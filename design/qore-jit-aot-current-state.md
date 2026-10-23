@@ -62,6 +62,28 @@ executable against the older runtime. `IRComposedIntLeaf.qtest` covers full-widt
 compositions, effects and exception fallback, concurrent first calls, Program
 churn/crossings, and warmed/cold debugger attachment through source-stripped AOT.
 
+### Constructor defaults
+
+QORD version 21 retains the exact parser-selected constructor signature in
+`VT_NEW_OBJECT` member, static-member and hashdecl defaults. This includes the
+empty signature of a zero-argument constructor. The loader binds an available
+constructor before publishing the default, so ordinary evaluation uses the
+same prebound call as source execution. A forward reference whose methods are
+not registered yet retains an immutable signature and resolves that exact
+variant when evaluated; it never substitutes overload selection by value.
+Defaults without a parser-selected variant retain runtime dispatch.
+
+This fixes source-stripped modules whose escaped module-init callbacks create
+objects with builtin constructor defaults such as `Thread::Mutex mutex()`.
+Losing the original binding made AOT repeat domain selection under the
+callback's module-header context, rejecting a construction accepted by source
+execution. No caller parse options or dynamic-call checks are relaxed.
+`AOTObjectDefaultBinding.qtest` compares source modes and source-stripped
+`-O0`/`-O3` modules, including inherited, static and hashdecl defaults, forward
+constructor declarations and overloaded constructors. Supported older artifacts
+remain readable with their previous unbound behavior; recompile them to obtain
+the binding. Older runtimes reject version-21 artifacts.
+
 ### Dynamic native integer closures
 
 AOT emits an optional dynamic `int(int)` closure companion independently of

@@ -1075,48 +1075,48 @@ const BZ2_DEFAULT_COMPRESSION = BZ2_DEFAULT_COMPRESSION;
 const COMPRESSION_LEVEL_DEFAULT = COMPRESSION_LEVEL_DEFAULT;
 
 //! gives the default quality level for the brotli() function (value: \c 11)
-/** @since %Qore 2.1
+/** @since %Qore 3.0
  */
 const BROTLI_DEFAULT_QUALITY = 11;
 
 //! gives the minimum quality level for the brotli() function (value: \c 0)
-/** @since %Qore 2.1
+/** @since %Qore 3.0
  */
 const BROTLI_MIN_QUALITY = 0;
 
 //! gives the maximum quality level for the brotli() function (value: \c 11)
-/** @since %Qore 2.1
+/** @since %Qore 3.0
  */
 const BROTLI_MAX_QUALITY = 11;
 
 //! gives the default compression level for the zstd() function (value: \c 3)
-/** @since %Qore 2.1
+/** @since %Qore 3.0
  */
 const ZSTD_DEFAULT_LEVEL = qore(ZSTD_CLEVEL_DEFAULT);
 
 //! gives the minimum compression level for the zstd() function (value: \c 1)
-/** @since %Qore 2.1
+/** @since %Qore 3.0
  */
 const ZSTD_MIN_LEVEL = 1;
 
 //! gives the maximum compression level for the zstd() function (typically 22)
-/** @since %Qore 2.1
+/** @since %Qore 3.0
  */
 const ZSTD_MAX_LEVEL = qore(ZSTD_maxCLevel());
 
 //! gives the default acceleration value for the lz4() function (value: \c 1)
 /** Higher acceleration values trade compression ratio for speed.
-    @since %Qore 2.1
+    @since %Qore 3.0
  */
 const LZ4_DEFAULT_ACCELERATION = 1;
 
 //! gives the minimum acceleration value for the lz4() function (value: \c 1)
-/** @since %Qore 2.1
+/** @since %Qore 3.0
  */
 const LZ4_MIN_ACCELERATION = 1;
 
 //! gives the maximum acceleration value for the lz4() function (value: \c 65537)
-/** @since %Qore 2.1
+/** @since %Qore 3.0
  */
 const LZ4_MAX_ACCELERATION = 65537;
 ///@}
@@ -1146,12 +1146,12 @@ const COMPRESSION_ALG_GZIP = str(CompressionTransforms::ALG_GZIP);
 const COMPRESSION_ALG_BZIP2 = str(CompressionTransforms::ALG_BZIP2);
 
 //! Identifies the <a href="https://github.com/google/brotli">Brotli</a> compression algorithm (<a href="https://www.rfc-editor.org/rfc/rfc7932">RFC 7932</a>)
-/** @since %Qore 2.1
+/** @since %Qore 3.0
  */
 const COMPRESSION_ALG_BROTLI = str(CompressionTransforms::ALG_BROTLI);
 
 //! Identifies the <a href="https://github.com/facebook/zstd">Zstandard</a> compression algorithm (<a href="https://www.rfc-editor.org/rfc/rfc8878">RFC 8878</a>)
-/** @since %Qore 2.1
+/** @since %Qore 3.0
  */
 const COMPRESSION_ALG_ZSTD = str(CompressionTransforms::ALG_ZSTD);
 
@@ -1159,7 +1159,7 @@ const COMPRESSION_ALG_ZSTD = str(CompressionTransforms::ALG_ZSTD);
 /** @note LZ4 does not store the original size in the compressed data, so decompression requires either a
     max_output_size parameter or knowledge of the original size.
 
-    @since %Qore 2.1
+    @since %Qore 3.0
  */
 const COMPRESSION_ALG_LZ4 = str(CompressionTransforms::ALG_LZ4);
 ///@}
@@ -1710,7 +1710,7 @@ binary bin = brotli(str);
     @throw BROTLI-LEVEL-ERROR quality must be between 0 - 11 or -1
     @throw BROTLI-ERROR the Brotli library returned an error during processing
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 binary brotli(string data, int quality = BROTLI_DEFAULT_QUALITY) [flags=NAMED_ARGS] {
    if ((quality < BROTLI_MIN_QUALITY && quality != -1) || quality > BROTLI_MAX_QUALITY)
@@ -1740,7 +1740,7 @@ binary bin = brotli(data);
     @throw BROTLI-LEVEL-ERROR quality must be between 0 - 11 or -1
     @throw BROTLI-ERROR the Brotli library returned an error during processing
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 binary brotli(binary data, int quality = BROTLI_DEFAULT_QUALITY) [flags=NAMED_ARGS] {
    if ((quality < BROTLI_MIN_QUALITY && quality != -1) || quality > BROTLI_MAX_QUALITY)
@@ -1758,7 +1758,7 @@ binary brotli(binary data, int quality = BROTLI_DEFAULT_QUALITY) [flags=NAMED_AR
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
 /**
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 nothing brotli() [flags=RUNTIME_NOOP] {
 }
@@ -1795,7 +1795,7 @@ binary unbrotli_to_binary(binary compressed_data, int max_size = 0) [flags=NAMED
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
 /**
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 nothing unbrotli_to_binary() [flags=RUNTIME_NOOP] {
 }
@@ -1834,7 +1834,7 @@ string unbrotli_to_string(binary compressed_data, *string encoding, int max_size
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
 /**
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 nothing unbrotli_to_string() [flags=RUNTIME_NOOP] {
 }
@@ -1855,7 +1855,7 @@ binary bin = zstd(str);
     @throw ZSTD-LEVEL-ERROR level must be between 1 - ZSTD_MAX_LEVEL or -1
     @throw ZSTD-ERROR the Zstd library returned an error during processing
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 binary zstd(string data, int level = 3) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > ZSTD_maxCLevel())
@@ -1885,7 +1885,7 @@ binary bin = zstd(data);
     @throw ZSTD-LEVEL-ERROR level must be between 1 - ZSTD_MAX_LEVEL or -1
     @throw ZSTD-ERROR the Zstd library returned an error during processing
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 binary zstd(binary data, int level = 3) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > ZSTD_maxCLevel())
@@ -1903,7 +1903,7 @@ binary zstd(binary data, int level = 3) [flags=NAMED_ARGS] {
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
 /**
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 nothing zstd() [flags=RUNTIME_NOOP] {
 }
@@ -1940,7 +1940,7 @@ binary unzstd_to_binary(binary compressed_data, int max_size = 0) [flags=NAMED_A
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
 /**
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 nothing unzstd_to_binary() [flags=RUNTIME_NOOP] {
 }
@@ -1979,7 +1979,7 @@ string unzstd_to_string(binary compressed_data, *string encoding, int max_size =
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
 /**
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 nothing unzstd_to_string() [flags=RUNTIME_NOOP] {
 }
@@ -2003,7 +2003,7 @@ binary bin = lz4(str);
     @throw LZ4-ACCELERATION-ERROR acceleration must be between 1 - 65537
     @throw LZ4-ERROR the LZ4 library returned an error during processing
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 binary lz4(string data, int acceleration = 1) [flags=NAMED_ARGS] {
    if (acceleration < 1 || acceleration > 65537)
@@ -2033,7 +2033,7 @@ binary bin = lz4(data);
     @throw LZ4-ACCELERATION-ERROR acceleration must be between 1 - 65537
     @throw LZ4-ERROR the LZ4 library returned an error during processing
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 binary lz4(binary data, int acceleration = 1) [flags=NAMED_ARGS] {
    if (acceleration < 1 || acceleration > 65537)
@@ -2048,7 +2048,7 @@ binary lz4(binary data, int acceleration = 1) [flags=NAMED_ARGS] {
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
 /**
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 nothing lz4() [flags=RUNTIME_NOOP] {
 }
@@ -2069,7 +2069,7 @@ binary bin = unlz4_to_binary(lz4_data, 1000000);
 
     @throw LZ4-ERROR the LZ4 library returned an internal error during processing (possibly due to corrupt input data or buffer too small)
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 binary unlz4_to_binary(binary compressed_data, int max_output_size = 0) [flags=NAMED_ARGS] {
    return qore_unlz4_to_binary(compressed_data, max_output_size, xsink);
@@ -2077,7 +2077,7 @@ binary unlz4_to_binary(binary compressed_data, int max_output_size = 0) [flags=N
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
 /**
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 nothing unlz4_to_binary() [flags=RUNTIME_NOOP] {
 }
@@ -2099,7 +2099,7 @@ string str = unlz4_to_string(lz4_data, 1000000, "utf-8");
 
     @throw LZ4-ERROR the LZ4 library returned an internal error during processing (possibly due to corrupt input data or buffer too small)
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 string unlz4_to_string(binary compressed_data, int max_output_size = 0, *string encoding) [flags=NAMED_ARGS] {
    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
@@ -2108,7 +2108,7 @@ string unlz4_to_string(binary compressed_data, int max_output_size = 0, *string 
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
 /**
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 nothing unlz4_to_string() [flags=RUNTIME_NOOP] {
 }

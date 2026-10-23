@@ -221,7 +221,7 @@ public class CdsRestDataProviderBase inherits DataProvider::AbstractDataProvider
     #! Returns the request path for the given URL
     /** OData services return links to further pages of results (\c \@odata.nextLink) as absolute URLs, but
         @ref CdsRestClient::CdsRestClientIo "CdsRestClientIo" requests take a path; the path of such a link
-        includes the connection path, which is therefore not prepended to it again
+        includes the connection path and must be dispatched with RestPathMode::OriginAbsolute
 
         @param url an absolute URL or a request path; the query of the URL is kept
 

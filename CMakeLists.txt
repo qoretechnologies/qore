@@ -487,7 +487,6 @@ set(QORE_DOX_TMPL_SRC
     doxygen/lang/255_keywords.dox.tmpl
     doxygen/lang/258_common_pitfalls.dox.tmpl
     doxygen/lang/900_release_notes.dox.tmpl
-    doxygen/lang/Doxyfile.tmpl
 )
 
 # qore interpreter
@@ -3323,9 +3322,9 @@ if (DOXYGEN_FOUND)
         COMMENT "Generating API documentation with Doxygen for: lang (initial pass)"
         VERBATIM
     )
-    # qdx loads astparser, and subsequent module documentation runs qjar,
-    # which loads reflection. Neither tool may race a module relink.
-    add_dependencies(docs-lang qore astparser reflection)
+    # qdx and qjar load the binary modules in QORE_DOC_TOOL_MODULES (see QoreMacros.cmake):
+    # they must be built first, and neither tool may race a module relink.
+    add_dependencies(docs-lang qore ${QORE_DOC_TOOL_MODULES})
     # C++ API documentation links to core language types and execution-mode sections.
     add_dependencies(docs-lib docs-lang)
     # docs will depend on docs-lang-final, not docs-lang (added after modules are defined)
@@ -4158,6 +4157,16 @@ qore_finalize_user_module_dependencies()
 qore_finalize_catalog_install()
 
 get_property(QORE_QM_METADATA_TARGETS GLOBAL PROPERTY QORE_QM_METADATA_TARGETS)
+# The metadata extractor loads QoreApiMetadata from the source qlib, which holds a link to the module's AOT qmod once
+# it is built.  The qmod is compiled again when one of its sources changes, including the binary modules it requires
+# (astparser, reflection, json, yaml): a metadata step that ran meanwhile found the qmod out of date and loaded the
+# source module instead, with a warning.  The steps therefore wait for the qmod, which also lets them run its compiled
+# code; the qmod is not installed with the bootstrap component.
+if (TARGET QoreApiMetadata-qmod)
+    foreach(_qore_qm_metadata_target ${QORE_QM_METADATA_TARGETS})
+        add_dependencies(${_qore_qm_metadata_target} QoreApiMetadata-qmod)
+    endforeach()
+endif()
 add_custom_target(qore-bootstrap
     DEPENDS
         qore
@@ -4291,7 +4300,7 @@ endif()
         COMMENT "Generating API documentation with Doxygen for: lang (final pass, no module deps)"
         VERBATIM
     )
-    add_dependencies(docs-lang-final-fast qore astparser reflection)
+    add_dependencies(docs-lang-final-fast qore ${QORE_DOC_TOOL_MODULES})
 
     # docs-lang-final depends on all module docs (so their tagfiles exist)
     foreach(mod ${QORE_USER_MODULE_NAMES})

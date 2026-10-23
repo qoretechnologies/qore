@@ -10,10 +10,22 @@ import subprocess
 import tempfile
 import unittest
 
+import qore_build_flags
+
 ROOT = Path(__file__).resolve().parents[3]
 BUILD = Path(os.environ.get('QORE_TEST_BUILD_DIR', ROOT / 'build')).resolve()
 INCLUDE = Path(os.environ.get('QORE_TEST_INCLUDE_DIR', ROOT / 'include')).resolve()
 HEADER = 'qore/intern/QoreOperatorNode.h'
+FIXTURE = ROOT / 'examples/test/cmake/operator_root_effect.cpp'
+COMPILER = shlex.split(os.environ.get('CXX', 'c++'))
+
+
+def is_gcc():
+    """Returns True if the compiler is GCC: Clang defines __GNUC__ too"""
+    macros = subprocess.run([*COMPILER, '-dM', '-E', '-x', 'c++', os.devnull], capture_output=True, text=True,
+                            check=True).stdout.splitlines()
+    return (any(line.startswith('#define __GNUC__ ') for line in macros)
+            and not any(line.startswith('#define __clang__ ') for line in macros))
 
 
 class OperatorRootEffectTest(unittest.TestCase):
@@ -53,24 +65,31 @@ class OperatorRootEffectTest(unittest.TestCase):
         (cls.output / 'commands.json').write_text(json.dumps(cls.receipts, indent=2) + '\n')
         return p
 
-    def test_real_operator_classes(self):
+    def compile_command(self, header_dir):
         # This focused internal-header consumer checks the address diagnostic.
         # The RPM's normal compiler flags and complete package builds are separate gates.
         flags = shlex.split(os.environ.get('QORE_TEST_CXXFLAGS', '-O3 -g -DNDEBUG'))
-        compiler = shlex.split(os.environ.get('CXX', 'c++'))
-        common = [*compiler, *flags, '-std=c++20', '-DHAVE_UNIX_CONFIG_H', '-Werror=address']
-        includes = ['-I' + str(BUILD / 'include'), '-I' + str(INCLUDE), '-I' + str(BUILD),
-                    '-I' + str(self.output)]
-        fixture = ROOT / 'examples/test/cmake/operator_root_effect.cpp'
-        bad = self.invoke('baseline', [*common, '-I' + str(self.output / 'baseline'), *includes,
-            '-c', str(fixture), '-o', str(self.output / 'baseline.o')])
+        # the program is linked with the build's libqore, so it targets its platform version, and the internal
+        # headers include third-party headers from the build's include directories
+        return [*COMPILER, *flags, *qore_build_flags.target_flags(BUILD), '-std=c++20', '-DHAVE_UNIX_CONFIG_H',
+                '-Werror=address', '-I' + str(header_dir), '-I' + str(BUILD / 'include'), '-I' + str(INCLUDE),
+                '-I' + str(BUILD), *qore_build_flags.include_flags(BUILD), '-I' + str(self.output)]
+
+    # GCC's -Waddress diagnoses a comparison of an address that cannot be null, which the original template bodies
+    # made; Clang has no such diagnostic for them, so it would compile the original bodies as well
+    @unittest.skipUnless(is_gcc(), 'the -Waddress diagnostic of the original operator bodies is GCC\'s')
+    def test_original_operator_classes_are_diagnosed(self):
+        bad = self.invoke('baseline', [*self.compile_command(self.output / 'baseline'), '-c', str(FIXTURE),
+            '-o', str(self.output / 'baseline.o')])
         self.assertNotEqual(0, bad.returncode)
         errors = [line for line in bad.stderr.splitlines() if 'error:' in line]
         self.assertEqual(8, len(errors), bad.stderr)
         self.assertTrue(all('[-Werror=address]' in line for line in errors), bad.stderr)
+
+    def test_real_operator_classes(self):
         binary = self.output / 'operator-root-effect'
-        good = self.invoke('fixed-compile', [*common, '-I' + str(self.output / 'fixed'), *includes,
-            str(fixture), '-L' + str(BUILD), '-Wl,-rpath,' + str(BUILD), '-lqore', '-o', str(binary)])
+        good = self.invoke('fixed-compile', [*self.compile_command(self.output / 'fixed'), str(FIXTURE),
+            '-L' + str(BUILD), '-Wl,-rpath,' + str(BUILD), '-lqore', '-o', str(binary)])
         self.assertEqual(0, good.returncode, good.stderr)
         self.assertEqual('', good.stderr)
         run = self.invoke('fixed-run', [str(binary)])

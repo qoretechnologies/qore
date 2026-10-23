@@ -117,6 +117,13 @@ DLLLOCAL void qore_dbg_conn_close_released();
 //! the number of times the next c-ares lookups report their query as lost; set by dbg_cares_lose_query()
 DLLLOCAL extern std::atomic<int> qore_dbg_cares_lost_query_count;
 
+//! Sets the DNS servers that the c-ares channels made from now on ask, as for ares_set_servers_ports_csv()
+/** @param servers the servers, such as \c "127.0.0.1:5353"; empty for the system's servers
+
+    @return the previous setting
+*/
+DLLLOCAL std::string qore_dbg_cares_set_servers(const std::string& servers);
+
 //! called by qore_queue_private::push() with the queue's lock held, after a value pushed with the queue's object has
 //! been counted for the collector and before the lock is released, with the queue's object; set by the C++ unit tests
 typedef void (*qore_dbg_queue_push_locked_hook_t)(const QoreObject* self);

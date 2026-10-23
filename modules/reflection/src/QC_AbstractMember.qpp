@@ -116,10 +116,11 @@ auto v = m.getDefaultValue();
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program whose values the calling code may not read or write (see @ref reflection_caller_privilege)
 */
-auto AbstractMember::getDefaultValue() [flags=RET_VALUE_ONLY] {
+auto AbstractMember::getDefaultValue() {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, m->pgm, "read or write the values of", xsink)) {
+    if (caller.checkProgramAccess(m->pgm, "evaluate member defaults in",
+            QoreReflectionCaller::Access::MemberDefault, xsink)) {
         return QoreValue();
     }
     // get read access to program object

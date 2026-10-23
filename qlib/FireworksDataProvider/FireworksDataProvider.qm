@@ -129,14 +129,9 @@ module FireworksDataProvider {
     - @ref FireworksDataProvider::FireworksChatCompletionDataProvider "FireworksChatCompletionDataProvider" — chat
     - @ref FireworksDataProvider::FireworksEmbeddingDataProvider "FireworksEmbeddingDataProvider" — embeddings
 
-    @section FireworksDataProviderRelnotes Release Notes
-
-    @subsection FireworksDataProviderv1_1 FireworksDataProvider v1.1
-    - keep reranking registered under Fireworks AI when other providers have already loaded
-    - add pinned schema actions for models, deployments, datasets, batch inference, fine-tuning,
-      evaluations, billing, text completions, Responses, and Anthropic-compatible messages
-    - add account and resource dropdowns with custom ID support
-    - preserve the original chat completion and embedding action names
+    The app also reranks documents and provides actions from pinned schemas for models, deployments, datasets,
+    batch inference, fine-tuning, evaluations, billing, text completions, Responses, and Anthropic-compatible
+    messages. Account and resource dropdowns also accept custom IDs.
 
     @par Example:
     @code{.py}
@@ -151,7 +146,9 @@ auto models = provider.getChildProvider("list-models").doRequest({
     catalog lookups do not generate tokens. Listings return one page; use the returned page token
     to retrieve more results.
 
-    @subsection FireworksDataProviderv1_0 FireworksDataProvider v1.0
+    @section FireworksDataProviderRelnotes Release Notes
+
+    @subsection FireworksDataProviderv1_1 FireworksDataProvider v1.1
     - initial release
 */
 

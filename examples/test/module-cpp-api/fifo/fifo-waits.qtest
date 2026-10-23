@@ -49,6 +49,7 @@ class FifoWaitsTest inherits QUnit::Test {
         addTestCase("qore_cancellable_poll(): a wait is cancelled", \testCancel());
         addTestCase("OutputStream::writeWithTimeout(): a closed reader", \testOutputStream());
         addTestCase("qore_cancellable_poll(): descriptors above FD_SETSIZE", \testHighDescriptors());
+        addTestCase("qore_cancellable_poll(): the end of a pipe that a read of its File returned", \testEndRead());
         set_return_value(main());
     }
 
@@ -66,6 +67,23 @@ class FifoWaitsTest inherits QUnit::Test {
         File r = openWithWriter(may_close, closed);
         on_exit may_close.push(True);
         checkReadEnd(r, may_close, closed, "");
+    }
+
+    testEndRead() {
+        # on macOS, select(2) reports the end of a named pipe only until a read has returned it; a wait on the
+        # descriptor of a File whose read returned it reports it at once, as on Linux
+        Queue may_close();
+        Counter closed(1);
+        File r = openWithWriter(may_close, closed);
+        on_exit may_close.push(True);
+        assertEq(Data, r.readShortBinary(4096), "the data");
+        may_close.push(True);
+        closed.waitForZero();
+        assertEq(NOTHING, r.readShortBinary(4096), "the end");
+        # Linux reports the end with POLLHUP, macOS (with select(2)) as read readiness
+        hash<auto> h = cpp_api_cancellable_poll_fd(r.getPollableDescriptor(), False, LongMs);
+        assertEq(1, h.rc, "the end is reported at once");
+        assertEq(NOTHING, r.readShortBinary(4096), "the end again");
     }
 
     testWriteEnd() {

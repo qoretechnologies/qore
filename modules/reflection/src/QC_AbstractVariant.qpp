@@ -750,8 +750,13 @@ list<auto> l = v.getDefaultArgs();
     @return a list of default arguments for parameters for the variant; if the variant has no parameters, an empty list is returned
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
+    @throw REFLECTION-ACCESS-ERROR the calling code may not perform this operation in the target Program (see @ref reflection_caller_privilege)
 */
 list<auto> AbstractVariant::getDefaultArgs() [flags=RET_VALUE_ONLY] {
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, v->pgm, "read parameter defaults in", xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, v->pgm);
     if (*xsink) {

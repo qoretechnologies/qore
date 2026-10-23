@@ -492,6 +492,7 @@ public class WooCommerceRestClientIo inherits RestClientIo::RestClientIo {
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(WooCommerceRestClientIo::getOptions(opts), shared_mgr) {
+        setConnectionPath(WooCommerceRestClientIo::getOptions(opts).default_path);
     }
 
     #! Returns the options for the @ref RestClientIo::RestClientIo "RestClientIo" constructor

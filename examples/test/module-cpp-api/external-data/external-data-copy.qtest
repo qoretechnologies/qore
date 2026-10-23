@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ExternalDataCopyTest
+
+#! Tests the copy of the external data of binary modules when a child Program is created
+/** A child Program gets its own external data from AbstractQoreProgramExternalData::copy(), called on the data of
+    the parent; a module's copy() takes the module's own locks, while a thread of the module can hold one of them when
+    it takes the Program's lock.  The external data of the cppapiuser test module takes such a lock in copy().
+*/
+class ExternalDataCopyTest inherits QUnit::Test {
+    constructor() : Test("ExternalDataCopyTest", "1.0", \ARGV) {
+        addTestCase("a thread holding the module's lock reads the external data while it is copied",
+            \readWhileCopying());
+        addTestCase("the external data is copied after the module's lock was taken before the Program's",
+            \lockOrder());
+        addTestCase("children are created in several threads at once", \concurrentCopies());
+        addTestCase("the external data is set and removed while children are created", \setWhileCreating());
+        set_return_value(main());
+    }
+
+    #! a thread holding the module's lock reads the external data while a child Program copies it
+    /** The copy waits for the module's lock, which this thread holds while it reads the external data of the
+        Program; previously the copy was made with the parent Program's lock held, and the read waited for it: both
+        threads waited forever (the test runner's time limit is only a guard).
+    */
+    readWhileCopying() {
+        cpp_api_ext_data_set();
+        on_exit cpp_api_ext_data_remove();
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            Program child(PO_NEW_STYLE);
+        }();
+        assertTrue(cpp_api_ext_data_read_while_copying(), "the external data is read while it is copied");
+        done.waitForZero();
+        assertEq(1, cpp_api_ext_data_copies(), "the child copied the external data");
+    }
+
+    #! the module takes its lock and then the Program's, and a child Program copies the data afterwards
+    /** Both run in this thread one after the other, so they do not wait for each other; a lock-order checker
+        (ThreadSanitizer) reported an inversion when the copy was made with the Program's lock held.
+    */
+    lockOrder() {
+        cpp_api_ext_data_set();
+        on_exit cpp_api_ext_data_remove();
+        assertTrue(cpp_api_ext_data_read_while_locked(), "the external data is read with the module's lock held");
+        {
+            Program child(PO_NEW_STYLE);
+        }
+        assertEq(1, cpp_api_ext_data_copies(), "the child copied the external data");
+    }
+
+    #! child Programs are created in several threads at once, and the external data is removed afterwards
+    concurrentCopies() {
+        cpp_api_ext_data_set();
+        on_exit cpp_api_ext_data_remove();
+        const int Threads = 8;
+        Counter done(Threads);
+        for (int i = 0; i < Threads; ++i) {
+            background sub () {
+                on_exit done.dec();
+                Program child(PO_NEW_STYLE);
+            }();
+        }
+        done.waitForZero();
+        assertEq(Threads, cpp_api_ext_data_copies(), "each child copied the external data");
+        assertTrue(cpp_api_ext_data_remove(), "the external data is removed once the copies are made");
+    }
+
+    #! the external data is set and removed while child Programs are created in another thread
+    /** A removal waits until the copies in progress have been made, and whether a child Program inherits the data is
+        decided under the parent's lock (it was read without the lock while this thread changed it with the lock held).
+    */
+    setWhileCreating() {
+        const int Rounds = 20;
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            for (int i = 0; i < Rounds; ++i) {
+                Program child(PO_NEW_STYLE);
+            }
+        }();
+        for (int i = 0; i < Rounds; ++i) {
+            cpp_api_ext_data_set();
+            assertTrue(cpp_api_ext_data_remove(), "the external data is removed while children are created");
+        }
+        done.waitForZero();
+        assertFalse(cpp_api_ext_data_remove(), "no external data is left");
+    }
+}

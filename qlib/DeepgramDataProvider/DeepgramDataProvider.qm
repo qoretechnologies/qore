@@ -136,7 +136,10 @@ module DeepgramDataProvider {
     Two DPAT_API actions are registered:
     - <tt>transcribe-file</tt> — submit an audio URL, or upload the audio bytes
       directly, to <tt>/v1/listen</tt> and receive a JSON transcript (Nova model
-      family, smart format, diarization, summarization, language detection)
+      family, smart format, diarization, summarization, language detection); the
+      <tt>audio</tt> option takes a file value (or raw audio bytes) that is uploaded as the
+      request body with its MIME type as the <tt>Content-Type</tt>, as an alternative to
+      the <tt>url</tt> option; exactly one of the two must be given
     - <tt>synthesize-speech</tt> — submit text to <tt>/v1/speak</tt> and receive audio
       bytes (Aura voice models, MP3/WAV/Opus/FLAC encodings)
 
@@ -150,13 +153,6 @@ module DeepgramDataProvider {
     @section DeepgramDataProviderRelnotes Release Notes
 
     @subsection DeepgramDataProviderv1_1 DeepgramDataProvider v1.1
-    - the <tt>transcribe-file</tt> action accepts the audio to transcribe as a new
-      <tt>audio</tt> input option — a file value (or raw audio bytes) uploaded as the
-      request body with its MIME type sent as the <tt>Content-Type</tt> — as an
-      alternative to the <tt>url</tt> option, which is now optional; exactly one of
-      the two must be given
-
-    @subsection DeepgramDataProviderv1_0 DeepgramDataProvider v1.0
     - initial release
 */
 

@@ -40,7 +40,7 @@
 %requires(reexport) ConnectionProvider >= 1.4
 
 module SewioRestClient {
-    version = "1.4";
+    version = "1.5";
     desc = "user module for calling Sewio.net RTLS Studio REST services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -85,6 +85,12 @@ printf("%Y\n", ans.body);
     @endcode
 
     @section sewiorestclientrelnotes Release Notes
+
+    @subsection Sewiorestclientv1_5 SewioRestClient v1.5
+    - added the @ref SewioRestClient::SewioRestClientIo "SewioRestClientIo" class, which makes the
+      module's requests with the async I/O of the @ref restclientiointro "RestClientIo" module;
+      @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()" of a
+      @ref SewioRestClient::SewioRestConnection "SewioRestConnection" returns it
 
     @subsection Sewiorestclientv1_4 SewioRestClient v1.4
     - implemented support for a data provider scheme cache and rich option information for connections

@@ -170,12 +170,26 @@ DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, 
     - to a given port fails with \c EADDRINUSE if a socket of the type uses the port on 0.0.0.0 or on 127.0.0.1, as
       found by binds of sockets that reuse the address and are closed again: a connection on the port, including one
       in \c TIME_WAIT from an earlier server on the port, does not refuse them, but a listening (or bound datagram)
-      socket on the address does
+      socket on the address does.  These binds hold the port for a moment, so a concurrent bind of the port can be
+      refused because of them; they are not made for an IPv4 socket that does not reuse the address, which macOS
+      itself refuses a port that any socket uses
     - of an IPv6 socket to port 0 gets the port that the system assigns to an IPv4 socket on 0.0.0.0, which no IPv4
       socket uses on any address; a port in use in IPv6 is replaced, up to \c QORE_BIND_RESERVATION_MAX_PORTS times,
       and then the system assigns the port
 
-    On other systems, and for other addresses, it is \c bind().
+    A socket bound to a specific address of a port also receives the clients of that address instead of a socket on
+    a wildcard address of the port.  Linux refuses a bind with \c SO_REUSEADDR of a specific address to a given port
+    if a socket on a wildcard address that covers it holds the port and listens or does not reuse the address; macOS
+    allows it.  On macOS, therefore, such a bind fails with \c EADDRINUSE, as found in the system's socket table:
+    - of a stream socket, if a socket that is not connected holds a wildcard address that covers the address on the
+      port, whether it listens or not, because a connection request to a stream socket that is bound but not
+      listening is dropped on macOS, while Linux gives it to the socket that listens
+    - of a datagram socket, if such a socket does not reuse the address, as on Linux
+    .
+    unless both sockets reuse the port and belong to the same user, as on Linux.  A bind without \c SO_REUSEADDR is
+    refused by macOS itself.
+
+    On other systems, and for other binds, it is \c bind().
 
     @param sock the socket descriptor
     @param addr the address to bind
@@ -183,11 +197,34 @@ DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, 
     @param socktype the socket type
     @param sandbox_manager the sandbox manager checking binds, if any; an address that it does not allow is not used
     for a check
+    @param xsink if given, the scan of the socket table is a cancellation point: when the thread is cancelled or its
+    program interrupted, the exception is raised in it, and \c QORE_SOCKET_ERROR is returned with the error number
+    \c ECANCELED
 
     @return 0 for success, \c QORE_SOCKET_ERROR for an error, with the system error number set
 */
 DLLLOCAL int qore_socket_bind_unshadowed(int sock, const struct sockaddr* addr, size_t addrlen, int socktype,
-    QoreSandboxManager* sandbox_manager);
+    QoreSandboxManager* sandbox_manager, ExceptionSink* xsink = nullptr);
+
+//! Puts a TCP socket in the listening state so that, on macOS, it never shares its port with another listener
+/** Two sockets that reuse the address can be bound to overlapping addresses of a port, such as \c 0.0.0.0 and
+    \c 127.0.0.1, if neither listens.  Linux then refuses the listen of the second one; macOS allows it, and the socket
+    on the more specific address receives the clients of that address.  On macOS, therefore, the listen fails with
+    \c EADDRINUSE if another socket that serves an address in common with the socket on its port listens, or does
+    not reuse the address, unless both sockets reuse the port and belong to the same user, as on Linux; the system's
+    socket table is read for it.
+
+    On other systems, it is \c listen().
+
+    @param sock the socket descriptor
+    @param backlog the length of the queue of pending connections
+    @param xsink if given, the scan of the socket table is a cancellation point: when the thread is cancelled or its
+    program interrupted, the exception is raised in it, and \c QORE_SOCKET_ERROR is returned with the error number
+    \c ECANCELED
+
+    @return 0 for success, \c QORE_SOCKET_ERROR for an error, with the system error number set
+*/
+DLLLOCAL int qore_socket_listen_unshadowed(int sock, int backlog, ExceptionSink* xsink = nullptr);
 DLLLOCAL int sock_get_error();
 DLLLOCAL void sock_set_raw_error(int rc);
 DLLLOCAL QoreListNode* qore_socket_resolve_addrinfo_asyncio(ExceptionSink* xsink, const char* node,
@@ -663,13 +700,23 @@ public:
         - 0 = done
         - < 0 = error (exception raised)
     */
-    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink);
+    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink) override;
 
     //! Returns extra fds that need to be polled for write readiness (connect completion)
     DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& fds) const;
 
+    //! Returns the descriptors of getExtraFds() for the public API: the resolver's, then the other attempts'
+    /** A module's operation that makes the connection with QoreSocket::startConnect() waits only for what the public
+        API reports; while the host name is resolved the socket has no descriptor, and the resolver's descriptors are
+        the only ones that continue the connection
+    */
+    DLLLOCAL virtual std::vector<ExtraWaitFd> getExtraWaitFds() override;
+
     //! Returns the operation-specific poll timeout, or -1 when no timeout is needed
-    DLLLOCAL int getPollTimeoutMs() const;
+    /** The resolver's timer while the host name is resolved, the RFC 8305 connection attempt delay while an address
+        waits for its attempt
+    */
+    DLLLOCAL virtual int getPollTimeoutMs() const override;
 
     //! Returns the primary socket events to poll for the current state
     DLLLOCAL int getPrimaryPollEvents(int rc) const;
@@ -2519,7 +2566,11 @@ struct qore_socket_private : public QoreReferenceCounter {
         hdr.concat("\r\n");
     }
 
-    DLLLOCAL int listen(int backlog = 20) {
+    //! Puts the socket in the listening state
+    /** @param backlog the length of the queue of pending connections
+        @param xsink if given, a cancellation point; see qore_socket_listen_unshadowed()
+    */
+    DLLLOCAL int listen(int backlog = 20, ExceptionSink* xsink = nullptr) {
         if (sock == QORE_INVALID_SOCKET)
             return QSE_NOT_OPEN;
         if (in_op >= 0)
@@ -2533,7 +2584,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         listening = true;
         return 0;
 #else
-        int rc = ::listen(sock, backlog);
+        int rc = qore_socket_listen_unshadowed(sock, backlog, xsink);
         if (!rc) {
             listening = true;
         }
@@ -3182,7 +3233,8 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     //! Makes the open IPv6 socket accept IPv4 traffic as well, as IPv4-mapped IPv6 addresses (RFC 3493 section 5.3)
     /** The option is always set explicitly, because the default differs between systems (Linux follows the
-        \c net.ipv6.bindv6only sysctl; Windows and the BSDs default to IPv6-only sockets).
+        \c net.ipv6.bindv6only sysctl and macOS the \c net.inet6.ip6.v6only sysctl, which are 0 by default; Windows
+        and FreeBSD default to IPv6-only sockets).
 
         @return 0 for success, -1 if the system does not support dual-stack sockets
     */
@@ -3200,19 +3252,23 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     // the only place where xsink is optional; the caller checks the bind against the sandbox, with the manager it
     // resolved on the thread that requested the bind, which it also passes for the bind's own checks of the port; see
-    // qore_socket_bind_unshadowed()
+    // qore_socket_bind_unshadowed().  A caller that gives no xsink can give cancel_xsink, which only receives the
+    // exception of a cancellation of the bind (the error number is then ECANCELED)
     DLLLOCAL int bindIntern(struct sockaddr* ai_addr, size_t ai_addrlen, int prt, bool reuseaddr,
-            QoreSandboxManager* sandbox_manager, ExceptionSink* xsink = nullptr) {
+            QoreSandboxManager* sandbox_manager, ExceptionSink* xsink = nullptr,
+            ExceptionSink* cancel_xsink = nullptr) {
         reuse(reuseaddr);
 
-        if (qore_socket_bind_unshadowed(sock, ai_addr, ai_addrlen, stype, sandbox_manager) == QORE_SOCKET_ERROR) {
+        if (qore_socket_bind_unshadowed(sock, ai_addr, ai_addrlen, stype, sandbox_manager,
+                xsink ? xsink : cancel_xsink) == QORE_SOCKET_ERROR) {
             // capture the bind() errno before close(), which invokes ::shutdown()
             // on the not-yet-connected socket and clobbers errno with ENOTCONN —
             // hiding the real reason (EADDRINUSE, EACCES, EAFNOSUPPORT, ...) from
             // callers that read errno via sock_get_raw_error() after we return
             // (e.g. qore_socket_bind_inet_resolved_direct's multi-address loop).
             int bind_errno = sock_get_raw_error();
-            if (xsink)
+            // a cancelled bind has raised its exception
+            if (xsink && !(bind_errno == ECANCELED && *xsink))
                 qore_socket_error(xsink, "SOCKET-BIND-ERROR", "error in bind()", 0, 0, 0, ai_addr);
             close();
             sock_set_raw_error(bind_errno);

@@ -56,7 +56,8 @@ module AwsTextractRestClient {
 
     AWS Textract uses an action-style JSON API: POST with body
     <tt>{"Document": {...}}</tt> and an <tt>X-Amz-Target</tt> header naming the action
-    (\c Textract.DetectDocumentText, \c Textract.AnalyzeDocument, etc.).
+    (\c Textract.DetectDocumentText, \c Textract.AnalyzeDocument, etc.), using the AWS JSON 1.1 media type
+    (<tt>application/x-amz-json-1.1</tt>).
     SigV4 signing is inherited from
     @ref awsrestclientintro "AwsRestClient", so the full AWS credential
     chain (static keys, env, ECS task role, IMDSv2, STS AssumeRole) works
@@ -99,11 +100,6 @@ foreach hash<auto> block in (resp.body.Blocks) {
     @section AwsTextractRestClientRelnotes Release Notes
 
     @subsection AwsTextractRestClientv1_1 AwsTextractRestClient v1.1
-    - authenticated ListAdapters ping with permission and malformed-response failures
-    - consistent regional endpoints and typed clients from both connection constructors
-    - exact AWS JSON 1.1 media type and temporary-credential propagation
-
-    @subsection AwsTextractRestClientv1_0 AwsTextractRestClient v1.0
     - initial release
 */
 

@@ -17,6 +17,12 @@
     - Cursor-based iteration for large result sets
     - BSON type support including ObjectId
 
+    A call that waits for the server (connecting, the TLS handshake, reading or writing) ends as soon as the thread is
+    cancelled (@ref Qore::cancel_thread() "cancel_thread()") or its @ref Qore::Program "Program" is interrupted
+    (@ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()"), and so does the conversion
+    of a large list to BSON.  A hash or list nested too deeply to be converted to BSON, or a BSON document nested too
+    deeply to be converted to a hash, raises \c STACK-LIMIT-EXCEEDED.
+
     This module is released under the MIT license (see \c COPYING.MIT in the source distribution for
     more information). The module is tagged as such in the module's header (meaning it can be loaded
     unconditionally regardless of how the %Qore library was initialized).

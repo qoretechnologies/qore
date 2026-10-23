@@ -88,20 +88,19 @@ hash<auto> ans = rest.post("/v1/chat/completions", {
 printf("%Y\n", ans.body);
     @endcode
 
+    Together AI connections belong to the Together AI app and use the service URL; the connection ping verifies the
+    API key with the authenticated model catalog, without inference.
+
+    @ref TogetherRestClient::TogetherLlmProviderFactory::getModelInfo()
+    "TogetherLlmProviderFactory::getModelInfo()" reports which models cannot turn hidden reasoning off
+    (\c reasoning_always_on): \c openai/gpt-oss-20b and <tt>openai/gpt-oss-120b</tt>. A reasoning token budget
+    of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns reasoning off on
+    the hybrid models (\c reasoning \c {"enabled": false}) and selects the lowest effort, \c low, of the GPT-OSS
+    models; requests for models whose reasoning controls have not been verified are sent as given.
+
     @section TogetherRestClientRelnotes Release Notes
 
     @subsection togetherrestclientv1_1 TogetherRestClient v1.1
-    - automatic connections always use the service URL and identify the Together AI app
-    - JSON serialization is configured consistently for direct and connection-created clients
-    - the authenticated model catalog ping performs no inference; an invalid API key fails the ping
-    - the provider factory reports, with @ref TogetherRestClient::TogetherLlmProviderFactory::getModelInfo()
-      "TogetherLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c
-      reasoning_always_on): \c openai/gpt-oss-20b and \c openai/gpt-oss-120b
-    - a reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
-      turns reasoning off on the hybrid models (\c reasoning \c {"enabled": false}) and selects the lowest effort, \c
-      low, of the GPT-OSS models; requests for models whose reasoning controls have not been verified are unchanged
-
-    @subsection TogetherRestClientv1_0 TogetherRestClient v1.0
     - initial release
 */
 

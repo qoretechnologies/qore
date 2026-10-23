@@ -4,9 +4,9 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/RestClientIo.qm
-%requires ../../../../qlib/AwsRestClient.qm
+%requires QUnit
+%requires RestClientIo
+%requires AwsRestClient
 %exec-class RestDeadlineTest
 
 # All simulated requests run on the test thread; no wall-clock waits or network I/O.
@@ -96,7 +96,7 @@ class DeadlineRestClient inherits RestClientIo {
         return clock.ticks;
     }
     private RestFuture restDoRequestAsyncWithTimeout(string method, string path, auto body, *hash<auto> hdr,
-            int timeout_ms) {
+            int timeout_ms, *hash<RestClient::RestRequestContext> request_context) {
         clock.prepare();
         return new DeadlineRestFuture(clock);
     }

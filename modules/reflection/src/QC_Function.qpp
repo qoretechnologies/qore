@@ -199,6 +199,7 @@ auto v = f.call(arg1, arg2);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function has been destroyed
     @throw INVALID-FUNCTION-ACCESS the calling code's or the function's Program's sandboxing restrictions do not allow the variant called (see @ref reflection_caller_privilege)
+    @throw REFLECTION-ACCESS-ERROR the calling code may not execute code in the target Program (see @ref reflection_caller_privilege)
 
     @see callArgs()
 */
@@ -227,6 +228,7 @@ auto v = f.callArgs(argv);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function has been destroyed
     @throw INVALID-FUNCTION-ACCESS the calling code's or the function's Program's sandboxing restrictions do not allow the variant called (see @ref reflection_caller_privilege)
+    @throw REFLECTION-ACCESS-ERROR the calling code may not execute code in the target Program (see @ref reflection_caller_privilege)
 
     @see call()
 */
@@ -286,7 +288,7 @@ static Function Function::forName(Program[QoreProgram] pgm, string path) [flags=
     }
     // a lookup in another Program is navigation in it
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, *pgm, "look up functions in", xsink)) {
+    if (reflection_check_structural_access(caller, *pgm, "look up functions in", xsink)) {
         return QoreValue();
     }
     return get_function_object(xsink, *path, *pgm);
@@ -325,7 +327,7 @@ list<Function> l = Function::findAllRegex(pgm, "^gg");
 static list<Function> Function::findAllRegex(Program[QoreProgram] pgm, string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
     // a lookup in another Program is navigation in it
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, *pgm, "look up functions in", xsink)) {
+    if (reflection_check_structural_access(caller, *pgm, "look up functions in", xsink)) {
         return QoreValue();
     }
     return find_all_funcs(*pattern, re_opts, *pgm, xsink);

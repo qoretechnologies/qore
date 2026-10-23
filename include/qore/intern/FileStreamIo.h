@@ -138,11 +138,18 @@ DLLLOCAL inline int qore_file_stream_ready_now(int fd, short events) {
 }
 
 //! Reads up to @p limit bytes that are available without waiting and without changing the descriptor's flags
-/** @return the number of bytes read; 0 at the end of the input or if nothing can be read now (as the nonblocking read
+/** @param read_done if given, set to true if the descriptor was read: a return value of 0 is then the end of the
+    input, not a read that was not made because nothing could be read now
+
+    @return the number of bytes read; 0 at the end of the input or if nothing can be read now (as the nonblocking read
     did), or -1 with @p err set to the error
 */
-DLLLOCAL inline ssize_t qore_file_stream_read_now(int fd, void* ptr, size_t limit, int& err) {
+DLLLOCAL inline ssize_t qore_file_stream_read_now(int fd, void* ptr, size_t limit, int& err,
+        bool* read_done = nullptr) {
     err = 0;
+    if (read_done) {
+        *read_done = false;
+    }
     int fl = fcntl(fd, F_GETFL);
     if (fl == -1) {
         err = errno;
@@ -178,6 +185,9 @@ DLLLOCAL inline ssize_t qore_file_stream_read_now(int fd, void* ptr, size_t limi
         }
         err = errno;
         return -1;
+    }
+    if (read_done) {
+        *read_done = true;
     }
     return rc;
 }

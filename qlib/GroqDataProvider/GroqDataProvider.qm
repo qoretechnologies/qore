@@ -155,18 +155,12 @@ printf("Response: %s\n", result.choices[0].message.content);
     @ref grokdataproviderintro "GrokDataProvider" (xAI's Grok product) —
     note the spelling: Groq (LPU inference) vs. Grok (xAI).
 
-    @section GroqDataProviderRelnotes Release Notes
+    @section groqdataprovidercoverage API Coverage
 
-    @subsection groqdataproviderv1_1 GroqDataProvider v1.1
-    - 20 typed actions covering every operation in the public Groq API reference
-    - Responses, transcription, translation, speech, model details, files, batches, and LoRA adapters
-    - model and file dropdowns scoped to the task, with model-dependent Orpheus voices
-    - multimodal chat input, named tool selection, reasoning, Compound, and structured output options
-    - authenticated connection pings, canonical automatic connection URLs, and explicit JSON serialization
-    - named multipart uploads, raw binary downloads, and native LoRA endpoint routing
-    - invalid options fail before transport; transport failures do not replay billable requests
+    The provider offers 20 typed actions covering every operation in the public Groq API reference. Chat accepts
+    multimodal input, named tool selection, reasoning, Compound, and structured output options; invalid options
+    fail before a request is sent, and transport failures do not replay requests that may be billable.
 
-    @par API coverage
     |!Group|!Actions
     |Chat and Responses|Chat Completion, Create Response
     |Models|List Models, Get Model
@@ -180,11 +174,11 @@ printf("Response: %s\n", result.choices[0].message.content);
     <a href="https://console.groq.com/docs/batch">batch guide</a>,
     <a href="https://console.groq.com/docs/text-to-speech/orpheus">Orpheus guide</a>, and
     <a href="https://console.groq.com/docs/lora">LoRA guide</a>, reviewed on 2026-09-08.
-    The existing hand-written provider architecture and public chat/model classes are retained.
     The reference page embeds an OpenAPI description, but it lags the feature guides: its speech
-    models omit Orpheus, file purposes omit LoRA uploads, batch endpoints omit audio, and Responses tools omit browser, code, and MCP tools. The
-    contracts therefore follow the current feature guides where they differ from that description.
-    Hidden embeddings, reranking, and model deletion operations are not advertised as public actions.
+    models omit Orpheus, file purposes omit LoRA uploads, batch endpoints omit audio, and Responses tools omit
+    browser, code, and MCP tools. The contracts therefore follow the current feature guides where they differ from
+    that description. Hidden embeddings, reranking, and model deletion operations are not advertised as public
+    actions.
 
     @note LoRA actions host externally trained adapters and require enterprise access. They do not
     train models. Most endpoints use /openai/v1; LoRA metadata uses /v1/fine_tunings.
@@ -205,10 +199,10 @@ printf("%s\n", transcript.text);
     @endcode
 
     @par Files and batch processing
-    Upload File accepts a FileDataType value with a filename and binary or base64 content. Use
-    purpose batch for JSONL requests, or fine_tuning for an enterprise LoRA adapter ZIP. Create Batch
-    returns immediately; inspect it later with Get Batch and download output_file_id using Download File.
-    The module does not wait for batch completion or automatically retry submissions.
+    Upload File accepts a FileDataType value with a filename and binary or base64 content, sent as a named
+    multipart upload. Use purpose batch for JSONL requests, or fine_tuning for an enterprise LoRA adapter ZIP.
+    Create Batch returns immediately; inspect it later with Get Batch and download output_file_id using Download
+    File. The module does not wait for batch completion or automatically retry submissions.
 
     @par Model and response options
     Dropdowns filter known model families and accept custom identifiers for new or account-specific models.
@@ -216,23 +210,13 @@ printf("%s\n", transcript.text);
     accept manually entered voice identifiers. Model-specific reasoning and tool support are enforced by
     Groq. The chat connection option accepts an explicit model ID; connection options do not have the
     action framework's reference-data dropdown mechanism.
-    Completed-response actions hide streaming; use GroqLlmProvider for streaming chat. Existing max_tokens
-    remains accepted, while the action preselects max_completion_tokens. Audio text responses are strings;
+    Completed-response actions hide streaming; use GroqLlmProvider for streaming chat. The chat action accepts
+    max_tokens and preselects max_completion_tokens. Audio text responses are strings;
     speech and file downloads are binary. Typed responses retain additive service metadata.
 
-    @par Tests
-    Run GroqRestClient.qtest, GroqDataProvider.qtest, and GroqActions.qtest with debugging enabled.
-    Set GROQ_LIVE=1 and GROQ_APIKEY to enable live authentication, model, chat, and Responses
-    checks. GROQ_FILE_TESTS=1 enables the temporary-file round trip for eligible accounts.
-    GROQ_RESTRICTED_PLAN_TESTS=1 verifies explicit permission denials for files, batches, and LoRA.
-    GROQ_CONNECTION selects a saved connection; GROQ_CHAT_MODEL overrides the test model.
-    GROQ_AUDIO_TESTS=1 enables transcription and translation of the bundled synthetic speech fixture.
-    GROQ_SPEECH_TESTS=1 separately enables speech generation after the organization accepts the model's terms.
-    Live generation is limited to 128 tokens per chat/Responses request. Temporary files are deleted on
-    exit. Batch creation/cancellation and enterprise LoRA operations are covered by deterministic local
-    transport tests; live tests do not submit batches or deploy adapters.
+    @section GroqDataProviderRelnotes Release Notes
 
-    @subsection GroqDataProviderv1_0 GroqDataProvider v1.0
+    @subsection groqdataproviderv1_1 GroqDataProvider v1.1
     - initial release
 */
 

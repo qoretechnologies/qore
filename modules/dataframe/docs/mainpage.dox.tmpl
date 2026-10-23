@@ -28,6 +28,13 @@
     @ref Qore::DataFrame::DataFrame::toRecords() "DataFrame::toRecords()") raise \c HASH-KEY-ERROR for one, and a
     file path with a NUL character, which would name another file, raises \c DATAFRAME-IO-ERROR.
 
+    The files read and written by @ref Qore::DataFrame::DataFrame::readCSV() "DataFrame::readCSV()",
+    @ref Qore::DataFrame::DataFrame::writeCSV() "DataFrame::writeCSV()",
+    @ref Qore::DataFrame::DataFrame::readParquet() "DataFrame::readParquet()" and
+    @ref Qore::DataFrame::DataFrame::writeParquet() "DataFrame::writeParquet()" are subject to the filesystem sandbox
+    of the calling program: a file the sandbox does not allow to be read or written raises
+    \c FILESYSTEM-ACCESS-DENIED, and a refused write creates or changes no file.
+
     A column of type \c auto can hold any %Qore value, objects included, and a reference cycle through such a value
     (an object in a DataFrame cell that refers to the DataFrame, for example) is collected by the deterministic
     garbage collector as one through the members of an object is.  A DataFrame returned by an operation shares the

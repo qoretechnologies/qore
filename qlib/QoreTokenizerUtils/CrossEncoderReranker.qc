@@ -28,7 +28,7 @@ public namespace QoreTokenizerUtils {
 /** Returned by @ref CrossEncoderReranker::rerankWithScores().  The list of hits is
     ordered by descending \c score and truncated to the caller's \c top_k.
 
-    @since QoreTokenizerUtils 1.1
+    @since QoreTokenizerUtils 1.0.0
 */
 public hashdecl RerankerScoredHit {
     #! Position in the input passage list this hit refers to
@@ -103,7 +103,7 @@ list<int> top_indices = reranker.rerank(query, passages, 2);
 # top_indices might be (0, 2) — the most relevant passages
     @endcode
 
-    @since QoreTokenizerUtils 1.1
+    @since QoreTokenizerUtils 1.0.0
 */
 public class CrossEncoderReranker {
     private {
@@ -524,7 +524,14 @@ public class CrossEncoderReranker {
             hdr."Authorization" = "Bearer " + api_key;
         }
 
-        hash<auto> resp = rest_client.restPost("/v1/rerank", body, hdr);
+        string root = rtrim(rest_client.getConnectionPath() ?? "", "/");
+        if (root !~ /\/v1$/) {
+            root += "/v1";
+        }
+        hash<auto> resp = rest_client.restDoRequestTarget("POST", <RestClient::RestRequestTarget>{
+            "mode": RestClient::RestPathMode::OriginAbsolute,
+            "path": RestClient::rest_request_path(<RestClient::RestRequestTarget>{"path": "rerank"}, root)},
+            body, hdr);
 
         # SGLang/Jina return either a top-level list of hits or {"results": [...]}
         auto hits;

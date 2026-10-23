@@ -138,12 +138,16 @@ auto v = m.call(obj, arg1, arg2);
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class and method has been destroyed
     @throw METHOD-ERROR the object was not instantiated from the class implementing this method
     @throw INVALID-FUNCTION-ACCESS the calling code's or the method's Program's sandboxing restrictions do not allow the method's class or the variant called (see @ref reflection_caller_privilege)
+    @throw REFLECTION-ACCESS-ERROR the calling code may not execute code in the target Program (see @ref reflection_caller_privilege)
 
     @see callArgs()
 */
 auto NormalMethod::call(object obj, ...) {
     // the privileges of the calling code, captured before switching to the method's Program
     QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, obj->getProgram(), "call methods on objects of", xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, m->pgm);
     if (*xsink) {
@@ -188,12 +192,16 @@ auto v = m.callArgs(obj, (arg1, arg2));
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class and method has been destroyed
     @throw METHOD-ERROR the object was not instantiated from the class implementing this method
     @throw INVALID-FUNCTION-ACCESS the calling code's or the method's Program's sandboxing restrictions do not allow the method's class or the variant called (see @ref reflection_caller_privilege)
+    @throw REFLECTION-ACCESS-ERROR the calling code may not execute code in the target Program (see @ref reflection_caller_privilege)
 
     @see call()
 */
 auto NormalMethod::callArgs(object obj, *softlist<auto> argv) {
     // the privileges of the calling code, captured before switching to the method's Program
     QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, obj->getProgram(), "call methods on objects of", xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, m->pgm);
     if (*xsink) {

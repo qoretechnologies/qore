@@ -129,7 +129,10 @@ printf("Response: %s\n", result.choices[0].message.content);
     @section deepseekdataprovidercoverage API Coverage
 
     Contracts follow the <a href="https://api-docs.deepseek.com/api/create-chat-completion">DeepSeek API reference</a>
-    verified in September 2026. Available models are queried at runtime.
+    verified in September 2026. Available models are queried at runtime. Inputs and outputs are typed, with
+    reasoning and vision support; models and uploaded files are offered in dropdowns, images are uploaded as
+    multipart files, and requests are validated before they are sent. Action names and descriptions are
+    translated into twelve locales.
 
     |!Action|!Endpoint|!Purpose
     |Chat Completion|POST /v1/chat/completions|Chat, reasoning, vision, JSON output, function calls
@@ -149,8 +152,9 @@ printf("Response: %s\n", result.choices[0].message.content);
     - Chat JSON output supports <tt>text</tt> or <tt>json_object</tt>; JSON Schema output is available through Create Response.
     - Responses are stateless: send the entire conversation on every call. There are no stored-response actions.
     - File content downloads are not documented by DeepSeek; images are referenced by their uploaded IDs.
-    - Deprecated <tt>frequency_penalty</tt> and <tt>presence_penalty</tt>, and unsupported <tt>seed</tt> and <tt>user</tt> chat options
-      are no longer advertised. Use <tt>user_id</tt> for chat isolation; Responses uses <tt>user</tt>.
+    - The chat action does not offer the deprecated <tt>frequency_penalty</tt> and <tt>presence_penalty</tt> options
+      or the unsupported <tt>seed</tt> and <tt>user</tt> options. Use <tt>user_id</tt> for chat isolation; Responses
+      uses <tt>user</tt>.
     - API failures propagate without replaying requests that may already have generated billable tokens.
     - For Responses JSON Schema output, <tt>schema: {}</tt> accepts any JSON value. The <tt>schema</tt> field must still be
       present and non-null. The <tt>name</tt> field must be a string; empty and whitespace-only names are preserved.
@@ -173,14 +177,6 @@ hash<auto> invoice = response.doRequest({
     @section DeepSeekDataProviderRelnotes Release Notes
 
     @subsection DeepSeekDataProviderv1_1 DeepSeekDataProvider v1.1
-    - Completed the documented API actions with typed inputs and outputs, model and file dropdowns,
-      reasoning and vision support, multipart image uploads, and local validation.
-    - Corrected chat option contracts and beta routing; added regression and opt-in live tests.
-    - Accept valid empty Responses JSON Schemas and schema names while rejecting missing or null fields.
-    - Updated the presentation catalog and all twelve existing translation locales.
-
-
-    @subsection DeepSeekDataProviderv1_0 DeepSeekDataProvider v1.0
     - initial release
 */
 

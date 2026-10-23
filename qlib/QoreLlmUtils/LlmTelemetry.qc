@@ -45,7 +45,9 @@ public class LlmTelemetry {
         \c output_tokens only when it is @ref False.  Usage that was already normalized by a provider module, such
         as \c GeminiBodyShape::normalizeUsage(), keeps its explicit \c reasoning_in_output.
         A total reported by the provider is preserved; a missing total is derived without adding a reasoning
-        count that the provider already includes in its output count.
+        count that the provider already includes in its output count.  The cached input tokens are read from the
+        counters of each provider format, including DeepSeek's \c prompt_cache_hit_tokens; a count that a provider
+        reports in more than one counter is counted once.
 
         @param raw provider-specific usage hash or @ref NOTHING
 

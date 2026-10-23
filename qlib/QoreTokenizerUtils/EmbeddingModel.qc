@@ -77,7 +77,7 @@ list<float> vec = emb.embed("Hello world");
 printf("Embedding dimension: %d\n", vec.size());
     @endcode
 
-    @since QoreTokenizerUtils 1.1
+    @since QoreTokenizerUtils 1.0.0
 */
 public class EmbeddingModel {
     private {
@@ -220,7 +220,7 @@ public class EmbeddingModel {
         }
         @endcode
 
-        @since QoreTokenizerUtils 1.2
+        @since QoreTokenizerUtils 1.0.0
     */
     *ML::Tensor embedBatchTensor(list<string> texts) {
         if (!texts) {
@@ -410,7 +410,7 @@ if (identity.complete) {
 
     #! Calls the OpenAI-compatible /v1/embeddings endpoint
     private list<list<float>> callOpenAiEndpoint(list<string> texts) {
-        hash<auto> body = {
+        hash<auto!> body = {
             "input": texts,
         };
         if (model_name.val()) {
@@ -422,7 +422,14 @@ if (identity.complete) {
             hdr."Authorization" = "Bearer " + api_key;
         }
 
-        hash<auto> resp = rest_client.restPost("/v1/embeddings", body, hdr);
+        string root = rtrim(rest_client.getConnectionPath() ?? "", "/");
+        if (root !~ /\/v1$/) {
+            root += "/v1";
+        }
+        hash<auto> resp = rest_client.restDoRequestTarget("POST", <RestClient::RestRequestTarget>{
+            "mode": RestClient::RestPathMode::OriginAbsolute,
+            "path": RestClient::rest_request_path(<RestClient::RestRequestTarget>{"path": "embeddings"}, root)},
+            body, hdr);
 
         # sort by index and extract embeddings
         list<hash<auto>> data = resp.body.data;

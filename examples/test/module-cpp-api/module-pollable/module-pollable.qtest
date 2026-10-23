@@ -84,6 +84,12 @@ class ModulePollableTest inherits QUnit::Test {
         addTestCase("Socket::poll() waits on a module pollable with the module's hold", \socketPollTest());
         addTestCase("a module pollable closed while the controller waits on it keeps its descriptor until the "
             "controller stops waiting", \closeWhileRegisteredTest());
+        addTestCase("Socket::poll() waits for the extra descriptors of a pollable without a descriptor",
+            \noDescriptorExtraFdsTest());
+        addTestCase("Socket::poll() honours the poll timeout of a pollable without a descriptor",
+            \noDescriptorPollTimeoutTest());
+        addTestCase("Socket::poll() refuses a pollable without a descriptor, extra descriptors or a poll timeout",
+            \noDescriptorRefusedTest());
         set_return_value(main());
     }
 
@@ -105,6 +111,69 @@ class ModulePollableTest inherits QUnit::Test {
         assertEq(1, ready.size(), "the readable module pollable is reported");
         assertEq(SOCK_POLLIN, ready[0].events & SOCK_POLLIN, "the module pollable is readable");
         assertGt(0, probe.getHoldCount(), "the async I/O controller registered the descriptor with the module's hold");
+    }
+
+    noDescriptorExtraFdsTest() {
+        # an object without a descriptor, as a socket whose connection resolves the name of its host, whose poll info
+        # gives the descriptor of the resolver as an extra descriptor
+        CppApiTest::PollableProbe resolving();
+        resolving.close();
+        CppApiTest::PollableProbe resolver();
+        on_exit resolver.close();
+        hash<SocketPollInfo> waiting = <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": resolving,
+            "extra_fds": (<ExtraPollFdInfo>{"fd": resolver.getPollableDescriptor(), "events": SOCK_POLLIN},),
+            "poll_timeout_ms": HangGuard.durationMilliseconds(),
+        };
+        resolver.signal();
+        list<hash<SocketPollInfo>> ready = Socket::poll((waiting,), HangGuard);
+        assertEq(1, ready.size(), "the element is reported with its ready extra descriptor");
+        assertEq(SOCK_POLLIN, ready[0].events, "the events of the extra descriptor, and none for the object");
+        assertEq(resolving, ready[0].socket, "the element's object");
+
+        # with another element whose object is ready, the element without a descriptor is not reported as closed
+        CppApiTest::PollableProbe idle();
+        on_exit idle.close();
+        CppApiTest::PollableProbe open();
+        on_exit open.close();
+        open.signal();
+        waiting.extra_fds = (<ExtraPollFdInfo>{"fd": idle.getPollableDescriptor(), "events": SOCK_POLLIN},);
+        ready = Socket::poll((waiting, <SocketPollInfo>{"events": SOCK_POLLIN, "socket": open}), HangGuard);
+        assertEq(1, ready.size(), "only the ready object is reported");
+        assertEq(open, ready[0].socket, "the ready object");
+    }
+
+    noDescriptorPollTimeoutTest() {
+        CppApiTest::PollableProbe resolving();
+        resolving.close();
+        # only a poll timeout: the poll waits for it and reports nothing
+        list<hash<SocketPollInfo>> ready = Socket::poll((<SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": resolving,
+            "poll_timeout_ms": 10,
+        },), HangGuard);
+        assertEq((), ready, "nothing is reported when the poll timeout expires");
+
+        # an extra descriptor that does not become ready: the poll timeout ends the wait
+        CppApiTest::PollableProbe idle();
+        on_exit idle.close();
+        ready = Socket::poll((<SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": resolving,
+            "extra_fds": (<ExtraPollFdInfo>{"fd": idle.getPollableDescriptor(), "events": SOCK_POLLIN},),
+            "poll_timeout_ms": 10,
+        },), HangGuard);
+        assertEq((), ready, "nothing is reported when the poll timeout expires before the extra descriptor");
+    }
+
+    noDescriptorRefusedTest() {
+        CppApiTest::PollableProbe closed();
+        closed.close();
+        assertThrows("SOCKET-NOT-OPEN", \Socket::poll(), ((<SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": closed,
+        },), HangGuard), "a closed object with nothing else to wait for");
     }
 
     closeWhileRegisteredTest() {

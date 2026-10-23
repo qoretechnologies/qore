@@ -8,8 +8,10 @@
 # building Boost and fails at generation because Boost::headers does not exist.
 #
 # Include once, before the first project() call or any package discovery. Preserve any surviving
-# directory by renaming it, which requires permission on its parent rather than on its contents,
-# and recreate the empty directory CMake expects. Do not change package hints or dependency choices.
+# directory by renaming it, which requires write permission on its parent, and on systems that
+# need it to rename a directory, such as macOS 15, on the directory itself, but none on its
+# contents, and recreate the empty directory CMake expects. Do not change package hints or
+# dependency choices.
 include_guard(GLOBAL)
 
 function(_qore_reset_package_redirects)
@@ -35,7 +37,7 @@ function(_qore_reset_package_redirects)
     if (NOT _result STREQUAL "0")
         message(FATAL_ERROR "Cannot reset stale CMake package redirects in "
             "'${CMAKE_FIND_PACKAGE_REDIRECTS_DIR}': ${_result}. "
-            "Make its parent directory writable or use a new build directory.")
+            "Make it and its parent directory writable, or use a new build directory.")
     endif()
     file(MAKE_DIRECTORY "${CMAKE_FIND_PACKAGE_REDIRECTS_DIR}")
     message(STATUS "Reset stale CMake package redirects; previous files preserved in ${_backup}")

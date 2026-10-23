@@ -11752,6 +11752,9 @@ extern "C" DLLEXPORT int qore_aot_run(
     } while (false);
 
     qore_cleanup();
+    // a child process created with fork() whose modules requested it ends without running exit-time handlers, as
+    // when the main program of qore and qr ends (see qore_fork_child_exit_quickly())
+    qore_fork_child_quick_exit(rc);
     return rc;
 }
 
@@ -12304,6 +12307,9 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
     } while (false);
 
     qore_cleanup();
+    // a child process created with fork() whose modules requested it ends without running exit-time handlers, as
+    // when the main program of qore and qr ends (see qore_fork_child_exit_quickly())
+    qore_fork_child_quick_exit(rc);
     return rc;
 }
 
@@ -14021,6 +14027,9 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
     } while (false);
 
     qore_cleanup();
+    // a child process created with fork() whose modules requested it ends without running exit-time handlers, as
+    // when the main program of qore and qr ends (see qore_fork_child_exit_quickly())
+    qore_fork_child_quick_exit(rc);
     return rc;
 }
 

@@ -20109,3 +20109,95 @@ Java parity and a global performance ceiling remain unestablished.
 All62 audit items, patches, selected IR/assembly, drivers, actual terminal receipts,
 references, restoration checks and2592 raw windows are preserved in
 [results-aot-native-cleanup-rejected-macos-arm64.json](results-aot-native-cleanup-rejected-macos-arm64.json).
+
+## Constructor-default binding and develop integration (2026-10-23)
+
+The integration of develop `a344dd8c9` into `feature/performance` exposed a
+source/AOT mismatch: serialized object defaults lost the constructor variant
+selected by the parser. An escaped module-initialization callback then repeated
+constructor selection under the module-header context, rejecting a builtin
+`Thread::Mutex` member default accepted by source execution. QORD version 21
+preserves the exact signature, including the empty zero-argument signature.
+Available constructors bind at load time; unresolved constructors retain an
+immutable exact signature. Ordinary resolved evaluation has no new lookup or
+cache. Older supported artifacts remain readable with their original behavior;
+recompile them to obtain the binding. This is retained for correctness, with no
+relaxation of caller context or dynamic-call checks.
+
+### Optimized measurement
+
+Both runtimes use Release `-O3 -DNDEBUG`, allocation tracking off, LLVM 22.1.8
+and stripped `qcc -O3` artifacts. The benchmark repeatedly creates a Parent and
+its Child member, reads the Child's integer field, validates the sum and cleans
+up both objects. Each item includes that complete workload; these are not
+isolated constructor or fast-call latencies.
+
+Nine fresh forks per mode use three warmup and three measured 200-ms windows,
+with balanced mode rotation: 27 timed runs, 162 windows, 81 measured. The table
+shows medians of per-fork measured-window means. The legacy control runs the
+exact pre-change artifact on the new runtime, retaining unbound metadata.
+Owned builds/tests were idle during timing; host load, thermals and frequency
+were uncontrolled. This is one layout/session, not a broad performance claim.
+
+|!Mode|!ns per Parent plus Child
+|Before|1651.712
+|After, bound defaults|1567.398
+|Old artifact on new runtime|1592.448
+
+The after/before median decreases 5.1%. Paired geometric-mean changes are
+-4.932% versus before (exploratory bootstrap 95% interval -6.490% to -3.208%)
+and -1.445% versus the old-artifact control (-3.881% to +1.097%). The latter
+interval crosses zero: **an isolated speedup from constructor binding is not
+confirmed**. Do not pool the earlier pre-audit prototype's measurements with
+this final code. There is no fresh Java/develop comparison in this checkpoint.
+
+### Qualification and limits
+
+The final source passes 194/195 selected Release fixtures and
+120/120 selected Debug fixtures, with 2220 independent IR/AOT
+reference comparisons, 12 CMake test scripts and four native unit-test invocations
+(11736 assertions total across AST/IR). Passing fixture summaries contain
+2145 executed Release cases / 73043 assertions and
+611 executed Debug cases / 26398 assertions;
+76 Release and 10 Debug cases were explicitly skipped.
+Fixtures without QUnit summaries are recorded separately by their actual exit
+status. Both builds rebuilt the 252 selected module targets. All 253 qmod aliases
+were restored to Release, with no source-module fallback warning in the fixture
+runs. Stripe's critical loaded module paths and hashes were also checked.
+
+The unpassed Release fixture is `SocketSpecificBind::otherProgramTest`: another
+process binds a specific address while a wildcard listener exists. The socket
+implementation is unchanged from develop. A standalone macOS socket-table probe
+returned zero records while a known listener was active; this suggests a local
+socket-table visibility limitation, but does not establish its root cause.
+The failed assertion is preserved and is not counted as passed. Named external
+service skips also remain unpassed. These checks do not establish full-suite,
+sanitizer or cross-platform certification.
+
+The new regression compares all source modes with stripped AOT at `-O0`/`-O3`,
+including debug-enabled execution, builtin/overloaded/forward constructors,
+inherited and static members, and hashdecl defaults. The frozen pre-change
+runtime reproduces the failure. AssemblyAi's fixture additionally drops an
+unused injection directive; it uses ordinary mock subclasses and retains all
+assertions. The handwritten merge resolution preserves the 83 branch-added
+release-note lines without restoring the 8 obsolete ancestor lines removed by
+develop. The 62-item audit covers these authored changes and merge resolution;
+automatically merged upstream changes receive integration testing, not a claim
+of retrospective individual code audit.
+
+### Next call investigation
+
+Inspect a compile-only specialization that inlines the existing pop handshake
+solely for reusable scalar callback frames. Keep every atomic ordering, reader
+wait and cold materialized-error path, along with all live admission/readiness,
+debugger, physical-stack and cancellation checks. Reject it before timing if it
+adds hot helper calls or increases stack/register-save burden. A retained
+candidate requires a versioned compiler selector, a disabled control, optimized
+before/after measurements and broad regression checks. Simply caching the AOT
+context is not justified: registration can replace/delete that context, and
+normal-entry identity alone is not a lifetime proof. Java parity and a global
+performance ceiling remain unestablished.
+
+The raw timings, fixtures, failures, skips, dependency hashes, drivers,
+independent reviews and all 62 audit results are preserved in
+[results-aot-constructor-default-binding-macos-arm64.json](results-aot-constructor-default-binding-macos-arm64.json).

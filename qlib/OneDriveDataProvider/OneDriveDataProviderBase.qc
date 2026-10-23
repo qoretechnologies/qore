@@ -148,7 +148,7 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
         providers, and a private method declared in one branch is not reachable from the execution
         context of the other.
 
-        @since %OneDriveDataProvider 1.1
+        @since %OneDriveDataProvider 1.0
     */
     string getDriveBasePath(*hash<auto> req) {
         return "me/drive";
@@ -285,7 +285,7 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
 
         @return the REST response
 
-        @since %OneDriveDataProvider 1.1
+        @since %OneDriveDataProvider 1.0
     */
     private hash<auto> doRestRawCommand(string method, string path, data body, string content_type,
             *hash<auto> hdr) {

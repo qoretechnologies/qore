@@ -439,15 +439,19 @@ QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant,
     // the call is deferred as a cross-Program call is (args evaluated in the caller's context, body under the
     // Program's own options); the override forces the caller's restrictions on the domain check and the body
     QoreReflectionCallCheckHelper call_check(caller, pgm);
-    if (variant) {
-        // a fixed variant is not re-checked by variant resolution, so check its domain against the override here
-        bool caller_refused = false;
-        if (!caller.allowsDomain(variant->getDomain(), pgm, &caller_refused)) {
-            xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to function '%s(%s)'",
-                caller_refused ? "parse options" : "the parse options of the Program it was found in", getName(),
-                variant->getSignatureText());
-            return QoreValue();
-        }
+    // Check the fixed variant's domain, or the domains common to all variants before dynamic resolution.
+    // Keep domain errors ahead of the Program-access error for a builtin that the caller already cannot use.
+    bool caller_refused = false;
+    if (!caller.allowsDomain(variant ? variant->getDomain() : getDomain(), pgm, &caller_refused)) {
+        xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to function '%s(%s)'",
+            caller_refused ? "parse options" : "the parse options of the Program it was found in", getName(),
+            variant ? variant->getSignatureText() : "...");
+        return QoreValue();
+    }
+    // Builtins can enter user code or construct Programs as well (for example create_object()), so every call
+    // needs full access to the context in which it will execute, even if the variant itself has no user body.
+    if (caller.checkProgramAccess(pgm, "execute code in", xsink)) {
+        return QoreValue();
     }
     return f->evalFunction(reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), args, pgm, rc, xsink,
         nullptr, true);
@@ -666,6 +670,11 @@ void QoreReflectionCaller::getCallRestrictionOverride(QoreParseOptions& mask, Qo
 
 int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const char* what,
         ExceptionSink* xsink) const {
+    return checkProgramAccess(target, what, Access::Value, xsink);
+}
+
+int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const char* what, Access access,
+        ExceptionSink* xsink) const {
     assert(xsink);
     if (!target || target == pgm) {
         return 0;
@@ -674,17 +683,15 @@ int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const ch
     if (pgm_id && qore_program_private::programCreatedBy(*target, pgm_id)) {
         return 0;
     }
-    // a caller at least as privileged as the target: it restricts no domain the target allows (PO_IN_MODULE only
-    // marks module code and is not a privilege), it allows every domain the target allows explicitly, and no sandbox
-    // other than the target's own governs it.  The code of a user module is not less privileged for lacking a domain
-    // that a Program must allow explicitly (PO_ALLOW_INJECTION, PO_ALLOW_DEBUGGER): those options belong to the
-    // Programs that use the module, one module Program serves every Program that loads it, and an AOT-compiled module
-    // does not inherit them from the Program that loads it; so module code such as the DataProvider module can read
-    // the types of the Programs that hand them to it (PO_IN_MODULE is a system option that user code cannot set)
+    // Declaration inspection cannot exercise the target's explicitly-allowed capabilities. Value access and code
+    // execution must compare them. Only member defaults retain the trusted-module exception: DataProvider needs
+    // their values, and module Programs do not inherit every loader's injection/debugger options.
     QoreParseOptions tpo = target->getParseOptions();
     QoreParseOptions compared = qore_restricting_domains & ~QoreParseOptions(QDOM_IN_MODULE);
-    bool module_code = pgm && pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE));
-    bool privileged = !((po & compared) & ~tpo) && (module_code || !((tpo & qore_positive_domains) & ~po));
+    bool default_module = access == Access::MemberDefault && pgm
+        && pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE));
+    bool privileged = !((po & compared) & ~tpo)
+        && (access == Access::Structural || default_module || !((tpo & qore_positive_domains) & ~po));
     if (privileged && sm) {
         QoreSandboxManager* target_sm = qore_program_private::get(*const_cast<QoreProgram*>(target))
             ->getSandboxManagerRef();

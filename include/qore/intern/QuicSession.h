@@ -442,7 +442,12 @@ public:
     DLLLOCAL int readPacketBatch(const QuicReceivedPacket* packets, int count, ExceptionSink* xsink);
 
     //! Submit an HTTP/3 request (client side)
-    /** @return stream ID on success, -1 on error */
+    /** A request is refused on a closed connection, including one that has been idle for longer than its idle
+        timeout, which RFC 9000 section 10.1 closes even if its idle timer has not run yet: the request would never
+        be sent (see refuseRequestOnClosedLocked()).
+
+        @return stream ID on success, -1 on error
+    */
     DLLLOCAL int64_t submitRequest(const char* method, const char* path,
                           const qore_http_header_pairs_t& headers,
                           const void* body, size_t body_len, ExceptionSink* xsink);
@@ -450,6 +455,8 @@ public:
     //! Submit an HTTP/3 streaming request (client side, headers only)
     /** Opens a new bidirectional stream with a deferred data reader; body data is
         fed incrementally via sendStreamData().
+
+        A request is refused on a closed connection, as by submitRequest().
 
         @param method HTTP method (e.g. "POST")
         @param path request path
@@ -1060,7 +1067,8 @@ public:
     //! Submit a client-side extended CONNECT request (RFC 9220)
     /** Opens a bidirectional stream and sends a CONNECT request with the :protocol
         pseudo-header.  Uses a deferred data provider so the stream stays open for
-        bidirectional tunnel data (e.g., WebSocket frames).
+        bidirectional tunnel data (e.g., WebSocket frames).  A request is refused on a closed connection, as by
+        submitRequest().
 
         @param path the request path (e.g., "/" or "/ws")
         @param headers additional request headers
@@ -1342,6 +1350,24 @@ private:
 
     //! Handle timer expiry without locking (caller must hold mtx_)
     DLLLOCAL int handleExpiryLocked(ExceptionSink* xsink);
+
+    //! Closes the connection as its idle timer does (caller must hold mtx_)
+    /** RFC 9000 section 10.1: the close is silent, and no CONNECTION_CLOSE is sent; the waiters on the session are
+        woken as for any other close (see markClosed()).
+    */
+    DLLLOCAL void closeIdleLocked();
+
+    //! Raises an exception and returns true if a request cannot be submitted because the connection is closed
+    /** Caller must hold mtx_.  A connection that has been idle for longer than its idle timeout is closed by RFC
+        9000 section 10.1 even if its idle timer has not run yet, so the timers that are due are run first (see
+        handleExpiryLocked()).  The exception is the one a read raises for the close (HTTP3-IDLE-CLOSE,
+        HTTP3-LOCAL-CLOSE or HTTP3-PEER-CLOSE), which tells the caller that the request was not sent; a timer error
+        raises QUIC-TIMER-ERROR.
+
+        @param xsink for the exception
+        @return true if the connection is closed and the exception was raised
+    */
+    DLLLOCAL bool refuseRequestOnClosedLocked(ExceptionSink* xsink);
 
     //! Generate outgoing packets without locking (caller must hold mtx_)
     DLLLOCAL int writePacketsLocked(QuicPacketBatch& batch, ExceptionSink* xsink);

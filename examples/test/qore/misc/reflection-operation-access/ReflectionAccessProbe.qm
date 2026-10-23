@@ -1,0 +1,34 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%requires reflection
+
+/** @section reflectionaccessprobeintro Reflection access test fixture
+    Exercises the trusted-module boundary from source and compiled module code.
+*/
+module ReflectionAccessProbe {
+    version = "1.0";
+    desc = "Reflection operation access regression fixture";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public class ReflectionAccessProbe {
+    static auto read(GlobalVar value) {
+        return value.getValue();
+    }
+
+    static write(GlobalVar value) {
+        value.setValue(99);
+    }
+
+    static auto call(Function func) {
+        return func.call();
+    }
+
+    static auto defaultValue(AbstractMember member) {
+        return member.getDefaultValue();
+    }
+}

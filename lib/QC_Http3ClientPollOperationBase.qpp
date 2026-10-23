@@ -934,6 +934,20 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
     }
     if (*xsink || stream_id < 0) {
         endSubmitFail();
+        // a request refused because the QUIC connection is closed (by its idle timer, locally or by the peer) was
+        // not sent: the connection is closed now, so that a retry finds a new one
+        if (*xsink) {
+            QoreValue err = xsink->getExceptionErr();
+            if (err.getType() == NT_STRING) {
+                const char* err_str = err.get<const QoreStringNode>()->c_str();
+                if (!strcmp(err_str, "HTTP3-IDLE-CLOSE") || !strcmp(err_str, "HTTP3-LOCAL-CLOSE")
+                        || !strcmp(err_str, "HTTP3-PEER-CLOSE")) {
+                    QoreValue desc = xsink->getExceptionDesc();
+                    setSubmitError(err_str, desc.getType() == NT_STRING
+                        ? desc.get<const QoreStringNode>()->c_str() : "");
+                }
+            }
+        }
         action->deref(xsink);
         return -1;
     }

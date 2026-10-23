@@ -64,7 +64,7 @@ public namespace LlamaParseDataProvider {
     give two ways to do one thing, with different IDs, different statuses and different result shapes -
     the same reason the deprecated \c file_id and \c parse_job_id are ignored on the classify request.
 
-    @since %LlamaParseDataProvider 1.1
+    @since %LlamaParseDataProvider 1.0
 */
 public class LlamaParseManifest {
     public {

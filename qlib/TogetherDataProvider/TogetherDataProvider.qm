@@ -85,6 +85,19 @@ module TogetherDataProvider {
     - @ref TogetherDataProvider::TogetherEmbeddingDataProvider "TogetherEmbeddingDataProvider" — embeddings
     - @ref TogetherDataProvider::TogetherImageGenerationDataProvider "TogetherImageGenerationDataProvider" — image generation
 
+    The app provides 197 typed REST actions from the official OpenAPI description, covering the v1 and v2 APIs:
+    - chat, text, embeddings, reranking, images, speech, transcription, translation, and video
+    - files, batch inference, fine-tuning, evaluations, and code execution
+    - dedicated models, endpoint deployments, adapters, rollouts, experiments, and analytics
+    - containers, queues, GPU clusters, reinforcement learning, identity, and billing usage
+
+    Model dropdowns are specific to the task, voice dropdowns are scoped to the selected speech model, and
+    references cover projects, organizations, files, training jobs, and parent-scoped resources. Dropdowns fetch
+    one page and allow custom identifiers when an account lacks listing permissions. Transport failures are
+    propagated without replaying requests that may be billable. Dedicated inference and specialized training
+    require the relevant account entitlements; the model catalog also includes models that require a dedicated
+    deployment.
+
     @par Example:
     @code{.py}
 %requires TogetherDataProvider
@@ -103,20 +116,6 @@ hash<auto> result = img.doRequest({
 printf("Image URL: %s\n", result.data[0].url);
     @endcode
 
-    @section TogetherDataProviderRelnotes Release Notes
-
-    @subsection togetherdataproviderv1_1 TogetherDataProvider v1.1
-    - 197 typed REST actions from the official OpenAPI description, covering v1 and v2
-    - chat, text, embeddings, reranking, images, speech, transcription, translation, and video
-    - files, batch inference, fine-tuning, evaluations, and code execution
-    - dedicated models, endpoint deployments, adapters, rollouts, experiments, and analytics
-    - containers, queues, GPU clusters, reinforcement learning, identity, and billing usage
-    - task-specific model dropdowns and voice dropdowns scoped to the selected speech model
-    - project, organization, file, training job, and parent-scoped resource references
-    - preserves the original three action IDs and provider classes
-    - transport failures are propagated without replaying potentially billable requests
-    - file deletion responses accept both documented booleans and the service's textual confirmation
-
     @par File upload example
     @code{.q}
     TogetherDataProvider provider({"apikey": ENV.TOGETHERAI_APIKEY});
@@ -129,29 +128,12 @@ printf("Image URL: %s\n", result.data[0].url);
 
     Uploads accept named FileDataType values or raw binary data. Speech and file download actions
     return binary or text as declared by their response media type. Completed-response actions hide
-    SSE switches; TogetherLlmProvider continues to offer streaming chat. The two WebSocket upgrade
+    SSE switches; TogetherLlmProvider offers streaming chat. The two WebSocket upgrade
     operations are not ordinary request actions.
 
-    @par Testing and costs
-    Local tests use recorded responses and a local HTTP server. Set TOGETHERAI_LIVE=1 and
-    TOGETHERAI_APIKEY for read-only authentication and listing checks. Paid tests additionally require
-    TOGETHERAI_PAID_TESTS=1 and TOGETHERAI_CHAT_MODEL; the chat request is limited to eight output tokens.
-    Optional TOGETHERAI_EMBED_MODEL and TOGETHERAI_RERANK_MODEL enable one short request each.
-    TOGETHERAI_FILE_TESTS=1 uploads a temporary batch input, verifies metadata and downloaded content,
-    and deletes the file on exit. It does not submit a batch job. Set TOGETHER_CONNECTION to exercise
-    a saved connection instead of the environment key. Select paid models from the active serverless
-    endpoints; the model catalog also includes models that require a dedicated deployment.
-    Training and infrastructure provisioning are never started by the test suite.
+    @section TogetherDataProviderRelnotes Release Notes
 
-    @par Updating the schema
-    Re-import with tools/rest-schema-import.qr --spec qlib/TogetherDataProvider/together-import.json.
-    The provenance records the checksum of the unmodified upstream document. The importer checks each
-    declared repair and partitions operations by their explicitly declared v1 or v2 server. Review drift
-    before adopting an upstream change. Dropdowns fetch one page and allow custom identifiers when an
-    account lacks listing permissions. Dedicated inference and specialized training require the relevant
-    account entitlements.
-
-    @subsection TogetherDataProviderv1_0 TogetherDataProvider v1.0
+    @subsection togetherdataproviderv1_1 TogetherDataProvider v1.1
     - initial release
 */
 

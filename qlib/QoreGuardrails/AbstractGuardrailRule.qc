@@ -74,7 +74,7 @@ public hashdecl GuardrailResult {
     the same renderer that drives DataProvider action option forms works
     for guardrail rule configuration forms with no extra glue.
 
-    @since QoreGuardrails 1.1
+    @since QoreGuardrails 1.0.0
 */
 public hashdecl RuleTypeInfo {
     #! The rule type key (e.g. \c "pii", \c "prompt_injection")
@@ -213,7 +213,7 @@ public class AbstractGuardrailRule {
 
         @return the per-parameter schema, keyed by parameter name
 
-        @since QoreGuardrails 1.1
+        @since QoreGuardrails 1.0.0
     */
     public static hash<string, hash<DataProviderOptionInfo>> getConfigSchema() {
         return {};

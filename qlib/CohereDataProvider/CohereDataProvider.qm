@@ -82,16 +82,10 @@ module CohereDataProvider {
     - @ref CohereDataProvider::CohereRerankDataProvider "CohereRerankDataProvider" — reranking
     - @ref CohereDataProvider::CohereClassifyDataProvider "CohereClassifyDataProvider" — classification
 
-    @section CohereDataProviderRelnotes Release Notes
-
-    @subsection coheredataproviderv1_1 CohereDataProvider v1.1
-    - 24 schema-derived actions, including model discovery, tokenization, datasets, embedding jobs,
-      batch inference, document image parsing, and audio transcription
-    - task-filtered model dropdowns and references to existing datasets and jobs
-    - complete current v2 request contracts, including multimodal embeddings and grounded chat
-    - v1 and v2 paths are routed explicitly rather than appended to the connection API prefix
-    - named multipart files preserve extensions and media types for audio and dataset uploads
-    - classification guidance reflects Cohere's retirement of classification fine-tuning and existing fine-tuned models
+    The app provides 24 schema-derived actions, including model discovery, tokenization, datasets, embedding jobs,
+    batch inference, document image parsing, and audio transcription, with the current v2 request contracts,
+    including multimodal embeddings and grounded chat. Model dropdowns are filtered by task, and dataset and job
+    options refer to existing datasets and jobs. Uploaded audio and dataset files keep their names and media types.
 
     @par Example
     @code{.q}
@@ -115,15 +109,15 @@ module CohereDataProvider {
     });
     @endcode
 
-    The vendored schema is pinned to a reviewed upstream revision. Re-import it with
-    <tt>tools/rest-schema-import.qr --spec qlib/CohereDataProvider/cohere-import.yaml</tt> and review drift.
-    Classify remains for compatibility, but Cohere has retired classification fine-tuning and
+    The classify action remains available, but Cohere has retired classification fine-tuning and
     previously fine-tuned models. See Cohere's
     <a href="https://docs.cohere.com/changelog/2025-09-15-major-command-deprecations">September 2025 deprecation notice</a>.
     Use Chat with structured output for new classification workflows. The Chat action returns a
     completed response and does not expose the streaming transport switch.
 
-    @subsection CohereDataProviderv1_0 CohereDataProvider v1.0
+    @section CohereDataProviderRelnotes Release Notes
+
+    @subsection coheredataproviderv1_1 CohereDataProvider v1.1
     - initial release
 */
 

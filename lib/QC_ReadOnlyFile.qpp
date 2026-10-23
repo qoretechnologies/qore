@@ -892,7 +892,7 @@ int ReadOnlyFile::getPos() [flags=RET_VALUE_ONLY] {
 
     @note text in a stateful @ref character_encoding "character encoding" (ex: \c "UTF-7", \c "ISO-2022-JP", \c "IBM930") is read in the shift state left by the characters read before it; each string returned is valid on its own (it starts and ends in the initial shift state, so its bytes can differ from the bytes read), and no bytes after the characters returned are read; once characters have been read, lines and all of the remaining text are read in the same shift state, until the position (ReadOnlyFile::setPos()), the file, or the encoding is changed
 
-    @since %Qore 2.3 text in a stateful @ref character_encoding "character encoding" can be read one character at a time
+    @since %Qore 3.0 text in a stateful @ref character_encoding "character encoding" can be read one character at a time
  */
 *string ReadOnlyFile::getchar() {
     if (check_terminal_io(self, "ReadOnlyFile::getchar", xsink))

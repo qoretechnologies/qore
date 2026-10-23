@@ -6,13 +6,9 @@
 
     @section json_v3_0_0 json Module Version 3.0.0
 
-    - a key with a NUL character in a JSON, CBOR or TOON document, which a hash key cannot hold, raises the parse
-      error of the format (\c JSON-PARSE-ERROR, \c CBOR-PARSE-ERROR or \c TOON-PARSE-ERROR), which gives the key
-      and the byte offset of the NUL character: the key was cut at the NUL character and could replace the value of
-      another key; a TOON key written without quotes is refused too; a JSON Pointer with a NUL character raises
-      \c JSON-POINTER-ERROR
-    - @ref Qore::Json::JsonSchema::load() "JsonSchema::load()" raises \c JSON-SCHEMA-ERROR for a location with a NUL
-      character instead of reading the file named by the location cut at the NUL character
+    - a key with a NUL character in a JSON document, which a hash key cannot hold, raises \c JSON-PARSE-ERROR, which
+      gives the key and the byte offset of the NUL character: the key was cut at the NUL character and could replace
+      the value of another key
     - the json module is now delivered with %Qore itself and versions with it; it was previously
       maintained in a separate \c module-json repository
     - the JSON parser and serializer are published to other binary modules as a versioned C++ API
@@ -163,11 +159,15 @@
     - fixed sprintf bug in JsonRpcHandler batch processing
     - fixed method index population bug in JsonRpcHandler
     - fixed internal method dispatch in JsonRpcHandler for private methods
-
-    @section json_v1_9_2 json Module Version 1.9.2
     - fixed JSON number parsing for signed exponents such as \c 1.2e-05
-    - tightened JSON number validation to reject malformed inputs with invalid decimals, leading zeros, or incomplete
-      exponents
+    - @ref Qore::Json::parse_json() "parse_json()" parses numbers as RFC 8259 section 6 defines them: a number that
+      does not have that form, such as \c "01", \c "-01", \c ".5", \c "-.5", \c "1.", \c "1e", \c "-" or
+      \c "1e5.5", raises \c JSON-PARSE-ERROR; it returned a value for it (see
+      @ref qore_3_0_0_compatibility "Changes That Can Affect Backwards-Compatibility")
+    - @ref Qore::Json::parse_json() "parse_json()" returns an integer outside the range of an \c int as a
+      \c number, which keeps its value; it returned the largest or the smallest \c int
+    - @ref Qore::Json::parse_json() "parse_json()" raises \c JSON-PARSE-ERROR for text after a \c null value, as
+      after any other value; the text was ignored
 
     @section json_v1_9_1 json Module Version 1.9.1
     - improved MCP server capabilities by making the call context available to tools as well as improving error

@@ -157,6 +157,8 @@ module StabilityAiDataProvider {
     use supported <tt>5:4</tt> and <tt>4:5</tt> ratios or another published choice.
 
     Uploads accept binary media or named file objects and use actual multipart encoding.
+    Conditional inputs are validated; binary and base64 inputs, zero and false values, and empty negative prompts
+    are sent as given.
     Successful media includes verified MIME type, bytes, seeds, and completion status.
     Filtered or malformed responses raise errors. Wait helpers retain the job ID on
     timeout and never retry paid submissions. Production polling waits at least ten seconds.
@@ -172,11 +174,6 @@ module StabilityAiDataProvider {
     @section StabilityAiDataProviderRelnotes Release Notes
 
     @subsection StabilityAiDataProviderv1_1 StabilityAiDataProvider v1.1
-    - complete the typed media/account catalog and bounded asynchronous waits
-    - validate conditional inputs and preserve binary, base64, zero, false, and empty negative prompts
-    - add complete registration, presentation, locale, wire, and installed qualification
-
-    @subsection StabilityAiDataProviderv1_0 StabilityAiDataProvider v1.0
     - initial release
 */
 

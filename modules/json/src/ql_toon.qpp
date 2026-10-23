@@ -57,6 +57,7 @@
     exactly as make_json() rejects them.
 */
 
+#include <cerrno>
 #include "qore-json-module.h"
 
 #include "ql_toon.h"
@@ -1643,7 +1644,13 @@ private:
             if (has_dot || has_e) {
                 return q_strtod(t.c_str());
             }
-            return static_cast<int64>(strtoll(t.c_str(), nullptr, 10));
+            errno = 0;
+            long long i = strtoll(t.c_str(), nullptr, 10);
+            if (errno == ERANGE) {
+                // outside the range of an int: a number keeps its value, as with parse_json()
+                return new QoreNumberNode(t.c_str());
+            }
+            return static_cast<int64>(i);
         }
         // plain string
         return new QoreStringNode(tok, len, QCS_UTF8);
@@ -2266,7 +2273,8 @@ DataFrame::DataFrame df(rows);
       parse_json()
     - tabs are not permitted in indentation
     - unquoted numeric tokens without a fractional or exponent part are
-      returned as \c int, otherwise as \c float, consistent with parse_json()
+      returned as \c int, or as \c number if they are outside the range of an
+      \c int, otherwise as \c float, consistent with parse_json()
 
     @see make_toon()
 

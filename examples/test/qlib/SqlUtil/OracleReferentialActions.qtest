@@ -142,7 +142,7 @@ class OracleReferentialActionsTest inherits QUnit::Test {
 %ifdef NoOracle
         throw "SKIP", "no oracle module";
 %else
-        OfflineDatasource ds("oracle:omq/pass@db", "Oracle Database 19c Enterprise Edition Release 19.0.0.0.0",
+        OfflineDatasource ds("oracle:qore/pass@db", "Oracle Database 19c Enterprise Edition Release 19.0.0.0.0",
             "oracle");
         return new OracleTable(ds, name);
 %endif
@@ -198,14 +198,14 @@ class OracleReferentialActionsTest inherits QUnit::Test {
         # another action: the constraint is dropped and added again with it
         list<auto> sql = alignSql(NOTHING, {"on_delete": "cascade"});
         assertEq(2, sql.size());
-        assertEq("alter table omq.ra_c drop constraint fk_ra_c", sql[0]);
-        assertEq("alter table omq.ra_c add constraint fk_ra_c foreign key (pid) references ra_p (id) on delete cascade",
+        assertEq("alter table qore.ra_c drop constraint fk_ra_c", sql[0]);
+        assertEq("alter table qore.ra_c add constraint fk_ra_c foreign key (pid) references ra_p (id) on delete cascade",
             sql[1]);
         sql = alignSql({"on_delete": "cascade"}, {"on_delete": "set null"});
-        assertEq("alter table omq.ra_c add constraint fk_ra_c foreign key (pid) references ra_p (id) on delete set null",
+        assertEq("alter table qore.ra_c add constraint fk_ra_c foreign key (pid) references ra_p (id) on delete set null",
             sql[1]);
         sql = alignSql({"on_delete": "set null"});
-        assertEq("alter table omq.ra_c add constraint fk_ra_c foreign key (pid) references ra_p (id)", sql[1]);
+        assertEq("alter table qore.ra_c add constraint fk_ra_c foreign key (pid) references ra_p (id)", sql[1]);
         assertThrows("FOREIGN-CONSTRAINT-ERROR", "Oracle does not support ON UPDATE", \alignSql(),
             (NOTHING, {"on_update": "cascade"}));
 

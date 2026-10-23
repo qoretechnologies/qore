@@ -88,7 +88,6 @@ module JsonLd {
     @section jsonldrelnotes JsonLd Release Notes
 
     @subsection jsonldv1_0 JsonLd v1.0
-    - document loading errors give the URL without its password
     - initial release
 */
 

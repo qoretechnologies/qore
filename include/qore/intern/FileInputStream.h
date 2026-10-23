@@ -39,6 +39,7 @@
 #include <unistd.h>
 #include "qore/InputStream.h"
 #include "qore/intern/FileStreamIo.h"
+#include "qore/intern/qore_qf_private.h"
 
 /**
  * @brief Private data for the Qore::FileInputStream class.
@@ -103,11 +104,30 @@ public:
             xsink->raiseException("FILE-READ-ERROR", "file is not open");
             return -1;
         }
+#ifdef DARWIN
+        // at the end of a named pipe that a read has returned, the waits report the pipe readable at once, so a read
+        // is made only if the pipe has data (see qore_qf_private::fifo_end_read)
+        if (f.priv->fifo_end_read) {
+            int ready = f.priv->fifoEndReadReady();
+            if (ready < 0) {
+                xsink->raiseException("FILE-READ-ERROR", "read failed: %s", strerror(errno));
+                return -1;
+            }
+            if (!ready) {
+                return 0;
+            }
+        }
+#endif
         int err;
-        ssize_t rc = qore_file_stream_read_now(fd, ptr, static_cast<size_t>(limit), err);
+        bool read_done;
+        ssize_t rc = qore_file_stream_read_now(fd, ptr, static_cast<size_t>(limit), err, &read_done);
         if (rc < 0) {
             xsink->raiseException("FILE-READ-ERROR", "read failed: %s", strerror(err));
             return -1;
+        }
+        if (read_done) {
+            // the end of a named pipe is recorded for the waits on the stream's descriptor
+            f.priv->noteReadResult(rc, static_cast<size_t>(limit));
         }
         return rc;
     }

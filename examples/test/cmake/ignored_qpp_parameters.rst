@@ -23,7 +23,9 @@ The default is ``build/``.  For Debug qualification, set
 ``QORE_TEST_OUTPUT_DIR`` retains generated files, command receipts and logs.
 The default native flags are ``-O3 -DNDEBUG -g``; distribution qualification
 passes the actual package flags through ``QORE_TEST_CXXFLAGS``.  Both modes
-add ``-Wall -Werror`` for the affected wrappers.  The RPM test section runs
+add ``-Wall -Werror`` for the affected wrappers, and the deployment target
+of the build (``CMAKE_OSX_DEPLOYMENT_TARGET``) on macOS, so that linking with
+the build's library does not warn.  The RPM test section runs
 this regression with the distribution compiler flags.
 
 The regression processes the four actual QPP source files, and also restores

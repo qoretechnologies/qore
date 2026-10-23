@@ -580,7 +580,7 @@ public:
     QoreParseOptions inherited_exec_mode_parse_options;
 
     //! the parent whose external data is copied once this Program is fully constructed
-    /** nullptr when there is nothing to copy; see copyExternalData()
+    /** nullptr when the Program does not inherit it (PO_NO_INHERIT_PROGRAM_DATA); see copyExternalData()
     */
     QoreProgram* ext_parent = nullptr;
 
@@ -1087,7 +1087,18 @@ public:
 protected:
     typedef vector_map_t<const char*, AbstractQoreProgramExternalData*> extmap_t;
     //typedef std::map<const char*, AbstractQoreProgramExternalData*, ltstr> extmap_t;
+    //! the external data of binary modules; protected by plock
     extmap_t extmap;
+
+    //! the number of child Programs copying the external data of this Program without plock (copyExternalData())
+    /** While it is not 0, the entries of extmap are not removed (removeExternalData() waits), so that the copies can
+        use them.  Protected by plock, signaled with ext_copy_cond.
+    */
+    unsigned ext_copy_count = 0;
+    //! the number of threads in removeExternalData() waiting for ext_copy_count to become 0; protected by plock
+    unsigned ext_copy_waiting = 0;
+    //! signaled when ext_copy_count becomes 0 while ext_copy_waiting is set
+    QoreCondition ext_copy_cond;
 
     // objects captured from languages without deterministic garbage collection (e.g. jni, python);
     // each is held with a strong reference and released when this program is torn down, so the
@@ -2904,6 +2915,15 @@ public:
 
     DLLLOCAL const QoreClass* runtimeFindClass(const char* class_name, ExceptionSink* xsink) const;
 
+    //! waits until no child Program copies the external data of this Program; plock must be held
+    DLLLOCAL void waitForExternalDataCopiesIntern() {
+        while (ext_copy_count) {
+            ++ext_copy_waiting;
+            ext_copy_cond.wait(plock);
+            --ext_copy_waiting;
+        }
+    }
+
     DLLLOCAL void setExternalData(const char* owner, AbstractQoreProgramExternalData* pud) {
         AutoLocker al(plock);
         assert(extmap.find(owner) == extmap.end());
@@ -2918,6 +2938,9 @@ public:
 
     DLLLOCAL AbstractQoreProgramExternalData* removeExternalData(const char* owner) {
         AutoLocker al(plock);
+        // a child Program copying the external data uses the entries without the lock (see copyExternalData()):
+        // the entry is removed, and its caller can destroy it, once no copy is in progress
+        waitForExternalDataCopiesIntern();
         extmap_t::iterator i = extmap.find(owner);
         if (i == extmap.end()) {
             return nullptr;

@@ -180,7 +180,7 @@ public class OneDriveRestClientBase {
             Profile values are <b>defaults, not overrides</b>: an option the caller set explicitly
             always wins.
 
-            @since %OneDriveRestClient 1.1
+            @since %OneDriveRestClient 1.0
         */
         const ApiProfiles = {
             "onedrive": {
@@ -441,7 +441,7 @@ public class OneDriveRestConnection inherits RestClient::RestConnection {
         *this* class's constant and rewrite the subclass's scheme back to \c "onedrive://".  The
         subclass therefore passes the URL it wants to normalize to.
 
-        @since %OneDriveRestClient 1.1
+        @since %OneDriveRestClient 1.0
     */
     constructor(hash<auto> config, *hash<auto> attr, string default_url)
             : RestConnection(OneDriveRestConnection::getConfig(config, default_url), attr) {
@@ -553,7 +553,7 @@ public class OneDriveRestConnection inherits RestClient::RestConnection {
 
         @return the canonical URL for this connection type
 
-        @since %OneDriveRestClient 1.1
+        @since %OneDriveRestClient 1.0
     */
     string getDefaultUrl() {
         return DefaultUrl;
@@ -613,7 +613,7 @@ public class OneDriveRestConnection inherits RestClient::RestConnection {
     @ref OneDriveRestClientBase::ApiProfiles "ApiProfiles", which this connection pins, so there is no
     separate SharePoint client class to keep in step with Microsoft's OAuth2 handling.
 
-    @since %OneDriveRestClient 1.1
+    @since %OneDriveRestClient 1.0
 */
 public class SharePointRestConnection inherits OneDriveRestConnection {
     public {
@@ -630,7 +630,7 @@ public class SharePointRestConnection inherits OneDriveRestConnection {
             This class shadows @ref OneDriveRestConnection::DefaultUrl, so it says so explicitly
             here instead of relying on that resolution.
 
-            @since %OneDriveRestClient 1.1
+            @since %OneDriveRestClient 1.0
         */
         const DefaultConnectionUrl = DefaultUrl;
 

@@ -141,8 +141,10 @@ dependency discovery. These files describe targets from one configure run and mu
 on the next run. If CMake could not remove old redirects (for example because another user owns
 the directory), Qore moves the directory to CMakeFiles/pkgRedirects.stale-<suffix>, prints that
 path, and creates an empty redirect directory. This prevents false package matches such as
-Boost being reported as found while Arrow cannot link Boost::headers. If the parent directory
-is also unwritable, configuration stops with a permissions diagnostic.
+Boost being reported as found while Arrow cannot link Boost::headers. If the directory cannot be
+moved, because its parent directory is not writable or, on systems that need write permission on
+a directory to rename it, such as macOS 15, the directory itself is not writable, configuration
+stops with a permissions diagnostic.
 
 
 Downloaded Dependency Sources

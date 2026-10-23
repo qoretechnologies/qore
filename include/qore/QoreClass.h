@@ -470,7 +470,7 @@ public:
         @param returnTypeInfo the return type of the method
         @param num_params the number of parameters
 
-        @since %Qore 2.0
+        @since %Qore 3.0
     */
     DLLEXPORT void addConstMethod(const char* n_name, q_method_t meth, ClassAccess access = Public,
         int64 n_flags = QCF_NO_FLAGS, int64 n_domain = QDOM_DEFAULT, const QoreTypeInfo* returnTypeInfo = 0,
@@ -530,7 +530,7 @@ public:
         @param defaultArgList a list of default arguments to each parameter
         @param n_names a list of parameter names
 
-        @since %Qore 2.0
+        @since %Qore 3.0
     */
     DLLEXPORT void addConstMethod(const void* ptr, const char* n_name, q_external_method_t meth,
         ClassAccess access = Public, int64 n_flags = QCF_NO_FLAGS, int64 n_domain = QDOM_DEFAULT,
@@ -559,7 +559,7 @@ public:
         @param returnTypeInfo the return type of the method
         @param num_params the number of parameters
 
-        @since %Qore 2.0
+        @since %Qore 3.0
     */
     DLLEXPORT void addConstAbstractMethod(const char* n_name, ClassAccess access = Public,
         int64 n_flags = QCF_NO_FLAGS, const QoreTypeInfo* returnTypeInfo = 0, unsigned num_params = 0, ...);
@@ -576,7 +576,7 @@ public:
         @param defaultArgList a list of default arguments to each parameter
         @param n_names a list of parameter names
 
-        @since %Qore 2.0
+        @since %Qore 3.0
     */
     DLLEXPORT void addConstAbstractMethod(const char* n_name, ClassAccess access, int64 n_flags,
         const QoreTypeInfo* returnTypeInfo, const type_vec_t& n_typeList,
@@ -1011,7 +1011,7 @@ public:
         with this base class's data (meaning that the base class's private data object is also a base class of this
         class's private data object)
 
-        @since %Qore 2.1
+        @since %Qore 3.0
     */
     DLLEXPORT void addBaseClass(QoreClass* qc, ClassAccess access, bool virt = false);
 
@@ -1023,7 +1023,7 @@ public:
 
         Safe to call multiple times; subsequent calls are no-ops.
 
-        @since %Qore 2.1
+        @since %Qore 3.0
     */
     DLLEXPORT void initializeBuiltin();
 
@@ -1289,7 +1289,7 @@ public:
         This method checks all abstract method variants against parent class implementations
         and removes abstract variants that have matching concrete implementations in parent classes.
 
-        @since %Qore 2.2
+        @since %Qore 3.0
      */
     DLLEXPORT void runtimeResolveAbstractMethods();
 

@@ -180,7 +180,8 @@ module JinaDataProvider {
     use documented contracts not described completely by that schema. The schema is installed with the
     module; requests never download it. Model dropdowns use the live model catalog and return the short
     IDs expected by inference endpoints. Classifier and batch dropdowns accept IDs from earlier workflow
-    steps, including IDs outside the most recent listing.
+    steps, including IDs outside the most recent listing. Options offer their finite choices, and inputs are
+    validated before a request is sent.
 
     @par Example: classify incoming support requests
     @code{.py}
@@ -254,15 +255,6 @@ hash<auto> vectors = provider.getChildProvider("create-embeddings").doRequest({
     @section JinaDataProviderRelnotes Release Notes
 
     @subsection JinaDataProviderv1_1 JinaDataProvider v1.1
-    - orders required inputs before optional controls, provides readable model and image-retention choices,
-      and formats API literals consistently in all presentation catalogs
-    - declares the JSON dependency directly so source loading can resolve the batch JSONL parser
-    - expands the app from two to 19 actions with schema-derived inference and batch forms
-    - adds live model and account dropdowns, finite choices, sensitive fields, and input validation
-    - preserves embedding/reranking providers and fixes the legacy embedding encoding option
-    - adds offline wire tests and optional live API integration tests
-
-    @subsection JinaDataProviderv1_0 JinaDataProvider v1.0
     - initial release
 */
 

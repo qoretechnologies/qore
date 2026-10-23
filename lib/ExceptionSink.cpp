@@ -60,14 +60,30 @@ void qore_es_private::assimilate(qore_es_private& xs) {
         }
         tail = xs.tail;
 
+        QoreException* adopted = xs.head;
         xs.head = xs.tail = nullptr;
-        // NOTE: xs.count can be 0 if the object is externally managed
+        // An exception is counted as active on the thread that holds it in a sink that Qore manages, and is not
+        // counted while a sink managed outside of Qore (see markExternallyManaged()) holds it; a module uses such a
+        // sink to keep exceptions beyond the call that raised them, or to hand them to another thread.  The counts
+        // therefore move with the exceptions: assimilated into a sink managed outside of Qore, they leave the count
+        // of the current thread; assimilated from such a sink, they are counted on the current thread as if raised
+        // in it, so that the sink can be handled or assimilated in turn like any other.
         if (!xs.externally_managed) {
             assert(xs.count);
-            count += xs.count;
+            if (externally_managed) {
+                inc_active_exceptions(-static_cast<int>(xs.count));
+            } else {
+                count += xs.count;
+            }
             xs.count = 0;
         } else {
             assert(!xs.count);
+            if (!externally_managed) {
+                for (QoreException* e = adopted; e; e = e->next) {
+                    ++count;
+                    inc_active_exceptions(1);
+                }
+            }
         }
     } else {
         assert(!xs.head);

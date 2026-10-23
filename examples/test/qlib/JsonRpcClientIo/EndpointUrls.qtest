@@ -1,0 +1,57 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires HttpServer
+%requires JsonRpcClientIo
+%exec-class RpcEndpointTest
+
+class EndpointPeer inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, make_json({"jsonrpc":"2.0", "id":1, "result":cx.raw_path}), {"Content-Type":"application/json"});
+    }
+}
+class RpcEndpointTest inherits QUnit::Test {
+    constructor() : Test("JsonRpcClientIo endpoint URLs", "1.0") {
+        addTestCase("Both constructors send the selected path and query", \endpoints());
+        set_return_value(main());
+    }
+    private endpoints() {
+        HttpServer server(); on_exit server.stop();
+        server.setDefaultHandler("endpoint", new EndpointPeer());
+        int port = server.addListener(<HttpListenerOptionInfo>{"node":"127.0.0.1", "service":0}).port;
+        string origin = sprintf("http://127.0.0.1:%d", port);
+        foreach hash<auto> row in (
+                {"suffix":"", "target":"/JSON"},
+                {"suffix":"", "default_path":"custom", "target":"/custom"},
+                {"suffix":"", "default_path":"/custom", "target":"/custom"},
+                {"suffix":"", "default_path":"//custom//", "target":"/custom//"},
+                {"suffix":"", "default_path":"", "target":"/"},
+                {"suffix":"/", "default_path":"custom", "target":"/"},
+                {"suffix":"?x=%2F&x=2+3#help", "target":"/JSON?x=%2F&x=2+3"},
+                {"suffix":"?", "default_path":"custom", "target":"/custom?"},
+                {"suffix":"#help", "default_path":"/custom", "target":"/custom"},
+                {"suffix":"/rpc?x=%23#help", "target":"/rpc?x=%23"},
+                {"suffix":"/rpc?#help", "target":"/rpc?"},
+                {"suffix":"/rpc/", "target":"/rpc/"},
+                {"suffix":"//rpc//", "target":"//rpc//"},
+                {"suffix":"/a/../b/%2e/%2F", "target":"/a/../b/%2e/%2F"},
+                {"suffix":"/a b/č?x=a b", "target":"/a%20b/%C4%8D?x=a%20b"}) {
+            foreach string scheme in ("http", "jsonrpc", "jsonrpcio") {
+                foreach bool legacy in (False, True) {
+                    string url = replace(origin, "http:", scheme + ":") + row.suffix;
+                    hash<auto> opts = {"http_protocol":"h1", "timeout":5000};
+                    if (exists row.default_path) { opts.default_path = row.default_path; }
+                    JsonRpcClientIo client = legacy ? new JsonRpcClientIo(opts + {"url":url})
+                        : new JsonRpcClientIo(url, opts);
+                    on_exit client.close();
+                    assertEq(origin + row.target, client.getUrl());
+                    hash<auto> response = client.call("echo");
+                    assertEq(row.target, response.result);
+                }
+            }
+        }
+    }
+}

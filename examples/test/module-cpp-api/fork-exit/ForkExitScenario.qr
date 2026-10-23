@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Run by fork-exit.qtest: ForkExitScenario.qr <case> <qore binary> <exec mode>
+#
+# Loads the forkexita and forkexitb test modules, whose exit-time code blocks forever (forkexita: an atexit() handler)
+# or aborts (forkexitb: a static destructor) in a child process created with fork(), and which request a quick exit
+# in their child fork handlers if armed to.  The script forks, the child exits in the way the case names, and the
+# script reads the markers that the exit-time code of the child writes to a pipe before it blocks or aborts, until
+# the end of the pipe (all of its write ends are closed when the child has ended).  The child blocks only after it
+# has written its marker, which the script reads before it kills the child, so no wait depends on time; the hang
+# guard only turns an unexpected wait into a failure.  The script prints:
+#   child markers=<markers> status=<exit status of the child, -1 if it did not exit normally>
+# and, at its own exit, the markers of its own exit-time code on stdout (which must run in the parent).
+
+# provides cpp_api_wait_child()
+%requires cppapiuser
+%requires forkexita
+%requires forkexitb
+
+const HangGuard = 10m;
+
+string test_case = shift ARGV;
+string qore_bin = shift ARGV ?? "qore";
+string exec_mode = shift ARGV ?? "ast";
+
+if (test_case == "exec-child") {
+    # started with exec() by a child that exits quickly: the request is not inherited, and the exit-time code runs
+    ForkExitA::arm(1, False);
+    ForkExitB::arm(1, False);
+    printf("exec-child exits_quickly=%y\n", ForkExitA::exits_quickly());
+    flush();
+    exit(0);
+}
+
+# reads the marker lines from the pipe until its end; kills the process when a module's exit-time code blocks
+string sub read_markers(ReadOnlyFile r, int pid) {
+    list<string> markers = ();
+    while (True) {
+        if (!r.isDataAvailable(HangGuard)) {
+            markers += "hang-guard";
+            kill(pid, SIGKILL);
+            break;
+        }
+        *string line = r.readLine(False);
+        if (!line) {
+            break;
+        }
+        markers += line;
+        if (line =~ /-hang$/) {
+            # the exit-time code blocks forever after it has written its marker
+            kill(pid, SIGKILL);
+        }
+    }
+    return markers.join(",");
+}
+
+# the modules whose exit-time code is armed, and whether they request a quick exit
+bool arm_a = True;
+bool arm_b = True;
+bool request = True;
+switch (test_case) {
+    case "control-a": arm_b = False; request = False; break;
+    case "control-b": arm_a = False; request = False; break;
+    case "control-end-a": arm_b = False; request = False; break;
+    case "grandchild-unrequested": arm_b = False; break;
+    case "parent-request":
+        # a request outside of a fork handler has no effect
+        ForkExitA::request_now();
+        ForkExitB::request_now();
+        printf("parent exits_quickly=%y\n", ForkExitA::exits_quickly() || ForkExitB::exits_quickly());
+        break;
+}
+
+hash<PipeInfo> p = File::getPipe();
+int fd = p.write.getPollableDescriptor();
+ForkExitA::arm(arm_a ? fd : -1, request);
+ForkExitB::arm(arm_b ? fd : -1, request);
+flush();
+
+int pid = fork();
+if (!pid) {
+    switch (test_case) {
+        case "exit":
+        case "parent-request":
+        case "control-a":
+        case "control-b":
+            exit(7);
+
+        case "end":
+        case "control-end-a":
+            # the end of the main program of the child, with its exit status
+            return 5;
+
+        case "uncaught":
+            throw "FORK-EXIT-TEST", "an exception that is not caught";
+
+        case "sigterm": {
+            # the signal thread ends the process; this thread waits until then
+            kill(getpid(), SIGTERM);
+            Counter c(1);
+            c.waitForZero();
+            exit(98);
+        }
+
+        case "grandchild":
+        case "grandchild-unrequested": {
+            # a child created by this child exits quickly only if a module requests it again in that fork()
+            hash<PipeInfo> gp = File::getPipe();
+            ForkExitA::arm(gp.write.getPollableDescriptor(), test_case == "grandchild");
+            ForkExitB::arm(test_case == "grandchild" ? gp.write.getPollableDescriptor() : -1, test_case == "grandchild");
+            int gpid = fork();
+            if (!gpid) {
+                exit(4);
+            }
+            # the modules write to copies of the descriptors they are armed with: this child arms them with the pipe
+            # of its parent again, so that only the grandchild holds the write end of the grandchild's pipe; this
+            # child still exits quickly, since its own request is for the fork() that created it
+            ForkExitA::arm(fd, True);
+            ForkExitB::arm(test_case == "grandchild" ? fd : -1, True);
+            gp.write.close();
+            string gmarkers = read_markers(gp.read, gpid);
+            printf("grandchild markers=%s status=%d\n", gmarkers, cpp_api_wait_child(gpid));
+            flush();
+            exit(6);
+        }
+
+        case "exec":
+            exec(sprintf("%s --exec-mode=%s %s exec-child", qore_bin, exec_mode, get_script_path()));
+    }
+    exit(99);
+}
+
+# the parent's exit-time code writes its markers to stdout when this script exits; the modules write to copies of the
+# descriptors they are armed with, so arming them again closes their copies of the write end of the pipe
+ForkExitA::arm(1, False);
+ForkExitB::arm(1, False);
+p.write.close();
+string markers = read_markers(p.read, pid);
+printf("child markers=%s status=%d\n", markers, cpp_api_wait_child(pid));
+flush();

@@ -21,8 +21,8 @@
 */
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/RestSchemaDataProvider
+%requires QUnit
+%requires RestSchemaDataProvider
 %requires json
 %exec-class QueryArraysTest
 
@@ -33,9 +33,9 @@ class QueryArrayClient inherits RestClientIo::RestClientIo {
     }
     constructor() : RestClientIo({"url": "https://example.com"}) {
     }
-    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+    hash<RestClient::RestResponseInfo> restDoRawRequestTarget(string method, hash<RestClient::RestRequestTarget> target, *data body,
             *hash<auto> headers) {
-        request_path = path;
+        request_path = target.path;
         ++requests;
         return <RestClient::RestResponseInfo>{"status_code": 200, "body": {}, "headers": {}};
     }

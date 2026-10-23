@@ -196,8 +196,13 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      and type was bound to the top-level variable (and a handler's or closure's reference to an outer
 //!      variable to a same-named local of the function).  A v9-v18 file carries no binding and is resolved by
 //!      name and type as before.
+//! v20: closure entry locations and lexical parse options are retained (see QoreAOTClosureEntry).
+//! v21: VT_NEW_OBJECT defaults carry a bound-variant flag and, when set, an exact constructor signature.
+//!      Older defaults remain unbound; recompilation is needed to recover the parser's selection.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 20;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 21;
+//! Object-construction defaults preserve the parser's exact constructor variant.
+constexpr uint16_t QORE_AOT_OBJECT_DEFAULT_VARIANT_VERSION = 21;
 //! Closure records preserve their entry location and lexical parse options.
 constexpr uint16_t QORE_AOT_CLOSURE_ENTRY_VERSION = 20;
 constexpr size_t QORE_AOT_CLOSURE_ENTRY_BYTES = 40;
@@ -666,7 +671,7 @@ enum class QoreAOTValueTag : uint8_t {
     VT_ABS_DATE_REGION = 13,
     //! Enum value: namespace path + member name
     VT_ENUM = 14,
-    //! New object constructor call expression: class path + serialized constructor args
+    //! New object constructor call expression: class path + optional exact variant + serialized constructor args
     //! Used for member initializers like "Mutex m()" that need runtime evaluation
     VT_NEW_OBJECT = 15,
     //! Reference to another constant by fully-qualified name.
@@ -2718,6 +2723,8 @@ class QoreAOTBinaryDeserializer {
         //! registered. Resolved into a ScopedObjectCallNode and installed
         //! into default_val in the second pass, after all classes exist.
         std::string pending_new_class_path;
+        bool pending_new_has_variant = false;
+        std::string pending_new_variant;
         //! Evaluated constructor args for pending_new_class_path (owned).
         std::vector<QoreValue> pending_new_args;
         //! When set, the member init references an enum member that was not
@@ -2760,6 +2767,8 @@ class QoreAOTBinaryDeserializer {
         QoreValue default_val;
         //! Same deferred-new-object channel as PendingInstanceMember.
         std::string pending_new_class_path;
+        bool pending_new_has_variant = false;
+        std::string pending_new_variant;
         std::vector<QoreValue> pending_new_args;
         //! Same deferred-enum channel as PendingInstanceMember.
         std::string pending_enum_path;
@@ -2820,6 +2829,8 @@ class QoreAOTBinaryDeserializer {
         // Class was not yet registered at hashdecl-read time.  Resolved
         // into a ScopedObjectCallNode after all classes exist.
         std::string pending_new_class_path;
+        bool pending_new_has_variant = false;
+        std::string pending_new_variant;
         std::vector<QoreValue> pending_new_args;
 
         // Deferred VT_NEW_COMPLEX_DEFAULT: kind 0=complex list,

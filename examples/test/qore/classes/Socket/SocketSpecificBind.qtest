@@ -1,0 +1,277 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A socket bound to a specific address of a port receives the clients of that address instead of a socket that
+    listens on the port on all interfaces, so a bind of a specific address with SO_REUSEADDR is refused (EADDRINUSE)
+    if a socket on a wildcard address that covers it holds the port and listens, or does not reuse the address; of
+    two such sockets that are bound, the one that listens first holds the port, and the other cannot listen.  Linux
+    behaves so; macOS allowed the binds and both listens, so that a later program of the same user took the clients
+    of the address.  On macOS, a TCP bind of the specific address is also refused if the socket on the wildcard
+    address reuses the address and does not listen, which Linux allows: macOS gives a connection request to the
+    socket bound to the specific address even if it does not listen, which drops it, so the clients of the address
+    would not reach the wildcard socket once it listens.  Binds without SO_REUSEADDR were refused on both systems.
+
+    Every port is assigned by the system to the socket that holds it, so the tests can run at the same time as other
+    programs.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SocketSpecificBindTest
+
+class SocketSpecificBindTest inherits QUnit::Test {
+    public {
+        #! the result of a bind that is allowed
+        const Bound = "bound";
+
+        #! the result of a TCP bind of a specific address with SO_REUSEADDR over a bound wildcard socket that reuses the
+        #! address and does not listen
+        const ReuseBoundHolderResult = PlatformOS == "Darwin" ? "EADDRINUSE" : Bound;
+    }
+
+    private {
+        #! true if the system has an IPv6 loopback address
+        bool ipv6;
+    }
+
+    constructor() : Test("SocketSpecificBindTest", "1.0") {
+        ipv6 = SocketSpecificBindTest::hasIpv6();
+        addTestCase("a specific address with SO_REUSEADDR is refused a port on which a socket listens on all "
+            "interfaces", \listeningHolderTest());
+        addTestCase("another program is refused a specific address of a port on which this program listens on all "
+            "interfaces", \otherProgramTest());
+        addTestCase("a specific address with SO_REUSEADDR is refused a port bound on all interfaces without "
+            "SO_REUSEADDR", \boundHolderTest());
+        addTestCase("of two sockets bound with SO_REUSEADDR, the one that listens first holds the port",
+            \listenOrderTest());
+        addTestCase("a datagram socket with SO_REUSEADDR is refused a specific address of a port bound on all "
+            "interfaces without SO_REUSEADDR", \datagramTest());
+        addTestCase("a specific address without SO_REUSEADDR is refused a port held on all interfaces",
+            \noReuseTest());
+        set_return_value(main());
+    }
+
+    #! returns the string as one word of a POSIX shell command
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+
+    #! returns true if a socket can be bound to the IPv6 loopback address
+    private static bool hasIpv6() {
+        Socket s();
+        on_exit s.close();
+        try {
+            s.bindINET("::1", 0, False, AF_INET6);
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+
+    #! returns a TCP socket bound on all interfaces with a system-assigned port
+    /** @param kind \c "ipv4" for 0.0.0.0, or \c "dual" for a dual-stack IPv6 socket on ::, which serves IPv4 clients
+        too (an IPv6-only socket, which the Socket class does not make, is tested by the libqore unit tests)
+    */
+    private static Socket wildcard(string kind, bool reuse, bool listen, int socktype = SOCK_STREAM) {
+        Socket s();
+        switch (kind) {
+            # all-interfaces: the test binds specific addresses of a port held on a wildcard address
+            case "ipv4": s.bindINET("0.0.0.0", 0, reuse, AF_INET, socktype); break;
+            # all-interfaces: a dual-stack socket on :: holds the port for both address families
+            case "dual": s.bindINET(NOTHING, 0, reuse, AF_UNSPEC, socktype); break;
+        }
+        if (listen && socktype == SOCK_STREAM) {
+            if (s.listen()) {
+                throw "TEST-ERROR", sprintf("listen on %s failed: %s", kind, strerror());
+            }
+        }
+        return s;
+    }
+
+    #! returns a port that is free in both address families and held only by connections, and their sockets
+    /** A dual-stack listener on a port that the system assigns, which is free in both address families, accepts a
+        connection over IPv6 and one over IPv4, and is closed; the connections hold the port in both families, so
+        that the system assigns it to no other socket and refuses binds of it without SO_REUSEADDR.
+    */
+    private static list<auto> connectionHeldPort() {
+        Socket l();
+        on_exit l.close();
+        l.bindINET(NOTHING, 0, True);  # all-interfaces: a dual-stack listener gives a port free in both families
+        if (l.listen()) {
+            throw "TEST-ERROR", sprintf("listen failed: %s", strerror());
+        }
+        int port = l.getSocketInfo(False).port;
+        # built element by element: a list literal of an int would be a list<int>
+        list<auto> rv;
+        rv += port;
+        foreach string address in (("::1", "127.0.0.1")) {
+            Socket c();
+            c.connectINET(address, port, 5s, address =~ /:/ ? AF_INET6 : AF_INET);
+            rv += c;
+            *Socket a = l.accept(5s);
+            if (!a) {
+                throw "TEST-ERROR", sprintf("no connection to %s:%d was accepted", address, port);
+            }
+            rv += a;
+        }
+        return rv;
+    }
+
+    #! binds a socket to the address and port and returns it, or the error of the bind
+    private static list<auto> bindTo(string address, int port, bool reuse, int socktype = SOCK_STREAM) {
+        Socket s();
+        try {
+            s.bindINET(address, port, reuse, address =~ /:/ ? AF_INET6 : AF_INET, socktype);
+            return (Bound, s);
+        } catch (hash<ExceptionInfo> ex) {
+            s.close();
+            return (ex.err == "SOCKET-BIND-ERROR" && ex.desc.find(strerror(EADDRINUSE)) != -1
+                ? "EADDRINUSE"
+                : sprintf("%s: %s", ex.err, ex.desc),);
+        }
+    }
+
+    #! asserts the result of binds of the loopback addresses with SO_REUSEADDR over a holder of the given kind
+    private assertLoopbackBinds(string kind, bool reuse, bool listen, string v4, string v6) {
+        string desc = sprintf("%s holder%s, %s", kind, reuse ? " with SO_REUSEADDR" : "",
+            listen ? "listening" : "bound");
+        if (kind != "ipv4" && !ipv6) {
+            return;
+        }
+        Socket h = SocketSpecificBindTest::wildcard(kind, reuse, listen);
+        on_exit h.close();
+        int port = h.getSocketInfo(False).port;
+        list<auto> r = SocketSpecificBindTest::bindTo("127.0.0.1", port, True);
+        assertEq(v4, r[0], "127.0.0.1 over " + desc);
+        if (r[1]) {
+            r[1].close();
+        }
+        if (ipv6) {
+            r = SocketSpecificBindTest::bindTo("::1", port, True);
+            assertEq(v6, r[0], "::1 over " + desc);
+            if (r[1]) {
+                r[1].close();
+            }
+        }
+    }
+
+    listeningHolderTest() {
+        foreach bool reuse in ((False, True)) {
+            assertLoopbackBinds("ipv4", reuse, True, "EADDRINUSE", Bound);
+            assertLoopbackBinds("dual", reuse, True, "EADDRINUSE", "EADDRINUSE");
+        }
+    }
+
+    otherProgramTest() {
+        string qore = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string code = "Socket s(); try { s.bindINET(\"127.0.0.1\", ARGV[0].toInt(), True, AF_INET); "
+            "print(\"bound\"); } catch (hash<ExceptionInfo> ex) { print(ex.err); }";
+        Socket h = SocketSpecificBindTest::wildcard("ipv4", True, True);
+        on_exit h.close();
+        string cmd = sprintf("%s -e %s", SocketSpecificBindTest::shellQuote(qore),
+            SocketSpecificBindTest::shellQuote(code));
+        string out = backquote(sprintf("%s %d 2>&1", cmd, h.getSocketInfo(False).port));
+        assertEq("SOCKET-BIND-ERROR", trim(out), "the other program is refused the port");
+        # the other program binds 127.0.0.1 with SO_REUSEADDR on a port that the system assigns
+        out = backquote(sprintf("%s 0 2>&1", cmd));
+        assertEq(Bound, trim(out), "the other program binds a system-assigned port");
+    }
+
+    boundHolderTest() {
+        # a holder that does not reuse the address refuses the bind
+        assertLoopbackBinds("ipv4", False, False, "EADDRINUSE", Bound);
+        assertLoopbackBinds("dual", False, False, "EADDRINUSE", "EADDRINUSE");
+        # a holder that reuses the address and does not listen allows it on Linux, not on macOS
+        assertLoopbackBinds("ipv4", True, False, ReuseBoundHolderResult, Bound);
+        assertLoopbackBinds("dual", True, False, ReuseBoundHolderResult, ReuseBoundHolderResult);
+    }
+
+    listenOrderTest() {
+        if (!ipv6) {
+            testSkip("no IPv6 loopback address");
+        }
+        foreach bool wildcard_first in ((True, False)) {
+            # a socket on ::1, and then a dual-stack socket on :: with the same port, which both systems allow; the
+            # port is free in both address families and held by connections, which no socket that reuses the address
+            # is refused for
+            list<auto> held = SocketSpecificBindTest::connectionHeldPort();
+            on_exit map $1.close(), held[1..];
+            int port = held[0];
+            list<auto> r = SocketSpecificBindTest::bindTo("::1", port, True);
+            assertEq(Bound, r[0], "the specific address is bound");
+            Socket s = r[1];
+            on_exit s.close();
+            Socket h();
+            on_exit h.close();
+            h.bindINET(NOTHING, port, True);  # all-interfaces: a dual-stack socket on :: shares the port with ::1
+            (Socket first, Socket second) = wildcard_first ? (h, s) : (s, h);
+            string desc = wildcard_first ? "the socket on all interfaces" : "the socket on ::1";
+            assertEq(0, first.listen(), desc + " listens first");
+            assertEq(-1, second.listen(), "the other socket cannot listen after " + desc);
+            assertEq(EADDRINUSE, errno(), "the listen is refused with EADDRINUSE after " + desc);
+            # a client of ::1 reaches the socket that listens; on macOS, a client of ::1 does not reach the socket on
+            # all interfaces while the socket on ::1 is bound
+            if (wildcard_first && PlatformOS == "Darwin") {
+                continue;
+            }
+            Socket c();
+            on_exit c.close();
+            c.connectINET("::1", port, 5s, AF_INET6);
+            *Socket a = first.accept(5s);
+            assertTrue(exists a, "the client reaches " + desc);
+            if (a) {
+                a.close();
+            }
+        }
+    }
+
+    datagramTest() {
+        foreach bool reuse in ((False, True)) {
+            Socket h = SocketSpecificBindTest::wildcard("ipv4", reuse, False, SOCK_DGRAM);
+            on_exit h.close();
+            list<auto> r = SocketSpecificBindTest::bindTo("127.0.0.1", h.getSocketInfo(False).port, True,
+                SOCK_DGRAM);
+            assertEq(reuse ? Bound : "EADDRINUSE", r[0],
+                sprintf("127.0.0.1 over a datagram socket on 0.0.0.0%s", reuse ? " with SO_REUSEADDR" : ""));
+            if (r[1]) {
+                r[1].close();
+            }
+        }
+    }
+
+    noReuseTest() {
+        foreach bool listen in ((True, False)) {
+            foreach bool reuse in ((False, True)) {
+                Socket h = SocketSpecificBindTest::wildcard("ipv4", reuse, listen);
+                on_exit h.close();
+                list<auto> r = SocketSpecificBindTest::bindTo("127.0.0.1", h.getSocketInfo(False).port, False);
+                assertEq("EADDRINUSE", r[0], sprintf("127.0.0.1 over a %s socket on 0.0.0.0%s",
+                    listen ? "listening" : "bound", reuse ? " with SO_REUSEADDR" : ""));
+            }
+        }
+    }
+}

@@ -1,0 +1,121 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file PortHolder.qm holds the ports that the system assigns next, for the tests of system-assigned ports
+
+/*  PortHolder.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module PortHolder {
+    version = "1.0";
+    desc    = "holds the ports that the system assigns next, for the tests of system-assigned ports";
+    author  = "David Nichols <david@qore.org>";
+    url     = "http://qore.org";
+    license = "MIT";
+}
+
+/** A test of a system-assigned port holds the ports that a system assigning ports in sequence (macOS) assigns
+    next, so that such a system would give the tested bind one of them if the bind did not avoid them.
+
+    The ports that the system assigns next are the ones that it assigns to concurrent programs too, such as the other
+    tests of a parallel test run, so a port that another socket uses is skipped: its program's clients would reach
+    the holder instead.  The next free ports are held, whatever the concurrent programs take, in the order of the
+    system's assignment, which wraps around to the first port of its range: only a range with fewer free ports than
+    the test needs, an error of the environment, leaves fewer held.
+
+    @par Example:
+    @code{.py}
+%requires ../../PortHolder.qm
+
+hash<string, Socket> held = PortHolder::hold_next_free_ports(64);
+on_exit map $1.close(), held.iterator();
+assertEq(65, held.size(), "the ports are held");
+    @endcode
+*/
+public namespace PortHolder {
+    #! the range of system-assigned ports if the system does not report it (RFC 6335 section 6)
+    public const DefaultEphemeralRange = (49152, 65535);
+
+    #! returns the first and the last port of the range from which the system assigns ports
+    /** @return the range that the system reports (\c net.inet.ip.portrange on macOS, \c ip_local_port_range on
+        Linux), or @ref DefaultEphemeralRange if it reports none
+    */
+    public list<int> sub ephemeral_range() {
+        try {
+            *string text;
+            if (PlatformOS == "Darwin") {
+                text = backquote("/usr/sbin/sysctl -n net.inet.ip.portrange.first net.inet.ip.portrange.last");
+            } else if (PlatformOS == "Linux") {
+                text = ReadOnlyFile::readTextFile("/proc/sys/net/ipv4/ip_local_port_range");
+            }
+            if (text) {
+                *list<auto> ports = (text =~ x/([0-9]+)\s+([0-9]+)/);
+                if (ports.size() == 2 && ports[0].toInt() > 0 && ports[0].toInt() <= ports[1].toInt()) {
+                    return (ports[0].toInt(), ports[1].toInt());
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the range is not reported; the default range applies
+        }
+        return DefaultEphemeralRange;
+    }
+
+    #! holds the next system-assigned port and the given number of free ports after it
+    /** The next system-assigned port is held by a listener on 127.0.0.1; the free ports after it, in the order of the
+        system's assignment, are held by listeners alternately on 127.0.0.1 and on 0.0.0.0, which do not reuse the
+        address, so that a port that any socket uses, also one on which only connections remain, is skipped.
+
+        @param count the number of free ports to hold after the next system-assigned port
+
+        @return the listeners keyed by port: the next system-assigned port and the free ports after it; fewer than
+        @a count + 1 only if the range of system-assigned ports has fewer free ports
+    */
+    public hash<string, Socket> sub hold_next_free_ports(int count) {
+        list<int> range = ephemeral_range();
+        hash<string, Socket> held();
+        int first;
+        {
+            Socket probe();
+            probe.bindINET("127.0.0.1", 0, True, AF_INET);
+            probe.listen();
+            first = probe.getSocketInfo(False).port;
+            held{first} = probe;
+        }
+        int candidate = first;
+        int span = range[1] - range[0] + 1;
+        for (int tried = 0; held.size() <= count && tried < span; ++tried) {
+            candidate = (candidate >= range[1] || candidate < range[0]) ? range[0] : candidate + 1;
+            if (candidate == first) {
+                break;
+            }
+            Socket s();
+            try {
+                s.bindINET((held.size() % 2) ? "127.0.0.1" : "0.0.0.0", candidate, False, AF_INET);
+                s.listen();
+                held{candidate} = s;
+            } catch (hash<ExceptionInfo> ex) {
+                # a port in use by another program cannot be held, and is not given to the tested bind either
+                s.close();
+            }
+        }
+        return held;
+    }
+}

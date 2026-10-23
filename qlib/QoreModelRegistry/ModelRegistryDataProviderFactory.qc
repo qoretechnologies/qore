@@ -27,7 +27,7 @@ public namespace QoreModelRegistry {
 #! Data provider factory for the model registry
 /** Provides access to model registry data via the DataProvider framework.
 
-    @since QoreModelRegistry 2.0
+    @since QoreModelRegistry 1.0.0
 */
 public class ModelRegistryDataProviderFactory inherits AbstractDataProviderFactory {
     private {

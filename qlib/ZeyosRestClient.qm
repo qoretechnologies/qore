@@ -33,7 +33,7 @@
 %requires json
 
 module ZeyosRestClient {
-    version = "1.1";
+    version = "1.2";
     desc = "user module for calling zeyos.com REST services";
     author = "Alzhan Turlybekov <alzhan.turlybekov@qoretechnologies.com>, David Nichols <david.nichols@qoretechnologies.com>";
     url = "http://qore.org";
@@ -87,6 +87,12 @@ printf("Response body: %Y\n", response.body);
     @endcode
 
     @section Zeyosrestclientrelnotes Release Notes
+
+    @subsection Zeyosrestclientv1_2 ZeyosRestClient v1.2
+    - added the @ref ZeyosRestClient::ZeyosRestClientIo "ZeyosRestClientIo" class, which makes the
+      module's requests with the async I/O of the @ref restclientiointro "RestClientIo" module;
+      @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()" of a
+      @ref ZeyosRestClient::ZeyosRestConnection "ZeyosRestConnection" returns it
 
     @subsection Zeyosrestclientv1_1 ZeyosRestClient v1.1
     - implemented support for a data provider scheme cache and rich option information for connections

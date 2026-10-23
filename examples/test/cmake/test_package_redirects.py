@@ -19,6 +19,28 @@ HELPER = ROOT / "cmake/QoreResetPackageRedirects.cmake"
 CMAKE = os.environ.get("CMAKE_EXECUTABLE", "cmake")
 
 
+def renames_unwritable_directories():
+    """Returns True if the system renames a directory that is not writable within a writable parent
+
+    Linux needs write permission on a directory to rename it only to move it to another parent, while
+    macOS 15 needs it for every rename, so the redirect directory of another user cannot be preserved there.
+    """
+    with tempfile.TemporaryDirectory(prefix="qore-rename-probe-") as directory:
+        source = Path(directory) / "unwritable"
+        target = Path(directory) / "renamed"
+        source.mkdir()
+        source.chmod(0o555)
+        try:
+            source.rename(target)
+            return True
+        except PermissionError:
+            return False
+        finally:
+            for path in (source, target):
+                if path.exists():
+                    path.chmod(0o755)
+
+
 class PackageRedirectsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -26,6 +48,18 @@ class PackageRedirectsTest(unittest.TestCase):
         major, minor = map(int, re.search(r"cmake version (\d+)\.(\d+)", version).groups())
         if (major, minor) < (3, 24):
             raise unittest.SkipTest("FetchContent package redirects require CMake 3.24 or later")
+        cls.renames_unwritable = renames_unwritable_directories()
+
+    def stale_args(self, saved):
+        """Returns the arguments that make the configure run find the saved redirects
+
+        The redirect directory is made unwritable, as if another user owned it, where the system can rename such a
+        directory; elsewhere the redirects survive in a writable directory, which the helper preserves the same way.
+        """
+        args = [f"-DSTALE_REDIRECTS={saved}"]
+        if not self.renames_unwritable:
+            args.append("-DSTALE_REDIRECTS_WRITABLE=ON")
+        return args
 
     def run_cmake(self, *args):
         return subprocess.run([CMAKE, *map(str, args)], text=True, capture_output=True, timeout=60)
@@ -53,8 +87,10 @@ if(STALE_REDIRECTS)
     # Model redirects surviving CMake's startup cleanup, without requiring a foreign UID.
     # CMake can chmod a directory it owns, so chmod alone cannot reproduce that failure.
     file(COPY "${{STALE_REDIRECTS}}/" DESTINATION "${{CMAKE_FIND_PACKAGE_REDIRECTS_DIR}}")
-    file(CHMOD "${{CMAKE_FIND_PACKAGE_REDIRECTS_DIR}}"
-        PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+    if(NOT STALE_REDIRECTS_WRITABLE)
+        file(CHMOD "${{CMAKE_FIND_PACKAGE_REDIRECTS_DIR}}"
+            PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+    endif()
 endif()
 if(ENABLE_REDIRECT_RESET)
     include("{HELPER.as_posix()}")
@@ -104,7 +140,7 @@ target_link_libraries(consumer PRIVATE QoreRedirectFixture::headers)
             saved = Path(directory) / "previous configure redirects"
             shutil.copytree(redirects, saved)
             # Reproduce the actual failure: an old config is found, but its targets do not exist.
-            failed = self.run_cmake(*args, "-DENABLE_REDIRECT_RESET=OFF", f"-DSTALE_REDIRECTS={saved}")
+            failed = self.run_cmake(*args, "-DENABLE_REDIRECT_RESET=OFF", *self.stale_args(saved))
             self.assertNotEqual(0, failed.returncode, failed.stdout + failed.stderr)
             self.assertIn("QoreRedirectFixture::headers", failed.stderr)
             self.assertIn("target was not found", failed.stderr)
@@ -138,7 +174,7 @@ set_target_properties(QoreRedirectFixture::headers PROPERTIES
 file(WRITE "${CMAKE_BINARY_DIR}/provider.txt" "system")
 ''')
             self.assert_success(self.run_cmake("-S", source, "-B", build,
-                "-DENABLE_REDIRECT_RESET=ON", f"-DSTALE_REDIRECTS={saved}",
+                "-DENABLE_REDIRECT_RESET=ON", *self.stale_args(saved),
                 f"-DQoreRedirectFixture_DIR={installed}"))
             self.assert_success(self.run_cmake("--build", build))
             self.assertEqual("system", (build / "provider.txt").read_text())
@@ -160,6 +196,27 @@ file(WRITE "${CMAKE_BINARY_DIR}/provider.txt" "system")
                 self.assertTrue((redirects / "stale-config.cmake").is_file())
             finally:
                 parent.chmod(0o755)
+
+    def test_unwritable_directory_fails_before_discovery(self):
+        if self.renames_unwritable:
+            self.skipTest("the system renames a directory that is not writable")
+        with tempfile.TemporaryDirectory(prefix="qore-package-redirects-") as directory:
+            source, build = self.fixture(Path(directory))
+            args = ("-S", source, "-B", build)
+            self.assert_success(self.run_cmake(*args, "-DENABLE_REDIRECT_RESET=ON"))
+            redirects = build / "CMakeFiles/pkgRedirects"
+            saved = Path(directory) / "previous configure redirects"
+            shutil.copytree(redirects, saved)
+            self.addCleanup(lambda: redirects.chmod(0o755) if redirects.exists() else None)
+            # the redirect directory of another user cannot be renamed here: the configuration stops before any
+            # package is found with the stale redirects, and says what to do
+            result = self.run_cmake(*args, "-DENABLE_REDIRECT_RESET=ON", f"-DSTALE_REDIRECTS={saved}")
+            self.assertNotEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertIn("Cannot reset stale CMake package redirects", result.stderr)
+            self.assertIn("Make it and its parent directory writable, or use a new build directory",
+                          " ".join(result.stderr.split()))
+            self.assertNotIn("QoreRedirectFixture::headers", result.stderr)
+            self.assertEqual([], list((build / "CMakeFiles").glob("pkgRedirects.stale-*")))
 
     def test_no_redirect_directory(self):
         self.assert_success(self.run_cmake("-P", HELPER))

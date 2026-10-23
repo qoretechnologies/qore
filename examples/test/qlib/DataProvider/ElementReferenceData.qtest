@@ -27,6 +27,12 @@ class CannedRestClient inherits RestClientIo::RestClientIo {
         self.bodies = bodies;
     }
 
+    #! Schema dispatch now supplies an explicit target; retain this mock's response recorder.
+    hash<RestClient::RestResponseInfo> restDoRawRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr) {
+        return restDoRawRequest(method, target.path, body, hdr);
+    }
+
     hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
             *hash<auto> hdr) {
         push paths, path;

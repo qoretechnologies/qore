@@ -29,7 +29,7 @@ public namespace QoreModelRegistry {
     registry. It parses JSON metadata and SafeTensors headers, but never loads
     or deserializes PyTorch pickle artifacts.
 
-    @since QoreModelRegistry 2.2
+    @since QoreModelRegistry 1.0.0
 */
 public class ModelArtifactInspector {
     #! Inspects a single artifact file

@@ -12,7 +12,7 @@ import unittest
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[3]
-QPP = Path(os.environ.get("QORE_QPP_EXECUTABLE", ROOT / "build-debug/qpp")).resolve()
+QPP = Path(os.environ.get("QORE_QPP_EXECUTABLE", ROOT / "build/qpp")).resolve()
 WRAPPER = shlex.split(os.environ.get("QPP_TEST_WRAPPER", ""))
 
 

@@ -103,7 +103,7 @@ public:
       * Streams that return true must implement getPollableDescriptor() and readNonBlock().
       * @return true if non-blocking I/O is supported
       *
-      * @since %Qore 2.2
+      * @since %Qore 3.0
       */
     virtual bool supportsNonBlockingIo() const { return false; }
 
@@ -131,7 +131,7 @@ public:
       * @brief Returns the pollable file descriptor for this stream, or -1 if not pollable.
       * @return the file descriptor, or -1
       *
-      * @since %Qore 2.2
+      * @since %Qore 3.0
       */
     virtual int getPollableDescriptor() const { return -1; }
 
@@ -152,7 +152,7 @@ public:
       * @param xsink the exception sink
       * @return the number of bytes read, 0 on EOF or would-block, negative on error
       *
-      * @since %Qore 2.2
+      * @since %Qore 3.0
       */
     virtual int64 readNonBlock(void* ptr, int64 limit, ExceptionSink* xsink) {
         return read(ptr, limit, xsink);
@@ -174,7 +174,7 @@ public:
       * @param xsink the exception sink
       * @return the number of bytes read, 0 if would block or timeout
       *
-      * @since %Qore 2.2
+      * @since %Qore 3.0
       */
     DLLEXPORT virtual int64 readWithTimeout(void* ptr, int64 limit, int64 timeout_ms, ExceptionSink* xsink);
 
@@ -185,7 +185,7 @@ public:
       * @param xsink the exception sink
       * @return the binary data read, or nullptr if nothing available
       *
-      * @since %Qore 2.2
+      * @since %Qore 3.0
       */
     DLLLOCAL BinaryNode* readWithTimeoutHelper(int64 limit, int64 timeout_ms, ExceptionSink* xsink) {
         if (!check(xsink)) {
@@ -212,7 +212,7 @@ public:
       * @param xsink the exception sink
       * @return the binary data read, or nullptr if nothing available
       *
-      * @since %Qore 2.2
+      * @since %Qore 3.0
       */
     DLLLOCAL BinaryNode* readNonBlockHelper(int64 limit, ExceptionSink* xsink) {
         if (!check(xsink)) {

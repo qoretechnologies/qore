@@ -124,12 +124,6 @@ auto transcript = root.getChildProvider("transcribe-audio").doRequest({
     @section MistralDataProviderRelnotes Release Notes
 
     @subsection MistralDataProviderv1_1 MistralDataProvider v1.1
-    - expose 161 typed actions from a pinned official OpenAPI description
-    - add model and resource dropdowns, including dependent document and agent-version choices
-    - preserve the original chat, embedding and OCR action IDs and public provider classes
-    - send each request once; callers decide whether a failed operation can safely be retried
-
-    @subsection MistralDataProviderv1_0 MistralDataProvider v1.0
     - initial release
 */
 

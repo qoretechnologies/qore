@@ -66,6 +66,11 @@ module VertexAiRestClient {
     shapers so the Gemini-on-Vertex wire body is bit-for-bit identical to
     the native Gemini REST API; only the URL and authentication differ.
 
+    Generation parameters are selected for the model of each request (see @ref geminibodyshapegeneration).  Tool
+    parameter schemas are shaped for Gemini, and tool calls are returned with the types of the original schema
+    (see @ref geminibodyshapetoolschemas); a request whose tool declarations exceed Gemini's constrained-decoding
+    budget raises \c GEMINI-TOOL-SCHEMA-TOO-COMPLEX (see @ref geminibodyshapetoolschemacomplexity).
+
     @par Authentication
 
     Bearer access tokens are obtained via @ref gcpauthintro "GcpAuth":
@@ -175,23 +180,7 @@ provider.deleteCachedContent(cache.name);
     @section vertexairestclientrelnotes Release Notes
 
     @subsection vertexairestclient_v1_0 VertexAiRestClient v1.0
-    - the provider factory reports, with @ref VertexAiRestClient::VertexAiLlmProviderFactory::getModelInfo()
-      "VertexAiLlmProviderFactory::getModelInfo()", that Gemini 3.x and Gemini 2.5 Pro models cannot turn hidden
-      reasoning off (\c reasoning_always_on); a reasoning budget of zero no longer fails on Gemini 2.5 Pro, which
-      rejected it
-    - the provider info no longer asks callers for JSON text tool payloads
-      (\c prefers_stringified_tool_payloads is @ref False): with the tool parameter schemas shaped for Gemini, the
-      model fills nested tool payloads natively
-    - tool calls keep the nested members of their parameters: values that Gemini's schema cannot declare are sent
-      as JSON text and returned with their original types (see @ref geminibodyshapetoolschemas)
-    - a request rejected because its tool declarations exceed Gemini's constrained-decoding budget raises
-      \c GEMINI-TOOL-SCHEMA-TOO-COMPLEX with the number and size of the tools (see
-      @ref geminibodyshapetoolschemacomplexity)
-    - Gemini 3.x generation requests omit deprecated sampling parameters and numeric thinking budgets; use
-      thinking levels instead. Gemini 2.5 behavior is preserved; see @ref geminibodyshapegeneration.
     - initial release
-    - explicit prompt caching with Vertex AI \c cachedContents resources: create, get, refresh and delete, and
-      requests that reference a cache
 */
 
 #! Contains all public definitions in the VertexAiRestClient module

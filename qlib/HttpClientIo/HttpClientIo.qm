@@ -53,16 +53,49 @@ module HttpClientIo {
     Features:
     - <b>Protocol auto-selection</b>: race HTTP/3 and HTTP/2 with happy eyeballs for HTTPS,
       preferring HTTP/3 when available, and falling back to HTTP/1.1 for endpoints that
-      complete the TLS handshake but refuse HTTP/2 via ALPN
+      complete the TLS handshake but refuse HTTP/2 via ALPN; the fallback is cached per host and re-probed
+      periodically.  The race ends early only when a protocol connects, so a server that receives only HTTP/3 is
+      reached whatever its head start; a denial of the @ref sandboxing "sandbox" or a refused server certificate
+      ends the race with that error (see
+      @ref HttpClientIo::HttpClientConnectionManager::isTerminalConnectionError()
+      "HttpClientConnectionManager::isTerminalConnectionError()").  Alt-Svc advertisements supply the UDP port for
+      later races.  Poll-operation callers race without blocking with
+      @ref HttpClientIo::HttpClientConnectionManager::acquireConnectionAsync() "acquireConnectionAsync()" and can
+      cancel a race with @ref HttpClientIo::HttpClientConnectionManager::abandonAsyncHEForUrl()
+      "abandonAsyncHEForUrl()"
     - <b>HTTP/1.1 support</b>: Serial request/response with keep-alive; connection manager creates
       multiple connections for concurrent requests
     - <b>True multiplexing</b>: Multiple concurrent streams on a single connection (HTTP/2, HTTP/3)
-    - <b>Connection pooling</b>: Shared connections across multiple clients
-    - <b>Async I/O</b>: All I/O driven by AsyncSocketIoController (epoll/kqueue); sync \c request()
-      blocks the caller via Future while the controller event loop handles actual I/O
+    - <b>Connection pooling</b>: Shared connections across multiple clients, with configurable limits, HTTP proxy
+      support, and configurable automatic request retry; a pooled connection, also that of a persistent session,
+      is used only by code whose @ref sandboxing "network sandbox" allows where it leads (for a proxy connection,
+      both the proxy and the destination), and a connection leased for a persistent session is used only by that
+      session
+    - <b>Redirects</b>:
+      @ref HttpClientIo::HttpClientConnectionManager::request() "HttpClientConnectionManager::request()",
+      @ref HttpClientIo::HttpClientConnectionManager::requestAsync() "requestAsync()",
+      @ref HttpClientIo::HttpClientConnectionManager::openStream() "openStream()", and
+      @ref HttpClientIo::HttpClientRequestPollOperation "HttpClientRequestPollOperation" follow 301, 302, 303, 307,
+      and 308 redirects, resolving \c Location values according to RFC 3986; \c Authorization, \c Cookie, and
+      \c Host request headers are only sent to the origin of the original request, and the response reports the
+      effective URL and the redirects followed (see @ref HttpClientIo::HttpClientResponseInfo
+      "HttpClientResponseInfo")
+    - <b>Response decoding</b>: response bodies are decoded once, by the rules shared by all HTTP clients, after
+      any content encoding is decompressed; a request can receive a text body as octets instead (the
+      \c decode_text argument and @ref HttpClientIo::HttpClientStreamHandle::setDecodeText()
+      "HttpClientStreamHandle::setDecodeText()"), which
+      @ref HttpClientIo::HttpClientStreamHandle::decodeResponseText() "decodeResponseText()" decodes as the default
+      would
+    - <b>Async I/O</b>: All I/O driven by the process-wide AsyncSocketIoController shared by all managers
+      (epoll/kqueue); sync \c request() blocks the caller via Future while the controller event loop handles
+      actual I/O
     - <b>Sync and async APIs</b>: Blocking and Future-based interfaces
     - <b>Streaming support</b>: WebSocket and SSE over HTTP/1.1, HTTP/2, and HTTP/3
     - <b>Connection migration</b>: QUIC connection migration for HTTP/3
+    - <b>Non-blocking HTTP/3 connections</b>: an HTTP/3 connection resolves its host name and binds its UDP socket
+      in the I/O controller, so asynchronous requests can retry it or try another address family; an address
+      family in which a connection did not reach the server is avoided for new connections to the origin for
+      @ref HttpClientIo::HttpClientConnectionManager::H3FamilyFailureTtl "H3FamilyFailureTtl"
     - <b>UNIX domain sockets</b>: plain HTTP/1.1 to a local server listening on a UNIX domain socket, addressed
       like @ref Qore::HTTPClient "HTTPClient" with a \c socket= URL
 
@@ -70,6 +103,7 @@ module HttpClientIo {
     A supplied body (including an empty string or binary value) or an upload stream raises
     \c HTTPCLIENT-REQUEST-BODY-ERROR. Receiving a streaming response to a bodyless GET remains supported.
     Redirects that change the request method to GET discard the original body and content headers.
+    Errors give URLs without their passwords.
 
     @section httpclientio_components Components
 
@@ -94,7 +128,7 @@ module HttpClientIo {
 %requires HttpClientIo
 
 # Create a connection manager (default: auto protocol selection)
-# The manager auto-creates an AsyncSocketIoController with autostop=True
+# The manager uses the process-wide AsyncSocketIoController (autostop=True)
 HttpClientConnectionManager manager();
 
 # Synchronous request - protocol selected automatically
@@ -110,7 +144,7 @@ manager.closeAll();
     @code{.py}
 %requires HttpClientIo
 
-# Create manager (controller auto-created)
+# Create manager (uses the process-wide I/O controller)
 HttpClientConnectionManager manager();
 
 # Submit async request — returns a Future
@@ -179,79 +213,7 @@ if (state == HttpClientConnectionState::Draining) {
     @section httpclientio_relnotes Release Notes
 
     @subsection httpclientio_v1_0 Version 1.0
-    - URL errors give the URL without its password
-    - @ref HttpClientIo::Http3ClientConnection::migrate() "Http3ClientConnection::migrate()" returns once the
-      connection has been migrated and raises the error of a failed migration (\c QUIC-MIGRATION-ERROR,
-      \c HTTP3-MIGRATION-TIMEOUT, \c HTTP3-CONNECTION-CLOSED); a migration for which the server has no spare
-      connection ID yet waits for one;
-      @ref HttpClientIo::HttpClientConnectionManager::migrateAll() "migrateAll()" drains a connection that cannot be
-      migrated
-    - connections wait for a change of their state with
-      @ref Qore::AbstractHttpPollConnection::waitForStateChange() "waitForStateChange()", for example to see a
-      connection drain after the server's \c GOAWAY; the streams in progress on a draining connection can still send
-      their request bodies
-    Initial (not yet released) version of the unified %HttpClientIo module —
-    HTTP/1.1, HTTP/2, and HTTP/3 client I/O behind a single API, as currently
-    implemented:
-    - Async-only I/O: all managers share the process-wide global
-      @ref AsyncSocketIo::AsyncSocketIoController singleton with
-      \c autostop = @ref True; the synchronous \c request() API blocks the
-      caller via a \c Future while the controller event loop drives the actual
-      I/O; the single-controller architecture eliminates cross-controller
-      deadlocks
-    - Protocol auto-selection for HTTPS via an HTTP/3-preferred happy-eyeballs
-      race.  The synchronous request path runs the race inline; poll-operation
-      callers use @ref HttpClientIo::HttpClientConnectionManager::acquireConnectionAsync()
-      for a fully non-blocking, immediately cancelable happy-eyeballs race
-      (winner / error / protocol-cache semantics identical to the synchronous
-      path) and @ref HttpClientIo::HttpClientConnectionManager::abandonAsyncHEForUrl() to
-      tear an in-flight race down with no leaked socket or stagger timer.
-      When both legs lose and HTTP/2 was refused via ALPN, the endpoint speaks
-      neither HTTP/3 nor HTTP/2 and the race falls back to HTTP/1.1 instead of
-      failing; the result is cached per host and re-probed periodically.
-      The race ends early only when a leg connects: when one leg fails, the other
-      leg's own outcome, bounded by its connect timeout, is awaited, so a server
-      that receives HTTP/3 only is reached whatever the head start of HTTP/3.
-      A denial of the @ref sandboxing "sandbox" or a server certificate refused by
-      either leg ends the race with that leg's error (\c NETWORK-ACCESS-DENIED,
-      \c SOCKET-SSL-ERROR), as for a single protocol, and is not retried, even if
-      the other leg failed for another reason; see
-      @ref HttpClientIo::HttpClientConnectionManager::isTerminalConnectionError()
-      Alt-Svc advertisements supply the UDP port for future races without
-      overriding the negotiated protocol or draining working connections.
-      Fresh automatic H3 connections and expired fallback entries race both
-      protocols, selecting H3 only after its handshake succeeds
-    - HTTP/1.1 serial request/response with keep-alive; the connection manager
-      creates multiple connections for concurrent requests
-    - @ref HttpClientIo::HttpClientConnectionManager::request() "HttpClientConnectionManager::request()",
-      @ref HttpClientIo::HttpClientConnectionManager::requestAsync() "requestAsync()",
-      @ref HttpClientIo::HttpClientConnectionManager::openStream() "openStream()", and
-      @ref HttpClientIo::HttpClientRequestPollOperation "HttpClientRequestPollOperation" (a non-blocking request
-      for poll loops and async I/O controllers, like the poll API of @ref Qore::HTTPClient "HTTPClient") follow
-      301, 302, 303, 307, and 308 redirects: \c Location values are resolved according to RFC 3986 with
-      @ref Qore::resolve_url() "resolve_url()" and fragments are removed; \c Authorization, \c Cookie, and
-      \c Host request headers are only sent to the origin of the original request; and the response reports the
-      effective URL and the redirects followed (see @ref HttpClientIo::HttpClientResponseInfo "HttpClientResponseInfo")
-    - Connection pooling with configurable limits, HTTP-proxy support,
-      configurable automatic request retry, and QUIC connection migration for
-      HTTP/3
-    - A pooled connection, also the connection of a persistent session, is used only for code whose
-      @ref sandboxing "network sandbox" allows where it leads, checked as a new connection would be; a connection
-      through an HTTP proxy leads to the proxy and to the destination that the proxy connects to, and a sandbox
-      must allow both; a connection leased for a persistent session is used only by that session
-    - HTTP/3 connections are created without blocking: their poll operation resolves the host name and binds the
-      UDP socket in the I/O controller, so asynchronous requests can retry them, try another address family, and
-      race them against HTTP/2 for a redirect in an I/O worker; an address family in which a connection did not
-      reach the server is avoided for new connections to the origin for
-      @ref HttpClientIo::HttpClientConnectionManager::H3FamilyFailureTtl "H3FamilyFailureTtl"
-    - Sync and async (\c Future / \c EventNotifier) request APIs
-    - Response bodies decoded once, by the rules shared by all HTTP clients, after any content encoding is
-      decompressed; a request can receive a text body as octets instead (the \c decode_text argument of the
-      request methods and @ref HttpClientIo::HttpClientStreamHandle::setDecodeText()
-      "HttpClientStreamHandle::setDecodeText()"), and
-      @ref HttpClientIo::HttpClientStreamHandle::decodeResponseText() "HttpClientStreamHandle::decodeResponseText()"
-      decodes it as the default would
-    - Streaming support (WebSocket, SSE) over HTTP/1.1, HTTP/2, and HTTP/3
+    - initial release
 */
 
 #! Main namespace for HttpClientIo module

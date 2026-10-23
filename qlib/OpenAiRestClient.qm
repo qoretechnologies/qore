@@ -122,6 +122,10 @@ stream.close();
     @section OpenAiRestClientRelnotes Release Notes
 
     @subsection OpenAiRestClientv1_2 OpenAiRestClient v1.2
+    - the OpenAI-compatible LLM providers send Chat Completions and Responses requests, including streams, to paths
+      beneath the path of the endpoint URL: a path that ends in \c /v1, with or without a trailing slash (such as
+      that of \c https://gateway.example.com/project/v1), is used as it is, and \c /v1 is appended to any other
+      path; a provider that publishes at its own path, such as Perplexity, keeps it
     - Preserve reasoning-only stream frames for compatible providers such as DeepSeek.
     - the provider factory reports, with @ref OpenAiRestClient::OpenAiLlmProviderFactory::getModelInfo()
       "OpenAiLlmProviderFactory::getModelInfo()", which OpenAI models cannot turn hidden reasoning off
@@ -129,38 +133,28 @@ stream.close();
       pro models, \c gpt-6-astra and \c gpt-6.1-sol;
       @ref OpenAiRestClient::OpenAiLlmProvider::getLowestReasoningEffort()
       "OpenAiLlmProvider::getLowestReasoningEffort()" returns their lowest reasoning effort
-    - the reasoning effort \c none is no longer refused for \c gpt-6-luna and \c gpt-6-sol, which accept it; it is
-      refused before the request is sent for every model that does not accept it
+    - the reasoning effort \c none is refused before the request is sent for every model that does not accept it
     - a reasoning token budget of zero or
       @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns reasoning off with the
       reasoning effort \c none on the models that accept it, and selects the lowest effort of the models that cannot
       turn reasoning off (@ref OpenAiRestClient::OpenAiLlmProvider::getOffReasoningEffort()
-      "OpenAiLlmProvider::getOffReasoningEffort()"); requests for other models are unchanged
-    - a tool call whose arguments are not a JSON object no longer raises \c JSON-PARSE-ERROR, which lost the response
-      and its usage: its arguments are kept in the \c _raw key, as those of a streamed call are
+      "OpenAiLlmProvider::getOffReasoningEffort()")
+    - the arguments of a tool call that are not a JSON object are kept in the \c _raw key, as those of a streamed
+      call are
     - the finish reason \c model_length (the model's context length was reached) is an output limit, as \c length
       is: the stop reason is \c max_tokens, and no tool call of the unfinished response is given
-
-    @subsection OpenAiRestClientv1_1 OpenAiRestClient v1.1
-
     - an \c allowed_tools tool choice restricts the tools a call may use without changing the tools it
       declares, also on the Responses API: keeping the declared tools unchanged keeps the provider's prompt
       cache across calls that allow different tools
-    - saved connections keep a custom endpoint URL such as a data-residency host or a gateway; only an
-      automatically generated URL is still replaced with the default endpoint
-    - Per-call LLM timeouts now govern synchronous requests and stream setup;
-      explicit streaming deadlines include all response chunks without changing
-      concurrent calls' client settings.
-    - Interrupted chat streams without a completion frame now raise an error
-      instead of returning a successful partial answer.
+    - a saved connection whose URL was generated automatically is given the default endpoint URL; a custom
+      endpoint URL such as a data-residency host or a gateway is kept
     - strict LLM output and tool schemas automatically adapt optional fields to
       OpenAI's required nullable representation; returned JSON and tool arguments
       restore the caller's original optional-field semantics
     - adapted structured streams emit their JSON after it is complete so callers
-      never receive temporary null placeholders; ordinary text streams are unchanged
+      never receive temporary null placeholders
     - unsupported strict-schema constraints report a local error before an API call
     - added SSE helper for streaming responses
-    - fixed streaming chat completions to preserve function-call-only deltas
 
     @subsection OpenAiRestClientv1_0 OpenAiRestClient v1.0
     - initial release
@@ -1160,10 +1154,39 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         SGLang.  Backends that publish at a different path (e.g. Perplexity
         at \c /chat/completions) override this method.
 
-        @return the URL path for chat-completions POST requests
+        @note The configured URL path is the API root. A final \c /v1 segment is reused; otherwise \c /v1
+        is appended. An optional trailing slash is supported. The same rule applies to Responses requests.
+
+        @par Example
+        A project-scoped gateway URL \c https://gateway.example.com/project/v1 resolves to
+        \c /project/v1/chat/completions.
+
+        @return the URL path for chat-completions POST requests, including the configured root
+        @throw PARSE-URL-ERROR the configured URL cannot be parsed
     */
     string getChatCompletionsPath() {
-        return "/v1/chat/completions";
+        return getOpenAiApiPath("chat/completions");
+    }
+
+    #! Returns the path mode of the chat-completions endpoint
+    /** Vendor implementations returning endpoints relative to their API root override this with ApiRelative.
+        @return OriginAbsolute for the complete OpenAI-compatible target
+    */
+    RestClient::RestPathMode getChatCompletionsPathMode() {
+        return RestClient::RestPathMode::OriginAbsolute;
+    }
+
+    #! Resolves a standard OpenAI endpoint beneath the configured API root
+    private string getOpenAiApiPath(string endpoint) {
+        string path = parse_url(getConfig().url).path ?? "";
+        if (path !~ /\/$/) {
+            path += "/";
+        }
+        if (path !~ /\/v1\/$/) {
+            path += "v1/";
+        }
+        # This is a complete target, dispatched explicitly as OriginAbsolute.
+        return path + endpoint;
     }
 
     #! Preserves supported OpenAI wire controls at the generic facade boundary
@@ -1227,7 +1250,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> resp;
         try {
             resp = withRetry(hash<auto> sub () {
-                return rest_client.restPostWithTimeout(wire.path, wire.body,
+                return rest_client.restDoRequestTargetWithTimeout("POST", wire.target, wire.body,
                     buildAuthHeader(), getRequestTimeoutMs(opts));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
@@ -1260,7 +1283,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> resp;
         try {
             resp = withRetry(hash<auto> sub () {
-                return rest_client.restPostWithTimeout(wire.path, wire.body,
+                return rest_client.restDoRequestTargetWithTimeout("POST", wire.target, wire.body,
                     buildAuthHeader(), getRequestTimeoutMs(opts));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
@@ -1314,8 +1337,8 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         HttpClientStreamingIo::SseStreamReader reader;
         try {
             reader = withRetry(HttpClientStreamingIo::SseStreamReader sub () {
-                return rest_client.restSseReaderWithTimeout("POST",
-                    wire.path, hdr, json_body,
+                return rest_client.restSseReaderTarget("POST",
+                    wire.target, hdr, json_body,
                     remainingStreamTimeout(getRequestTimeoutMs(opts), request_deadline), on_stream);
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
@@ -1522,7 +1545,8 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             }
         }
         if (responses) {
-            return {"responses": True, "path": "/v1/responses",
+            return {"responses": True, "target": <RestClient::RestRequestTarget>{
+                    "mode": RestClient::RestPathMode::OriginAbsolute, "path": getOpenAiApiPath("responses")},
                 "body": chatCompletionToResponses(body)};
         }
         # Provider-specific reasoning must never leak onto an incompatible wire API.
@@ -1532,7 +1556,8 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             messages += msg;
         }
         body.messages = messages;
-        return {"responses": False, "path": getChatCompletionsPath(), "body": body};
+        return {"responses": False, "target": <RestClient::RestRequestTarget>{
+            "mode": getChatCompletionsPathMode(), "path": getChatCompletionsPath()}, "body": body};
     }
 
     #! Converts the prepared strict chat contract into stateless Responses input

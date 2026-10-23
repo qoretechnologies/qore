@@ -4,10 +4,10 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires json
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/AzureOpenAiDataProvider
-%requires ../../../../qlib/RestSchemaActions
-%requires ../../../../qlib/Mime.qm
+%requires QUnit
+%requires AzureOpenAiDataProvider
+%requires RestSchemaActions
+%requires Mime
 %exec-class AzureActionsTest
 
 class AzureActionFixtureClient inherits RestClientIo::RestClientIo {
@@ -24,6 +24,12 @@ class AzureActionFixtureClient inherits RestClientIo::RestClientIo {
     RestClient::AbstractRestClient copyWithUrl(string url) {
         return self;
     }
+    #! Schema dispatch now supplies an explicit target; retain this mock's response recorder.
+    hash<RestClient::RestResponseInfo> restDoRawRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr) {
+        return restDoRawRequest(method, target.path, body, hdr);
+    }
+
     hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr) {
         self.method = method;
         self.path = path;

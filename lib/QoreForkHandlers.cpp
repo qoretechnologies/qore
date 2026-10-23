@@ -34,15 +34,26 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdio>
 #include <cstring>
 #include <new>
 #include <pthread.h>
+#include <unistd.h>
 
 DLLLOCAL extern pthread_mutexattr_t ma_recursive;
 
 namespace {
 //! incremented in each child process created with fork(); see qore_fork_get_generation()
 std::atomic<unsigned> qore_fork_generation{0};
+
+//! true while the child handlers of a fork() run in the child; see qore_fork_child_exit_quickly()
+std::atomic<bool> qore_fork_in_child_handlers{false};
+
+//! the fork generation of the child process in which qore_fork_child_exit_quickly() was called, 0 if none
+/** The generation of the parent of all forks is 0, so the request is never in effect there; a child created by a
+    later fork() has another generation
+*/
+std::atomic<unsigned> qore_fork_quick_exit_generation{0};
 
 //! the registered fork handlers, sorted by rank (handlers of one rank in registration order)
 class QoreForkRegistry {
@@ -104,9 +115,11 @@ public:
     //! re-initializes the handlers in decreasing rank order and then the registry lock (only this thread is left)
     void child() noexcept {
         qore_fork_generation.fetch_add(1, std::memory_order_relaxed);
+        qore_fork_in_child_handlers.store(true, std::memory_order_relaxed);
         for (auto i = handlers.rbegin(), e = handlers.rend(); i != e; ++i) {
             (*i)->child();
         }
+        qore_fork_in_child_handlers.store(false, std::memory_order_relaxed);
         // held by this thread since prepare(); a mutex held by a thread of the parent cannot be unlocked in the
         // child on every platform, so it is reset to the static initializer (see QoreThreadLock::reinitAfterFork())
         static const pthread_mutex_t unlocked = PTHREAD_MUTEX_INITIALIZER;
@@ -186,6 +199,29 @@ QoreForkHandler* qore_fork_find_handler(const char* name) {
 
 unsigned qore_fork_get_generation() {
     return qore_fork_generation.load(std::memory_order_relaxed);
+}
+
+void qore_fork_child_exit_quickly() {
+    // only a child handler of the current fork() can request it, so the request is never in effect in the parent
+    if (!qore_fork_in_child_handlers.load(std::memory_order_relaxed)) {
+        return;
+    }
+    qore_fork_quick_exit_generation.store(qore_fork_generation.load(std::memory_order_relaxed),
+        std::memory_order_relaxed);
+}
+
+bool qore_fork_child_exits_quickly() {
+    unsigned gen = qore_fork_quick_exit_generation.load(std::memory_order_relaxed);
+    return gen && gen == qore_fork_generation.load(std::memory_order_relaxed);
+}
+
+void qore_fork_child_quick_exit(int rc) {
+    if (qore_fork_child_exits_quickly()) {
+        // no atexit() handler and no static destructor runs; the buffered output of the standard I/O streams is
+        // written, as exit() would
+        fflush(nullptr);
+        _exit(rc);
+    }
 }
 
 QoreForkHandler::QoreForkHandler(int rank, const char* name) : rank(rank), name(name) {

@@ -251,18 +251,10 @@ module ElasticSearchDataProvider {
       @ref RestClient::AbstractRestClient "AbstractRestClient" subclass, so callers that
       already have a sync <tt>RestClient</tt> or an async <tt>RestClientIo</tt> can pass either via the
       <tt>restclient</tt> constructor option
-    - bulk NDJSON body construction now uses
-      @ref NdjsonDataProvider::NdjsonStringWriter "NdjsonStringWriter" from the
-      <tt>NdjsonDataProvider</tt> module (shipped with <tt>json</tt> >= 1.11), switching the
-      bulk-request accumulator from O(n²) string concatenation to O(n) streaming
-      via @ref Qore::StringOutputStream "StringOutputStream"; this matters for large
-      @ref ElasticSearchDataProvider::ElasticSearchBulkDataProvider "ElasticSearchBulkDataProvider"
-      and @ref ElasticSearchDataProvider::ElasticSearchBulkOperation "ElasticSearchBulkOperation"
-      batches where the hand-rolled accumulator spent meaningful wall time in buffer
-      reallocation
-    - minimum <tt>json</tt> module version bumped to 1.11 (the version that introduced NDJSON
-      support); environments on older <tt>json</tt> will now get a clearer error pointing at the
-      version requirement instead of silently running the old slow path
+    - added @ref ElasticSearchDataProvider::ElasticSearchBulkDataProvider "ElasticSearchBulkDataProvider" and
+      @ref ElasticSearchDataProvider::ElasticSearchBulkOperation "ElasticSearchBulkOperation" for the bulk API; their
+      NDJSON request bodies are written with @ref NdjsonDataProvider::NdjsonStringWriter "NdjsonStringWriter" from
+      the <tt>NdjsonDataProvider</tt> module, which this module requires
     - the request and response data type classes are now public, so types serialized in a provider index can be
       restored by programs that import the module
 

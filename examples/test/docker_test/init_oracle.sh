@@ -58,15 +58,15 @@ else
     . /tmp/env.sh
 
     # setup new env vars
-    export ORACLE_USER=omq_docker_test_`qore -lUtil -ne 'printf("%s", get_random_string());'`
+    export ORACLE_USER=qore_test_`qore -lUtil -ne 'printf("%s", get_random_string());'`
     echo unset ORACLE_PDB >> /tmp/env.sh
     echo export ORACLE_SID=rippy >> /tmp/env.sh
-    echo export ORACLE_PWD=omq >> /tmp/env.sh
+    echo export ORACLE_PWD=qore >> /tmp/env.sh
     echo export ORACLE_USER=${ORACLE_USER} >> /tmp/env.sh
-    echo export QORE_DB_CONNSTR_ORACLE=oracle:${ORACLE_USER}/omq@rippy%rippy:1521 >> /tmp/env.sh
+    echo export QORE_DB_CONNSTR_ORACLE=oracle:${ORACLE_USER}/qore@rippy%rippy:1521 >> /tmp/env.sh
 
     # create user for test; if Oracle is unavailable, skip Oracle tests
-    if qore -ne "Datasource ds(\"oracle:system/qore@rippy%rippy:1521\"); ds.exec(\"create user ${ORACLE_USER} identified by omq\"); ds.exec(\"grant create session, create procedure, create sequence, create table, create trigger, create type, create view, create synonym, unlimited tablespace to ${ORACLE_USER}\"); ds.commit();" 2>/dev/null; then
+    if qore -ne "Datasource ds(\"oracle:system/qore@rippy%rippy:1521\"); ds.exec(\"create user ${ORACLE_USER} identified by qore\"); ds.exec(\"grant create session, create procedure, create sequence, create table, create trigger, create type, create view, create synonym, unlimited tablespace to ${ORACLE_USER}\"); ds.commit();" 2>/dev/null; then
         echo "created oracle user ${ORACLE_USER}"
     else
         echo "WARNING: could not connect to Oracle on rippy — Oracle tests will be skipped"

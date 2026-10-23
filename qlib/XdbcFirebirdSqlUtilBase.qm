@@ -1384,7 +1384,7 @@ string sql = db.getSqlIdentifier("Order Date");
         #! Returns @ref True if the driver requires a scale to support decimal values in numeric or decimal columns
         /** @return @ref True if the driver requires a scale to support decimal values in numeric or decimal columns
 
-            @since %XdbcFirebirdSqlUtilBase 1.4.3
+            @since %XdbcFirebirdSqlUtilBase 0.1
         */
         bool requiresScale() {
             # an unqualified NUMERIC or DECIMAL column is NUMERIC(9,0) in Firebird, which silently truncates
@@ -1395,7 +1395,7 @@ string sql = db.getSqlIdentifier("Order Date");
         #! Returns the maximum precision for numeric or decimal columns
         /** @return -1 means, no maximum
 
-            @since %XdbcFirebirdSqlUtilBase 1.4.3
+            @since %XdbcFirebirdSqlUtilBase 0.1
         */
         int getMaximumPrecision() {
             return 18;
@@ -3157,7 +3157,7 @@ where
         }
 
         #! Returns True if the exception was raised because of a duplicate row / key error
-        /** @since XdbcFirebirdSqlUtilBase 1.4.2
+        /** @since XdbcFirebirdSqlUtilBase 0.1
         */
         private bool isDuplicateRowErrorImpl(hash<ExceptionInfo> ex) {
             return (ex.desc =~ /(attempt to store duplicate value|violation of PRIMARY or UNIQUE KEY constraint)/);

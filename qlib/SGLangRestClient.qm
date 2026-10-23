@@ -107,12 +107,6 @@ printf("%Y\n", ans.body);
 
     @subsection SGLangRestClientv1_0 SGLangRestClient v1.0
     - initial release
-    - the provider factory reports, with @ref SGLangRestClient::SGLangLlmProviderFactory::getModelInfo()
-      "SGLangLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c
-      reasoning_always_on): DeepSeek-R1, the Qwen3 thinking models and the GPT-OSS models
-    - a reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
-      turns thinking off on the hybrid Qwen3 and DeepSeek-V3.1/V3.2 models (\c chat_template_kwargs); requests for
-      models whose reasoning controls have not been verified are unchanged
 */
 
 #! the SGLangRestClient namespace contains all the objects in the SGLangRestClient module
@@ -420,7 +414,11 @@ public class SGLangLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
         return "sglang";
     }
     #! Turns reasoning off for the model of a request, or selects its lowest reasoning setting
-    /** Models are recognized when the served model name is the Hugging Face model ID.  Evidence,
+    /** Applied to a request with a @ref QoreLlmUtils::LlmRequestOptions::reasoning_token_budget
+        "reasoning_token_budget" of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning
+        "disable_reasoning": the hybrid Qwen3 and DeepSeek-V3.1/V3.2 models turn thinking off.
+
+        Models are recognized when the served model name is the Hugging Face model ID.  Evidence,
         https://docs.sglang.ai/advanced_features/separate_reasoning.html: standard Qwen3 "supports enable_thinking in
         chat templates", and DeepSeek-V3.1/V3.2 is a "Hybrid model supporting both thinking and non-thinking modes,
         use the deepseek-v3 parser and thinking parameter (NOTE: not enable_thinking)"; both are sent in

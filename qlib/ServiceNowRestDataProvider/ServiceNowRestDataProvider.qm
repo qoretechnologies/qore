@@ -262,8 +262,7 @@ module ServiceNowRestDataProvider {
     - fixed passing a REST client in the \c snrestclient option, which always failed with
       \c METHOD-DOES-NOT-EXIST
     - the field of a search expression is a field path: a path of more than one key is dot-walked in the encoded
-      query (\c caller_id.name), and a field whose key has a dot raises \c WHERE-ERROR instead of being sent as its
-      escaped text
+      query (\c caller_id.name), and a field whose key has a dot raises \c WHERE-ERROR
 
     @subsection servicenowrestdataprovider_v2_0 ServiceNowRestDataProvider v2.0
     - added support for the data provider action catalog API

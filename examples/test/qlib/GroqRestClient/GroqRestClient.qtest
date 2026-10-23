@@ -5,14 +5,13 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/QoreLlmTypes.qm
-%requires ../../../../qlib/QoreLlmUtils
-%requires ../../../../qlib/OpenAiRestClient.qm
-%requires ../../../../qlib/GroqRestClient.qm
-
-%requires ../../../../qlib/HttpServer.qm
+%requires Util
+%requires QUnit
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires OpenAiRestClient
+%requires GroqRestClient
+%requires HttpServer
 %requires json
 
 %exec-class GroqRestClientTest
@@ -203,9 +202,9 @@ public class GroqRestClientTest inherits QUnit::Test {
                 "model": "test-model",
                 "api_key": "k",
             });
-        # OpenAI-compatible default — Groq does NOT override the path
-        # (the /openai prefix lives on the URL, not the path)
-        assertEq("/v1/chat/completions", p.getChatCompletionsPath());
+        # OpenAI-compatible default — Groq does NOT override the path: it is beneath the path of the default API
+        # root, https://api.groq.com/openai, which has no /v1
+        assertEq("/openai/v1/chat/completions", p.getChatCompletionsPath());
     }
 
     private restOptionsTest() {

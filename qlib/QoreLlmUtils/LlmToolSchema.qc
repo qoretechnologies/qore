@@ -109,7 +109,7 @@ hash<ToolDefinition> td = <ToolDefinition>{
 };
     @endcode
 
-    @since QoreLlmUtils 1.1
+    @since QoreLlmUtils 1.0.0
 */
 public hash<auto> sub qoreParamsToJsonSchema(*hash<auto> params) {
     hash<auto> properties = {};
@@ -294,7 +294,7 @@ public hash<auto> sub qoreTypeNameToJsonSchema(*string qore_type) {
 
     @return a sanitized name guaranteed to match the provider rules
 
-    @since QoreLlmUtils 1.1
+    @since QoreLlmUtils 1.0.0
 */
 public string sub sanitizeLlmToolName(string name, *string prefix) {
     string raw = (prefix ?? "") + name;

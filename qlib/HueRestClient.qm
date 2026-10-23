@@ -87,6 +87,10 @@ printf("%Y\n", ans.body);
     @section Huerestclientrelnotes Release Notes
 
     @subsection Huerestclientv1_0_1 HueRestClient v1.0.1
+    - added the @ref HueRestClient::HueRestClientIo "HueRestClientIo" class, which makes the module's requests with
+      the async I/O of the @ref restclientiointro "RestClientIo" module;
+      @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()" of a
+      @ref HueRestClient::HueRestConnection "HueRestConnection" returns it
     - fixed platform-generated connection URLs by declaring
       @ref HueRestClient::HueRestConnection::DefaultConnectionUrl "HueRestConnection::DefaultConnectionUrl"
 
@@ -292,7 +296,7 @@ public class HueRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since HueRestClient 1.1
+    /** @since HueRestClient 1.0.1
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new HueRestClientIo(getConnectionOptions(rtopts));

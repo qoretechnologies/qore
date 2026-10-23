@@ -1,0 +1,46 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A child process created with fork() while another thread holds a process-wide leaf lock of the library can take the
+# lock: the library registers a fork handler for it (see design/fork-handlers.md).  Without one, the child got the lock
+# held by a thread that does not exist in it and waited forever for it (the test runner's time limit is only a guard).
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+
+%exec-class ForkLeafLocksTest
+
+class ForkLeafLocksTest inherits QUnit::Test {
+    constructor() : QUnit::Test("fork leaf locks", "1.0", \ARGV) {
+        addTestCase("fork() while another thread holds the lock of the QUIC idle-close test hook",
+            \testQuicIdleCloseHook());
+        addTestCase("fork() while another thread holds the lock of the AOT module source hashes",
+            \testAotModuleSourceHashes());
+        set_return_value(main());
+    }
+
+    testQuicIdleCloseHook() {
+        forkWhileHeld("quic_test_idle_close_at_submit");
+    }
+
+    testAotModuleSourceHashes() {
+        forkWhileHeld("aot_module_source_hashes");
+    }
+
+    private forkWhileHeld(string name) {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+        # the child takes the lock as the fork handler does
+        hash<auto> r = call_function("dbg_fork_while_handler_held", name);
+        assertTrue(r.waited, sprintf("fork() waited for the thread holding the %y lock", name));
+        assertEq(0, r.status, sprintf("the child took the %y lock", name));
+    }
+}

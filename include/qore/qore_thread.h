@@ -91,7 +91,7 @@ DLLEXPORT void qore_get_runtime_context(QoreRuntimeContext* rc);
 DLLEXPORT bool is_valid_qore_thread();
 
 //! returns the current TID number
-/** @since %Qore 0.9.5.1
+/** @since %Qore 0.9.6
 */
 DLLEXPORT int q_gettid() noexcept;
 
@@ -474,7 +474,7 @@ DLLEXPORT int q_remove_thread_local_data(int key, q_user_tld& data, bool run_des
     The target thread receives a \c THREAD-CANCELLED exception at the next cancellation point
     (loop iteration, blocking wait, sleep, I/O operation).
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 ///@{
 
@@ -488,7 +488,7 @@ DLLEXPORT int q_remove_thread_local_data(int key, q_user_tld& data, bool run_des
 
     @return true if cancelled/interrupted (exception raised), false otherwise
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 DLLEXPORT bool qore_check_cancel(ExceptionSink* xsink, const char* operation = "operation");
 
@@ -530,7 +530,7 @@ DLLEXPORT bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operati
 
     @return 0 if the request was delivered, -1 if the thread was not found or not active
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 DLLEXPORT int qore_cancel_thread(int tid, const char* reason = nullptr);
 
@@ -539,7 +539,7 @@ DLLEXPORT int qore_cancel_thread(int tid, const char* reason = nullptr);
     running (e.g., to complete cleanup operations without re-triggering at the next
     cancellation point).
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 DLLEXPORT void qore_clear_thread_cancel();
 
@@ -552,7 +552,7 @@ DLLEXPORT void qore_clear_thread_cancel();
 
     @return true if cancellation has been requested
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 DLLEXPORT bool qore_is_thread_cancel_requested();
 
@@ -582,7 +582,7 @@ struct pollfd;
     - 0: the timeout expired
     - -1: poll(2) failed; \c errno is set and no exception has been raised (\c EINTR is handled internally: the wait
       resumes for the rest of the timeout)
-    - @ref QORE_POLL_CANCELLED: an exception has been raised: \c THREAD-CANCELLED, \c PROGRAM-INTERRUPTED, or
+    - @ref QORE_POLL_CANCELLED "QORE_POLL_CANCELLED": an exception has been raised: \c THREAD-CANCELLED, \c PROGRAM-INTERRUPTED, or
       \c THREAD-ERROR if the wakeup channel could not be created (for example because no descriptors are left)
 
     While cancellation is deferred (@ref qore_push_cancel_deferral()), and on a thread that is not registered with

@@ -81,25 +81,25 @@ printf("%Y\n", ans.body);
     @note The OCR endpoint is exposed via the
     @ref mistraldataproviderintro "MistralDataProvider" <tt>ocr</tt> action.
 
+    @ref MistralRestClient::MistralLlmProvider "MistralLlmProvider" supports reasoning responses and streams and
+    preserves reasoning across tool and conversation turns. It passes on sampling options and prompt-cache routing
+    keys (\c prompt_cache_key) in synchronous and streaming requests; with a zero temperature, it sends
+    \c top_p \c 1 unless \c top_p is given, as Mistral requires.
+    @ref MistralRestClient::MistralRestClientBase::getModelReasoningEfforts()
+    "MistralRestClientBase::getModelReasoningEfforts()" returns the reasoning efforts of the known models, for
+    example for application policies.
+    @ref MistralRestClient::MistralLlmProviderFactory::getModelInfo() "MistralLlmProviderFactory::getModelInfo()"
+    reports which models cannot turn hidden reasoning off (\c reasoning_always_on): the dated Magistral models. A
+    reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
+    turns reasoning off with the reasoning effort \c none on the reasoning models that accept it; requests for
+    models whose reasoning controls have not been verified are sent as given.
+
+    Mistral connections belong to the Mistral AI app and offer the supported API versions; the connection ping
+    verifies the API key with the model listing.
+
     @section MistralRestClientRelnotes Release Notes
 
     @subsection MistralRestClientv1_2 MistralRestClient v1.2
-    - support prompt-cache routing keys for synchronous and streaming LLM requests
-    - expose model-specific reasoning choices for application policy adapters
-    - the provider factory reports, with @ref MistralRestClient::MistralLlmProviderFactory::getModelInfo()
-      "MistralLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c
-      reasoning_always_on): the dated Magistral models
-    - a reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
-      turns reasoning off with the reasoning effort \c none on the reasoning models that accept it; requests for models
-      whose reasoning controls have not been verified are unchanged
-
-    @subsection MistralRestClientv1_1 MistralRestClient v1.1
-    - support reasoning responses and streams, preserving reasoning across tool and conversation turns
-    - preserve sampling options and supply the compatible default for zero-temperature requests
-    - associate connections with the Mistral AI app and correct automatically generated URLs
-    - expose the supported API versions and verify authentication with the model listing
-
-    @subsection MistralRestClientv1_0 MistralRestClient v1.0
     - initial release
 */
 

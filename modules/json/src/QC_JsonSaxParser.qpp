@@ -25,6 +25,7 @@
 #include "qore-json-module.h"
 #include "QC_JsonSaxParser.h"
 
+#include <cerrno>
 #include <ctype.h>
 #include <cmath>
 
@@ -437,7 +438,8 @@ bool JsonSaxParser::parseNumber(ParseState& state) {
             break;
         }
         if (ch == '.') {
-            if (has_dot) {
+            // a number has one fraction, which precedes its exponent (RFC 8259 section 6)
+            if (has_dot || has_e) {
                 state.xsink->raiseException("JSON-SAX-PARSE-ERROR",
                     "unexpected '.' in number at line %d, column %d", state.line_number, state.column);
                 return false;
@@ -501,7 +503,13 @@ bool JsonSaxParser::parseNumber(ParseState& state) {
     if (has_dot || has_e) {
         return emitEvent(state, JSON_SAX_NUMBER, nullptr, q_strtod(numstr.c_str()));
     }
-    return emitEvent(state, JSON_SAX_NUMBER, nullptr, strtoll(numstr.c_str(), nullptr, 10));
+    errno = 0;
+    long long i = strtoll(numstr.c_str(), nullptr, 10);
+    if (errno == ERANGE) {
+        // outside the range of an int: a number keeps its value
+        return emitEvent(state, JSON_SAX_NUMBER, nullptr, new QoreNumberNode(numstr.c_str()));
+    }
+    return emitEvent(state, JSON_SAX_NUMBER, nullptr, static_cast<int64>(i));
 }
 
 bool JsonSaxParser::parseObject(ParseState& state) {
@@ -877,7 +885,9 @@ const JsonSaxNull = JSON_SAX_NULL;
     - @ref JsonSaxArrayEnd - end of a JSON array ']'
     - @ref JsonSaxKey - JSON object key
     - @ref JsonSaxString - JSON string value
-    - @ref JsonSaxNumber - JSON number value (integer or float)
+    - @ref JsonSaxNumber - JSON number value: an \c int, a \c number for an integer outside the range of an \c int,
+      or a \c float for a number with a fraction or an exponent; a number that does not have the form of RFC 8259
+      section 6, such as \c "01", \c ".5", \c "1." or \c "1e5.5", raises \c JSON-SAX-PARSE-ERROR
     - @ref JsonSaxBoolean - JSON boolean value
     - @ref JsonSaxNull - JSON null value
 

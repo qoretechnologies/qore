@@ -443,15 +443,11 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
                 hdr.Accept = MimeTypeJson;
             }
 
-            # prepend base path to request, if any
-            string base_path = options.base_path ?? schema.getBasePath();
-            if (base_path.val() && base_path != "/") {
-                if (uri_path !~ /^\//) {
-                    base_path += "/";
-                }
-                uri_path = base_path + uri_path;
-            }
-            info = rest.restDoRawRequest(method, uri_path, body, hdr);
+            # The schema owns the namespace; compose it once before explicit absolute dispatch.
+            uri_path = RestClient::rest_request_path(<RestClient::RestRequestTarget>{"path": uri_path},
+                options.base_path ?? schema.getBasePath());
+            info = rest.restDoRawRequestTarget(method, <RestClient::RestRequestTarget>{
+                "mode": RestClient::RestPathMode::OriginAbsolute, "path": uri_path}, body, hdr);
             *hash<auto> rv;
             if (exists info.body) {
                 rv.body = info.body;

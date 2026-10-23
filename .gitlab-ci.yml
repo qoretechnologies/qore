@@ -27,14 +27,14 @@ default:
 
 variables:
   REPO_NAME: qore
-  POSTGRES_PASSWORD: omq
-  POSTGRES_PASSWORD_MAP: pgsql=omq
+  POSTGRES_PASSWORD: qore
+  POSTGRES_PASSWORD_MAP: pgsql=qore
   TZ: 'Europe/Prague'
   PGTZ: 'Europe/Prague'
   TDSVER: "7.3"
-  MYSQL_DATABASE: omq
-  MYSQL_ROOT_PASSWORD: omq
-  QORE_DB_CONNSTR_MYSQL: 'mysql:root/omq@omq(UTF8)%mysql'
+  MYSQL_DATABASE: qore
+  MYSQL_ROOT_PASSWORD: qore
+  QORE_DB_CONNSTR_MYSQL: 'mysql:root/qore@qore(UTF8)%mysql'
   MEMCACHED_URL: 'memcached://memcached:11211'
   REDIS_URL: 'redis://redis:6379'
   MONGODB_URL: 'mongodb://mongodb:27017'
@@ -56,6 +56,20 @@ check-third-party-sources:
   before_script: []
   script:
     - cmake -DQORE_THIRD_PARTY_MIRROR="${QORE_THIRD_PARTY_MIRROR}" -P cmake/QoreCheckThirdPartySources.cmake
+
+# The release notes of each module begin with "- initial release" only and have no bullets before the first release
+# section; the checker's own tests run first
+check-module-release-notes:
+  stage: build
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  script:
+    - python3 examples/test/cmake/test_module_release_notes.py
+    - git ls-files -z 'qlib/*.qm' 'qlib/**/*.qm' 'modules/*/docs/*.dox.tmpl' | xargs -0 python3 -I doxygen/check-module-release-notes.py
 
 # Build stage - compile once per platform, save build/ as artifact
 build-ubuntu-amd64:
@@ -486,3 +500,31 @@ test-perf:
     paths:
       - crash-dumps/
     expire_in: 7 days
+
+# The build-system tests (examples/test/cmake): the CMake macros and scripts, qpp, qcc and the documentation toolchain,
+# with real CMake, Doxygen and compilers, against the build job's build/
+test-cmake-ubuntu-amd64:
+  stage: test
+  timeout: 30 minutes
+  needs: [build-ubuntu-amd64]
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  script:
+    - test/docker_test/test-cmake.sh
+
+test-cmake-alpine-amd64:
+  stage: test
+  timeout: 30 minutes
+  needs: [build-alpine-amd64]
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  script:
+    - test/docker_test/test-cmake.sh

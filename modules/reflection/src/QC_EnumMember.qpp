@@ -35,7 +35,7 @@
 
 //! This class provides information about %Qore enum members
 /**
-    @since %Qore 2.1
+    @since %Qore 3.0
  */
 qclass EnumMember [ns=Qore::Reflection; arg=QoreReflectionEnumMember* m; dom=REFLECTION];
 
@@ -80,7 +80,8 @@ auto val = member.getValue();
 auto EnumMember::getValue() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, m->pgm, "read or write the values of", xsink)) {
+    // Enum values are fixed scalar declarations; this cannot evaluate an initializer or expose a mutable object.
+    if (reflection_check_structural_access(caller, m->pgm, "inspect enum declarations in", xsink)) {
         return QoreValue();
     }
     // get read access to program object

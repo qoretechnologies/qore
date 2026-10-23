@@ -1962,5 +1962,9 @@ exit:
    // cleanup Qore subsystem (deallocate memory, etc)
    qore_cleanup();
 
+   // a child process created with fork() whose modules requested it ends without running exit-time handlers (see
+   // qore_fork_child_exit_quickly())
+   qore_fork_child_quick_exit(rc);
+
    return rc;
 }

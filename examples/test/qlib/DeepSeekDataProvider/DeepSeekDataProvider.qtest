@@ -6,14 +6,13 @@
 %allow-injection
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/DeepSeekDataProvider
-
-%requires ../../../../qlib/HttpServer.qm
+%requires Util
+%requires QUnit
+%requires Logger
+%requires ConnectionProvider
+%requires DataProvider
+%requires DeepSeekDataProvider
+%requires HttpServer
 %requires json
 
 %exec-class DeepSeekDataProviderTest
@@ -58,6 +57,12 @@ class FakeDeepSeekRestClientIo inherits RestClientIo::RestClientIo {
 
     RestClient::AbstractRestClient copyWithUrl(string url) {
         return self;
+    }
+
+    #! Schema dispatch now supplies an explicit target; retain this mock's response recorder.
+    hash<RestClient::RestResponseInfo> restDoRawRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr) {
+        return restDoRawRequest(method, target.path, body, hdr);
     }
 
     hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,

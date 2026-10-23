@@ -121,12 +121,6 @@ stream.close();
 
     @subsection GrokRestClientv1_0 GrokRestClient v1.0
     - initial release
-    - the provider factory reports, with @ref GrokRestClient::GrokLlmProviderFactory::getModelInfo()
-      "GrokLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c reasoning_always_on):
-      Grok 4.5, 4.6 and 4.7
-    - a reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
-      turns reasoning off on Grok 4.3 (reasoning effort \c none) and selects the lowest effort, \c low, of Grok 4.5, 4.6
-      and 4.7; requests for models whose reasoning controls have not been verified are unchanged
 */
 
 %requires json
@@ -559,7 +553,10 @@ public class GrokLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
         return "grok";
     }
     #! Returns the reasoning effort that turns reasoning off for a model, or the model's lowest effort
-    /** Evidence:
+    /** A @ref QoreLlmUtils::LlmRequestOptions::reasoning_token_budget "reasoning_token_budget" of zero or
+        @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" sends this reasoning effort.
+
+        Evidence:
         - https://docs.x.ai/developers/models/grok-4.3.md: "Reasoning efforts (supported): \c none, \c low,
           \c medium, \c high, \c xhigh"
         - https://docs.x.ai/docs/guides/reasoning: \c grok-4.7, \c grok-4.6 and \c grok-4.5: "Reasoning cannot be

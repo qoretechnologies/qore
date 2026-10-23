@@ -1,0 +1,158 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# MIT License
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires QoreLlmUtils
+%requires OpenAiRestClient
+%requires GrokRestClient
+%requires PerplexityRestClient
+%requires SGLangRestClient
+%requires AzureOpenAiRestClient
+%requires json
+
+%exec-class OpenAiApiRootTest
+
+#! Records actual HTTP request paths and serves both OpenAI wire formats, including SSE
+class OpenAiApiRootHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue requests();
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> request = parse_json(body.typeCode() == NT_BINARY ? body.toString() : body);
+        requests.push(cx.raw_path);
+        bool responses = exists request.input;
+        hash<auto> reply = responses ? {
+            "id": "resp-test", "model": request.model, "status": "completed",
+            "output": ({"type": "message", "role": "assistant",
+                "content": ({"type": "output_text", "text": "ok"},)},),
+            "usage": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
+        } : {
+            "id": "chatcmpl-test", "model": request.model,
+            "choices": ({"index": 0, "message": {"role": "assistant", "content": "ok"},
+                "finish_reason": "stop"},),
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+        };
+        if (request.stream) {
+            hash<auto> event;
+            if (responses) {
+                event = {"type": "response.completed", "response": reply};
+            } else {
+                event = reply;
+                event.choices[0].delta = remove event.choices[0].message;
+            }
+            return makeResponse(200, "data: " + make_json(event) + "\n\ndata: [DONE]\n\n",
+                {"Content-Type": "text/event-stream"});
+        }
+        return makeResponse(200, make_json(reply), {"Content-Type": "application/json"});
+    }
+}
+
+class OpenAiApiRootTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        OpenAiApiRootHandler handler();
+        string url;
+    }
+
+    constructor() : Test("OpenAI API roots", "1.0", \ARGV) {
+        # Expected roots are explicit so the test does not repeat the path resolver.
+        foreach list<string> root in ((
+                ("", "/v1"),
+                ("/", "/v1"),
+                ("/v1", "/v1"),
+                ("/v1/", "/v1"),
+                ("/project-id/v1", "/project-id/v1"),
+                ("/project-id/v1/", "/project-id/v1"),
+                ("/gateway/openai/v1", "/gateway/openai/v1"),
+                ("/gateway/openai/v1/", "/gateway/openai/v1"),
+                ("/gateway", "/gateway/v1"),
+                ("/gateway/", "/gateway/v1"),
+                ("/v10", "/v10/v1"),
+                ("/v1/proxy", "/v1/proxy/v1"),
+            )) {
+            foreach string api in (("chat_completions", "responses")) {
+                addTestCase(sprintf("%s root %y", api, root[0]), \rootTest(), (root[0], root[1], api));
+            }
+        }
+        foreach string mode in (("grok", "sglang")) {
+            addTestCase(mode + " inherits prefixed API roots", \inheritedRootTest(), (mode,));
+        }
+        addTestCase("Perplexity path override", \perplexityTest());
+        addTestCase("Azure deployment path override", \azureTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("llm", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        url = "http://127.0.0.1:" + port;
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+    }
+
+    private rootTest(string root, string expected_root, string api) {
+        hash<LlmBackendConfig> config = <LlmBackendConfig>{
+            "mode": "http", "url": url + root, "model": "test-model", "api_key": "test-key",
+            "max_retries": 0, "timeout_ms": 5000, "connect_timeout_ms": 5000,
+            "provider_options": {"openai_api": api},
+        };
+        LlmBackend backend(config);
+        checkRequests(backend, expected_root + (api == "responses" ? "/responses" : "/chat/completions"));
+        OpenAiLlmProvider provider(config);
+        assertEq(expected_root + "/chat/completions", provider.getChatCompletionsPath());
+    }
+
+    private inheritedRootTest(string mode) {
+        LlmBackend backend(<LlmBackendConfig>{
+            "mode": mode, "url": url + "/project-id/v1/", "model": "test-model", "api_key": "test-key",
+            "max_retries": 0, "timeout_ms": 5000,
+        });
+        checkRequests(backend, "/project-id/v1/chat/completions");
+    }
+
+    private perplexityTest() {
+        LlmBackend backend(<LlmBackendConfig>{
+            "mode": "perplexity", "url": url, "model": "sonar", "api_key": "test-key",
+            "max_retries": 0, "timeout_ms": 5000,
+        });
+        checkRequests(backend, "/chat/completions");
+    }
+
+    private azureTest() {
+        LlmBackend backend(<LlmBackendConfig>{
+            "mode": "azure-openai", "url": url, "model": "test-model", "api_key": "test-key",
+            "max_retries": 0, "timeout_ms": 5000,
+            "provider_options": {"azure_deployment": "test-deployment", "azure_api_version": "2024-10-21"},
+        });
+        checkRequests(backend, "/openai/deployments/test-deployment/chat/completions?api-version=2024-10-21");
+    }
+
+    private checkRequests(LlmBackend backend, string expected_path) {
+        hash<auto> request = {"messages": ({"role": "user", "content": "hi"},), "max_tokens": 4};
+        hash<auto> reply = backend.chatCompletions(request);
+        assertEq("ok", reply.choices[0].message.content);
+        assertEq(expected_path, handler.requests.get(5s), "synchronous facade HTTP path");
+
+        string text;
+        reply = backend.chatCompletionsStream(request, sub (hash<auto> chunk) {
+            text += chunk.choices[0].delta.content ?? "";
+        });
+        assertEq("ok", text);
+        assertEq("ok", reply.choices[0].message.content);
+        assertEq(expected_path, handler.requests.get(5s), "streaming facade HTTP path");
+
+        hash<LlmCompletionResult> completion = backend.complete("Be concise.", "hi");
+        assertEq("ok", completion.content);
+        assertEq(expected_path, handler.requests.get(5s), "single-turn completion HTTP path");
+    }
+}

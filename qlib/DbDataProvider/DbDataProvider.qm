@@ -350,12 +350,6 @@ module DbDataProvider {
       search option) and refused in an update or a delete (\c UNSUPPORTED-FIELD-REFERENCE); it was sent to SqlUtil as
       it was written (@ref DbDataProvider::DbTableDataProvider::getColumnReference()
       "DbTableDataProvider::getColumnReference()")
-    - update and delete APIs now preserve affected-row counts when optional search options are omitted, including
-      zero-row results, while retaining caller-owned transaction boundaries
-    - bulk create operations now return every requested server-generated value across flush blocks instead of only
-      the final callback row
-    - bulk upserts preserve exact per-row inserted, updated, and unchanged results for strategies that promise this
-      distinction; optimized strategies explicitly return \c verified when the backend cannot expose it
     - field renames now use SqlUtil column mapping so data is preserved, and same-type logical renames retain the
       database-native physical type instead of introducing an implicit type conversion
     - database table providers now advertise expression pushdown capabilities dynamically from the active
@@ -369,11 +363,11 @@ module DbDataProvider {
     - made table create options database-aware so unsupported \c returning options are not published or accepted
     - validated unsupported raw SQL search conditions before iterator construction to avoid leaking implicit
       transactions on constructor errors
-    - fixed row and bulk iterator interoperability by preserving record types, limits, maximums, and required-result
-      state when adapting a row iterator to bulk, and by releasing implicit transactions immediately at end-of-data
-    - made single-record updates and \c max_records-bounded updates and deletes atomic with savepoints, including
-      inside caller-owned transactions
-    - updated the c exec-sql provider to commit or roll back only transactions started by the request, preserving
+    - fixed the record type of table record iterators, which was not returned, and database record iterators
+      release an implicit transaction as soon as the end of the data is reached instead of when they are destroyed
+    - made single-record updates atomic with savepoints, including inside caller-owned transactions;
+      \c max_records-bounded updates and deletes are atomic as well
+    - updated the \c exec-sql provider to commit or roll back only transactions started by the request, preserving
       caller-owned transaction boundaries
     - added \c BufferColumns support for bulk table reads and raw SQL reads with
       @ref Qore::SQL::ColumnarResult "ColumnarResult" blocks from \c getShapedValue()
@@ -383,8 +377,6 @@ module DbDataProvider {
     - added the SqlUtil \c partition search option to
       @ref DbDataProvider::DbTableDataProvider "DbTableDataProvider" reads and DB \c find / \c find_single actions;
       bulk reads now forward all validated search options to SqlUtil
-
-    @subsection dbdataprovider_v2_4 DbDataProvider v2.4
     - added the @ref DbDataProvider::DbVendorInfo "DbVendorInfo" hashdecl for per-vendor database app configuration
     - added @ref DbDataProvider::registerDbVendorApp() "registerDbVendorApp()" for registering per-vendor database
       applications with individual connection form fields (driver, host, port, db, user, pass, etc.)
@@ -392,8 +384,6 @@ module DbDataProvider {
     - added per-vendor database applications for CockroachDB, Amazon Redshift, MariaDB, Snowflake, ClickHouse, and H2
     - added @c jdbc_jar field to @ref DbDataProvider::DbVendorInfo "DbVendorInfo" for JDBC auto-classpath support
     - added SVG logos for CockroachDB, Amazon Redshift, MariaDB, Snowflake, ClickHouse, and H2
-
-    @subsection dbdataprovider_v2_3 DbDataProvider v2.3
     - added the @ref DbDataProvider::DatasourceConnection "DatasourceConnection" class providing database connectivity
       using the @c db:// URL scheme with automatic connection scheme registration
     - added per-database-driver SVG logo registry with logos for PostgreSQL, MySQL, Oracle, SQL Server (FreeTDS),

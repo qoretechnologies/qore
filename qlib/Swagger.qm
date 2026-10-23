@@ -150,16 +150,12 @@ RestHandler handler(NOTHING, swagger);
     - fixed YAML MIME type equivalence: \c "application/yaml" (RFC 9512), \c "text/x-yaml",
       \c "application/x-yaml", and \c "text/yaml" are now treated as interchangeable when
       validating content types against API schemas
-
-    @subsection swagger_2_4 Swagger v2.4
     - renamed @ref Swagger::AbstractSwaggerParameterObject "AbstractSwaggerParameterObject" from
       \c AbstractParameterObject to avoid confusion with
       @ref RestSchemaValidator::AbstractParameterObject "RestSchemaValidator::AbstractParameterObject"
     - added overloaded @ref Swagger::SwaggerSchema::getFieldFromSchema() "getFieldFromSchema()" method
       that accepts @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject" for polymorphic access
       (<a href="https://github.com/qorelanguage/qore/issues/5006">issue 5006</a>)
-
-    @subsection swagger_2_3 Swagger v2.3
     - updated classes to inherit from abstract base classes in @ref RestSchemaValidator for polymorphic usage:
       - @ref Swagger::SchemaBase "SchemaBase" now inherits from
         @ref RestSchemaValidator::AbstractSchemaBase "AbstractSchemaBase"

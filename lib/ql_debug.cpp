@@ -97,6 +97,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -4600,6 +4601,758 @@ public:
 };
 #endif
 
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+//! A connection made with QoreSocket::startConnect() reports everything that a module's operation must wait for
+/** A module's poll operation that makes a connection with the poll state that QoreSocket::startConnect() returns,
+    as module-ssh2's SftpPollOperation does, can only wait for what the state's public API reports: the events that
+    continuePoll() returns for the socket's descriptor, the descriptors of AbstractPollState::getExtraWaitFds() and
+    the time of AbstractPollState::getPollTimeoutMs().  The happy-eyeballs connection reported the descriptors of its
+    resolver and of its other connection attempts, and its timers, only to %Qore's own poll operations: while a host
+    name was resolved asynchronously the socket had no descriptor and the module had nothing to wait for, and while
+    attempts raced the module waited for the first one only, so a first address that does not answer stalled it.
+
+    The connection drives the state as a module does, and its lookups ask a DNS server that the test runs
+    (dbg_cares_set_servers()), which holds its answers until the connection first waits while its socket has no
+    descriptor, so that the lookup is answered over the network while the connection waits for it: an answer to
+    every query, answers after the server dropped the first query, which only the resolver's timer sends again, and
+    answers with an IPv6 address first whose listener drops the connection requests (its accept queue is full), so
+    that only the RFC 8305 connection attempt delay and the descriptor of the second attempt connect it.  The last case needs an IPv6 loopback address that drops the
+    requests; on a host without one, the connection is made to the IPv6 address and the case checks only that.
+*/
+class HappyEyeballsLayeredConnectTest {
+public:
+    static void run(UnitTestCounters& c) {
+        runCase(c, Case::Answered);
+        runCase(c, Case::LostQuery);
+        runCase(c, Case::Racing);
+    }
+
+private:
+    enum class Case {
+        //! the server answers every query
+        Answered,
+        //! the server drops the first query
+        LostQuery,
+        //! the server answers with an IPv6 address that drops connection requests, and an IPv4 one
+        Racing,
+    };
+
+    //! the name that is resolved; the server answers every name
+    static constexpr const char* Name = "qore-layered-connect.test";
+
+    //! the longest wait for which nothing would continue the connection: a hang guard only
+    static constexpr int HangGuardMs = 30000;
+
+    //! A DNS server on the IPv4 loopback address that answers the A and AAAA queries for any name
+    /** The answers are held until release() is called, and then sent at once
+    */
+    class DnsServer {
+    public:
+        DLLLOCAL ~DnsServer() {
+            stop();
+        }
+
+        /** @param a the IPv4 address of the answers to A queries
+            @param aaaa the IPv6 address of the answers to AAAA queries, or nullptr to answer them with no address
+            @param drop the number of queries to drop before the server answers
+
+            @return 0 for success, -1 for failure
+        */
+        DLLLOCAL int start(const char* a, const char* aaaa, int drop) {
+            if (inet_pton(AF_INET, a, a_addr) != 1 || (aaaa && inet_pton(AF_INET6, aaaa, aaaa_addr) != 1)) {
+                return -1;
+            }
+            has_aaaa = aaaa != nullptr;
+            to_drop = drop;
+            fd = socket(AF_INET, SOCK_DGRAM, 0);
+            if (fd < 0 || pipe(stop_pipe) || pipe(release_pipe)) {
+                return -1;
+            }
+            struct sockaddr_in sin = {};
+            sin.sin_family = AF_INET;
+            sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            socklen_t len = sizeof sin;
+            if (::bind(fd, reinterpret_cast<struct sockaddr*>(&sin), sizeof sin)
+                    || getsockname(fd, reinterpret_cast<struct sockaddr*>(&sin), &len)) {
+                return -1;
+            }
+            port = ntohs(sin.sin_port);
+            th = std::thread([this]() {
+                serve();
+            });
+            return 0;
+        }
+
+        //! Sends the answers held so far, and the answers to the queries received from now on at once
+        DLLLOCAL void release() {
+            notifyPipe(release_pipe[1]);
+        }
+
+        DLLLOCAL void stop() {
+            if (th.joinable()) {
+                notifyPipe(stop_pipe[1]);
+                th.join();
+            }
+            for (int* p : {&fd, &stop_pipe[0], &stop_pipe[1], &release_pipe[0], &release_pipe[1]}) {
+                if (*p >= 0) {
+                    close(*p);
+                    *p = -1;
+                }
+            }
+        }
+
+        DLLLOCAL int getPort() const {
+            return port;
+        }
+
+        DLLLOCAL int getQueries() const {
+            return queries.load();
+        }
+
+    private:
+        //! An answer that the server holds until release()
+        struct Held {
+            std::vector<unsigned char> answer;
+            struct sockaddr_storage to;
+            socklen_t to_len;
+        };
+
+        int fd = -1;
+        int stop_pipe[2] = {-1, -1};
+        int release_pipe[2] = {-1, -1};
+        int port = 0;
+        unsigned char a_addr[4] = {};
+        unsigned char aaaa_addr[16] = {};
+        bool has_aaaa = false;
+        int to_drop = 0;
+        std::atomic<int> queries{0};
+        //! the answers held until release(); used by the server's thread only
+        std::vector<Held> held;
+        //! true once release() was called; used by the server's thread only
+        bool released = false;
+        std::thread th;
+
+        //! Writes a byte to the pipe whose write end is given
+        /** A write to a pipe whose read end is open fails only when a signal interrupts it
+        */
+        DLLLOCAL static void notifyPipe(int pipe_fd) {
+            char b = 0;
+            while (write(pipe_fd, &b, 1) < 0 && errno == EINTR) {
+            }
+        }
+
+        DLLLOCAL void serve() {
+            while (true) {
+                struct pollfd fds[3] = {{fd, POLLIN, 0}, {stop_pipe[0], POLLIN, 0}, {release_pipe[0], POLLIN, 0}};
+                if (poll(fds, 3, -1) < 0) {
+                    if (errno == EINTR) {
+                        continue;
+                    }
+                    return;
+                }
+                if (fds[1].revents) {
+                    return;
+                }
+                if (fds[2].revents & POLLIN) {
+                    char b;
+                    if (read(release_pipe[0], &b, 1) == 1 && !released) {
+                        released = true;
+                        for (const Held& h : held) {
+                            sendto(fd, h.answer.data(), h.answer.size(), 0,
+                                reinterpret_cast<const struct sockaddr*>(&h.to), h.to_len);
+                        }
+                        held.clear();
+                    }
+                }
+                if (!(fds[0].revents & POLLIN)) {
+                    continue;
+                }
+                unsigned char q[512];
+                struct sockaddr_storage from;
+                socklen_t from_len = sizeof from;
+                ssize_t n = recvfrom(fd, q, sizeof q, 0, reinterpret_cast<struct sockaddr*>(&from), &from_len);
+                if (n < 12) {
+                    continue;
+                }
+                ++queries;
+                if (to_drop > 0) {
+                    --to_drop;
+                    continue;
+                }
+                unsigned char r[sizeof q + 28];
+                size_t r_len = answer(q, static_cast<size_t>(n), r);
+                if (!r_len) {
+                    continue;
+                }
+                if (released) {
+                    sendto(fd, r, r_len, 0, reinterpret_cast<struct sockaddr*>(&from), from_len);
+                } else {
+                    held.push_back({std::vector<unsigned char>(r, r + r_len), from, from_len});
+                }
+            }
+        }
+
+        //! Makes the answer to the query; returns its size, or 0 if the query is not answered
+        DLLLOCAL size_t answer(const unsigned char* q, size_t n, unsigned char* r) const {
+            // a single question
+            if (q[4] || q[5] != 1) {
+                return 0;
+            }
+            size_t pos = 12;
+            while (pos < n && q[pos]) {
+                if (q[pos] > 63) {
+                    return 0;
+                }
+                pos += q[pos] + 1;
+            }
+            // the root label, the type and the class
+            if (pos + 5 > n) {
+                return 0;
+            }
+            ++pos;
+            int qtype = (q[pos] << 8) | q[pos + 1];
+            size_t q_end = pos + 4;
+            memcpy(r, q, q_end);
+            // a response to a standard query, recursion desired as asked and available, no error
+            r[2] = 0x80 | (q[2] & 0x01);
+            r[3] = 0x80;
+            const unsigned char* addr = nullptr;
+            unsigned char addr_len = 0;
+            if (qtype == 1) {
+                addr = a_addr;
+                addr_len = 4;
+            } else if (qtype == 28 && has_aaaa) {
+                addr = aaaa_addr;
+                addr_len = 16;
+            }
+            // one answer or none; no authority or additional records
+            r[6] = 0;
+            r[7] = addr ? 1 : 0;
+            memset(r + 8, 0, 4);
+            size_t len = q_end;
+            if (addr) {
+                // the name of the question, the type of the question, class IN, a TTL of 60 seconds
+                const unsigned char rr[] = {0xc0, 0x0c, q[pos], q[pos + 1], 0, 1, 0, 0, 0, 60, 0, addr_len};
+                memcpy(r + len, rr, sizeof rr);
+                len += sizeof rr;
+                memcpy(r + len, addr, addr_len);
+                len += addr_len;
+            }
+            return len;
+        }
+    };
+
+    //! What the connection waited for
+    struct Waits {
+        //! waits for descriptors while the socket had none
+        int resolving = 0;
+        //! waits for more than one descriptor while the socket had one
+        int racing = 0;
+        //! waits that the poll timeout ended
+        int timed = 0;
+    };
+
+    //! The results of drive()
+    enum class Drive {
+        Connected,
+        Error,
+        NothingToWaitFor,
+        HangGuard,
+    };
+
+    //! Drives the connection as a module's poll operation does: with the poll state's public API only
+    /** @param dns the DNS server, whose answers are released when the connection waits while the socket has no
+        descriptor
+    */
+    static Drive drive(QoreSocket& client, AbstractPollState* state, DnsServer& dns, Waits& waits,
+            ExceptionSink& xsink) {
+        // the number of steps is a hang guard only
+        for (int i = 0; i < 100000; ++i) {
+            int rc = state->continuePoll(&xsink);
+            if (xsink || rc < 0) {
+                return Drive::Error;
+            }
+            if (!rc) {
+                return Drive::Connected;
+            }
+            std::vector<struct pollfd> fds;
+            int sock = client.getSocket();
+            if (sock >= 0) {
+                fds.push_back({sock, static_cast<short>(((rc & SOCK_POLLIN) ? POLLIN : 0)
+                    | ((rc & SOCK_POLLOUT) ? POLLOUT : 0)), 0});
+            }
+            for (const ExtraWaitFd& extra : state->getExtraWaitFds()) {
+                short events = (extra.want_read ? POLLIN : 0) | (extra.want_write ? POLLOUT : 0);
+                fds.push_back({extra.fd, events ? events : static_cast<short>(POLLIN), 0});
+            }
+            int timeout = state->getPollTimeoutMs();
+            if (fds.empty() && timeout < 0) {
+                return Drive::NothingToWaitFor;
+            }
+            if (sock < 0) {
+                // the lookup is answered while the connection waits for it
+                dns.release();
+                if (!fds.empty()) {
+                    ++waits.resolving;
+                }
+            } else if (fds.size() > 1) {
+                ++waits.racing;
+            }
+            bool guard = timeout < 0 || timeout > HangGuardMs;
+            int n = poll(fds.data(), fds.size(), guard ? HangGuardMs : timeout);
+            if (n < 0 && errno != EINTR) {
+                xsink.raiseErrnoException("POLL-ERROR", errno, "poll() failed");
+                return Drive::Error;
+            }
+            if (!n) {
+                if (guard) {
+                    return Drive::HangGuard;
+                }
+                ++waits.timed;
+            }
+        }
+        return Drive::HangGuard;
+    }
+
+    //! An IPv6 loopback listener that drops connection requests, and an IPv4 loopback listener on the same port
+    struct Listeners {
+        int v4 = -1;
+        int v6 = -1;
+        int filler = -1;
+        int port = 0;
+
+        DLLLOCAL ~Listeners() {
+            for (int fd : {v4, v6, filler}) {
+                if (fd >= 0) {
+                    close(fd);
+                }
+            }
+        }
+
+        //! Makes the IPv4 listener, on a free port or on \a port; returns 0 for success
+        DLLLOCAL int listenV4(int on_port) {
+            v4 = socket(AF_INET, SOCK_STREAM, 0);
+            int on = 1;
+            struct sockaddr_in sin = {};
+            sin.sin_family = AF_INET;
+            sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            sin.sin_port = htons(on_port);
+            socklen_t len = sizeof sin;
+            if (v4 < 0 || setsockopt(v4, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on)
+                    || ::bind(v4, reinterpret_cast<struct sockaddr*>(&sin), sizeof sin) || ::listen(v4, 20)
+                    || getsockname(v4, reinterpret_cast<struct sockaddr*>(&sin), &len)) {
+                return -1;
+            }
+            port = ntohs(sin.sin_port);
+            return 0;
+        }
+
+        //! Makes the IPv6 listener with a full accept queue and the IPv4 listener; returns 0 for success
+        DLLLOCAL int listenRacing() {
+            v6 = socket(AF_INET6, SOCK_STREAM, 0);
+            int on = 1;
+            struct sockaddr_in6 sin6 = {};
+            sin6.sin6_family = AF_INET6;
+            sin6.sin6_addr = in6addr_loopback;
+            socklen_t len = sizeof sin6;
+            if (v6 < 0 || setsockopt(v6, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof on)
+                    || ::bind(v6, reinterpret_cast<struct sockaddr*>(&sin6), sizeof sin6) || ::listen(v6, 0)
+                    || getsockname(v6, reinterpret_cast<struct sockaddr*>(&sin6), &len)) {
+                return -1;
+            }
+            if (listenV4(ntohs(sin6.sin6_port))) {
+                return -1;
+            }
+            // a connection that is never accepted fills the accept queue, if the system does not drop it already
+            filler = socket(AF_INET6, SOCK_STREAM, 0);
+            if (filler < 0 || fcntl(filler, F_SETFL, fcntl(filler, F_GETFL) | O_NONBLOCK)) {
+                return -1;
+            }
+            if (connect(filler, reinterpret_cast<struct sockaddr*>(&sin6), sizeof sin6) && errno != EINPROGRESS) {
+                return -1;
+            }
+            return 0;
+        }
+    };
+
+    static void runCase(UnitTestCounters& c, Case which) {
+        const char* what = which == Case::Answered
+            ? "answered lookup"
+            : (which == Case::LostQuery ? "lookup whose first query is lost" : "racing attempts");
+        printf("  layered connect: %s\n", what);
+
+        Listeners listeners;
+        if (which == Case::Racing ? listeners.listenRacing() : listeners.listenV4(0)) {
+            if (which == Case::Racing) {
+                printf("  layered connect: the IPv6 and IPv4 loopback listeners cannot be made on one port; the "
+                    "racing case is skipped\n");
+                return;
+            }
+            UT_ASSERT(c, false, "layered connect: the listener is made");
+            return;
+        }
+
+        DnsServer dns;
+        int rc = dns.start("127.0.0.1", which == Case::Racing ? "::1" : nullptr, which == Case::LostQuery ? 1 : 0);
+        UT_ASSERT_EQ(c, 0, rc, "layered connect: the DNS server starts");
+        if (rc) {
+            return;
+        }
+
+        // a local class: its members take no visibility attribute
+        struct ServersHelper {
+            ServersHelper(int port) : prev(qore_dbg_cares_set_servers("127.0.0.1:" + std::to_string(port))) {
+            }
+            ~ServersHelper() {
+                qore_dbg_cares_set_servers(prev);
+            }
+            std::string prev;
+        } servers(dns.getPort());
+
+        ExceptionSink xsink;
+        QoreSocket client;
+        std::string target = std::string(Name) + ":" + std::to_string(listeners.port);
+        std::unique_ptr<AbstractPollState> state(client.startConnect(&xsink, target.c_str()));
+        UT_ASSERT(c, !xsink && state, "layered connect: the connection starts");
+        if (xsink || !state) {
+            xsink.clear();
+            return;
+        }
+
+        Waits waits;
+        Drive result = drive(client, state.get(), dns, waits, xsink);
+        if (xsink) {
+            QoreStringValueHelper err(xsink.getExceptionErr());
+            QoreStringValueHelper desc(xsink.getExceptionDesc());
+            printf("  layered connect: %s: %s\n", err->c_str(), desc->c_str());
+            xsink.clear();
+        }
+        printf("  layered connect: result %d, %d resolving waits, %d racing waits, %d timed waits, %d queries\n",
+            static_cast<int>(result), waits.resolving, waits.racing, waits.timed, dns.getQueries());
+        UT_ASSERT(c, result == Drive::Connected, "layered connect: the connection is made with the public API");
+        UT_ASSERT(c, dns.getQueries() > 0, "layered connect: the name is resolved by the DNS server");
+        UT_ASSERT(c, waits.resolving > 0,
+            "layered connect: the resolver's descriptors are reported while the socket has no descriptor");
+        if (which == Case::LostQuery) {
+            UT_ASSERT(c, waits.timed > 0, "layered connect: the resolver's timer sends the lost query again");
+            UT_ASSERT(c, dns.getQueries() >= 3, "layered connect: the lost query is sent again");
+        }
+        if (result != Drive::Connected) {
+            return;
+        }
+        ReferenceHolder<QoreHashNode> peer(client.getPeerInfo(&xsink), &xsink);
+        QoreStringValueHelper address(peer ? peer->getKeyValue("address") : QoreValue());
+        xsink.clear();
+        if (which == Case::Racing) {
+            if (!strcmp(address->c_str(), "::1")) {
+                printf("  layered connect: the IPv6 listener accepted the connection; the attempts did not race\n");
+                return;
+            }
+            UT_ASSERT(c, waits.racing > 0, "layered connect: the other connection attempts are reported");
+            UT_ASSERT(c, waits.timed > 0, "layered connect: the connection attempt delay continues the connection");
+        }
+        UT_ASSERT(c, !strcmp(address->c_str(), "127.0.0.1"), "layered connect: the IPv4 listener is connected");
+    }
+};
+#endif
+
+#ifndef _Q_WINDOWS
+//! Sockets on overlapping addresses of a port share it only as Linux allows it
+/** qore_socket_bind_unshadowed() and qore_socket_listen_unshadowed() follow Linux's rules: two TCP sockets that
+    serve an address in common share its port only if both reuse the address and the other one does not listen, or if
+    both reuse the port and belong to the same user; of two such sockets that are bound, the one that listens first
+    holds the port.  On Linux the system applies the rules; on macOS, which allows a socket that reuses the address to
+    bind a specific address of a port held on a wildcard address, and two such sockets to listen, the functions apply
+    them, and a TCP socket is refused a specific address of a port held on a wildcard address also if the other socket
+    reuses the address and does not listen, because macOS gives the connection requests to the address to the socket
+    bound there, which drops them if it does not listen.  The sockets are made with the system's API, as the Socket
+    class makes no IPv6-only socket.
+*/
+class SpecificBindTest {
+public:
+    static void run(UnitTestCounters& c) {
+        runIpv6OnlyHolder(c);
+        runListenOrder(c);
+        runReusePort(c);
+        runMappedAddress(c);
+#ifdef DARWIN
+        runCancelledScan(c);
+#endif
+    }
+
+private:
+    //! closes the descriptor when it goes out of scope
+    struct Fd {
+        int fd = -1;
+        DLLLOCAL ~Fd() {
+            if (fd >= 0) {
+                ::close(fd);
+            }
+        }
+    };
+
+    //! returns an open TCP socket with the options, or -1
+    static int open(int family, bool v6only, bool reuse, bool reuseport = false) {
+        int fd = socket(family, SOCK_STREAM, 0);
+        if (fd < 0) {
+            return -1;
+        }
+        int one = 1;
+        int v6 = v6only ? 1 : 0;
+        if ((family == AF_INET6 && setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6, sizeof(v6)))
+            || (reuse && setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)))
+#ifdef SO_REUSEPORT
+            || (reuseport && setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one)))
+#endif
+            ) {
+            ::close(fd);
+            return -1;
+        }
+        return fd;
+    }
+
+    //! binds the socket to the address and port with qore_socket_bind_unshadowed(); returns 0 or the error number
+    /** @param xsink if given, the scan of the socket table is a cancellation point
+    */
+    static int bindTo(int fd, int family, const char* address, int port, ExceptionSink* xsink = nullptr) {
+        struct sockaddr_storage ss = {};
+        socklen_t len;
+        if (family == AF_INET) {
+            struct sockaddr_in* sin = reinterpret_cast<struct sockaddr_in*>(&ss);
+            sin->sin_family = AF_INET;
+            sin->sin_port = htons(port);
+            inet_pton(AF_INET, address, &sin->sin_addr);
+            len = sizeof(*sin);
+        } else {
+            struct sockaddr_in6* sin6 = reinterpret_cast<struct sockaddr_in6*>(&ss);
+            sin6->sin6_family = AF_INET6;
+            sin6->sin6_port = htons(port);
+            inet_pton(AF_INET6, address, &sin6->sin6_addr);
+            len = sizeof(*sin6);
+        }
+#ifdef DARWIN
+        ss.ss_len = len;
+#endif
+        return qore_socket_bind_unshadowed(fd, reinterpret_cast<struct sockaddr*>(&ss), len, SOCK_STREAM, nullptr,
+            xsink) ? errno : 0;
+    }
+
+    //! puts the socket in the listening state with qore_socket_listen_unshadowed(); returns 0 or the error number
+    /** @param xsink if given, the scan of the socket table is a cancellation point
+    */
+    static int listenOn(int fd, ExceptionSink* xsink = nullptr) {
+        return qore_socket_listen_unshadowed(fd, 5, xsink) ? errno : 0;
+    }
+
+    //! returns the port of the bound socket, or -1
+    static int portOf(int fd) {
+        struct sockaddr_storage ss = {};
+        socklen_t len = sizeof(ss);
+        if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&ss), &len)) {
+            return -1;
+        }
+        return ss.ss_family == AF_INET ? ntohs(reinterpret_cast<struct sockaddr_in*>(&ss)->sin_port)
+            : ntohs(reinterpret_cast<struct sockaddr_in6*>(&ss)->sin6_port);
+    }
+
+#ifdef DARWIN
+    //! clears the cancellation request of the running thread when it goes out of scope
+    struct CancelRequestClearer {
+        DLLLOCAL ~CancelRequestClearer() {
+            qore_clear_thread_cancel();
+        }
+    };
+
+    //! asserts that the sink holds the cancellation of the scan of the socket table
+    static void assertScanCancelled(UnitTestCounters& c, ExceptionSink& xsink, const char* what) {
+        UT_ASSERT(c, xsink.isException(), what);
+        if (!xsink.isException()) {
+            return;
+        }
+        {
+            QoreStringValueHelper err(xsink.getExceptionErr());
+            QoreStringValueHelper desc(xsink.getExceptionDesc());
+            UT_ASSERT(c, !strcmp(err->c_str(), "THREAD-CANCELLED"),
+                "specific bind: the cancelled scan raises THREAD-CANCELLED");
+            UT_ASSERT(c, strstr(desc->c_str(), "reading the system's socket table"),
+                "specific bind: the exception names the scan of the socket table");
+        }
+        xsink.clear();
+    }
+
+    //! The scan of the socket table by a bind or a listen is a cancellation point when it is given an exception sink
+    /** The scan checks for cancellation at the first record of the table, so a pending request is raised by any scan;
+        the socket listening on the loopback address is a record of the table.  Without a sink, the scan is no
+        cancellation point, and the port check gives its result.
+    */
+    static void runCancelledScan(UnitTestCounters& c) {
+        Fd h{open(AF_INET, false, true)};
+        Fd s{open(AF_INET, false, true)};
+        Fd l{open(AF_INET, false, true)};
+        UT_ASSERT(c, h.fd >= 0 && s.fd >= 0 && l.fd >= 0, "specific bind: the cancellation sockets are opened");
+        if (h.fd < 0 || s.fd < 0 || l.fd < 0) {
+            return;
+        }
+        UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET, "127.0.0.1", 0), "specific bind: the holder is bound");
+        UT_ASSERT_EQ(c, 0, listenOn(h.fd), "specific bind: the holder listens");
+        int port = portOf(h.fd);
+        UT_ASSERT(c, port > 0, "specific bind: the holder has a port");
+        UT_ASSERT_EQ(c, 0, bindTo(l.fd, AF_INET, "127.0.0.1", 0), "specific bind: the socket to listen is bound");
+        if (port <= 0) {
+            return;
+        }
+
+        CancelRequestClearer clearer;
+        UT_ASSERT_EQ(c, 0, qore_cancel_thread(q_gettid(), "socket table scan test"),
+            "specific bind: the running thread accepts a cancellation request");
+
+        ExceptionSink xsink;
+        UT_ASSERT_EQ(c, ECANCELED, bindTo(s.fd, AF_INET, "127.0.0.1", port, &xsink),
+            "specific bind: a bind whose scan is cancelled fails with ECANCELED");
+        assertScanCancelled(c, xsink, "specific bind: the cancelled bind raises an exception");
+        UT_ASSERT_EQ(c, ECANCELED, listenOn(l.fd, &xsink),
+            "specific bind: a listen whose scan is cancelled fails with ECANCELED");
+        assertScanCancelled(c, xsink, "specific bind: the cancelled listen raises an exception");
+
+        // without a sink, the request stays pending and the scan finds the holder
+        UT_ASSERT_EQ(c, EADDRINUSE, bindTo(s.fd, AF_INET, "127.0.0.1", port),
+            "specific bind: a bind without a sink is checked against the socket table");
+        UT_ASSERT(c, qore_is_thread_cancel_requested(),
+            "specific bind: a scan without a sink leaves the cancellation request pending");
+    }
+#endif
+
+    //! returns true if a socket can be bound to the IPv6 loopback address
+    static bool hasIpv6() {
+        Fd s{open(AF_INET6, true, false)};
+        return s.fd >= 0 && !bindTo(s.fd, AF_INET6, "::1", 0);
+    }
+
+    //! the result of a TCP bind of a specific address with SO_REUSEADDR over a wildcard socket that reuses the address
+    //! and does not listen: Linux allows it, macOS refuses it
+    static constexpr int ReuseBoundHolderResult =
+#ifdef DARWIN
+        EADDRINUSE;
+#else
+        0;
+#endif
+
+    //! an IPv6-only socket on :: serves no IPv4 address: 127.0.0.1 may share its port, ::1 may not
+    static void runIpv6OnlyHolder(UnitTestCounters& c) {
+        if (!hasIpv6()) {
+            return;
+        }
+        {
+            Fd h{open(AF_INET6, true, true)};
+            UT_ASSERT_EQ(c, 0, h.fd >= 0 ? bindTo(h.fd, AF_INET6, "::", 0) : -1,
+                "specific bind: an IPv6-only holder that reuses the address is bound");
+            Fd v6{open(AF_INET6, true, true)};
+            UT_ASSERT_EQ(c, ReuseBoundHolderResult, bindTo(v6.fd, AF_INET6, "::1", portOf(h.fd)),
+                "specific bind: ::1 with SO_REUSEADDR over a bound IPv6-only socket on :: that reuses the address");
+        }
+        for (bool listening : {true, false}) {
+            Fd h{open(AF_INET6, true, false)};
+            UT_ASSERT(c, h.fd >= 0, "specific bind: an IPv6-only holder is opened");
+            if (h.fd < 0) {
+                return;
+            }
+            UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET6, "::", 0), "specific bind: the IPv6-only holder is bound");
+            if (listening) {
+                UT_ASSERT_EQ(c, 0, listenOn(h.fd), "specific bind: the IPv6-only holder listens");
+            }
+            int port = portOf(h.fd);
+            Fd v4{open(AF_INET, false, true)};
+            UT_ASSERT_EQ(c, 0, bindTo(v4.fd, AF_INET, "127.0.0.1", port),
+                "specific bind: 127.0.0.1 shares the port of an IPv6-only socket on ::");
+            Fd v6{open(AF_INET6, true, true)};
+            UT_ASSERT_EQ(c, EADDRINUSE, bindTo(v6.fd, AF_INET6, "::1", port),
+                "specific bind: ::1 with SO_REUSEADDR is refused the port of an IPv6-only socket on :: that does not "
+                "reuse the address");
+        }
+    }
+
+    //! of two sockets bound with SO_REUSEADDR to overlapping addresses, the one that listens first holds the port
+    static void runListenOrder(UnitTestCounters& c) {
+        // 127.0.0.1 over a bound socket on 0.0.0.0: Linux allows the bind, macOS refuses it
+        for (bool wildcard_first : {true, false}) {
+            Fd h{open(AF_INET, false, true)};
+            Fd s{open(AF_INET, false, true)};
+            UT_ASSERT(c, h.fd >= 0 && s.fd >= 0, "specific bind: the listen order sockets are opened");
+            if (h.fd < 0 || s.fd < 0) {
+                return;
+            }
+            UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET, "0.0.0.0", 0), "specific bind: the wildcard socket is bound");
+            int rc = bindTo(s.fd, AF_INET, "127.0.0.1", portOf(h.fd));
+            UT_ASSERT_EQ(c, ReuseBoundHolderResult, rc,
+                "specific bind: 127.0.0.1 over a bound socket on 0.0.0.0 that reuses the address");
+            if (rc) {
+                continue;
+            }
+            assertListenOrder(c, wildcard_first ? h.fd : s.fd, wildcard_first ? s.fd : h.fd);
+        }
+        // a dual-stack socket on :: over a bound socket on ::1, which both systems allow
+        if (!hasIpv6()) {
+            return;
+        }
+        for (bool wildcard_first : {true, false}) {
+            Fd s{open(AF_INET6, true, true)};
+            Fd h{open(AF_INET6, false, true)};
+            UT_ASSERT(c, h.fd >= 0 && s.fd >= 0, "specific bind: the IPv6 listen order sockets are opened");
+            if (h.fd < 0 || s.fd < 0) {
+                return;
+            }
+            UT_ASSERT_EQ(c, 0, bindTo(s.fd, AF_INET6, "::1", 0), "specific bind: the socket on ::1 is bound");
+            UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET6, "::", portOf(s.fd)),
+                "specific bind: a dual-stack socket on :: shares the port of a bound socket on ::1 that reuses the "
+                "address");
+            assertListenOrder(c, wildcard_first ? h.fd : s.fd, wildcard_first ? s.fd : h.fd);
+        }
+    }
+
+    //! asserts that the first socket listens and the second one then cannot
+    static void assertListenOrder(UnitTestCounters& c, int first, int second) {
+        UT_ASSERT_EQ(c, 0, listenOn(first), "specific bind: the first socket listens");
+        UT_ASSERT_EQ(c, EADDRINUSE, listenOn(second), "specific bind: the second socket cannot listen");
+    }
+
+    //! two sockets that reuse the port share it, if both reuse it
+    static void runReusePort(UnitTestCounters& c) {
+#ifdef SO_REUSEPORT
+        for (bool both : {true, false}) {
+            Fd h{open(AF_INET, false, true, true)};
+            UT_ASSERT(c, h.fd >= 0, "specific bind: the SO_REUSEPORT holder is opened");
+            if (h.fd < 0) {
+                return;
+            }
+            UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET, "0.0.0.0", 0), "specific bind: the SO_REUSEPORT holder is bound");
+            UT_ASSERT_EQ(c, 0, listenOn(h.fd), "specific bind: the SO_REUSEPORT holder listens");
+            Fd s{open(AF_INET, false, true, both)};
+            UT_ASSERT_EQ(c, both ? 0 : EADDRINUSE, bindTo(s.fd, AF_INET, "127.0.0.1", portOf(h.fd)),
+                both ? "specific bind: 127.0.0.1 with SO_REUSEPORT shares the port of a listener that reuses the port"
+                    : "specific bind: 127.0.0.1 without SO_REUSEPORT is refused the port of a listener on 0.0.0.0");
+        }
+#endif
+    }
+
+    //! an IPv4-mapped address of a dual-stack socket is an IPv4 address of the port
+    static void runMappedAddress(UnitTestCounters& c) {
+        if (!hasIpv6()) {
+            return;
+        }
+        Fd h{open(AF_INET, false, false)};
+        UT_ASSERT(c, h.fd >= 0, "specific bind: the IPv4 listener is opened");
+        if (h.fd < 0) {
+            return;
+        }
+        UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET, "0.0.0.0", 0), "specific bind: the IPv4 listener is bound");
+        UT_ASSERT_EQ(c, 0, listenOn(h.fd), "specific bind: the IPv4 listener listens");
+        Fd s{open(AF_INET6, false, true)};
+        UT_ASSERT_EQ(c, EADDRINUSE, bindTo(s.fd, AF_INET6, "::ffff:127.0.0.1", portOf(h.fd)),
+            "specific bind: ::ffff:127.0.0.1 with SO_REUSEADDR is refused the port of a listener on 0.0.0.0");
+    }
+};
+#endif
+
 //! A socket closed by another thread while its descriptor is registered keeps the descriptor's number
 /** The system gives the lowest free descriptor number to the next socket or file opened by any thread, so an I/O
     thread that still has the number of a closed descriptor registered in its event loop would remove or change the
@@ -4964,16 +5717,46 @@ public:
         }
         const int notifier_fd = ctrl->io_threads[0]->notifier->fd();
 
-        // a port that nothing listens on: that of a listener that is closed
+        // a port on which nothing listens and that no other socket can be given: a listener bound without
+        // SO_REUSEADDR is connected to and then closed, so that only the connection holds the port.  A connection to
+        // the port is then refused at once on Linux and macOS, the system assigns the port to no other socket while
+        // the connection holds it, and a bind of the port is refused; only on macOS can a program of the same user
+        // still bind that port number with SO_REUSEADDR, which no socket can prevent there.  The port of a closed
+        // listener could be taken by a concurrent program before the connection, which would then succeed, and a
+        // socket that is bound but not listening would hold the port, but macOS drops a connection to such a socket
+        // instead of refusing it, so the connection would fail only when it timed out.
         int port;
+        QoreSocket holder;
+        int holder_peer = -1;
+        struct PeerCloser {
+            int& fd;
+            ~PeerCloser() {
+                if (fd >= 0) {
+                    ::close(fd);
+                }
+            }
+        } holder_peer_closer{holder_peer};
         {
             QoreSocket listener;
-            int rc = listener.bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
-            UT_ASSERT(c, !rc && !xsink, "connect failure listener binds");
+            int rc = listener.bindINET("127.0.0.1", "0", false, AF_INET, SOCK_STREAM, 0, &xsink);
+            if (!rc && !xsink) {
+                rc = listener.listen(1);
+            }
+            UT_ASSERT(c, !rc && !xsink, "connect failure port listener listens");
             if (rc || xsink) {
                 return;
             }
             port = listener.getPort();
+            rc = holder.connectINET("127.0.0.1", port, 5000, &xsink);
+            UT_ASSERT(c, !rc && !xsink, "connect failure port holder connects");
+            if (rc || xsink) {
+                return;
+            }
+            holder_peer = ::accept(listener.getSocket(), nullptr, nullptr);
+            UT_ASSERT(c, holder_peer >= 0, "connect failure port holder is accepted");
+            if (holder_peer < 0) {
+                return;
+            }
             listener.close();
         }
 
@@ -5015,7 +5798,16 @@ public:
         ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
         UT_ASSERT(c, !timed_out && !xsink && result->getType() == NT_HASH, "the connection ends");
         if (result->getType() == NT_HASH) {
-            UT_ASSERT(c, result->get<QoreHashNode>()->getKeyValue("ex").getType() == NT_HASH,
+            QoreValue ex = result->get<QoreHashNode>()->getKeyValue("ex");
+            const QoreHashNode* exh = ex.getType() == NT_HASH ? ex.get<const QoreHashNode>() : nullptr;
+            QoreValue err = exh ? exh->getKeyValue("err") : QoreValue();
+            QoreValue desc = exh ? exh->getKeyValue("desc") : QoreValue();
+            // the error of the refused connection, not of one that timed out
+            UT_ASSERT(c, err.getType() == NT_STRING
+                && !strcmp(err.get<const QoreStringNode>()->c_str(), "SOCKET-CONNECT-ERROR"),
+                "the connection fails with SOCKET-CONNECT-ERROR");
+            UT_ASSERT(c, desc.getType() == NT_STRING
+                && strstr(desc.get<const QoreStringNode>()->c_str(), strerror(ECONNREFUSED)),
                 "the connection is refused");
         }
         xsink.clear();
@@ -6065,6 +6857,303 @@ private:
         UT_ASSERT(c, !xsink, "the operation is unregistered");
         xsink.clear();
         UT_ASSERT(c, !is_socket_descriptor(), "the descriptor is closed once it has been removed from the event loop");
+    }
+};
+
+//! An operation waiting for a module's pollable object that was closed before it was registered ends at once
+/** A module's pollable I/O object, such as an SSH connection, can be closed by another thread without the async I/O
+    controller (a disconnect) at any point of an operation that waits for it.  Its descriptor is held while it is
+    registered (AbstractPollableIoObjectBase::holdPollableDescriptor()), so a close after the registration shuts the
+    descriptor down, which wakes the operation, and a close after the I/O thread read the descriptor makes the hold
+    fail, so the operation runs again and sees the close.  When the object was closed before the I/O thread read its
+    descriptor, it had none: nothing was registered, nothing woke the operation, and it waited until its timeout, or
+    forever without one.  The operation now runs again then as well, and an operation that waits for the closed
+    object once more ends with SOCKET-CLOSED.
+
+    The registration cases drive the registration of an I/O thread context on this thread: the first registration
+    of the object, a registration made again by the operation, and a registration of an object whose descriptor
+    another operation has registered (the change of the registered events finds the object closed, and the other
+    operation must not be left waiting for a registration that is removed).  The operation cases submit operations
+    to a running controller, on its I/O thread and on a worker, that close the object after they returned their wait
+    and before the I/O thread registers it.
+*/
+class AsyncIoClosedPollableTest {
+public:
+    static void run(UnitTestCounters& c) {
+        runRegistration(c, Registration::First);
+        runRegistration(c, Registration::Again);
+        runRegistration(c, Registration::Shared);
+        runOperation(c, false, true);
+        runOperation(c, true, true);
+        runOperation(c, false, false);
+        runOperation(c, true, false);
+    }
+
+private:
+    //! A module's pollable object: a listening socket that another thread can close without the controller
+    class ModulePollable : public AbstractPollableIoObjectBase {
+    public:
+        //! Makes the object listen on a port of the IPv4 loopback address; returns 0 for success
+        DLLLOCAL int listen(ExceptionSink* xsink) {
+            if (socket.bindINET("127.0.0.1", "0", true, Q_AF_INET, Q_SOCK_STREAM, 0, xsink)) {
+                return -1;
+            }
+            return socket.listen(5);
+        }
+
+        DLLLOCAL virtual int getPollableDescriptor() const override {
+            return socket.getSocket();
+        }
+
+        DLLLOCAL virtual int holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const override {
+            return socket.holdDescriptor(fd, hold);
+        }
+
+        DLLLOCAL virtual void closeIo(ExceptionSink*) override {
+            socket.close();
+        }
+
+        //! Closes the object in another thread without the controller, as a disconnect does
+        DLLLOCAL void closeFromAnotherThread() {
+            std::thread closer([this]() {
+                socket.close();
+            });
+            closer.join();
+        }
+
+        DLLLOCAL bool isOpen() const {
+            return socket.isOpen();
+        }
+
+    private:
+        QoreSocket socket;
+    };
+
+    //! The registration made for the operation after the object was closed
+    enum class Registration {
+        //! the operation's first registration of the object
+        First,
+        //! the operation registered the open object before and registers it again
+        Again,
+        //! another operation registered the open object before
+        Shared,
+    };
+
+    static void runRegistration(UnitTestCounters& c, Registration reg) {
+        const char* what = reg == Registration::First
+            ? "the first registration"
+            : (reg == Registration::Again ? "a registration made again" : "a registration shared with another "
+                "operation");
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "closed-pollable controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        // an I/O thread context that the test drives itself, on this thread
+        std::unique_ptr<AsyncIoControllerPriv::IoThreadContext> tp(new AsyncIoControllerPriv::IoThreadContext);
+        AsyncIoControllerPriv::IoThreadContext& t = *tp;
+        t.loop = new QoreEventLoop(&xsink);
+        UT_ASSERT(c, !xsink && t.loop->isValid(), "closed-pollable event loop construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+
+        ModulePollable* p = new ModulePollable;
+        ReferenceHolder<QoreObject> obj(new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), p), &xsink);
+        int rc = p->listen(&xsink);
+        UT_ASSERT(c, !rc && !xsink, "the module's object listens");
+        if (rc || xsink) {
+            xsink.clear();
+            return;
+        }
+
+        const uint64_t op_id = 1;
+        const uint64_t other_op_id = 2;
+        const std::string sock_hash = AsyncIoControllerPriv::getSocketHash(p);
+        if (reg != Registration::First) {
+            ctrl->updateEventLoopRegistration(t, reg == Registration::Again ? op_id : other_op_id, *obj, sock_hash,
+                SOCK_POLLIN, false, &xsink);
+            UT_ASSERT(c, !xsink && t.registered_fds.count(sock_hash), "the open object's descriptor is registered");
+            xsink.clear();
+            UT_ASSERT(c, t.wake_socket_hashes.empty(), "the operation waiting for the open object is not run again");
+            t.wake_socket_hashes.clear();
+        }
+
+        p->closeFromAnotherThread();
+        UT_ASSERT(c, !p->isOpen(), "the module's object is closed");
+
+        // a shared registration changes the registered events
+        ctrl->updateEventLoopRegistration(t, op_id, *obj, sock_hash, reg == Registration::Shared ? SOCK_POLLOUT
+            : SOCK_POLLIN, false, &xsink);
+        UT_ASSERT(c, !xsink, "the registration of the closed object raises no exception");
+        xsink.clear();
+        UT_ASSERT(c, !t.registered_fds.count(sock_hash), "the closed object has no registered descriptor");
+        if (!t.wake_socket_hashes.count(sock_hash)) {
+            printf("  closed-pollable: the operations are not run again after %s\n", what);
+        }
+        UT_ASSERT(c, t.wake_socket_hashes.count(sock_hash),
+            "the operations of an object closed before its registration run again and see the close");
+
+        ctrl->unregisterFromEventLoop(t, op_id, &xsink);
+        if (reg == Registration::Shared) {
+            ctrl->unregisterFromEventLoop(t, other_op_id, &xsink);
+        }
+        UT_ASSERT(c, !xsink, "the operations are unregistered");
+        xsink.clear();
+    }
+
+    //! Waits for the module's object, which another thread closes after the operation returned its first wait
+    class WaitOp : public SocketPollOperationBase {
+    public:
+        /** @param worker true if continuePoll() runs on a worker of the controller, false for the I/O thread
+            @param sees_close true if the operation ends when it runs after the close, false if it waits again
+        */
+        DLLLOCAL WaitOp(QoreObject* obj, ModulePollable* p, bool worker, bool sees_close) : obj(obj), p(p),
+                worker(worker), sees_close(sees_close) {
+        }
+
+        DLLLOCAL virtual bool goalReached() const override {
+            return false;
+        }
+
+        DLLLOCAL virtual void abort(ExceptionSink*) override {
+        }
+
+        DLLLOCAL virtual bool needsWorkerDispatch() const override {
+            return worker;
+        }
+
+        DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+            int n = ++calls;
+            if (n > 1 && sees_close && !p->isOpen()) {
+                xsink->raiseException("MODULE-CLOSED", "the module's object was closed");
+                return nullptr;
+            }
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+            info->setKeyValue("events", SOCK_POLLIN, xsink);
+            info->setKeyValue("socket", obj->objectRefSelf(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (n == 1) {
+                // the object is closed after the operation has returned its wait, before the I/O thread registers
+                // its descriptor
+                p->closeFromAnotherThread();
+            }
+            return info.release();
+        }
+
+        DLLLOCAL virtual QoreValue getOutput() const override {
+            return calls.load();
+        }
+
+        DLLLOCAL int getCalls() const {
+            return calls.load();
+        }
+
+        DLLLOCAL virtual const char* getStateImpl() const override {
+            return "waiting";
+        }
+
+    private:
+        QoreObject* obj;
+        ModulePollable* p;
+        bool worker;
+        bool sees_close;
+        std::atomic<int> calls{0};
+    };
+
+    static void runOperation(UnitTestCounters& c, bool worker, bool sees_close) {
+        printf("  closed-pollable operation: %s, %s\n", worker ? "worker" : "I/O thread",
+            sees_close ? "sees the close" : "waits again");
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "closed-pollable controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        struct Cleanup {
+            AsyncIoControllerPriv* ctrl;
+            ExceptionSink& xsink;
+            UnitTestCounters& c;
+
+            ~Cleanup() {
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                UT_ASSERT(c, !xsink, "closed-pollable controller cleanup succeeds");
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink, c};
+
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->start(&xsink);
+        UT_ASSERT(c, !xsink, "closed-pollable controller starts");
+        if (xsink) {
+            return;
+        }
+
+        ModulePollable* p = new ModulePollable;
+        ReferenceHolder<QoreObject> obj(new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), p), &xsink);
+        int rc = p->listen(&xsink);
+        UT_ASSERT(c, !rc && !xsink, "the module's object listens");
+        if (rc || xsink) {
+            return;
+        }
+
+        WaitOp* op = new WaitOp(*obj, p, worker, sees_close);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        op->setSelf(*op_obj);
+        op_obj->setValue("sock", obj->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("closed-pollable"), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode("closed-pollable-unit-test"), &xsink);
+        // the operation's timeout; it must end before, for the close
+        info->setKeyValue("to", 5000, &xsink);
+        UT_ASSERT(c, !xsink, "closed-pollable submission info is initialized");
+        if (xsink) {
+            return;
+        }
+        ReferenceHolder<QoreObject> queue_obj(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, "closed-pollable operation is submitted with a result queue");
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
+            &xsink);
+        UT_ASSERT(c, queue && !xsink, "closed-pollable result queue is valid");
+        if (!queue || xsink) {
+            return;
+        }
+        // a hang guard only: the operation ends with its timeout at the latest
+        bool timed_out = false;
+        ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
+        UT_ASSERT(c, !timed_out && !xsink && result->getType() == NT_HASH, "the closed-pollable operation ends");
+        const QoreHashNode* h = result->getType() == NT_HASH ? result->get<const QoreHashNode>() : nullptr;
+        QoreValue ex = h ? h->getKeyValue("ex") : QoreValue();
+        std::string err;
+        if (ex.getType() == NT_HASH) {
+            QoreStringValueHelper str(ex.get<const QoreHashNode>()->getKeyValue("err"));
+            err = str->c_str();
+        }
+        const char* expected = sees_close ? "MODULE-CLOSED" : "SOCKET-CLOSED";
+        if (err != expected) {
+            printf("  closed-pollable: the operation ended with %s, not %s\n", err.empty() ? "no error"
+                : err.c_str(), expected);
+        }
+        UT_ASSERT(c, err == expected, sees_close
+            ? "an operation that sees the close ends with its own error when it runs after the close"
+            : "an operation that waits for the closed object again ends with SOCKET-CLOSED");
+        UT_ASSERT_EQ(c, 2, op->getCalls(), "the operation runs once more after the close");
+        xsink.clear();
+        SimpleRefHolder<QoreStringNode> owner(new QoreStringNode("closed-pollable-unit-test"));
+        ctrl->cancelByOwner(*owner, &xsink);
+        xsink.clear();
     }
 };
 
@@ -12031,8 +13120,15 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runOwnedExtraFd(c);
     AsyncIoDescriptorHoldTest::runRefusedExtraFd(c);
     QoreCaresSocketsTest::run(c);
+#ifndef _Q_WINDOWS
+    HappyEyeballsLayeredConnectTest::run(c);
+#endif
+#ifndef _Q_WINDOWS
+    SpecificBindTest::run(c);
+#endif
     AsyncIoAbandonedSubmitTest::run(c);
     AsyncIoRegistrationCloseTest::run(c);
+    AsyncIoClosedPollableTest::run(c);
     AsyncIoZeroPollHintTest::run(c);
     AsyncIoStaleReadinessTest::run(c);
     AsyncIoAbandonedCommandLockTest::run(c);
@@ -13145,6 +14241,20 @@ static QoreValue f_dbg_cares_lose_query(const QoreListNode* params, RuntimeConfi
     }
     return static_cast<int64>(qore_dbg_cares_lost_query_count.exchange(static_cast<int>(count)));
 }
+
+//! makes the c-ares channels made from now on ask the given DNS servers
+/** Name, reverse and name-info lookups then ask a DNS server that a test runs, so their answers come over the
+    network, asynchronously, from a server whose answers the test controls.
+
+    @param servers the servers as for ares_set_servers_ports_csv(), such as \c "127.0.0.1:5353"; an empty string
+    restores the system's servers
+
+    @return the previous setting
+*/
+static QoreValue f_dbg_cares_set_servers(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    HARD_QORE_VALUE_PARAM(servers, const QoreStringNode, params, 0);
+    return new QoreStringNode(qore_dbg_cares_set_servers(servers->c_str()));
+}
 #endif
 
 //! functional domain for debug and unit-test hooks
@@ -13264,6 +14374,8 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "released");
     qns.addBuiltinVariant("dbg_cares_lose_query", f_dbg_cares_lose_query, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
+    qns.addBuiltinVariant("dbg_cares_set_servers", f_dbg_cares_set_servers, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "servers");
     qns.addBuiltinVariant("dbg_register_user_module_from_source", f_dbg_register_user_module_from_source,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         stringTypeInfo, QORE_PARAM_NO_ARG, "src");

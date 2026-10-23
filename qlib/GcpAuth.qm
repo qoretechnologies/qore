@@ -83,6 +83,10 @@ module GcpAuth {
     explicit override, \c GOOGLE_CLOUD_QUOTA_PROJECT, or the credential file's \c quota_project_id.
     Consumers send it as \c x-goog-user-project; the resource project remains independent.
 
+    Credential types and the fields of token responses are validated, and authentication errors never include
+    secrets. Token requests have bounded timeouts and do not follow redirects, metadata-server tokens are cached
+    separately for each endpoint, and thread cancellation and program interruption are passed through unchanged.
+
     @par Dependencies
 
     JWT signing uses the \c json binary module's
@@ -104,12 +108,6 @@ string token = GcpAuth::getAccessTokenFromServiceAccountFile(
     @section gcpauthrelnotes Release Notes
 
     @subsection gcpauth_v1_1 GcpAuth v1.1
-    - added explicit credential resolution and independent quota-project resolution
-    - validated supported credential types and token response fields without exposing secrets
-    - bounded token requests, disabled redirects, and isolated metadata caches by endpoint
-    - preserved cooperative cancellation while sanitizing authentication failures
-
-    @subsection gcpauth_v1_0 GcpAuth v1.0
     - initial release
 */
 

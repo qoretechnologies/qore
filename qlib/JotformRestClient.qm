@@ -451,7 +451,7 @@ public class JotformRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since JotformRestClient 1.1
+    /** @since JotformRestClient 1.0
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new JotformRestClientIo(getConnectionOptions(rtopts));

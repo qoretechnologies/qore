@@ -34,8 +34,11 @@
 
 #ifdef HAVE_POLL
 
+#include <atomic>
 #include <cerrno>
+#include <mutex>
 #include <new>
+#include <unordered_map>
 #include <vector>
 
 #include <fcntl.h>
@@ -76,11 +79,127 @@ bool qore_poll_needs_select(const struct pollfd* fds, nfds_t nfds) {
 }
 
 #ifdef DARWIN
+#include "qore/intern/QoreForkHandlers.h"
+
+namespace {
+//! a named pipe whose end a read of its File has returned (see qore_fifo_end_read_set())
+struct QoreFifoEndRead {
+    dev_t dev;
+    ino_t ino;
+};
+
+//! the named pipes whose end a read has returned, by descriptor, under the lock
+std::mutex fifo_end_read_lock;
+std::unordered_map<int, QoreFifoEndRead> fifo_end_read_fds;
+//! the number of entries, read without the lock: a process that has none never takes the lock
+std::atomic<size_t> fifo_end_read_count{0};
+// a leaf lock: its holders only update the map and call fstat(); a child created with fork() can use it (see
+// QoreForkHandlers.h)
+QoreForkStdMutex fifo_end_read_fork_handler(fifo_end_read_lock, QFLR_LEAF, "fifo_end_read");
+}
+
+void qore_fifo_end_read_set(int fd) {
+    struct stat st;
+    if (fd < 0 || fstat(fd, &st)) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(fifo_end_read_lock);
+    try {
+        fifo_end_read_fds[fd] = QoreFifoEndRead{st.st_dev, st.st_ino};
+    } catch (std::bad_alloc&) {
+        // the waits then miss the end, as before; the File's own reads still see it
+        return;
+    }
+    fifo_end_read_count.store(fifo_end_read_fds.size(), std::memory_order_release);
+}
+
+void qore_fifo_end_read_clear(int fd) {
+    if (!fifo_end_read_count.load(std::memory_order_acquire)) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(fifo_end_read_lock);
+    fifo_end_read_fds.erase(fd);
+    fifo_end_read_count.store(fifo_end_read_fds.size(), std::memory_order_release);
+}
+
+//! marks the descriptors to be read whose end a read has returned; returns their number
+static int qore_fifo_end_read_marks(const struct pollfd* fds, nfds_t nfds, std::vector<char>& marks) {
+    if (!fifo_end_read_count.load(std::memory_order_acquire)) {
+        return 0;
+    }
+    int count = 0;
+    std::lock_guard<std::mutex> lock(fifo_end_read_lock);
+    for (nfds_t i = 0; i < nfds; ++i) {
+        if (fds[i].fd < 0 || !(fds[i].events & (POLLIN | POLLRDNORM))) {
+            continue;
+        }
+        auto it = fifo_end_read_fds.find(fds[i].fd);
+        if (it == fifo_end_read_fds.end()) {
+            continue;
+        }
+        struct stat st;
+        if (fstat(fds[i].fd, &st) || st.st_dev != it->second.dev || st.st_ino != it->second.ino) {
+            // the descriptor was closed without the File, and its number may have been given to another one
+            fifo_end_read_fds.erase(it);
+            continue;
+        }
+        try {
+            if (marks.empty()) {
+                marks.resize(nfds);
+            }
+        } catch (std::bad_alloc&) {
+            return count;
+        }
+        marks[i] = 1;
+        ++count;
+    }
+    fifo_end_read_count.store(fifo_end_read_fds.size(), std::memory_order_release);
+    return count;
+}
+
+static int qore_select_poll_intern(struct pollfd* fds, nfds_t nfds, int64_t timeout_us);
+
 int qore_select_poll(struct pollfd* fds, nfds_t nfds, int timeout_ms) {
     return qore_select_poll_us(fds, nfds, timeout_ms < 0 ? -1 : static_cast<int64_t>(timeout_ms) * 1000);
 }
 
 int qore_select_poll_us(struct pollfd* fds, nfds_t nfds, int64_t timeout_us) {
+    // the ends that a read has returned are readable at once; the other descriptors are reported as they are now
+    std::vector<char> marks;
+    int ends = qore_fifo_end_read_marks(fds, nfds, marks);
+    int rc = qore_select_poll_intern(fds, nfds, ends ? 0 : timeout_us);
+    if (!ends || rc < 0) {
+        return rc;
+    }
+    int count = 0;
+    for (nfds_t i = 0; i < nfds; ++i) {
+        if (marks[i]) {
+            fds[i].revents |= fds[i].events & (POLLIN | POLLRDNORM);
+        }
+        if (fds[i].revents) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+int qore_fd_readable_now(int fd) {
+    struct pollfd pfd = {fd, POLLIN, 0};
+    int rc;
+    while ((rc = qore_select_poll_intern(&pfd, 1, 0)) < 0 && errno == EINTR) {
+    }
+    if (rc < 0) {
+        return -1;
+    }
+    if (rc && (pfd.revents & POLLNVAL)) {
+        errno = EBADF;
+        return -1;
+    }
+    return rc ? 1 : 0;
+}
+
+//! qore_select_poll_us() without the ends that reads have returned
+static int qore_select_poll_intern(struct pollfd* fds, nfds_t nfds, int64_t timeout_us) {
     int maxfd = -1;
     for (nfds_t i = 0; i < nfds; ++i) {
         fds[i].revents = 0;

@@ -276,9 +276,11 @@ public class CdsEntityWatchDataProviderBase inherits DataProvider::AbstractTimes
             # the next link is an absolute URL; requests take its path; the exception argument of an error
             # response includes the response; stopping the provider cancels the polling thread, which aborts an
             # in-flight request
-            hash<RestClient::RestResponseInfo> resp = rest.restGet(next
-                ? CdsRestDataProviderBase::getRequestPath(next)
-                : uri, hdr);
+            hash<RestClient::RestResponseInfo> resp = next
+                ? rest.restDoRequestTarget("GET", <RestClient::RestRequestTarget>{
+                    "mode": RestClient::RestPathMode::OriginAbsolute,
+                    "path": CdsRestDataProviderBase::getRequestPath(next)}, NOTHING, hdr)
+                : rest.restGet(uri, hdr);
 
             foreach auto rec in (resp.body.value ?? ()) {
                 if (rec.typeCode() == NT_HASH) {

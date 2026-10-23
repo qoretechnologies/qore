@@ -199,7 +199,7 @@ class OracleIdentifierQuotingTest inherits QUnit::Test {
 
     #! returns a table for SQL generation without a connection
     private static OracleTable offlineTable(string name) {
-        OfflineDatasource ds("oracle:omq/pass@db", "Oracle Database 19c Enterprise Edition Release 19.0.0.0.0",
+        OfflineDatasource ds("oracle:qore/pass@db", "Oracle Database 19c Enterprise Edition Release 19.0.0.0.0",
             "oracle");
         return new OracleTable(ds, name);
     }
@@ -209,7 +209,7 @@ class OracleIdentifierQuotingTest inherits QUnit::Test {
     orderByDirection() {
         foreach string version in ("Oracle Database 19c Enterprise Edition Release 19.0.0.0.0",
                 "Oracle Database 11g Enterprise Edition Release 11.2.0.4.0") {
-            OfflineDatasource ds("oracle:omq/pass@db", version, "oracle");
+            OfflineDatasource ds("oracle:qore/pass@db", version, "oracle");
             OracleTable t(ds, "obd");
             t.setupTable({
                 "columns": {
@@ -238,7 +238,7 @@ class OracleIdentifierQuotingTest inherits QUnit::Test {
         string tname = "b4sq t; drop table x --";
         string tsql = "\"B4SQ T; DROP TABLE X --\"";
         OracleTable t = offlineTable(tname);
-        assertEq("omq." + tsql, t.getSqlName());
+        assertEq("qore." + tsql, t.getSqlName());
         t.setupTable({
             "columns": {
                 "id": {"native_type": "number", "size": 14, "notnull": True},
@@ -258,22 +258,22 @@ class OracleIdentifierQuotingTest inherits QUnit::Test {
         }
         assertEq("create table " + tsql + " (\n  id number(14) not null,\n  \"MY COL\" varchar2(20),\n  "
             "\"order\" varchar2(20)\n)", sql[0]);
-        assertEq("alter table omq." + tsql + " rename to \"B4SQ U\"", t.getRenameSql("b4sq u"));
-        assertEq(("drop table omq." + tsql,), t.getDropSql());
+        assertEq("alter table qore." + tsql + " rename to \"B4SQ U\"", t.getRenameSql("b4sq u"));
+        assertEq(("drop table qore." + tsql,), t.getDropSql());
 
         # DML: hostile column names are quoted, values are bound
         list<auto> args;
         string sel = t.getSelectSql({"columns": ("id", "my col"), "where": {"my col": "x", "order": "y"},
             "orderby": "my col"}, \args);
-        assertEq("select id, \"MY COL\" from omq." + tsql + " where \"MY COL\" = %v and \"order\" = %v "
+        assertEq("select id, \"MY COL\" from qore." + tsql + " where \"MY COL\" = %v and \"order\" = %v "
             "order by \"MY COL\"", sel);
         assertEq(("x", "y"), args);
         hash<auto> upd = t.getUpdateSql({"my col": "v"}, {"id": 1});
-        assertEq("update omq." + tsql + " set \"MY COL\" = %v where id = %v", upd.sql);
+        assertEq("update qore." + tsql + " set \"MY COL\" = %v where id = %v", upd.sql);
 
         # ordinary names: the SQL is as before
         OracleTable p = offlineTable("plain_t");
-        assertEq("omq.plain_t", p.getSqlName());
+        assertEq("qore.plain_t", p.getSqlName());
         assertEq("a", p.getColumnSqlName("a"));
         assertEq("\"order\"", p.getColumnSqlName("order"));
         assertEq(("a", "\"MY COL\""), p.getColumnSqlNames(("a", "my col")));
@@ -291,15 +291,15 @@ class OracleIdentifierQuotingTest inherits QUnit::Test {
         t.setupTable({"columns": {"id": {"native_type": "number", "size": 14, "notnull": True}}});
         list<auto> args;
         # an alias keeps its case; ordinary aliases and reserved words are given as before
-        assertEq("select id as total from omq.alias_t", t.getSelectSql({"columns": (cop_as("id", "total"),)},
+        assertEq("select id as total from qore.alias_t", t.getSelectSql({"columns": (cop_as("id", "total"),)},
             \args));
-        assertEq("select id as Total from omq.alias_t", t.getSelectSql({"columns": (cop_as("id", "Total"),)},
+        assertEq("select id as Total from qore.alias_t", t.getSelectSql({"columns": (cop_as("id", "Total"),)},
             \args));
-        assertEq("select id as \"order\" from omq.alias_t", t.getSelectSql({"columns": (cop_as("id", "order"),)},
+        assertEq("select id as \"order\" from qore.alias_t", t.getSelectSql({"columns": (cop_as("id", "order"),)},
             \args));
-        assertEq("select id as \"My Total\" from omq.alias_t",
+        assertEq("select id as \"My Total\" from qore.alias_t",
             t.getSelectSql({"columns": (cop_as("id", "My Total"),)}, \args));
-        assertEq("select id as \"a; drop table x --\" from omq.alias_t",
+        assertEq("select id as \"a; drop table x --\" from qore.alias_t",
             t.getSelectSql({"columns": (cop_as("id", "a; drop table x --"),)}, \args));
         assertThrows("IDENTIFIER-ERROR", "double quote", \t.getSelectSql(),
             ({"columns": (cop_as("id", "a\" from dual; --"),)}, \args));

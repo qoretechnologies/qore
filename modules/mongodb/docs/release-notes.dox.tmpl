@@ -6,18 +6,4 @@
 
     @section mongodb_3_0 mongodb Module Version 3.0
     - initial release
-    - BSON array construction uses the supported libbson 2.3 API while retaining
-      compatibility with older drivers; array keys remain contiguous from zero,
-      including null elements and nested arrays
-    - array conversion honors thread cancellation and sandbox interruption,
-      including large arrays, while preserving cleanup deferral
-    - a call blocked on the server (connecting, the TLS handshake, reading or writing) ends as soon as the thread
-      is cancelled or its Program is interrupted, instead of within 500 ms: connections use a socket of the
-      module's own whose waits are woken directly by the request
-    - converting a deeply nested hash or list to BSON, or a deeply nested BSON document to a hash, raises a
-      \c STACK-LIMIT-EXCEEDED exception instead of overflowing the thread's stack: each level of nesting was
-      converted recursively without checking the stack
-    - the files named by the \c tlsCAFile and \c tlsCertificateKeyFile options of a connection string are subject to
-      the filesystem sandbox of the calling program; a file the sandbox does not allow to be read fails the
-      connection before it is made, with the \c FILESYSTEM-ACCESS-DENIED error in its description
 */

@@ -62,7 +62,7 @@ public namespace ExaDataProvider {
     favour of \c /search - the action predates the deprecation and removing it would break existing
     flows, so it is kept and its description says what to prefer.
 
-    @since %ExaDataProvider 1.1
+    @since %ExaDataProvider 1.0
 */
 public class ExaManifest {
     public {

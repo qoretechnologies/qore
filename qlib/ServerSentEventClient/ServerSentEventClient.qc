@@ -613,7 +613,7 @@ sse.setEventQueue(queue);
 
         @see @ref event_handling for more information
 
-        @since %ServerSentEventClient 1.8
+        @since %ServerSentEventClient 1.0
     */
     setEventQueue(Qore::Thread::Queue queue, auto arg, *bool with_data) {
         hc.setEventQueue(queue, arg, with_data);
@@ -627,7 +627,7 @@ sse.setEventQueue();
 
         @see @ref event_handling for more information
 
-        @since %ServerSentEventClient 1.8
+        @since %ServerSentEventClient 1.0
     */
     setEventQueue() {
         hc.setEventQueue();

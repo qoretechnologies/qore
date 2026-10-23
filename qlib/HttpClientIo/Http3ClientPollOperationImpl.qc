@@ -121,8 +121,11 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
                         sprintf("QUIC stream limit reached on connection"
                             " (active_streams: %d)", captured_active);
                 }
+                # a request refused because the QUIC connection is closed (by its idle timer, locally or by
+                # the peer) was not sent: the connection is closed now, so that a retry finds a new one
                 if (ex.err == "QUIC-HTTP3-ERROR" || ex.err == "QUIC-READ-ERROR"
-                        || ex.err == "QUIC-RECV-ERROR") {
+                        || ex.err == "QUIC-RECV-ERROR" || ex.err == "HTTP3-IDLE-CLOSE"
+                        || ex.err == "HTTP3-LOCAL-CLOSE" || ex.err == "HTTP3-PEER-CLOSE") {
                     self.setSubmitError(ex.err, ex.desc);
                 }
                 rethrow;

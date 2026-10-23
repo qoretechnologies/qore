@@ -77,7 +77,7 @@ public hashdecl LlamaParseSchemaProvenanceInfo {
 /** The schema is pruned to the exported operations and the transitive closure of everything they
     reference.  It is parsed once, when the module loads and registers its actions, which are built from it.
 
-    @since %LlamaParseDataProvider 1.1
+    @since %LlamaParseDataProvider 1.0
 */
 public class LlamaParseSchema {
     public {

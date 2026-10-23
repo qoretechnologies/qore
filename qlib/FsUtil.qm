@@ -85,7 +85,6 @@ module FsUtil {
       instead of incorrectly returning \c True
     - fixed @ref FsUtil::remove_tree() "remove_tree()" to properly handle symlinks (by removing them with
       \c unlink() instead of trying \c rmdir()) and to throw \c REMOVE-TREE-ERROR on \c rmdir() failure
-    - fixed @ref FsUtil::move_path() "move_path()" to throw \c MOVE-PATH-ERROR on \c rename() failure
     - fixed @ref FsUtil::copy_path() "copy_path()" and @ref FsUtil::copy_tree() "copy_tree()" to properly
       pass the \c depth parameter through the function chain
 
@@ -973,6 +972,7 @@ bool b = path_exists("/tmp/broken_link", True);  # False (target doesn't exist)
         @throws SAME-PATH-ERROR If both paths point to the same location
         @throws FILE-STAT-ERROR If stat call for the source path fails
         @throws PATH-EXISTS-ERROR If destination path exists and overwrite flag is False
+        @throws RENAME-ERROR If the path cannot be moved (see @ref Qore::rename() "rename()")
 
         The Destination can be a directory, in which case, this function will attempt to move the source to
         the same filename in the destination directory unless \a overwrite is @ref True.
@@ -1011,9 +1011,7 @@ bool b = path_exists("/tmp/broken_link", True);  # False (target doesn't exist)
             }
         }
 
-        if (rename(source, destination)) {
-            throw "MOVE-PATH-ERROR", sprintf("failed to move %y to %y: %s", source, destination, strerror());
-        }
+        rename(source, destination);
 
         return destination;
     }

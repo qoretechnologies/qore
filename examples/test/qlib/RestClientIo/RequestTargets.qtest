@@ -1,0 +1,399 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# MIT License
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires RestClientIo
+%requires HttpServer
+%requires QoreTokenizerUtils
+%requires QoreLlmUtils
+%requires QoreLlmTypes
+%requires AnthropicRestClient
+%requires json
+%requires ../../TestCertificates.qm
+
+%exec-class RequestTargetsTest
+
+class TargetEchoHandler inherits AbstractHttpRequestHandler {
+    public { Queue token_paths(); Queue ping_paths(); Queue protocol_paths(); }
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path =~ /\/v1\/(embeddings|rerank|messages)$/) {
+            protocol_paths.push(cx.raw_path);
+            auto response;
+            if (cx.raw_path =~ /embeddings$/) {
+                response = {"data": ({"index": 0, "embedding": (1.0, 0.0)},)};
+            } else if (cx.raw_path =~ /rerank$/) {
+                response = ({"index": 0, "score": 1.0},);
+            } else {
+                response = {"id": "path-test", "type": "message", "role": "assistant", "model": "test",
+                    "content": ({"type": "text", "text": "ok"},), "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 1, "output_tokens": 1}};
+            }
+            return makeResponse(200, make_json(response), {"Content-Type": "application/json"});
+        }
+        if (cx.raw_path =~ /ping-health/) {
+            ping_paths.push(cx.raw_path);
+        }
+        if (cx.raw_path =~ /^\/oauth\/token/) {
+            token_paths.push(cx.raw_path);
+            return makeResponse(200, make_json({"access_token": "target-test-token", "token_type": "Bearer",
+                "expires_in": 3600}), {"Content-Type": "application/json"});
+        }
+        if (cx.raw_path =~ /retry/ && !hdr."x-retry") {
+            return makeResponse(401, "{}", {"Content-Type": "application/json"});
+        }
+        if (cx.raw_path =~ /redirect/) {
+            return makeResponse(307, "", {"Location": "/final?value=%2F"});
+        }
+        hash<auto> reply = {"path": cx.raw_path, "signature": hdr."x-target", "body": body};
+        if (hdr.accept == "text/event-stream") {
+            return makeResponse(200, "data: " + make_json(reply) + "\n\n", {"Content-Type": "text/event-stream"});
+        }
+        return makeResponse(200, make_json(reply), {"Content-Type": "application/json"});
+    }
+}
+
+#! Verifies that validation uses the same namespace as dispatch, including bodyless requests
+class TargetValidator inherits NullRestSchemaValidator {
+    public { Queue paths(); Queue response_paths(); }
+    bool managesUriPath() { return True; }
+    private string getBasePathImpl() { return "/schema/"; }
+    private hash<RestResponseClientInfo> parseResponseImpl(string method, string path, int status,
+            *data body, hash<auto> hdr) {
+        response_paths.push(path);
+        return NullRestSchemaValidator::parseResponseImpl(method, path, status, body, hdr);
+    }
+    private hash<RestRequestClientInfo> processRequestImpl(string method, string path, auto body,
+            *hash<auto> headers, *softlist<string> content_types) {
+        paths.push(path);
+        return NullRestSchemaValidator::processRequestImpl(method, path, body, headers, content_types);
+    }
+}
+
+#! A schema change during an in-flight request must not change that request's response validator
+class RejectTargetValidator inherits NullRestSchemaValidator {
+    private hash<RestResponseClientInfo> parseResponseImpl(string method, string path, int status,
+            *data body, hash<auto> hdr) {
+        throw "WRONG-VALIDATOR", "an in-flight request used a replacement validator";
+    }
+}
+
+class RetryTargetClient inherits RestClientIo::RestClientIo {
+    constructor(hash<auto> opts) : RestClientIo(opts) { }
+    bool tryHttpAuthRetry(*hash<auto> response_headers, reference<*hash<auto>> hdr) {
+        hdr."x-retry" = "yes";
+        setConnectionPath("/changed");
+        setValidator(new RejectTargetValidator());
+        return True;
+    }
+}
+
+class TargetObserver inherits DataProvider::Observer {
+    public { Queue events(); }
+    update(string event_id, hash<auto> data) {
+        if (event_id == HttpClientStreamingIo::EVENT_SSE_DATA) {
+            events.push(parse_json(data.data).path);
+        }
+    }
+}
+
+class RequestTargetsTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        TargetEchoHandler handler;
+        string url;
+        string tls_url;
+    }
+
+    constructor() : Test("REST request targets", "1.0", \ARGV) {
+        addTestCase("pure path composition", \composition());
+        addTestCase("root precedence and explicit clearing", \roots());
+        addTestCase("OAuth endpoints are independent of API roots", \oauthTargets());
+        addTestCase("provider-owned v1 namespaces", \providerTargets());
+        addTestCase("released transport contracts", \transports());
+        addTestCase("synchronous explicit targets", \syncTargets());
+        foreach string protocol in (("h1", "h2", "h3")) {
+            addTestCase(protocol + " blocking, async, raw, polling, SSE and signed targets", \ioTargets(), (protocol,));
+        }
+        addTestCase("schema owns namespace and request snapshot", \schemaTargets());
+        addTestCase("authentication retries retain target and validator", \retryTargets());
+        addTestCase("concurrent target modes and observable snapshot", \concurrentTargets());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        handler = new TargetEchoHandler();
+        server.setDefaultHandler("targets", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        url = "http://127.0.0.1:" + port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem)}).port;
+        tls_url = "https://127.0.0.1:" + port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() { if (server) { server.stop(); } }
+
+    private static list<list<string>> cases() {
+        return (("", "/api"), ("/", "/api"), ("users", "/api/users"), ("/users", "/api/users"),
+            ("/api/users", "/api/api/users"), ("/apiary/users", "/api/apiary/users"),
+            ("/users/", "/api/users/"), ("?page=2", "/api?page=2"), ("?", "/api?"),
+            ("/users//x", "/api/users//x"), ("/a%2Fb?q=x%2Fy&x=1&x=2", "/api/a%2Fb?q=x%2Fy&x=1&x=2"),
+            ("/../users", "/api/../users"));
+    }
+
+    private composition() {
+        foreach string root in (("/api", "/api/")) {
+            foreach list<string> pair in (cases()) {
+                assertEq(pair[1], rest_request_path(<RestRequestTarget>{"path": pair[0]}, root));
+            }
+        }
+        assertEq("/?", rest_request_path(<RestRequestTarget>{"path": "?"}, NOTHING));
+        assertEq("//health?", rest_request_path(<RestRequestTarget>{"mode": RestPathMode::OriginAbsolute,
+            "path": "//health?"}, "/api"));
+        foreach string invalid in (("", "users", "https://example.com/users")) {
+            assertThrows("REST-REQUEST-TARGET-ERROR", sub () {
+                rest_request_path(<RestRequestTarget>{"mode": RestPathMode::OriginAbsolute, "path": invalid}, "/api");
+            });
+        }
+        assertThrows("REST-REQUEST-TARGET-ERROR", sub () {
+            rest_request_path(<RestRequestTarget>{"path": "users"}, "/api?token=1");
+        });
+    }
+
+    private roots() {
+        foreach hash<auto> c in ((
+                {"suffix": "", "expected": "/"},
+                {"suffix": "", "default_path": "", "expected": "/"},
+                {"suffix": "", "default_path": "/fallback", "expected": "/fallback"},
+                {"suffix": "/url", "default_path": "/fallback", "expected": "/url"},
+                {"suffix": "/", "default_path": "/fallback", "expected": "/"})) {
+            hash<auto> opts = {"url": url + c.suffix, "default_path": c.default_path};
+            RestClient::RestClient sync(opts);
+            RestClientIo::RestClientIo io(opts + {"protocol": "h1"});
+            on_exit { sync.close(); io.close(); }
+            assertEq(c.expected, sync.restGet("").body.path);
+            assertEq(c.expected, io.restGet("").body.path);
+            io.setConnectionPath("/override/");
+            assertEq("/override/users", io.restGet("users").body.path);
+            io.clearConnectionPath();
+            assertEq("/users", io.restGet("users").body.path);
+            io.setConnectionPath("");
+            assertEq("/users", io.restGet("users").body.path);
+            sync.setConnectionPath();
+            sync.disconnect();
+            assertEq("/users", sync.restDoRequestTarget("GET", <RestRequestTarget>{"path": "users"},
+                NOTHING, NOTHING).body.path);
+            sync.disconnect();
+            RestClient::RestClient restored = Serializable::deserialize(sync.serialize());
+            on_exit restored.close();
+            assertEq("/users", restored.restDoRequestTarget("GET", <RestRequestTarget>{"path": "users"},
+                NOTHING, NOTHING).body.path);
+        }
+    }
+
+    private oauthTargets() {
+        string expected = "/oauth/token?tenant=a%2Fb";
+        foreach string endpoint in ((expected.substr(1), expected, url + expected)) {
+            RestClientIo::RestClientIo rest({"url": url + "/api", "protocol": "h1",
+                "oauth2_grant_type": "client_credentials", "oauth2_client_id": "path-test",
+                "oauth2_client_secret": "path-test-secret", "oauth2_token_url": endpoint});
+            on_exit rest.close();
+            assertEq("/api/users", rest.restGet("users").body.path);
+            assertEq(expected, handler.token_paths.get(5s));
+            hash<auto> request = rest.startOAuth2PollRefreshToken();
+            assertEq(expected, request.path);
+            RestClientIo::RestClientIo token_client = request.rcio;
+            on_exit token_client.close();
+            EventNotifier notifier();
+            hash<auto> submitted = token_client.doRequestRawAsyncWithNotifier("POST", request.path,
+                request.headers, request.body, notifier);
+            assertEq(200, submitted.future.get(5s).status_code);
+            assertEq(expected, handler.token_paths.get(5s));
+        }
+        foreach list<string> pair in ((("/ping-health", "/ping-health"),
+                ("ping-health", "/api/ping-health"),
+                (url + "/different/ping-health?x=1", "/different/ping-health?x=1"))) {
+            RestConnection conn("target-test", "test", url + "/api", {}, {
+                "pre_encoded_urls": True,
+                "oauth2_grant_type": "client_credentials", "oauth2_client_id": "path-test",
+                "oauth2_client_secret": "path-test-secret", "oauth2_token_url": url + expected,
+                "ping_path": pair[0]});
+            RestClient::RestClient rest = conn.get(False);
+            on_exit rest.close();
+            drive(new RestPingPollOperation(conn, rest, conn.getRealOptions()));
+            assertEq(pair[1], handler.ping_paths.get(5s));
+            assertEq(expected, handler.token_paths.get(5s));
+        }
+    }
+
+    private providerTargets() {
+        foreach string root in (("", "/v1", "/tenant", "/tenant/v1/")) {
+            string expected = rtrim(root, "/");
+            if (expected !~ /\/v1$/) { expected += "/v1"; }
+            QoreTokenizerUtils::EmbeddingModel embedding(<QoreTokenizerUtils::EmbeddingConfig>{
+                "mode": "http", "url": url + root, "model": "test"});
+            assertEq(2, embedding.embed("test").size());
+            assertEq(expected + "/embeddings", handler.protocol_paths.get(5s));
+            QoreTokenizerUtils::CrossEncoderReranker reranker(<QoreTokenizerUtils::RerankerConfig>{
+                "mode": "sglang", "url": url + root, "model": "test"});
+            assertEq((1.0,), reranker.score("query", ("passage",)));
+            assertEq(expected + "/rerank", handler.protocol_paths.get(5s));
+            AnthropicRestClient::AnthropicLlmProvider anthropic(<QoreLlmUtils::LlmBackendConfig>{
+                "url": url + root, "model": "test", "api_key": "path-test", "max_retries": 0});
+            anthropic.chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "test"},));
+            assertEq(expected + "/messages", handler.protocol_paths.get(5s));
+        }
+    }
+
+    private transports() {
+        HTTPClient http({"url": url + "/api/"});
+        on_exit http.disconnect();
+        assertEq("/api/", parse_json(http.send(body: NOTHING, method: "GET", path: "", read_response_body: True).body).path);
+        assertEq("/users", parse_json(http.send(body: NOTHING, method: "GET", path: "/users", read_response_body: True).body).path);
+        assertEq("/api/users", parse_json(http.sendUrl(body: NOTHING, method: "GET", url: "users", read_response_body: True).body).path);
+        assertEq("/users", parse_json(http.sendUrl(body: NOTHING, method: "GET", url: "/users", read_response_body: True).body).path);
+        http.setURL(url + "/api");
+        assertEq("/users", parse_json(http.sendUrl(body: NOTHING, method: "GET", url: "users",
+            read_response_body: True).body).path);
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        assertEq("/", parse_json(mgr.request(url + "/api", "GET", "").body).path);
+        assertEq("/users", parse_json(mgr.request(url + "/api", "GET", "/users").body).path);
+    }
+
+    private syncTargets() {
+        foreach string root in (("/api", "/api/")) {
+            RestClient::RestClient rest({"url": url + root, "pre_encoded_urls": True});
+            on_exit rest.close();
+            foreach list<string> pair in (cases()) {
+                hash<RestRequestTarget> target = <RestRequestTarget>{"path": pair[0]};
+                assertEq(pair[1], rest.restDoRequestTarget("GET", target, NOTHING, NOTHING).body.path);
+                assertEq(pair[1], rest.restDoRawRequestTarget("POST", target, "{}",
+                    {"Content-Type": "application/json"}).body.path);
+            }
+            assertEq("/health?", rest.restDoRequestTarget("GET", <RestRequestTarget>{
+                "mode": RestPathMode::OriginAbsolute, "path": "/health?"}, NOTHING, NOTHING).body.path);
+            assertEq(root, rest.getConnectionPath());
+            assertEq("//health?", rest.restDoRequestTarget("GET", <RestRequestTarget>{
+                "mode": RestPathMode::OriginAbsolute, "path": "//health?"}, NOTHING, NOTHING).body.path);
+            AbstractPollOperation op = rest.startPollRequestTarget("GET", <RestRequestTarget>{
+                "mode": RestPathMode::OriginAbsolute, "path": "/sync-poll"}, NOTHING, NOTHING);
+            hash<auto> poll_reply = drive(op);
+            assertEq("/sync-poll", poll_reply.body.path);
+            # Released raw strings remain complete targets.
+            assertEq("/raw", rest.restDoRawRequest("POST", "/raw", "{}",
+                {"Content-Type": "application/json"}).body.path);
+        }
+    }
+
+    private ioTargets(string protocol) {
+        foreach string root in (("/api", "/api/")) {
+            RestClientIo::RestClientIo rest({"url": (protocol == "h1" ? url : tls_url) + root,
+                "protocol": protocol, "accept_all_certs": True});
+            on_exit rest.close();
+            foreach list<string> pair in (cases()) {
+                assertEq(pair[1], rest.restGet(pair[0]).body.path);
+                assertEq(pair[1], rest.restGetAsync(pair[0]).get(5000).body.path);
+                hash<RestRequestTarget> target = <RestRequestTarget>{"path": pair[0]};
+                assertEq(pair[1], rest.restDoRawRequestTarget("POST", target, "{}",
+                    {"Content-Type": "application/json"}).body.path);
+                assertEq(pair[1], rest.restDoRequestAsyncTarget("GET", target, NOTHING, NOTHING).get(5000).body.path);
+            }
+            hash<RestRequestTarget> absolute = <RestRequestTarget>{"mode": RestPathMode::OriginAbsolute,
+                "path": "/health?x=%2F"};
+            assertEq(absolute.path, rest.restDoRequestTarget("GET", absolute, NOTHING, NOTHING).body.path);
+            assertEq(absolute.path, rest.restDoRequestTargetWithTimeout("GET", absolute, NOTHING, NOTHING, 5000).body.path);
+            AbstractPollOperation op = rest.startPollRequestTarget("GET", absolute, NOTHING, NOTHING);
+            assertEq(absolute.path, drive(op).body.path);
+            HttpClientStreamingIo::SseStreamReader reader = rest.restSseReaderTarget("GET", absolute);
+            on_exit reader.cancel();
+            assertEq(absolute.path, parse_json(reader.readEvent(5s).data).path);
+            hash<auto> signed_reply = rest.doSignedRequest("x-target", string sub (hash<auto> request) {
+                return request.path;
+            }, "GET", "users").body;
+            assertEq("/api/users", signed_reply.path);
+            assertEq(signed_reply.path, signed_reply.signature);
+            assertEq(root, rest.getConnectionPath());
+        }
+    }
+
+    private static auto drive(AbstractPollOperation op) {
+        date deadline = now_us() + 10s;
+        while (!op.goalReached()) {
+            if (now_us() >= deadline) {
+                op.abort();
+                throw "TEST-TIMEOUT", "request poll did not finish";
+            }
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (pi) { Socket::poll((pi,), 1000); }
+        }
+        return op.getOutput();
+    }
+
+    private retryTargets() {
+        foreach string mode in (("blocking", "async", "poll", "raw")) {
+            TargetValidator validator();
+            RetryTargetClient rest({"url": url + "/api", "protocol": "h1", "validator": validator});
+            on_exit rest.close();
+            string path = "retry?value=%252F";
+            hash<auto> resp;
+            switch (mode) {
+                case "blocking": resp = rest.restGet(path); break;
+                case "async": resp = rest.restGetAsync(path).get(5000); break;
+                case "poll": resp = drive(rest.startPollRequest("GET", path)); break;
+                case "raw": resp = rest.restDoRawRequest("POST", path, "{}",
+                    {"Content-Type": "application/json"}); break;
+            }
+            assertEq("/schema/retry?value=%252F", resp.body.path, mode);
+            assertEq("/schema/retry", validator.response_paths.get(5s), mode);
+            assertEq("/changed", rest.getConnectionPath());
+        }
+    }
+
+    private concurrentTargets() {
+        RestClientIo::RestClientIo rest({"url": url + "/api", "protocol": "h1"});
+        on_exit rest.close();
+        list<RestFuture> futures = ();
+        foreach int i in (0..9) {
+            futures += rest.restDoRequestAsyncTarget("GET", <RestRequestTarget>{
+                "mode": i % 2 ? RestPathMode::OriginAbsolute : RestPathMode::ApiRelative,
+                "path": "/health"}, NOTHING, NOTHING);
+        }
+        foreach int i in (0..9) {
+            assertEq(i % 2 ? "/health" : "/api/health", futures[i].get(5000).body.path);
+        }
+        TargetObserver observer();
+        HttpClientStreamingIo::SseObservable obs = rest.restObserveSseTarget("GET",
+            <RestRequestTarget>{"path": "events"}, NOTHING, NOTHING);
+        on_exit obs.stopEvents();
+        obs.registerObserver(observer);
+        rest.setConnectionPath("/changed");
+        obs.observersReady();
+        assertEq("/api/events", observer.events.get(5s));
+        hash<RestRequestTarget> target = <RestRequestTarget>{"mode": RestPathMode::OriginAbsolute,
+            "path": "/redirect"};
+        assertEq("/final?value=%2F", rest.restDoRequestTarget("GET", target, NOTHING, NOTHING).body.path);
+        assertEq("/final?value=%2F", rest.restDoRequestAsyncTarget("GET", target, NOTHING, NOTHING).get(5000).body.path);
+        HttpClientStreamingIo::SseStreamReader reader = rest.restSseReaderTarget("GET", target);
+        on_exit reader.cancel();
+        assertEq("/final?value=%2F", parse_json(reader.readEvent(5s).data).path);
+    }
+
+    private schemaTargets() {
+        TargetValidator validator();
+        RestClientIo::RestClientIo rest({"url": url + "/ignored", "protocol": "h1", "validator": validator});
+        on_exit rest.close();
+        assertEq("/schema/users", rest.restGet("users").body.path);
+        assertEq("/schema/users", validator.paths.get(5s));
+        assertEq("/schema/schema/users", rest.restGet("/schema/users").body.path);
+        assertEq("/schema/schema/users", validator.paths.get(5s));
+        assertEq("/health", rest.restDoRequestTarget("GET", <RestRequestTarget>{
+            "mode": RestPathMode::OriginAbsolute, "path": "/health"}, NOTHING, NOTHING).body.path);
+        assertEq("/health", validator.paths.get(5s));
+    }
+}

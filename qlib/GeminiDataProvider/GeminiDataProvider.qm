@@ -403,6 +403,10 @@ module GeminiDataProvider {
 
     The %GeminiDataProvider module provides a data provider API for Google Gemini services.
 
+    Gemini 3.x generation requests omit the sampling parameters and numeric thinking budgets that Gemini 3.x
+    deprecates; use thinking levels instead.  Gemini 2.5 requests keep their sampling parameters and numeric
+    thinking budgets; see @ref geminibodyshapegeneration.
+
     To use this module, use \c "%requires GeminiDataProvider" in your code.
 
     All the public symbols in the module are defined in the GeminiDataProvider namespace.
@@ -410,8 +414,6 @@ module GeminiDataProvider {
     @section geminidataproviderRelnotes Release Notes
 
     @subsection geminidataproviderv1_0 GeminiDataProvider v1.0
-    - Gemini 3.x generation requests omit deprecated sampling parameters and numeric thinking budgets; use
-      thinking levels instead. Gemini 2.5 behavior is preserved; see @ref geminibodyshapegeneration.
     - initial release
 */
 

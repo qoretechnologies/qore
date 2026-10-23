@@ -59,11 +59,30 @@ public class AzureOpenAiDataProvider inherits AzureOpenAiDataProviderCommon {
         if (!actions) {
             return;
         }
-        return new RestSchemaActionDataProvider(actions, actions.getOperationEx(name), rest);
+        return new AzureOpenAiSchemaActionDataProvider(actions, actions.getOperationEx(name), rest);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
     }
 }
+
+#! Binds the Foundry project prefix into this action's schema namespace without changing the shared schema
+class AzureOpenAiSchemaActionDataProvider inherits RestSchemaActionDataProvider {
+    private {
+        #! Complete schema root, immutable after construction
+        string api_root;
+    }
+
+    constructor(RestSchemaActionSet actions, RestSchemaActionOperation op, AbstractRestClient client)
+            : RestSchemaActionDataProvider(actions, op, client) {
+        api_root = RestClient::rest_request_path(<RestClient::RestRequestTarget>{
+            "path": actions.getSchema().getBasePath()}, client.getConnectionPath());
+    }
+
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        return RestSchemaActionDataProvider::doRequestImpl(req, request_options + {"base_path": api_root});
+    }
+}
+
 }

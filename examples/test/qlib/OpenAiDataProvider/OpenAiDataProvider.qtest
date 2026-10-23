@@ -63,6 +63,12 @@ class FakeOpenAiRestClient inherits OpenAiRestClient::OpenAiRestClientIo {
         };
     }
 
+    #! Schema dispatch now supplies an explicit target; retain this mock's response recorder.
+    hash<RestClient::RestResponseInfo> restDoRawRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr) {
+        return restDoRawRequest(method, target.path, body, hdr);
+    }
+
     hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr) {
         if (raw_error) {
             throw raw_error.err, raw_error.desc, raw_error.arg;

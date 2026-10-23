@@ -399,7 +399,7 @@ public class Cin7CoreRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since Cin7CoreRestClient 1.1
+    /** @since Cin7CoreRestClient 1.0
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new Cin7CoreRestClientIo(getConnectionOptions(rtopts));

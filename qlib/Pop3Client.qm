@@ -1702,7 +1702,7 @@ public class Pop3PingPollOperation inherits Qore::PollPipeline {
         @throw POP3-POLL-ERROR if the POP3 server returns an error response
         @throw POP3-CONFIG-ERROR a credential cannot be sent as it is; see @ref Pop3Client::checkCredentials()
 
-        @since %Pop3Client 2.2
+        @since %Pop3Client 2.1
     */
     constructor(Pop3Client pop3) : PollPipeline(new Socket()) {
         setup(pop3, True);
@@ -1718,7 +1718,7 @@ public class Pop3PingPollOperation inherits Qore::PollPipeline {
         @throw POP3-POLL-ERROR if the POP3 server returns an error response
         @throw POP3-CONFIG-ERROR a credential cannot be sent as it is; see @ref Pop3Client::checkCredentials()
 
-        @since %Pop3Client 2.2
+        @since %Pop3Client 2.1
     */
     constructor(Pop3Client pop3, Socket sock, bool send_noop = True) : PollPipeline(sock) {
         setup(pop3, send_noop);
@@ -1860,7 +1860,7 @@ public class Pop3PingPollOperation inherits Qore::PollPipeline {
 /** Generic one-shot POP3 command pipeline used by blocking Pop3Client methods
     when the client does not already have an open stateful session.
 
-    @since Pop3Client 2.2
+    @since Pop3Client 2.1
 */
 public class Pop3CommandPollOperation inherits Qore::PollPipeline {
     private {
@@ -2020,7 +2020,7 @@ public class Pop3CommandPollOperation inherits Qore::PollPipeline {
 /** Generic connected POP3 command pipeline used by blocking Pop3Client methods
     when the client already has an open stateful session.
 
-    @since Pop3Client 2.2
+    @since Pop3Client 2.1
 */
 public class Pop3ConnectedCommandPollOperation inherits Qore::PollPipeline {
     private {
@@ -2127,7 +2127,7 @@ public class Pop3ConnectedCommandPollOperation inherits Qore::PollPipeline {
     @ref getList() for the per-message size hash. The socket remains
     connected for subsequent RETR operations.
 
-    @since Pop3Client 2.2
+    @since Pop3Client 2.1
 */
 public class Pop3StatPollOperation inherits Qore::PollPipeline {
     private {
@@ -2305,7 +2305,7 @@ public class Pop3StatPollOperation inherits Qore::PollPipeline {
     @ref Pop3StatPollOperation) and a list of message IDs, then statically
     unrolls RETR + optional DELE commands per message, followed by QUIT.
 
-    @since Pop3Client 2.2
+    @since Pop3Client 2.1
 */
 public class Pop3RetrPollOperation inherits Qore::PollPipeline {
     private {
@@ -2401,7 +2401,7 @@ public class Pop3RetrPollOperation inherits Qore::PollPipeline {
     orchestrator manages sub-operations but does not inherit
     @c AbstractPollOperation itself.
 
-    @since Pop3Client 2.2
+    @since Pop3Client 2.1
 */
 public class Pop3FetchPollOperation {
     private {
@@ -2653,7 +2653,7 @@ public class Pop3Connection inherits ConnectionProvider::AbstractConnectionWithI
         @param do_delete if True, delete messages after fetching (DELE)
         @return a fetch orchestrator; submit getStatOp() first, then createRetrOp()
 
-        @since Pop3Client 2.2
+        @since Pop3Client 2.1
     */
     Pop3FetchPollOperation startPollFetch(bool do_delete = False) {
         return new Pop3FetchPollOperation(getImpl(False), do_delete);

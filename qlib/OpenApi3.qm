@@ -1347,7 +1347,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
     #! returns a unique hash for the schema that can be used to compare schemas
     /** @return a unique hash for the schema that can be used to compare schemas
 
-        @since OpenApi3 2.0
+        @since OpenApi3 1.0
     */
     private string getHashImpl() {
         return hash_str;
@@ -1739,7 +1739,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
     #! Allows the time zone locale to be set for serialization / deserialization
     /** @param tz the time zone locale to set
 
-        @since OpenApi3 2.0.10
+        @since OpenApi3 1.0
     */
     private setTimeZoneLocaleImpl(*TimeZone tz) {
         set_thread_tz(tz);
@@ -1748,7 +1748,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
     #! Returns the time zone locale used for serialization / deserialization
     /** @return the time zone locale to set
 
-        @since OpenApi3 2.0.10
+        @since OpenApi3 1.0
     */
     private *TimeZone getTimeZoneLocaleImpl() {
         return get_thread_tz();
@@ -1912,7 +1912,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
 
     #! Returns a field definition from an abstract schema object
     /** This method provides polymorphic access to getFieldFromSchema()
-        @since OpenApi3 2.3
+        @since OpenApi3 1.0
     */
     AbstractDataField getFieldFromSchema(string name, *string desc, RestSchemaValidator::AbstractSchemaObject schema,
             bool required = True, *object rest) {
@@ -2842,7 +2842,7 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
         /** Declares how each property of an object-valued request body is serialized; without it a property
             that is not a scalar cannot be serialized into a form-encoded body at all.
 
-            @since OpenApi3 2.4
+            @since OpenApi3 1.0
         */
         *hash<string, hash<string, hash<auto>>> content_encoding;
 
@@ -3365,7 +3365,7 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
 
         @throw SERIALIZATION-ERROR a property cannot be serialized in the style declared for it
 
-        @since OpenApi3 2.4
+        @since OpenApi3 1.0
     */
     private string getFormUrlEncodedBody(hash<auto> body, *hash<string, hash<auto>> encoding) {
         list<string> pairs = ();
@@ -6332,7 +6332,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
 
         @return the composed property
 
-        @since %OpenApi3 1.4
+        @since %OpenApi3 1.0
     */
     private static SchemaObject mergeAllOfProperty(SchemaObject outer, SchemaObject inner) {
         if (!outer.properties || !inner.properties) {
@@ -7509,7 +7509,7 @@ public hashdecl SchemaBlockInfo {
     #! Response content type override from \@content_type (e.g., \c "application/x-yaml"
     #! for file downloads).  When set, the response content type in the generated OpenAPI
     #! spec uses this value instead of the default \c application/json + YAML pair.
-    #! @since OpenApi3 2.1
+    #! @since OpenApi3 1.0
     *string content_type;
 }
 

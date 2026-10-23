@@ -45,7 +45,12 @@ public int sub repro_value(int value) {
 
 
 def ar_members(data):
-    """Returns the member headers of a System V (GNU) ar archive with their resolved names"""
+    """Returns the member headers of an ar archive with their resolved names
+
+    Both formats qcc writes are read: the System V (GNU) one, and the BSD (Darwin) one it writes on macOS, whose
+    long names (#1/<length>) precede the member data and whose symbol table is named __.SYMDEF (or __.SYMDEF_64);
+    the symbol table is named "/" in either.  The body of a BSD member is padded to 8 bytes with newlines.
+    """
     if not data.startswith(b"!<arch>\n"):
         raise ValueError("not an ar archive")
     members = []
@@ -58,7 +63,13 @@ def ar_members(data):
         size = int(header[48:58])
         name = header[:16].decode().rstrip()
         body = data[pos + 60:pos + 60 + size]
-        if name == "//":
+        if name.startswith("#1/"):
+            length = int(name[3:])
+            name = body[:length].rstrip(b"\0").decode()
+            body = body[length:]
+            if name.startswith("__.SYMDEF"):
+                name = "/"
+        elif name == "//":
             long_names = body
         elif name != "/" and name.startswith("/"):
             offset = int(name[1:])
@@ -339,16 +350,23 @@ public class Zeta inherits Alpha {
         self.assertIn(b"qore_qoa_register_all", symbols["body"], "the symbol table indexes the entry point")
         for obj in objects:
             member = next(m for m in members if m["name"] == obj.name)
-            self.assertEqual(obj.read_bytes(), member["body"])
+            data = obj.read_bytes()
+            self.assertEqual(data, member["body"][:len(data)])
+            # only the padding of a BSD member follows the object
+            padding = member["body"][len(data):]
+            self.assertLess(len(padding), 8)
+            self.assertEqual(b"\n" * len(padding), padding)
 
         # the archive is a static library for the system's tools: ar lists it, and a host links its entry point
         ar = shutil.which("ar")
         if ar:
+            # the ar of macOS lists the symbol table as well
             self.assertEqual(["ReproProbe.qoa.agg.o", "ReproProbe.qm.qo", "functions.qc.qo"],
-                             self.run_tool(ar, "t", archive).split())
+                             [name for name in self.run_tool(ar, "t", archive).split()
+                              if not name.startswith("__.SYMDEF")])
         cxx = shutil.which("c++")
         libqore_dir = QCC.parent
-        if cxx and (libqore_dir / "libqore.so").exists():
+        if cxx and ((libqore_dir / "libqore.so").exists() or (libqore_dir / "libqore.dylib").exists()):
             host = self.root / "host.cpp"
             host.write_text('extern "C" void qore_qoa_register_all(void*);\n'
                             "int main(int argc, char**) { if (argc > 99) { qore_qoa_register_all(nullptr); }"
@@ -558,6 +576,42 @@ try {
                              self.run_tool(output, cwd=self.root))
             outputs.append(output.read_bytes())
         self.assertEqual(*outputs)
+
+    def test_prefixes_match_canonical_source_paths(self):
+        # qcc names its inputs by their canonical paths, so a prefix that names the source directory through a
+        # symbolic link (as a temporary directory on macOS does: /var is a link to /private/var), with a relative
+        # path, as a partial name or with a trailing separator must match the canonical path as well
+        real = self.root / "real checkout"
+        source = real / "source"
+        source.mkdir(parents=True)
+        (source / "ReproProbe.qm").write_text(HEADER + FUNCTIONS)
+        physical = source.resolve()
+        link = self.root / "linked checkout"
+        link.symlink_to(real, target_is_directory=True)
+        module = link / "source" / "ReproProbe.qm"
+        line = next(i for i, text in enumerate(module.read_text().splitlines(), 1)
+                    if 'throw "MAPPED-LOCATION"' in text)
+        for case, old, new, cwd, expected in (
+            ("symbolic link", str(link / "source"), "/mapped", self.root, "/mapped/ReproProbe.qm"),
+            ("relative", "source", "/relative", link, "/relative/ReproProbe.qm"),
+            ("partial name", str(link / "sou"), "/partial-", self.root, "/partial-rce/ReproProbe.qm"),
+            ("trailing separator", str(link / "source") + "/", "/slash/", self.root, "/slash/ReproProbe.qm"),
+            # a prefix of another directory maps nothing
+            ("unrelated", str(self.root / "elsewhere"), "/unrelated", self.root, str(physical / "ReproProbe.qm")),
+        ):
+            with self.subTest(case):
+                output = self.root / ("output " + case)
+                output.mkdir()
+                artifact = output / "ReproProbe.qmod"
+                self.run_tool(QCC, "-m", "-O3", f"--file-prefix-map={old}={new}", "-o", artifact, module, cwd=cwd)
+                index = json.loads(self.run_tool(QCC, "--dump-index-json", artifact))
+                self.assertEqual(expected, index["source"])
+                self.env["QORE_MODULE_DIR"] = str(output)
+                result = self.run_tool(QORE, "-l", "ReproProbe", "-e", 'printf("%s\\n", repro_location());')
+                self.assertEqual(f"{expected}:{line}\n", result)
+                if case != "unrelated":
+                    self.assertNotIn(str(physical), json.dumps(index))
+                    self.assertNotIn(str(physical).encode(), artifact.read_bytes())
 
     def test_relative_maps_and_old_prefix_with_equals(self):
         first = self.compile_module("first=checkout", mapped_prefix=".")

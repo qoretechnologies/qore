@@ -97,7 +97,7 @@ public class OneDriveWatchChangesDataProvider inherits OneDriveDataProviderBase,
         leave the embedder keying the cursor on the whole configuration, so tuning the poll interval
         would discard the delta link and re-seed the feed.
 
-        @since OneDriveDataProvider 1.1
+        @since OneDriveDataProvider 1.0
     */
     private *hash<auto> getWatchStreamIdentityImpl() {
         return {

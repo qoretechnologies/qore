@@ -85,9 +85,27 @@ public class BedrockEndpointRestClientIo inherits AwsRestClient::AwsRestClientIo
             : AwsRestClient::AwsRestClientIo::restDoEncodedRawRequest(method, path, body, hdr);
     }
 
+    #! Routes an explicit target to the endpoint owning its path
+    /** @copydoc RestClient::AbstractRestClient::restDoRequestTarget() */
+    hash<RestClient::RestResponseInfo> restDoRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, auto body, *hash<auto> hdr) {
+        return control && !BedrockEndpointRestClientIo::isRuntimePath(target.path)
+            ? control.restDoRequestTarget(method, target, body, hdr)
+            : AwsRestClient::AwsRestClientIo::restDoRequestTarget(method, target, body, hdr);
+    }
+
+    #! Routes an explicit schema target while preserving SigV4 encoded-path handling
+    /** @copydoc RestClient::AbstractRestClient::restDoRawRequestTarget() */
+    hash<RestClient::RestResponseInfo> restDoRawRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr) {
+        return control && !BedrockEndpointRestClientIo::isRuntimePath(target.path)
+            ? control.restDoEncodedRawRequestTarget(method, target, body, hdr)
+            : AwsRestClient::AwsRestClientIo::restDoEncodedRawRequestTarget(method, target, body, hdr);
+    }
+
     #! Returns true for paths belonging to the Bedrock Runtime service
     private static bool isRuntimePath(string path) {
-        return path =~ /^\/(?:async-invoke(?:\/|\?|$)|guardrail\/|guardrail-checks\/|model\/)/;
+        return path =~ /^\/?(?:async-invoke(?:\/|\?|$)|guardrail\/|guardrail-checks\/|model\/)/;
     }
 
     #! Preserves the supplied manager's owner when the router is copied

@@ -10,6 +10,8 @@ import subprocess
 import tempfile
 import unittest
 
+import qore_build_flags
+
 ROOT = Path(__file__).resolve().parents[3]
 BUILD = Path(os.environ.get("QORE_TEST_BUILD_DIR", ROOT / "build")).resolve()
 INCLUDE = Path(os.environ.get("QORE_TEST_INCLUDE_DIR", ROOT / "include")).resolve()
@@ -109,7 +111,8 @@ class IgnoredQppParametersTest(unittest.TestCase):
     def test_actual_wrappers_compile_and_run(self):
         compiler = shlex.split(os.environ.get("CXX", "c++"))
         flags = shlex.split(os.environ.get("QORE_TEST_CXXFLAGS", "-O3 -DNDEBUG -g"))
-        common = [*compiler, *flags, "-std=c++20", "-Wall", "-Werror",
+        # the wrappers are linked with the build's libqore, so they target its platform version
+        common = [*compiler, *flags, *qore_build_flags.target_flags(BUILD), "-std=c++20", "-Wall", "-Werror",
             "-I" + str(INCLUDE), "-I" + str(BUILD / "include"), "-I" + str(BUILD)]
         fixture = ROOT / "examples/test/cmake/ignored_qpp_parameters.cpp"
         bad = self.invoke('baseline-compile', [*common, '-I' + str(self.output / 'baseline'),

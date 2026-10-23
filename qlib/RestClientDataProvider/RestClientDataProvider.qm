@@ -304,14 +304,6 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     @section restclientdataprovider_relnotes Release Notes
 
     @subsection restclientdataprovider_v2_4 RestClientDataProvider v2.4
-    - fixed \c make-api-call with synchronous REST connections: \c error_passthru returns decoded error
-      responses and \c expected_status accepts listed non-2xx codes; call-specific settings do not alter
-      the connection's client, and subclass authentication and request policies remain active
-    - preserved percent-encoded paths and encoded path variables exactly once; query argument names and
-      values now escape reserved delimiters independently
-    - \c body_type=json accepts arrays, objects, scalars, and null, matching the JSON serializer and the
-      existing option description; form bodies retain hash validation
-      (<a href="https://github.com/qoretechnologies/qorus/issues/626">qorus issue 626</a>)
     - implements the framework-level generic API call auto-injection introduced in
       @ref dataprovider_v3_5 "DataProvider v3.5":
       - registers the
@@ -340,14 +332,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
         - <tt>error_passthru</tt> returns non-2xx responses as data instead of raising
         - <tt>multipart</tt> body type accepts a @ref DataProvider::FileDataType "FileDataType" structure
           and the framework builds the multipart envelope
-
-    @subsection restclientdataprovider_v2_3 RestClientDataProvider v2.3
     - migrated from @ref RestClient::RestClient "RestClient" (synchronous HTTP/1.x) to
       @ref RestClientIo::RestClientIo "RestClientIo" (async HTTP/1.x, HTTP/2, and HTTP/3) as
       the default REST transport; this enables HTTP/2 and HTTP/3 support with concurrent
       request multiplexing against the same host
-
-    @subsection restclientdataprovider_v2_2 RestClientDataProvider v2.2
     - added debug info collection support via @ref DataProvider::AbstractDataProvider::setDebugCollector()
       "AbstractDataProvider::setDebugCollector()"
     - debug info includes HTTP method, URL, headers, request/response bodies, status codes, timing, and protocol info

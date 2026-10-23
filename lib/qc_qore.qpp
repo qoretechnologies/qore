@@ -101,12 +101,12 @@ const NT_HASH = NT_HASH;
 const NT_OBJECT = NT_OBJECT;
 
 //! type code for @ref buffer "buffer values"
-/** @since %Qore 2.0
+/** @since %Qore 3.0
  */
 const NT_BUFFER = NT_BUFFER;
 
 //! type code for plugin value instances
-/** @since %Qore 2.0
+/** @since %Qore 3.0
  */
 const NT_PLUGIN_VALUE = NT_PLUGIN_VALUE;
 
@@ -448,7 +448,7 @@ const EVENT_HTTP_HEADERS_READ = QORE_EVENT_HTTP_HEADERS_READ;
 /** @defgroup http2_mode_constants HTTP/2 Mode Constants
     These constants can be used with HTTPClient::setHttp2Mode() to control HTTP/2 behavior
 
-    @since %Qore 2.2
+    @since %Qore 3.0
  */
 ///@{
 //! HTTP/2 disabled mode - only use HTTP/1.x, never attempt HTTP/2
@@ -461,12 +461,12 @@ const HTTP2_MODE_AUTO = HTTP2_MODE_AUTO;
 const HTTP2_MODE_REQUIRED = HTTP2_MODE_REQUIRED;
 
 //! h2c (HTTP/2 cleartext) direct mode - starts HTTP/2 directly on non-TLS connections using prior knowledge
-/** @since %Qore 2.2
+/** @since %Qore 3.0
 */
 const HTTP2_MODE_H2C_DIRECT = HTTP2_MODE_H2C_DIRECT;
 
 //! h2c via HTTP/1.1 Upgrade header (not yet implemented)
-/** @since %Qore 2.2
+/** @since %Qore 3.0
 */
 const HTTP2_MODE_H2C_UPGRADE = HTTP2_MODE_H2C_UPGRADE;
 ///@}

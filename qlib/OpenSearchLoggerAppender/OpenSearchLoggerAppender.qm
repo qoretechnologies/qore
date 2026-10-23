@@ -199,9 +199,6 @@ module OpenSearchLoggerAppender {
     @section opensearchloggerappenderrelnotes Release Notes
 
     @subsection opensearchloggerappenderv11 v1.1
-    - Added the \c fields option, which adds constant fields to every document
-
-    @subsection opensearchloggerappenderv10 v1.0
     - initial release
 */
 

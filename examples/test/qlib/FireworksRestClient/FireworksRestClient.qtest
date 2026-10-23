@@ -5,25 +5,18 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%try-module json
-%define MissingJson
-%endtry
-%ifdef MissingJson
-printf("SKIP: this test requires the external json module\n");
-%else
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/QoreLlmTypes.qm
-%requires ../../../../qlib/QoreLlmUtils
-%requires ../../../../qlib/QoreRagTypes.qm
-%requires ../../../../qlib/QoreRagUtils
-%requires ../../../../qlib/OpenAiRestClient.qm
-%requires ../../../../qlib/FireworksRestClient.qm
-
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/Logger.qm
-
+%requires json
+%requires Util
+%requires QUnit
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires QoreRagTypes
+%requires QoreRagUtils
+%requires OpenAiRestClient
+%requires FireworksRestClient
+%requires HttpServer
+%requires HttpServerUtil
+%requires Logger
 %exec-class FireworksRestClientTest
 
 class FireworksWireHandler inherits AbstractHttpRequestHandler {
@@ -153,7 +146,8 @@ public class FireworksRestClientTest inherits QUnit::Test {
                 "model": "accounts/fireworks/models/gpt-oss-120b",
                 "api_key": "k",
             });
-        assertEq("/v1/chat/completions", p.getChatCompletionsPath());
+        # beneath the path of the default API root, https://api.fireworks.ai/inference, which has no /v1
+        assertEq("/inference/v1/chat/completions", p.getChatCompletionsPath());
     }
 
     private restOptionsTest() {
@@ -297,5 +291,3 @@ public class FireworksRestClientTest inherits QUnit::Test {
     }
 
 }
-
-%endif

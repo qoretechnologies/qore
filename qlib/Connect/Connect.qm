@@ -170,9 +170,21 @@ hash<ConnectCallResult> result = stream.finish();
     Qore type fidelity (number precision, dates with timezones, durations,
     binary, etc.).
 
+    @ref Connect::JsonConnectCodec "JsonConnectCodec" serializes messages as JSON, and
+    @ref Connect::CborConnectCodec "CborConnectCodec" as compact binary CBOR (RFC 8949).
+
     When the \c grpc binary module is available, the
     @ref Connect::ProtobufConnectCodec can be added for protobuf serialization,
     enabling gRPC client interoperability.
+
+    @par Per-message compression
+
+    Messages of streaming RPCs can be compressed with \c gzip or \c deflate
+    (@ref Connect::ConnectCompression "ConnectCompression"); the encoding is negotiated with the
+    \c connect-content-encoding and \c connect-accept-encoding headers.  The server decompresses incoming
+    compressed messages and optionally compresses its responses; the client compresses outgoing messages when an
+    encoding is set in @ref Connect::ConnectCallOptions "ConnectCallOptions".  The size of a decompressed message
+    is limited by \c max_message_size.
 
     @section connecterror Error Handling
 
@@ -317,6 +329,10 @@ handler.registerDatagramBidi("Sensor", "Exchange",
     Datagram messages use a minimal 2-byte envelope (flags + sequence number),
     with no length field since QUIC datagrams are self-delimiting. Compression
     is optional and off by default to preserve low-latency characteristics.
+    A datagram channel is set up with the content type <tt>application/connect+datagram+</tt><i>codec</i> and the
+    <tt>Capsule-Protocol: ?1</tt> header (RFC 9297); errors are sent as datagrams with the
+    \c CONNECT_FLAG_DATAGRAM_ERROR flag, and \c CONNECT_FLAG_DATAGRAM_ACK_REQ requests an application-level
+    acknowledgement.  The RPC types are \c CONNECT_RPC_DATAGRAM_FIRE_AND_FORGET and \c CONNECT_RPC_DATAGRAM_BIDI.
 
     @note Datagram support requires HTTP/3 (QUIC). Attempting to use datagrams
     over HTTP/2 or HTTP/1.1 will throw \c CONNECT-DATAGRAM-NOT-SUPPORTED.
@@ -354,6 +370,13 @@ handler.registerUnary("Greeter", "SayHello", \sayHelloHandler(), req_type, resp_
     - \c GetServiceDescriptor — returns full descriptor for a named service
     - \c GetMethodDescriptor — returns descriptor for a named method
 
+    Descriptors name each RPC type as returned by
+    @ref Connect::ConnectTypeHelper::rpcTypeName() "ConnectTypeHelper::rpcTypeName()".
+    @ref Connect::ConnectHandler::getMethodRegistry() "ConnectHandler::getMethodRegistry()" returns the registered
+    methods, whose @ref Connect::ConnectServerMethodInfo "ConnectServerMethodInfo" includes the optional
+    \c request_type and \c response_type.  The module re-exports the @ref dataproviderintro "DataProvider" module
+    for its type API.
+
     @subsection connectreflection_client Client Side
 
     Use @ref Connect::ConnectReflectionClient "ConnectReflectionClient" to discover
@@ -386,55 +409,6 @@ hash<string, hash<auto>> all = refl.discoverAll();
     @section connectrelnotes Release Notes
 
     @subsection connect_v1_3 Connect Module Version 1.3
-
-    - added QUIC datagram support (RFC 9221/9297) for low-latency unreliable RPC
-    - two new RPC patterns: datagram fire-and-forget and datagram bidirectional
-    - new constants: \c CONNECT_RPC_DATAGRAM_FIRE_AND_FORGET, \c CONNECT_RPC_DATAGRAM_BIDI,
-      \c CONNECT_FLAG_DATAGRAM_ACK_REQ, \c CONNECT_FLAG_DATAGRAM_ERROR
-    - new @ref Connect::ConnectDatagramStream "ConnectDatagramStream" class for client-side
-      datagram communication
-    - new @ref Connect::ConnectServerDatagramStream "ConnectServerDatagramStream" class for
-      server-side datagram handlers
-    - new registration methods on @ref Connect::ConnectHandler "ConnectHandler":
-      \c registerDatagramFireAndForget() and \c registerDatagramBidi()
-    - new client methods on @ref Connect::ConnectClient "ConnectClient":
-      \c sendDatagram() and \c datagramBidi()
-    - minimal 2-byte datagram envelope (flags + sequence number, no length field)
-    - \c application/connect+datagram+{codec} content type for datagram channel setup
-    - \c Capsule-Protocol: ?1 header per RFC 9297
-    - datagram errors sent via \c CONNECT_FLAG_DATAGRAM_ERROR flag
-    - RPC type name mapping in reflection descriptors via
-      @ref Connect::ConnectTypeHelper::rpcTypeName "ConnectTypeHelper::rpcTypeName()"
-
-    @subsection connect_v1_2 Connect Module Version 1.2
-
-    - added automatic service reflection via \c qore.connect.reflection built-in service
-      (@ref Connect::ConnectTypeHelper "ConnectTypeHelper",
-       @ref Connect::ConnectReflectionClient "ConnectReflectionClient")
-    - extended @ref Connect::ConnectServerMethodInfo "ConnectServerMethodInfo" with optional
-      \c request_type and \c response_type fields
-    - overloaded \c register* methods on @ref Connect::ConnectHandler "ConnectHandler" to
-      accept optional type parameters for reflection
-    - added \c getMethodRegistry() method to @ref Connect::ConnectHandler "ConnectHandler"
-    - added \c %requires(reexport) \c DataProvider dependency for type system access
-
-    @subsection connect_v1_1 Connect Module Version 1.1
-
-    - added per-message compression for streaming RPCs
-      (@ref Connect::ConnectCompression "ConnectCompression")
-    - supported encodings: \c gzip and \c deflate
-    - automatic compression negotiation via \c connect-content-encoding
-      and \c connect-accept-encoding headers
-    - server decompresses incoming compressed frames and optionally compresses responses
-    - client compresses outgoing messages when encoding is specified in
-      @ref Connect::ConnectCallOptions "ConnectCallOptions"
-    - zip-bomb protection: decompressed payload size validated against max_message_size
-    - added @ref Connect::JsonConnectCodec "JsonConnectCodec" for JSON serialization
-      (available when the \c json module is installed)
-    - added @ref Connect::CborConnectCodec "CborConnectCodec" for compact binary
-      serialization via CBOR (RFC 8949; available when the \c json module is installed)
-
-    @subsection connect_v1_0 Connect Module Version 1.0
     - initial release
 */
 

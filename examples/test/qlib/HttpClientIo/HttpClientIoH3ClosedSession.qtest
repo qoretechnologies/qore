@@ -1,0 +1,210 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    An HTTP/3 request on a QUIC connection that was closed between connect and submit.
+
+    A QUIC connection that stays idle for longer than its idle timeout is closed silently (RFC 9000 section 10.1).  A
+    request submitted on such a connection was accepted, opened a stream on the closed connection and was never sent;
+    the caller learned of it only when it read the response, too late for the connection manager to repeat the
+    request on a new connection, so the request was lost (the "H3 SSE survives QUIC idle timeout" case of
+    ServerSentEventsHandler/SseAllProtocols.qtest failed so when the client was delayed for longer than the idle
+    timeout after the handshake).  The submit refuses the request now, with the error of the close, and the manager
+    repeats it on a new connection, which RFC 9110 section 9.2.2 allows for any method, since the request was never
+    sent.
+
+    The DEBUG-build test hook QORE_QUIC_TEST_IDLE_CLOSE_AT_SUBMIT closes the connection of the next request submitted
+    after the variable is given a new value, as the idle timer does; the cases skip in other builds.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpClientIoH3ClosedSessionTest
+
+#! Echoes the body of a POST request, and counts the POST requests it served
+class EchoHandler inherits AbstractHttpRequestHandler {
+    public {
+        Counter posts();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.method == "POST") {
+            posts.inc();
+        }
+        return makeResponse(200, body ?? "ok", {"Content-Type": MimeTypeText});
+    }
+}
+
+class HttpClientIoH3ClosedSessionTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        EchoHandler echo();
+        *string url;
+        #! the values given to the test hook, each of which arms it once
+        int hook_values = 0;
+
+        #! the variable of the test hook
+        const HookVar = "QORE_QUIC_TEST_IDLE_CLOSE_AT_SUBMIT";
+
+        #! the longest wait for a part of a response, after which the request has failed
+        const ResponseWait = 20s;
+    }
+
+    constructor() : Test("HttpClientIoH3ClosedSessionTest", "1.0") {
+        addTestCase("a request on an HTTP/3 connection closed between connect and submit is refused, and repeated "
+            "on a new connection", \closedSessionTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("h3-closed-session", LoggerLevel::getLevelWarn()),
+        });
+        server.setHandler("echo", "/echo", NOTHING, echo);
+        try {
+            url = sprintf("https://127.0.0.1:%d", server.addQuicListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            }).port);
+        } catch (hash<ExceptionInfo> ex) {
+            # QUIC is not available; the test is skipped
+        }
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+    }
+
+    closedSessionTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip(HookVar + " is only available in a library-debug build");
+        }
+        if (!url) {
+            testSkip("QUIC is not available");
+        }
+
+        # the Socket API: a request submitted on a connection that was closed after connect is refused, and is not
+        # sent
+        {
+            HttpClientConnectionManager mgr = getManager();
+            on_exit mgr.closeAll();
+            HttpClientConnection conn = requestOk(mgr, "GET", NOTHING).conn;
+            Socket sock = conn.getSocket();
+            assertFalse(sock.isQuicSessionClosed(), "the connection is open after its request");
+            armHook();
+            on_exit unsetenv(HookVar);
+            *hash<ExceptionInfo> err;
+            *int stream_id;
+            try {
+                stream_id = sock.submitQuicRequest("POST", "/echo", {"host": url.substr(8)}, "refused");
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+            assertTrue(sock.isQuicSessionClosed(), "the hook closed the connection at the submit");
+            assertEq("HTTP3-IDLE-CLOSE", err.err, "the submit is refused with the error of the close");
+            assertRegex("the request was not sent", err.desc ?? "",
+                "the description says that the request was not sent");
+            assertEq(NOTHING, stream_id, "no stream is opened for the request");
+        }
+
+        # the connection manager: a request refused so is repeated once on a new connection; a POST request is
+        # repeated too, since it was never sent, and the server gets it once
+        {
+            HttpClientConnectionManager mgr = getManager();
+            on_exit mgr.closeAll();
+            HttpClientConnection first = requestOk(mgr, "GET", NOTHING).conn;
+            int posts = echo.posts.getCount();
+            armHook();
+            on_exit unsetenv(HookVar);
+            hash<auto> rv = requestOk(mgr, "POST", "repeated");
+            assertTrue(first.getSocket().isQuicSessionClosed(),
+                "the hook closed the pooled connection the request was submitted on");
+            assertNeq(first.getConnectionId(), rv.conn.getConnectionId(),
+                "the request was repeated on a new connection");
+            assertEq("repeated", rv.body, "the repeated request was answered");
+            assertEq(posts + 1, echo.posts.getCount(), "the server got the request once");
+            assertEq(1, mgr.getStats().total_connections, "the closed connection was removed from the pool");
+        }
+    }
+
+    #! A new connection manager for HTTP/3 to the server
+    private HttpClientConnectionManager getManager() {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "connect_timeout": 10s,
+            "request_timeout": 20s,
+        });
+    }
+
+    #! Gives the test hook a new value, which arms it for the next request submitted
+    private armHook() {
+        setenv(HookVar, sprintf("%d-%d", getpid(), ++hook_values));
+    }
+
+    #! Makes a request on a stream of the given manager and reads its response, which must be a success
+    /** @return a hash of the body ("body") and of the connection the request was made on ("conn")
+    */
+    private hash<auto> requestOk(HttpClientConnectionManager mgr, string method, *string body) {
+        HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(url, method, "/echo",
+            {"Content-Type": MimeTypeText}, False, body);
+        on_exit stream.cancel();
+        string received = "";
+        while (True) {
+            auto chunk = stream.readData(ResponseWait);
+            if (!exists chunk) {
+                fail(sprintf("%s: no response data within %y", method, ResponseWait));
+            }
+            if (chunk.typeCode() == NT_HASH) {
+                if (chunk.error) {
+                    fail(sprintf("%s: the response failed: %y", method, chunk.error));
+                }
+                if (chunk.end_stream) {
+                    break;
+                }
+                continue;
+            }
+            received += chunk.typeCode() == NT_BINARY ? chunk.toString() : chunk;
+        }
+        return {
+            "body": received,
+            "conn": stream.getConnection(),
+        };
+    }
+}

@@ -168,6 +168,17 @@ while (true) {
     <tt>QoreCancelDeferralHelper</tt>; no cancellation is delivered while it is active, and the pending request is
     raised at the first cancellation point after it.
 
+    @section interruptible_io_fork Child Processes Created with fork()
+
+    A child process created with \c fork() runs only the thread that called \c fork().  A module registers fork
+    handlers for its process-wide locks with <tt>qore_register_fork_handler()</tt>, and a module whose third-party
+    library has exit-time code that is not safe in such a child (an \c atexit() handler or static destructor that
+    joins the library's threads, takes a lock that one of them held, or destroys a kernel object that the child does
+    not have) calls <tt>qore_fork_child_exit_quickly()</tt> from its child handler, so that the child ends without
+    running exit-time handlers.  Both are described in the module guide of the C++ API documentation ("Process-Wide
+    Locks and fork()" and "Exit-Time Code of Third-Party Libraries in a Child Process") and in
+    <tt>include/qore/QoreForkHandler.h</tt>.
+
     @section interruptible_io_sandboxing Sandboxing
 
     Check every filesystem and network access against the program's sandbox before making it, and mark functions

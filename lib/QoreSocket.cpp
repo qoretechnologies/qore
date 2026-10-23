@@ -54,6 +54,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/FileInputStream.h"
 #include "qore/intern/FileOutputStream.h"
 #include "qore/intern/QorePollCompat.h"
@@ -78,6 +79,15 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#endif
+#ifdef DARWIN
+// the socket table of the system, as netstat reads it, for the port checks of qore_socket_bind_unshadowed() and
+// qore_socket_listen_unshadowed()
+#include <sys/socketvar.h>
+#include <sys/sysctl.h>
+#include <netinet/in_pcb.h>
+#include <netinet/tcp_var.h>
+#include <netinet/tcp_fsm.h>
 #endif
 
 // maximum number of non-blocking network operations before returning
@@ -611,7 +621,7 @@ static int qore_socket_bind_unix_direct(QoreSocket* s, const char* name, int soc
         QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
 static int qore_socket_bind_sockaddr_direct(QoreSocket* s, const struct sockaddr* addr, int size,
         QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
-static int qore_socket_listen_direct(QoreSocket* s, int backlog);
+static int qore_socket_listen_direct(QoreSocket* s, int backlog, ExceptionSink* xsink);
 static int qore_socket_shutdown_direct(QoreSocket* s);
 static int qore_socket_set_no_delay_direct(QoreSocket* s, int nodelay);
 static int qore_socket_get_no_delay_direct(QoreSocket* s);
@@ -1326,7 +1336,7 @@ private:
                     *sandbox_manager, xsink);
                 break;
             case Action::Listen:
-                rc = qore_socket_listen_direct(sock, backlog);
+                rc = qore_socket_listen_direct(sock, backlog, xsink);
                 break;
             case Action::Shutdown:
                 rc = qore_socket_shutdown_direct(sock);
@@ -6709,7 +6719,49 @@ void qore_network_init_once() {
 
 #ifdef DEBUG
 std::atomic<int> qore_dbg_cares_lost_query_count{0};
+
+//! guards @ref qore_dbg_cares_servers
+static std::mutex qore_dbg_cares_servers_lock;
+//! the DNS servers of the c-ares channels made from now on; empty for the system's servers
+static std::string qore_dbg_cares_servers;
+
+std::string qore_dbg_cares_set_servers(const std::string& servers) {
+    std::lock_guard<std::mutex> lg(qore_dbg_cares_servers_lock);
+    std::string prev = std::move(qore_dbg_cares_servers);
+    qore_dbg_cares_servers = servers;
+    return prev;
+}
 #endif
+
+//! Returns the DNS servers that dbg_cares_set_servers() set for new c-ares channels, if any
+/** With servers set, the channel is also given a timeout of a second and three tries, so that a lookup that a test
+    makes does not depend on the options of the host's resolver configuration.
+
+    @param options the options of the channel to make
+    @param optmask the mask of the options set in \a options
+*/
+static std::string qore_cares_debug_servers(struct ares_options& options, int& optmask) {
+#ifdef DEBUG
+    std::string servers;
+    {
+        std::lock_guard<std::mutex> lg(qore_dbg_cares_servers_lock);
+        servers = qore_dbg_cares_servers;
+    }
+    if (!servers.empty()) {
+        options.timeout = 1000;
+        options.tries = 3;
+        optmask |= ARES_OPT_TIMEOUTMS | ARES_OPT_TRIES;
+    }
+    return servers;
+#else
+    return std::string();
+#endif
+}
+
+//! Makes a new c-ares channel ask the DNS servers that qore_cares_debug_servers() returned; returns an ARES_* status
+static int qore_cares_set_debug_servers(ares_channel_t* channel, const std::string& servers) {
+    return servers.empty() ? ARES_SUCCESS : ares_set_servers_ports_csv(channel, servers.c_str());
+}
 
 //! The number of times a lookup is started again after c-ares lost its query before it fails
 static constexpr unsigned QORE_CARES_MAX_LOST_QUERY_RESTARTS = 3;
@@ -7099,12 +7151,14 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
     struct ares_options options = {};
     options.sock_state_cb = sockStateCallback;
     options.sock_state_cb_data = this;
+    int optmask = ARES_OPT_SOCK_STATE_CB;
+    std::string debug_servers = qore_cares_debug_servers(options, optmask);
 
     int rc;
     {
         // c-ares reads the LOCALDOMAIN and RES_OPTIONS environment variables when it creates a channel
         QoreEnvironmentReadLock env_lock;
-        rc = ares_init_options(&channel, &options, ARES_OPT_SOCK_STATE_CB);
+        rc = ares_init_options(&channel, &options, optmask);
     }
     if (rc != ARES_SUCCESS) {
         xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "ares_init_options() failed: %s",
@@ -7120,6 +7174,12 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
         return -1;
     }
 #endif
+    rc = qore_cares_set_debug_servers(channel, debug_servers);
+    if (rc != ARES_SUCCESS) {
+        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "ares_set_servers_ports_csv() failed: %s",
+            ares_strerror(rc));
+        return -1;
+    }
 
     struct ares_addrinfo_hints hints = {};
     // POSIX AI_* and c-ares ARES_AI_* flags have different values, including across operating systems.
@@ -7698,12 +7758,14 @@ private:
         struct ares_options options = {};
         options.sock_state_cb = sockStateCallback;
         options.sock_state_cb_data = this;
+        int optmask = ARES_OPT_SOCK_STATE_CB;
+        std::string debug_servers = qore_cares_debug_servers(options, optmask);
 
         int rc;
         {
             // c-ares reads the LOCALDOMAIN and RES_OPTIONS environment variables when it creates a channel
             QoreEnvironmentReadLock env_lock;
-            rc = ares_init_options(&channel, &options, ARES_OPT_SOCK_STATE_CB);
+            rc = ares_init_options(&channel, &options, optmask);
         }
         if (rc != ARES_SUCCESS) {
             xsink->raiseException("GETHOSTBYADDR-ERROR", "ares_init_options() failed: %s", ares_strerror(rc));
@@ -7718,6 +7780,12 @@ private:
             return -1;
         }
 #endif
+        rc = qore_cares_set_debug_servers(channel, debug_servers);
+        if (rc != ARES_SUCCESS) {
+            xsink->raiseException("GETHOSTBYADDR-ERROR", "ares_set_servers_ports_csv() failed: %s",
+                ares_strerror(rc));
+            return -1;
+        }
 
         void* raw_addr = qore_get_in_addr(reinterpret_cast<struct sockaddr*>(&addr));
         info.length = addr.ss_family == AF_INET ? sizeof(struct in_addr) : sizeof(struct in6_addr);
@@ -8269,12 +8337,14 @@ int QoreCaresNameInfoResolver::start(ExceptionSink* xsink) {
     struct ares_options options = {};
     options.sock_state_cb = sockStateCallback;
     options.sock_state_cb_data = this;
+    int optmask = ARES_OPT_SOCK_STATE_CB;
+    std::string debug_servers = qore_cares_debug_servers(options, optmask);
 
     int rc;
     {
         // c-ares reads the LOCALDOMAIN and RES_OPTIONS environment variables when it creates a channel
         QoreEnvironmentReadLock env_lock;
-        rc = ares_init_options(&channel, &options, ARES_OPT_SOCK_STATE_CB);
+        rc = ares_init_options(&channel, &options, optmask);
     }
     if (rc != ARES_SUCCESS) {
         xsink->raiseException("QOREADDRINFO-GETNAMEINFO-ERROR", "ares_init_options() failed: %s",
@@ -8290,6 +8360,12 @@ int QoreCaresNameInfoResolver::start(ExceptionSink* xsink) {
         return -1;
     }
 #endif
+    rc = qore_cares_set_debug_servers(channel, debug_servers);
+    if (rc != ARES_SUCCESS) {
+        xsink->raiseException("QOREADDRINFO-GETNAMEINFO-ERROR", "ares_set_servers_ports_csv() failed: %s",
+            ares_strerror(rc));
+        return -1;
+    }
 
     started = true;
     ares_socklen_t alen = len ? static_cast<ares_socklen_t>(len)
@@ -8524,6 +8600,17 @@ void SocketConnectInetHappyEyeballsPollState::getExtraFds(std::vector<std::pair<
             fds.push_back({a.fd, SOCK_POLLOUT});
         }
     }
+}
+
+std::vector<ExtraWaitFd> SocketConnectInetHappyEyeballsPollState::getExtraWaitFds() {
+    std::vector<std::pair<int, int>> fds;
+    getExtraFds(fds);
+    std::vector<ExtraWaitFd> rv;
+    rv.reserve(fds.size());
+    for (const auto& [fd, events] : fds) {
+        rv.push_back({fd, (events & SOCK_POLLIN) != 0, (events & SOCK_POLLOUT) != 0});
+    }
+    return rv;
 }
 
 int SocketConnectInetHappyEyeballsPollState::getPollTimeoutMs() const {
@@ -10010,6 +10097,8 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             int events;
         };
         std::vector<PollTarget> extra_targets;
+        //! false for an object that had no descriptor when the poll started (see the setup below)
+        bool has_descriptor;
     };
 
     struct PollObjectCleanup {
@@ -10082,12 +10171,6 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
                 new QoreSocketPollListPollable(fd));
             cleanup.objects.push_back(poll_obj);
         }
-        if (fd < 0) {
-            xsink->raiseException("SOCKET-NOT-OPEN", "element %zu/%zu (starting from 1) references a " \
-                "pollable object that is not open", li.index() + 1, poll_list->size());
-            return nullptr;
-        }
-
         std::vector<PollEntry::PollTarget> extra_targets;
         QoreValue extra_value = h->getKeyValue("extra_fds");
         if (extra_value.getType() == NT_LIST) {
@@ -10136,13 +10219,26 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             }
         }
 
-        if (!(events & (SOCK_POLLIN | SOCK_POLLOUT)) && extra_targets.empty()) {
+        if (fd < 0) {
+            // an object that has no descriptor yet, such as a socket whose connection resolves the name of its host,
+            // has nothing to wait for itself: the element waits for its extra descriptors and its poll timeout, as
+            // the I/O controller and the event loop wait for it, and no events are reported for the object; with
+            // neither, the object is closed
+            if (extra_targets.empty() && poll_timeout_value.isNullOrNothing()) {
+                xsink->raiseException("SOCKET-NOT-OPEN", "element %zu/%zu (starting from 1) references a " \
+                    "pollable object that is not open and has no extra descriptors or poll timeout", li.index() + 1,
+                    poll_list->size());
+                return nullptr;
+            }
+            events = 0;
+        } else if (!(events & (SOCK_POLLIN | SOCK_POLLOUT)) && extra_targets.empty()) {
             xsink->raiseException("SOCKET-POLL-ERROR", "element %zu/%zu (starting from 1) has an invalid " \
                 "'events' value; neither SOCK_POLLIN nor SOCK_POLLOUT is set", li.index() + 1, poll_list->size());
             return nullptr;
         }
 
-        entries.push_back({li.index(), events, obj, poll_obj, static_cast<bool>(io), std::move(extra_targets)});
+        entries.push_back({li.index(), events, obj, poll_obj, static_cast<bool>(io), std::move(extra_targets),
+            fd >= 0});
     }
 
     std::map<size_t, int> result_events;
@@ -10271,7 +10367,10 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
 
     std::map<size_t, std::pair<QoreObject*, bool>> entry_objects;
     for (const PollEntry& entry : entries) {
-        entry_objects[entry.index] = {entry.original_obj, entry.original_is_pollable};
+        // an object without a descriptor when the poll started is not closed by the poll's end without one
+        if (entry.has_descriptor) {
+            entry_objects[entry.index] = {entry.original_obj, entry.original_is_pollable};
+        }
     }
 
     auto entry_closed = [&](size_t index) -> bool {
@@ -10523,6 +10622,21 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             }
             return build_results();
         }
+    }
+
+    if (!submitted) {
+        // only objects without a descriptor and without extra descriptors: the poll waits for the shortest of their
+        // poll timeouts, or for its own timeout if shorter, and reports nothing
+        assert(poll_timeout_hint_ms >= 0);
+        int64 wait_ms = timeout_ms >= 0 && timeout_ms < poll_timeout_hint_ms ? timeout_ms : poll_timeout_hint_ms;
+        // the wait ends at once when the thread is cancelled or its Program is interrupted
+        if (wait_ms > 0) {
+            qore_cancellable_sleep(wait_ms * 1000, xsink, "Socket::poll");
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+        return rv.release();
     }
 
     cancel_owner();
@@ -12871,32 +12985,426 @@ static int qore_socket_bind_ipv4_free_port(int sock, const struct sockaddr* addr
     }
     return ::bind(sock, addr, addrlen);
 }
+
+//! The addresses that a TCP or UDP socket serves on its port, for the port checks of macOS
+/** Each address family has no address, one address, or all of its addresses: a socket on the wildcard address of
+    its family serves all of them, and a dual-stack IPv6 socket on the IPv6 wildcard address also serves all IPv4
+    addresses.
+*/
+struct QoreSocketServedAddrs {
+    enum Kind : unsigned char { NONE, ONE, ALL };
+    Kind v4 = NONE;
+    Kind v6 = NONE;
+    struct in_addr a4 = {};
+    struct in6_addr a6 = {};
+
+    //! sets the addresses of an IPv4 socket bound to the address
+    DLLLOCAL void setIpv4(const struct in_addr& addr) {
+        v4 = addr.s_addr == htonl(INADDR_ANY) ? ALL : ONE;
+        a4 = addr;
+    }
+
+    //! sets the addresses of an IPv6 socket bound to the address
+    DLLLOCAL void setIpv6(const struct in6_addr& addr, bool v6only) {
+        if (IN6_IS_ADDR_UNSPECIFIED(&addr)) {
+            v6 = ALL;
+            v4 = v6only ? NONE : ALL;
+        } else if (IN6_IS_ADDR_V4MAPPED(&addr)) {
+            struct in_addr mapped;
+            memcpy(&mapped, &addr.s6_addr[12], sizeof(mapped));
+            setIpv4(mapped);
+        } else {
+            v6 = ONE;
+            a6 = addr;
+        }
+    }
+
+    //! sets the addresses of a socket bound to the address; returns false if it is not an IPv4 or IPv6 address
+    DLLLOCAL bool set(const struct sockaddr* addr, bool v6only) {
+        if (addr->sa_family == AF_INET) {
+            setIpv4(reinterpret_cast<const struct sockaddr_in*>(addr)->sin_addr);
+            return true;
+        }
+        if (addr->sa_family == AF_INET6) {
+            setIpv6(reinterpret_cast<const struct sockaddr_in6*>(addr)->sin6_addr, v6only);
+            return true;
+        }
+        return false;
+    }
+
+    //! returns true if the socket serves all addresses of a family
+    DLLLOCAL bool isWildcard() const {
+        return v4 == ALL || v6 == ALL;
+    }
+
+    //! returns true if the sockets serve an address in common
+    DLLLOCAL bool overlaps(const QoreSocketServedAddrs& other) const {
+        return overlaps(v4, other.v4, !memcmp(&a4, &other.a4, sizeof(a4)))
+            || overlaps(v6, other.v6, !memcmp(&a6, &other.a6, sizeof(a6)));
+    }
+
+    //! returns true if the sockets serve the same addresses
+    DLLLOCAL bool sameAs(const QoreSocketServedAddrs& other) const {
+        return v4 == other.v4 && v6 == other.v6 && (v4 != ONE || !memcmp(&a4, &other.a4, sizeof(a4)))
+            && (v6 != ONE || !memcmp(&a6, &other.a6, sizeof(a6)));
+    }
+
+private:
+    DLLLOCAL static bool overlaps(Kind k1, Kind k2, bool same_address) {
+        if (k1 == NONE || k2 == NONE) {
+            return false;
+        }
+        return k1 == ALL || k2 == ALL || same_address;
+    }
+};
+
+//! A socket of the system's socket table that is bound to a port and not connected
+struct QoreSocketTableEntry {
+    QoreSocketServedAddrs addrs;
+    int port = 0;
+    bool listening = false;
+    //! the socket's options, such as SO_REUSEADDR and SO_REUSEPORT
+    int options = 0;
+    uid_t uid = 0;
+};
+
+//! Calls @a f with each socket of the type in the system's socket table that is bound to a port and not connected
+/** The table is the one that \c netstat reads (\c net.inet.tcp.pcblist64 or \c net.inet.udp.pcblist64); it lists
+    the sockets of all users.
+
+    @param socktype the socket type, \c SOCK_STREAM or \c SOCK_DGRAM
+    @param f called with each socket
+    @param xsink if given, the scan is a cancellation point, checked at the first record of the table and at every
+    100th one: when the thread is cancelled or its program interrupted, the exception is raised in it and -2 is
+    returned
+
+    @return 0 if the table was read, -1 if not, -2 if the scan was cancelled; @a f may have been called for a part of
+    the table if not 0
+*/
+template <typename F>
+static int qore_socket_for_each_bound_socket(int socktype, F&& f, ExceptionSink* xsink) {
+    static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
+        "the length of a record of the socket table is read from the low 32 bits of its first field");
+    bool tcp = socktype == SOCK_STREAM;
+    const char* name = tcp ? "net.inet.tcp.pcblist64" : "net.inet.udp.pcblist64";
+    std::vector<char> buf;
+    size_t len = 0;
+    for (unsigned i = 0; ; ++i) {
+        if (sysctlbyname(name, nullptr, &len, nullptr, 0)) {
+            return -1;
+        }
+        // room for sockets created after the size is read
+        len += len / 8 + 4096;
+        buf.resize(len);
+        if (!sysctlbyname(name, buf.data(), &len, nullptr, 0)) {
+            break;
+        }
+        if (errno != ENOMEM || i == 3) {
+            return -1;
+        }
+    }
+    struct xinpgen gen;
+    if (len < sizeof(gen)) {
+        return -1;
+    }
+    memcpy(&gen, buf.data(), sizeof(gen));
+    size_t record_size = tcp ? sizeof(struct xtcpcb64) : sizeof(struct xinpcb64);
+    size_t cancel_check = 0;
+    for (size_t pos = gen.xig_len; pos + sizeof(uint32_t) <= len; ) {
+        if (xsink && !(cancel_check++ % 100) && qore_check_cancel(xsink, "reading the system's socket table")) {
+            return -2;
+        }
+        uint32_t record_len;
+        memcpy(&record_len, buf.data() + pos, sizeof(record_len));
+        if (record_len <= sizeof(struct xinpgen)) {
+            // the generation record that ends the table
+            return 0;
+        }
+        if (record_len < record_size || pos + record_len > len) {
+            return -1;
+        }
+        struct xinpcb64 inp;
+        int state = -1;
+        if (tcp) {
+            struct xtcpcb64 record;
+            memcpy(&record, buf.data() + pos, sizeof(record));
+            inp = record.xt_inpcb;
+            state = record.t_state;
+        } else {
+            memcpy(&inp, buf.data() + pos, sizeof(inp));
+        }
+        pos += record_len;
+        QoreSocketTableEntry e;
+        e.port = ntohs(inp.inp_lport);
+        if (!e.port || inp.inp_fport) {
+            continue;
+        }
+        if (inp.inp_vflag & INP_IPV6) {
+            e.addrs.setIpv6(inp.inp_dependladdr.inp6_local, inp.inp_flags & IN6P_IPV6_V6ONLY);
+        } else if (inp.inp_vflag & INP_IPV4) {
+            e.addrs.setIpv4(inp.inp_dependladdr.inp46_local.ia46_addr4);
+        } else {
+            continue;
+        }
+        e.options = inp.xi_socket.so_options;
+        e.listening = tcp && (state == TCPS_LISTEN || (e.options & SO_ACCEPTCONN));
+        e.uid = inp.xi_socket.so_uid;
+        f(static_cast<const QoreSocketTableEntry&>(e));
+    }
+    // the table has no end record
+    return -1;
+}
+
+//! Returns true if a socket option that is a flag is set on the socket
+static bool qore_socket_has_flag(int sock, int level, int option) {
+    int value = 0;
+    socklen_t len = sizeof(value);
+    return !getsockopt(sock, level, option, &value, &len) && value;
+}
+
+//! Returns true if another socket holds the port on an address that the socket also serves
+/** Two sockets that serve an address in common share its port if both reuse the port and belong to the same user,
+    and, if @a reuse_shares is true, as on Linux, if both reuse the address and the other one does not listen.
+    Connections, including those in \c TIME_WAIT, are not considered.  The sockets in a part of the socket table that
+    cannot be read are not found; if no part can be read, the port is not held.
+
+    @param socktype the socket type, \c SOCK_STREAM or \c SOCK_DGRAM
+    @param ours the addresses that the socket serves
+    @param port the port
+    @param sock the socket, whose \c SO_REUSEADDR and \c SO_REUSEPORT options are checked
+    @param reuse_shares true if two sockets that reuse the address share the port while the other one does not listen
+    @param at_listen true when the socket is about to listen: the sockets on the same addresses, which are the socket
+    itself and other sockets that reuse the port with it, are then not considered
+    @param xsink if given, the scan of the socket table is a cancellation point (see
+    qore_socket_for_each_bound_socket())
+
+    @return 1 if another socket holds the port, 0 if not, -1 if the scan was cancelled, in which case the exception
+    has been raised in @a xsink
+*/
+static int qore_socket_port_held(int socktype, const QoreSocketServedAddrs& ours, int port, int sock,
+        bool reuse_shares, bool at_listen, ExceptionSink* xsink) {
+    bool reuse = qore_socket_has_flag(sock, SOL_SOCKET, SO_REUSEADDR);
+    bool reuseport = qore_socket_has_flag(sock, SOL_SOCKET, SO_REUSEPORT);
+    uid_t uid = geteuid();
+    bool held = false;
+    try {
+        int rc = qore_socket_for_each_bound_socket(socktype, [&](const QoreSocketTableEntry& e) {
+            if (held || e.port != port || !e.addrs.overlaps(ours) || (at_listen && e.addrs.sameAs(ours))) {
+                return;
+            }
+            if ((reuse_shares && reuse && (e.options & SO_REUSEADDR) && !e.listening)
+                || (reuseport && (e.options & SO_REUSEPORT) && e.uid == uid)) {
+                return;
+            }
+            held = true;
+        }, xsink);
+        if (rc == -2) {
+            return -1;
+        }
+    } catch (std::bad_alloc&) {
+        // the table could not be read
+        return 0;
+    }
+    return held ? 1 : 0;
+}
+
+//! Returns true if a bind of a specific address with SO_REUSEADDR is refused because a socket holds the port
+/** macOS allows a socket that reuses the address to bind a specific address of a port that another socket of the
+    same user holds on a wildcard address, and the socket then receives the clients of that address instead.  Linux
+    refuses the bind if the other socket listens or does not reuse the address, and so does this function for a
+    datagram socket.  A stream socket is refused the port on macOS whenever another socket holds it on the wildcard
+    address: a connection request to the specific address reaches the socket bound there, also if it does not listen,
+    in which case the request is dropped, while Linux gives it to the socket that listens.  A bind without
+    SO_REUSEADDR is refused by macOS itself, and a system-assigned port is never one that a socket on a wildcard
+    address holds.
+
+    @return 1 if the bind is refused, 0 if not, -1 if the scan of the socket table was cancelled, in which case the
+    exception has been raised in @a xsink (see qore_socket_for_each_bound_socket())
+*/
+static int qore_socket_bind_specific_refused(int sock, const struct sockaddr* addr, int socktype,
+        ExceptionSink* xsink) {
+    int port = q_get_port_from_addr(addr);
+    if (port <= 0 || !qore_socket_has_flag(sock, SOL_SOCKET, SO_REUSEADDR)) {
+        return 0;
+    }
+    QoreSocketServedAddrs ours;
+    if (!ours.set(addr, qore_socket_has_flag(sock, IPPROTO_IPV6, IPV6_V6ONLY)) || ours.isWildcard()) {
+        return 0;
+    }
+    return qore_socket_port_held(socktype, ours, port, sock, socktype != SOCK_STREAM, false, xsink);
+}
+
+//! Returns true if a listen of the TCP socket is refused because another socket holds its port
+/** Of two sockets that reuse the address and serve an address in common, and that are bound but not listening, macOS
+    allows both to listen, and the one on the more specific address receives the clients of that address.  Linux
+    refuses the listen of the second one.
+
+    @return 1 if the listen is refused, 0 if not, -1 if the scan of the socket table was cancelled, in which case
+    the exception has been raised in @a xsink (see qore_socket_for_each_bound_socket())
+*/
+static int qore_socket_listen_refused(int sock, ExceptionSink* xsink) {
+    int type = 0;
+    socklen_t len = sizeof(type);
+    if (getsockopt(sock, SOL_SOCKET, SO_TYPE, &type, &len) || type != SOCK_STREAM) {
+        return 0;
+    }
+    struct sockaddr_storage addr;
+    len = sizeof(addr);
+    if (getsockname(sock, reinterpret_cast<struct sockaddr*>(&addr), &len)) {
+        return 0;
+    }
+    int port = q_get_port_from_addr(reinterpret_cast<const struct sockaddr*>(&addr));
+    QoreSocketServedAddrs ours;
+    if (port <= 0 || !ours.set(reinterpret_cast<const struct sockaddr*>(&addr),
+            qore_socket_has_flag(sock, IPPROTO_IPV6, IPV6_V6ONLY))) {
+        return 0;
+    }
+    return qore_socket_port_held(SOCK_STREAM, ours, port, sock, true, true, xsink);
+}
 #endif
 
 int qore_socket_bind_unshadowed(int sock, const struct sockaddr* addr, size_t addrlen, int socktype,
-        QoreSandboxManager* sandbox_manager) {
+        QoreSandboxManager* sandbox_manager, ExceptionSink* xsink) {
 #ifdef DARWIN
-    if ((socktype == SOCK_STREAM || socktype == SOCK_DGRAM) && qore_socket_bind_serves_ipv4_wildcard(sock, addr)) {
-        int port = q_get_port_from_addr(addr);
-        if (port > 0) {
-            if (qore_socket_ipv4_port_used(socktype, INADDR_ANY, port, sandbox_manager)
-                || qore_socket_ipv4_port_used(socktype, INADDR_LOOPBACK, port, sandbox_manager)) {
-                sock_set_raw_error(EADDRINUSE);
-                return QORE_SOCKET_ERROR;
+    if (socktype == SOCK_STREAM || socktype == SOCK_DGRAM) {
+        if (qore_socket_bind_serves_ipv4_wildcard(sock, addr)) {
+            int port = q_get_port_from_addr(addr);
+            if (port > 0) {
+                // the probes bind the port for a moment, so a concurrent bind of the port can be refused because of
+                // them; they are not made for an IPv4 socket that does not reuse the address, which macOS itself
+                // refuses a port that any socket uses
+                if ((addr->sa_family != AF_INET || qore_socket_has_flag(sock, SOL_SOCKET, SO_REUSEADDR))
+                    && (qore_socket_ipv4_port_used(socktype, INADDR_ANY, port, sandbox_manager)
+                        || qore_socket_ipv4_port_used(socktype, INADDR_LOOPBACK, port, sandbox_manager))) {
+                    sock_set_raw_error(EADDRINUSE);
+                    return QORE_SOCKET_ERROR;
+                }
+            } else if (addr->sa_family == AF_INET6) {
+                return qore_socket_bind_ipv4_free_port(sock, addr, addrlen, socktype, sandbox_manager);
             }
-        } else if (addr->sa_family == AF_INET6) {
-            return qore_socket_bind_ipv4_free_port(sock, addr, addrlen, socktype, sandbox_manager);
+        } else if (int refused = qore_socket_bind_specific_refused(sock, addr, socktype, xsink)) {
+            sock_set_raw_error(refused < 0 ? ECANCELED : EADDRINUSE);
+            return QORE_SOCKET_ERROR;
         }
     }
 #endif
     return ::bind(sock, addr, addrlen);
 }
 
+int qore_socket_listen_unshadowed(int sock, int backlog, ExceptionSink* xsink) {
+#ifdef DARWIN
+    if (int refused = qore_socket_listen_refused(sock, xsink)) {
+        sock_set_raw_error(refused < 0 ? ECANCELED : EADDRINUSE);
+        return QORE_SOCKET_ERROR;
+    }
+#endif
+    return ::listen(sock, backlog);
+}
+
+#ifdef DARWIN
+//! The time a reservation waits for the connection that holds its port to arrive, in milliseconds
+static constexpr int QORE_BIND_RESERVATION_CONNECT_TIMEOUT_MS = 1000;
+
+//! Holds the port of a socket bound to an address by a connection to it, so that a connection to the port is refused
+/** macOS drops a connection request to a socket that is bound but not listening instead of refusing it, so a client
+    that tries the address first would wait for its connect timeout.  The socket listens, a socket of this function
+    connects to it, and the listening socket is no longer needed once the connection is accepted: the connection holds
+    the port, a connection request to the port finds no listening socket and is refused at once, and a bind of the
+    port without SO_REUSEADDR is refused (with SO_REUSEADDR, macOS allows a bind by a program of the same user).  Both
+    ends close with an abortive close, so a released reservation leaves no connection in TIME_WAIT on the port.
+    The connection is made only to the socket that this function bound, so it needs no network sandbox check.
+
+    @param lfd the socket bound to the address, which the caller closes in any case
+    @param family the address family
+    @param addr the bound address
+    @param addrlen the length of @a addr
+    @param held the two ends of the connection holding the port, if 0 is returned; the caller owns them
+
+    @return 0 if the connection holds the port, -1 if not, in which case no descriptor is added to @a held; @a lfd
+    may then listen, so it must not hold the port
+*/
+static int qore_socket_hold_port_by_connection(int lfd, int family, const struct sockaddr* addr, socklen_t addrlen,
+        std::vector<int>& held) {
+    if (::listen(lfd, 1) == QORE_SOCKET_ERROR) {
+        return -1;
+    }
+    int cfd = socket(family, SOCK_STREAM, 0);
+    if (cfd == QORE_INVALID_SOCKET) {
+        return -1;
+    }
+    struct Closer {
+        int& fd;
+        ~Closer() {
+            if (fd != QORE_INVALID_SOCKET) {
+                qore_socket_private::closeDescriptor(fd);
+            }
+        }
+    } cfd_closer{cfd};
+    // the connect is completed by the system, as the socket listens on a local address; it is not waited for here
+    int flags = fcntl(cfd, F_GETFL);
+    if (flags == -1 || fcntl(cfd, F_SETFL, flags | O_NONBLOCK) == -1) {
+        return -1;
+    }
+    if (::connect(cfd, addr, addrlen) == QORE_SOCKET_ERROR && sock_get_raw_error() != EINPROGRESS) {
+        return -1;
+    }
+    struct pollfd pfd = {lfd, POLLIN, 0};
+    int rc;
+    do {
+        rc = ::poll(&pfd, 1, QORE_BIND_RESERVATION_CONNECT_TIMEOUT_MS);
+    } while (rc == -1 && sock_get_raw_error() == EINTR);
+    if (rc <= 0 || !(pfd.revents & POLLIN)) {
+        return -1;
+    }
+    // reserved before the accept, so that adding the descriptors cannot fail (the caller reserves it in advance)
+    held.reserve(held.size() + 2);
+    int afd = ::accept(lfd, nullptr, nullptr);
+    if (afd == QORE_INVALID_SOCKET) {
+        return -1;
+    }
+    struct linger l = {1, 0};
+    setsockopt(afd, SOL_SOCKET, SO_LINGER, &l, sizeof(l));
+    setsockopt(cfd, SOL_SOCKET, SO_LINGER, &l, sizeof(l));
+    held.push_back(afd);
+    held.push_back(cfd);
+    cfd = QORE_INVALID_SOCKET;
+    return 0;
+}
+#endif
+
+//! Returns a socket bound to the given address of a bind-name reservation, or QORE_INVALID_SOCKET with @a err set
+/** The socket is bound without SO_REUSEADDR, so that no other socket can bind the port on the address while it is
+    held, and an IPv6 socket holds only its IPv6 address.
+*/
+static int qore_socket_bind_reservation(const SocketResolvedAddrInfo& ai, const struct sockaddr_storage& addr,
+        int& err) {
+    int fd = socket(ai.family, ai.socktype, ai.protocol);
+    if (fd == QORE_INVALID_SOCKET) {
+        err = sock_get_raw_error();
+        return QORE_INVALID_SOCKET;
+    }
+#ifdef IPV6_V6ONLY
+    if (ai.family == AF_INET6) {
+        // only the IPv6 address itself is held, not the IPv4 address that a dual-stack socket would also hold
+        int opt = 1;
+        setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (SETSOCKOPT_ARG_4)&opt, sizeof(int));
+    }
+#endif
+    if (::bind(fd, reinterpret_cast<const struct sockaddr*>(&addr), ai.addrlen) == QORE_SOCKET_ERROR) {
+        err = sock_get_raw_error();
+        qore_socket_private::closeDescriptor(fd);
+        return QORE_INVALID_SOCKET;
+    }
+    return fd;
+}
+
 //! Holds the port of a TCP socket bound to one address of a name on the name's addresses in other address families
 /** A client that connects to the name tries the name's addresses in turn (IPv6 first, RFC 8305), and a port number
     is allocated per address family, so another listener with the same port number on an address of another family
-    would receive the connection instead of the bound socket.  A socket bound to such an address, but not
-    listening, refuses the connection, and the client falls back to the address of the bound socket.
+    would receive the connection instead of the bound socket.  The port is held so that a connection to it is refused,
+    and the client falls back to the address of the bound socket: by a socket bound to the address but not
+    listening, which Linux refuses a connection to, and on macOS, which drops such a connection request instead, by
+    a connection to the port (see qore_socket_hold_port_by_connection()).
 
     @param addrs the addresses of the name
     @param bound_family the address family of the bound address
@@ -12910,6 +13418,9 @@ int qore_socket_bind_unshadowed(int sock, const struct sockaddr* addr, size_t ad
 static int qore_socket_reserve_bind_port(const std::vector<SocketResolvedAddrInfo>& addrs, int bound_family,
         int port, QoreSandboxManager* sandbox_manager, std::vector<int>& fds) {
     assert(fds.empty());
+    // reserved before any socket is created, so that adding a descriptor cannot fail; on macOS a connection holds
+    // the port with two descriptors
+    fds.reserve(addrs.size() * 2);
     for (size_t i = 0, e = addrs.size(); i < e; ++i) {
         const SocketResolvedAddrInfo& ai = addrs[i];
         if (ai.family == bound_family || ai.socktype != SOCK_STREAM
@@ -12930,21 +13441,9 @@ static int qore_socket_reserve_bind_port(const std::vector<SocketResolvedAddrInf
                 continue;
             }
         }
-        // without SO_REUSEADDR, so that no other socket can bind the port on the address while it is held
-        int fd = socket(ai.family, ai.socktype, ai.protocol);
+        int err = 0;
+        int fd = qore_socket_bind_reservation(ai, addr, err);
         if (fd == QORE_INVALID_SOCKET) {
-            continue;
-        }
-#ifdef IPV6_V6ONLY
-        if (ai.family == AF_INET6) {
-            // only the IPv6 address itself is held, not the IPv4 address that a dual-stack socket would also hold
-            int opt = 1;
-            setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (SETSOCKOPT_ARG_4)&opt, sizeof(int));
-        }
-#endif
-        if (::bind(fd, reinterpret_cast<const struct sockaddr*>(&addr), ai.addrlen) == QORE_SOCKET_ERROR) {
-            int err = sock_get_raw_error();
-            qore_socket_private::closeDescriptor(fd);
 #ifdef _Q_WINDOWS
             bool in_use = err == WSAEADDRINUSE;
 #else
@@ -12960,6 +13459,21 @@ static int qore_socket_reserve_bind_port(const std::vector<SocketResolvedAddrInf
             // an address that cannot be bound, such as an IPv6 address on a system without IPv6, needs no reservation
             continue;
         }
+#ifdef DARWIN
+        // the connection holds the port; the bound socket is closed in any case, as it may listen
+        int rc = qore_socket_hold_port_by_connection(fd, ai.family, reinterpret_cast<const struct sockaddr*>(&addr),
+            static_cast<socklen_t>(ai.addrlen), fds);
+        qore_socket_private::closeDescriptor(fd);
+        if (!rc) {
+            continue;
+        }
+        // without the connection, the port is held as on other systems, by a socket that is bound but not
+        // listening, although a connection request to it then times out instead of being refused
+        fd = qore_socket_bind_reservation(ai, addr, err);
+        if (fd == QORE_INVALID_SOCKET) {
+            continue;
+        }
+#endif
         fds.push_back(fd);
     }
     return 0;
@@ -13140,7 +13654,7 @@ static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name
         }
         int prt = q_get_port_from_addr(reinterpret_cast<const struct sockaddr*>(&ai.addr));
         if (!priv->bindIntern(reinterpret_cast<struct sockaddr*>(&ai.addr), ai.addrlen, prt, reuseaddr,
-                sandbox_manager)) {
+                sandbox_manager, nullptr, xsink)) {
             // an allowed address was bound; a denial of another address is not an error
             denied_xsink.clear();
             if (bound) {
@@ -13152,6 +13666,12 @@ static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name
             return 0;
         }
         en = sock_get_raw_error();
+        if (en == ECANCELED && *xsink) {
+            // the bind was cancelled, and its exception has been raised; no other address is tried
+            denied_xsink.clear();
+            sock_set_raw_error(en);
+            return -1;
+        }
         // only a system without IPv6 falls back to the IPv4 wildcard; any other error, such as a port in use in
         // either address family, means that the port cannot be bound on all interfaces
         if (dual_stack_candidate && !qore_socket_ipv6_unavailable(en)) {
@@ -13346,7 +13866,8 @@ static int qore_socket_bind_sockaddr_direct(QoreSocket* s, const struct sockaddr
     if (priv->sock == QORE_INVALID_SOCKET && priv->openINET())
         return -1;
 
-    if (qore_socket_bind_unshadowed(priv->sock, addr, size, SOCK_STREAM, sandbox_manager) == QORE_SOCKET_ERROR) {
+    if (qore_socket_bind_unshadowed(priv->sock, addr, size, SOCK_STREAM, sandbox_manager, xsink)
+            == QORE_SOCKET_ERROR) {
 #ifdef _Q_WINDOWS
         // set errno from windows error
         sock_get_error();
@@ -13383,7 +13904,8 @@ int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, const str
     if (priv->sock == QORE_INVALID_SOCKET && priv->openINET(family, sock_type, protocol))
         return -1;
 
-    if (qore_socket_bind_unshadowed(priv->sock, addr, size, sock_type, sandbox_manager) == QORE_SOCKET_ERROR) {
+    if (qore_socket_bind_unshadowed(priv->sock, addr, size, sock_type, sandbox_manager, xsink)
+            == QORE_SOCKET_ERROR) {
 #ifdef _Q_WINDOWS
         // set errno from windows error
         sock_get_error();
@@ -13401,8 +13923,8 @@ int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, const str
     return 0;
 }
 
-static int qore_socket_listen_direct(QoreSocket* s, int backlog) {
-    return qore_socket_private::get(*s)->listen(backlog);
+static int qore_socket_listen_direct(QoreSocket* s, int backlog, ExceptionSink* xsink) {
+    return qore_socket_private::get(*s)->listen(backlog, xsink);
 }
 
 static int qore_socket_shutdown_direct(QoreSocket* s) {
@@ -15420,7 +15942,7 @@ QoreHashNode* SocketSetupPollOperation::continuePollIntern(ExceptionSink* xsink)
         case Action::BindInet:
             return continueBindInet(xsink);
         case Action::Listen:
-            rc = qore_socket_listen_direct(sock->priv->socket, backlog);
+            rc = qore_socket_listen_direct(sock->priv->socket, backlog, xsink);
             break;
         case Action::SetNoDelay:
             rc = qore_socket_set_no_delay_direct(sock->priv->socket, static_cast<int>(value));

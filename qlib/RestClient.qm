@@ -90,7 +90,10 @@ module RestClient {
     - \c "url": message bodies are encoded in URL form encoded format (see
       <a href="https://tools.ietf.org/html/rfc1738">RFC 2738 2.2</a>)
     - \c "xml": using the \c "xml" module; message bodies are encoded using XML-RPC value encoding
-    - \c "yaml": using the \c "yaml" module; message bodies are encoded using YAML
+    - \c "yaml": using the \c "yaml" module; message bodies are encoded using YAML and sent with the media type
+      \c "text/x-yaml", which the servers of all %Qore releases decode (servers of releases before %Qore 3.0 do not
+      decode the RFC 9512 type \c "application/yaml"); a response is read with any YAML media type, and the media
+      type of a response is negotiated with the \c Accept header
     - \c "text": message bodies are not serialized, plain text value is used
     - \c "bin": message bodies are not serialized, binary data is used instead
 
@@ -121,6 +124,30 @@ printf("%Y\n", ans.body);
     with a message body, but this is bad practice and not compliant with HTTP 1.1 RFCs and therefore
     could lead to compatibility problems; see @ref httpclient_get_with_body for more information
 
+    @section restclienttargets Explicit Request Targets
+
+    New code can use @ref RestRequestTarget with @ref RestPathMode::ApiRelative (the default) or
+    @ref RestPathMode::OriginAbsolute. API-relative targets append an endpoint to the API root even when
+    the endpoint starts with a slash. With root \c /api, both \c users and \c /users send \c /api/users;
+    \c /api/users sends \c /api/api/users. Origin-absolute targets require a leading slash and bypass the root.
+
+    @code{.py}
+    rest.restDoRequestTarget("GET", <RestRequestTarget>{"path": "orders"}, NOTHING, NOTHING);
+    rest.restDoRawRequestTarget("POST", <RestRequestTarget>{
+        "mode": RestPathMode::OriginAbsolute, "path": "/imports?format=json"},
+        json_text, {"Content-Type": "application/json"});
+    @endcode
+
+    The shared @ref rest_request_path() composer treats roots \c /api and \c /api/ identically, preserves
+    internal slashes and query text, and joins query-only endpoints without inserting a slash. Roots must
+    contain only a path: move any query from the root into the request target. A schema that manages URI
+    paths supplies the API root instead of the connection path. This is API-root composition, not URI-reference
+    resolution; use HTTPClient::sendUrl() for RFC 3986 resolution.
+
+    The existing synchronous string methods retain their released behavior, including complete-target
+    semantics for restDoRawRequest(). The explicit raw target API makes body serialization independent of
+    path mode. startPollRequestTarget() offers the same explicit modes to caller-driven polling code.
+
     @section rest-info-output REST Info Output
 
     The \c info output hash to REST methods has the following format:
@@ -143,6 +170,15 @@ printf("%Y\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_7 RestClient v2.7
+    - added RestPathMode, RestRequestTarget, rest_request_path(), and explicit target methods for ordinary,
+      raw-body, and polling requests; connection pings no longer clear the API root to address an absolute path
+      (<a href="https://github.com/qoretechnologies/qore/issues/5485">issue 5485</a>)
+    - YAML request bodies (the \c "yaml" serialization option) are sent with the media type \c "text/x-yaml", as by
+      earlier releases, also now that @ref Mime::MimeTypeYaml "MimeTypeYaml" is the RFC 9512 type
+      \c "application/yaml", which the servers of %Qore releases before 3.0 do not decode
+    - added support for the OAuth2 \c implicit grant type, and the
+      @ref RestClient::RestConnection::RCF_OAUTH2_IMPLICIT "oauth2-implicit" and
+      @ref RestClient::RestConnection::RCF_OAUTH2_AUTH "oauth2-auth" connection features
     - <b>security</b>: a credential sent in a header with a name of its own, such as \c Qorus-Token, no longer appears
       in exception arguments, the request information (\c info) of a failed request or debug messages, nor where
       a server echoes it in an error: headers whose names contain \c token, \c secret, \c api-key or \c apikey,
@@ -158,7 +194,8 @@ printf("%Y\n", ans.body);
       the ping debug message gives the URL without its password
     - synchronous requests with \c error_passthru enabled retain the normal bounded OAuth2 token
       refresh and retry behavior on authentication errors, including generic API calls with status policies
-    - restored the documented \c oauth2_auto_refresh default of \c True when the option is omitted
+    - the \c oauth2_auto_refresh option is \c True as documented when it is omitted; before, OAuth2 tokens were not
+      refreshed automatically unless the option was set
     - explicit \c Authorization headers take precedence over generated bearer headers when constructing a client
       with a saved token, preserving combined credentials such as Trello's consumer key and token
     - added the \c status_message, \c effective_url, and \c redirects keys to
@@ -178,9 +215,6 @@ printf("%Y\n", ans.body);
     - added @ref RestClient::RestClient::getConstructorOptions() "RestClient::getConstructorOptions()", which
       returns the options a client was created with, as \c getConstructorOptions() of
       @ref restclientiointro "RestClientIo" does
-    - a response read with a \c max_response_body_size is decoded by the rules shared by all HTTP clients (see
-      @ref Qore::decode_http_body() "decode_http_body()"), and the \c assume_encoding option applies to every HTTP
-      version
     - redact authentication headers and echoed rejected credentials from blocking and polling error diagnostics
     - @ref RestClient::RestRequestPollOperation::getInfo() "RestRequestPollOperation::getInfo()" reports the same
       request information as a blocking request, including \c response-headers-raw, the redirects followed
@@ -196,16 +230,13 @@ printf("%Y\n", ans.body);
     - clearing the connection path also clears the default path so opening a socket cannot restore
       the API prefix on a ping that addresses the host root
     - renews expiring client-credentials tokens by acquiring another token when no refresh token is issued
-    - fixed a connection using an OAuth2 grant with no authorization step reporting that it has nothing to
-      do with OAuth2; the only OAuth2 features published were the two interactive flows and the general
-      \c oauth2-auth flag, so a fully configured \c client_credentials connection was indistinguishable
-      from one using no OAuth2 at all.  Connections now claim
-      @ref RestClient::RestConnection::RCF_OAUTH2 "RCF_OAUTH2" for every grant type,
-      @ref RestClient::RestConnection::RCF_OAUTH2_CLIENT_CREDENTIALS "RCF_OAUTH2_CLIENT_CREDENTIALS" and
-      @ref RestClient::RestConnection::RCF_OAUTH2_PASSWORD "RCF_OAUTH2_PASSWORD" for the grants with no
+    - connections claim the @ref RestClient::RestConnection::RCF_OAUTH2 "RCF_OAUTH2" feature for every OAuth2
+      grant type, and @ref RestClient::RestConnection::RCF_OAUTH2_CLIENT_CREDENTIALS "RCF_OAUTH2_CLIENT_CREDENTIALS"
+      and @ref RestClient::RestConnection::RCF_OAUTH2_PASSWORD "RCF_OAUTH2_PASSWORD" for the grants with no
       authorization step, and publish the grant type itself in
-      @ref RestClient::RestConnection::getExtendedInfo() "getExtendedInfo()"; \c oauth2-auth keeps its
-      meaning of "there is an authorization step to offer".  The features are derived from the new
+      @ref RestClient::RestConnection::getExtendedInfo() "getExtendedInfo()", so that a connection using OAuth2 can
+      be told apart from one using no OAuth2 at all; \c oauth2-auth means that there is an authorization step to
+      offer.  The features are derived from the new
       @ref RestClient::RestConnection::getOAuth2GrantType() "getOAuth2GrantType()" hook, which connection
       classes configuring OAuth2 through options of their own can override
       (<a href="https://github.com/qoretechnologies/qore/issues/5441">issue 5441</a>)
@@ -213,46 +244,21 @@ printf("%Y\n", ans.body);
       \c charset is not defined for multipart types, and appending it after the \c boundary
       parameter breaks strict multipart parsers.  @ref Qore::HTTPClient "HTTPClient" already
       applied this rule when adding the charset itself, so the two disagreed
-    - fixed connections that always use the authorization code grant reporting that they cannot be
-      authorized; their \c checkAuthCodeFeature() overrides set only the authorization code feature
-      and not the general \c oauth2-auth feature a UI reads to offer an \c Authorize control, so
-      Dynamics, Salesforce, OneDrive, ServiceNow, Dropbox, and LinkedIn connections could not be
-      authorized from the UI at all.  Both features are now set together in
-      @ref RestClient::RestConnection::setOAuth2AuthFeature() "setOAuth2AuthFeature()"
-    - fixed pings swallowing every failure acquiring the async client and silently retrying the
-      whole ping synchronously; only \c CONNECTION-ASYNC-UNSUPPORTED and \c LOAD-MODULE-ERROR
-      fall back now, so a real failure such as an OAuth2 login error is reported as-is instead of
-      being replaced by the second attempt's error
-    - fixed pings with a \c ping_path given as an absolute URL; the client is now retargeted at
-      that URL with @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" instead of
-      the URL being sent to the connection's own host as a request path, which made every
-      @ref SalesforceRestClient::SalesforceRestConnection "SalesforceRestConnection"
-      synchronous ping fail deserializing the resulting HTML error page
-    - fixed @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" silently returning a
-      generic @ref RestClient::RestClient "RestClient" when called on a subclass; a client that
-      customizes authentication or headers &mdash; @ref awsrestclientintro "AwsRestClient", whose \c signRequest() applies AWS SigV4 signing &mdash; lost that
-      behaviour on the copy, and its requests went out unsigned.  The copy is now constructed from
-      the object's own class through the new
-      @ref RestClient::RestClient::copySelf() "copySelf()" hook
+    - added @ref RestClient::RestConnection::setOAuth2AuthFeature() "setOAuth2AuthFeature()", which sets the
+      feature of an OAuth2 authorization flow together with the general \c oauth2-auth feature that a UI reads to
+      offer an \c Authorize control; a \c checkAuthCodeFeature() override must call it instead of setting the
+      authorization code feature directly
+    - added @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()", which returns a copy of the client
+      for another URL; the copy is constructed from the object's own class through the new
+      @ref RestClient::RestClient::copySelf() "copySelf()" hook, so a subclass that customizes authentication or
+      headers, such as @ref awsrestclientintro "AwsRestClient", keeps that behaviour on the copy
       (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
-
-    @subsection restclientv2_6 RestClient v2.6
     - added @ref RestClient::RestClient::doRequestWithResponseLimit()
       "RestClient::doRequestWithResponseLimit()" for memory-safe bounded REST responses
-
-    @subsection restclientv2_5 RestClient v2.5
-    - added \c deserialized_body member to @ref RestResponseInfo "RestResponseInfo" hashdecl
-      to fix \c INVALID-MEMBER crashes when error responses from \c RestClientIo-based data
-      providers are accessed
-      (<a href="https://github.com/qoretechnologies/qorus/issues/69">issue 69</a>)
-
-    @subsection restclientv2_4 RestClient v2.4
     - added CBOR serialization support (\c "cbor" data option) when the \c json module
       version 1.12+ is available (RFC 8949)
     - added the official \c "application/yaml" MIME type (RFC 9512) to the accepted content types
       for inbound responses
-
-    @subsection restclientv2_3_3 RestClient v2.3.3
     - fixed non-blocking polling with connections that use basic auth
       (<a href="https://github.com/qoretechnologies/qore/issues/5001">issue 5001</a>)
 
@@ -589,6 +595,83 @@ public class RestDiagnostics {
     }
 }
 
+#! Selects the namespace of a REST request target
+public enum RestPathMode {
+    #! Append an endpoint to the API root, even if the endpoint starts with a slash
+    ApiRelative = 0,
+    #! Use a complete origin-relative request target, independent of the API root
+    OriginAbsolute = 1,
+}
+
+#! A request target whose path semantics are explicit and independent of body serialization
+/** @par Example
+    @code{.py}
+    client.restDoRequestTarget("GET",
+        <RestRequestTarget>{"mode": RestPathMode::OriginAbsolute, "path": "/health"}, NOTHING, NOTHING);
+    @endcode
+*/
+public hashdecl RestRequestTarget {
+    #! How to interpret the path
+    RestPathMode mode = RestPathMode::ApiRelative;
+    #! Endpoint or complete request target; queries and percent escapes are preserved
+    string path;
+}
+
+#! Request-local target and validator snapshot shared by the REST request engines
+/** Internal preparation state; callers use @ref RestRequestTarget instead.  Once prepared, retries reuse
+    this snapshot without joining or encoding the path again.
+*/
+public hashdecl RestRequestContext {
+    #! The effective target, encoded once by the transport adapter
+    string path;
+    #! The validator that owns this request's namespace and response
+    AbstractRestSchemaValidator validator;
+}
+
+#! Composes an API endpoint or accepts an explicit origin-absolute target
+/** Only slashes at the joining boundary are normalized; internal slashes, percent escapes, dot segments,
+    and query text are preserved.  This is API-root composition, not RFC 3986 URI-reference resolution.
+
+    @param target the requested target and its mode
+    @param root the API path prefix; an empty prefix means the origin root
+    @return the complete origin-relative request target
+    @throw REST-REQUEST-TARGET-ERROR an origin-absolute target lacks a leading slash, or a root contains a query
+        or fragment, or the target contains a fragment or a URL
+    @par Example
+    @code{.py}
+    string path = rest_request_path(<RestRequestTarget>{"path": "orders?page=2"}, "/api/");
+    # path == "/api/orders?page=2"
+    @endcode
+*/
+public string sub rest_request_path(hash<RestRequestTarget> target, *string root) {
+    string path = target.path;
+    if (path =~ /#/ || path =~ /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//) {
+        throw "REST-REQUEST-TARGET-ERROR", "a REST target must be a path and optional query, not a URL or fragment";
+    }
+    if (target.mode == RestPathMode::OriginAbsolute) {
+        if (!path.val() || path[0] != "/") {
+            throw "REST-REQUEST-TARGET-ERROR", "an origin-absolute REST target must start with '/'";
+        }
+        return path;
+    }
+    if (target.mode != RestPathMode::ApiRelative) {
+        throw "REST-REQUEST-TARGET-ERROR", "invalid REST path mode";
+    }
+    string prefix = root ?? "";
+    if (prefix =~ /[?#]/) {
+        throw "REST-REQUEST-TARGET-ERROR", "an API root cannot contain a query or fragment; put queries in the target";
+    }
+    prefix =~ s/\/+$//;
+    if (prefix.val() && prefix[0] != "/") {
+        prefix = "/" + prefix;
+    }
+    path =~ s/^\/+//;
+    if (!path.val()) {
+        return prefix.val() ? prefix : "/";
+    }
+    return (prefix.val() ? prefix : "") + (path[0] == "?" && prefix.val() ? "" : "/") + path;
+}
+
 #! Hash to use for generating authorization code requests
 /** @since RestClient 2.0
 */
@@ -728,6 +811,40 @@ public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoo
         schema validation still runs.
     */
     abstract hash<RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr);
+
+    #! Sends a request with explicit path semantics
+    /** @param method HTTP method
+        @param target API-relative endpoint or origin-absolute target
+        @param body request body
+        @param hdr additional headers
+        @return the REST response
+        @throw REST-REQUEST-TARGET-ERROR the target or API root is invalid
+        @par Example
+        @code{.py}
+        client.restDoRequestTarget("GET", <RestRequestTarget>{
+            "mode": RestPathMode::OriginAbsolute, "path": "/health"}, NOTHING, NOTHING);
+        @endcode
+        @note ApiRelative always joins the API root, even for leading slashes or matching prefixes.
+    */
+    abstract hash<RestResponseInfo> restDoRequestTarget(string method, hash<RestRequestTarget> target,
+        auto body, *hash<auto> hdr);
+
+    #! Sends an explicitly addressed request with an already serialized body
+    /** @param method HTTP method
+        @param target API-relative endpoint or origin-absolute target
+        @param body serialized body
+        @param hdr headers, including Content-Type
+        @return the REST response
+        @throw REST-REQUEST-TARGET-ERROR the target or API root is invalid
+        @par Example
+        @code{.py}
+        client.restDoRawRequestTarget("POST", <RestRequestTarget>{"path": "imports"},
+            json_body, {"Content-Type": "application/json"});
+        @endcode
+        @note Raw describes the body only; path semantics still come from the target mode.
+    */
+    abstract hash<RestResponseInfo> restDoRawRequestTarget(string method, hash<RestRequestTarget> target,
+        *data body, *hash<auto> hdr);
 
     #! Returns the target URL for this client
     abstract string getUrl();
@@ -1038,7 +1155,9 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
 
         const hash<auto> DataSerializationSupport = {
             "json": MimeTypeJson,
-            "yaml": MimeTypeYaml,
+            # the YAML media type that the servers of every release decode; Mime::MimeTypeYaml is the RFC 9512 type
+            # "application/yaml", which servers of Qore releases before 3.0 refuse
+            "yaml": "text/x-yaml",
 %ifndef NoXml
             "xml": MimeTypeXml,
             "rawxml": MimeTypeXmlApp,
@@ -1227,6 +1346,11 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
     }
 
     private {
+        #! Explicit path override for the additive target API, including an explicitly cleared root
+        transient Mutex target_path_lock();
+        bool target_root_overridden;
+        *string target_root;
+
         #! Constructor options hash, kept for @ref copyWithUrl() / @ref getConstructorOptions()
         /** Captured verbatim in the constructor so that a sibling instance can be built
             with the same config via @ref copyWithUrl(). Immutable post-construction.
@@ -1700,6 +1824,18 @@ RestClient rest({"url": "http://localhost:8001/rest"});
             "oauth2_token_url": oauth2_token_url,
             "oauth2_token_use_basic_auth": oauth2_token_use_basic_auth,
         };
+    }
+
+    #! Sets the connection path and records explicit clearing for the target API
+    /** @param path API root, or NOTHING to clear it
+        @note Released string methods retain HTTPClient's default-path fallback. Explicit target methods
+            distinguish a cleared root from an absent override, including after reconnection.
+    */
+    setConnectionPath(*string path) {
+        AutoLock al(target_path_lock);
+        HTTPClient::setConnectionPath(path);
+        target_root_overridden = True;
+        target_root = path;
     }
 
     #! Clears the connection path when a validator is present that manages the URI path
@@ -2327,6 +2463,79 @@ hash<auto> ans = rest.del("/orders/1");
             "body": rv.body,
             "content_type": rv."content-type",
         };
+    }
+
+    #! Sends a request with an explicit target; see AbstractRestClient::restDoRequestTarget()
+    /** @copydoc AbstractRestClient::restDoRequestTarget() */
+    hash<RestResponseInfo> restDoRequestTarget(string method, hash<RestRequestTarget> target,
+            auto body, *hash<auto> hdr) {
+        hash<auto> info;
+        checkLogin(\info);
+        string path = getRequestTargetPath(target);
+        prepareResolvedMsg(method, path, \body, \hdr);
+        return makeRestResponse(sendAndDecodeResponse(body, method, path, hdr, \info, True));
+    }
+
+    #! Sends a serialized body with an explicit target; see AbstractRestClient::restDoRawRequestTarget()
+    /** @copydoc AbstractRestClient::restDoRawRequestTarget() */
+    hash<RestResponseInfo> restDoRawRequestTarget(string method, hash<RestRequestTarget> target,
+            *data body, *hash<auto> hdr) {
+        return restDoRawRequest(method, getRequestTargetPath(target), body, hdr);
+    }
+
+    #! Resolves a target using the current API or schema root without changing client configuration
+    /** @param target the endpoint and its path mode
+        @return the complete request target, before HTTPClient encoding
+        @throw REST-REQUEST-TARGET-ERROR the target or API root is invalid
+        @see RestRequestTarget for examples
+    */
+    string getRequestTargetPath(hash<RestRequestTarget> target) {
+        *string root;
+        {
+            AutoLock al(target_path_lock);
+            root = target_root_overridden ? target_root : getConnectionPath();
+        }
+        return rest_request_path(target, validator.managesUriPath() ? validator.getBasePath() : root);
+    }
+
+    #! Resolves a string path with the released synchronous client's rules
+    /** Used by synchronous streaming adapters, including subclass preparePath() overrides.
+        @param path the legacy endpoint argument
+        @return the complete request target before transport encoding
+        @see getRequestTargetPath() for explicit path modes
+    */
+    string getLegacyRequestPath(string path) {
+        preparePath(\path);
+        return path;
+    }
+
+    #! Starts a caller-driven request with an explicit target
+    /** @param method HTTP method
+        @param target API-relative endpoint or origin-absolute target
+        @param body request body
+        @param hdr additional headers
+        @param raw True for an already serialized body
+        @return a poll operation, prepared and signed for the resolved target
+        @throw REST-REQUEST-TARGET-ERROR the target or API root is invalid
+        @see RestRequestTarget for examples
+    */
+    RestRequestPollOperation startPollRequestTarget(string method, hash<RestRequestTarget> target,
+            auto body, *hash<auto> hdr, bool raw = False) {
+        hash<auto> info = {};
+        checkLogin(\info);
+        string path = getRequestTargetPath(target);
+        if (raw) {
+            hdr = {} + headers + hdr;
+        } else {
+            prepareResolvedMsg(method, path, \body, \hdr);
+        }
+        if (exists body) {
+            info += {"request-body": body, "request-serialization": ds};
+        }
+        *auto negotiate_context;
+        addPollPreemptiveNegotiateHeader(\hdr, \negotiate_context);
+        prepareAsyncSend(method, path, body, \hdr);
+        return new RestRequestPollOperation(self, method, path, body, hdr, True, info, negotiate_context);
     }
 
     #! Returns the target URL for this client (lowercase name for @ref AbstractRestClient parity)
@@ -2974,6 +3183,23 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         prepareMsg(method, path, \body, \hdr);
         preparePath(\path);
         signRequest(method, path, body, \hdr);
+    }
+
+    #! Prepares and signs an explicitly addressed request without sending it
+    /** @param method HTTP method
+        @param target the endpoint and path mode
+        @param body body to serialize, updated in place
+        @param hdr additional headers, updated in place
+        @return the effective request target
+        @throw REST-REQUEST-TARGET-ERROR the target or API root is invalid
+        @see RestRequestTarget for examples
+    */
+    string prepareToSendTarget(string method, hash<RestRequestTarget> target, reference<auto> body,
+            reference<hash<auto>> hdr) {
+        string path = getRequestTargetPath(target);
+        prepareResolvedMsg(method, path, \body, \hdr);
+        signRequest(method, path, body, \hdr);
+        return path;
     }
 
     #! The same as doRequest() except no schema validation is performed on the request
@@ -3660,9 +3886,6 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     #! sets up the Content-Type header and encodes any body for sending
     private nothing prepareMsg(string method, string path, reference<auto> body, reference<hash<auto>> hdr,
             string ct = "Content-Type") {
-        # use {} + ... here to ensure that hdr stays "hash<auto>"
-        hdr = {} + headers + hdr;
-
         # we need to prepend any connection path to the path before validation to ensure correct matches
         # must get the path from the HTTPClient object if not given in the request
         if (!validator.managesUriPath() && (*string p = getConnectionPath()).val()) {
@@ -3675,6 +3898,13 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             path = p + path;
         }
 
+        prepareResolvedMsg(method, path, \body, \hdr, ct);
+    }
+
+    #! Serializes a body against the effective target, without composing a path again
+    private nothing prepareResolvedMsg(string method, string path, reference<auto> body,
+            reference<hash<auto>> hdr, string ct = "Content-Type") {
+        hdr = {} + headers + hdr;
         body = preprocessRequestBody(body);
         hash<RestRequestClientInfo> req = validator.processRequest(method, path, body, hdr, sct);
         if (exists body) {
@@ -5817,8 +6047,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         # An absolute ping_path (starting with "/") must NOT inherit the connection's URL path
         # component, otherwise an `api: v1` style connection turns ping_path `/get_server_info`
         # into `/v1/get_server_info` and the ping reliably 404s against backends that expose
-        # health endpoints outside the API namespace (e.g. SGLang at `/get_server_info`).  Both
-        # RestClient (sync) and RestClientIo (async) expose `clearConnectionPath()`.
+        # health endpoints outside the API namespace (e.g. SGLang at `/get_server_info`).
+        # The per-request target selects that namespace without mutating the connection path.
         #
         # ... unless the URL path is not a namespace but the address of the thing connected to -
         # Atlassian addresses a Confluence site as /ex/confluence/<cloud_id> - in which case
@@ -5828,16 +6058,21 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         # NOTE: the parent is held for the life of the ping; the async copy shares the parent's
         # connection manager
         AbstractRestClient parent = client;
-        if (ping_path =~ /^http/) {
-            client = parent.copyWithUrl(ping_path);
-            ping_path = "";
+        hash<RestRequestTarget> target = <RestRequestTarget>{"path": ping_path};
+        if (ping_path =~ /^https?:\/\//) {
+            hash<UrlInfo> ui = parse_url(ping_path);
+            string origin = sprintf("%s://%s", ui.protocol, ui.host);
+            if (ui.port) {
+                origin += ":" + ui.port;
+            }
+            client = parent.copyWithUrl(origin);
+            target = <RestRequestTarget>{"mode": RestPathMode::OriginAbsolute,
+                "path": get_http_request_target(ping_path)};
         } else if (ping_path[0] == "/" && !pingInheritsConnectionPath()) {
-            client.clearConnectionPath();
+            target.mode = RestPathMode::OriginAbsolute;
         }
 
-        # Use restDoRequest (AbstractRestClient API) — works with both
-        # RestClient and RestClientIo
-        hash<RestResponseInfo> h = client.restDoRequest(opts.ping_method, ping_path, ping_body,
+        hash<RestResponseInfo> h = client.restDoRequestTarget(opts.ping_method, target, ping_body,
             opts.ping_headers);
         if ((h.status_code / 100) != 2) {
             authFailure();
@@ -5980,8 +6215,11 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
         #! token refresh flag
         bool in_refresh;
 
-        #! Use path directly / ping path already prepared
-        bool use_path_as_is;
+        #! Explicit target retained across authentication retries
+        *hash<RestRequestTarget> ping_target;
+
+        #! Restore this URL after token requests temporarily select the authentication endpoint
+        string ping_url;
     }
 
     #! Creates the poller with the REST client and option hash
@@ -5995,17 +6233,17 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
         self.real_opts = real_opts;
         method = real_opts.ping_method ?? "GET";
         path = real_opts.ping_path ?? "/";
+        ping_url = path =~ /^https?:\/\// ? path : conn.real_url;
         body = method != "GET" ? real_opts.ping_body : NOTHING;
         headers += real_opts.ping_headers;
 
         rc.postponeUpdateOptions(rc.getLogger());
 
-        if (real_opts.ping_path[0] == "/") {
-            # use the path directly if it's an absolute path
-            use_path_as_is = True;
-            if (!conn.pingInheritsConnectionPath()) {
-                rc.clearConnectionPath();
-            }
+        if (path =~ /^https?:\/\//) {
+            ping_target = <RestRequestTarget>{"mode": RestPathMode::OriginAbsolute,
+                "path": get_http_request_target(path)};
+        } else if (path[0] == "/" && !conn.pingInheritsConnectionPath()) {
+            ping_target = <RestRequestTarget>{"mode": RestPathMode::OriginAbsolute, "path": path};
         }
 
         if (real_opts.openapi3 && !rc.getValidator().managesUriPath()) {
@@ -6257,41 +6495,27 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
     }
 
     private doStartPing() {
-        # if the path has already been prepared, use it directly
-        if (use_path_as_is) {
-            checkUrl();
-            string p = path;
-            rc.prepareToSend(method, \p, \body, \headers);
-            rc.debug("Connection %y using ping path: %y", conn.name, path);
-        } else {
-            use_path_as_is = True;
-            # check if the path is a URL
-            if (path =~ /^http/) {
-                rc.setURL(path);
-                rc.debug("Setting ping URL: %y", path);
-                path = "";
-            } else {
-                checkUrl();
-                rc.debug("Connection %y using ping path: %y", conn.name, path);
-            }
-            rc.prepareToSend(method, \path, \body, \headers);
-            rc.debug("Prepared ping path: %y", path);
+        checkUrl();
+        if (!ping_target) {
+            ping_target = <RestRequestTarget>{"mode": RestPathMode::OriginAbsolute,
+                "path": rc.getRequestTargetPath(<RestRequestTarget>{"path": path})};
         }
+        auto request_body = body;
+        path = rc.prepareToSendTarget(method, ping_target, \request_body, \headers);
 
         string http_version = real_opts.http_version ?? "auto";
         rc.debug("RestConnecton ping: start ping: %s %y path: %y http_version: %y hdr: %y", method, rc.getSafeURL(),
             path, http_version, rc.getSafeHeaders(headers));
         state = SPS_REST_PING;
-        poller = rc.startPollSendRecv(method, path, body, headers);
+        poller = rc.startPollSendRecv(method, path, request_body, headers);
     }
 
     private checkUrl() {
         if (*string url = rc.getURL()) {
-            int len = min(url.length(), conn.real_url.length()) - 1;
-            if (url[0..len] != conn.real_url[0..len]) {
+            if (url != ping_url) {
                 *string username = rc.getUsername();
                 *string password = rc.getPassword();
-                rc.setURL(conn.real_url);
+                rc.setURL(ping_url);
                 if (username.val()) {
                     rc.setUserPassword(username, password);
                 }

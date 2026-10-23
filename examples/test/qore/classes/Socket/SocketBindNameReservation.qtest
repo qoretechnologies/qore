@@ -35,6 +35,11 @@
 %exec-class SocketBindNameReservationTest
 
 class SocketBindNameReservationTest inherits QUnit::Test {
+    public {
+        #! the number of ports that the given-port test tries; only a port range almost all in use exhausts them
+        const MaxPortAttempts = 1024;
+    }
+
     constructor() : Test("SocketBindNameReservationTest", "1.0") {
         addTestCase("the port is held in the other address family", \reservationTest());
         addTestCase("a client of the name reaches the socket", \connectByNameTest());
@@ -84,12 +89,17 @@ class SocketBindNameReservationTest inherits QUnit::Test {
         (string addr, int family) = SocketBindNameReservationTest::otherLoopback(info.family);
         Socket other();
         on_exit other.close();
-        # SO_REUSEADDR does not allow binding a port that the reservation holds
         if (bindable) {
             other.bindINET(addr, info.port, True, family);
             assertEq(info.port, other.getSocketInfo(False).port, msg);
-        } else {
-            assertThrows("SOCKET-BIND-ERROR", \other.bindINET(), (addr, info.port, True, family), msg);
+            return;
+        }
+        # a bind of a port that the reservation holds is refused; with SO_REUSEADDR also on Linux, while macOS allows
+        # it for a program of the same user on a port that only a connection holds, as the reservation does there
+        assertThrows("SOCKET-BIND-ERROR", \other.bindINET(), (addr, info.port, False, family), msg);
+        if (PlatformOS != "Darwin") {
+            assertThrows("SOCKET-BIND-ERROR", \other.bindINET(), (addr, info.port, True, family),
+                msg + " (SO_REUSEADDR)");
         }
     }
 
@@ -100,10 +110,18 @@ class SocketBindNameReservationTest inherits QUnit::Test {
         hash<auto> info = listenLocalhost(s);
         assertOtherBindable(info, False, "the port is held in the other address family");
 
-        # a connection to the other loopback address is refused, as no socket listens there
+        # a connection to the other loopback address is refused at once, as no socket listens there; it must not time
+        # out, as a client of the name that tries that address first would wait for it
         (string addr, int family) = SocketBindNameReservationTest::otherLoopback(info.family);
         Socket c();
-        assertThrows("SOCKET-CONNECT-ERROR", \c.connectINET(), (addr, info.port, 10s, family));
+        *hash<ExceptionInfo> err;
+        try {
+            c.connectINET(addr, info.port, 10s, family);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertEq("SOCKET-CONNECT-ERROR", err.err, "the connection fails");
+        assertRegex(strerror(ECONNREFUSED), err.desc ?? "", "the connection is refused");
     }
 
     connectByNameTest() {
@@ -151,15 +169,50 @@ class SocketBindNameReservationTest inherits QUnit::Test {
         (string addr, int family) = SocketBindNameReservationTest::otherLoopback(info.family);
 
         # another socket holds a port in the other address family; a bind to the name with that port as before
-        # binds the name's first address that can be bound
-        Socket holder();
-        on_exit holder.close();
-        holder.bindINET(addr, 0, False, family);
-        holder.listen();
-        int port = holder.getSocketInfo(False).port;
+        # binds the name's first address that can be bound.  The system assigns the holder's port in the other address
+        # family, and concurrent programs can use the port in the name's: macOS assigns a port of one family without
+        # checking the other.  The port of the name's first address is therefore bound too, by a listener that a
+        # connection to it then replaces: no socket listens on the port, the system assigns it to no concurrent
+        # program, and the bind of the name, which reuses the address, can take it.  The listener reuses the address
+        # too: Linux lets a socket bind an address and port that a connection holds only if both sockets reuse the
+        # address, and the accepted connection has the listener's setting (macOS lets a program bind a port that only
+        # a connection of the same user holds).  A port in use at the name's first address is replaced by the next one
+        # that the system assigns in the other family
+        string first_addr = info.family == AF_INET6 ? "::1" : "127.0.0.1";
+        *Socket holder;
+        *Socket held_client;
+        *Socket held_peer;
+        on_exit {
+            map $1.close(), (holder, held_client, held_peer), $1;
+        }
+        int port;
+        for (int attempt = 0; attempt < MaxPortAttempts && !port; ++attempt) {
+            Socket other();
+            other.bindINET(addr, 0, False, family);
+            other.listen();
+            int candidate = other.getSocketInfo(False).port;
+            Socket listener();
+            try {
+                listener.bindINET(first_addr, candidate, True, info.family);
+                listener.listen();
+            } catch (hash<ExceptionInfo> ex) {
+                # the port is in use at the name's first address; the next one is tried
+                other.close();
+                continue;
+            }
+            Socket client();
+            client.connect(sprintf("%s:%d", info.family == AF_INET6 ? "[::1]" : first_addr, candidate), 5s);
+            held_peer = listener.accept(5s);
+            listener.close();
+            held_client = client;
+            holder = other;
+            port = candidate;
+        }
+        assertGt(0, port, "a port free at the name's first address is held in the other address family");
         Socket s();
         on_exit s.close();
-        s.bind("localhost:" + port, True);
+        assertEq(0, s.bind("localhost:" + port, True), sprintf("the name is bound with the given port: %s",
+            strerror(errno())));
         s.listen();
         assertEq(port, s.getSocketInfo(False).port, "the given port was bound");
         assertEq(info.family, s.getSocketInfo(False).family, "the name's first address was bound");

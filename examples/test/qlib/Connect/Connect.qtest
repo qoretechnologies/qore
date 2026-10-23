@@ -39,9 +39,7 @@ class ConnectTest inherits QUnit::Test {
         addTestCase("negative: malformed frame", \testMalformedFrame());
         addTestCase("end-stream serialization", \testEndStream());
         addTestCase("json codec tests", \testJsonCodec());
-%ifndef NoCbor
         addTestCase("cbor codec tests", \testCborCodec());
-%endif
         addTestCase("compression utilities", \testCompression());
         addTestCase("compressed framing", \testCompressedFraming());
         addTestCase("grpc wire compatibility", \testGrpcWireCompatibility());
@@ -206,7 +204,6 @@ class ConnectTest inherits QUnit::Test {
         assertNothing(deser, "json null");
     }
 
-%ifndef NoCbor
     testCborCodec() {
         Connect::CborConnectCodec codec();
 
@@ -268,7 +265,6 @@ class ConnectTest inherits QUnit::Test {
         assertEq(False, deser.outer.flag, "cbor nested: bool");
         assertEq(2, deser.items[1].b, "cbor nested: list of hashes");
     }
-%endif
 
     # ---- Framing tests ----
 

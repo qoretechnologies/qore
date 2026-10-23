@@ -1,0 +1,51 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ExceptionHandoffTest
+
+#! Tests exceptions handed between sinks that Qore manages and sinks managed outside of Qore
+/** A module keeps exceptions beyond the call that raised them, or hands them to another thread, in a sink marked with
+    ExceptionSink::markExternallyManaged(), whose exceptions are not counted as active on any thread.  The counts
+    move with the exceptions when they are assimilated.  Previously an exception assimilated from such a sink into a
+    sink that Qore manages was not counted there, so the next assimilation of that sink (ex: across a destructor's
+    sink) failed an assertion in debug builds, and an exception assimilated into such a sink while still counted
+    stayed counted on the thread that raised it, which then ended with an active exception.
+*/
+class ExceptionHandoffTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ExceptionHandoffTest", "1.0", \ARGV) {
+        addTestCase("an exception kept outside of Qore is rethrown", \testRethrow());
+        addTestCase("an exception kept outside of Qore is counted where it is adopted", \testCounts());
+        set_return_value(main());
+    }
+
+    testRethrow() {
+        foreach bool other_thread in ((False, True)) {
+            foreach bool mark_first in ((True, False)) {
+                string label = sprintf("other thread: %y, marked first: %y", other_thread, mark_first);
+                assertThrows("HANDOFF-TEST", "kept outside", \cpp_api_exception_handoff(),
+                    ("HANDOFF-TEST", "kept outside", other_thread, mark_first, True), label);
+                assertFalse(cpp_api_active_exception(), label + ": no active exception after it was handled");
+            }
+        }
+    }
+
+    testCounts() {
+        foreach bool other_thread in ((False, True)) {
+            foreach bool mark_first in ((True, False)) {
+                string label = sprintf("other thread: %y, marked first: %y", other_thread, mark_first);
+                assertEq({"kept": False, "adopted": True, "handled": False},
+                    cpp_api_exception_handoff("HANDOFF-TEST", "kept outside", other_thread, mark_first, False), label);
+            }
+        }
+    }
+}

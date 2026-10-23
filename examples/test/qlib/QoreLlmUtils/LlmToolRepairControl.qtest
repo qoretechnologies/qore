@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# MIT License
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QoreLlmUtils
+%requires QUnit
+%exec-class ToolRepairControlTest
+
+class ToolRepairControlTest inherits QUnit::Test {
+    constructor() : Test("ToolRepairControlTest", "1.0", \ARGV) {
+        addTestCase("a caller can disable tool repairs in synchronous and streaming requests", \disabled());
+        addTestCase("ordinary requests retain automatic tool repair", \defaults());
+        addTestCase("invalid repair controls are refused before provider egress", \invalid());
+        set_return_value(main());
+    }
+    private hash<auto> response(int call, string finish) {
+        return {"model": "repair-control-fixture", "choices": ({"index": 0,
+            "message": {"role": "assistant", "content": call == 1 ? "" : "{\"value\":1}"},
+            "finish_reason": call == 1 ? finish : "stop"},),
+            "usage": {"prompt_tokens": 3, "completion_tokens": call == 1 ? 0 : 2,
+                "total_tokens": call == 1 ? 3 : 5}};
+    }
+    private hash<auto> run(bool stream, string finish, *bool repair) {
+        int calls = 0;
+        list<hash<auto>> dispatched = ();
+        LlmBackend backend(<LlmBackendConfig>{"mode": "callback", "model": "repair-control-fixture",
+            "api_callback": hash<auto> sub (string method, string path, hash<auto> body) {
+                dispatched += body;
+                return response(++calls, finish);
+            },
+            "api_stream_callback": sub (string method, string path, hash<auto> body,
+                    code<nothing(hash<auto>)> cb) {
+                dispatched += body;
+                hash<auto> reply = response(++calls, finish);
+                cb({"model": reply.model, "choices": ({"index": 0, "delta":
+                    {"role": "assistant", "content": reply.choices[0].message.content},
+                    "finish_reason": reply.choices[0].finish_reason},), "usage": reply.usage});
+            }});
+        hash<auto!> request = {"model": "repair-control-fixture", "max_retries": 0,
+            "messages": ({"role": "user", "content": "Record the value."},), "max_output_tokens": 128,
+            "tools": ({"type": "function", "function": {"name": "record", "description": "Record a value",
+                "parameters": {"type": "object", "properties": {"value": {"type": "integer"}},
+                    "required": ("value",)}}},), "tool_choice": "required"};
+        if (exists repair) { request.tool_repair_enabled = repair; }
+        hash<auto> reply = stream
+            ? backend.chatCompletionsStream(request, sub (hash<auto> chunk) { })
+            : backend.chatCompletions(request);
+        foreach hash<auto> sent in (dispatched) {
+            assertFalse(exists sent.tool_repair_enabled, "the facade control is not a provider wire parameter");
+        }
+        return {"calls": calls, "reply": reply};
+    }
+    private disabled() {
+        foreach bool stream in ((False, True)) {
+            foreach string finish in (("stop", "MALFORMED_FUNCTION_CALL")) {
+                hash<auto> result = run(stream, finish, False);
+                assertEq(1, result.calls, sprintf("stream=%y finish=%s: a single budgeted request", stream, finish));
+                assertEq(finish, result.reply.choices[0].finish_reason);
+                assertFalse((result.reply.choices[0].message.tool_calls ?? False).toBool());
+                assertEq(3, result.reply.usage.total_tokens, "the original billed usage is preserved");
+            }
+        }
+    }
+    private defaults() {
+        foreach bool stream in ((False, True)) {
+            foreach auto repair in ((NOTHING, True)) {
+                foreach string finish in (("stop", "MALFORMED_FUNCTION_CALL")) {
+                    hash<auto> result = run(stream, finish, repair);
+                    assertEq(2, result.calls);
+                    assertEq("record", result.reply.choices[0].message.tool_calls[0].function.name);
+                }
+            }
+        }
+    }
+    private invalid() {
+        assertTrue(inlist("tool_repair_enabled", LlmBackend::SupportedFacadeControls));
+        int calls = 0;
+        LlmBackend backend(<LlmBackendConfig>{"mode": "callback", "model": "repair-control-fixture",
+            "api_callback": hash<auto> sub (string method, string path, hash<auto> body) { ++calls; return {}; }});
+        foreach auto flag in ((0, "false", NULL, (False,), {})) {
+            foreach bool stream in ((False, True)) {
+                assertThrows("LLM-REQUEST-ERROR", nothing sub () {
+                    hash<auto> request = {"messages": (), "tool_repair_enabled": flag};
+                    if (stream) { backend.chatCompletionsStream(request, sub (hash<auto> chunk) { }); }
+                    else { backend.chatCompletions(request); }
+                });
+            }
+        }
+        assertEq(0, calls);
+    }
+
+}

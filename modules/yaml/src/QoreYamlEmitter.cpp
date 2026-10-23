@@ -67,11 +67,15 @@ QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler& wh, int flags, int width,
     }
 }
 
-int QoreYamlEmitter::emit(const QoreValue& v) {
+int QoreYamlEmitter::emit(const QoreValue& val) {
     // emitting recurses with the nesting of the value, which is unbounded
     if (q_check_stack(xsink)) {
         return -1;
     }
+    // A container can hold a weak (":=") or opaque ("@=") reference, and iterating the container yields the
+    // reference itself rather than its target, so it is resolved before the value's type is checked; otherwise a
+    // serializable hash or list reaches the default case below and is reported as a type that cannot be converted
+    const QoreValue v = val.resolveIndirect();
     switch (v.getType()) {
         case NT_STRING: {
             QoreStringNodeValueHelper str(v);

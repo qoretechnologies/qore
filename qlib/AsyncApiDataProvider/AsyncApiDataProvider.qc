@@ -214,6 +214,9 @@ public class AsyncApiDataProvider inherits AsyncApiDataProviderCommon {
         - \c channel_name: the name of the channel the operation acts on
         - \c channel_address: the channel's address, defaulting to the channel name
         - \c desc: a markdown description of the operation
+        - \c display_name: a label for the endpoint: its action and channel address (such as \c "send rma"), with
+          the operation ID in parentheses if another endpoint has the same label, or the operation ID if the
+          operation has no action or channel address
     */
     list<hash<auto>> getApiManagementEndpoints() {
         list<hash<auto>> rv = ();

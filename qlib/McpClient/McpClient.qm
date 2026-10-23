@@ -191,7 +191,6 @@ module McpClient {
     @section McpClient_relnotes McpClient Release Notes
 
     @subsection McpClient_1_0 McpClient v1.0
-    - log messages give the URL without its password
     - initial release
 */
 

@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/FsUtil.qm
+%requires ../ExecModeHarness.qm
+%exec-class AOTObjectDefaultBindingTest
+
+class AOTObjectDefaultBindingTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        #! bounds each command so that a hang fails the test instead of stalling the run
+        string timeout_prefix = timeoutPrefix(90);
+    }
+    constructor() : Test("AOT constructor defaults preserve parse-time bindings", "1.0", \ARGV) {
+        addTestCase("Escaped init callbacks construct defaults in all source modes", \source());
+        addTestCase("Compiled defaults retain overloads and builtin constructors", \compiled());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+    #! A command prefix that kills what follows after \a seconds, or an empty string when there is none
+    /** GNU coreutils \c timeout is not part of macOS; MacPorts and Homebrew install it as \c gtimeout.  Perl's
+        \c alarm is the last resort.  \c QORE_TIMEOUT_EXECUTABLE overrides the search.
+    */
+    private static string timeoutPrefix(int seconds) {
+        string cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? trim(backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true"));
+        if (cmd) {
+            return sprintf("%s %d ", quote(cmd), seconds);
+        }
+        string perl = trim(backquote("command -v perl 2>/dev/null || true"));
+        if (perl) {
+            return sprintf("%s -e 'alarm shift; exec @ARGV' %d ", quote(perl), seconds);
+        }
+        return "";
+    }
+    private static write(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        string command = timeout_prefix + "env LD_LIBRARY_PATH=" + quote(lib_dir)
+            + " DYLD_LIBRARY_PATH=" + quote(lib_dir)
+            + " QORE_LIBDIR=" + quote(lib_dir) + " " + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        assertFalse(r.out.regex("(?i)warning[: ]"), r.out);
+        return r.out;
+    }
+    private static fixture(string dir, string suffix) {
+        write(dir + "/ObjectDefaultBindingFixture.qm", Module);
+        write(dir + "/run.qr", "%requires ./ObjectDefaultBindingFixture." + suffix + "\n" + Driver);
+    }
+    private source() {
+        TmpDir dir("qore-object-default-source-");
+        fixture(dir.path, "qm");
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            assertEq(Expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode,
+                dir.path + "/run.qr")));
+        }
+    }
+    private compiled() {
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-object-default-aot-");
+            fixture(dir.path, "qmod");
+            run((qcc_bin, level, "--strip-source", "-m", dir.path + "/ObjectDefaultBindingFixture.qm",
+                "-o", dir.path + "/ObjectDefaultBindingFixture.qmod"));
+            run((qcc_bin, "--dump-info", "--dump-sections", dir.path + "/ObjectDefaultBindingFixture.qmod"));
+            assertEq(Expected, run((qore_bin, "-b", dir.path + "/run.qr")));
+            assertEq(Expected, run((qore_bin, "-b", "--enable-debug", dir.path + "/run.qr")));
+        }
+    }
+    private {
+        const string Expected = "7:9:5:True:True:True\n7:9:5:True:True:True\n";
+        const string Module = '%modern
+module ObjectDefaultBindingFixture {
+    version = "1.0";
+    desc = "Constructor default binding regression fixture";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        Factory::Callback = object sub () { return new Derived(); };
+    };
+}
+public class Factory {
+    public { static *code<object()> Callback; }
+    static object make() { return call_function_args(Callback, ()); }
+}
+public class Base {
+    public {
+        Thread::Mutex mutex();
+        Choice choice(7);
+        hash<Defaults> defaults();
+    }
+}
+public class Derived inherits Base {
+    public {
+        Choice second(9);
+        static Thread::Mutex shared();
+    }
+}
+public hashdecl Defaults {
+    Choice choice(5);
+    Thread::Mutex mutex();
+}
+# The constructor is declared after the defaults that use it.
+public class Choice {
+    public { int value; }
+    constructor(int n) { value = n; }
+    constructor(string n) { value = -1; }
+}
+';
+        const string Driver = '%modern
+for (int i = 0; i < 2; ++i) {
+    Derived product = cast<Derived>(Factory::make());
+    printf("%d:%d:%d:%y:%y:%y\n", product.choice.value, product.second.value, product.defaults.choice.value,
+        product.mutex instanceof Thread::Mutex, Derived::shared instanceof Thread::Mutex,
+        product.defaults.mutex instanceof Thread::Mutex);
+}
+';
+    }
+}

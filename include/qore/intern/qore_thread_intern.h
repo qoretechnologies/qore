@@ -325,7 +325,7 @@ DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_manager_ref();
     inherit a sandboxed caller's filesystem/network policy.  The current Program's own manager
     still wins, so a callback re-entering sandboxed code remains sandboxed.
 
-    @since Qore 2.2
+    @since Qore 3.0
 */
 DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_policy_manager_ref();
 

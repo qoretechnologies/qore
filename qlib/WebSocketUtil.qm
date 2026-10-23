@@ -66,9 +66,6 @@ module WebSocketUtil {
     @section websocketutil_relnotes WebSocketUtil Module Release History
 
     @subsection wsu_v16 v1.6
-    - fixed @ref WebSocketUtil::PerMessageDeflateExtension::transformIncoming()
-      "PerMessageDeflateExtension::transformIncoming()" to return string (not binary) for text frames after
-      decompression, preserving the correct message type for \c gotMessage() dispatch
     - added pluggable WebSocket extension framework
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - added @ref WsExtensionParamInfo hashdecl for extension parameters
@@ -77,8 +74,6 @@ module WebSocketUtil {
       - added @ref WebSocketUtil::WebSocketExtensionRegistry "WebSocketExtensionRegistry" factory class
       - added @ref WebSocketUtil::PerMessageDeflateExtension "PerMessageDeflateExtension" implementing
         <a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>
-
-    @subsection wsu_v15 v1.5
     - added RSV bit support for WebSocket extensions
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - added @ref WS_RSV1, @ref WS_RSV2, @ref WS_RSV3 constants
@@ -494,7 +489,7 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         enough data to determine the frame size (need at least 2 bytes for header, plus extended length bytes
         if applicable)
 
-        @since WebSocketUtil 1.7
+        @since WebSocketUtil 1.6
     */
     public *int sub ws_get_frame_size(binary buf) {
         int len = buf.size();

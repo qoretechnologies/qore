@@ -83,7 +83,7 @@ if (!r.allowed) {
 }
     @endcode
 
-    @since QoreLlmUtils 1.1
+    @since QoreLlmUtils 1.0.0
 */
 public class LlmRequestClassifier {
     private {

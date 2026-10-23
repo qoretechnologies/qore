@@ -1783,6 +1783,36 @@ using PendingFunctionDefault = QoreAOTBinaryDeserializer::PendingFunctionDefault
 static thread_local std::vector<PendingFunctionDefault>*
     g_aot_pending_function_defaults = nullptr;
 
+//! Read the optional exact constructor signature (including a valid empty signature).
+static bool readAOTObjectDefaultVariant(const QoreAOTBinaryReader& reader,
+        const uint8_t*& ptr, const uint8_t* end, const char*& signature, std::string& error) {
+    signature = nullptr;
+    if (reader.getHeader().version < QORE_AOT_OBJECT_DEFAULT_VARIANT_VERSION) {
+        return true;
+    }
+    if (ptr >= end || *ptr > 1) {
+        error = "invalid new_object variant flag";
+        return false;
+    }
+    if (!QoreAOTBinaryReader::readU8(ptr)) {
+        return true;
+    }
+    if (ptr > end || static_cast<size_t>(end - ptr) < 4) {
+        error = "truncated new_object variant signature";
+        return false;
+    }
+    signature = reader.readStringRef(ptr);
+    if (!signature || !std::memchr(signature, 0, reader.getStringPoolSize()
+            - static_cast<size_t>(signature - reinterpret_cast<const char*>(reader.getStringPoolData())))) {
+        error = "invalid new_object variant signature";
+        return false;
+    }
+    return true;
+}
+
+static QoreValue qoreAOTMakeObjectDefaultNode(QoreProgram* pgm, const QoreClass* qc,
+    const std::string& class_path, std::vector<QoreValue>& args, const char* signature = nullptr);
+
 // Read an instance-member / static-member default value.
 //
 // If the value is a VT_NEW_OBJECT whose target class is not yet registered in
@@ -1978,6 +2008,10 @@ static bool readDeferredMemberDefault(
         error = "invalid string offset for new_object class path";
         return false;
     }
+    const char* signature = nullptr;
+    if (!readAOTObjectDefaultVariant(reader, ptr, end, signature, error)) {
+        return false;
+    }
     if (ptr + 4 > end) {
         error = "unexpected end of data reading new_object arg count";
         return false;
@@ -2001,24 +2035,14 @@ static bool readDeferredMemberDefault(
     // AOT class-ref resolver for committed program/module classes.
     const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(getProgram(), class_path);
     if (qc) {
-        // Resolvable now: construct ScopedObjectCallNode immediately.
-        QoreParseListNode* parse_args = nullptr;
-        if (nargs > 0) {
-            parse_args = new QoreParseListNode(&loc_builtin);
-            for (auto& v : args) {
-                parse_args->add(v, &loc_builtin);
-            }
-            args.clear();
-        }
-        ScopedObjectCallNode* socn = new ScopedObjectCallNode(
-            &loc_builtin, qc, parse_args);
-        if (parse_args) {
-            socn->resolveParseArgs();
-        }
-        default_val = QoreValue(socn);
+        default_val = qoreAOTMakeObjectDefaultNode(getProgram(), qc, class_path, args, signature);
     } else {
         // Defer: store class path + args; second pass resolves.
         pim.pending_new_class_path = class_path;
+        pim.pending_new_has_variant = signature != nullptr;
+        if (signature) {
+            pim.pending_new_variant = signature;
+        }
         pim.pending_new_args = std::move(args);
         default_val = QoreValue();
     }
@@ -2297,6 +2321,10 @@ static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
 
         case QoreAOTValueTag::VT_NEW_OBJECT: {
             if (!skip_fixed(8, "new_object class path")) {
+                return false;
+            }
+            const char* signature = nullptr;
+            if (!readAOTObjectDefaultVariant(reader, ptr, end, signature, error)) {
                 return false;
             }
             uint32_t nargs = 0;
@@ -3750,21 +3778,90 @@ static QoreParseListNode* qoreAOTTakeParseArgs(std::vector<QoreValue>& args) {
     return parse_args;
 }
 
-static QoreValue qoreAOTMakeObjectDefaultNode(QoreProgram* pgm, const QoreClass* qc,
-        const std::string& class_path, std::vector<QoreValue>& args) {
-    QoreParseListNode* parse_args = qoreAOTTakeParseArgs(args);
-    ScopedObjectCallNode* socn = nullptr;
-    if (qc) {
-        socn = new ScopedObjectCallNode(&loc_builtin, qc, parse_args, qc->getTypeInfo());
-    } else {
-        const QoreTypeInfo* object_type_info = qore_get_aot_deferred_type_info(
-            &loc_builtin, class_path.c_str(), false, false);
-        socn = new ScopedObjectCallNode(&loc_builtin, class_path.c_str(), parse_args, object_type_info, pgm);
+static const AbstractQoreFunctionVariant* findAOTObjectDefaultVariant(const QoreClass& qc,
+        const char* signature) {
+    const QoreMethod* ctor = qc.getConstructor();
+    return ctor ? qore_method_private::get(*ctor)->getFunction()->findVariantBySignatureText(signature) : nullptr;
+}
+
+//! An already validated constructor default whose method is still awaiting AOT registration.
+/** The signature is immutable. Resolve it without caching if the constructor was not available
+    at load time; never silently replace the parser's binding with runtime overload selection.
+*/
+class AOTBoundObjectDefaultNode : public ScopedObjectCallNode {
+public:
+    DLLLOCAL AOTBoundObjectDefaultNode(QoreProgram* pgm, const QoreClass* qc,
+            const std::string& class_path, QoreParseListNode* args, const char* signature,
+            const QoreTypeInfo* object_type_info)
+            : ScopedObjectCallNode(&loc_builtin, class_path.c_str(), args, object_type_info, pgm),
+                signature(signature) {
+        oc = qc;
     }
+
+    DLLLOCAL const char* getBoundSignature() const {
+        return signature.c_str();
+    }
+
+protected:
+    DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalImpl(rc_get_current_ref(), needs_deref, xsink);
+    }
+
+    DLLLOCAL QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const override {
+        const QoreClass* qc = oc ? oc : qore_aot_resolve_class_ref(
+            aot_resolver_pgm ? aot_resolver_pgm : getProgram(), dynamic_class_name.c_str(), false);
+        if (!qc) {
+            if (!*xsink) {
+                xsink->raiseException("AOT-PENDING-CLASS",
+                    "class '%s' is pending AOT source linking for instantiation", dynamic_class_name.c_str());
+            }
+            return QoreValue();
+        }
+        const AbstractQoreFunctionVariant* bound = findAOTObjectDefaultVariant(*qc, signature.c_str());
+        if (!bound) {
+            xsink->raiseException("AOT-CONSTRUCTOR-ERROR", "cannot resolve bound constructor '%s(%s)'",
+                dynamic_class_name.c_str(), signature.c_str());
+            return QoreValue();
+        }
+        if (!oc && qore_class_private::runtimeCheckInstantiateClassByName(*qc,
+                getProgram() ? getProgram() : aot_resolver_pgm, xsink)) {
+            return QoreValue();
+        }
+        return qore_class_private::execConstructor(*qc, rc, bound, getArgs(), xsink,
+            qore_substitute_type_params_if_needed(object_type_info));
+    }
+
+private:
+    const std::string signature;
+};
+
+static ScopedObjectCallNode* qoreAOTMakeObjectDefaultExpr(QoreProgram* pgm, const QoreClass* qc,
+        const std::string& class_path, QoreParseListNode* parse_args, const char* signature) {
+    std::unique_ptr<QoreParseListNode> owned_args(parse_args);
+    ReferenceHolder<ScopedObjectCallNode> socn(nullptr);
+    const AbstractQoreFunctionVariant* bound = qc && signature
+        ? findAOTObjectDefaultVariant(*qc, signature) : nullptr;
+    const QoreTypeInfo* object_type_info = qc ? qc->getTypeInfo()
+        : qore_get_aot_deferred_type_info(&loc_builtin, class_path.c_str(), false, false);
+    if (signature && !bound) {
+        socn = new AOTBoundObjectDefaultNode(pgm, qc, class_path, owned_args.release(), signature, object_type_info);
+    } else if (qc) {
+        socn = new ScopedObjectCallNode(&loc_builtin, qc, owned_args.release(), object_type_info);
+    } else {
+        socn = new ScopedObjectCallNode(&loc_builtin, class_path.c_str(), owned_args.release(), object_type_info, pgm);
+    }
+    // The common case uses the ordinary node with a binding resolved before publication;
+    // no extra virtual call, signature lookup or mutable cache is needed at execution time.
+    socn->setVariant(bound);
     if (parse_args) {
         socn->resolveParseArgs();
     }
-    return QoreValue(socn);
+    return socn.release();
+}
+
+static QoreValue qoreAOTMakeObjectDefaultNode(QoreProgram* pgm, const QoreClass* qc,
+        const std::string& class_path, std::vector<QoreValue>& args, const char* signature) {
+    return QoreValue(qoreAOTMakeObjectDefaultExpr(pgm, qc, class_path, qoreAOTTakeParseArgs(args), signature));
 }
 
 static void qoreAOTWriteContainerValueType(QoreAOTBinaryWriter& writer,
@@ -4197,6 +4294,17 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_OBJECT));
                 writeU32(static_cast<uint32_t>(class_path.size()));
                 writeStringRef(class_path.c_str(), class_path.size());
+                const AbstractQoreFunctionVariant* variant = socn->getVariant();
+                const char* signature = variant ? variant->getSignature()->getSignatureText() : nullptr;
+                if (!signature) {
+                    if (auto* pending = dynamic_cast<const AOTBoundObjectDefaultNode*>(socn)) {
+                        signature = pending->getBoundSignature();
+                    }
+                }
+                writeU8(signature ? 1 : 0);
+                if (signature) {
+                    writeStringRef(signature);
+                }
                 writeU32(nargs);
                 for (uint32_t i = 0; i < nargs; ++i) {
                     if (i && !(i % 100)
@@ -5121,6 +5229,10 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 error = "invalid string offset for new_object class path";
                 return QoreValue();
             }
+            const char* signature = nullptr;
+            if (!readAOTObjectDefaultVariant(*this, ptr, end, signature, error)) {
+                return QoreValue();
+            }
             if (ptr + 4 > end) {
                 error = "unexpected end of data reading new_object arg count";
                 return QoreValue();
@@ -5153,12 +5265,7 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 delete parse_args;
                 return QoreValue();
             }
-            ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, parse_args);
-            // Convert parse_args to args so evalImpl() doesn't hit the assertion
-            if (parse_args) {
-                socn->resolveParseArgs();
-            }
-            return QoreValue(socn);
+            return QoreValue(qoreAOTMakeObjectDefaultExpr(getProgram(), qc, class_path, parse_args, signature));
         }
 
         case QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT: {
@@ -16703,7 +16810,8 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                 const QoreClass* target = resolveClassRefForSession(
                     pim.pending_new_class_path.c_str(), &all_class_map);
                 pim.default_val = qoreAOTMakeObjectDefaultNode(getProgram(), target,
-                    pim.pending_new_class_path, pim.pending_new_args);
+                    pim.pending_new_class_path, pim.pending_new_args,
+                    pim.pending_new_has_variant ? pim.pending_new_variant.c_str() : nullptr);
                 pim.pending_new_class_path.clear();
             }
 
@@ -16907,7 +17015,8 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                 const QoreClass* target = resolveClassRefForSession(
                     psm.pending_new_class_path.c_str(), &all_class_map);
                 psm.default_val = qoreAOTMakeObjectDefaultNode(getProgram(), target,
-                    psm.pending_new_class_path, psm.pending_new_args);
+                    psm.pending_new_class_path, psm.pending_new_args,
+                    psm.pending_new_has_variant ? psm.pending_new_variant.c_str() : nullptr);
                 psm.pending_new_class_path.clear();
             }
 
@@ -17408,7 +17517,8 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                 const QoreClass* target = resolveClassRefForSession(
                     phm.pending_new_class_path.c_str());
                 phm.default_val = qoreAOTMakeObjectDefaultNode(getProgram(), target,
-                    phm.pending_new_class_path, phm.pending_new_args);
+                    phm.pending_new_class_path, phm.pending_new_args,
+                    phm.pending_new_has_variant ? phm.pending_new_variant.c_str() : nullptr);
                 phm.pending_new_class_path.clear();
             }
 
@@ -17717,6 +17827,8 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             std::string pending_enum_path;
             std::string pending_enum_member;
             std::string pending_new_class_path;
+            bool pending_new_has_variant = false;
+            std::string pending_new_variant;
             std::vector<QoreValue> pending_new_args;
             int8_t pending_complex_default_kind = -1;
             int8_t pending_complex_buffer_init_kind = 0;
@@ -17826,6 +17938,8 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             phm.pending_enum_path = std::move(mi.pending_enum_path);
             phm.pending_enum_member = std::move(mi.pending_enum_member);
             phm.pending_new_class_path = std::move(mi.pending_new_class_path);
+            phm.pending_new_has_variant = mi.pending_new_has_variant;
+            phm.pending_new_variant = std::move(mi.pending_new_variant);
             phm.pending_new_args = std::move(mi.pending_new_args);
             phm.pending_complex_default_kind = mi.pending_complex_default_kind;
             phm.pending_complex_buffer_init_kind = mi.pending_complex_buffer_init_kind;

@@ -4,9 +4,9 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/JinaDataProvider
+%requires Util
+%requires QUnit
+%requires JinaDataProvider
 %requires json
 
 %exec-class JinaDataProviderTest
@@ -60,6 +60,12 @@ class FakeJinaRestClientIo inherits JinaRestClient::JinaRestClientIo {
             *HttpClientIo::HttpClientConnectionManager mgr) : JinaRestClientIo(opts, mgr) {
     }
 
+    #! Schema dispatch now supplies an explicit target; retain this mock's response recorder.
+    hash<RestClient::RestResponseInfo> restDoRawRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr) {
+        return restDoRawRequest(method, target.path, body, hdr);
+    }
+
     hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
             *hash<auto> hdr) {
         auto response = Log.record(<JinaRecordedRequest>{
@@ -68,6 +74,11 @@ class FakeJinaRestClientIo inherits JinaRestClient::JinaRestClientIo {
             "headers": (getDefaultHeaders() ?? {}) + (hdr ?? {}),
         });
         return <RestClient::RestResponseInfo>{"status_code": 200, "body": response};
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, auto body, *hash<auto> hdr) {
+        return restDoRequest(method, target.path, body, hdr);
     }
 
     hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,

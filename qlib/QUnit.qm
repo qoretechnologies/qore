@@ -187,15 +187,11 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
       in @ref QUnit::Test::globalTearDown() "Test::globalTearDown()" failed with \c TEST-ERROR
     - fixed a thread that runs a test after a test that ran in a @ref Qore::Program "Program" object that has been
       deleted: it failed with \c PROGRAM-ERROR
-
-    @subsection qunit_v0_5_1 Version 0.5.1
     - added @ref QUnit::Test::isConnectionError() "Test::isConnectionError()", a shared predicate
       for tests that talk to external services: it returns @ref True "True" for external-connection
       / transport failures (\c SOCKET-*, \c HTTP2-*, \c HTTP3-*, \c QUIC-*, \c QOREADDRINFO-*, the
       \c HTTPCLIENT- transport errors, and \c NETWORK-ACCESS-DENIED) so such tests skip gracefully
       when the dependency is unavailable instead of failing
-
-    @subsection qunit_v0_5 Version 0.5
     - added an optional \a depends argument to @ref QUnit::Test::addTestCase() so
       test cases can declare prerequisite test cases; when a prerequisite does
       not pass, the dependent test case is skipped with an explanatory message

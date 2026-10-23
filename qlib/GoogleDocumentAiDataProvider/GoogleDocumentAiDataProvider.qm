@@ -140,6 +140,10 @@ module GoogleDocumentAiDataProvider {
     for <a href="https://cloud.google.com/document-ai">Google Document AI</a>.
     Typed actions cover processing, processor and version management, evaluations, operations, and
     document schemas. Explicitly named beta actions support datasets and processor-version import.
+    The actions follow pinned Google Discovery contracts shipped with the module. Processing can select a
+    processor version, documents are fully typed, and resource dropdowns are scoped to their parent resource.
+    Batch operations are supported, and waiting for an operation is bounded. Actions, reference data, generic API
+    calls, and the connection ping use the same authenticated transport.
 
     - <tt>process-document</tt> — submit a document to a Document AI processor
       and receive the parsed <tt>Document</tt> object with text, layout, and
@@ -157,12 +161,6 @@ module GoogleDocumentAiDataProvider {
     @section GoogleDocumentAiDataProviderRelnotes Release Notes
 
     @subsection GoogleDocumentAiDataProviderv1_1 GoogleDocumentAiDataProvider v1.1
-    - expanded typed actions from pinned, offline Google Discovery contracts
-    - added processor-version selection, complete document types, and scoped resource dropdowns
-    - added batch operations, bounded operation waiting, and explicit beta dataset actions
-    - shared authenticated transport for actions, references, generic calls, and connection ping
-
-    @subsection GoogleDocumentAiDataProviderv1_0 GoogleDocumentAiDataProvider v1.0
     - initial release
 */
 

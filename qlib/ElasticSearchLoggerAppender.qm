@@ -199,9 +199,6 @@ module ElasticSearchLoggerAppender {
     @section elasticsearchloggerappenderrelnotes Release Notes
 
     @subsection elasticsearchloggerappenderv11 v1.1
-    - Added the \c fields option, which adds constant fields to every document
-
-    @subsection elasticsearchloggerappenderv10 v1.0
     - initial release
 */
 

@@ -71,12 +71,16 @@ auto v = m.call(val, arg1, arg2);
 
     @throw METHOD-ERROR the value is not compatible with the class implementing this method
     @throw INVALID-FUNCTION-ACCESS the calling code's or the method's Program's sandboxing restrictions do not allow the variant called (see @ref reflection_caller_privilege)
+    @throw REFLECTION-ACCESS-ERROR the calling code may not execute code in the target Program (see @ref reflection_caller_privilege)
 
     @see callArgs()
 */
 auto PseudoMethod::call(auto val, ...) {
     // the privileges of the calling code
     QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, m->pgm, "execute code in", xsink)) {
+        return QoreValue();
+    }
     // we have to explictly test value compatibility here, otherwise QoreClass::evalPseudoMethod() will throw
     // a confusing exception
     if (check_pseudo_call(val, *m->m, xsink)) {
@@ -110,12 +114,16 @@ auto v = m.callArgs(val, (arg1, arg2));
 
     @throw METHOD-ERROR the value is not compatible with the class implementing this method
     @throw INVALID-FUNCTION-ACCESS the calling code's or the method's Program's sandboxing restrictions do not allow the variant called (see @ref reflection_caller_privilege)
+    @throw REFLECTION-ACCESS-ERROR the calling code may not execute code in the target Program (see @ref reflection_caller_privilege)
 
     @see call()
 */
 auto PseudoMethod::callArgs(auto val, *softlist<auto> argv) {
     // the privileges of the calling code
     QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, m->pgm, "execute code in", xsink)) {
+        return QoreValue();
+    }
     // we have to explictly test value compatibility here, otherwise QoreClass::evalPseudoMethod() will throw
     // a confusing exception
     if (check_pseudo_call(val, *m->m, xsink)) {

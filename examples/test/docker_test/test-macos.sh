@@ -193,6 +193,10 @@ make -j${MAKE_JOBS}
 echo "=== Running Tests ==="
 cd "${QORE_SRC_DIR}"
 
+# The build-system tests (examples/test/cmake), against this build, as test-cmake.sh runs them on Linux
+QORE_QPP_EXECUTABLE="${BUILD_DIR}/qpp" QORE_QCC_EXECUTABLE="${BUILD_DIR}/qcc" QORE_BINARY="${BUILD_DIR}/qore" \
+    QORE_TEST_BUILD_DIR="${BUILD_DIR}" python3 -B -W error -m unittest discover -s examples/test/cmake -v
+
 # Core tests need native modules from the image (for example yaml and xml), but
 # must not see the image's user modules: those were compiled against the Qore
 # that built the image, so a job that changes a qlib API would be tested against

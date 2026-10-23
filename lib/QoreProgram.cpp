@@ -1359,11 +1359,17 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     appended_module_paths = p_pgm->priv->appended_module_paths;
 
     // the external data of the parent is copied after this Program is fully constructed; see
-    // copyExternalData(), called from qore_program_private's constructor
-    ext_parent = (!(n_parse_options & PO_NO_INHERIT_PROGRAM_DATA) && !p_pgm->priv->extmap.empty())
-        ? p_pgm
-        : nullptr;
+    // copyExternalData(), called from qore_program_private's constructor, which reads the parent's external data
+    // under the parent's lock
+    ext_parent = !(n_parse_options & PO_NO_INHERIT_PROGRAM_DATA) ? p_pgm : nullptr;
 }
+
+#ifdef DEBUG
+namespace {
+// the Program whose external data the current thread copies in copyExternalData(), if any
+thread_local const qore_program_private_base* ext_data_copy_parent = nullptr;
+}
+#endif
 
 void qore_program_private_base::copyExternalData() {
     if (!ext_parent) {
@@ -1371,17 +1377,47 @@ void qore_program_private_base::copyExternalData() {
     }
     QoreProgram* p_pgm = ext_parent;
     ext_parent = nullptr;
+    qore_program_private_base* parent = p_pgm->priv;
 
+    // The entries are taken under the parent's lock, and copied without it: copy() runs module code, which takes
+    // the module's own locks, while a thread of the module can hold one of them when it takes the Program lock (ex:
+    // to parse or to look up its external data), which would deadlock with a copy made under the lock.  The entries
+    // stay valid meanwhile: removeExternalData() and del() wait until no copy is in progress, and the parent is
+    // referenced by the code creating the child Program.
+    std::vector<extmap_t::value_type> parent_data;
     {
-        AutoLocker al(p_pgm->priv->plock);
-        for (auto& i : p_pgm->priv->extmap) {
-            // External data whose state belongs to the parent alone returns nullptr rather than a copy (the AOT
-            // script data does: a child Program runs its own AOT load).  Storing that null would crash the
-            // init() loop below, and again when the child's teardown calls doDeref() on it.
-            AbstractQoreProgramExternalData* copy = i.second->copy(pgm);
-            if (copy) {
-                extmap.insert(extmap_t::value_type(i.first, copy));
-            }
+        AutoLocker al(parent->plock);
+        if (parent->extmap.empty()) {
+            return;
+        }
+        parent_data.assign(parent->extmap.begin(), parent->extmap.end());
+        ++parent->ext_copy_count;
+    }
+    ON_BLOCK_EXIT([parent] () {
+        AutoLocker al(parent->plock);
+        assert(parent->ext_copy_count);
+        if (!--parent->ext_copy_count && parent->ext_copy_waiting) {
+            parent->ext_copy_cond.broadcast();
+        }
+    });
+#ifdef DEBUG
+    // a copy() can create a Program itself, which copies the data of its own parent
+    const qore_program_private_base* old_copy_parent = ext_data_copy_parent;
+    ext_data_copy_parent = parent;
+    ON_BLOCK_EXIT([old_copy_parent] () {
+        ext_data_copy_parent = old_copy_parent;
+    });
+#endif
+
+    for (auto& i : parent_data) {
+        // External data whose state belongs to the parent alone returns nullptr rather than a copy (the AOT
+        // script data does: a child Program runs its own AOT load).  Storing that null would crash the
+        // init() loop below, and again when the child's teardown calls doDeref() on it.
+        AbstractQoreProgramExternalData* copy = i.second->copy(pgm);
+        if (copy) {
+            // the Program is registered already, so other threads can look up its external data
+            AutoLocker al(plock);
+            extmap.insert(extmap_t::value_type(i.first, copy));
         }
     }
     for (auto& i : extmap) {
@@ -2454,7 +2490,11 @@ void qore_program_private::del(ExceptionSink* xsink) {
         return;
     }
 
-    // dereference all external data
+    // dereference all external data, once no child Program copies it
+    {
+        AutoLocker al(plock);
+        waitForExternalDataCopiesIntern();
+    }
     for (auto& i : extmap) {
         try {
             i.second->doDeref();
@@ -3729,7 +3769,9 @@ AbstractQoreProgramExternalData* QoreProgram::getExternalData(const char* owner)
 }
 
 AbstractQoreProgramExternalData* QoreProgram::removeExternalData(const char* owner) {
-   return priv->removeExternalData(owner);
+    // the removal waits until the copies of the data are made, so a copy() must not remove the data it copies
+    assert(ext_data_copy_parent != priv);
+    return priv->removeExternalData(owner);
 }
 
 void QoreProgram::saveObject(QoreObject* obj) {

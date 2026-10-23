@@ -89,7 +89,7 @@ public hashdecl GroundingVerificationResult {
     \c [source-1]) or in a typed marker (for example \c [source:source-1],
     \c [doc:source-1], or \c [artifact:source-1]).
 
-    @since QoreLlmUtils 1.1
+    @since QoreLlmUtils 1.0.0
 */
 public class CitationValidator {
     #! Validates citations in an answer against a supplied source bundle
@@ -193,7 +193,7 @@ public class CitationValidator {
     The verifier is generic: callers decide which sources are authoritative,
     which users may see them, and whether lack of sources should fail closed.
 
-    @since QoreLlmUtils 1.1
+    @since QoreLlmUtils 1.0.0
 */
 public class GroundedAnswerVerifier {
     private {

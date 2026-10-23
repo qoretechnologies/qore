@@ -454,7 +454,7 @@ public class UnleashedRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since UnleashedRestClient 1.1
+    /** @since UnleashedRestClient 1.0
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new UnleashedRestClientIo(getConnectionOptions(rtopts));
@@ -500,16 +500,16 @@ public class UnleashedRestClientIo inherits RestClientIo::RestClientIo, Unleashe
 
     #! Prepares a request and signs it with HMAC-SHA256 authentication
     private hash<auto> prepareRequest(string method, reference<string> path, auto body,
-            reference<*hash<auto>> hdr) {
-        hash<auto> rv = RestClientIo::prepareRequest(method, \path, body, \hdr);
+            reference<*hash<auto>> hdr, *hash<RestClient::RestRequestContext> request_context) {
+        hash<auto> rv = RestClientIo::prepareRequest(method, \path, body, \hdr, request_context);
         signRequest(path, \hdr);
         return rv;
     }
 
     #! Prepares a request with a pre-serialized body and signs it with HMAC-SHA256 authentication
     private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
-            reference<*hash<auto>> hdr) {
-        hash<auto> rv = RestClientIo::prepareRawRequest(method, \path, body, \hdr);
+            reference<*hash<auto>> hdr, *hash<RestClient::RestRequestContext> request_context) {
+        hash<auto> rv = RestClientIo::prepareRawRequest(method, \path, body, \hdr, request_context);
         signRequest(path, \hdr);
         return rv;
     }

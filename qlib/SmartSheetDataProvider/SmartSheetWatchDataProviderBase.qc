@@ -94,7 +94,7 @@ public class SmartSheetWatchDataProviderBase inherits SmartSheetDataProviderBase
         one cannot be reused.  The poll interval is excluded: it changes how often the same stream
         is read, not what it contains.
 
-        @since SmartSheetDataProvider 1.1
+        @since SmartSheetDataProvider 1.0
     */
     private *hash<auto> getWatchStreamIdentityImpl() {
         return {

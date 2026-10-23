@@ -4,6 +4,10 @@
 
 %modern
 
+# the emitter has to resolve these; see testIndirectReferences()
+%allow-weak-references
+%allow-opaque-references
+
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 
 %requires yaml
@@ -89,6 +93,7 @@ public class Main inherits QUnit::Test {
         addTestCase("Structure with NaN test", \testNanStructure());
         addTestCase("single quoted strings", \testSingleQuotedStrings());
         addTestCase("sql null test", \sqlNull());
+        addTestCase("indirect references", \testIndirectReferences());
         # New comprehensive tests
         addTestCase("malformed yaml tests", \testMalformedYaml());
         addTestCase("edge cases", \testEdgeCases());
@@ -105,6 +110,38 @@ public class Main inherits QUnit::Test {
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    #! A container member holding a weak or opaque reference serializes as its target
+    /** Iterating a container yields the reference itself and not its target, so the emitter must resolve it;
+        otherwise it is refused with "cannot convert Qore type 'weak hash reference' to YAML", although the target is
+        an ordinary serializable hash or list.
+    */
+    testIndirectReferences() {
+        hash<auto> inner = {"a": 1, "b": "two"};
+        list<auto> ilist = (1, "two", 3);
+
+        # the hash and the list are walked by separate iterators, so cover both containers as the holder and both as
+        # the target
+        hash<auto> weak = {};
+        weak{"h"} := inner;
+        weak{"l"} := ilist;
+        assertEq({"h": inner, "l": ilist}, parse_yaml(make_yaml(weak)),
+            "weak references in a hash serialize as their targets");
+
+        list<auto> weak_list = ();
+        weak_list[0] := inner;
+        assertEq((inner,), parse_yaml(make_yaml(weak_list)), "a weak reference in a list serializes as its target");
+
+        hash<auto> opaque = {};
+        opaque{"h"} @= inner;
+        opaque{"l"} @= ilist;
+        assertEq({"h": inner, "l": ilist}, parse_yaml(make_yaml(opaque)),
+            "opaque references in a hash serialize as their targets");
+
+        list<auto> opaque_list = ();
+        opaque_list[0] @= ilist;
+        assertEq((ilist,), parse_yaml(make_yaml(opaque_list)), "an opaque reference in a list serializes as its target");
     }
 
     testAliases() {

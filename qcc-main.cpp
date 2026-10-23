@@ -1294,9 +1294,10 @@ static void print_usage(const char* prog) {
            "                         (default: auto)\n");
     printf("      --file-prefix-map=OLD=NEW\n"
            "                         Map emitted source paths in a final executable or\n"
-           "                         whole module; last matching prefix wins. Input\n"
-           "                         files and depfiles keep physical paths. Not for\n"
-           "                         incremental .qo or object-link modes.\n");
+           "                         whole module; last matching prefix wins. OLD also\n"
+           "                         matches the canonical form of the path it names.\n"
+           "                         Input files and depfiles keep physical paths. Not\n"
+           "                         for incremental .qo or object-link modes.\n");
     printf("      --strip-debug-info Strip DWARF debug info (faster compile, no debugger)\n");
     printf("  -g                     Emit DWARF debug info (default)\n");
     printf("      --time-trace[=PATH]  Emit Chrome-format trace of opt+codegen passes\n");
@@ -3270,8 +3271,17 @@ static bool dump_skip_serialized_value(const QoreAOTBinaryReader& reader,
 
         case QoreAOTValueTag::VT_NEW_OBJECT: {
             uint32_t nargs = 0;
-            return dump_skip_len_string_ref(reader, p, end)
-                && dump_read_u32(p, end, nargs)
+            if (!dump_skip_len_string_ref(reader, p, end)) {
+                return fail("truncated new_object class path");
+            }
+            if (reader.getHeader().version >= QORE_AOT_OBJECT_DEFAULT_VARIANT_VERSION) {
+                uint8_t bound = 0;
+                if (!dump_read_u8(p, end, bound) || bound > 1
+                        || (bound && !dump_skip_string_ref(reader, p, end))) {
+                    return fail("invalid new_object variant signature");
+                }
+            }
+            return dump_read_u32(p, end, nargs)
                 && dump_skip_serialized_value_args(reader, p, end, nargs, summary, error);
         }
 
@@ -6534,6 +6544,75 @@ static std::string canonical_existing_path(const std::string& path) {
     return rv;
 }
 
+//! Returns the canonical form of a --file-prefix-map OLD prefix
+/** qcc names its inputs, and so the source paths it emits, by their canonical paths, so a prefix that names them
+    through a symbolic link (on macOS /tmp and /var are links to /private/tmp and /private/var) or with a relative path
+    matches none of them.  The longest leading part of the prefix that names an existing path is made canonical, and
+    the rest of the prefix is kept as it is: like the compiler's -ffile-prefix-map, a prefix is a string, which need not
+    end at a path component.
+
+    @param prefix the prefix as given
+
+    @return the canonical form of the prefix; the prefix itself when no leading part of it can be resolved
+*/
+static std::string canonical_file_prefix(const std::string& prefix) {
+    std::string head = prefix;
+    // the rest of the prefix after head, which starts with a separator; trailing separators stay in it, so that
+    // "dir/" maps "dir/file" and not "dirfile"
+    std::string tail;
+    while (head.size() > 1 && head.back() == '/') {
+        head.pop_back();
+        tail.insert(0, 1, '/');
+    }
+    while (true) {
+        std::unique_ptr<char, decltype(&free)> resolved(realpath(head.c_str(), nullptr), &free);
+        if (resolved) {
+            std::string rv = resolved.get();
+            // the canonical form of "/" ends with the separator that starts the rest
+            if (!rv.empty() && rv.back() == '/' && !tail.empty()) {
+                rv.pop_back();
+            }
+            return rv + tail;
+        }
+        size_t separator = head.find_last_of('/');
+        if (separator == std::string::npos) {
+            // a relative prefix whose first component does not exist names a path in the working directory
+            std::unique_ptr<char, decltype(&free)> cwd(realpath(".", nullptr), &free);
+            if (!cwd) {
+                return prefix;
+            }
+            std::string rv = cwd.get();
+            if (rv.back() != '/') {
+                rv += '/';
+            }
+            return rv + head + tail;
+        }
+        tail.insert(0, head, separator, std::string::npos);
+        head.erase(separator);
+        if (head.empty()) {
+            // no component of the absolute prefix exists
+            return prefix;
+        }
+    }
+}
+
+//! Returns the --file-prefix-map maps with the canonical form of each OLD prefix that differs from it
+/** Each canonical form follows the map it was made from, so the last matching map still wins.
+*/
+static std::vector<std::pair<std::string, std::string>> with_canonical_file_prefixes(
+        const std::vector<std::pair<std::string, std::string>>& maps) {
+    std::vector<std::pair<std::string, std::string>> rv;
+    rv.reserve(maps.size() * 2);
+    for (const auto& map : maps) {
+        rv.push_back(map);
+        std::string canonical = canonical_file_prefix(map.first);
+        if (canonical != map.first) {
+            rv.emplace_back(std::move(canonical), map.second);
+        }
+    }
+    return rv;
+}
+
 static bool load_depfile_source_content_map(std::string& error) {
     if (!depfile_source_content_map_path) {
         return true;
@@ -9440,6 +9519,7 @@ static int link_script_objects_to_executable(const std::string& output,
         "    if (!pgm) {\n"
         "        fprintf(stderr, \"qore_create_program failed\\n\");\n"
         "        qore_cleanup();\n"
+        "        qore_fork_child_quick_exit(1);\n"
         "        return 1;\n"
         "    }\n"
         "    qore_aot_script_begin_batch(pgm);\n",
@@ -9456,6 +9536,7 @@ static int link_script_objects_to_executable(const std::string& output,
         "            qore_last_error(pgm));\n"
         "        qore_destroy_program(pgm);\n"
         "        qore_cleanup();\n"
+        "        qore_fork_child_quick_exit(1);\n"
         "        return 1;\n"
         "    }\n"
         "    rc = qore_run_callable(pgm, \"%s\", NULL);\n"
@@ -9465,6 +9546,9 @@ static int link_script_objects_to_executable(const std::string& output,
         "    }\n"
         "    qore_destroy_program(pgm);\n"
         "    qore_cleanup();\n"
+        "    // a child process created with fork() whose modules requested it ends without running exit-time\n"
+        "    // handlers, as when the main program of qore and qr ends (see qore_fork_child_exit_quickly())\n"
+        "    qore_fork_child_quick_exit(rc);\n"
         "    return rc;\n"
         "}\n",
         entry, entry);
@@ -9626,7 +9710,8 @@ int main(int argc, char** argv) {
                 "build; incremental objects and object linking retain physical source identities\n");
             return 1;
         }
-        QoreAOT::setFilePrefixMaps(file_prefix_maps);
+        // the prefixes match the canonical paths qcc names its inputs by as well
+        QoreAOT::setFilePrefixMaps(with_canonical_file_prefixes(file_prefix_maps));
     }
     if (depfile_path && depfile_dir && !batch_compile_arguments) {
         fprintf(stderr,

@@ -53,6 +53,8 @@ public class AstProcessorTests inherits QUnit::Test {
         addTestCase("Mainpage doc association", \testMainpageAssociation());
         addTestCase("Doc association with same-line loc", \testDocAssociationWithSameLineLoc());
         addTestCase("Endcond association with comments", \testDocEndcondWithComment());
+        addTestCase("Conditional sections leave out their declarations", \testCondSectionsOmitted());
+        addTestCase("A section around a namespace's opening line keeps the namespace", \testCondNamespaceWrapper());
         addTestCase("Conditional parsing ifdef/endif", \testConditionalIfdef());
         addTestCase("Conditional parsing if/elif/else/endif", \testConditionalIfElif());
         addTestCase("Nested conditionals", \testNestedConditionals());
@@ -508,8 +510,94 @@ sub visible() { }
 
         assertFalse(output =~ /@cond/, "cond marker removed");
         assertFalse(output =~ /@endcond/, "endcond marker removed");
-        assertTrue(output =~ /hidden\(\);/, "hidden function emitted");
+        assertFalse(output =~ /hidden\(\);/, "the function of the section is left out");
         assertTrue(output =~ /visible\(\);/, "visible function emitted");
+    }
+
+    testCondSectionsOmitted() {
+        string code = "
+#! the documented namespace
+public namespace Mod {
+    #! returns the size of a thing
+    public int sub size_of(string s) { return s.size(); }
+
+    #! @cond nodoc
+    # a private helper between the comment of a function and the function
+    int sub helper(string s) { return s.size(); }
+    const HiddenConst = 1;
+    #! @endcond
+
+    #! decodes data; names the <tt>\\@cond</tt> command in its prose
+    /** @param data the data
+    */
+    public data sub decode(data data) { return data; }
+
+    #! a documented class
+    public class Widget {
+        public {
+            #! a documented member
+            int shown;
+        }
+
+        #! @cond nodoc
+        private:internal {
+            int hidden_member;
+        }
+
+        private hiddenMethod() { }
+
+        #! @cond nodoc
+        private nestedHidden() { }
+        #! @endcond
+
+        private alsoHidden() { }
+        #! @endcond
+
+        #! a documented method
+        shownMethod() { }
+    }
+}
+";
+        string output = processCode(code);
+
+        assertFalse(output =~ /^\s*(\/\/!|#!)\s*@(end)?cond/m, "no section marker reaches the output");
+        foreach string name in ("helper", "HiddenConst", "hidden_member", "hiddenMethod", "nestedHidden",
+                "alsoHidden") {
+            assertFalse(regex(output, name), sprintf("%y of a section is left out", name));
+        }
+        foreach string name in ("size_of", "decode", "Widget", "int shown", "shownMethod") {
+            assertTrue(regex(output, name), sprintf("%y outside the sections is emitted", name));
+        }
+        assertTrue(output =~ /names the <tt>/, "prose that names the command is kept");
+        assertTrue(output =~ /decodes data;[^}]*@param data the data[^}]*decode\(/s,
+            "the function after a section keeps its documentation");
+        assertTrue(output =~ /a documented method[^}]*shownMethod\(/s,
+            "the method after a nested section keeps its documentation");
+    }
+
+    testCondNamespaceWrapper() {
+        # the source files of a module hide the opening and closing lines of the module's namespace, which the
+        # module's main file documents
+        string code = "
+#! @cond nodoc
+public namespace Mod {
+#! @endcond
+
+#! a documented class of the namespace
+public class Part {
+    #! a documented method
+    run() { }
+}
+
+#! @cond nodoc
+} # namespace Mod
+#! @endcond
+";
+        string output = processCode(code);
+
+        assertTrue(output =~ /namespace Mod \{/, "the namespace is emitted");
+        assertTrue(output =~ /a documented class of the namespace\s*\*?\/?\s*class Part/s, "its class is emitted");
+        assertTrue(output =~ /a documented method[^}]*run\(/s, "the class's method is emitted");
     }
 
     testConditionalIfdef() {

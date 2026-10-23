@@ -55,6 +55,17 @@ class ModuleDocNavigationTest(unittest.TestCase):
                     self.assertEqual(['NO'], values)
 
     @unittest.skipUnless(DOXYGEN, 'Doxygen is required')
+    def test_templates_have_no_obsolete_settings(self):
+        # Doxygen warns about each setting that it no longer has, which fails a documentation build that treats
+        # warnings as errors; doxygen -x reads a configuration file and reports them
+        for template in TEMPLATES:
+            with self.subTest(template=template):
+                result = subprocess.run([DOXYGEN, '-x', str(ROOT / template)], capture_output=True, text=True,
+                                        timeout=60)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                self.assertNotIn('has become obsolete', result.stderr)
+
+    @unittest.skipUnless(DOXYGEN, 'Doxygen is required')
     def test_external_references_resolve_without_importing_navigation(self):
         for destination in ('https://example.invalid/foreign', '../../foreign/html'):
             with self.subTest(destination=destination), tempfile.TemporaryDirectory(

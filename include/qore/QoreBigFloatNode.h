@@ -51,7 +51,7 @@
     @note This class is used internally by QoreValue and should not
     normally be used directly in user code.
 
-    @since Qore 2.0 (NaN-boxing implementation)
+    @since Qore 3.0 (NaN-boxing implementation)
 */
 class QoreBigFloatNode : public SimpleValueQoreNode {
 private:

@@ -584,7 +584,18 @@ released.  An operation that runs after the close finds the object without a des
 removed (with the kernel call, on the still open descriptor) and the hold released; the descriptor never stays
 registered without a hold, so no level-triggered event of a shut-down descriptor can wake the I/O thread over and
 over.  When the object was closed after its descriptor was read, `holdPollableDescriptor()` fails, the descriptor is
-not registered and the object's operations run again and see the close.
+not registered and the object's operations run again and see the close.  When it was closed before its descriptor was
+read, by a thread that closed it without the controller (a module's object closed through the module's own API, such
+as an SSH disconnect), the object has no descriptor: no event can come for it, and nothing else would continue the
+operations waiting for it before their timeout, so `updateEventLoopRegistration()` and `applyEventUnion()` make them
+run again too.  An operation that waits for the closed object again
+(`PollInfo::descriptorless_waits`) would only run again and again; the next time it runs, it ends with
+`SOCKET-CLOSED` instead (`makeDescriptorlessWaitException()`), and its next wait is always registered in full, so the
+fast path of Phase 3 cannot skip the check.  An operation that waits only for its extra fds or its poll timeout while
+its object has no descriptor (a connection that resolves its host name) reports no events for the object and is not
+affected.  `AsyncIoClosedPollableTest` in the C++ unit tests closes a module-style pollable before its first
+registration, before a registration made again, and before a registration that another operation shares, and runs
+operations on the I/O thread and on a worker that see the close or wait for the closed object again.
 
 Socket objects, the controller's socket wrappers and `QoreSocket::holdDescriptor()` implement the hold with
 `qore_socket_private::DescriptorHold`, a reference to the socket's `SharedDescriptor` like the one an I/O call takes
@@ -612,6 +623,18 @@ its close (`runOwnedExtraFd()` in `AsyncIoDescriptorHoldTest`, `QoreCaresSockets
 loop refuses (a descriptor that epoll cannot wait for, or a number that a close and a reuse gave to such a file) is
 not waited for: `updateExtraFds()` removes any registration of the operation's for it and releases its hold
 (`runRefusedExtraFd()`).
+
+%Qore's own connect operations read these descriptors and the state's timers from the happy-eyeballs state directly
+(`getExtraFds()`, `getPollTimeoutMs()`, `getPrimaryPollEvents()`).  A module's operation that makes a connection with
+`QoreSocket::startConnect()` sees only the public `AbstractPollState` API, so the state reports them there as well:
+`getExtraWaitFds()` returns the resolver's sockets while the host name is resolved, when the socket has no
+descriptor, and the other attempts while they race, and `getPollTimeoutMs()` the resolver's retransmission timer and
+the RFC 8305 connection attempt delay.  Before, the public API reported neither, so a module's operation had nothing to
+wait for while the name was resolved asynchronously (module-ssh2's `SftpPollOperation` failed), and waited for the first
+attempt only while they raced.  `HappyEyeballsLayeredConnectTest` in the C++ unit tests drives a connection with the
+public API only, against a DNS server that the test runs (`dbg_cares_set_servers()`, which also gives the channels a
+fixed timeout and number of tries): a lookup answered at once, one whose first query the server drops, and an IPv6
+address whose listener drops the connection requests before the IPv4 one.
 
 `AsyncIoRegistrationCloseTest` in the C++ unit tests closes the socket from another thread at the point where the
 event loop is about to register its descriptor (the debug hook `QoreEventLoop::dbgSetBeforeRegister()`), for the

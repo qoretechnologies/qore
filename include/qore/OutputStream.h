@@ -125,7 +125,7 @@ public:
       * @brief Returns true if this stream supports non-blocking I/O.
       * @return true if non-blocking I/O is supported
       *
-      * @since %Qore 2.2
+      * @since %Qore 3.0
       */
     virtual bool supportsNonBlockingIo() const { return false; }
 
@@ -147,7 +147,7 @@ public:
       * @brief Returns the pollable file descriptor for this stream, or -1 if not pollable.
       * @return the file descriptor, or -1
       *
-      * @since %Qore 2.2
+      * @since %Qore 3.0
       */
     virtual int getPollableDescriptor() const { return -1; }
 
@@ -160,7 +160,7 @@ public:
       * @param xsink the exception sink
       * @return the number of bytes written, or -1 on error
       *
-      * @since %Qore 2.2
+      * @since %Qore 3.0
       */
     virtual int64 writeNonBlock(const void* ptr, int64 count, ExceptionSink* xsink) {
         write(ptr, count, xsink);
@@ -188,7 +188,7 @@ public:
       * A negative timeout writes with write(), whose errors are the stream's own (\c FILE-WRITE-ERROR for
       * FileOutputStream).
       *
-      * @since %Qore 2.2
+      * @since %Qore 3.0
       */
     DLLEXPORT virtual int64 writeWithTimeout(const void* ptr, int64 count, int64 timeout_ms, ExceptionSink* xsink);
 

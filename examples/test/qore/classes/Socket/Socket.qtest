@@ -1665,34 +1665,44 @@ class SocketTest inherits QUnit::Test {
                 assertEq(bigmsg.toSHA512(), bmsg.toSHA512());
             }
 
-            Socket s4();
-            if (s4.bind("127.0.0.1:0", True)) {
-                throw "SOCKET-BIND-ERROR", strerror();
-            }
-            int port2 = s4.getSocketInfo().port;
-            s4.close();
-            s4.shutdown();
-            target = "127.0.0.1:" + port2;
-            spop = s2.startPollConnect(target);
-            assertEq("connect", spop.getGoal());
-            assertEq("connecting", spop.getState());
             {
-                on_error printf("target %y\n", target);
+                # a port on which no socket listens, held by a connection to a listener that is then closed: a
+                # connection request to it is refused, and no concurrent program can take it, as it could take a port
+                # that is released
+                Socket s4();
+                if (s4.bind("127.0.0.1:0", True)) {
+                    throw "SOCKET-BIND-ERROR", strerror();
+                }
+                s4.listen();
+                int port2 = s4.getSocketInfo().port;
+                Socket port2_client();
+                on_exit port2_client.close();
+                port2_client.connect("127.0.0.1:" + port2, 5s);
+                Socket port2_peer = s4.accept(5s);
+                on_exit port2_peer.close();
+                s4.close();
+                target = "127.0.0.1:" + port2;
+                spop = s2.startPollConnect(target);
+                assertEq("connect", spop.getGoal());
+                assertEq("connecting", spop.getState());
+                {
+                    on_error printf("target %y\n", target);
+                    assertThrows("SOCKET-CONNECT-ERROR", sub () {
+                        while (*hash<SocketPollInfo> info = spop.continuePoll()) {
+                            Socket::poll((info,), 1s);
+                        }
+                    });
+                }
+
+                spop = s2.startPollConnectSsl(target);
+                assertEq("connect-ssl", spop.getGoal());
+                assertEq("connecting", spop.getState());
                 assertThrows("SOCKET-CONNECT-ERROR", sub () {
                     while (*hash<SocketPollInfo> info = spop.continuePoll()) {
                         Socket::poll((info,), 1s);
                     }
                 });
             }
-
-            spop = s2.startPollConnectSsl(target);
-            assertEq("connect-ssl", spop.getGoal());
-            assertEq("connecting", spop.getState());
-            assertThrows("SOCKET-CONNECT-ERROR", sub () {
-                while (*hash<SocketPollInfo> info = spop.continuePoll()) {
-                    Socket::poll((info,), 1s);
-                }
-            });
 
             {
                 msg = get_random_string();

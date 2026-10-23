@@ -43,9 +43,11 @@
 #include <qore/QoreSandboxManager.h>
 
 #include <cassert>
+#include <cerrno>
 #include <cmath>
 #include <cstdlib>
 #include <cctype>
+#include <string>
 
 // RFC 4627 JSON specification
 // qore only supports JSON with UTF-8
@@ -365,6 +367,92 @@ static AbstractQoreNode* get_json_array(const char*& buf, int& line_number, cons
     return 0;
 }
 
+//! Returns true if the character can follow a JSON number: the end of the text, a separator or whitespace
+static bool is_json_number_terminator(char c) {
+    return !c || c == ',' || c == '}' || c == ']' || c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+//! Parses a JSON number at @a buf, which starts with a digit or \c '-' (RFC 8259 section 6)
+/** The number is <tt>[ minus ] int [ frac ] [ exp ]</tt>, where \c int is \c 0 or a digit other than \c 0 followed
+    by digits, \c frac is \c '.' followed by at least one digit, and \c exp is \c 'e' or \c 'E', an optional sign
+    and at least one digit; anything else, such as a leading zero, a missing digit or a second fraction, raises
+    \c JSON-PARSE-ERROR.  A number with a fraction or an exponent is a \c float, and an integer is an \c int, or a
+    \c number if it is outside the range of an \c int, so that its value is kept.
+
+    @param buf the position of the number, which is set after the number on success
+    @param line_number the current line, for errors
+    @param xsink for errors
+
+    @return the value, or no value with an exception in @a xsink
+*/
+static QoreValue get_json_number(const char*& buf, int line_number, ExceptionSink* xsink) {
+    const char* p = buf;
+    bool is_float = false;
+    if (*p == '-') {
+        ++p;
+    }
+    if (!isdigit(static_cast<unsigned char>(*p))) {
+        xsink->raiseException("JSON-PARSE-ERROR", "expected a digit after '-' in a number on line %d", line_number);
+        return QoreValue();
+    }
+    if (*p == '0') {
+        ++p;
+        if (isdigit(static_cast<unsigned char>(*p))) {
+            xsink->raiseException("JSON-PARSE-ERROR", "unexpected digit '%c' after a leading zero in a number on line "
+                "%d", *p, line_number);
+            return QoreValue();
+        }
+    } else {
+        while (isdigit(static_cast<unsigned char>(*p))) {
+            ++p;
+        }
+    }
+    if (*p == '.') {
+        is_float = true;
+        ++p;
+        if (!isdigit(static_cast<unsigned char>(*p))) {
+            xsink->raiseException("JSON-PARSE-ERROR", "expected a digit after the decimal point in a number on line %d",
+                line_number);
+            return QoreValue();
+        }
+        while (isdigit(static_cast<unsigned char>(*p))) {
+            ++p;
+        }
+    }
+    if (*p == 'e' || *p == 'E') {
+        is_float = true;
+        ++p;
+        if (*p == '+' || *p == '-') {
+            ++p;
+        }
+        if (!isdigit(static_cast<unsigned char>(*p))) {
+            xsink->raiseException("JSON-PARSE-ERROR", "expected a digit in the exponent of a number on line %d",
+                line_number);
+            return QoreValue();
+        }
+        while (isdigit(static_cast<unsigned char>(*p))) {
+            ++p;
+        }
+    }
+    if (!is_json_number_terminator(*p)) {
+        xsink->raiseException("JSON-PARSE-ERROR", "unexpected character '%c' in a number on line %d", *p,
+            line_number);
+        return QoreValue();
+    }
+    std::string str(buf, p - buf);
+    buf = p;
+    if (is_float) {
+        return QoreValue(q_strtod(str.c_str()));
+    }
+    errno = 0;
+    long long i = strtoll(str.c_str(), nullptr, 10);
+    if (errno == ERANGE) {
+        // outside the range of an int: a number keeps its value
+        return new QoreNumberNode(str.c_str());
+    }
+    return static_cast<int64>(i);
+}
+
 static QoreValue get_json_value(const char*& buf, int& line_number, const QoreEncoding* enc, bool& empty,
         int depth, QoreSandboxManager* sm, ExceptionSink* xsink) {
     assert(!empty);
@@ -375,7 +463,7 @@ static QoreValue get_json_value(const char*& buf, int& line_number, const QoreEn
         return QoreValue();
     }
 
-    // can expect: 't'rue, 'f'alse, '{', '[', '"'string...", integer, '.'digits
+    // can expect: 't'rue, 'f'alse, 'n'ull, '{', '[', '"'string...", or a number
     if (*buf == '{') {
         return get_json_object(buf, line_number, enc, depth, sm, xsink);
     }
@@ -389,65 +477,8 @@ static QoreValue get_json_value(const char*& buf, int& line_number, const QoreEn
         return get_json_string_token(*(*str), buf, line_number, sm, xsink) ? 0 : str.release();
     }
 
-    if (isdigit(static_cast<unsigned char>(*buf)) || (*buf) == '.' || (*buf) == '-') {
-        // temporarily use a QoreString
-        QoreString str;
-        bool has_dot;
-        if (*buf == '.') {
-            // add a leading zero
-            str.concat("0.");
-            has_dot = true;
-        } else {
-            str.concat(*buf);
-            has_dot = false;
-        }
-        ++buf;
-        bool has_e = false;
-        while (*buf) {
-            if (*buf == '.') {
-                if (has_dot) {
-                    xsink->raiseException("JSON-PARSE-ERROR", "unexpected '.' in floating point number (too many '.' "
-                        "characters)");
-                    return 0;
-                }
-                has_dot = true;
-                // if another token follows then break but do not increment buffer position
-            } else if (*buf == ',' || *buf == '}' || *buf == ']') {
-                break;
-                // if whitespace follows then increment buffer position and break
-            } else if (isblank(static_cast<unsigned char>(*buf)) || (*buf) == '\r') {
-                ++buf;
-                break;
-                // if a newline follows then  increment buffer position and line number and break
-            } else if ((*buf) == '\n') {
-                ++buf;
-                ++line_number;
-                break;
-            } else if (*buf == 'e' || *buf == 'E') {
-                if (has_e) {
-                    xsink->raiseException("JSON-PARSE-ERROR", "unexpected second exponent marker '%c' in number", *buf);
-                    return QoreValue();
-                }
-                has_e = true;
-                // handle optional sign after exponent marker
-                str.concat(*buf);
-                ++buf;
-                if (*buf == '+' || *buf == '-') {
-                    str.concat(*buf);
-                    ++buf;
-                }
-                continue;
-            } else if (!isdigit(static_cast<unsigned char>(*buf))) {
-                xsink->raiseException("JSON-PARSE-ERROR", "unexpected character '%c' in number", *buf);
-                return QoreValue();
-            }
-            str.concat(*buf);
-            ++buf;
-        }
-        if (has_dot || has_e) {
-            return QoreValue(q_strtod(str.c_str()));
-        }
-        return strtoll(str.c_str(), 0, 10);
+    if (isdigit(static_cast<unsigned char>(*buf)) || (*buf) == '-') {
+        return get_json_number(buf, line_number, xsink);
     }
 
     if ((*buf) == 't') {
@@ -813,7 +844,8 @@ QoreValue parse_json(const QoreString* str, ExceptionSink* xsink) {
     // ignore empty values; return NOTHIN in this case
     bool empty = false;
     ValueHolder rv(get_json_value(buf, line_number, str->getEncoding(), empty, 0, smh.get(), xsink), xsink);
-    if (rv && *buf) {
+    // a value that is false, such as null, 0 or false, is checked too
+    if (!*xsink && !empty && *buf) {
         // check for excess text after JSON data
         skip_whitespace(buf, line_number);
         if (*buf) {

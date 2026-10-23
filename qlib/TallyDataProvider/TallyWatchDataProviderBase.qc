@@ -99,7 +99,7 @@ public class TallyWatchDataProviderBase inherits TallyDataProviderBase,
         stream and its cursor cannot carry over.  The poll interval is excluded: it changes how
         often the same form is polled, not which submissions it covers.
 
-        @since TallyDataProvider 1.1
+        @since TallyDataProvider 1.0
     */
     private *hash<auto> getWatchStreamIdentityImpl() {
         return {

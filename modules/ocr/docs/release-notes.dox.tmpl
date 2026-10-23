@@ -6,16 +6,4 @@
 
     @section ocr_3_0 ocr Module Version 3.0
     - initial release
-    - the trained data read from an explicit data directory given to
-      @ref Qore::Ocr::TesseractEngine::constructor() "TesseractEngine::constructor()" is subject to the filesystem
-      sandbox of the calling program: every trained data file Tesseract loads, including the sub-languages a
-      trained data file names, must be allowed by the sandbox, and the language configuration in the trained data
-      may only set the layout, segmentation and recognition parameters that the official trained data sets, so
-      trained data cannot make Tesseract read or write another file; the system data directory is a system
-      resource and is not checked
-    - @ref Qore::Ocr::TesseractEngine "TesseractEngine" can be used by a program without filesystem access rights
-      (\c PO_NO_FILESYSTEM) with the system data directory; an explicit data directory needs them and raises
-      \c ILLEGAL-FILESYSTEM-ACCESS without them
-    - a language code may only contain ASCII letters, digits, \c "_" and \c "-", and a data directory may not
-      contain a NUL character, so that neither can name a file outside the data directory
 */

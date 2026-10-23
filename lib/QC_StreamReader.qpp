@@ -104,7 +104,7 @@ string str = sr.read(len);
     - other stream read errors could be thrown here depending on the underlying @ref InputStream implementation
     - text in a stateful @ref character_encoding "character encoding" (ex: \c "UTF-7", \c "ISO-2022-JP", \c "IBM930") is read in the shift state left by the characters read before it, so a number of characters can be read at a time; each string returned is valid on its own (it starts and ends in the initial shift state, so its bytes can differ from the bytes read), and no bytes after the characters returned are read; once characters have been read, lines and all of the remaining text are read in the same shift state; the shift state is reset when the encoding is changed; \c STREAM-ENCODING-ERROR is also raised in such an encoding if the data ends in the middle of a character or shift sequence
 
-    @since %Qore 2.3 text in a stateful @ref character_encoding "character encoding" can be read a number of characters at a time
+    @since %Qore 3.0 text in a stateful @ref character_encoding "character encoding" can be read a number of characters at a time
  */
 *string StreamReader::readString(int limit = -1) [flags=NAMED_ARGS] {
     return sr->readString(limit, xsink);

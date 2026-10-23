@@ -6,8 +6,8 @@
 # reads their default values through reflection).  Reflection allows code to read the values of another Program only
 # from code at least as privileged as it, and a Program that allows the debugger or code injection allows a domain
 # that the module's Program does not allow: one module Program serves every Program that loads it, and an AOT-compiled
-# module does not inherit the options of the Program that loads it.  The code of a user module is not less privileged
-# for lacking such a domain, so a Program with %allow-debugger or %allow-injection can hand its types to the module
+# module does not inherit the options of the Program that loads it. Member-default evaluation retains the trusted
+# user-module exception, so a Program with %allow-debugger or %allow-injection can hand its types to the module
 # (ir/AOTDataProviderExecutable.qtest failed with REFLECTION-ACCESS-ERROR); code outside modules that lacks the domain
 # still cannot read the values of such a Program.
 #
@@ -31,13 +31,18 @@ class HashDeclDataTypeCallerPrivilegeTest inherits QUnit::Test {
         #! a Program that hands the DataProvider module a type with a typed hash of its own and one of the builtin ones
         const UserSource = "%requires DataProvider
 %requires reflection
+int sub default_count() { return 7; }
 hashdecl Order {
-    int count = 7;
+    int count = default_count();
     string name = \"n\";
 }
 
 auto sub user_default() {
     return AbstractDataProviderType::get(new Type(\"hash<Order>\")).getField(\"count\").getDefaultValue();
+}
+
+auto sub converted_default() {
+    return AbstractDataProviderType::get(new Type(\"hash<Order>\")).acceptsValue({}).count;
 }
 
 auto sub builtin_field() {
@@ -84,6 +89,7 @@ auto sub read(TypedHashMember m) {
     private checkModuleReads(int po) {
         Program pgm = userProgram(po);
         assertEq(7, pgm.callFunction("user_default"));
+        assertEq(7, pgm.callFunction("converted_default"));
         assertEq("int", pgm.callFunction("builtin_field"));
         assertEq(("count", "name"), pgm.callFunction("fields"));
     }

@@ -171,6 +171,12 @@ public:
 
         @return a socket poll state object or nullptr in case of an exception or an immediate connection
 
+        @note An Internet connection resolves the host name asynchronously and races the connection attempts to its
+        addresses (RFC 8305): until the name is resolved the socket has no descriptor, and the descriptors of the
+        resolver and of the other attempts are reported by AbstractPollState::getExtraWaitFds(); the caller waits for
+        them and for the time of AbstractPollState::getPollTimeoutMs() as well as for the events that
+        AbstractPollState::continuePoll() returns for the socket's descriptor, if it has one
+
         @since %Qore 1.12
     */
     DLLEXPORT AbstractPollState* startConnect(ExceptionSink* xsink, const char* name);
@@ -184,6 +190,8 @@ public:
         @param protocol protocol number
 
         @return a socket poll state object or nullptr in case of an exception or an immediate connection
+
+        @note see startConnect() for what the caller waits for
 
         @since %Qore 3.0
     */
@@ -2010,28 +2018,28 @@ int MyPollable::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) cons
         @param xsink if an error occurs, the Qore-language exception information will be added here
         @return 0 on success, -1 on error
 
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLEXPORT int setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* xsink);
 
     //! Clears ALPN protocol settings
     /** This should be called when HTTP/2 mode is disabled to ensure proper protocol negotiation
 
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLEXPORT void clearAlpnProtocols();
 
     //! Returns the negotiated ALPN protocol after TLS handshake
     /** @return the selected protocol string, or nullptr if ALPN was not negotiated
 
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLEXPORT QoreStringNode* getAlpnProtocol() const;
 
     //! Returns true if HTTP/2 ("h2") was negotiated via ALPN
     /** @return true if the connection uses HTTP/2
 
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLEXPORT bool isHttp2() const;
 
@@ -2043,7 +2051,7 @@ int MyPollable::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) cons
 
         @return the promised stream ID on success (positive integer), or -1 on error
 
-        @since Qore 2.2
+        @since Qore 3.0
     */
     DLLEXPORT int32_t submitHttp2PushPromise(int32_t stream_id, const char* path,
             const QoreHashNode* headers, ExceptionSink* xsink);
@@ -2364,14 +2372,14 @@ int MyPollable::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) cons
 
         @param size maximum body size in bytes; 0 means unlimited
 
-        @since %Qore 2.1
+        @since %Qore 3.0
     */
     DLLEXPORT void setMaxChunkedBodySize(int64 size);
 
     //! Returns the maximum body size for chunked HTTP reads
     /** @return the maximum body size in bytes; 0 means unlimited
 
-        @since %Qore 2.1
+        @since %Qore 3.0
     */
     DLLEXPORT int64 getMaxChunkedBodySize() const;
 
@@ -2381,14 +2389,14 @@ int MyPollable::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) cons
 
         @param size maximum body size in bytes; 0 means unlimited
 
-        @since %Qore 2.1
+        @since %Qore 3.0
     */
     DLLEXPORT void setHttp2MaxRequestBodySize(int64 size);
 
     //! Returns the maximum request body size for HTTP/2 streams
     /** @return the maximum body size in bytes; 0 means unlimited
 
-        @since %Qore 2.1
+        @since %Qore 3.0
     */
     DLLEXPORT int64 getHttp2MaxRequestBodySize() const;
 

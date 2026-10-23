@@ -62,7 +62,7 @@ cannot deadlock with a thread that keeps to the order.
 | 510 | condition waker (`cond_waker.lck`) | ACQUIRE | — |
 | 520 | stack lock (`stack_lck`) | ACQUIRE | — (only `pthread_create()`) |
 | 900 | AOT PC map attach lock (`g_aot_pc_attach_lock`) | ACQUIRE | AOT PC map lock, environment |
-| 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT PC map, the AOT pending constants, the AOT regex cache and the content hashes of the sources of linked AOT modules), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list) | ACQUIRE | environment, debug output, allocation tracking |
+| 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT PC map, the AOT pending constants, the AOT regex cache, the content hashes of the sources of linked AOT modules, and the QUIC idle-close test hook of debug builds), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list) | ACQUIRE | environment, debug output, allocation tracking |
 | 1500 | environment (`SystemEnvironment`) | ACQUIRE | debug output, allocation tracking |
 | 1900 | debug output (`printd()`) | ACQUIRE | allocation tracking |
 | 1950 | allocation tracking (only with `ENABLE_ALLOC_TRACKING`) | ACQUIRE | — |
@@ -109,6 +109,45 @@ callbacks run, so it is only reset in the child, which takes it again as often a
 `pthread_atfork()` in each module would not keep the order: modules register after the library, so their prepare
 handlers would run before all of the library's, and their handlers cannot be removed when a module is unloaded on
 musl or macOS.
+
+## Children that exit without exit-time handlers
+
+A child created with `fork()` exits with `exit()`, which runs the `atexit()` handlers and C++ static destructors of
+every library in the process. Third-party libraries have exit-time code that assumes the process that loaded them:
+libnode's libuv joins its thread-pool threads (a hang in the child) and Node's static `SigintWatchdogHelper`
+destroys a Mach semaphore that a macOS child does not have (an abort); nats.c's `natsLib_Destructor()` takes a lock
+that a parent thread can hold; the Oracle Instant Client frees OpenSSL state under such locks. A module cannot change
+that code, so it requests a quick exit from its child handler with `qore_fork_child_exit_quickly()`
+(`include/qore/QoreForkHandler.h`).
+
+- **The flag:** `qore_fork_quick_exit_generation` holds the fork generation (`qore_fork_generation`, incremented
+  first in the child handler of the registry) in which a request was made, 0 for none. A request only counts while
+  the registry runs the child handlers (`qore_fork_in_child_handlers`), so it is never in effect in the parent,
+  where the generation is 0, and any number of modules can make it in handlers of any rank. A child that this
+  child creates with `fork()` has the next generation, so it exits quickly only if a module requests it again in
+  that `fork()`; `exec()` replaces the process memory, so a program it starts begins without the request.
+  `qore_fork_child_exits_quickly()` compares the two generations; it takes no lock and allocates nothing.
+- **The exits:** `qore_fork_child_quick_exit(rc)` flushes the standard I/O streams and calls `_exit(rc)` if the
+  request is in effect, and returns otherwise.
+  - `qore_main_intern()` calls it after `qore_cleanup()`, so programs, threads and module delete functions are torn
+    down as in any process (an uncaught exception gives exit status 3 there).
+  - `qore_exit_process()` (`exit()`, `GetOpt` errors) calls it where it called `exit(rc)`: in a single-threaded
+    process, after stopping the signal thread, the JIT background compiler, the external thread reaper and the
+    condition waker. No program is torn down there in any process. With other threads running (or from the signal
+    thread, for a `SIGTERM` without a handler), it already ends with `_Exit(rc)`, without flushing.
+  - The executables that `qcc` compiles call it after `qore_cleanup()` too: the runtime entry points of their
+    generated `main()` (`qore_aot_run()`, `qore_aot_run_v2()` and `qore_aot_run_v3()` in `QoreAOTRuntime.cpp`) and the
+    `main()` that `qcc` writes for executables linked from script objects (`qcc-main.cpp`).
+  - Embedding programs that return from `main()` call it themselves after `qore_cleanup()`.
+- **What is skipped:** every `atexit()` handler and C++ static destructor, of every library and module, including the
+  library's own (`qore_jit_shutdown_at_exit()` is not needed: the background compiler is stopped before).
+
+Tests: `examples/test/module-cpp-api/fork-exit/fork-exit.qtest` with the `forkexita` (an `atexit()` handler that
+blocks forever in a child) and `forkexitb` (a static destructor that aborts in a child) test modules, whose child
+handlers (at `QFR_MODULE_LEAF` and `QFR_MODULE_RESET`) request a quick exit twice each. The exit-time code writes a
+marker to a pipe before it blocks or aborts, so the scenario sees whether it ran without waiting for time. The
+scenario also runs compiled with `qcc` as an AOT executable, and `ForkExitEntryLib.qr` and `ForkExitEntry.qr` are
+linked into one executable from script objects, whose children end their main program.
 
 ## One-time initialization
 

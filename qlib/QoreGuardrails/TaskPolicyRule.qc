@@ -30,7 +30,7 @@ public namespace QoreGuardrails {
     intentionally language-independent: the classifier prompt tells the model
     to classify by meaning in whatever language the user used.
 
-    @since QoreGuardrails 1.2
+    @since QoreGuardrails 1.0.0
 */
 public class TaskPolicyRule inherits AbstractGuardrailRule {
     private {
@@ -95,7 +95,7 @@ public class TaskPolicyRule inherits AbstractGuardrailRule {
     }
 
     #! Returns the DataProvider-option schema for this rule's \c params hash
-    /** @since QoreGuardrails 1.2 */
+    /** @since QoreGuardrails 1.0.0 */
     public static hash<string, hash<DataProviderOptionInfo>> getConfigSchema() {
         return {
             "policy": <DataProviderOptionInfo>{

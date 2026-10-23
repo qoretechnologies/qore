@@ -31,7 +31,7 @@ public namespace QoreModelRegistry {
     small API surface and keeps model-type dispatch out of DataProviderML
     processors and application code.
 
-    @since QoreModelRegistry 2.3
+    @since QoreModelRegistry 1.0.0
 */
 public class ModelExecutableAdapter {
     private {
@@ -191,7 +191,7 @@ public class ModelExecutableAdapter {
 
         @throw ML-REGISTRY-ERROR if the wrapped model is not an ONNX Runtime model
 
-        @since QoreModelRegistry 2.3
+        @since QoreModelRegistry 1.0.0
     */
     hash<auto> runTensors(hash<auto> inputs, *list<string> output_names) {
         if (!isOnnx()) {
@@ -253,7 +253,7 @@ public class ModelExecutableAdapter {
             model has no input tensors, or the input tensor cannot be
             represented by a numeric feature matrix
 
-        @since QoreModelRegistry 2.3
+        @since QoreModelRegistry 1.0.0
     */
     hash<auto> runFeatureMatrixTensors(list<list<float>> matrix, *string input_tensor,
             *list<string> output_names) {
@@ -290,7 +290,7 @@ public class ModelExecutableAdapter {
             model has no input tensors, or the input tensor dtype does not match
             the selected ONNX input
 
-        @since QoreModelRegistry 2.3
+        @since QoreModelRegistry 1.0.0
     */
     hash<auto> runFeatureTensor(ML::Tensor input, *string input_tensor, *list<string> output_names) {
         if (!isOnnx()) {
@@ -321,7 +321,7 @@ public class ModelExecutableAdapter {
         @throw ML-REGISTRY-ERROR if the wrapped model is not an ONNX model, the
             model has no input tensors, or the input tensor type is unsupported
 
-        @since QoreModelRegistry 2.3
+        @since QoreModelRegistry 1.0.0
     */
     string getOnnxInputTensorDtype(*string input_tensor) {
         if (!isOnnx()) {
@@ -339,7 +339,7 @@ public class ModelExecutableAdapter {
             provider information, and input/output tensor metadata when
             available
 
-        @since QoreModelRegistry 2.3
+        @since QoreModelRegistry 1.0.0
     */
     hash<auto> getProviderDiagnostics() {
         hash<auto> rv = {
@@ -384,7 +384,7 @@ public class ModelExecutableAdapter {
     /** @return inference statistics for ONNX models, or an empty hash for
         native Qore ML models
 
-        @since QoreModelRegistry 2.4
+        @since QoreModelRegistry 1.0.0
     */
     hash<auto> getInferenceStats() {
         if (!isOnnx()) {
@@ -394,7 +394,7 @@ public class ModelExecutableAdapter {
     }
 
     #! Resets ONNX Runtime inference counters for ONNX models
-    /** @since QoreModelRegistry 2.4
+    /** @since QoreModelRegistry 1.0.0
     */
     nothing resetInferenceStats() {
         if (isOnnx()) {
@@ -405,7 +405,7 @@ public class ModelExecutableAdapter {
     #! Ends ONNX Runtime profiling and returns the generated profile path
     /** @return generated profile file path or NOTHING when profiling is not active
 
-        @since QoreModelRegistry 2.4
+        @since QoreModelRegistry 1.0.0
     */
     *string endProfiling() {
         if (!isOnnx()) {
@@ -504,7 +504,7 @@ public class ModelExecutableAdapter {
         cumulative host/device transfer counters so mixed CPU/GPU registry pipelines
         can explain where transfers happen
 
-        @since QoreModelRegistry 2.6
+        @since QoreModelRegistry 1.0.0
     */
     private hash<auto> getDeviceBindingDiagnostics() {
         hash<auto> rv = {

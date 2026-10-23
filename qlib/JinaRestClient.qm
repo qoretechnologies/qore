@@ -66,6 +66,11 @@ module JinaRestClient {
     registry provided by @ref qoreragtypesintro "QoreRagTypes". RAG consumers can target Jina
     by setting the backend to \c "jina".
 
+    Jina connections belong to the Jina AI app and select the embedding and reranking models separately with the
+    <tt>embedding-model</tt> and <tt>rerank-model</tt> options. The connection ping verifies the API key with the
+    authenticated batch listing; saved connections that ping the public model catalog or the obsolete rate-limit
+    endpoint are switched to the batch listing when they are loaded.
+
     @par Example:
     @code{.py}
 #!/usr/bin/env qore
@@ -83,11 +88,6 @@ printf("%Y\n", ans.body);
     @section JinaRestClientRelnotes Release Notes
 
     @subsection JinaRestClientv1_1 JinaRestClient v1.1
-    - verifies API keys with the authenticated batch listing instead of the public model catalog
-    - migrates existing public-model and obsolete rate-limit pings, including saved configurations
-    - associates connections with the Jina AI app and provides separate embedding/reranking choices
-
-    @subsection JinaRestClientv1_0 JinaRestClient v1.0
     - initial release
 */
 

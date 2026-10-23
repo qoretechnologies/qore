@@ -6331,10 +6331,14 @@ sub main() {
         assertTrue(link_out.regex("EXIT=0"),
             "qcc links .qo containing %module-cmd metadata: " + link_out);
 
-        string run_out = backquote(sprintf("env -u JAVA_TOOL_OPTIONS -u JDK_JAVA_OPTIONS LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
-            libqore_dir, app_path));
+        # only the standard output is compared: the JVM writes a banner such as "Picked up JAVA_TOOL_OPTIONS: ..." to the
+        # standard error when JAVA_TOOL_OPTIONS or _JAVA_OPTIONS is set, as the CI images set JAVA_TOOL_OPTIONS
+        string err_path = tmp_dir + "/run.stderr";
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>%s; echo EXIT=$?", libqore_dir, app_path,
+            err_path));
         assertEq((jni_available ? "ok\n" : "no-jni\n") + "EXIT=0\n", run_out,
-            "linked .qo binary replays %module-cmd before AOT metadata resolution");
+            "linked .qo binary replays %module-cmd before AOT metadata resolution; error output: "
+            + (ReadOnlyFile::readTextFile(err_path) ?? ""));
     }
 
     testAOTModuleDependencyPrependPath() {
