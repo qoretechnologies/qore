@@ -237,13 +237,17 @@ class ThirdPartySourcesTest inherits QUnit::Test {
         assertEq(0, r.rc, r.output);
         assertRegex("1 archives in the manifest; 1 download declarations in 2 files", r.output);
 
-        # a build tree is not checked
+        # a build tree is not checked, nor another checkout in the tree (a git worktree has a .git file)
         r = checkTree(makeTree({"manifest.cmake": manifest, "CMakeLists.txt": good,
             "build/CMakeCache.txt": "",
             "build/_deps/x-src/CMakeLists.txt": "FetchContent_Declare(x URL ${u})\n",
             "other/build/CMakeCache.txt": "",
             "other/build/sub/x.cmake": "file(DOWNLOAD ${u} x)\n",
-            "_deps/y/CMakeLists.txt": "ExternalProject_Add(y GIT_REPOSITORY ${r})\n"}));
+            "_deps/y/CMakeLists.txt": "ExternalProject_Add(y GIT_REPOSITORY ${r})\n",
+            ".claude/worktrees/wt/.git": "gitdir: /src/.git/worktrees/wt\n",
+            ".claude/worktrees/wt/CMakeLists.txt": "FetchContent_Declare(z URL ${u})\n",
+            "repo/.git/HEAD": "ref: refs/heads/main\n",
+            "repo/sub/x.cmake": "file(DOWNLOAD ${u} x)\n"}));
         assertEq(0, r.rc, r.output);
 
         # each line is a CMakeLists.txt and the error it causes
