@@ -15,6 +15,7 @@
 public class DpqlDateZonesTest inherits QUnit::Test {
     constructor() : Test("DPQL date literals with zone designators", "1.0") {
         addTestCase("a date literal with a zone designator after the minutes, or in lower case", \zoneTests());
+        addTestCase("toDate() reads a UTC offset after a date as date() does", \toDateOffsetTests());
         set_return_value(main());
     }
 
@@ -40,5 +41,18 @@ public class DpqlDateZonesTest inherits QUnit::Test {
             # the record's value is compared with the instant
             assertTrue(AbstractDataProvider::evalGenericExpressionValue({"a": i.value[0]}, r.expression), i.key);
         }
+    }
+
+    toDateOffsetTests() {
+        # a date with a UTC offset of hours and minutes is midnight at that offset, as a date literal can be written
+        hash<DpqlParseResult> r = DataProvider::parseDpqlExpressionWithInfo("@a == toDate(\"2026-01-01+02:00\")");
+        assertTrue(r.success, sprintf("%y", r.diagnostics));
+        assertTrue(AbstractDataProvider::evalGenericExpressionValue({"a": 2025-12-31T22:00:00Z}, r.expression));
+        # an offset with seconds after a date can only be a time that lost its separator ("2026-10-01 10:00:00" with
+        # its space encoded as "+" in a URL query): it is refused, not read as midnight at an offset of ten hours
+        r = DataProvider::parseDpqlExpressionWithInfo("@a == toDate(\"2026-10-01+10:00:00\")");
+        assertTrue(r.success, sprintf("%y", r.diagnostics));
+        assertThrows("INVALID-DATE", "only hours and minutes", \AbstractDataProvider::evalGenericExpressionValue(),
+            ({"a": 2026-09-30T14:00:00Z}, r.expression));
     }
 }

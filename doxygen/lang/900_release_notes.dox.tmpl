@@ -625,8 +625,15 @@
       functions): <tt>"2026-01-01 10:00:00.500000 Thu +02:00 (CET)"</tt>, with an optional weekday name and a zone
       name in parentheses; the UTC offset gives the zone, also when the name is that of another zone (before, the
       offset was ignored, and the value was the local time)
-    - a date with a UTC offset, as a date literal can be written: <tt>"2026-01-01+02:00"</tt> (before, the offset was
-      ignored)
+    - a date with a UTC offset of hours or hours and minutes, as a date literal can be written:
+      <tt>"2026-01-01+02:00"</tt> is midnight at +02:00 (before, the offset was ignored)
+
+    An offset with seconds after a date without a time raises \c INVALID-DATE, as the UTC offsets of ISO 8601 and
+    RFC 3339 have only hours and minutes: <tt>"2026-10-01+10:00:00"</tt>, which a URL query gives for
+    <tt>"2026-10-01 10:00:00"</tt> when its space is encoded as \c "+", was midnight in the local time zone.  Without
+    seconds, such a value cannot be told apart from a date with an offset: <tt>"2026-10-01+10:00"</tt> is midnight at
+    +10:00 (before, midnight in the local time zone).  After a time, an offset can still have seconds, as %Qore writes
+    the offset of a zone whose offset is not a whole number of minutes.
 
     Code that passes strings with other text after the date, such as a comment, must remove it first.  The
     conversions that do not raise exceptions (a string assigned to a \c softdate, for example) still ignore the text.

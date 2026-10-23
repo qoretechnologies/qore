@@ -392,9 +392,19 @@ class DateTest inherits QUnit::Test {
             "2026-01-01T10 utc": (2026-01-01T10:00:00Z, 0),
             "2026-01-01 UTC": (2026-01-01T00:00:00Z, 0),
             "20260101T100000 GMT": (2026-01-01T10:00:00Z, 0),
-            # a date with a UTC offset, as a date literal can be written
+            # a date with a UTC offset of hours or hours and minutes, as a date literal can be written; a time that
+            # lost its separator without seconds cannot be told apart from it ("2026-10-01 10:00" with its space
+            # encoded as "+" in a URL query) and is read as midnight at that offset
             "2026-01-01+02:00": (2025-12-31T22:00:00Z, 7200),
             "2026-01-01 +02:00": (2025-12-31T22:00:00Z, 7200),
+            "2026-01-01+0200": (2025-12-31T22:00:00Z, 7200),
+            "2026-01-01+02": (2025-12-31T22:00:00Z, 7200),
+            "2026-10-01+10:00": (2026-09-30T14:00:00Z, 36000),
+            # after a time, a UTC offset can have seconds, as Qore writes the offset of a zone whose offset is not a
+            # whole number of minutes (Africa/Monrovia until 1972)
+            "1960-06-01T12:00:00-00:44:30": (1960-06-01T12:44:30Z, -2670),
+            "1960-06-01T12:00:00-004430": (1960-06-01T12:44:30Z, -2670),
+            "1960-06-01 12:00:00.000000 Wed -00:44:30 (MMT)": (1960-06-01T12:44:30Z, -2670),
             # trailing white space
             "2026-01-01T10:00:00Z \t\r\n": (2026-01-01T10:00:00Z, 0),
             # forms that were already read, for comparison
@@ -425,6 +435,23 @@ class DateTest inherits QUnit::Test {
                 "2026-01-01T10:00:00+", "2026-01-01T10:00:00.Z", "2026-01-01T10:00:00,Z", "2026-01-01T10:00:00,",
                 "2026-01-01T10Q")) {
             assertThrows("INVALID-DATE", \date(), text, text);
+        }
+        # a UTC offset after a date without a time has only hours and minutes (ISO 8601 4.2.5.1, RFC 3339 5.6): a
+        # seconds part there can only be a time that lost its separator ("2026-10-01 10:00:00" with its space
+        # encoded as "+" in a URL query), which was read as midnight at an offset of ten hours
+        TimeZone offset_tokyo("Asia/Tokyo");
+        foreach string text in (("2026-10-01+10:00:00", "2026-10-01 +10:00:00", "20261001+100000",
+                "2026-01-01+02:00:30", "2026-10-01+10:00:00 (CET)", "2026-10-01+10:00:00.5")) {
+            assertThrows("INVALID-DATE", "only hours and minutes", \date(), text, text);
+            assertThrows("INVALID-DATE", "only hours and minutes", \offset_tokyo.date(), text, "Asia/Tokyo: " + text);
+        }
+        # the strings that Qore writes for a time in a zone whose offset has seconds are read as the same instant
+        {
+            date monrovia = (new TimeZone("Africa/Monrovia")).date("1960-06-01T12:00:00");
+            assertEq(-2670, monrovia.getUtcOffset());
+            foreach string text in ((sprintf("%n", monrovia), sprintf("%y", monrovia), monrovia.format("IF"))) {
+                assertEq(monrovia.getEpochMicroseconds(), date(text).getEpochMicroseconds(), text);
+            }
         }
         # and so is any text after a complete value, which was ignored
         TimeZone tokyo("Asia/Tokyo");

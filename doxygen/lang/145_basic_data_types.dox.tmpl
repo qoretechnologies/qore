@@ -394,7 +394,14 @@ YYYY-MM-DD[THH:mm:SS[.n*]][Z|[+-]HH[:mm[:SS]]]@endverbatim
     - a fraction of a second after a comma as well as after a full stop: <tt>2026-01-01T10:00:00,5Z</tt>
       (ISO 8601)
     - \c UTC and \c GMT after the date or the time, which are UTC: <tt>2026-01-01 10:00:00 UTC</tt>
-    - a date with a UTC offset: <tt>2026-01-01+02:00</tt>
+    - a date with a UTC offset of hours or hours and minutes, as a date literal can be written:
+      <tt>2026-01-01+02:00</tt> is midnight at +02:00.  An offset with seconds after a date without a time raises
+      \c INVALID-DATE (<tt>2026-10-01+10:00:00</tt>), as the UTC offsets of ISO 8601 (section 4.2.5.1) and RFC 3339
+      (section 5.6) have only hours and minutes, and a seconds part there can only be a time that lost its
+      separator, such as <tt>2026-10-01 10:00:00</tt> with its space encoded as \c "+" in a URL query.  Without
+      seconds, such a time cannot be told apart from an offset: <tt>2026-10-01+10:00</tt> is midnight at +10:00
+    - after a time, a UTC offset with seconds, as %Qore writes the offset of a zone whose offset is not a whole number
+      of minutes (<tt>1960-06-01 12:00:00 -00:44:30</tt> in \c Africa/Monrovia, which used that offset until 1972)
     - the format in which %Qore writes a date with \c "%n": an optional weekday name after the time and a zone name
       in parentheses after the UTC offset (<tt>2026-01-01 10:00:00.500000 Thu +02:00 (CET)</tt>); the weekday is not
       checked, and the zone name is not read: the offset gives the zone

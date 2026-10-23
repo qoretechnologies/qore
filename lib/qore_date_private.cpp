@@ -110,12 +110,16 @@ static bool is_zone_start(const char* p) {
 //! seconds, each with or without a ":" separator ("+02", "+02:00", "+0200", "-05:30:15")
 /** @param str the whole string, for error messages
     @param p the position of the sign; on success, the position after the offset
+    @param allow_seconds true if the offset can have seconds: after a time, as %Qore writes the offset of a zone
+    whose offset is not a whole number of minutes ("-00:44:30"); not after a date without a time, where ISO 8601
+    (section 4.2.5.1) and RFC 3339 (section 5.6) offsets have only hours and minutes, and a seconds part can only be a
+    time that lost its separator ("2026-10-01+10:00:00" for "2026-10-01 10:00:00" with its space encoded as "+")
     @param offset the offset in seconds east of UTC
     @param xsink for an exception if the offset cannot be read; can be nullptr
 
     @return 0 if the offset was read, -1 if not
 */
-static int read_utc_offset(const char* str, const char*& p, int& offset, ExceptionSink* xsink) {
+static int read_utc_offset(const char* str, const char*& p, bool allow_seconds, int& offset, ExceptionSink* xsink) {
     int mult = *p == '-' ? -1 : 1;
     ++p;
     if (!isdigit(*p)) {
@@ -159,6 +163,14 @@ static int read_utc_offset(const char* str, const char*& p, int& offset, Excepti
             }
             break;
         }
+        if (i && !allow_seconds) {
+            if (xsink) {
+                xsink->raiseException("INVALID-DATE", "cannot parse date/time string '%s'; a UTC offset after a date "
+                    "without a time has only hours and minutes, as in ISO 8601 and RFC 3339; a seconds part there can "
+                    "only be a time without its separator", str);
+            }
+            return -1;
+        }
         int v = *q - '0';
         ++q;
         if (isdigit(*q)) {
@@ -185,13 +197,15 @@ static bool is_weekday_abbr(const char* p) {
 
 //! Reads what can follow a complete date or time in a date/time string, and refuses any other text
 /** After a time, a weekday name abbreviation, as Qore writes a date (\c "Thu"); then a zone designator: the UTC
-    designator \c Z (also \c z, RFC 3339 section 5.6), \c UTC, \c GMT or a UTC offset, also after a space; then,
+    designator \c Z (also \c z, RFC 3339 section 5.6), \c UTC, \c GMT or a UTC offset (with seconds only after a
+    time; see read_utc_offset()), also after a space; then,
     after a zone designator, a zone name in parentheses, which is not read, as the designator gives the zone (Qore
     writes a date as <tt>2026-01-01 10:00:00.500000 Thu +01:00 (CET)</tt>); then white space.
 
     @param str the whole string, for error messages
     @param p the position after the date or the time
-    @param after_time true if a time precedes, after which a weekday name can be written
+    @param after_time true if a time precedes, after which a weekday name and a UTC offset with seconds can be
+    written
     @param zone the zone; set to UTC or to the zone of the UTC offset if one is given, otherwise left as it is
     @param xsink for an exception for any other text; can be nullptr
 
@@ -220,7 +234,7 @@ static int read_date_suffix(const char* str, const char* p, bool after_time, con
         have_zone = true;
     } else if (*q == '+' || *q == '-') {
         int offset = 0;
-        if (read_utc_offset(str, q, offset, xsink)) {
+        if (read_utc_offset(str, q, after_time, offset, xsink)) {
             return -1;
         }
         zone = findCreateOffsetZone(offset);
