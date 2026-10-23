@@ -13,6 +13,8 @@
 class SerializationConfigTest inherits QUnit::Test {
     private {
         *string connstr = ENV.QORE_DB_CONNSTR_MYSQL;
+        bool connection_checked = False;
+        bool connection_unavailable = False;
     }
 
     constructor() : Test("SqlUtil serialization configuration", "1.0", \ARGV) {
@@ -31,7 +33,24 @@ class SerializationConfigTest inherits QUnit::Test {
         if (!connstr) {
             testSkip("set QORE_DB_CONNSTR_MYSQL for the live serialization regression");
         }
+        if (connection_unavailable) {
+            testSkip("MySQL server unavailable");
+        }
         Datasource ds(connstr);
+        # Check the optional service once, before exercising typed configuration.  A configured CI service
+        # can be unavailable; serialization and typed-option errors must still fail the test.
+        if (!connection_checked) {
+            connection_checked = True;
+            try {
+                ds.open();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "DBI:MYSQL:CONNECT-ERROR") {
+                    rethrow;
+                }
+                connection_unavailable = True;
+                testSkip("MySQL server unavailable");
+            }
+        }
         ds.setOption("connect-timeout", 2);
         return ds;
     }
