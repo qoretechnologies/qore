@@ -3972,3 +3972,19 @@ semantics. The aim is to remove a C++ dispatch frame, not change call observabil
 The inspected reusable path already passes RuntimeConfig and has no TLS lookup.
 This future design is unimplemented; Java parity and a global ceiling remain
 unestablished. Keep the rejected cleanup and guard-shape experiments rejected.
+
+## Rejected reusable callback inline pop (2026-10-23)
+
+A compiler-selected v6 prototype inlined the full per-call reader handshake
+for reusable scalar callbacks, retaining the existing scratch/release ABI and
+all guards. It removed an outlined pop call without growing helper/caller
+stack or register saves, but the optimized three-layout screen was 3.300%
+slower across four targets versus before and 2.996% slower versus the disabled
+control. It failed the fixed benefit gate and was removed; v4/v5 remain.
+The integer direct-result case improved while its floating counterpart
+regressed about 25%, so no universal benefit is inferred from instruction
+counts. Candidate and restored selected Release checks pass; full details,
+limitations and the 62-item retained-evidence audit are in
+`bench/runtime-comparison/results-aot-reusable-pop-rejected-macos-arm64.json`.
+A separate result-initialization compile probe is next, not a retained change
+or speedup. Java parity and a global performance ceiling remain unestablished.

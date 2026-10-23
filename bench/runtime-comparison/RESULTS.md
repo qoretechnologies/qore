@@ -20201,3 +20201,83 @@ performance ceiling remain unestablished.
 The raw timings, fixtures, failures, skips, dependency hashes, drivers,
 independent reviews and all 62 audit results are preserved in
 [results-aot-constructor-default-binding-macos-arm64.json](results-aot-constructor-default-binding-macos-arm64.json).
+
+## Rejected reusable-callback inline pop (2026-10-23)
+
+The specialized inline-pop prototype is **rejected and removed**. Baseline
+`9e25144df` includes the audited `origin/develop` integration through
+`a344dd8c9`. Release uses `-O3 -DNDEBUG`, allocation tracking off, LLVM
+22.1.8, and fresh `qcc -O3` executables for before/candidate/disabled.
+Three forks, three warmup plus three measured 300 ms windows, 4096 items,
+seed 7 and default/reverse/shuffle-487 link layouts produce 432 runs and
+1296 measured windows. No owned build, test or profile overlaps timing.
+
+The four-target geometric mean is **3.300% slower than before** and
+**2.996% slower than the same-runtime disabled control**. The frozen screen
+gate requires at least 3% improvement against both, plus 5% on ordinary
+integer or floating callbacks. It fails; no confirmation or broad55 run
+was performed. Regression flags from this single screen remain unconfirmed,
+not repeated-regression evidence. All gains and losses are retained.
+
+Values are ns/item: median of three layout medians of fork means. They
+include loop, call, computation and checksum work, not isolated call latency.
+The four targets are unary callbacks in two result-consumption shapes; the
+zero-argument helpers have code/semantic coverage but no separate timing.
+
+|!Workload|!Before|!Candidate|!Disabled|!Vs before|!Vs disabled
+|indirect_call|7.211329|7.290268|7.229989|+1.095%|+0.834%
+|indirect_float|6.903444|6.869528|6.863799|-0.491%|+0.083%
+|indirect_int_result|6.645872|6.039672|6.763125|-9.121%|-10.697%
+|indirect_float_result|7.824647|9.745641|7.804747|+24.551%|+24.868%
+|direct_call|1.570911|1.583565|1.566373|+0.806%|+1.098%
+|method_call|1.644636|1.643615|1.653007|-0.062%|-0.568%
+|indirect_affine|7.113912|7.165333|7.054808|+0.723%|+1.567%
+|monomorphic_call|3.566747|3.612729|3.610633|+1.289%|+0.058%
+|monomorphic_float_call|3.555503|3.552413|3.515690|-0.087%|+1.045%
+|polymorphic_call|22.783019|22.487890|22.636842|-1.295%|-0.658%
+|polymorphic_float_call|23.535437|23.435070|23.640399|-0.426%|-0.869%
+|closure_call|16.455332|16.344535|16.051825|-0.673%|+1.824%
+|closure_capture|22.643056|23.074780|23.022133|+1.907%|+0.229%
+|list_build|27.288729|27.242557|27.004785|-0.169%|+0.880%
+|list_mutate|190.844470|193.537827|192.131293|+1.411%|+0.732%
+|temporary_hash|341.729740|338.998597|334.699808|-0.799%|+1.284%
+
+The candidate adds four compiler-selected v6 helpers using the existing
+208-byte scratch/release ABI, retaining the v5 closure-miss route. It inlines
+the identical reader-completion handshake only for reusable callback cleanup;
+all atomic orderings, live guards, stack checks and cold materialization remain.
+Each helper retains its 80-byte stack frame and register saves, and removes
+the separate pop call and that callee's 32-byte frame. All 149 generated
+non-startup function bodies match before after substituting helper names;
+the disabled control matches before exactly. Startup differs only in the
+compressed metadata byte count. The four measured callers retain their
+instruction counts and stack/save burden. This favorable static evidence
+did not translate into a reliable throughput improvement.
+
+Candidate qualification passes 13 Release fixtures / 74 cases / 7319
+assertions without skips or source fallback, plus 5550 reference comparisons
+across nine fresh artifacts and an old executable on the candidate runtime.
+The first focused attempt passed 4178 assertions but fell back to source
+because three qmods had the previous runtime identity; it was rejected as
+qualification, the modules were rebuilt, and the complete selection rerun.
+Its child exit is recorded; the expired outer session's exit is unavailable.
+No runtime-identity check was bypassed.
+
+Exact original production and fixture bytes are restored. Fresh core and test
+qmods are rebuilt; restored Release passes 13 fixtures / 74 cases /
+6841 assertions, plus 555 IR and 555 legacy-AOT reference comparisons.
+The rebuilt library is not byte-identical to the frozen baseline; fresh checks
+qualify it separately. Debug code was not changed by this experiment. No new
+Debug, full-suite, sanitizer or cross-platform certification is claimed.
+
+The audit applies to the retained documentation/evidence: all 62 items,
+7 Pass / 55 N/A / zero Fail. No production change or performance benefit is
+retained. No fresh Java ratio, fresh develop comparison, or global ceiling
+follows from this screen. Raw samples, failed attempts, code checks, provenance,
+drivers, restoration and the full audit are in
+[results-aot-reusable-pop-rejected-macos-arm64.json](results-aot-reusable-pop-rejected-macos-arm64.json).
+
+Next inspect a separate compile-only change moving the redundant default
+result store to failed callback completion. It must preserve handled-error
+and C++ unwind output, the complete handshake, and every live guard. Reject
+before timing if generated hot calls or stack/register-save costs increase.
