@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ForeachClosureVarRecursionTest
+
+#! Tests foreach variables that a closure or a reference uses, in recursive calls
+/** A foreach variable that a closure or a reference uses is created lazily by compiled code, at its first write.  The
+    write of an assignment through an lvalue path did not create it, so in a compiled module, the variable was found by
+    name in the frame of the recursive caller: a reference foreach whose body passed a reference to its variable to a
+    call that recursed into the loop replaced the first element of every nested list with @ref NOTHING.
+
+    The worker runs with the module from source in every execution mode, with the module compiled with qcc, and as an
+    executable compiled with qcc that loads the compiled module.
+*/
+class ForeachClosureVarRecursionTest inherits QUnit::Test {
+    public {
+        #! the lines that the worker prints
+        const Expected = (
+            "[{wrapped: 1}, [{wrapped: 2}, [{wrapped: 3}, {wrapped: 4}]], {wrapped: 5}]",
+            "[\"1\", \"2\", \"3\", \"4\", \"4\", \"4\", \"[3, 4]\", \"[3, 4]\", \"[3, 4]\", \"[2, [3, 4]]\", \"5\", \"5\", "
+                "\"5\", \"5\"]",
+            "[\"1\", \"2\", \"3\", \"4\", \"4\", \"4\", \"[3, 4]\", \"[3, 4]\", \"[3, 4]\", \"[2, [3, 4]]\", \"5\", \"5\", "
+                "\"5\", \"5\"]",
+        );
+
+        #! the name of the module
+        const ModuleName = "ForeachClosureVarRecursion";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script_dir;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("ForeachClosureVarRecursion", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script_dir = get_script_dir();
+        worker = script_dir + DirSep + "foreach-closure-var-recursion-worker.qr";
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+        addTestCase("compiled executable", \testCompiledExecutable());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s "
+                "%s", libqore_dir, script_dir, qore_bin, mode, worker)));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-foreach-closure-var-recursion-");
+        compileModule(tmp.path);
+        checkOutput("module", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s",
+            libqore_dir, tmp.path, qore_bin, worker)));
+    }
+
+    testCompiledExecutable() {
+        TmpDir tmp("qore-foreach-closure-var-recursion-");
+        compileModule(tmp.path);
+        string exe = tmp.path + DirSep + "foreach";
+        string out = backquote(sprintf("QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -o %s %s 2>&1", libqore_dir, tmp.path,
+            qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
+            libqore_dir, tmp.path, exe)));
+    }
+
+    #! compiles the module with qcc in the given directory
+    private compileModule(string dir) {
+        string qmod = dir + DirSep + ModuleName + ".qmod";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, qmod,
+            script_dir + DirSep + ModuleName + ".qm"));
+        assertTrue(is_file(qmod), "compiled the module: " + out);
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(Expected, lines, label + ": " + out);
+    }
+}

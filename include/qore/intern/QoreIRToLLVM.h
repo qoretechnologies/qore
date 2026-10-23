@@ -1047,6 +1047,13 @@ private:
     // Emit qore_rt_instantiate_local calls for all function locals at current insert point
     void emitLocalInstantiation(llvm::Module& module);
 
+    //! Emits the instantiation of a closure-use local that an assignment writes, in the current frame
+    /** Idempotent at runtime: the helper does nothing when the variable already exists in the current frame.  An
+        assignment can be the first write of a block-scoped closure-use local (such as a foreach variable), which is
+        created lazily; without it, the variable would be resolved by name in a caller's frame.
+    */
+    void emitAssignedClosureLocalInstantiation(const LocalVar* root_local, llvm::Module& module);
+
     // Pre-create LLVM allocas for all function locals so reloadAllLocalsFromRuntime can find them
     void preCreateLocalAllocas(llvm::Module& module, llvm::Function* llvm_func);
 

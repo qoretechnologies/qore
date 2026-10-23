@@ -2500,6 +2500,24 @@ void QoreIRToLLVM::emitLocalInstantiation(llvm::Module& module) {
     }
 }
 
+void QoreIRToLLVM::emitAssignedClosureLocalInstantiation(const LocalVar* root_local, llvm::Module& module) {
+    if (!root_local || !root_local->closureUse()) {
+        return;
+    }
+    if (aot_mode) {
+        auto inst_helper = module.getOrInsertFunction("qore_rt_instantiate_local_aot",
+                llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
+        int32_t local_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
+                reinterpret_cast<const void*>(root_local));
+        builder->CreateCall(inst_helper, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, local_slot)});
+    } else {
+        auto inst_helper = module.getOrInsertFunction("qore_rt_instantiate_local",
+                llvm::FunctionType::get(void_type, {ptr_type}, false));
+        llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(root_local));
+        builder->CreateCall(inst_helper, {builder->CreateIntToPtr(var_ptr, ptr_type)});
+    }
+}
+
 void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* llvm_func) {
     llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
     llvm::IRBuilder<> alloca_builder(entry, entry->begin());
@@ -18139,25 +18157,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t lv_bits;
                 std::memcpy(&lv_bits, &lv, sizeof(lv_bits));
                 llvm::Value* val_boxed = boxValue(val, inv->operands[0].id);
-                if (LocalVar* root_local = findLvalueRootLocalVar(lv);
-                        root_local && root_local->closureUse()) {
-                    const void* local_key = reinterpret_cast<const void*>(root_local);
-                    if (aot_mode) {
-                        auto inst_helper = module.getOrInsertFunction(
-                                "qore_rt_instantiate_local_aot",
-                                llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
-                        int32_t local_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(local_key);
-                        builder->CreateCall(inst_helper, {aot_ctx_arg,
-                                llvm::ConstantInt::get(i32_type, local_slot)});
-                    } else {
-                        auto inst_helper = module.getOrInsertFunction(
-                                "qore_rt_instantiate_local",
-                                llvm::FunctionType::get(void_type, {ptr_type}, false));
-                        llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
-                                reinterpret_cast<uint64_t>(root_local));
-                        builder->CreateCall(inst_helper, {builder->CreateIntToPtr(var_ptr, ptr_type)});
-                    }
-                }
+                emitAssignedClosureLocalInstantiation(findLvalueRootLocalVar(lv), module);
                 // Clear reload tracker for lvalue target local
                 {
                     const void* local_key = findLvalueRootLocalKey(lv);
@@ -27559,25 +27559,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             uint64_t lv_bits;
             std::memcpy(&lv_bits, &lv, sizeof(lv_bits));
             llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
-            if (LocalVar* root_local = findLvalueRootLocalVar(lvinst->lvalue);
-                    root_local && root_local->closureUse()) {
-                const void* local_key = reinterpret_cast<const void*>(root_local);
-                if (aot_mode) {
-                    auto inst_helper = module.getOrInsertFunction(
-                            "qore_rt_instantiate_local_aot",
-                            llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
-                    int32_t local_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(local_key);
-                    builder->CreateCall(inst_helper, {aot_ctx_arg,
-                            llvm::ConstantInt::get(i32_type, local_slot)});
-                } else {
-                    auto inst_helper = module.getOrInsertFunction(
-                            "qore_rt_instantiate_local",
-                            llvm::FunctionType::get(void_type, {ptr_type}, false));
-                    llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(root_local));
-                    builder->CreateCall(inst_helper, {builder->CreateIntToPtr(var_ptr, ptr_type)});
-                }
-            }
+            emitAssignedClosureLocalInstantiation(findLvalueRootLocalVar(lvinst->lvalue), module);
             // Clear the reload tracker for the lvalue target local (same pattern
             // as compound assign — prevents refcount inflation in loops).
             {
@@ -31309,6 +31291,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             const void* local_key = findLVPathRootLocalKey(path_inst);
+            // an assignment can be the first write of a closure-use local of this function: it is created in this
+            // frame first, as for StoreLValue; a variable of another scope (a top-level local or a variable that a
+            // closure captures) already exists and must not be shadowed in this frame
+            if (inst->opcode == QoreIROpcode::LValuePathAssign && local_key && !direct_self_mutation
+                    && current_body_locals.count(local_key)) {
+                emitAssignedClosureLocalInstantiation(reinterpret_cast<const LocalVar*>(local_key), module);
+            }
             if (local_key && !direct_self_mutation) {
                 clearLocalCachedValue(local_key, module, llvm_func,
                     LocalCacheClearMode::DuplicateRefsOnly);
