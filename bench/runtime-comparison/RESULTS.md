@@ -20466,3 +20466,81 @@ checks, provenance, reproduction and audit are in
 [results-merge-28a6bbcb14-macos-arm64.json](results-merge-28a6bbcb14-macos-arm64.json)
 (SHA-256 `17d384cd81dc040f53b5cefa9a2b42e875b050aaaaca62740db4c47b063ac93e`).
 No new speedup, Java ratio or global performance ceiling is claimed.
+
+## Rejected general callback owner proof (2026-10-23)
+
+Baseline `1d6f7c8d03` includes develop through `28a6bbcb14`. The additive
+v8 experiment is rejected and removed under its prospective combined gate.
+Release uses `-O3 -DNDEBUG`, allocation tracking off, LLVM 22.1.8 and fresh
+`qcc -O3` executables. Three forks, three warmups plus three measured 300 ms
+windows, 4096 items, seed 7 and default/reverse/shuffle-487 layouts yield 432 runs
+and 1296 measured windows, without overlapping owned build/test/profile work.
+
+The four-target geometric mean improves **4.009% versus before** and
+**4.902% versus disabled**, meeting the 3% requirement. The separate requirement
+for at least 5% on ordinary integer or floating callbacks against both controls
+is not met: integer improves 2.118%/1.722%, floating 0.384%/2.375%. Native-result
+consumption is more promising: integer improves 5.590%/5.624%, floating
+7.767%/9.676%. These are single-screen results; no confirmation or broad 55
+run was performed and no speedup is retained. Single-layout polymorphic and
+closure regression flags against before are also unconfirmed.
+
+Values are ns/item, including loop/call/computation/checksum work, using the
+median of three layout medians of per-fork means; not isolated call latency.
+
+|!Workload|!Before|!Candidate|!Disabled|!Vs before|!Vs disabled
+|indirect_call|6.795376|6.651428|6.767966|-2.118%|-1.722%
+|indirect_float|6.365948|6.341471|6.495728|-0.384%|-2.375%
+|indirect_int_result|6.169797|5.824890|6.171972|-5.590%|-5.624%
+|indirect_float_result|7.092776|6.541854|7.242649|-7.767%|-9.676%
+|direct_call|1.412286|1.425549|1.425962|+0.939%|-0.029%
+|method_call|1.500493|1.506779|1.512733|+0.419%|-0.394%
+|indirect_affine|6.623747|6.544047|6.599008|-1.203%|-0.833%
+|monomorphic_call|3.389087|3.400852|3.403216|+0.347%|-0.069%
+|monomorphic_float_call|3.346228|3.339880|3.384134|-0.190%|-1.308%
+|polymorphic_call|20.941855|21.218320|21.433635|+1.320%|-1.005%
+|polymorphic_float_call|22.669266|22.046064|22.082309|-2.749%|-0.164%
+|closure_call|15.187277|15.233491|15.218723|+0.304%|+0.097%
+|closure_capture|20.742295|20.790460|20.766116|+0.232%|+0.117%
+|list_build|24.932780|24.682613|24.675402|-1.003%|+0.029%
+|list_mutate|176.011201|175.690502|177.331870|-0.182%|-0.926%
+|temporary_hash|313.275888|312.037477|306.234636|-0.395%|+1.895%
+
+V8 consumes a nonempty owner match established by its public wrapper. A
+scoped adapter inlines both layers of the complete physical stack guard, and
+the one-time frame initialization is marked unlikely. All four new helpers
+remove a redundant owner load/comparison/branch and the x23/x24 save pair.
+Unary frames remain 80 bytes; zero-argument frames shrink 80 to 64 bytes. All four legacy
+helpers and five old wrappers match baseline normalized code; all new bodies
+match the reviewed probe. The 149 non-startup LLVM functions differ only at
+twelve helper names, and the four timed callers keep their instruction counts,
+frames and saves. All live Program/debugger/body/readiness checks, fallback,
+closure routing, 208-byte scratch/release ABI and reader synchronization remain.
+
+Three isolated compile probes precede the versioned candidate. One-level
+inlining still outlines the inner stack guard and adds saves; full-guard
+inlining removes that call but grows the floating-unary frame from 80 to 96 bytes. Both
+are declined untimed. Marking first-time frame setup unlikely passes the
+assembly gate; only its additive version is linked and timed. The initial
+application's EOF whitespace failure is preserved and was fixed before build.
+
+Candidate qualification passes 13 Release fixtures / 74 cases / 7319 assertions,
+without skips or source fallback, plus 5550 reference comparisons across nine
+fresh artifacts and an old executable on the new runtime. All outer exits
+and waited child exits are observed and recorded.
+
+All 12 changed production/compiler/fixture files are restored exactly. The core
+and 252 qmod targets are rebuilt, and 253 Release aliases restored. Fresh selected
+Release checks pass 13 fixtures / 74 cases / 6841 assertions and 1110 IR/AOT
+references. The rebuilt core artifacts do not match the frozen baseline bytes and
+are qualified separately. No candidate Debug or full-suite run is claimed.
+
+Full evidence and the 62-item retained audit (7 Pass / 55 N/A / zero Fail) are in
+[results-aot-reusable-owner-proof-rejected-macos-arm64.json](results-aot-reusable-owner-proof-rejected-macos-arm64.json).
+No fresh Java/develop ratio, parity or global performance ceiling follows.
+
+Next prove a compiler-selected invocation-invariant callback/cache contract
+to omit the wrapper identity comparison too. Ordinary/reloaded locals and
+conflicting cache producers must stay on existing helpers. The native-result
+findings could motivate a separately scoped candidate with a new prospective
+campaign; they do not change this experiment's acceptance criteria.

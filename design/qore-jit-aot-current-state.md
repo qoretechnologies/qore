@@ -4051,3 +4051,20 @@ disabled measurements. Separately, invocation-invariant LLVM callback arguments
 may support a stronger cache-owner proof. That requires a distinct helper,
 complete cache lifetime proof and actual path verification. Reader synchronization
 remains unchanged; Java parity and a global ceiling remain unestablished.
+
+## Rejected general callback owner proof (2026-10-23)
+
+The qualified merged baseline is `1d6f7c8d03` / develop `28a6bbcb14`. An
+additive v8 owner-proof/cold-init experiment improves the optimized four-target
+screen 4.009% versus before and 4.902% versus disabled, but ordinary integer/float
+callbacks miss its separate 5% criterion. Native-result cases improve 5.6–7.8%
+versus before in this screen. The combined gate fails; no confirmation/broad 55
+was run, and all 12 source/fixture changes are removed. Restored Release core,
+all 252 qmods, selected fixtures and references are requalified.
+
+RESULTS and `bench/runtime-comparison/results-aot-reusable-owner-proof-rejected-macos-arm64.json`
+preserve all probes, measurements, limits and the 62-item retained audit.
+Next prove invocation-invariant compiler operands and cache ownership before
+removing the wrapper check. Mutable guards and reader synchronization remain.
+A native-result-only candidate needs its own prospective validation; no parity
+or global ceiling is established.
