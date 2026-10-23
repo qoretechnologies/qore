@@ -3716,6 +3716,49 @@ QoreSandboxManager* qore_find_thread_sandbox_manager_ref() {
     return find_thread_sandbox_manager_ref_intern();
 }
 
+bool qore_reflection_has_module_caller(const QoreProgram* caller, const QoreProgram* target,
+        ExceptionSink* xsink, const QoreClass* cls) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    bool found_caller = td->current_pgm == caller;
+    unsigned iterations = 0;
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        if (++iterations % 100 == 0 && qore_check_cancel(xsink, "checking reflection module callers")) {
+            return false;
+        }
+        const QoreProgram* pgm = ch->getOldProgram();
+        if (!pgm) {
+            continue;
+        }
+        if (!found_caller) {
+            found_caller = pgm == caller;
+            continue;
+        }
+        if (pgm == target) {
+            return true;
+        }
+        if (!pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
+            // Importing a public module class authorizes calls to that class, not arbitrary execution in the
+            // module's Program. Builtins and classes merely handed over from unrelated Programs do not qualify.
+            if (!cls || cls->isSystem() || !cls->isModulePublic() || cls->getSourceProgram() != target
+                    || !target->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
+                return false;
+            }
+            QoreParseOptions restricting = QoreParseOptions(QDOM_ALL)
+                & ~QoreParseOptions::POSITIVE_OPTIONS & ~QoreParseOptions(QDOM_IN_MODULE);
+            if ((pgm->getParseOptions() & restricting) & ~target->getParseOptions()) {
+                return false;
+            }
+            const QoreClass* imported = pgm->findClass(cls->getPath(), xsink);
+            return !*xsink && imported && imported->getID() == cls->getID()
+                && imported->getSourceProgram() == target;
+        }
+    }
+    return false;
+}
+
 QoreSandboxManager* qore_find_thread_sandbox_policy_manager_ref() {
     return find_thread_sandbox_manager_ref_intern(nullptr, true);
 }

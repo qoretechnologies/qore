@@ -1,0 +1,73 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires GoogleDataProvider
+%requires HttpServer
+%requires json
+%exec-class GoogleRequestTargetsTest
+
+#! Records the actual HTTP target received from the provider's REST client
+class GoogleTargetHandler inherits AbstractHttpRequestHandler {
+    public { Queue requests(); }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests.push({"method": hdr.method, "path": cx.raw_path, "body": body ? parse_json(body) : NOTHING});
+        hash<auto> reply = cx.raw_path =~ /^\/gmail\// ? {"id": "message-1"}
+            : {"id": "event-1", "summary": "Existing meeting"};
+        return makeResponse(200, make_json(reply), {"Content-Type": "application/json"});
+    }
+}
+
+public class GoogleRequestTargetsTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        GoogleTargetHandler handler;
+        RestClientIo::RestClientIo rest;
+    }
+
+    constructor() : Test("Google Discovery request targets", "1.0", \ARGV) {
+        addTestCase("empty Discovery base path produces an absolute target", \gmailTargetTest());
+        addTestCase("Calendar update and backfill use the Discovery base path", \calendarTargetTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        handler = new GoogleTargetHandler();
+        server.setDefaultHandler("targets", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        rest = new RestClientIo::RestClientIo({"url": "http://127.0.0.1:" + port + "/client-root",
+            "data": "json", "protocol": "h1", "timeout": 5000});
+    }
+
+    globalTearDown() {
+        if (rest) { rest.close(); }
+        if (server) { server.stop(); }
+    }
+
+    gmailTargetTest() {
+        GoogleApiDataProvider provider(rest, "gmail", "users/messages/get", {"userId": "me"});
+        assertEq("message-1", provider.doRequest({"id": "a/b? c", "format": "metadata"}).id);
+        hash<auto> req = handler.requests.get(5000);
+        assertEq("GET", req.method);
+        assertEq("/gmail/v1/users/me/messages/a%2Fb%3F%20c?format=metadata", req.path,
+            "empty basePath gains a slash, path args stay encoded, and the client root is ignored");
+    }
+
+    calendarTargetTest() {
+        GoogleApiDataProvider provider(rest, "calendar", "events/update", {"calendarId": "primary"});
+        assertEq("event-1", provider.doRequest({"eventId": "event-1", "summary": "Updated meeting"}).id);
+        hash<auto> read = handler.requests.get(5000);
+        hash<auto> write = handler.requests.get(5000);
+        assertEq("GET", read.method, "missing event fields are backfilled first");
+        assertEq("PUT", write.method);
+        assertEq("/calendar/v3/calendars/primary/events/event-1", read.path);
+        assertEq(read.path, write.path, "read and update both use the schema root exactly once");
+        assertEq("Updated meeting", write.body.summary, "backfill preserves the requested update");
+        assertEq("event-1", write.body.id, "missing fields are copied from the existing event");
+    }
+}

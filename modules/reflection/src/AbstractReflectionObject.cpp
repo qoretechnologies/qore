@@ -71,7 +71,7 @@ int reflection_check_class_call(const QoreReflectionCaller& caller, const QoreCl
         bool create, ExceptionSink* xsink) {
     bool caller_refused = false;
     if (caller.allowsDomain(cls->getDomain(), target, &caller_refused)) {
-        return caller.checkProgramAccess(target, "execute code in", xsink);
+        return caller.checkClassCallAccess(cls, target, xsink);
     }
     // the message of create_object() when the calling code's restrictions refuse the class
     xsink->raiseException(create ? "CREATE-OBJECT-ERROR" : "INVALID-FUNCTION-ACCESS", "%s sandboxing restrictions "
@@ -96,7 +96,7 @@ int reflection_check_variant_call(const QoreReflectionCaller& caller, const Qore
         const char* cname, const char* fname, const QoreProgram* target, ExceptionSink* xsink) {
     bool caller_refused = false;
     if (caller.allowsDomain(variant->getDomain(), target, &caller_refused)) {
-        return caller.checkProgramAccess(target, "execute code in", xsink);
+        return caller.checkClassCallAccess(variant->getClass(), target, xsink);
     }
     // the message of a call resolved at run time when the calling code's restrictions refuse the variant
     xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to %s '%s%s%s(%s)'",

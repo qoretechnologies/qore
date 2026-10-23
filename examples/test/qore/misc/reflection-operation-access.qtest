@@ -49,6 +49,7 @@ Model::changed = 0;
         addTestCase("builtin constructors and factories cannot borrow target privileges", \builtinCalls());
         addTestCase("object methods, copy and destruction check the object's Program", \objectCalls());
         addTestCase("trusted modules have an exception only for member initializers", \moduleAccess());
+        addTestCase("modules can call back into their active application caller", \moduleCallbacks());
         set_return_value(main());
     }
 
@@ -220,6 +221,29 @@ Model::changed = 0;
             assertEq(0, changed.getValue());
             assertEq(7, ReflectionAccessProbe::defaultValue(TypedHash::forName(pgm, "Model::Order").getMember("count")));
             assertEq(1, changed.getValue());
+        }
+    }
+
+    moduleCallbacks() {
+        foreach int options in (PO_ALLOW_INJECTION, PO_ALLOW_DEBUGGER) {
+            Program pgm(BaseOptions | options, True);
+            pgm.parse(TargetSource + "%requires ReflectionAccessProbe\n"
+                "auto sub callback() { return ReflectionAccessProbe::call(Function::forName(\"Model::update\")); }\n"
+                "auto sub readback() { return ReflectionAccessProbe::read(GlobalVar::forName(\"Model::changed\")); }\n"
+                "auto sub indirect(Program reader, Function func) { return reader.callFunction(\"relay\", func); }",
+                "reflection-module-callback");
+            pgm.run();
+            assertEq(1, pgm.callFunction("callback"));
+            assertEq(1, pgm.callFunction("readback"));
+
+            # An intervening application Program must not borrow an outer caller's authority through a module.
+            Program reader(BaseOptions, True);
+            reader.parse("%modern\n%requires reflection\n%requires ReflectionAccessProbe\n"
+                "auto sub relay(Function func) { try { return ReflectionAccessProbe::call(func); } "
+                "catch (hash<ExceptionInfo> ex) { return ex.err; } }", "reflection-module-intervening-program");
+            assertEq("REFLECTION-ACCESS-ERROR", pgm.callFunction("indirect", reader,
+                Function::forName(pgm, "Model::update")));
+            assertEq(1, GlobalVar::forName(pgm, "Model::changed").getValue());
         }
     }
 }

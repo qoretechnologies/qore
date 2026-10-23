@@ -1,0 +1,118 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../qore/misc/reflection-operation-access"
+%prepend-module-path "${SCRIPT_DIR}/FactoryCallerPrivilege"
+%requires QUnit
+%requires DataProvider
+%requires reflection
+%requires ReflectionAccessProbe
+%requires ReflectionFactoryProvider
+%exec-class FactoryCallerPrivilegeTest
+
+class FactoryCallerPrivilegeTest inherits QUnit::Test {
+    private {
+        const BaseOptions = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS;
+        const Operations = ("newObject", "newObjectArgs", "callConstructor", "method", "methodArgs",
+            "variant", "variantArgs");
+    }
+    constructor() : Test("FactoryCallerPrivilegeTest", "1.0") {
+        addTestCase("factories construct public classes exported by another module", \factories());
+        addTestCase("all constructor entry points use the exact imported class", \constructors());
+        addTestCase("public class method variants retain their class identity", \methods());
+        addTestCase("an intervening application cannot borrow an outer import", \intervening());
+        addTestCase("a same-named class is not the imported class", \sameName());
+        addTestCase("restricting domains and sandbox identity remain enforced", \restrictions());
+        addTestCase("class import does not authorize private classes, builtins, or globals", \otherSymbols());
+        addTestCase("an imported class does not authorize its unrelated reflection Program", \foreignProgram());
+        set_return_value(main());
+    }
+
+    factories() {
+        ReflectionFactoryProvider::Provider direct({"name": "direct"});
+        assertEq("direct", direct.getName());
+        ReflectionFactoryProvider::Factory factory();
+        assertEq("factory", factory.create({"name": "factory"}).getName());
+        assertEq("template-factory", factory.createWithTemplate({"prefix": "template-"},
+            {"name": "factory"}).getName());
+        ReflectionFactoryProvider::Factory fallback(True);
+        assertEq("fallback", fallback.createWithTemplate({"prefix": "unused-"},
+            {"name": "fallback"}).getName());
+    }
+
+    constructors() {
+        ReflectionFactoryProvider::Factory factory(True);
+        foreach string operation in (Operations) {
+            object obj = ReflectionAccessProbe::construct(factory.getClass(), operation, ({"name": operation},));
+            assertEq(operation, obj.getName(), operation);
+        }
+    }
+
+    methods() {
+        ReflectionFactoryProvider::Factory factory(True);
+        assertEq("pong", ReflectionAccessProbe::callStatic(factory.getClass().getStaticVariant("ping")));
+    }
+
+    private Program reader(bool import_class, int options = 0, *SandboxManager sm, string extra = "") {
+        Program pgm(BaseOptions | options, True);
+        pgm.parse("%modern\n%requires reflection\n%requires ReflectionAccessProbe\n"
+            + (import_class ? "%requires ReflectionFactoryProvider\n" : "") + extra
+            + "auto sub construct(Class cls, string operation, auto arg) {\n"
+            + "    return ReflectionAccessProbe::construct(cls, operation, (arg,));\n}\n",
+            "reflection-factory-reader");
+        if (sm) { pgm.setSandboxManager(sm); }
+        return pgm;
+    }
+
+    intervening() {
+        ReflectionFactoryProvider::Factory factory(True);
+        Program pgm = reader(False);
+        foreach string operation in (Operations) {
+            assertThrows("REFLECTION-ACCESS-ERROR", NOTHING, \pgm.callFunction(),
+                ("construct", factory.getClass(), operation, {}));
+        }
+        # The same application is allowed once it has imported the exact public class.
+        Program imported = reader(True);
+        object obj = imported.callFunction("construct", factory.getClass(), "variant", {"name": "imported"});
+        assertEq("imported", obj.getName());
+    }
+
+    sameName() {
+        ReflectionFactoryProvider::Factory factory(True);
+        Program pgm = reader(False, 0, NOTHING,
+            "namespace ReflectionFactoryProvider { class FallbackProvider { constructor(*hash<auto> options) {} } }\n");
+        assertThrows("REFLECTION-ACCESS-ERROR", NOTHING, \pgm.callFunction(),
+            ("construct", factory.getClass(), "newObject", {}));
+    }
+
+    restrictions() {
+        ReflectionFactoryProvider::Factory factory(True);
+        foreach Program pgm in ((reader(True, PO_NO_NETWORK), reader(True, 0, new SandboxManager()))) {
+            assertThrows("REFLECTION-ACCESS-ERROR", NOTHING, \pgm.callFunction(),
+                ("construct", factory.getClass(), "variant", {}));
+        }
+    }
+
+    otherSymbols() {
+        foreach string operation in (Operations) {
+            assertThrows("REFLECTION-ACCESS-ERROR", NOTHING, \ReflectionAccessProbe::construct(),
+                (ReflectionFactoryProvider::Factory::privateClass(), operation, ({},)));
+            assertThrows("REFLECTION-ACCESS-ERROR", NOTHING, \ReflectionAccessProbe::construct(),
+                (ReflectionFactoryProvider::Factory::builtinClass(), operation, (PO_ALLOW_DEBUGGER,)));
+        }
+        assertThrows("REFLECTION-ACCESS-ERROR", NOTHING, \ReflectionAccessProbe::read(),
+            (ReflectionFactoryProvider::Factory::secretVar(),));
+    }
+
+    foreignProgram() {
+        # Even an exact imported class must not confer authority over a sibling application's context.
+        Program target(BaseOptions | PO_ALLOW_DEBUGGER, True);
+        target.parse("%modern\n%requires ReflectionFactoryProvider\n", "reflection-factory-foreign");
+        Class cls = Class::forName(target, "ReflectionFactoryProvider::FallbackProvider");
+        Program pgm = reader(True);
+        assertThrows("REFLECTION-ACCESS-ERROR", NOTHING, \pgm.callFunction(),
+            ("construct", cls, "variant", {}));
+    }
+}

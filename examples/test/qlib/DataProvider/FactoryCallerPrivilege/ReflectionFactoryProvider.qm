@@ -1,0 +1,69 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%allow-debugger
+%allow-injection
+%requires DataProvider
+%requires reflection
+
+/** @section reflectionfactoryproviderintro Reflection factory access test fixture
+    Exports provider classes from a module with capabilities that DataProvider does not inherit.
+*/
+module ReflectionFactoryProvider {
+    version = "1.0";
+    desc = "Cross-module factory access regression fixture";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ReflectionFactoryProvider {
+    our int secret;
+
+    public class Provider inherits AbstractDataProvider {
+        private { string name; }
+        constructor(*hash<auto> options) { name = options.name ?? "default"; }
+        constructor(hash<auto> template_options, *hash<auto> options) {
+            name = template_options.prefix + options.name;
+        }
+        string getName() { return name; }
+        private hash<DataProviderInfo> getStaticInfoImpl() {
+            return <DataProviderInfo>{"type": "reflection-factory-probe"};
+        }
+    }
+
+    public class FallbackProvider inherits AbstractDataProvider {
+        private { string name; }
+        constructor(*hash<auto> options) { name = options.name ?? "default"; }
+        string getName() { return name; }
+        static string ping() { return "pong"; }
+        private hash<DataProviderInfo> getStaticInfoImpl() {
+            return <DataProviderInfo>{"type": "reflection-factory-probe"};
+        }
+    }
+
+    class PrivateProvider inherits FallbackProvider {
+        constructor(*hash<auto> options) : FallbackProvider(options) {}
+    }
+
+    public class Factory inherits AbstractDataProviderFactory {
+        private {
+            static Class provider_class = Class::forName("ReflectionFactoryProvider::Provider");
+            static Class fallback_class = Class::forName("ReflectionFactoryProvider::FallbackProvider");
+            static Class private_class = Class::forName("ReflectionFactoryProvider::PrivateProvider");
+            static Class builtin_class = Class::forName("Program");
+            static GlobalVar secret_var = GlobalVar::forName("ReflectionFactoryProvider::secret");
+            bool fallback;
+        }
+        constructor(bool fallback = False) { self.fallback = fallback; }
+        private Class getClassImpl() { return fallback ? fallback_class : provider_class; }
+        private hash<DataProviderFactoryInfo> getInfoImpl() {
+            return <DataProviderFactoryInfo>{"name": "reflection-factory-probe", "desc": "test fixture"};
+        }
+        private hash<DataProviderInfo> getProviderInfoImpl() {
+            return <DataProviderInfo>{"type": "reflection-factory-probe"};
+        }
+        static Class privateClass() { return private_class; }
+        static Class builtinClass() { return builtin_class; }
+        static GlobalVar secretVar() { return secret_var; }
+    }
+}

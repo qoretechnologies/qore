@@ -31,4 +31,21 @@ public class ReflectionAccessProbe {
     static auto defaultValue(AbstractMember member) {
         return member.getDefaultValue();
     }
+
+    static object construct(Class cls, string operation, list<auto> args) {
+        switch (operation) {
+            case "newObject": return cls.newObject(args[0]);
+            case "newObjectArgs": return cls.newObjectArgs(args);
+            case "callConstructor": return cls.callConstructor(args, NOTHING);
+            case "method": return cls.getConstructorMethod().call(args[0]);
+            case "methodArgs": return cls.getConstructorMethod().callArgs(args);
+            case "variant": return cls.getConstructorVariants()[0].call(args[0]);
+            case "variantArgs": return cls.getConstructorVariants()[0].callArgs(args);
+        }
+        throw "TEST-ERROR", "unknown constructor operation";
+    }
+
+    static auto callStatic(StaticMethodVariant method) {
+        return method.call();
+    }
 }

@@ -157,14 +157,14 @@ static void create_datasource_from_conf(const QoreString& conf, QoreObject& self
 static QoreHashNode* Datasource_serializer(const QoreObject& self, const ManagedDatasource& ds,
         QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
     (void)rc;
-    SimpleRefHolder<QoreStringNode> str(const_cast<ManagedDatasource&>(ds).getConfigString(xsink));
+    ReferenceHolder<QoreHashNode> conf(const_cast<ManagedDatasource&>(ds).getConfigHash(xsink), xsink);
     if (*xsink) {
         return nullptr;
     }
 
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
-    rv->setKeyValue("conf", str.release(), xsink);
-    return rv.release();
+    rv->setKeyValue("conf", conf.release(), xsink);
+    return *xsink ? nullptr : rv.release();
 }
 
 static void Datasource_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context,
@@ -173,9 +173,14 @@ static void Datasource_deserializer(QoreObject& self, const QoreHashNode* sdata,
     if (sdata) {
         QoreValue val = sdata->getKeyValue("conf");
         if (val) {
+            if (val.getType() == NT_HASH) {
+                ds_constructor_hash(val.get<const QoreHashNode>(), &self, nullptr, QoreValue(), xsink);
+                return;
+            }
+            // Continue accepting the connection-string representation written before Qore 3.0.
             if (val.getType() != NT_STRING) {
                 xsink->raiseException("DESERIALIZATION-ERROR", "Datasource serialization key 'conf' has type '%s'; "
-                    "expecting 'string'", val.getTypeName());
+                    "expecting 'hash' or a legacy 'string'", val.getTypeName());
                 return;
             }
             QoreStringNodeValueHelper conf(val);
@@ -674,6 +679,9 @@ int rows = db.exec("insert into table (varchar_col, timestamp_col, blob_col, num
     @par Data Serialization
     The Datasource class supports @ref Serializable "data serialization"; deserialization can fail if the database is not
     supported on or reachable from the target machine.
+
+    Since %Qore 3.0, serialized configuration retains driver-option types and literal delimiters in string values.
+    Deserialization also accepts the connection-string representation written by earlier versions.
 
     When deserializing, any datasource event queue is lost; only the connection information is propagated in the
     deserialized copy.

@@ -3988,3 +3988,21 @@ limitations and the 62-item retained-evidence audit are in
 `bench/runtime-comparison/results-aot-reusable-pop-rejected-macos-arm64.json`.
 A separate result-initialization compile probe is next, not a retained change
 or speedup. Java parity and a global performance ceiling remain unestablished.
+
+## Develop integration through 8c4350a87 (2026-10-23)
+
+The restored performance branch includes develop through `8c4350a87`. A native
+socket fixture needed a setup correction: keep its dual-stack reservation while
+binding both fixture sockets natively, then clear temporary port reuse before
+the unchanged wrapper listen-order assertions. No production socket behavior
+or new call optimization changes. Final selected Release/Debug qualification
+each passes 42 of 43 fixtures; the known cross-process SocketSpecificBind case
+remains failed. There are 2220 passing IR/AOT reference comparisons and 11744
+passing Debug native assertions. Optional service cases remain skipped, and
+reflection-module provenance is verified in both builds. All 252 qmod targets
+are rebuilt per build; 253 source aliases are restored to Release.
+
+RESULTS and `results-merge-8c4350a87-macos-arm64.json` preserve failures,
+final validation and the complete 62-item audit. Next inspect explicit cold
+result defaults without a per-success flag or branch. This is a compile-only
+hypothesis; no performance benefit or Java parity is claimed.

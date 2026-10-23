@@ -217,6 +217,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \openAiIncompleteToolResponseTest());
         addTestCase("OpenAI strict schemas preserve optional-field semantics", \openAiStrictSchemaRoundTripTest());
         addTestCase("OpenAI strict JSON streams restore optional fields", \openAiStrictSchemaStreamTest());
+        addTestCase("OpenAI held-back streams report raw progress and stop on its exception",
+            \openAiStrictSchemaStreamProgressTest());
         addTestCase("OpenAI strict tool arguments restore optional fields", \openAiStrictToolSchemaTest());
         addTestCase("OpenAI unsupported schemas fail before HTTP", \openAiStrictSchemaFailureTest());
         addTestCase("LlmBackend OpenAI streaming preserves tool-call-only deltas",
@@ -2870,6 +2872,82 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "buffered schema restoration preserves the provider's served tier");
         assertEq("priority", chunks[-1].service_tier);
         assertStrictSchema(gemini_handler.requests[0].body.response_format.json_schema.schema);
+    }
+
+    openAiStrictSchemaStreamProgressTest() {
+        string content = make_json(strictOptionalResponse());
+        hash<auto> stream = {"/v1/chat/completions": {"code": 200,
+            "sse": (
+                {"id": "schema-stream", "choices": ({"delta": {"content": content.substr(0, 17)}},)},
+                {"choices": ({"delta": {"content": content.substr(17)}, "finish_reason": "stop"},)},
+                {"choices": (), "usage": {"total_tokens": 42}},
+            )}};
+        hash<auto> request = {
+            "messages": ({"role": "user", "content": "fixture"},),
+            "response_format": {"type": "json_schema", "json_schema": {
+                "name": "fixture", "strict": True, "schema": strictOptionalSchema()}},
+        };
+        assertTrue(inlist("stream_progress", LlmBackend::SupportedFacadeControls));
+
+        # the facade passes the held-back raw events as they arrive, marked, and still delivers the restored
+        # response once it is complete; the control is never sent to the provider
+        installGeminiHandler(stream);
+        LlmBackend llm = strictSchemaBackend();
+        list<hash<auto>> chunks = ();
+        hash<auto> rv = llm.chatCompletionsStream(request + {"stream_progress": True},
+            sub (hash<auto> chunk) { chunks += chunk; });
+        list<hash<auto>> progress = select chunks, $1.stream_progress;
+        assertEq(3, progress.size());
+        assertEq(content, (map $1.choices[0].delta.content, progress, $1.choices[0].delta.content).join(""));
+        assertEq(2, (select chunks, !$1.stream_progress).size());
+        assertEq(restoredOptionalResponse(), parse_json((select chunks, !$1.stream_progress)[0].choices[0].delta.content));
+        assertEq(restoredOptionalResponse(), parse_json(rv.choices[0].message.content),
+            "progress chunks are not accumulated into the response");
+        assertFalse(gemini_handler.requests[0].body.hasKey("stream_progress"));
+
+        # an exception from the progress callback stops the response and reaches the caller unchanged, before
+        # any restored output is delivered
+        installGeminiHandler(stream);
+        chunks = ();
+        try {
+            llm.chatCompletionsStream(request + {"stream_progress": True}, sub (hash<auto> chunk) {
+                chunks += chunk;
+                if (chunk.stream_progress) {
+                    throw "TEST-RUNAWAY", "stopped", {"chars": 17};
+                }
+            });
+            assertTrue(False, "the progress exception must stop the response");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("TEST-RUNAWAY", ex.err);
+            assertEq({"chars": 17}, ex.arg);
+        }
+        assertEq(1, chunks.size());
+
+        # the direct API: the observer sees the held-back output; without it, the stream is unchanged
+        installGeminiHandler(stream);
+        list<string> seen = ();
+        list<hash<ChatStreamEvent>> events = ();
+        llm.chatStream(({"role": "user", "content": "fixture"},), sub (hash<ChatStreamEvent> event) {
+                events += event;
+            }, NOTHING, <LlmRequestOptions>{"body_options": {"response_format": request.response_format},
+                "stream_progress": sub (hash<ChatStreamEvent> event) { seen += event.delta ?? ""; }});
+        assertEq(content, seen.join(""));
+        assertEq(restoredOptionalResponse(), parse_json(events[0].delta));
+
+        # a stream that is not held back never calls the observer
+        installGeminiHandler({"/v1/chat/completions": {"code": 200, "sse": (
+            {"choices": ({"delta": {"content": "plain"}, "finish_reason": "stop"},)},
+        )}});
+        seen = ();
+        llm.chatStream(({"role": "user", "content": "fixture"},), sub (hash<ChatStreamEvent> event) {},
+            NOTHING, <LlmRequestOptions>{"stream_progress": sub (hash<ChatStreamEvent> event) {
+                seen += event.delta ?? "";
+            }});
+        assertEq((), seen);
+
+        assertThrows("LLM-REQUEST-ERROR", "stream_progress must be a boolean", sub () {
+            llm.chatCompletionsStream(request + {"stream_progress": "yes"}, sub (hash<auto> chunk) {});
+        });
     }
 
     openAiStrictToolSchemaTest() {

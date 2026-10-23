@@ -29,12 +29,12 @@ class RecordingGoogleClient inherits RestClientIo::RestClientIo {
         bool fail_request;
     }
 
-    constructor() : RestClientIo({"url": "https://www.googleapis.com"}) {
+    constructor() : RestClientIo({"url": "https://www.googleapis.com/client-root"}) {
     }
 
     hash<RestClient::RestResponseInfo> restDoRequestTarget(string method,
             hash<RestClient::RestRequestTarget> target, auto body, *hash<auto> hdr) {
-        return restDoRequest(method, target.path, body, hdr);
+        return restDoRequest(method, resolveRequestTarget(target, method).path, body, hdr);
     }
 
     hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {

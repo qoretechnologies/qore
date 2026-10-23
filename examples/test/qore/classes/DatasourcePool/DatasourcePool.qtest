@@ -74,7 +74,7 @@ public class DatasourcePoolTest inherits QUnit::Test {
         assertEq(ds.getConfigString(), ds1.getConfigString());
 
         hash<auto> h1 = h;
-        assertEq(Type::String, (remove h1._index."0"._class_data."Qore::SQL::DatasourcePool".conf).type());
+        assertEq(Type::Hash, (remove h1._index."0"._class_data."Qore::SQL::DatasourcePool".conf).type());
         assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(), h1);
 
         h1 = h;

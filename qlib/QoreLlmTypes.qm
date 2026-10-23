@@ -459,6 +459,31 @@ public hashdecl LlmRequestOptions {
         response; the call then raises \c LLM-CANCELLED.  See @ref LlmCancellation.
     */
     *LlmCancellation cancellation;
+    #! Optional observer of the raw output of a stream that the provider holds back until it is complete
+    /** A provider that must validate or restore a structured response before the caller sees it, for example a
+        strict schema with optional fields or a strict schema that the provider can only check locally, delivers
+        that response to the stream callback once, when it is complete.  When this observer is set, the provider
+        also passes it each raw event of such a response as it arrives, with any text in \c delta and the parsed
+        provider event in \c raw.  This output is raw and unvalidated: it can hold placeholder values that the
+        final response does not, and it never replaces the final response.  Streams that deliver their events
+        directly never call it.
+
+        An exception raised by the observer stops the response: the connection is closed, so the provider stops
+        generating it, and the exception is raised to the caller unchanged.  A caller can so stop a response that
+        has gone wrong, for example one that repeats itself until its output limit.
+
+        @par Example
+        @code{.py}
+int chars = 0;
+opts.stream_progress = sub (hash<ChatStreamEvent> event) {
+    chars += (event.delta ?? "").length();
+    if (chars > 200000) {
+        throw "MY-RUNAWAY-OUTPUT", "the response is far longer than any valid answer";
+    }
+};
+        @endcode
+    */
+    *code<nothing(hash<ChatStreamEvent>)> stream_progress;
 }
 
 #! Result from an LLM completion call

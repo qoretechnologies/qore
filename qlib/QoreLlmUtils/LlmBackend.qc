@@ -662,7 +662,7 @@ public class LlmBackend {
     public {
         #! Caller-owned controls consumed by the OpenAI-compatible facade, never sent to a provider
         /** Callers can inspect this contract before relying on a control to bound billed work. */
-        const SupportedFacadeControls = ("max_retries", "tool_repair_enabled");
+        const SupportedFacadeControls = ("max_retries", "tool_repair_enabled", "stream_progress");
     }
     private {
         #! Minimum visible-output budget for a schema-constrained forced-tool retry
@@ -1179,6 +1179,13 @@ if (resp.stop_reason == "tool_use") {
             repair. The default is \c True. This facade control is separate from transport \c max_retries and is
             never forwarded to the provider. Supported controls are listed in \ref SupportedFacadeControls.
 
+        @note Set the optional boolean \c stream_progress to \c True to receive the raw provider events of a
+            response that the provider holds back until it is complete (@ref LlmRequestOptions::stream_progress).
+            They reach @a delta_cb as they arrive, marked with \c stream_progress set to \c True; they are
+            unvalidated, are not part of the returned response, and are followed by the usual chunks once the
+            response is complete.  An exception raised by @a delta_cb for such a chunk stops the response and is
+            raised unchanged.  The control is never forwarded to the provider.
+
         @note A request that forces a tool but receives no tool call is
             repaired with a bounded retry sequence, reported in the response
             under \c provider_diagnostics.forced_tool_retry. A repair that the
@@ -1190,11 +1197,12 @@ if (resp.stop_reason == "tool_use") {
         @return accumulated OpenAI-compatible final response
 
         @throw LLM-ERROR the backend call failed
-        @throw LLM-REQUEST-ERROR \c tool_repair_enabled is present and is not a boolean
+        @throw LLM-REQUEST-ERROR \c tool_repair_enabled or \c stream_progress is present and is not a boolean
     */
     hash<auto> chatCompletionsStream(hash<auto> body,
             code<nothing(hash<auto>)> delta_cb) {
         bool tool_repair_enabled = toolRepairEnabled(body);
+        bool stream_progress = facadeFlag(body, "stream_progress", False);
         hash<auto> parsed = parseOpenAiChatCompletionsRequest(body);
         list<hash<ChatMessage>> messages =
             cast<list<hash<ChatMessage>>>(parsed.messages);
@@ -1202,6 +1210,14 @@ if (resp.stop_reason == "tool_use") {
             cast<*list<hash<ToolDefinition>>>(parsed.tools);
         hash<LlmRequestOptions> options =
             cast<hash<LlmRequestOptions>>(parsed.options);
+        if (stream_progress) {
+            # held-back raw output goes to the caller as it arrives, marked, and is never accumulated
+            options.stream_progress = sub (hash<ChatStreamEvent> event) {
+                if (event.raw.typeCode() == NT_HASH) {
+                    delta_cb(event.raw + {"stream_progress": True});
+                }
+            };
+        }
         hash<auto> state = newOpenAiStreamState(options.model
             ?? provider.getModel());
         chatStream(messages, sub (hash<ChatStreamEvent> event) {
@@ -1326,6 +1342,15 @@ if (resp.stop_reason == "tool_use") {
             throw "LLM-REQUEST-ERROR", "tool_repair_enabled must be a boolean";
         }
         return body.tool_repair_enabled;
+    }
+
+    #! Returns a boolean facade control of the request, validated before any provider request
+    private static bool facadeFlag(hash<auto> body, string control, bool default_value) {
+        if (!exists body{control}) { return default_value; }
+        if (body{control}.typeCode() != NT_BOOLEAN) {
+            throw "LLM-REQUEST-ERROR", sprintf("%s must be a boolean", control);
+        }
+        return body{control};
     }
 
     #! Parses an OpenAI-compatible request for provider-native dispatch

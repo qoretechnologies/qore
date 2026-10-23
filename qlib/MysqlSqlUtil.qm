@@ -186,6 +186,7 @@ hash<auto> desc = {
     @section mysql_relnotes Release Notes
 
     @subsection mysqlsqlutilv16 MysqlSqlUtil v1.6
+    - emulated-sequence connections retain typed driver options when cloning the datasource configuration
     - security: names are quoted and escaped where they are not ordinary names, or refused if they cannot be
       identifiers in SQL run through the \c mysql driver, so that a table, column, index, constraint, sequence,
       view, trigger, savepoint or schema name or an alias can never change the SQL statement that it is
@@ -1415,7 +1416,7 @@ end";
             if (opts.sequence_function)
                 sequence_function = opts.sequence_function;
 
-            seqds = new Datasource(ds.getConfigString());
+            seqds = new Datasource(ds.getConfigHash());
         }
 
         #! Returns @ref True if the driver requires a scale to support decimal values in numeric or decimal columns

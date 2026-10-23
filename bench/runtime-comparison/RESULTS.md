@@ -20281,3 +20281,48 @@ Next inspect a separate compile-only change moving the redundant default
 result store to failed callback completion. It must preserve handled-error
 and C++ unwind output, the complete handshake, and every live guard. Reject
 before timing if generated hot calls or stack/register-save costs increase.
+
+## Develop integration through 8c4350a87 (2026-10-23)
+
+Integrated seven develop commits through `8c4350a876523164d9f6e665544bb1a09477cd94`
+on the restored `6879364af` performance branch. No new performance optimization
+or timing claim is included. Release remains optimized (`-O3 -DNDEBUG`); both
+Release and Debug core/binary-module selections and all 252 qmod targets are
+rebuilt. Final source and staged code-tree hashes remain fixed during validation.
+
+The first qualification stopped at a new native socket-fixture setup failure:
+its temporary dual-stack reservation made the wrapper's IPv4 probe reject the
+second fixture bind. Both fixture sockets now bind natively while the reservation
+remains held; the temporary port-reuse option is cleared before the unchanged
+Qore-wrapper listen assertions in both orders. Production socket behavior is
+unchanged. Twenty local native setup probes reproduce the conflict and validate
+the arrangement. All four native prechecks then pass 11,744 assertions, and the
+complete selected qualification is repeated on the final source.
+
+|!Final selected qualification|!Release|!Debug
+|Fixture exits successful / total|42 / 43|42 / 43
+|Registered / executed / skipped cases|516 / 504 / 12|516 / 504 / 12
+|Assertions passed / total|20468 / 20469|20468 / 20469
+|IR plus AOT reference comparisons|1110|1110
+
+The sole failing fixture in each build is the previously observed
+`SocketSpecificBind` cross-process `otherProgramTest`; it remains failed.
+Live MySQL and OpenAI connection cases remain explicitly skipped. The final
+Debug native AST/IR invocations pass all 11,744 assertions. All 24 reflection
+AST/IR invocations preload and verify the respective Release or Debug module,
+and no selected fixture falls back to source modules. All 253 source-tree qmod
+aliases are restored to Release outputs afterward. This is selected validation,
+not full-suite, sanitizer or cross-platform certification.
+
+The audit covers all 62 checklist items: 21 Pass, 41 N/A, zero Fail for the
+stated integration and fixture-fix scope. The known platform failure is not
+converted into a pass. Raw child exits/logs, the initial alias-inventory failure,
+the aborted native-fixture attempt, final replay, artifact hashes and the full
+audit are in [results-merge-8c4350a87-macos-arm64.json](results-merge-8c4350a87-macos-arm64.json).
+
+Next inspect explicit cold result initialization in an isolated optimized
+object. A prior scope-guard variant added a success flag and branch and was
+declined without timing. The new probe must preserve handled-error and C++
+unwind output without those costs. Any runtime candidate needs a fresh merged
+baseline, an additive compiler-selected helper and matched disabled control.
+No fresh Java ratio or global performance ceiling is established here.
