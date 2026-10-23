@@ -92,6 +92,19 @@ static void concat_year(QoreString& str, int64 year) {
     str.sprintf(QLLDx(04), magnitude);
 }
 
+//! Returns true if the character is the UTC designator, which RFC 3339 section 5.6 allows in either case
+static bool is_utc_designator(char c) {
+    return c == 'Z' || c == 'z';
+}
+
+//! Returns true if a zone designator starts at the position: the UTC designator or a UTC offset, also after a space
+static bool is_zone_start(const char* p) {
+    if (*p == ' ') {
+        ++p;
+    }
+    return is_utc_designator(*p) || *p == '+' || *p == '-';
+}
+
 static int get_uint(const char *&p, int digits) {
     int rc = 0;
     for (int i = 0; i < digits; ++i) {
@@ -416,8 +429,24 @@ static bool try_parse_rfc7231(const char* str, qore_absolute_time& target, Excep
                 off_m = 0;  // allow "+HH" without minutes
             }
             utc_offset = sign * (off_h * 3600 + off_m * 60);
+        } else {
+            // RFC 5322 section 4.3 (obs-zone): the North American zone names have their offsets ("EST" is
+            // -0500); any other alphabetic zone, including the military single letters, SHOULD be considered
+            // equivalent to -0000, and so to UTC
+            static const struct {
+                const char* name;
+                int offset;
+            } obs_zones[] = {
+                {"EST", -5}, {"EDT", -4}, {"CST", -6}, {"CDT", -5},
+                {"MST", -7}, {"MDT", -6}, {"PST", -8}, {"PDT", -7},
+            };
+            for (const auto& zone : obs_zones) {
+                if (!strncasecmp(p, zone.name, 3) && !isalpha(p[3])) {
+                    utc_offset = zone.offset * 3600;
+                    break;
+                }
+            }
         }
-        // else: unknown timezone — treat as UTC
     }
 
     // Compute UTC epoch seconds and adjust for offset
@@ -559,13 +588,17 @@ void qore_absolute_time::set(const char* str, const AbstractQoreZoneInfo* n_zone
 
     //printd(5, "set: date: %04d-%02d-%02d\n", year, month, day);
 
-    if (*p == 'Z' || (*p == ' ' && *(p + 1) == 'Z')) {
+    // the UTC designator, which RFC 3339 section 5.6 also allows in lower case
+    if (is_utc_designator(*p) || (*p == ' ' && is_utc_designator(*(p + 1)))) {
         set(0, year, month, day, 0, 0, 0, 0);
         return;
     }
 
-    if (*p == ' ' || *p == 't' || *p == 'T' || *p == '-')
+    // the time designator "T", which RFC 3339 section 5.6 also allows in lower case
+    bool time_designator = *p == 't' || *p == 'T';
+    if (*p == ' ' || time_designator || *p == '-') {
         ++p;
+    }
 
     int hour = get_uint(p, 2);
     if (hour < 0) {
@@ -579,44 +612,63 @@ void qore_absolute_time::set(const char* str, const AbstractQoreZoneInfo* n_zone
         return;
     }
 
-    needs_sep = false;
-    if (*p == ':') {
-        needs_sep = true;
-        ++p;
-    }
-
-    int minute = get_uint(p, 2);
-    if (minute < 0) {
-        if (xsink)
-            xsink->raiseException("INVALID-DATE", "date '%s': cannot parse minute value; expecting 0 - 59 inclusive", str);
-        set(n_zone, year, month, day, hour, 0, 0, 0);
-        return;
-    }
-
-    if (xsink && minute > 59)
-        xsink->raiseException("INVALID-DATE", "date '%s' provides an invalid minute value: %d; expecting 0 - 59 inclusive", str, minute);
-
-    if (needs_sep) {
-        if (*p == ':')
+    int minute = 0;
+    int second = 0;
+    // ISO 8601 reduced precision: a time of only the hour ("T10"), also with a zone designator ("T10Z",
+    // "T10+02:00"), after the time designator
+    if (!time_designator || (*p && !is_zone_start(p))) {
+        needs_sep = false;
+        if (*p == ':') {
+            needs_sep = true;
             ++p;
-        else {
-            if (*p && xsink)
-                xsink->raiseException("INVALID-DATE", "cannot parse date/time string '%s'; encountered unknown char '%c'", str, *p);
-            set(n_zone, year, month, day, hour, minute, 0, 0);
+        }
+
+        minute = get_uint(p, 2);
+        if (minute < 0) {
+            if (xsink) {
+                xsink->raiseException("INVALID-DATE", "date '%s': cannot parse minute value; expecting 0 - 59 inclusive", str);
+            }
+            set(n_zone, year, month, day, hour, 0, 0, 0);
             return;
         }
-    }
 
-    int second = get_uint(p, 2);
-    if (second < 0) {
-        set(n_zone, year, month, day, hour, minute, 0, 0);
-        return;
-    }
+        if (xsink && minute > 59) {
+            xsink->raiseException("INVALID-DATE", "date '%s' provides an invalid minute value: %d; expecting 0 - 59 inclusive", str, minute);
+        }
 
-    if (xsink && second > 59) {
-        xsink->raiseException("INVALID-DATE", "date '%s' provides an invalid second value: %d; expecting 0 - 59 inclusive", str, second);
-        set(n_zone, year, month, day, hour, minute, second, 0);
-        return;
+        // ISO 8601 reduced precision: a time without seconds can be followed by a zone designator in both the
+        // extended ("10:00Z", "10:00+02:00") and the basic ("1000Z", "1000+0200") formats
+        if (needs_sep && *p == ':') {
+            ++p;
+            second = get_uint(p, 2);
+            if (second < 0) {
+                set(n_zone, year, month, day, hour, minute, 0, 0);
+                return;
+            }
+        } else if (!*p) {
+            set(n_zone, year, month, day, hour, minute, 0, 0);
+            return;
+        } else if (is_zone_start(p)) {
+            second = 0;
+        } else if (needs_sep) {
+            if (xsink) {
+                xsink->raiseException("INVALID-DATE", "cannot parse date/time string '%s'; encountered unknown char '%c'", str, *p);
+            }
+            set(n_zone, year, month, day, hour, minute, 0, 0);
+            return;
+        } else {
+            second = get_uint(p, 2);
+            if (second < 0) {
+                set(n_zone, year, month, day, hour, minute, 0, 0);
+                return;
+            }
+        }
+
+        if (xsink && second > 59) {
+            xsink->raiseException("INVALID-DATE", "date '%s' provides an invalid second value: %d; expecting 0 - 59 inclusive", str, second);
+            set(n_zone, year, month, day, hour, minute, second, 0);
+            return;
+        }
     }
 
     if (!*p) {
@@ -625,7 +677,8 @@ void qore_absolute_time::set(const char* str, const AbstractQoreZoneInfo* n_zone
     }
 
     int us = 0;
-    if (*p == '.') {
+    // the decimal sign of a fraction of a second, which is a comma or a full stop in ISO 8601
+    if (*p == '.' || *p == ',') {
         ++p;
         if (!isdigit(*p)) {
             if (xsink) {
@@ -668,7 +721,7 @@ void qore_absolute_time::set(const char* str, const AbstractQoreZoneInfo* n_zone
     if (*p == ' ')
         ++p;
 
-    if (*p == 'Z') {
+    if (is_utc_designator(*p)) {
         n_zone = 0;
         ++p;
     }

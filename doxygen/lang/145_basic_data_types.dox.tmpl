@@ -383,6 +383,17 @@ YYYY-MM-DD[THH:mm:SS[.n*]][Z|[+-]HH[:mm[:SS]]]@endverbatim
 
     Note that if no time zone information is given, the local time zone will be assumed. If a time zone UTC offset is given, it is given in units of time east of UTC (i.e. \c +05:00 means five hours east of UTC).
 
+    When a string is converted to a date (@ref Qore::date(string) "date(string)",
+    @ref Qore::TimeZone::date(string) "TimeZone::date(string)"), these forms of ISO 8601 and RFC 3339 are read as well:
+    - a time of hours and minutes, or after the time designator \c T of only the hour, also with a zone designator:
+      <tt>2026-01-01T10:00Z</tt>, <tt>2026-01-01T10:00+02:00</tt>, <tt>2026-01-01T10Z</tt> (ISO 8601 reduced
+      precision)
+    - the basic format without separators: <tt>20260101T100000Z</tt>, <tt>20260101T1000+0200</tt>
+    - the time designator \c T and the UTC designator \c Z in lower case: <tt>2026-01-01t10:00:00z</tt>
+      (RFC 3339 section 5.6)
+    - a fraction of a second after a comma as well as after a full stop: <tt>2026-01-01T10:00:00,5Z</tt>
+      (ISO 8601)
+
     Or an alternative format (with a \c '-' instead of a \c 'T' to separate the time component):
 
     @verbatim

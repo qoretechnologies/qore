@@ -1,0 +1,44 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+
+%exec-class DpqlDateZonesTest
+
+#! DPQL date literals with a zone designator are read as the instant they designate
+public class DpqlDateZonesTest inherits QUnit::Test {
+    constructor() : Test("DPQL date literals with zone designators", "1.0") {
+        addTestCase("a date literal with a zone designator after the minutes, or in lower case", \zoneTests());
+        set_return_value(main());
+    }
+
+    zoneTests() {
+        hash<string, list<auto>> cases = {
+            # ISO 8601:2004 4.2.2.3 (hours and minutes) with the UTC designator (4.2.4) or the difference from UTC
+            # (4.2.5.2)
+            "2026-01-01T10:00Z": (2026-01-01T10:00:00Z, 0),
+            "2026-01-01T10:00+02:00": (2026-01-01T08:00:00Z, 7200),
+            "2026-01-01T10:00-05:30": (2026-01-01T15:30:00Z, -19800),
+            "2026-01-01 10:00Z": (2026-01-01T10:00:00Z, 0),
+            # RFC 3339 section 5.6: "T" and "Z" may alternatively be lower case
+            "2026-01-01t10:00:00z": (2026-01-01T10:00:00Z, 0),
+            "2026-01-01T10:00:00.5z": (2026-01-01T10:00:00.5Z, 0),
+            "2026-01-01T10:00z": (2026-01-01T10:00:00Z, 0),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            hash<DpqlParseResult> r = DataProvider::parseDpqlExpressionWithInfo("@a == " + i.key);
+            assertTrue(r.success, sprintf("%s: %y", i.key, r.diagnostics));
+            date d = r.expression.args[1];
+            assertEq(i.value[0].getEpochMicroseconds(), d.getEpochMicroseconds(), i.key);
+            assertEq(i.value[1], d.getUtcOffset(), i.key);
+            # the record's value is compared with the instant
+            assertTrue(AbstractDataProvider::evalGenericExpressionValue({"a": i.value[0]}, r.expression), i.key);
+        }
+    }
+}

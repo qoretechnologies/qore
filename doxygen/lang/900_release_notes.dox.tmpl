@@ -2682,7 +2682,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     - <b><a href="https://datatracker.ietf.org/doc/html/rfc2822">RFC 2822</a></b> (email dates with numeric timezone offset): \c "Sun, 06 Nov 1994 08:49:37 +0500"
 
     RFC 7231 dates (with \c GMT or \c UTC timezone) are always returned as UTC. RFC 2822 numeric
-    offsets (e.g. \c +0530) are converted to UTC.
+    offsets (e.g. \c +0530) and the obsolete North American zone names of
+    <a href="https://datatracker.ietf.org/doc/html/rfc5322#section-4.3">RFC 5322 section 4.3</a> (e.g. \c EST,
+    which is \c -0500) are converted to UTC; any other zone name is UTC (\c -0000), as that section recommends.
 
     The @ref <date>::getUtcOffset() "date.getUtcOffset()" method now returns the offset at the represented
     instant, including daylight-saving transitions, and returns -1 for relative dates as documented.
@@ -4735,6 +4737,19 @@ while (*binary chunk = input.read(65536)) {
       - new module providing a REST client for <a href="https://www.zoho.com/invoice/">Zoho Invoice</a>'s invoicing API
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
+
+    - @ref Qore::date(string) "date(string)" and @ref Qore::TimeZone::date(string) "TimeZone::date(string)" read
+      the zone designator after a time without seconds, as ISO 8601 allows for a time of reduced precision:
+      <tt>2026-01-01T10:00Z</tt> and <tt>2026-01-01T10:00+02:00</tt> were refused with \c INVALID-DATE, and the
+      basic forms <tt>20260101T1000Z</tt> and <tt>20260101T1000+0200</tt> ignored the zone and gave the time in the
+      local time zone; a time of only the hour after the time designator (<tt>2026-01-01T10Z</tt>) is read too
+    - @ref Qore::date(string) "date(string)" and @ref Qore::TimeZone::date(string) "TimeZone::date(string)" read a
+      lower-case \c z as UTC, as RFC 3339 section 5.6 allows (<tt>2026-01-01T10:00:00z</tt>,
+      <tt>2026-01-01z</tt>); the \c z was ignored, and the time was given in the local time zone
+    - @ref Qore::date(string) "date(string)" and @ref Qore::TimeZone::date(string) "TimeZone::date(string)" read a
+      fraction of a second after a comma, which ISO 8601 allows as well as a full stop
+      (<tt>2026-01-01T10:00:00,5Z</tt>); the fraction and the zone designator after it were ignored, and the time
+      was given in the local time zone; a comma without digits after it is refused with \c INVALID-DATE
 
     - @ref Qore::Socket::shutdown() "Socket::shutdown()" on a secure connection now sends the TLS \c close_notify
       alert before it shuts down the connection, as @ref Qore::Socket::close() "Socket::close()" does (RFC 8446

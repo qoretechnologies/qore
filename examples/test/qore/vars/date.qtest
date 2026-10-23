@@ -22,6 +22,8 @@ class DateTest inherits QUnit::Test {
         addTestCase("WindowsTimeZoneTests", \windowsTimeZoneTests());
         addTestCase("issue 2546", \issue2546());
         addTestCase("RFC 7231 date parsing", \rfc7231Tests());
+        addTestCase("ISO 8601 and RFC 3339 zone and time designators", \isoDesignatorTests());
+        addTestCase("RFC 5322 obsolete zone names", \rfc5322ObsoleteZoneTests());
 
         set_return_value(main());
     }
@@ -346,6 +348,97 @@ class DateTest inherits QUnit::Test {
         #if (d >= 1970-01-01 && d < 2038-01-19)
             #testAssertionValue("qore epoch conversion " + ri, timegm(d), int(d));
         ri++;
+    }
+
+    #! Each form gives the instant and the UTC offset that it designates
+    isoDesignatorTests() {
+        hash<string, list<auto>> cases = {
+            # ISO 8601:2004 4.2.2.3 (reduced accuracy: hours and minutes) with the UTC designator (4.2.4) or the
+            # difference from UTC (4.2.5.2), in the extended format
+            "2026-01-01T10:00Z": (2026-01-01T10:00:00Z, 0),
+            "2026-01-01T10:00+02:00": (2026-01-01T08:00:00Z, 7200),
+            "2026-01-01T10:00-05:30": (2026-01-01T15:30:00Z, -19800),
+            "2026-01-01T10:00-0530": (2026-01-01T15:30:00Z, -19800),
+            "2026-01-01T10:00+02": (2026-01-01T08:00:00Z, 7200),
+            "2026-01-01T10:00 Z": (2026-01-01T10:00:00Z, 0),
+            "2026-01-01 10:00+01:00": (2026-01-01T09:00:00Z, 3600),
+            # and in the basic format
+            "20260101T1000Z": (2026-01-01T10:00:00Z, 0),
+            "20260101T1000+0200": (2026-01-01T08:00:00Z, 7200),
+            "20260101T1000-05": (2026-01-01T15:00:00Z, -18000),
+            # ISO 8601:2004 4.2.2.3 b): a time of only the hour, after the time designator (4.2.2.5)
+            "2026-01-01T10Z": (2026-01-01T10:00:00Z, 0),
+            "2026-01-01T10+02:00": (2026-01-01T08:00:00Z, 7200),
+            "20260101T10Z": (2026-01-01T10:00:00Z, 0),
+            # RFC 3339 section 5.6: "T" and "Z" may alternatively be lower case
+            "2026-01-01T10:00:00z": (2026-01-01T10:00:00Z, 0),
+            "2026-01-01t10:00:00z": (2026-01-01T10:00:00Z, 0),
+            "2026-01-01T10:00:00.5z": (2026-01-01T10:00:00.5Z, 0),
+            "2026-01-01T10:00z": (2026-01-01T10:00:00Z, 0),
+            "2026-01-01z": (2026-01-01T00:00:00Z, 0),
+            "2026-01-01 z": (2026-01-01T00:00:00Z, 0),
+            "20260101T100000z": (2026-01-01T10:00:00Z, 0),
+            # ISO 8601:2004 4.2.2.4: the decimal sign of a fraction is a comma or a full stop
+            "2026-01-01T10:00:00,5Z": (2026-01-01T10:00:00.5Z, 0),
+            "2026-01-01T10:00:00,25+02:00": (2026-01-01T08:00:00.25Z, 7200),
+            "20260101T100000,5Z": (2026-01-01T10:00:00.5Z, 0),
+            # forms that were already read, for comparison
+            "2026-01-01T10:00:00Z": (2026-01-01T10:00:00Z, 0),
+            "2026-01-01T10:00:00.5+02:00": (2026-01-01T08:00:00.5Z, 7200),
+            "2026-01-01T10:00:00+02": (2026-01-01T08:00:00Z, 7200),
+            "20260101T100000+0200": (2026-01-01T08:00:00Z, 7200),
+            "2026-01-01Z": (2026-01-01T00:00:00Z, 0),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            date d = date(i.key);
+            assertEq(i.value[0].getEpochMicroseconds(), d.getEpochMicroseconds(), i.key);
+            assertEq(i.value[1], d.getUtcOffset(), i.key);
+            # the zone designator wins over the zone of the time zone that reads the text
+            date tzd = (new TimeZone("Asia/Tokyo")).date(i.key);
+            assertEq(i.value[0].getEpochMicroseconds(), tzd.getEpochMicroseconds(), "Asia/Tokyo: " + i.key);
+            assertEq(i.value[1], tzd.getUtcOffset(), "Asia/Tokyo: " + i.key);
+        }
+
+        # without a zone designator, the time is in the local time zone
+        assertEq(2026-01-01T10:00:00, date("2026-01-01T10"));
+        assertEq(2026-01-01T10:00:00, date("20260101T10"));
+        assertEq(2026-01-01T10:00:00, date("2026-01-01T10:00"));
+        assertEq(2026-01-01T10:00:00, date("20260101T1000"));
+
+        # a form that is not valid is refused, never read as another value
+        foreach string text in (("2026-01-01T10:00X", "2026-01-01T10:00 X", "2026-01-01T10:0Z", "2026-01-01T10 X",
+                "2026-01-01T10:00:00+", "2026-01-01T10:00:00.Z", "2026-01-01T10:00:00,Z", "2026-01-01T10:00:00,",
+                "2026-01-01T10Q")) {
+            assertThrows("INVALID-DATE", \date(), text, text);
+        }
+        # an hour alone without the time designator is not a time
+        assertThrows("INVALID-DATE", \date(), "2026010110");
+        assertThrows("INVALID-DATE", \date(), "2026-01-01-10");
+    }
+
+    #! RFC 5322 section 4.3: the obsolete North American zone names have their offsets, and other zone names are -0000
+    rfc5322ObsoleteZoneTests() {
+        hash<string, date> cases = {
+            "EST": 1994-11-06T13:49:37Z,
+            "EDT": 1994-11-06T12:49:37Z,
+            "CST": 1994-11-06T14:49:37Z,
+            "CDT": 1994-11-06T13:49:37Z,
+            "MST": 1994-11-06T15:49:37Z,
+            "MDT": 1994-11-06T14:49:37Z,
+            "PST": 1994-11-06T16:49:37Z,
+            "PDT": 1994-11-06T15:49:37Z,
+            "pst": 1994-11-06T16:49:37Z,
+            "UT": 1994-11-06T08:49:37Z,
+            "GMT": 1994-11-06T08:49:37Z,
+            # a military zone and an unknown one are -0000
+            "Z": 1994-11-06T08:49:37Z,
+            "A": 1994-11-06T08:49:37Z,
+            "XYZ": 1994-11-06T08:49:37Z,
+            "ESTX": 1994-11-06T08:49:37Z,
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            assertEq(i.value, date("Sun, 06 Nov 1994 08:49:37 " + i.key), i.key);
+        }
     }
 
     rfc7231Tests() {
