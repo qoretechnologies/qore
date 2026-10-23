@@ -193,3 +193,18 @@ published for cross-block reuse. Non-consuming-use checks remain necessary.
 `IRScalarCSETemporaryLifetime.qtest` compares signed integer boundaries, computed
 large products, boxed finite doubles, empty loops and ordinary small values in
 AST, IR, tiered, JIT and AOT at optimization levels zero and three.
+
+Values with a native representation (`NativeInt` and `NativeFloat` facts) are
+owned by their slot in the interpreter, not by the temporary scope of the
+statement that computes them: fixed-aggregate scalar replacement forwards them
+across statements, around loops and into phis, as native code keeps them in
+registers. `buildInterpreterAnalysis()` marks these slots
+(`QoreIRFunction::interpreter_slot_owned_values`), and `IRCleanupSlots` keeps
+their cleanup entries in a separate list that `DiscardTemps`, `DiscardTempsKeep`,
+`UnwindTemps` and exception unwinding do not drain; a boxed node is released when
+its slot is overwritten or when the function's values are cleaned up. Such
+values have no destructors, so the later release is not observable. The result
+of a compound or increment operation does not inherit the integer range of the
+value it replaces. `IRScalarReplacementTemporaryLifetime.qtest` checks integers
+outside the inline range and boxed doubles in fixed hashes and lists, including
+loop-carried and branch values, in every execution mode and compiled code.

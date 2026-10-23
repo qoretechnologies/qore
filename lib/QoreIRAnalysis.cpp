@@ -2343,6 +2343,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     std::unordered_map<const QoreIRInstruction*, InstructionPosition> positions;
     std::unordered_map<const LocalVar*, std::vector<InstructionPosition>> local_accesses;
     std::unordered_map<const LocalVar*, std::vector<InstructionPosition>> local_path_operations;
+    // locals written by an instruction other than a StoreLocal, an InstantiateLocal or an UninstantiateLocal, such as
+    // an IncrementLocalInt: their value is not the one stored
+    std::unordered_set<const LocalVar*> otherwise_written_locals;
     for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
         for (size_t offset = 0; offset < func.blocks[block_id]->instructions.size(); ++offset) {
             if (qore_ir_analysis_cancelled(check_count,
@@ -2351,6 +2354,12 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             }
             QoreIRInstruction* inst = func.blocks[block_id]->instructions[offset].get();
             positions.emplace(inst, InstructionPosition{inst, block_id, offset});
+            if (inst->opcode != QoreIROpcode::StoreLocal && inst->opcode != QoreIROpcode::InstantiateLocal
+                    && inst->opcode != QoreIROpcode::UninstantiateLocal) {
+                if (const LocalVar* written = qore_ir_get_written_local(inst)) {
+                    otherwise_written_locals.insert(written);
+                }
+            }
             if (inst->result.isValid()) {
                 definitions.emplace(inst->result.id,
                     InstructionPosition{inst, block_id, offset});
@@ -2411,7 +2420,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 || !func.ir_only_locals.count(local_key)
                 || func.ast_referenced_locals.count(local_key)
                 || func.lvalue_path_locals.count(local_key)
-                || local_path_operations.count(local)) {
+                || local_path_operations.count(local)
+                || otherwise_written_locals.count(local)) {
             continue;
         }
         const InstructionPosition* store = nullptr;
@@ -3176,6 +3186,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                                 QoreIRAssignedState::Assigned;
                             facts.representation = representation;
                             facts.never_nothing = true;
+                            // the left operand's range says nothing about the result's
+                            facts.int_range_known = false;
+                            facts.int_range_min = facts.int_range_max = 0;
                             candidate_value_facts[value.id] = facts;
                             return true;
                         }
@@ -3345,6 +3358,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     }
                     current_facts.assigned_state = QoreIRAssignedState::Assigned;
                     current_facts.never_nothing = true;
+                    // the previous value's range says nothing about the result's
+                    current_facts.int_range_known = false;
+                    current_facts.int_range_min = current_facts.int_range_max = 0;
                     candidate_value_facts[path->result.id] = current_facts;
                     candidate_path_operations.push_back({inst,
                         ScalarizedPathOperation{scalar_opcode, path->result,
@@ -3379,7 +3395,11 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                         ? func.createValue() : path->result;
                     func.max_value_id = std::max(func.max_value_id,
                         operation_result.id);
-                    candidate_value_facts[operation_result.id] = current_facts;
+                    // the previous value's range says nothing about the result's
+                    QoreIRValueFacts result_facts = current_facts;
+                    result_facts.int_range_known = false;
+                    result_facts.int_range_min = result_facts.int_range_max = 0;
+                    candidate_value_facts[operation_result.id] = result_facts;
                     if (post) {
                         candidate_replacements.emplace(path->result.id,
                             state[value_index]);
@@ -3392,7 +3412,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     candidate_path_operations.push_back({inst,
                         ScalarizedPathOperation{scalar_opcode,
                             operation_result, state[value_index],
-                            QoreIRValue(), current_facts, true}});
+                            QoreIRValue(), result_facts, true}});
                     state[value_index] = operation_result;
                     return true;
                 }
@@ -3795,6 +3815,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                                 && phi_facts.assigned_state
                                     == QoreIRAssignedState::Assigned
                                 && phi_facts.never_nothing;
+                            // the initial value's range does not bound the values that reach the phi later
+                            phi_facts.int_range_known = false;
+                            phi_facts.int_range_min = phi_facts.int_range_max = 0;
                             QoreIRPhiValueKind phi_kind =
                                 QoreIRPhiValueKind::QoreValue;
                             if (valid_phi && phi_facts.representation
@@ -4362,8 +4385,13 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                         "IR fixed-aggregate dead selector use analysis")) {
                     return {};
                 }
+                // a scalarized mutation still uses its right operand; only a selector is no longer used
+                auto path_operation = use.inst
+                    ? scalarized_path_operations.find(use.inst) : scalarized_path_operations.end();
                 if (!use.inst || (!eliminated.count(use.inst)
-                        && !scalarized_path_operations.count(use.inst))) {
+                        && (path_operation == scalarized_path_operations.end()
+                            || path_operation->second.right.id == access.inst->result.id
+                            || path_operation->second.left.id == access.inst->result.id))) {
                     removable = false;
                     break;
                 }

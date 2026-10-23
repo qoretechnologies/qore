@@ -824,20 +824,38 @@ struct IROnBlockExitHandler {
     Out-of-range ids (the PushTempMark UINT32_MAX statement sentinel) are not
     counted and are always appended; they can only be removed by pop_back(),
     which matches how DiscardTemps drains the statement temp region.
+
+    A slot whose value has a native scalar representation (see
+    QoreIRFunction::interpreter_slot_owned_values) is not a statement temp: the
+    optimizer forwards such values from one statement to the next and around
+    loops, as native code keeps them in registers, but an integer outside the
+    inline range or a double whose bits collide with a value tag is a boxed node
+    in the interpreter.  Its entry is kept apart from the temp entries, so that no
+    temp scope drain releases it; the slot owns the value until the value is
+    overwritten (see setValueSlot()) or the function's values are cleaned up.
+    The value cannot have a destructor, so the longer life is not observable.
  */
 class IRCleanupSlots {
 public:
     //! clears all entries and resizes the per-slot counts to the value pool size
-    void reset(size_t slot_count) {
+    /** @param n_slot_owned the slots that own their value (indexed by value id), if any
+    */
+    void reset(size_t slot_count, const std::vector<uint8_t>* n_slot_owned = nullptr) {
         entries.clear();
+        slot_owned_entries.clear();
         counts.assign(slot_count, 0);
+        slot_owned = n_slot_owned;
     }
 
     void push_back(uint32_t id) {
         if (id < counts.size()) {
             uint32_t& count = counts[id];
             if (!count) {
-                entries.push_back(id);
+                if (isSlotOwned(id)) {
+                    slot_owned_entries.push_back(id);
+                } else {
+                    entries.push_back(id);
+                }
             }
             // saturate rather than wrap; a slot pushed 2^32 times without an
             // intervening remove is not a realistic ledger state
@@ -879,12 +897,25 @@ public:
         return id < counts.size() ? counts[id] : 0;
     }
 
+    //! returns true if there are no temp entries; slot-owned values are not counted
     bool empty() const {
         return entries.empty();
     }
 
+    //! returns the number of temp entries; slot-owned values are not counted
     size_t size() const {
         return entries.size();
+    }
+
+    //! sets the slots that own their value (indexed by value id); only valid before the first push
+    void setSlotOwned(const std::vector<uint8_t>* n_slot_owned) {
+        assert(entries.empty() && slot_owned_entries.empty());
+        slot_owned = n_slot_owned;
+    }
+
+    //! returns the slots that own their value; see the class description
+    const std::vector<uint32_t>& slotOwnedEntries() const {
+        return slot_owned_entries;
     }
 
     uint32_t back() const {
@@ -909,6 +940,10 @@ public:
             }
         }
         entries.clear();
+        for (uint32_t id : slot_owned_entries) {
+            counts[id] = 0;
+        }
+        slot_owned_entries.clear();
     }
 
     //! LIFO iteration for cleanup passes
@@ -923,13 +958,22 @@ public:
 private:
     //! insertion-ordered tracked slot ids (unique) and sentinels
     std::vector<uint32_t> entries;
+    //! tracked slots that own their value, which no temp scope drain releases
+    std::vector<uint32_t> slot_owned_entries;
     //! per-slot push counts indexed by slot id
     std::vector<uint32_t> counts;
+    //! the slots that own their value, indexed by value id; null if none
+    const std::vector<uint8_t>* slot_owned = nullptr;
+
+    bool isSlotOwned(uint32_t id) const {
+        return slot_owned && id < slot_owned->size() && (*slot_owned)[id];
+    }
 
     void eraseEntry(uint32_t id) {
-        auto it = std::find(entries.begin(), entries.end(), id);
-        assert(it != entries.end());
-        entries.erase(it);
+        std::vector<uint32_t>& list = isSlotOwned(id) ? slot_owned_entries : entries;
+        auto it = std::find(list.begin(), list.end(), id);
+        assert(it != list.end());
+        list.erase(it);
     }
 };
 
@@ -983,6 +1027,12 @@ struct IRCallFrame {
     void releaseReferences(ExceptionSink* xsink) {
         for (auto it = cleanup.rbegin(); it != cleanup.rend(); ++it) {
             uint32_t id = *it;
+            if (id < values.size()) {
+                values[id].discard(xsink);
+                values[id] = QoreValue();
+            }
+        }
+        for (uint32_t id : cleanup.slotOwnedEntries()) {
             if (id < values.size()) {
                 values[id].discard(xsink);
                 values[id] = QoreValue();
@@ -1361,6 +1411,13 @@ static void cleanupValues(IRValueSlots& values, IRCleanupSlots& cleanup,
         }
         slot.discard(eff_xsink);
         slot = QoreValue();
+    }
+    // slot-owned values are native scalars: there is nothing to log and no destructor to run
+    for (uint32_t id : cleanup.slotOwnedEntries()) {
+        if (id < values.size()) {
+            values[id].discard(eff_xsink);
+            values[id] = QoreValue();
+        }
     }
     cleanup.clear();
 }
@@ -1974,6 +2031,17 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_locals_ir_only = std::move(locals_ir_only);
     func.interpreter_return_protected_slots = std::move(return_protected_slots);
     func.interpreter_cross_block_slots = std::move(cross_block_slots);
+    // the slots of native scalars own their value (see IRCleanupSlots)
+    std::vector<uint8_t> slot_owned_values(func.max_value_id + 1, 0);
+    for (size_t id = 0; id < slot_owned_values.size() && id < func.value_facts.size(); ++id) {
+        if (id && ((id % 100) == 0) && qore_check_cancel(xsink, "IR interpreter analysis")) {
+            return false;
+        }
+        QoreIRValueRepresentation representation = func.value_facts[id].representation;
+        slot_owned_values[id] = representation == QoreIRValueRepresentation::NativeInt
+            || representation == QoreIRValueRepresentation::NativeFloat;
+    }
+    func.interpreter_slot_owned_values = std::move(slot_owned_values);
     func.interpreter_return_value_slot_ids = std::move(return_value_slot_ids);
     func.interpreter_return_preserve_slot_ids = std::move(return_preserve_slot_ids);
     func.interpreter_direct_calls = std::move(direct_calls);
@@ -5619,6 +5687,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     if (!ensureInterpreterAnalysis(func, xsink)) {
         return false;
     }
+    // nothing has been registered for cleanup yet
+    assert(cleanup.empty() && cleanup.slotOwnedEntries().empty());
+    cleanup.setSlotOwned(&func.interpreter_slot_owned_values);
     const std::vector<uint32_t>& value_use_counts = func.interpreter_value_use_counts;
     const std::vector<uint8_t>& dot_eval_only_bases = func.interpreter_dot_eval_only_bases;
     const std::vector<uint8_t>& consumed_method_call_bases = func.interpreter_consumed_method_call_bases;

@@ -3512,6 +3512,13 @@ public:
         excluded from that block-local kill and are released by the normal
         end-of-function value cleanup instead. */
     mutable std::vector<uint8_t> interpreter_cross_block_slots;
+    //! Slots of native scalars (NativeInt or NativeFloat facts), which own their value in the interpreter.
+    /** Native code keeps such values in registers, so the optimizer forwards them from one statement to the
+        next and around loops; in the interpreter an integer outside the inline range or a double whose bits
+        collide with a value tag is a boxed node, which the slot owns until the value is overwritten or the
+        function's values are cleaned up instead of the temp scope of the statement that computed it (see
+        IRCleanupSlots in QoreIRInterpreter.cpp). */
+    mutable std::vector<uint8_t> interpreter_slot_owned_values;
     mutable std::vector<uint32_t> interpreter_return_value_slot_ids;
     mutable std::vector<uint32_t> interpreter_return_preserve_slot_ids;
     mutable std::vector<const QoreIRCallDirectInstruction*> interpreter_direct_calls;

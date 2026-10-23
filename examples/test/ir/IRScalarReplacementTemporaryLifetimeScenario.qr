@@ -1,0 +1,277 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The scenario of IRScalarReplacementTemporaryLifetime.qtest: members of fixed hashes and lists that are replaced
+# with scalars hold integers outside the inline range and doubles whose bits collide with a value tag, which the
+# optimized interpreter boxes and releases with the temp scope of the statement that computed them.  Every call runs
+# three times, so that tiered execution runs it on the AST tier, the IR tier and as native code.
+
+%modern
+
+hashdecl LifetimeMember {
+    int v;
+    float f;
+}
+
+# compound assignments on members of a fixed hash
+hash<auto> sub compound(int a, int b) {
+    hash<auto> h = {"d": a, "m": a, "p": a, "x": a};
+    h.d /= b;
+    h.m *= b;
+    h.p += b;
+    h.x -= b;
+    return h;
+}
+
+# results outside the inline range from operands inside it
+hash<auto> sub product(int a, int b) {
+    hash<auto> h = {"m": a, "c": 3};
+    h.m *= b;
+    h.c *= b;
+    return h;
+}
+
+int sub productRead(int b) {
+    hash<auto> h = {"m": 10};
+    h.m *= b;
+    return h.m;
+}
+
+# a chain of mutations of one member
+int sub chain(int a, int b) {
+    hash<auto> h = {"x": a};
+    h.x *= b;
+    h.x += b;
+    h.x -= 1;
+    return h.x;
+}
+
+# increments and decrements
+list<auto> sub increments(int a) {
+    hash<auto> h = {"i": a, "d": a};
+    int old = h.i++;
+    int dec = --h.d;
+    return (old, dec, h.i, h.d);
+}
+
+# reads only
+int sub readOnly(int a) {
+    hash<auto> h = {"d": a};
+    int x = 1;
+    return h.d + x;
+}
+
+# typed containers
+list<int> sub typedList(int a, int b) {
+    list<int> l = (a, a);
+    l[0] += b;
+    l[1] *= b;
+    return l;
+}
+
+int sub typedListRead(int a) {
+    list<int> l = (a, a);
+    int x = 1;
+    return l[0] + x;
+}
+
+hash<string, int> sub typedHash(int a, int b) {
+    hash<string, int> h = {"a": a};
+    h.a += b;
+    return h;
+}
+
+hash<LifetimeMember> sub hashDecl(int a, int b) {
+    hash<LifetimeMember> h = <LifetimeMember>{"v": a, "f": 1.5};
+    h.v += b;
+    return h;
+}
+
+# doubles whose bits collide with a value tag are boxed
+hash<auto> sub boxedFloat(float a, float b) {
+    hash<auto> h = {"d": a, "e": a};
+    h.d *= b;
+    h.e += b;
+    return h;
+}
+
+list<float> sub boxedFloatList(float a) {
+    list<float> l = (a,);
+    l[0] += 1.0;
+    return l;
+}
+
+float sub boxedFloatRead(float a) {
+    hash<auto> h = {"d": a};
+    float x = 1.0;
+    return h.d + x;
+}
+
+# computed member values
+hash<auto> sub computed(int a, int b) {
+    hash<auto> h = {"x": a * b};
+    h.x += 1;
+    return h;
+}
+
+hash<auto> sub computedTwo(int a, int b) {
+    hash<auto> h = {"x": a * b, "y": a * b};
+    h.x += 1;
+    h.y -= 1;
+    return h;
+}
+
+# the local holding the member value changes before the member is used
+hash<auto> sub reassigned(int a) {
+    int c = a;
+    hash<auto> h = {"x": c};
+    c = 5;
+    h.x += c;
+    return h;
+}
+
+# mutations in loops and branches
+hash<auto> sub loopSum(int a, int n) {
+    hash<auto> h = {"x": a};
+    for (int i = 0; i < n; ++i) {
+        h.x += a;
+    }
+    return h;
+}
+
+int sub loopBody(list<int> values, int a) {
+    int sum = 0;
+    foreach int v in (values) {
+        hash<auto> h = {"x": v * a};
+        h.x += 1;
+        sum += h.x;
+    }
+    return sum;
+}
+
+hash<auto> sub branch(int a, bool c) {
+    hash<auto> h = {"x": a};
+    if (c) {
+        h.x *= 2;
+    } else {
+        h.x += 1;
+    }
+    return h;
+}
+
+hash<auto> sub branchReturn(int a, bool c) {
+    hash<auto> h = {"x": a};
+    if (c) {
+        h.x *= 2;
+        return h;
+    }
+    return {"y": a};
+}
+
+# accumulators carried around loops and through branches
+hash<auto> sub accumulator(int start, int step, int n) {
+    hash<auto> h = {"sum": start, "count": 0};
+    for (int i = 0; i < n; ++i) {
+        h.sum += step + i;
+        h.count += 1;
+    }
+    return h;
+}
+
+list<int> sub listLoop(int a, int n) {
+    list<int> l = (a, 0);
+    for (int i = 0; i < n; ++i) {
+        l[0] += a;
+        l[1] -= a;
+    }
+    return l;
+}
+
+# a variable list index is not a constant
+list<int> sub variableIndex(int a) {
+    list<int> l = (0, 0, 0);
+    for (int i = 0; i < 3; ++i) {
+        l[i] += a;
+    }
+    return l;
+}
+
+hash<auto> sub floatLoop(float a, int n) {
+    hash<auto> h = {"f": a};
+    for (int i = 0; i < n; ++i) {
+        h.f *= 1.0;
+    }
+    return h;
+}
+
+hash<auto> sub floatBranch(float a, bool c) {
+    hash<auto> h = {"f": a};
+    if (c) {
+        h.f *= 2.0;
+    } else {
+        h.f += 1.0;
+    }
+    return h;
+}
+
+# an exception raised by a mutation
+list<auto> sub divisionByZero(int a, int b) {
+    hash<auto> h = {"x": a, "y": a};
+    h.y *= 2;
+    *string err;
+    try {
+        h.x /= b;
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex.err;
+    }
+    return (h, err);
+}
+
+# no value overflows in the arithmetic below
+const Ints = (10, -10, 1 << 47, -(1 << 47) - 1, 1 << 60, -(1 << 60), 1 << 61, -(1 << 61));
+# a negative NaN and finite doubles such as -4e307 have bits that collide with a value tag
+const Nan = float("-nan");
+
+# each call runs three times so that tiered execution runs it on the AST tier, the IR tier and as native code
+sub show(string label, code call) {
+    for (int i = 0; i < 3; ++i) {
+        printf("%s: %y\n", label, call());
+    }
+}
+
+foreach int a in (Ints) {
+    show(sprintf("compound %d", a), auto sub () { return compound(a, 2); });
+    show(sprintf("product %d", a), auto sub () { return product(2, a); });
+    show(sprintf("productRead %d", a), auto sub () { return productRead(a / 16); });
+    show(sprintf("chain %d", a), auto sub () { return chain(a, 2); });
+    show(sprintf("increments %d", a), auto sub () { return increments(a); });
+    show(sprintf("readOnly %d", a), auto sub () { return readOnly(a); });
+    show(sprintf("typedList %d", a), auto sub () { return typedList(a, 2); });
+    show(sprintf("typedListRead %d", a), auto sub () { return typedListRead(a); });
+    show(sprintf("typedHash %d", a), auto sub () { return typedHash(a, 2); });
+    show(sprintf("hashDecl %d", a), auto sub () { return hashDecl(a, 2); });
+    show(sprintf("computed %d", a), auto sub () { return computed(a, 2); });
+    show(sprintf("computedTwo %d", a), auto sub () { return computedTwo(a, 2); });
+    show(sprintf("reassigned %d", a), auto sub () { return reassigned(a); });
+    show(sprintf("loopSum %d", a), auto sub () { return loopSum(a, 2); });
+    show(sprintf("loopBody %d", a), auto sub () { return loopBody((a, 1, 2), 2); });
+    show(sprintf("branch %d", a), auto sub () { return (branch(a, True), branch(a, False)); });
+    show(sprintf("branchReturn %d", a), auto sub () { return (branchReturn(a, True), branchReturn(a, False)); });
+    show(sprintf("divisionByZero %d", a), auto sub () { return (divisionByZero(a, 0), divisionByZero(a, 2)); });
+    show(sprintf("accumulator %d", a), auto sub () { return accumulator(a, a / 4, 3); });
+    show(sprintf("listLoop %d", a), auto sub () { return listLoop(a, 2); });
+    show(sprintf("variableIndex %d", a), auto sub () { return variableIndex(a); });
+}
+foreach int a in ((1 << 62, -(1 << 62))) {
+    show(sprintf("compound %d", a), auto sub () { return compound(a, 1); });
+    show(sprintf("readOnly %d", a), auto sub () { return readOnly(a); });
+}
+foreach float f in ((1.5, 1e300, -4e307, Nan)) {
+    show(sprintf("boxedFloat %y", f), auto sub () { return boxedFloat(f, 2.0); });
+    show(sprintf("boxedFloatList %y", f), auto sub () { return boxedFloatList(f); });
+    show(sprintf("boxedFloatRead %y", f), auto sub () { return boxedFloatRead(f); });
+    show(sprintf("floatLoop %y", f), auto sub () { return floatLoop(f, 3); });
+    show(sprintf("floatBranch %y", f), auto sub () { return (floatBranch(f, True), floatBranch(f, False)); });
+}
