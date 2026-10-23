@@ -42,7 +42,7 @@ public class AbstractSqlUtilBase inherits Qore::Serializable {
         # create datasource
         hash<auto> dsh = remove members.ds;
         # must initialize transient members explicitly when "deserializeMembers()" is defined
-        ds = sqlutil_get_ds(dsh.ds_type, dsh.ds);
+        ds = sqlutil_get_ds(dsh.ds_type, dsh.ds, dsh.ds_config);
 
         # load any dependent module
         AbstractDatabase::loadModule(ds);

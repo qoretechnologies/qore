@@ -148,6 +148,8 @@ module SqlUtil {
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
     @subsection sqlutilv3_11_0 SqlUtil v3.11.0
+    - serialized tables and schemas retain structured datasource configuration so driver-option types and string
+      delimiters survive reconstruction; legacy serialized data and string-based custom deserializers remain supported
     - Security: the names of database objects that reach generated SQL (tables, columns, indexes, constraints,
       sequences, schemas and column aliases) are quoted and escaped with the rules of the database when they are
       not ordinary names, or refused with \c IDENTIFIER-ERROR when the database cannot represent them, so that a
@@ -7604,12 +7606,15 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
     );
 
     # private variable to store the closure used to deserialize datasources (if any)
-    our code ds_get;
+    our *code ds_get;
 
     # private variable to store the closure used to serialize datasources (if any)
-    our code ds_do;
+    our *code ds_do;
 
     #! registers a closure or call reference taking a string type and string datasource configuration that will return an AbstractDatasource
+    /** The callback continues to receive the string configuration, including for data that also contains the
+        structured configuration used by the default deserializer.
+    */
     public sub sqlutil_register_ds_deserializer(*code new_ds_get) {
         ds_get = new_ds_get;
     }
@@ -7620,19 +7625,19 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
     }
 
     # private function used to deserialize datasources
-    AbstractDatasource sub sqlutil_get_ds(string type, string config) {
+    AbstractDatasource sub sqlutil_get_ds(string type, string config, *hash<auto> structured_config) {
         if (ds_get) {
             return ds_get(type, config);
         }
 
         switch (type) {
             case "DatasourcePool":
-                return new DatasourcePool(config);
+                return new DatasourcePool(structured_config ?? config);
             case "Datasource":
-                return new Datasource(config);
+                return new Datasource(structured_config ?? config);
             default:
-                throw "DATASOURCE-DESERIALIZATION-ERROR", sprintf("cannot deserialize datasource of unknown type %y "
-                    "with config %y", type, config);
+                throw "DATASOURCE-DESERIALIZATION-ERROR", sprintf("cannot deserialize datasource of unknown type %y",
+                    type);
         }
     }
 
@@ -7644,7 +7649,9 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
 
         return {
             "ds_type": ds.className(),
+            # Keep the string for existing custom deserializers; builtin reconstruction uses the typed hash.
             "ds": ds.getConfigString(),
+            "ds_config": ds.getConfigHash(),
         };
     }
 

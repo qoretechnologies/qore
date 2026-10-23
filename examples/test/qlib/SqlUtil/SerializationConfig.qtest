@@ -1,0 +1,116 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires MysqlSqlUtil
+%try-module mysql
+%define NoMysql
+%endtry
+%exec-class SerializationConfigTest
+
+class SerializationConfigTest inherits QUnit::Test {
+    private {
+        *string connstr = ENV.QORE_DB_CONNSTR_MYSQL;
+    }
+
+    constructor() : Test("SqlUtil serialization configuration", "1.0", \ARGV) {
+        addTestCase("typed datasource configuration survives table serialization", \typedConfig());
+        addTestCase("typed pool configuration survives table serialization", \poolConfig());
+        addTestCase("legacy connection-string data remains readable", \legacyConfig());
+        addTestCase("custom deserializers still receive strings", \customReader());
+        addTestCase("custom serializer and deserializer keep their format", \customFormat());
+        set_return_value(main());
+    }
+
+    private Datasource datasource() {
+%ifdef NoMysql
+        testSkip("mysql module unavailable");
+%endif
+        if (!connstr) {
+            testSkip("set QORE_DB_CONNSTR_MYSQL for the live serialization regression");
+        }
+        Datasource ds(connstr);
+        ds.setOption("connect-timeout", 2);
+        return ds;
+    }
+
+    private MysqlTable table(AbstractDatasource ds) {
+        MysqlTable result(ds, "sqlutil_serialization_config");
+        result.setupTable({"columns": {"id": {"qore_type": "integer", "notnull": True}}});
+        return result;
+    }
+
+    private checkTable(AbstractTable restored) {
+        assertEq("sqlutil_serialization_config", restored.getName());
+        assertEq(NT_STRING, restored.getSelectSql({"columns": "id"}).typeCode());
+        assertEq(1, restored.getDatasource().selectRow("select 1 as value").value);
+        restored.getDatasource().rollback();
+    }
+
+    typedConfig() {
+        Datasource ds = datasource();
+        on_exit ds.close();
+        MysqlTable source = table(ds);
+        AbstractTable restored = Serializable::deserialize(source.serialize());
+        checkTable(restored);
+        assertEq(NT_INT, restored.getDatasource().getConfigHash().options{"connect-timeout"}.typeCode());
+        assertEq(2, restored.getDatasource().getConfigHash().options{"connect-timeout"});
+    }
+
+    poolConfig() {
+        Datasource ds = datasource();
+        hash<auto> config = ds.getConfigHash();
+        config.options += {"min": 1, "max": 2};
+        DatasourcePool pool(config);
+        AbstractTable restored = Serializable::deserialize(table(pool).serializeToData());
+        checkTable(restored);
+        assertEq("DatasourcePool", restored.getDatasource().className());
+        assertEq(2, restored.getDatasource().getConfigHash().options{"connect-timeout"});
+        assertEq(1, restored.getDatasource().getConfigHash().options.min);
+        assertEq(2, restored.getDatasource().getConfigHash().options.max);
+    }
+
+    legacyConfig() {
+        Datasource ds = datasource();
+        on_exit ds.close();
+        sqlutil_register_ds_serializer(hash<auto> sub (AbstractDatasource source) {
+            return {"ds_type": "Datasource", "ds": connstr};
+        });
+        on_exit sqlutil_register_ds_serializer(NOTHING);
+        checkTable(Serializable::deserialize(table(ds).serializeToData()));
+    }
+
+    customReader() {
+        Datasource ds = datasource();
+        on_exit ds.close();
+        binary serialized = table(ds).serialize();
+        int calls = 0;
+        sqlutil_register_ds_deserializer(AbstractDatasource sub (string type, string config) {
+            ++calls;
+            assertEq("Datasource", type);
+            assertTrue(config == ds.getConfigString(), "custom reader receives the legacy string configuration");
+            return ds;
+        });
+        on_exit sqlutil_register_ds_deserializer(NOTHING);
+        checkTable(Serializable::deserialize(serialized));
+        assertTrue(calls > 0);
+    }
+
+    customFormat() {
+        Datasource ds = datasource();
+        on_exit ds.close();
+        sqlutil_register_ds_serializer(hash<auto> sub (AbstractDatasource source) {
+            return {"ds_type": "registry", "ds": "test-connection"};
+        });
+        on_exit sqlutil_register_ds_serializer(NOTHING);
+        sqlutil_register_ds_deserializer(AbstractDatasource sub (string type, string config) {
+            assertEq("registry", type);
+            assertEq("test-connection", config);
+            return ds;
+        });
+        on_exit sqlutil_register_ds_deserializer(NOTHING);
+        checkTable(Serializable::deserialize(table(ds).serializeToData()));
+    }
+}

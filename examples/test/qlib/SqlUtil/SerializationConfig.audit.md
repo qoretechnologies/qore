@@ -1,0 +1,102 @@
+# Audit: typed SqlUtil datasource reconstruction after pipeline 61360
+
+Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+Applied `/home/david/.codex/skills/audit-changes/SKILL.md` to changes based on `9c90cc42bf`.
+Reviewed module structure, sandboxing, cancellation and DataProvider guides. Changes are limited to three existing
+Qore sources, their release notes, one new live regression suite and this audit.
+
+SqlUtil's custom serialization bypasses the native Datasource serializer. It now stores `ds_config` alongside the
+legacy `ds` string. Default reconstruction prefers the hash; custom readers still receive the string and custom
+writers retain their chosen format. Legacy records without `ds_config` follow the existing string path.
+Callback globals accept NOTHING, matching their registration APIs and allowing tests/applications to reset them.
+MysqlSqlUtil's independent sequence connection clones getConfigHash() instead of getConfigString().
+
+All 71 checks reviewed: 22 Pass, 49 N/A, no failures.
+
+|!Check|!Status|!Evidence
+|Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new module, native class, provider metadata, catalog, factory, packaging or Java change.
+|Entry exists in `doxygen/lang/900_release_notes.dox.tmpl` (for modules in the Qore repo; external modules have release notes in their .qm)|Pass|SqlUtil 3.11.0 and MysqlSqlUtil 1.6 release notes describe typed datasource reconstruction and cloning; release-note checker passes.
+|`qore_user_module()` or `qore_external_user_module()` call in `CMakeLists.txt`|N/A|No new module, native class, provider metadata, catalog, factory, packaging or Java change.
+|Module added to QMOD list in `CMakeLists.txt`|N/A|No new module, native class, provider metadata, catalog, factory, packaging or Java change.
+|`.qm` file has `@section <lowercasemodname>intro` as first doc section — **must be all lowercase** (e.g., `avrodataproviderintro`, not `AvroDataProviderintro`)|Pass|Existing modules start their documentation with lowercase sqlutilintro and mysqlsqlutilintro sections.
+|`%modern` in `.qm` file — no redundant `%new-style`, `%require-types`, `%strict-args`, `%enable-all-warnings`|Pass|Both existing module entry points use %modern; no directives added.
+|No parse directives (`%requires`, `%modern`, `%new-style`) in separated `.qc` files (check OUTSIDE of `@code` blocks only)|Pass|AbstractSqlUtilBase.qc contains no parse directives.
+|No `%include` usage (deprecated for modules)|Pass|No %include introduced.
+|Copyright 2026 on all new files|Pass|New test and audit carry copyright 2026.
+|Directory layout: `.qm` inside `qlib/<ModuleName>/` directory (not at `qlib/<ModuleName>.qm` for multi-file modules)|Pass|SqlUtil remains a directory module and MysqlSqlUtil retains its existing flat single-file layout.
+|No second `.qm` for the same module at `qlib/<ModuleName>.qm`|Pass|No duplicate module entry point.
+|`ns=Qore::XX` matches the QoreNamespace constructor path|N/A|No new module, native class, provider metadata, catalog, factory, packaging or Java change.
+|`%modern` directive present|Pass|SerializationConfig.qtest uses %modern.
+|Executable permission set (`chmod +x`)|Pass|SerializationConfig.qtest is executable (0755).
+|Uses %prepend-module-path  before %requires for in-repo modules (Qore and Qore modules only; not Qorus)|Pass|Repository qlib path is prepended before QUnit, SqlUtil and MysqlSqlUtil requirements.
+|External module dependencies use `%try-module` — except modules delivered with the project itself (Qore ex: DataProvider, ConnectionProvider, QUnit, etc.) which use hard `%requires`|Pass|In-repository modules use hard requires; external mysql uses try-module and a clear skip when unavailable.
+|No filesystem operations (fopen, open, creat, unlink, remove, rename, mkdir, rmdir, stat, chmod) without sandbox checks|N/A|No C++ changes or native I/O.
+|No network operations (connect, bind, socket, getaddrinfo, gethostbyname) without sandbox checks|N/A|No C++ changes or native I/O.
+|If filesystem/network ops exist, verify `QoreSandboxManagerHelper` usage|N/A|No C++ changes or native I/O.
+|No `File::`, `Dir::`, `Socket::`, `HTTPClient::` usage without justification|Pass|No new direct File, Dir, Socket or HTTPClient use. Database reconstruction reuses the existing configured connection; tests use an explicitly supplied connection and a disposable local MariaDB instance.
+|All `for`/`while` loops that could iterate >100 times have `qore_check_cancel()` checks|N/A|No C++ changes, new loops or new blocking primitive.
+|Uses `qore_check_cancel()` (NOT deprecated `qore_check_io_interrupt()`)|N/A|No C++ changes, new loops or new blocking primitive.
+|Check frequency: every 100 iterations for tight loops, every 10 for expensive iterations|N/A|No C++ changes, new loops or new blocking primitive.
+|No blocking operations without cancellation support|N/A|No C++ changes, new loops or new blocking primitive.
+|Every action has `display_name`, `short_desc` (plain text, <80 chars), `desc` (markdown)|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Every action has `options` populated via `getActionOptionFromFields()` — without this, the action shows an empty, unusable form|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Every action has `output_type` set to a typed data type constant (e.g., `MyResponseDataType`) — not omitted|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|DPAT_API actions: provider has `"supports_request": True` and implements `doRequestImpl()`|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|DPAT_FIND actions: every option exists in `SearchOptions`, `getRecordTypeImpl()` returns `*hash<string, AbstractDataField>`|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Scheme-based apps (with `"scheme"` in registerApp): actions use `"path"` and do NOT use `"cls"` — having both `scheme` and `cls` causes a runtime error|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Single-key hash slices use trailing comma: `Fields{"key",}` (without trailing comma, `Fields{"key"}` returns the value, not a hash)|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|**Typed data type classes exist** for request and response types — inherit `HashDataType`, have `const Fields` hash, call `addQoreFields(Fields)` in constructor, export public constant at bottom (e.g., `public const MyDataType = new MyDataType();`)|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Request/input types use `public` Fields (enables `ClassName::Fields` in action registration)|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Response/output types use `private` Fields|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Each field in data types has `display_name`, `type`, and `desc` (markdown-formatted)|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Input fields have `example_value` where useful (string fields, endpoint URIs, SQL queries, etc.)|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Fields with finite allowed values use `allowed_values` with `AllowedValueInfo` containing both `value` and `display_name` (Title Case, human-readable) — never bare values, never described only in text|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Password/secret fields have `"sensitive": True`|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|`groups` uses `AppGroup` enum values from `qlib/DataProvider/AppGroup.qc`|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|App `logo` stored as separate file, loaded at module level in `Priv` namespace|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|App `desc` uses markdown: bullet list of capabilities, links to project website, business-language explanation of value|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|`display_name` is user-friendly ("Apache Avro" not "avro")|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|`short_desc` is plain text, under 80 chars, single sentence — no markdown|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|`desc` uses markdown: backticks for code/field refs (`` `field_name` ``, `` `True` ``, `` `pdf` ``), `\n\n` for paragraphs, `- ` bullet lists for enumerations, `**bold**` for caveats|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Descriptions use plain business language relating to common challenges — not just technical "what" but "why" and "when to use"|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|No bare `True`/`False`/`NOTHING` — must be backtick-wrapped in `desc`|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|No bare field/option names in prose — must use backticks|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Long descriptions (>500 chars) use bold section headers and bullet lists|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|**Factory registration in Qore repo**: every factory name registered in `qlib/DataProvider/DataProvider.qc` → `FactoryMap` (without this, module loads but doesn't appear in Qorus apps)|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|**`getRecordTypeImpl()` signature**: must be `private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options)` — NOT returning `*AbstractDataProviderType`|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|**Dependency JARs committed** (for JNI modules): JAR files in `qlib/*/jar/` may be gitignored — use `git add -f` to ensure they're tracked, otherwise CI compilation fails|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|JAR install rules in CMakeLists.txt for all dependency JARs|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Every producer publishes exact lightweight app/action inventory before schema materialization; inventory callbacks do not execute dynamic schema, connection, or action code|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Every caught registration/discovery/factory/scheme/publication failure reaches structured qualification state; logs or empty output are never treated as success|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Authoritative index publication requires a current authenticated single-use qualification token, and the revision check plus atomic writer share the catalog lock|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|External schemas are normalized once at a versioned boundary; absent/empty/null remain distinct and `AllowedValueInfo` conversion occurs only in declared choice positions|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Recursive presentation extraction uses only static metadata and declared fallback types; it never invokes dynamic type/default/example/network/connection callbacks|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Existing flat presentation IDs are unchanged; nested IDs cover structured fields, list elements, unions, and nested choices with cycle/DAG bounds|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Every shipped locale has exact root ID/source parity after regeneration; source-language fallback does not qualify a release|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|Installed-artifact checks use an empty prefix with source module paths excluded and cover normal/AST/AOT/fresh-process modes as applicable|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|JNI provider runtime JARs come from one declarative inventory with exactly one logging policy; committed checksums, staging parity, SLF4J API/provider compatibility, service entries, duplicate providers, and bridge cycles are validated|N/A|Only existing SqlUtil datasource serialization and sequence cloning change; provider actions, types, presentation, factories, qualification, locales and Java are untouched.
+|**No workarounds**: No TODOs, FIXMEs, stubs, or partially-implemented features|Pass|Uses typed configuration at the two lossy round trips. Legacy string is retained solely for the documented custom-reader contract; no disabled tests or stubs.
+|**Exception safety**: C++ uses `ReferenceHolder` for Qore allocations, `std::unique_ptr` for C++ allocations, `*xsink` checked after every fallible operation|Pass|Qore manages values; existing exceptions propagate. Test hooks reset with on_exit, and datasource/pool lifetimes release connections.
+|**Thread safety**: All mutable shared state protected by `std::lock_guard<std::mutex>` or documented as immutable-after-construction|Pass|Existing module callback globals and their assignment model are retained; making them optional aligns storage with the existing nullable registration API. Test hooks are scoped to one process.
+|**Type safety**: Strongly-typed `code<return(args)>` instead of untyped `code`; `static_cast` instead of C casts; typed hashdecls for results; enums where appropriate|Pass|Structured configuration is an optional hash<auto>; custom readers retain their string arguments. Test callbacks declare return and argument types.
+|**Performance**: No O(n²) where O(n) is possible; no unnecessary copies; coordinate descent uses incremental residuals not full matrix multiply|Pass|Each configuration representation is generated once in linear time; no extra connection or recursive scan in serialization. The existing sequence connection now receives its hash directly.
+|**Error handling**: All inputs validated (dimensions, empty data, unfitted models); C++ I/O handles EAGAIN/EINTR if applicable|Pass|Builtin constructors validate the supplied hash; missing structured data follows the legacy string path. Unknown datasource errors no longer print configuration that may contain credentials.
+|**Documentation**: Doxygen `@param`, `@return`, `@throw` on all public methods; `@par Example` with realistic business scenarios; `@note` for important caveats|Pass|Release notes, callback documentation and inline compatibility comment explain the behavior. Strict Qdx extraction and release-note validation pass.
+|**QPP flags**: `[flags=CONSTANT]` on methods that never throw; `[flags=RET_VALUE_ONLY]` on methods that throw but have no side effects|N/A|No QPP or native callable flags change.
+|**Security**: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No privileges or sandbox checks change. Unknown-type errors omit connection credentials; test comparisons do not print connection strings. Custom hooks remain explicit application configuration.
+|**Correctness**: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Both exact CI failures reproduced against disposable MariaDB before the fix. New compatibility suite and full MysqlSqlUtil suite pass in all four modes with source and AOT modules: 16 runs, 3,896 successful assertions, eight expected unsupported-feature skips; AOT has no source fallback.
+
+Validation:
+
+- Reproduced both the table-deserialization and emulated-sequence failures using the unchanged MySQL driver
+  and a disposable MariaDB container bound only to loopback.
+- Rebuilt SqlUtil-qmod, MysqlSqlUtil-qmod and the test-support dependencies BulkSqlUtil, Schema and DbDataProvider.
+- Ran the new SerializationConfig suite (5 cases, 26 assertions) and the complete MysqlSqlUtil suite
+  (38 cases, 461 successful assertions and one expected unsupported-result-set skip) in AST, IR, JIT and tiered
+  modes with source-only and AOT modules. All 16 runs pass; AOT loads have no source fallback.
+- New cases cover datasource and pool option types, pool limits, binary and structured table serialization,
+  legacy records, custom readers of the default format, custom writer/reader formats and hook reset.
+- Strict Qdx extraction passes for all three changed sources. Release-note checker, executable/directive checks,
+  strict audit table validation and git diff --check pass.
+- No sibling repository source was changed. The local MySQL binary was rebuilt for validation only.
