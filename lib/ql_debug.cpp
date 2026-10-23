@@ -4016,8 +4016,10 @@ private:
         }
         for (bool wildcard_first : {true, false}) {
             Fd s{open(AF_INET6, true, true)};
-            Fd h{open(AF_INET6, false, true)};
-            Fd reservation{open(AF_INET6, false, true)};
+            // macOS requires SO_REUSEPORT while the two wildcard sockets share the reservation. Clear it on
+            // the test socket before checking listen order, so it cannot change the behavior under test.
+            Fd h{open(AF_INET6, false, true, true)};
+            Fd reservation{open(AF_INET6, false, true, true)};
             UT_ASSERT(c, h.fd >= 0 && s.fd >= 0 && reservation.fd >= 0,
                 "specific bind: the IPv6 listen order sockets are opened");
             if (h.fd < 0 || s.fd < 0 || reservation.fd < 0) {
@@ -4053,6 +4055,11 @@ private:
             }
             ::close(reservation.fd);
             reservation.fd = -1;
+#ifdef SO_REUSEPORT
+            int zero = 0;
+            UT_ASSERT_EQ(c, 0, setsockopt(h.fd, SOL_SOCKET, SO_REUSEPORT, &zero, sizeof(zero)),
+                "specific bind: port reuse is disabled before listening");
+#endif
             assertListenOrder(c, wildcard_first ? h.fd : s.fd, wildcard_first ? s.fd : h.fd);
         }
     }
