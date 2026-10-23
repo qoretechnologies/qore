@@ -3279,7 +3279,7 @@ QoreSandboxManager* qore_find_thread_sandbox_manager_ref() {
 }
 
 bool qore_reflection_has_module_caller(const QoreProgram* caller, const QoreProgram* target,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, const QoreClass* cls) {
     ThreadData* td = thread_data.get();
     if (!td) {
         return false;
@@ -3302,7 +3302,20 @@ bool qore_reflection_has_module_caller(const QoreProgram* caller, const QoreProg
             return true;
         }
         if (!pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
-            return false;
+            // Importing a public module class authorizes calls to that class, not arbitrary execution in the
+            // module's Program. Builtins and classes merely handed over from unrelated Programs do not qualify.
+            if (!cls || cls->isSystem() || !cls->isModulePublic() || cls->getSourceProgram() != target
+                    || !target->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
+                return false;
+            }
+            QoreParseOptions restricting = QoreParseOptions(QDOM_ALL)
+                & ~QoreParseOptions::POSITIVE_OPTIONS & ~QoreParseOptions(QDOM_IN_MODULE);
+            if ((pgm->getParseOptions() & restricting) & ~target->getParseOptions()) {
+                return false;
+            }
+            const QoreClass* imported = pgm->findClass(cls->getPath(), xsink);
+            return !*xsink && imported && imported->getID() == cls->getID()
+                && imported->getSourceProgram() == target;
         }
     }
     return false;

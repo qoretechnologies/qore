@@ -675,6 +675,16 @@ int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const ch
 
 int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const char* what, Access access,
         ExceptionSink* xsink) const {
+    return checkProgramAccess(target, what, access, xsink, nullptr);
+}
+
+int QoreReflectionCaller::checkClassCallAccess(const QoreClass* cls, const QoreProgram* target,
+        ExceptionSink* xsink) const {
+    return checkProgramAccess(target, "execute code in", Access::Value, xsink, cls);
+}
+
+int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const char* what, Access access,
+        ExceptionSink* xsink, const QoreClass* cls) const {
     assert(xsink);
     if (!target || target == pgm) {
         return 0;
@@ -695,8 +705,9 @@ int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const ch
     if (!privileged && !((po & compared) & ~tpo) && pgm
             && pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
         // A library can reflect back into its active caller (for example, to construct an application subclass).
-        // Never cross an intervening non-module Program or infer authority over an inactive target.
-        privileged = qore_reflection_has_module_caller(pgm, target, xsink);
+        // A class call can also use an exact public module-class import in the first application caller.
+        // This does not confer general access to the class's Program or cross an intervening application.
+        privileged = qore_reflection_has_module_caller(pgm, target, xsink, cls);
         if (*xsink) {
             return -1;
         }

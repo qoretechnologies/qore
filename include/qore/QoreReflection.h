@@ -589,7 +589,8 @@ DLLEXPORT const QoreNamespace* qore_program_find_namespace(const QoreProgram& pg
       constructor, copy method, destructor or method) must be allowed by the caller and by the target Program
       (allowsDomain()); a variant selected at run time is checked with QoreReflectionCallCheckHelper or the
       QoreExternalFunction::evalFunction() variant that takes the caller. All calls, including builtins that can
-      construct Programs or enter user code, also require full checkProgramAccess() permission
+      construct Programs or enter user code, also require checkProgramAccess() permission. Class calls use
+      checkClassCallAccess(), which also permits an exact public module class imported by the application caller
     - reading or writing a class's members or constants: the class's functional domain is checked in the same way
     - navigation and value access in another Program (checkProgramAccess()): allowed from that Program, from a
       Program that created it (directly or through Programs it created), or when the caller is at least as
@@ -606,7 +607,7 @@ public:
     //! Classifies access by whether it can expose values or execute target code
     enum class Access {
         Structural,     //!< Declaration inspection only; explicitly-allowed domains are not compared
-        Value,          //!< Values, state changes and code execution require full Program access
+        Value,          //!< Full Program access, with a class-specific permission for checkClassCallAccess()
         MemberDefault,  //!< Full access, retaining the trusted user-module exception for initializers
     };
 
@@ -676,7 +677,27 @@ public:
     DLLEXPORT int checkProgramAccess(const QoreProgram* target, const char* what, Access access,
         ExceptionSink* xsink) const;
 
+    //! Checks access to the Program of a class called through reflection
+    /** In addition to full Program access, a user module may call an exact public user-module class imported
+        by its first enclosing application Program. This grants no access to other symbols or Program state.
+        Restricting domains, sandbox identity, and the separate class/variant domain checks still apply.
+
+        @par Example
+        DataProvider constructs a provider class exported by another module that the application has loaded.
+
+        @param cls the class being called
+        @param target the Program of the reflection handle; nullptr is always allowed
+        @param xsink raises \c REFLECTION-ACCESS-ERROR if access is denied
+        @return 0 if allowed, -1 if an exception was raised
+        @throw REFLECTION-ACCESS-ERROR neither full Program access nor the exact class import permits the call
+        @since %Qore 3.0
+    */
+    DLLEXPORT int checkClassCallAccess(const QoreClass* cls, const QoreProgram* target, ExceptionSink* xsink) const;
+
 private:
+    int checkProgramAccess(const QoreProgram* target, const char* what, Access access, ExceptionSink* xsink,
+        const QoreClass* cls) const;
+
     QoreProgram* pgm;
     unsigned pgm_id;
     QoreParseOptions po;

@@ -44,7 +44,8 @@ object belongs to, by the same rule the parser applies to a builtin named in sou
   the duration of call checking: the target Program's options, with every domain the caller restricts also restricted and
   every explicitly-allowed domain the caller lacks removed. The body then runs under the target Program's own
   options (as a cross-Program `callFunction()` does), so a call the caller is allowed to make still executes with the
-  target's privileges. All calls therefore also require full Program access before dispatch.
+  target's privileges. Calls therefore also require Program access before dispatch, with the class-specific
+  permission for imported public module classes described below.
 
 This is stricter than a pure "caller only" rule (it also enforces the target Program's restrictions), which was
 chosen (D1, David 2026-10-21) so that a call through reflection can never exceed either Program's restrictions while
@@ -65,7 +66,7 @@ manager other than the target's own. `PO_IN_MODULE` is an execution-context mark
 
 |!Operation|!Explicitly-allowed domains|!Execution and values
 |Structural navigation (`Structural`)|Not compared|Only declarations and handles; no initializers or target state
-|Value access and calls (`Value`)|Caller must allow every such domain the target allows, or return through an active module call chain|Reads, writes and calls require full access
+|Value access and calls (`Value`)|Caller must allow every such domain the target allows, or return through an active module call chain|Full access; class calls also permit an exact imported public module class
 |Member defaults and typed-hash casts (`MemberDefault`)|Full comparison except for trusted user-module code|Evaluates the initializer in the target context
 
 Thus code without injection or debugger capability can inspect a foreign Program's structure without acquiring its
@@ -89,6 +90,25 @@ created by that outer caller, is not authorized by this rule.
 Restricting domains, sandbox-manager identity, callable domains, and the runtime restriction override remain in
 force. This rule grants no general module exemption and does not expose inactive Programs to module callbacks.
 The context walk checks cooperative cancellation every 100 entries.
+
+#### Calls to imported public module classes
+
+A module can also construct or call a public class exported by another user module when the first application
+Program on the active call chain has imported that exact class. This preserves
+`AbstractDataProviderFactory::create()` and `createWithTemplate()`: DataProvider's module Program need not have
+the injection or debugger options of the module defining the provider class, and the provider module need not
+be active on the stack. The application could already name and construct the imported class directly.
+
+This permission is limited to class calls (`QoreReflectionCaller::checkClassCallAccess()`). The class must be
+non-builtin and module-public, its source Program must be the reflection handle's target module Program, and
+the application must resolve the class's path to the same class ID and source Program. A same-named unrelated
+class does not qualify. The walk stops at the first application even if an outer application imported the class.
+That application's restricting domains must also be compatible with the target. The captured caller's domain
+checks, sandbox-manager identity and runtime restriction override remain enforced. Normal methods, copy and
+destruction still check the object's Program separately.
+
+This does not grant access to globals, static members, constants, functions, private module classes or builtin
+constructors, nor to an unrelated application Program merely because it contains the same imported class.
 
 #### Defaults and module compatibility
 
@@ -153,8 +173,9 @@ encode declaration paths and resolve them in the deserializing Program, without 
 - **Value:** full access; class values also check class domains. An object member additionally checks its object's
   Program. No general user-module exception.
 - **Default:** `MemberDefault` access, with the narrowly retained trusted-module exception described above.
-- **Call:** full access plus caller-and-target domain checks, including builtin functions, constructors and
-  pseudo-methods. Normal/copy/destructor calls also check the object's Program.
+- **Call:** Program access plus caller-and-target domain checks, including builtin functions, constructors and
+  pseudo-methods. Public user-module classes additionally permit the exact imported-class check above.
+  Normal/copy/destructor calls also check the object's Program.
 - **Cast:** member-default access before constructing a typed hash or evaluating any missing-member initializer;
   the same trusted-module exception preserves DataProvider record conversion.
 - **Input value:** operates on a supplied value, not foreign Program state; does not evaluate member defaults.
@@ -260,3 +281,10 @@ exception and record conversion; the ordinary non-module reader remains denied. 
 module proves the exception does not grant module callers global reads, writes or arbitrary function calls. Existing
 caller-domain and namespace-navigation tests cover builtin calls, creators, transitive creators and equal siblings. `QoreRepl.qtest` covers tooling-created Programs;
 `AOTDataProviderExecutable.qtest` covers compiled executable use of DataProvider.
+
+`FactoryCallerPrivilege.qtest` exercises a provider module with injection and debugger capabilities that the
+DataProvider caller lacks: both factory creation paths, the single-constructor fallback, all seven reflection
+constructor entry points and a static method variant. It rejects an intervening application without the import,
+a same-named unrelated class, restricting-domain and sandbox mismatches, private classes, builtin constructors,
+global reads and a handle bound to an unrelated Program that imported the same class. The fixtures are tested
+from source and compiled modules across AST, IR, JIT and tiered execution.

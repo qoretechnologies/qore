@@ -81,7 +81,7 @@
     |!Operation|!Access rule
     |Structural inspection: namespace navigation, declarations, names, types, signatures, class hierarchy and fixed enum values|The caller's restricting domains and sandbox manager apply; missing injection or debugger capability does not prevent inspection
     |Reading constants, globals, object/static members or parameter defaults; writing values|Full Program access, including explicitly-allowed domains
-    |Calling functions or methods, constructing, copying or destroying objects|Full Program access plus the caller's and target's functional-domain checks; object calls also check the object's Program
+    |Calling functions or methods, constructing, copying or destroying objects|Program access plus the caller's and target's functional-domain checks; public module classes also permit the exact imported-class rule below; object calls also check the object's Program
     |Reading member defaults or constructing typed hashes with <tt>doCast*</tt>|Full Program access, retaining a narrow exception for trusted user-module code that lacks the target's injection or debugger capability
 
     Full Program access is allowed from the target @ref Qore::Program "Program", from a Program that created it
@@ -90,6 +90,13 @@
     and have no governing sandbox manager other than the target's own. Otherwise \c REFLECTION-ACCESS-ERROR is raised.
     Structural navigation uses the same creator, restricting-domain and sandbox rules, but does not compare
     explicitly-allowed domains. Existing metadata-only accessors on a supplied handle retain their behavior.
+
+    Modules may reflect back into a caller already on their active module call chain, up to the first application
+    Program. For class calls, a module may also use an exact public user-module class imported by that application,
+    even when the defining module is inactive and enables injection or debugging. This preserves cross-module
+    data-provider factories. The class ID and defining Program must match the import; builtin classes, private
+    module classes and handles bound to unrelated Programs do not qualify. Restricting domains, sandbox identity
+    and callable-domain checks still apply. This grants no access to the module's globals or other symbols.
 
     Inspection never authorizes execution or state access: a caller can discover a function or typed hash without
     being allowed to call the function or evaluate the hash's initializers. Builtin functions and constructors also

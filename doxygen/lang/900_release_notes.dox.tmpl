@@ -31,11 +31,14 @@
 
     <b>Security</b>: @ref reflection "reflection" checks cross-Program access per operation. Structural inspection
     works even when the target enables injection or debugging, while calls, value access and writes
-    require full Program access. Caller-and-target functional-domain checks remain in place. The trusted
+    require full Program access. Caller-and-target functional-domain checks remain in place. The general trusted
     user-module exception is limited to member-default evaluation, including typed-hash conversion, so @ref dataproviderintro "DataProvider" continues
     to consume such Programs' types. Namespace constant handles now retain the requested Program for access checks.
     Modules can reflect back into an active caller through a chain of module calls; an intervening application
     Program ends that chain, and restricting domains and sandbox checks still apply.
+    Cross-module data-provider factories can also construct an exact public module class imported by their
+    application caller, even when its defining module enables injection or debugging. This class-specific
+    permission preserves factory creation without exposing other symbols or unrelated Programs.
     See @ref reflection_caller_privilege and <a href="https://github.com/qoretechnologies/qore/issues/5483">issue 5483</a>.
 
     @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool" serialization

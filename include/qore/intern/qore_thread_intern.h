@@ -322,9 +322,11 @@ DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_manager_ref();
 //! Returns whether target is an enclosing caller reached only through user-module contexts.
 /** Starts at the captured caller, ignoring context switches made by the reflection API itself.
     The first non-module Program is included but is never crossed. Cancellation is reported in xsink.
+    For a class call, that application may instead have imported the exact public user-module class; this
+    permission is limited to the class and still compares the application's restricting domains.
 */
 DLLLOCAL bool qore_reflection_has_module_caller(const QoreProgram* caller, const QoreProgram* target,
-    ExceptionSink* xsink);
+    ExceptionSink* xsink, const QoreClass* cls = nullptr);
 
 //! Resolves the manager for a POLICY check (filesystem/network); honors the policy barrier
 /** Identical to @ref qore_find_thread_sandbox_manager_ref() except that an active policy
