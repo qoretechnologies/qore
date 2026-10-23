@@ -154,7 +154,7 @@ public:
     DLLLOCAL bool dropInheritedData();
 
     //! initializes the statement's lock again in a child process created with fork(); see QoreDbiForkObject
-    DLLLOCAL void forkChild() noexcept override {
+    DLLLOCAL virtual void forkChild() noexcept {
         stmt_lock.reinitAfterFork();
     }
 

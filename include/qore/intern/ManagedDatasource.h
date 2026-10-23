@@ -169,7 +169,7 @@ public:
     }
 
     //! initializes the lock and its condition again in a child process created with fork(); see QoreDbiForkObject
-    DLLLOCAL void forkChild() noexcept override {
+    DLLLOCAL virtual void forkChild() noexcept {
         // the waiters are threads of the parent; the TID of a lock that one of them held is forgotten when the
         // datasource is next used (see forkCheckUnlocked())
         cond.reinitAfterFork();

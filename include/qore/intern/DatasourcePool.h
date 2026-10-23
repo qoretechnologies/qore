@@ -282,7 +282,7 @@ public:
 
     //! initializes the pool lock and its condition again in a child process created with fork(); see
     //! QoreDbiForkObject
-    DLLLOCAL void forkChild() noexcept override {
+    DLLLOCAL virtual void forkChild() noexcept {
         // the waiters are threads of the parent; the connections they held are given up when the pool is next used
         // (see forkCheckUnlocked())
         QoreCondition::reinitAfterFork();
