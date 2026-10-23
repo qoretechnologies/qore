@@ -160,6 +160,8 @@ public class DpqlParser {
         /** @since %DataProvider 3.9
         */
         *hash<DpqlTokenInfo> prefix_op_name_tok;
+        #! The last token read that is not a space or a line break, which a diagnostic of a missing value names
+        *hash<DpqlTokenInfo> last_tok;
     }
 
     #! Creates a parser with optional expression map and fields for validation
@@ -223,16 +225,20 @@ public class DpqlParser {
     /** @param text the DPQL expression to parse
         @return the parsed DataProviderExpression
 
-        @throw DPQL-PARSE-ERROR if the expression contains syntax errors
+        @throw DPQL-PARSE-ERROR if the expression contains syntax errors; the description gives the position and the
+        message of the first diagnostic (<tt>DPQL parse error at line 1, column 4: ...</tt>), and the argument is the
+        list of diagnostics
+
+        @since %DataProvider 3.11 the description gives the position of the first diagnostic before its message, as a
+        message is a sentence that says how to make the text valid
     */
     hash<DataProviderExpression> parse(string text) {
         hash<DpqlParseResult> result = parseWithInfo(text);
         if (!result.success) {
             string msg = "DPQL parse error";
             if (result.diagnostics) {
-                msg += ": " + result.diagnostics[0].message;
-                msg += sprintf(" at line %d, column %d", result.diagnostics[0].line,
-                    result.diagnostics[0].column);
+                msg += sprintf(" at line %d, column %d: %s", result.diagnostics[0].line, result.diagnostics[0].column,
+                    result.diagnostics[0].message);
             }
             throw "DPQL-PARSE-ERROR", msg, result.diagnostics;
         }
@@ -249,6 +255,7 @@ public class DpqlParser {
         tokens = ();
         remove prefix_op_paren_tok;
         remove prefix_op_name_tok;
+        remove last_tok;
 
         # Initialize tokenizer
         tokenizer = new DpqlTokenizer(text);
@@ -272,8 +279,10 @@ public class DpqlParser {
                 skipWhitespace();
                 if (!atEnd()) {
                     hash<DpqlTokenInfo> tok = peek();
-                    addError(sprintf("Unexpected token '%s' after expression", tok.value),
-                        "DPQL-E001", tok);
+                    # a token that the tokenizer could not read has been reported by it
+                    if (tok.type != DPQL_TOK_ERROR) {
+                        addError(getTrailingTokenMessage(tok), "DPQL-E001", tok);
+                    }
                 }
                 # Wrap non-expression results (field references, bare values) in a value expression
                 # This only happens at the top level, not for nested expressions or function args
@@ -822,6 +831,9 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
         hash<DpqlTokenInfo> tok = tokenizer.next();
         line = tok.line;
         column = tok.column;
+        if (tok.type != DPQL_TOK_WHITESPACE && tok.type != DPQL_TOK_NEWLINE && tok.type != DPQL_TOK_EOF) {
+            last_tok = tok;
+        }
         return tok;
     }
 
@@ -847,6 +859,48 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             "end_line": tok.end_line,
             "end_column": tok.end_column,
         };
+    }
+
+    #! Returns what a diagnostic says of a token that follows a complete expression
+    /** @param tok the token after the expression
+
+        @return the message, which says how to make the text valid
+
+        @since %DataProvider 3.11
+    */
+    private static string getTrailingTokenMessage(hash<DpqlTokenInfo> tok) {
+        switch (tok.type) {
+            case DPQL_TOK_RPAREN:
+                return "This ')' has no '(' to close: remove it.";
+            case DPQL_TOK_RBRACKET:
+                return "This ']' has no '[' to close: remove it.";
+            case DPQL_TOK_RBRACE:
+                return "This '}' has no '{' to close: remove it.";
+            case DPQL_TOK_COMMA:
+                return "A ',' separates the values of a function or a list, and there's none here: remove it.";
+            case DPQL_TOK_IDENTIFIER:
+                switch (tok.value.lwr()) {
+                    case "and":
+                        return "Use && to join two conditions: 'and' only joins the two bounds of between.";
+                    case "or":
+                        return "Use || to join two conditions: 'or' isn't an operator.";
+                    case "not":
+                        return "'not' goes before in or between, as in @status not in (\"closed\", \"lost\").";
+                }
+                break;
+        }
+        return "Something follows a complete value here: join them with an operator, such as +, == or &&.";
+    }
+
+    #! Returns what a diagnostic says of a value that is missing at the end of the text
+    /** @return the message, which names the last token read, after which the value is missing
+
+        @since %DataProvider 3.11
+    */
+    private string getMissingValueMessage() {
+        return last_tok
+            ? sprintf("Something is missing at the end: a value after '%s'.", last_tok.value)
+            : "Something is missing at the end: a value.";
     }
 
     #! Adds a warning diagnostic from a token
@@ -877,16 +931,28 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
     }
 
     #! Expects a specific token type and returns it
-    private hash<DpqlTokenInfo> expect(int token_type, string description) {
+    /** @param token_type the token type expected
+        @param description the token expected, as a diagnostic names it
+        @param end_message what a diagnostic says when the text ends where the token is expected; by default, that
+        the token is missing at the end
+        @param other_message what a diagnostic says when another token is where the token is expected; by default,
+        that the token was expected
+
+        @return the token
+    */
+    private hash<DpqlTokenInfo> expect(int token_type, string description, *string end_message,
+            *string other_message) {
         skipWhitespace();
         if (atEnd()) {
-            addError(sprintf("Unexpected end of input, expected %s", description),
+            addError(end_message ?? (token_type == DPQL_TOK_RPAREN
+                    ? "Something is missing at the end: a ')' to close the '('."
+                    : sprintf("Something is missing at the end: %s.", description)),
                 "DPQL-E001", line, column, line, column);
             throw "DPQL-PARSE-ERROR", "Unexpected end of input";
         }
         hash<DpqlTokenInfo> tok = nextToken();
         if (tok.type != token_type) {
-            addError(sprintf("Expected %s, got '%s'", description, tok.value),
+            addError(other_message ?? sprintf("Expected %s, got '%s'", description, tok.value),
                 "DPQL-E001", tok);
             throw "DPQL-PARSE-ERROR", sprintf("Expected %s", description);
         }
@@ -959,7 +1025,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
     private auto parseUnaryExpr() {
         skipWhitespace();
         if (atEnd()) {
-            addError("Unexpected end of input", "DPQL-E001", line, column, line, column);
+            addError(getMissingValueMessage(), "DPQL-E001", line, column, line, column);
             throw "DPQL-PARSE-ERROR", "Unexpected end of input";
         }
 
@@ -981,7 +1047,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
     private auto parsePrimaryExpr() {
         skipWhitespace();
         if (atEnd()) {
-            addError("Unexpected end of input", "DPQL-E001", line, column, line, column);
+            addError(getMissingValueMessage(), "DPQL-E001", line, column, line, column);
             throw "DPQL-PARSE-ERROR", "Unexpected end of input";
         }
 
@@ -1141,7 +1207,10 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                             }
                             values = parsed;
                         } else {
-                            expect(DPQL_TOK_LPAREN, "'('");
+                            expect(DPQL_TOK_LPAREN, "'('",
+                                "Something is missing at the end: the values after 'in', in parentheses, such as "
+                                    "in (1, 2).",
+                                "'in' needs its values in parentheses, such as in (1, 2).");
                             skipWhitespace();
                             values = parseValueList();
                             skipWhitespace();
@@ -1159,7 +1228,8 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                         skipWhitespace();
                         hash<DpqlTokenInfo> and_tok = peek();
                         if (and_tok.type != DPQL_TOK_IDENTIFIER || and_tok.value.lwr() != "and") {
-                            addError("Expected 'and' in between expression", "DPQL-E001", and_tok);
+                            addError("'between' needs 'and' between its two bounds, as in @age between 18 and 65.",
+                                "DPQL-E001", and_tok);
                             throw "DPQL-PARSE-ERROR", "Expected 'and'";
                         }
                         nextToken();  # consume 'and'
@@ -1210,14 +1280,15 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
     */
     private hash<DataProviderExpression> parseRegexExpr(auto left, string op_name, string op_sym) {
         if (atEnd()) {
-            addError(sprintf("Expected regex pattern after '%s'", op_sym), "DPQL-E009",
-                line, column, line, column);
+            addError(sprintf("Something is missing at the end: a pattern after '%s', between slashes, such as /abc/.",
+                op_sym), "DPQL-E009", line, column, line, column);
             throw "DPQL-PARSE-ERROR", "Expected regex pattern";
         }
 
         hash<DpqlTokenInfo> tok = peek();
         if (tok.type != DPQL_TOK_REGEX) {
-            addError(sprintf("Expected regex pattern after '%s'", op_sym), "DPQL-E009", tok);
+            addError(sprintf("'%s' needs a pattern between slashes after it, such as /abc/.", op_sym), "DPQL-E009",
+                tok);
             throw "DPQL-PARSE-ERROR", "Expected regex pattern";
         }
 
@@ -1274,8 +1345,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
     private auto parseValue() {
         skipWhitespace();
         if (atEnd()) {
-            addError("Unexpected end of input, expected value", "DPQL-E001",
-                line, column, line, column);
+            addError(getMissingValueMessage(), "DPQL-E001", line, column, line, column);
             throw "DPQL-PARSE-ERROR", "Expected value";
         }
 
@@ -1386,8 +1456,8 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                 throw "DPQL-PARSE-ERROR", "Tokenizer error";
 
             default:
-                addError(sprintf("Unexpected token '%s' in value position", tok.value),
-                    "DPQL-E001", tok);
+                addError(sprintf("Something is missing before '%s': a value, such as a field or a template.",
+                    tok.value), "DPQL-E001", tok);
                 throw "DPQL-PARSE-ERROR", "Unexpected token";
         }
     }

@@ -216,6 +216,12 @@ public hashdecl DpqlDiagnostic {
     int end_column;
 }
 
+#! What a diagnostic says of an \c @ that no field name follows
+const DpqlLoneFieldMarkerMessage = "An `@` names a field: pick one from the list, or remove the `@`.";
+
+#! What a diagnostic says of a \c $ that no template follows
+const DpqlLoneTemplateMarkerMessage = "A `$` starts a template: pick one from the list, or remove the `$`.";
+
 #! Tokenizer for DPQL (Data Provider Query Language) expressions
 /** This class provides lexical analysis of DPQL query expressions, correctly handling:
     - Field references (\c \@field or <tt>\@\"field with spaces\"</tt>)
@@ -267,6 +273,9 @@ public class DpqlTokenizer {
         list<hash<DpqlDiagnostic>> errors = ();
         #! Context flag: when True, '{' is a key accessor; when False, it's a hash literal
         bool in_field_ref_context = False;
+        #! The byte position of a character that a diagnostic said cannot follow an \c @ or a \c $
+        /** The character is then not reported again as a character that cannot be used */
+        int named_char_pos = -1;
     }
 
     #! Creates a tokenizer for the given DPQL expression
@@ -312,6 +321,11 @@ public class DpqlTokenizer {
     */
     static bool isBareFieldName(string name) {
         return name =~ /^[\p{L}_][\p{L}\p{M}\p{N}_]*(?:\.[\p{L}\p{M}\p{N}_]+)*$/;
+    }
+
+    #! Returns True if a character is a space, a tab or a line break
+    private static bool isSpaceChar(string ch) {
+        return ch == " " || ch == "\t" || ch == "\r" || ch == "\n";
     }
 
     #! Returns True if a character can start a bare field name (a letter of any script, or \c _)
@@ -376,8 +390,13 @@ public class DpqlTokenizer {
     }
 
     #! Returns True if at end of input
+    /** @return True if no token is left to read: the input has been read, and no token has been peeked at, or the
+        token peeked at is the end of the input (@ref DPQL_TOK_EOF)
+
+        @since %DataProvider 3.11 True after the end of the input has been peeked at
+    */
     bool atEnd() {
-        return !peeked && pos >= len;
+        return peeked ? peeked.type == DPQL_TOK_EOF : pos >= len;
     }
 
     #! Returns the next token without consuming it
@@ -825,11 +844,15 @@ public class DpqlTokenizer {
             return scanIdentifier();
         }
 
-        # Unknown character: the whole character, never one byte of it, so that the message is valid text
+        # Unknown character: the whole character, never one byte of it, so that the message is valid text; a
+        # character that a diagnostic has named already, as one that cannot follow an @ or a $, is not reported again
         string ch = currentCodePoint() ?? c;
+        bool named = pos == named_char_pos;
         advance(currentCodePointBytes());
-        addError(sprintf("Unexpected character '%s'", ch), "DPQL-E001",
-            start_line, start_column, line, column);
+        if (!named) {
+            addError(sprintf("'%s' can't be used here: remove it, or put it in quotes to make it text.", ch),
+                "DPQL-E001", start_line, start_column, line, column);
+        }
         return makeToken(DPQL_TOK_ERROR, ch, start_line, start_column);
     }
 
@@ -841,7 +864,7 @@ public class DpqlTokenizer {
         advance();  # skip @
 
         if (pos >= len) {
-            addError("Incomplete field reference", "DPQL-E003",
+            addError(DpqlLoneFieldMarkerMessage, "DPQL-E003",
                 start_line, start_column, line, column);
             return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
         }
@@ -868,7 +891,8 @@ public class DpqlTokenizer {
                     }
                 } else if (c == "\n") {
                     # Newline in field name is invalid
-                    addError("Unterminated quoted field reference", "DPQL-E003",
+                    addError("A field name can't go on to the next line: add the closing '\"' before the line "
+                        "ends.", "DPQL-E003",
                         start_line, start_column, line, column);
                     return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
                 } else {
@@ -877,7 +901,7 @@ public class DpqlTokenizer {
                 }
             }
             # Reached end without closing quote
-            addError("Unterminated quoted field reference", "DPQL-E003",
+            addError("This field name has no closing '\"': add one after the name.", "DPQL-E003",
                 start_line, start_column, line, column);
             return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
         }
@@ -907,9 +931,14 @@ public class DpqlTokenizer {
             return makeToken(DPQL_TOK_FIELD, value, start_line, start_column);
         }
 
-        # Invalid field reference
-        addError(sprintf("Invalid field reference: expected identifier or quoted string after '@', got '%s'",
-                currentCodePoint() ?? c),
+        # Invalid field reference: an @ followed by a space is an @ on its own
+        string next = currentCodePoint() ?? c;
+        if (!isSpaceChar(next)) {
+            named_char_pos = pos;
+        }
+        addError(isSpaceChar(next)
+                ? DpqlLoneFieldMarkerMessage
+                : sprintf("'%s' can't follow an `@`: pick a field from the list, or remove the `@`.", next),
             "DPQL-E003", start_line, start_column, line, column);
         return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
     }
@@ -932,7 +961,7 @@ public class DpqlTokenizer {
         advance();  # skip $
 
         if (pos >= len) {
-            addError("Incomplete template reference: expected context identifier after '$'", "DPQL-E030",
+            addError(DpqlLoneTemplateMarkerMessage, "DPQL-E030",
                 start_line, start_column, line, column);
             return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
         }
@@ -941,7 +970,15 @@ public class DpqlTokenizer {
 
         # Context identifier: letters, digits, underscores, hyphens (for qore-expr etc.)
         if (c !~ /[a-zA-Z_]/) {
-            addError(sprintf("Invalid template reference: expected context identifier after '$', got '%s'", c),
+            # the whole character, never one byte of it, so that the message is valid text; a $ followed by a space
+            # is a $ on its own
+            string next = currentCodePoint() ?? c;
+            if (!isSpaceChar(next)) {
+                named_char_pos = pos;
+            }
+            addError(isSpaceChar(next)
+                    ? DpqlLoneTemplateMarkerMessage
+                    : sprintf("'%s' can't follow a `$`: pick a template from the list, or remove the `$`.", next),
                 "DPQL-E031", start_line, start_column, line, column);
             return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
         }
@@ -958,15 +995,17 @@ public class DpqlTokenizer {
 
         # Expect ':' separator
         if (pos >= len || currentChar() != ":") {
-            addError("Invalid template reference: expected ':' after context identifier", "DPQL-E032",
-                start_line, start_column, line, column);
+            addError(sprintf("This template needs a ':' after `%s`: pick one from the list, or remove the `$`.",
+                    value),
+                "DPQL-E032", start_line, start_column, line, column);
             return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
         }
         value += ":";
         advance();  # skip ':'
 
         if (pos >= len) {
-            addError("Incomplete template reference: expected value after ':'", "DPQL-E033",
+            addError("This template isn't finished: pick one from the list, or write what it refers to after the "
+                "':'.", "DPQL-E033",
                 start_line, start_column, line, column);
             return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
         }
@@ -1011,7 +1050,7 @@ public class DpqlTokenizer {
                 }
             }
             if (depth > 0) {
-                addError("Unterminated bracketed template value", "DPQL-E034",
+                addError("This template's '{' isn't closed: add a '}' after what it refers to.", "DPQL-E034",
                     start_line, start_column, line, column);
                 return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
             }

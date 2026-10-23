@@ -1292,7 +1292,22 @@ if (!result.success) {
             diag.line, diag.column, diag.message, diag.code);
     }
 }
+# Error at line 1, column 7: Something is missing at the end: a value after '=='. (code: DPQL-E001)
     @endcode
+
+    A diagnostic's message is written for a person who builds an expression from lists of fields and templates:
+    it says in plain words what is wrong and how to make the text valid, without naming parts of the grammar, as in
+    <tt>"A `$` starts a template: pick one from the list, or remove the `$`."</tt> or
+    <tt>"Something follows a complete value here: join them with an operator, such as +, == or &&."</tt>.  A
+    program that reacts to a diagnostic reads its \c code and its range, which do not change when a message is
+    reworded; one code can have a message for each situation that raises it.  A character or a token that a
+    diagnostic has reported is not reported a second time by a diagnostic about the same text.
+
+    @ref DataProvider::DpqlParser::parse() "DpqlParser::parse()" and
+    @ref DataProvider::DataProvider::parseDpqlExpression() "DataProvider::parseDpqlExpression()" throw
+    \c DPQL-PARSE-ERROR with the position and the message of the first diagnostic in the description
+    (<tt>DPQL parse error at line 1, column 7: Something is missing at the end: a value after '=='.</tt>) and the
+    list of diagnostics as the exception argument.
 
     @subsection dpql_syntax_highlighting Syntax Highlighting
 

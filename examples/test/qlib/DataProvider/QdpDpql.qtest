@@ -210,8 +210,11 @@ public class QdpDpqlTest inherits QUnit::Test {
             shellQuote("@name = \"John\""));
         hash<auto> result = runQdp(args);
         assertTrue(result.rc != 0);
-        int count = result.err.split("\n  - Invalid operator").size() - 1;
-        assertEq(1, count);
+        # the single '=' is reported once, and not again as a token after the expression
+        assertEq(1, result.err.split("Invalid operator").size() - 1, result.err);
+        assertEq(-1, result.err.find("follows a complete value"), result.err);
+        assertRegex("DPQL parse error: Invalid operator '=', did you mean '=='\\? \\(line 1, column 7\\)",
+            result.err);
     }
 
     private dpqlHelp() {

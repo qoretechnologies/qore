@@ -160,6 +160,9 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("exists: searches", \existsSearchTests());
         addTestCase("quoted field names: dots, escapes and round trips", \quotedFieldNameTests());
         addTestCase("quoted field names: a reference to one key", \fieldReferenceForKeyTests());
+        addTestCase("diagnostics say in plain words how to make the text valid", \plainWordDiagnosticsTests());
+        addTestCase("the end of the input is the end after it has been peeked at", \tokenizerEndAfterPeekTests());
+        addTestCase("a parse error gives the position before the message", \parseErrorDescriptionTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -735,13 +738,13 @@ public class DpqlTest inherits QUnit::Test {
         try {
             DataProvider::parseDpqlExpression('@größe § 1');
         } catch (hash<ExceptionInfo> ex) {
-            assertRegex("Unexpected character '§'", ex.desc);
+            assertRegex("'§' can't be used here", ex.desc);
             assertEq(8, ex.arg[0].column, "the column counts characters");
         }
         try {
             DataProvider::parseDpqlExpression('@€ == 1');
         } catch (hash<ExceptionInfo> ex) {
-            assertRegex("got '€'", ex.desc);
+            assertRegex("'€' can't follow an `@`", ex.desc);
         }
 
         # completion offers the names bare, and works after them
@@ -9725,5 +9728,127 @@ public class DpqlTest inherits QUnit::Test {
             # the reference reads the key
             assertEq(True, evalDpql(ref + " == 1", {i.key: 1}), i.key);
         }
+    }
+
+    #! Each text gives the diagnostics listed: code, range and message
+    /** The codes and ranges are what they were before the messages were written in plain words; a character that a
+        diagnostic names as one that cannot follow an \c @ or a \c $, and a token that the tokenizer could not read,
+        are not reported a second time
+    */
+    plainWordDiagnosticsTests() {
+        const string LoneTemplate = "A `$` starts a template: pick one from the list, or remove the `$`.";
+        const string LoneField = "An `@` names a field: pick one from the list, or remove the `@`.";
+        const string Follows = "Something follows a complete value here: join them with an operator, such as +, == "
+            "or &&.";
+        list<list<auto>> cases = (
+            ("$", (("DPQL-E030", 1, 1, 1, 2, LoneTemplate),)),
+            ("$ ", (("DPQL-E031", 1, 1, 1, 2, LoneTemplate),)),
+            ("$\n", (("DPQL-E031", 1, 1, 1, 2, LoneTemplate),)),
+            ("$1", (("DPQL-E031", 1, 1, 1, 2,
+                "'1' can't follow a `$`: pick a template from the list, or remove the `$`."),)),
+            ("$:x", (("DPQL-E031", 1, 1, 1, 2,
+                "':' can't follow a `$`: pick a template from the list, or remove the `$`."),)),
+            # the whole character is named, never one byte of it
+            ("$€", (("DPQL-E031", 1, 1, 1, 2,
+                "'€' can't follow a `$`: pick a template from the list, or remove the `$`."),)),
+            ("$local", (("DPQL-E032", 1, 1, 1, 7,
+                "This template needs a ':' after `$local`: pick one from the list, or remove the `$`."),)),
+            ("$local:", (("DPQL-E033", 1, 1, 1, 8,
+                "This template isn't finished: pick one from the list, or write what it refers to after the ':'."),)),
+            ("$qore-expr:{", (("DPQL-E034", 1, 1, 1, 13,
+                "This template's '{' isn't closed: add a '}' after what it refers to."),)),
+            ("@", (("DPQL-E003", 1, 1, 1, 2, LoneField),)),
+            ("@ ", (("DPQL-E003", 1, 1, 1, 2, LoneField),)),
+            ("@1", (("DPQL-E003", 1, 1, 1, 2,
+                "'1' can't follow an `@`: pick a field from the list, or remove the `@`."),)),
+            ("@-", (("DPQL-E003", 1, 1, 1, 2,
+                "'-' can't follow an `@`: pick a field from the list, or remove the `@`."),)),
+            ('@"abc', (("DPQL-E003", 1, 1, 1, 6, "This field name has no closing '\"': add one after the name."),)),
+            ("#", (("DPQL-E001", 1, 1, 1, 2,
+                "'#' can't be used here: remove it, or put it in quotes to make it text."),)),
+            ("@a € 1", (("DPQL-E001", 1, 4, 1, 5,
+                "'€' can't be used here: remove it, or put it in quotes to make it text."),)),
+            ("@a = 1", (("DPQL-E004", 1, 4, 1, 5, "Invalid operator '=', did you mean '=='?"),)),
+            ("@a @b", (("DPQL-E001", 1, 4, 1, 6, Follows),)),
+            ("@a == 1 2", (("DPQL-E001", 1, 9, 1, 10, Follows),)),
+            ("@a)", (("DPQL-E001", 1, 3, 1, 4, "This ')' has no '(' to close: remove it."),)),
+            ("@a ]", (("DPQL-E001", 1, 4, 1, 5, "This ']' has no '[' to close: remove it."),)),
+            ("@a }", (("DPQL-E001", 1, 4, 1, 5, "This '}' has no '{' to close: remove it."),)),
+            ("@a,", (("DPQL-E001", 1, 3, 1, 4,
+                "A ',' separates the values of a function or a list, and there's none here: remove it."),)),
+            ("@a and @b", (("DPQL-E001", 1, 4, 1, 7,
+                "Use && to join two conditions: 'and' only joins the two bounds of between."),)),
+            ("@a OR @b", (("DPQL-E001", 1, 4, 1, 6, "Use || to join two conditions: 'or' isn't an operator."),)),
+            ("@a not", (("DPQL-E001", 1, 4, 1, 7,
+                "'not' goes before in or between, as in @status not in (\"closed\", \"lost\")."),)),
+            ("@a ==", (("DPQL-E001", 1, 4, 1, 4, "Something is missing at the end: a value after '=='."),)),
+            ("@a + ", (("DPQL-E001", 1, 4, 1, 4, "Something is missing at the end: a value after '+'."),)),
+            ("@a &&", (("DPQL-E001", 1, 4, 1, 4, "Something is missing at the end: a value after '&&'."),)),
+            ("!", (("DPQL-E001", 1, 1, 1, 1, "Something is missing at the end: a value after '!'."),)),
+            ("(", (("DPQL-E001", 1, 1, 1, 1, "Something is missing at the end: a value after '('."),)),
+            # the end of the input after a comma is the end, not a token
+            ("lower(@a,", (("DPQL-E001", 1, 10, 1, 10, "Something is missing at the end: a value after ','."),)),
+            ("(@a", (("DPQL-E001", 1, 2, 1, 2, "Something is missing at the end: a ')' to close the '('."),)),
+            ("lower(@a", (("DPQL-E001", 1, 7, 1, 7, "Something is missing at the end: a ')' to close the '('."),)),
+            ("@a in", (("DPQL-E001", 1, 4, 1, 4,
+                "Something is missing at the end: the values after 'in', in parentheses, such as in (1, 2)."),)),
+            ("@a in 5", (("DPQL-E001", 1, 7, 1, 8, "'in' needs its values in parentheses, such as in (1, 2)."),)),
+            ("@a in (", (("DPQL-E001", 1, 7, 1, 7, "Something is missing at the end: a value after '('."),)),
+            ("@a between 1", (("DPQL-E001", 1, 13, 1, 13,
+                "'between' needs 'and' between its two bounds, as in @age between 18 and 65."),)),
+            ("@a between 1 and", (("DPQL-E001", 1, 14, 1, 14,
+                "Something is missing at the end: a value after 'and'."),)),
+            ("@a =~", (("DPQL-E009", 1, 4, 1, 4,
+                "Something is missing at the end: a pattern after '=~', between slashes, such as /abc/."),)),
+            ("@a !~ 5", (("DPQL-E009", 1, 7, 1, 8, "'!~' needs a pattern between slashes after it, such as /abc/."),)),
+            ("@a == )", (("DPQL-E001", 1, 7, 1, 8,
+                "Something is missing before ')': a value, such as a field or a template."),)),
+            ("==", (("DPQL-E001", 1, 1, 1, 3,
+                "Something is missing before '==': a value, such as a field or a template."),)),
+        );
+        foreach list<auto> c in (cases) {
+            hash<DpqlParseResult> r = DataProvider::parseDpqlExpressionWithInfo(c[0]);
+            assertFalse(r.success, c[0]);
+            assertEq(c[1], (map ($1.code, $1.line, $1.column, $1.end_line, $1.end_column, $1.message), r.diagnostics),
+                c[0]);
+            # every message is text that can be encoded
+            map assertEq($1.message, binary_to_string(binary($1.message), "UTF-8"), c[0]), r.diagnostics;
+        }
+    }
+
+    #! The tokenizer is at the end of the input once the end has been peeked at
+    tokenizerEndAfterPeekTests() {
+        DpqlTokenizer tok("@a");
+        assertFalse(tok.atEnd());
+        assertEq(DPQL_TOK_FIELD, tok.next().type);
+        assertTrue(tok.atEnd(), "the input has been read");
+        assertEq(DPQL_TOK_EOF, tok.peek().type);
+        assertTrue(tok.atEnd(), "the token peeked at is the end of the input");
+        assertEq(DPQL_TOK_EOF, tok.next().type);
+        assertTrue(tok.atEnd());
+
+        # a token peeked at that is not the end of the input leaves the tokenizer before the end
+        DpqlTokenizer tok2("@a ");
+        tok2.next();
+        assertEq(DPQL_TOK_WHITESPACE, tok2.peek().type);
+        assertFalse(tok2.atEnd());
+        assertEq((DPQL_TOK_FIELD, DPQL_TOK_WHITESPACE), (map $1.type, (new DpqlTokenizer("@a ")).getAllTokens()));
+    }
+
+    #! The description of a parse error gives the position of the first diagnostic, then its message
+    parseErrorDescriptionTests() {
+        assertThrows("DPQL-PARSE-ERROR",
+            "^DPQL parse error at line 1, column 4: Something is missing at the end: a value after '=='\\.$",
+            \DataProvider::parseDpqlExpression(), "@a ==");
+        *hash<ExceptionInfo> err;
+        try {
+            DataProvider::parseDpqlExpression("@a\n  && $");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertEq("DPQL-PARSE-ERROR", err.err);
+        assertEq("DPQL parse error at line 2, column 6: A `$` starts a template: pick one from the list, or remove "
+            "the `$`.", err.desc);
+        assertEq(("DPQL-E030",), (map $1.code, err.arg));
     }
 }
