@@ -28677,45 +28677,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::ModAssignInt: {
-            // Keep zero and signed-overflow behavior in the runtime helper;
-            // LLVM srem is undefined for both cases.
+            // the modulo-equals operator assigns 0 for a divisor of 0, as AST execution does
+            // (QoreModuloEqualsOperatorNode), and the remainder of a division by -1 is 0 (qore_int_mod()); LLVM srem
+            // is undefined for both, so it divides by 1 instead and the result is selected
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
             llvm::Value* l_int = ensureIntTypeInline(lhs, inst->operands[0].id);
             llvm::Value* r_int = ensureIntTypeInline(rhs, inst->operands[1].id);
             llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
-            llvm::Value* is_zero = builder->CreateICmpEQ(r_int, zero);
-            llvm::Value* is_min = builder->CreateICmpEQ(l_int,
-                llvm::ConstantInt::getSigned(i64_type, INT64_MIN));
-            llvm::Value* is_negative_one = builder->CreateICmpEQ(r_int,
-                llvm::ConstantInt::getSigned(i64_type, -1));
-            llvm::Value* use_helper = builder->CreateOr(is_zero,
-                builder->CreateAnd(is_min, is_negative_one));
-
-            llvm::BasicBlock* mod_zero_bb = llvm::BasicBlock::Create(ctx, "moda_zero", llvm_func);
-            llvm::BasicBlock* mod_ok_bb = llvm::BasicBlock::Create(ctx, "moda_ok", llvm_func);
-            llvm::BasicBlock* mod_merge_bb = llvm::BasicBlock::Create(ctx, "moda_merge", llvm_func);
-            builder->CreateCondBr(use_helper, mod_zero_bb, mod_ok_bb);
-
-            // Division by zero path: call runtime helper to raise exception
-            builder->SetInsertPoint(mod_zero_bb);
-            auto helper = module.getOrInsertFunction("qore_rt_mod_int",
-                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-            llvm::Value* exc_result = builder->CreateCall(helper, {l_int, r_int, xsink_arg});
-            builder->CreateBr(mod_merge_bb);
-
-            // Normal path: native modulo (result is raw i64)
-            builder->SetInsertPoint(mod_ok_bb);
-            llvm::Value* mod_result = builder->CreateSRem(l_int, r_int);
-            builder->CreateBr(mod_merge_bb);
-
-            // Merge results
-            builder->SetInsertPoint(mod_merge_bb);
-            llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "moda_result");
-            phi->addIncoming(exc_result, mod_zero_bb);
-            phi->addIncoming(mod_result, mod_ok_bb);
-            values[inst->result.id] = phi;
+            llvm::Value* no_remainder = builder->CreateOr(builder->CreateICmpEQ(r_int, zero),
+                builder->CreateICmpEQ(r_int, llvm::ConstantInt::getSigned(i64_type, -1)));
+            llvm::Value* divisor = builder->CreateSelect(no_remainder, llvm::ConstantInt::get(i64_type, 1), r_int);
+            values[inst->result.id] = builder->CreateSelect(no_remainder, zero,
+                builder->CreateSRem(l_int, divisor), "moda_result");
             return true;
         }
         // === Optimized fold operations (native LLVM loops) ===

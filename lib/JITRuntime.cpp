@@ -885,7 +885,7 @@ extern "C" DLLEXPORT int64_t qore_rt_div_int(int64_t left, int64_t right, Except
         }
         return 0;
     }
-    return left / right;
+    return qore_int_div(left, right);
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_mod_int(int64_t left, int64_t right, ExceptionSink* xsink) {
@@ -895,7 +895,7 @@ extern "C" DLLEXPORT int64_t qore_rt_mod_int(int64_t left, int64_t right, Except
         }
         return 0;
     }
-    return left % right;
+    return qore_int_mod(left, right);
 }
 
 extern "C" DLLEXPORT double qore_rt_div_float(double left, double right, ExceptionSink* xsink) {

@@ -16157,7 +16157,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 }
                 return QoreValue();
             }
-            return QoreValue(left.getAsBigInt() / divisor);
+            return QoreValue(qore_int_div(left.getAsBigInt(), divisor));
         }
         case QoreIROpcode::DivFloat: {
             double divisor = right.getAsFloat();
@@ -16200,7 +16200,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 }
                 return QoreValue();
             }
-            return QoreValue(left.getAsBigInt() % divisor);
+            return QoreValue(qore_int_mod(left.getAsBigInt(), divisor));
         }
         case QoreIROpcode::AndInt:
             return QoreValue(left.getAsBigInt() & right.getAsBigInt());
@@ -16274,7 +16274,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 }
                 return QoreValue();
             }
-            return QoreValue(left.getAsBigInt() / divisor);
+            return QoreValue(qore_int_div(left.getAsBigInt(), divisor));
         }
         case QoreIROpcode::DivAssignFloat: {
             double divisor = right.getAsFloat();
@@ -16290,14 +16290,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreDivisionOperatorNode::doDivision(left, right, xsink);
         case QoreIROpcode::ModAssignInt:
         case QoreIROpcode::ModAssignAny: {
+            // the modulo-equals operator assigns 0 for a divisor of 0, as AST execution does
+            // (QoreModuloEqualsOperatorNode); only the modulo operator raises an exception
             int64_t divisor = right.getAsBigInt();
-            if (!divisor) {
-                if (xsink) {
-                    xsink->raiseException("DIVISION-BY-ZERO", "modula operand cannot be zero");
-                }
-                return QoreValue();
-            }
-            return QoreValue(left.getAsBigInt() % divisor);
+            return QoreValue(divisor ? qore_int_mod(left.getAsBigInt(), divisor) : 0ll);
         }
         case QoreIROpcode::AndAssignInt:
             return QoreValue(left.getAsBigInt() & right.getAsBigInt());

@@ -2280,7 +2280,7 @@ int64 LValueHelper::divideEqualsBigInt(int64 va, const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    int64 newVal = qv->getAsBigInt() / va;
+    int64 newVal = qore_int_div(qv->getAsBigInt(), va);
     qv->set(newVal);
     return newVal;
 }
@@ -2325,7 +2325,7 @@ int64 LValueHelper::modulaEqualsBigInt(int64 va, const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    int64 newVal = qv->getAsBigInt() % va;
+    int64 newVal = qore_int_mod(qv->getAsBigInt(), va);
     qv->set(newVal);
     return newVal;
 }

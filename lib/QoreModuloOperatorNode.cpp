@@ -45,7 +45,7 @@ QoreValue QoreModuloOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsi
             r);
         return QoreValue();
     }
-    return l % r;
+    return qore_int_mod(l, r);
 }
 
 int QoreModuloOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {

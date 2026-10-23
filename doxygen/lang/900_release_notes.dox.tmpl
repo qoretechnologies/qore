@@ -4941,6 +4941,10 @@ while (*binary chunk = input.read(65536)) {
       code that starts the thread directly (such as <tt><b>background</b> (x = 1)</tt> in a method of a class with
       member \c x); since the expression takes the member's value when the thread starts, as it does for a local
       variable, such an expression now raises a parse exception, as the modification of a local variable does
+    - Fixed a crash (\c SIGFPE) when the smallest integer is divided by \c -1 with the
+      @ref division_operator "divide" (<tt>/</tt>, <tt>/=</tt>) or @ref modulo_operator "modulo" (<tt>%</tt>,
+      <tt>%=</tt>) operators: as integer arithmetic wraps, the quotient is the smallest integer and the remainder is
+      \c 0
     - Fixed calling the methods implemented by the abstract classes
       @ref Qore::SQL::AbstractDatasource "AbstractDatasource",
       @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement",

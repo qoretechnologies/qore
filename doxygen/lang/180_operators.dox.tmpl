@@ -1348,7 +1348,7 @@ foreach string key in (keys hash)
     |!Argument|!Processing
     |@ref number_type "number"|Gives the result of dividing its arguments; @ref integer "ints" and @ref float "floats" are converted to @ref number "numbers" if at least one of the arguments is a @ref number "number"
     |@ref float_type "float"|Gives the result of dividing its arguments; @ref integer "ints" are converted to @ref float "floats" if at least one of the arguments is a @ref float "float"
-    |@ref int_type "int"|Gives the result of dividing its arguments
+    |@ref int_type "int"|Gives the result of dividing its arguments, rounded toward zero; as integer arithmetic wraps, the smallest integer divided by \c -1 gives the smallest integer
     |any other type|Converts argument to a @ref float_type "float" and performs the division
 
     @throw DIVISION-BY-ZERO division by zero error
@@ -1370,9 +1370,9 @@ foreach string key in (keys hash)
 
     <b>Arguments Processed by %</b>
     |!Argument|!Processing
-    |@ref int_type "int"|Gives \a expression1 modulo \a expression2 (ex: <tt>12 % 10</tt> result in \c 2). Arguments are converted to integers if necessary.
+    |@ref int_type "int"|Gives \a expression1 modulo \a expression2 (ex: <tt>12 % 10</tt> result in \c 2), with the sign of \a expression1; the remainder of a division by \c -1 is \c 0. Arguments are converted to integers if necessary.
 
-    This operator does not throw any exceptions.
+    @throw DIVISION-BY-ZERO \a expression2 is zero
 
     <hr>
     @subsection plus_operator Plus (Addition and Concatenation) Operator (+)
@@ -2437,7 +2437,7 @@ if (x || y)
 
     <b>Arguments Processed by %=</b>
     |!Argument|!Processing
-    |All|the \a lvalue's type will be converted to an integer if necessary, and the \a expression will be evaluated and converted to an integer as well if necessary, and then the result will be used to divide the \a lvalue's value and the remainder will be saved to the \a lvalue
+    |All|the \a lvalue's type will be converted to an integer if necessary, and the \a expression will be evaluated and converted to an integer as well if necessary, and then the result will be used to divide the \a lvalue's value and the remainder will be saved to the \a lvalue, as by the @ref modulo_operator "modulo operator"; if the \a expression is zero, \c 0 is saved to the \a lvalue and no exception is raised
 
     <hr>
     @subsection multiply_equals_operator Multiply Equals Operator (*=)
@@ -2475,7 +2475,7 @@ if (x || y)
 
     <b>Arguments Processed by /=</b>
     |!Argument|!Processing
-    |All|The type precedence from highest to lowest is @ref number "number", @ref float "float" float, and @ref integer "int", other types are converted to @ref integer "int"; The \a expression will be evaluated and multiplied by the \a lvalue, and the result will be saved to the \a lvalue. The \a expression will be evaluated and used to divide the \a lvalue, and the result will be saved to the \a lvalue.
+    |All|The type precedence from highest to lowest is @ref number "number", @ref float "float", and @ref integer "int", other types are converted to @ref integer "int"; the \a expression will be evaluated and used to divide the \a lvalue, and the result will be saved to the \a lvalue, as by the @ref division_operator "divide operator".
 
     @throw DIVISION-BY-ZERO If the divisor expression evaluates to zero, this exception is thrown
 

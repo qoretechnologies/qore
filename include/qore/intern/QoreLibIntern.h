@@ -409,6 +409,24 @@ DLLLOCAL void inc_container_obj(const AbstractQoreNode* n, int dt);
 
 DLLLOCAL AbstractQoreNode* missing_openssl_feature(const char* f, ExceptionSink* xsink);
 
+//! Returns the quotient of an integer division by a divisor that is not zero
+/** Integer arithmetic wraps: the quotient of the smallest integer and -1 is the smallest integer, where the CPU's
+    division instruction traps (SIGFPE)
+*/
+static inline int64 qore_int_div(int64 l, int64 r) {
+    assert(r);
+    return r == -1 ? static_cast<int64>(0 - static_cast<uint64_t>(l)) : l / r;
+}
+
+//! Returns the remainder of an integer division by a divisor that is not zero
+/** The remainder of a division by -1 is 0, also for the smallest integer, where the CPU's division instruction
+    traps (SIGFPE)
+*/
+static inline int64 qore_int_mod(int64 l, int64 r) {
+    assert(r);
+    return r == -1 ? 0 : l % r;
+}
+
 #include "qore/intern/ParseWarnOptions.h"
 
 struct QoreProgramLineLocation {
