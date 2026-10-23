@@ -97,12 +97,162 @@ static bool is_utc_designator(char c) {
     return c == 'Z' || c == 'z';
 }
 
-//! Returns true if a zone designator starts at the position: the UTC designator or a UTC offset, also after a space
+//! Returns true if a zone designator starts at the position: the UTC designator, a UTC offset, \c UTC or \c GMT,
+//! also after a space
 static bool is_zone_start(const char* p) {
     if (*p == ' ') {
         ++p;
     }
-    return is_utc_designator(*p) || *p == '+' || *p == '-';
+    return is_utc_designator(*p) || *p == '+' || *p == '-' || !strncasecmp(p, "UTC", 3) || !strncasecmp(p, "GMT", 3);
+}
+
+//! Reads the UTC offset of a date/time string: "+" or "-" and the hours, optionally followed by the minutes and the
+//! seconds, each with or without a ":" separator ("+02", "+02:00", "+0200", "-05:30:15")
+/** @param str the whole string, for error messages
+    @param p the position of the sign; on success, the position after the offset
+    @param offset the offset in seconds east of UTC
+    @param xsink for an exception if the offset cannot be read; can be nullptr
+
+    @return 0 if the offset was read, -1 if not
+*/
+static int read_utc_offset(const char* str, const char*& p, int& offset, ExceptionSink* xsink) {
+    int mult = *p == '-' ? -1 : 1;
+    ++p;
+    if (!isdigit(*p)) {
+        if (xsink) {
+            if (*p) {
+                xsink->raiseException("INVALID-DATE", "cannot parse date/time string '%s'; encountered unknown char '%c' when parsing the UTC offset", str, *p);
+            } else {
+                xsink->raiseException("INVALID-DATE", "cannot parse date/time string '%s'; encountered end of data when parsing the UTC offset", str);
+            }
+        }
+        return -1;
+    }
+
+    int utc_h = *p - '0';
+    ++p;
+    if (isdigit(*p)) {
+        utc_h = utc_h * 10 + (*p - '0');
+        ++p;
+    }
+    offset = utc_h * 3600;
+
+    // the minutes and then the seconds, each after an optional ':'
+    static const int units[] = {60, 1};
+    for (int i = 0; i < 2; ++i) {
+        const char* q = p;
+        if (*q == ':') {
+            ++q;
+        }
+        if (!isdigit(*q)) {
+            if (q != p) {
+                // a ':' without what it separates
+                const char* what = i ? "seconds" : "minutes";
+                if (xsink) {
+                    if (*q) {
+                        xsink->raiseException("INVALID-DATE", "cannot parse date/time string '%s'; encountered unknown char '%c' when parsing the UTC offset %s", str, *q, what);
+                    } else {
+                        xsink->raiseException("INVALID-DATE", "cannot parse date/time string '%s'; encountered end of data when parsing the UTC offset %s", str, what);
+                    }
+                }
+                return -1;
+            }
+            break;
+        }
+        int v = *q - '0';
+        ++q;
+        if (isdigit(*q)) {
+            v = v * 10 + (*q - '0');
+            ++q;
+        }
+        offset += v * units[i];
+        p = q;
+    }
+
+    offset *= mult;
+    return 0;
+}
+
+//! Returns true if a weekday name abbreviation as Qore writes it ("Thu", in any case) starts at the position
+static bool is_weekday_abbr(const char* p) {
+    for (const auto& day : days) {
+        if (!strncasecmp(p, day.abbr, 3)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! Reads what can follow a complete date or time in a date/time string, and refuses any other text
+/** After a time, a weekday name abbreviation, as Qore writes a date (\c "Thu"); then a zone designator: the UTC
+    designator \c Z (also \c z, RFC 3339 section 5.6), \c UTC, \c GMT or a UTC offset, also after a space; then,
+    after a zone designator, a zone name in parentheses, which is not read, as the designator gives the zone (Qore
+    writes a date as <tt>2026-01-01 10:00:00.500000 Thu +01:00 (CET)</tt>); then white space.
+
+    @param str the whole string, for error messages
+    @param p the position after the date or the time
+    @param after_time true if a time precedes, after which a weekday name can be written
+    @param zone the zone; set to UTC or to the zone of the UTC offset if one is given, otherwise left as it is
+    @param xsink for an exception for any other text; can be nullptr
+
+    @return 0 if the rest of the string was read, -1 if not
+*/
+static int read_date_suffix(const char* str, const char* p, bool after_time, const AbstractQoreZoneInfo*& zone,
+        ExceptionSink* xsink) {
+    // a weekday name, which is not checked against the date, as in the RFC 7231 formats
+    if (after_time && *p == ' ' && is_weekday_abbr(p + 1) && !isalpha(*(p + 4))) {
+        p += 4;
+    }
+
+    // the zone designator
+    bool have_zone = false;
+    const char* q = p;
+    if (*q == ' ') {
+        ++q;
+    }
+    if (is_utc_designator(*q) && !isalpha(*(q + 1))) {
+        zone = nullptr;
+        p = q + 1;
+        have_zone = true;
+    } else if ((!strncasecmp(q, "UTC", 3) || !strncasecmp(q, "GMT", 3)) && !isalpha(*(q + 3))) {
+        zone = nullptr;
+        p = q + 3;
+        have_zone = true;
+    } else if (*q == '+' || *q == '-') {
+        int offset = 0;
+        if (read_utc_offset(str, q, offset, xsink)) {
+            return -1;
+        }
+        zone = findCreateOffsetZone(offset);
+        p = q;
+        have_zone = true;
+    }
+
+    // a zone name after the zone designator, which gives the zone
+    if (have_zone) {
+        q = p;
+        if (*q == ' ') {
+            ++q;
+        }
+        if (*q == '(') {
+            const char* e = strchr(q + 1, ')');
+            if (e && e > q + 1) {
+                p = e + 1;
+            }
+        }
+    }
+
+    // trailing white space
+    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') {
+        ++p;
+    }
+    if (*p) {
+        if (xsink) {
+            xsink->raiseException("INVALID-DATE", "cannot parse date/time string '%s'; encountered unknown char '%c'", str, *p);
+        }
+        return -1;
+    }
+    return 0;
 }
 
 static int get_uint(const char *&p, int digits) {
@@ -588,24 +738,27 @@ void qore_absolute_time::set(const char* str, const AbstractQoreZoneInfo* n_zone
 
     //printd(5, "set: date: %04d-%02d-%02d\n", year, month, day);
 
-    // the UTC designator, which RFC 3339 section 5.6 also allows in lower case
-    if (is_utc_designator(*p) || (*p == ' ' && is_utc_designator(*(p + 1)))) {
-        set(0, year, month, day, 0, 0, 0, 0);
+    // a time follows after a separator: the time designator "T" (which RFC 3339 section 5.6 also allows in lower
+    // case), a space, or "-"; or directly in the basic format
+    bool time_designator = *p == 't' || *p == 'T';
+    const char* tp = p;
+    if (*tp == ' ' || time_designator || *tp == '-') {
+        ++tp;
+    }
+    if (!isdigit(*tp) || !isdigit(*(tp + 1))) {
+        // a date without a time: it can be followed by a zone designator and white space, and by nothing else
+        const AbstractQoreZoneInfo* zone = n_zone;
+        if (read_date_suffix(str, p, false, zone, xsink)) {
+            set(n_zone, year, month, day, 0, 0, 0, 0);
+            return;
+        }
+        set(zone, year, month, day, 0, 0, 0, 0);
         return;
     }
-
-    // the time designator "T", which RFC 3339 section 5.6 also allows in lower case
-    bool time_designator = *p == 't' || *p == 'T';
-    if (*p == ' ' || time_designator || *p == '-') {
-        ++p;
-    }
+    p = tp;
 
     int hour = get_uint(p, 2);
-    if (hour < 0) {
-        set(n_zone, year, month, day, 0, 0, 0, 0);
-        return;
-    }
-
+    assert(hour >= 0);
     if (xsink && hour > 23) {
         xsink->raiseException("INVALID-DATE", "date '%s' provides an invalid hour value: %d; expecting 0 - 23 inclusive", str, hour);
         set(n_zone, year, month, day, hour, 0, 0, 0);
@@ -614,6 +767,8 @@ void qore_absolute_time::set(const char* str, const AbstractQoreZoneInfo* n_zone
 
     int minute = 0;
     int second = 0;
+    // a fraction can only follow the seconds: a fraction of the minute or of the hour is not read
+    bool have_seconds = false;
     // ISO 8601 reduced precision: a time of only the hour ("T10"), also with a zone designator ("T10Z",
     // "T10+02:00"), after the time designator
     if (!time_designator || (*p && !is_zone_start(p))) {
@@ -634,58 +789,44 @@ void qore_absolute_time::set(const char* str, const AbstractQoreZoneInfo* n_zone
 
         if (xsink && minute > 59) {
             xsink->raiseException("INVALID-DATE", "date '%s' provides an invalid minute value: %d; expecting 0 - 59 inclusive", str, minute);
+            set(n_zone, year, month, day, hour, minute, 0, 0);
+            return;
         }
 
-        // ISO 8601 reduced precision: a time without seconds can be followed by a zone designator in both the
-        // extended ("10:00Z", "10:00+02:00") and the basic ("1000Z", "1000+0200") formats
-        if (needs_sep && *p == ':') {
-            ++p;
+        // the seconds, which ISO 8601 reduced precision allows to be left out in both the extended ("10:00Z",
+        // "10:00+02:00") and the basic ("1000Z", "1000+0200") formats
+        if (needs_sep ? *p == ':' : isdigit(*p)) {
+            if (needs_sep) {
+                ++p;
+            }
             second = get_uint(p, 2);
             if (second < 0) {
+                if (xsink) {
+                    xsink->raiseException("INVALID-DATE", "date '%s': cannot parse second value; expecting 0 - 59 inclusive", str);
+                }
                 set(n_zone, year, month, day, hour, minute, 0, 0);
                 return;
             }
-        } else if (!*p) {
-            set(n_zone, year, month, day, hour, minute, 0, 0);
-            return;
-        } else if (is_zone_start(p)) {
-            second = 0;
-        } else if (needs_sep) {
-            if (xsink) {
-                xsink->raiseException("INVALID-DATE", "cannot parse date/time string '%s'; encountered unknown char '%c'", str, *p);
-            }
-            set(n_zone, year, month, day, hour, minute, 0, 0);
-            return;
-        } else {
-            second = get_uint(p, 2);
-            if (second < 0) {
-                set(n_zone, year, month, day, hour, minute, 0, 0);
+            if (xsink && second > 59) {
+                xsink->raiseException("INVALID-DATE", "date '%s' provides an invalid second value: %d; expecting 0 - 59 inclusive", str, second);
+                set(n_zone, year, month, day, hour, minute, second, 0);
                 return;
             }
+            have_seconds = true;
         }
-
-        if (xsink && second > 59) {
-            xsink->raiseException("INVALID-DATE", "date '%s' provides an invalid second value: %d; expecting 0 - 59 inclusive", str, second);
-            set(n_zone, year, month, day, hour, minute, second, 0);
-            return;
-        }
-    }
-
-    if (!*p) {
-        set(n_zone, year, month, day, hour, minute, second, 0);
-        return;
     }
 
     int us = 0;
     // the decimal sign of a fraction of a second, which is a comma or a full stop in ISO 8601
-    if (*p == '.' || *p == ',') {
+    if (have_seconds && (*p == '.' || *p == ',')) {
         ++p;
         if (!isdigit(*p)) {
             if (xsink) {
-                if (*p)
+                if (*p) {
                     xsink->raiseException("INVALID-DATE", "cannot parse date/time string '%s'; encountered unknown char '%c' when parsing microseconds", str, *p);
-                else
+                } else {
                     xsink->raiseException("INVALID-DATE", "cannot parse date/time string '%s'; encountered end of data after decimal point", str);
+                }
             }
             set(n_zone, year, month, day, hour, minute, second, 0);
             return;
@@ -708,100 +849,16 @@ void qore_absolute_time::set(const char* str, const AbstractQoreZoneInfo* n_zone
             us *= 10;
             ++dlen;
         }
-
-        if (!*p) {
-            set(n_zone, year, month, day, hour, minute, second, us);
-            return;
-        }
     }
 
-    // get time zone offset
-
-    // read
-    if (*p == ' ')
-        ++p;
-
-    if (is_utc_designator(*p)) {
-        n_zone = 0;
-        ++p;
+    // the time can be followed by a weekday name, a zone designator, a zone name and white space, and by nothing
+    // else
+    const AbstractQoreZoneInfo* zone = n_zone;
+    if (read_date_suffix(str, p, true, zone, xsink)) {
+        set(n_zone, year, month, day, hour, minute, second, us);
+        return;
     }
-    else if (*p == '+' || *p == '-') {
-        int mult = *p == '-' ? -1 : 1;
-
-        ++p;
-        if (!isdigit(*p)) {
-            if (xsink) {
-                if (*p)
-                    xsink->raiseException("INVALID-DATE", "cannot parse date/time string '%s'; encountered unknown char '%c' when parsing the UTC offset", str, *p);
-                else
-                    xsink->raiseException("INVALID-DATE", "cannot parse date/time string '%s'; encountered end of data when parsing the UTC offset", str);
-            }
-            set(n_zone, year, month, day, hour, minute, second, us);
-            return;
-        }
-
-        int utc_h = *p - '0';
-        ++p;
-        if (isdigit(*p)) {
-            utc_h = utc_h * 10 + (*p - '0');
-            ++p;
-        }
-
-        int offset = utc_h * 3600;
-
-        if (*p) {
-            if (*p == ':')
-                ++p;
-
-            if (!isdigit(*p)) {
-                if (xsink) {
-                    if (*p)
-                        xsink->raiseException("INVALID-DATE", "cannot parse date/time string '%s'; encountered unknown char '%c' when parsing the UTC offset minutes", str, *p);
-                    else
-                        xsink->raiseException("INVALID-DATE", "cannot parse date/time string '%s'; encountered end of data when parsing the UTC offset minutes", str);
-                    }
-                // ignore any time zone passed
-                n_zone = findCreateOffsetZone(offset * mult);
-                set(n_zone, year, month, day, hour, minute, second, us);
-                return;
-            }
-
-            int utc_m = *p - '0';
-            ++p;
-            if (isdigit(*p)) {
-                utc_m = utc_m * 10 + (*p - '0');
-                ++p;
-            }
-
-            offset += utc_m * 60;
-
-            if (*p) {
-                if (*p == ':')
-                    ++p;
-
-                if (!isdigit(*p)) {
-                    // ignore any time zone passed
-                    n_zone = findCreateOffsetZone(offset * mult);
-                    set(n_zone, year, month, day, hour, minute, second, us);
-                    return;
-                }
-
-                int utc_s = *p - '0';
-                ++p;
-                if (isdigit(*p)) {
-                utc_s = utc_s * 10 + (*p - '0');
-                ++p;
-                }
-
-                offset += utc_s;
-            }
-        }
-
-        // ignore any time zone passed
-        n_zone = findCreateOffsetZone(offset * mult);
-    }
-
-    set(n_zone, year, month, day, hour, minute, second, us);
+    set(zone, year, month, day, hour, minute, second, us);
 }
 
 int64 qore_absolute_time::getRelativeMicroseconds() const {

@@ -168,6 +168,18 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         #! Default poll interval in seconds
         const DefaultPollInterval = 120;
 
+        #! The UTC offsets of the North American zone names of RFC 5322 section 4.3 (obs-zone)
+        const ObsoleteZoneOffsets = {
+            "EST": "-0500",
+            "EDT": "-0400",
+            "CST": "-0600",
+            "CDT": "-0500",
+            "MST": "-0700",
+            "MDT": "-0600",
+            "PST": "-0800",
+            "PDT": "-0700",
+        };
+
         #! For parsing months
         const MonthMap = {
             "jan": 1,
@@ -654,6 +666,17 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         }
     }
 
+    #! Returns the ISO 8601 zone designator of the zone of an RFC 5322 date
+    /** A UTC offset is the offset; a zone name is as RFC 5322 section 4.3 (obs-zone) defines it: the North American
+        zone names have their offsets ("EST" is -0500), and any other name is -0000, which is UTC
+    */
+    private static string getZoneDesignator(string zone) {
+        if (zone =~ /^[-+][0-9]{4}$/) {
+            return zone;
+        }
+        return ObsoleteZoneOffsets{zone.upr()} ?? "Z";
+    }
+
     #! Get header value
     private static auto getHeaderValue(string val, hash<auto> f) {
         if (f.type == AbstractDataProviderTypeMap."date") {
@@ -665,7 +688,7 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
                 return;
             }
             if (*int m = MonthMap{l[1].lwr()}) {
-                return date(sprintf("%04d-%02d-%02dT%s %s", l[2], m, l[0], l[3], l[4]));
+                return date(sprintf("%04d-%02d-%02dT%s%s", l[2], m, l[0], l[3], getZoneDesignator(l[4])));
             }
             return;
         }

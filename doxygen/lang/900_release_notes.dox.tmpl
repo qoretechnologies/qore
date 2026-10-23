@@ -612,6 +612,25 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par date() Raises an Exception for Text After a Date or Time
+    @ref Qore::date(string) "date(string)" and @ref Qore::TimeZone::date(string) "TimeZone::date(string)" now raise
+    \c INVALID-DATE for text after a complete ISO 8601 date or time that is not a zone designator or white space
+    (<tt>"2026-01-01T10:00:00X"</tt>, <tt>"2026-01-01X"</tt>, <tt>"2026-01-01T"</tt>,
+    <tt>"20260101T10005Z"</tt>); before, the text was ignored, and the value could be another one than the text
+    meant, such as a local time for <tt>"2026-01-01T10:00:00 UTC"</tt>.  Trailing white space is still ignored, and
+    these are now read as they are meant:
+    - \c UTC and \c GMT after the date or the time: <tt>"2026-01-01 10:00:00 UTC"</tt> is UTC (before, it was the
+      local time)
+    - the format in which %Qore writes a date with \c "%n" (@ref Qore::printf() "printf()" and the other formatting
+      functions): <tt>"2026-01-01 10:00:00.500000 Thu +02:00 (CET)"</tt>, with an optional weekday name and a zone
+      name in parentheses; the UTC offset gives the zone, also when the name is that of another zone (before, the
+      offset was ignored, and the value was the local time)
+    - a date with a UTC offset, as a date literal can be written: <tt>"2026-01-01+02:00"</tt> (before, the offset was
+      ignored)
+
+    Code that passes strings with other text after the date, such as a comment, must remove it first.  The
+    conversions that do not raise exceptions (a string assigned to a \c softdate, for example) still ignore the text.
+
     @par The Ends of File::getPipe() Are Closed
     The ends of a pipe made by @ref Qore::File::getPipe() "File::getPipe()" now own their descriptors:
     @ref Qore::ReadOnlyFile::close() "close()" closes the descriptor and returns 0 (it returned -1 and closed

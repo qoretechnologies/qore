@@ -24,6 +24,7 @@ class DateTest inherits QUnit::Test {
         addTestCase("RFC 7231 date parsing", \rfc7231Tests());
         addTestCase("ISO 8601 and RFC 3339 zone and time designators", \isoDesignatorTests());
         addTestCase("RFC 5322 obsolete zone names", \rfc5322ObsoleteZoneTests());
+        addTestCase("Qore's own date strings, UTC and GMT, and trailing text", \dateSuffixTests());
 
         set_return_value(main());
     }
@@ -256,7 +257,8 @@ class DateTest inherits QUnit::Test {
         assertEq(2016-12-01, date("01-12-2016", "DD-MM-YYYY"));
         assertEq(2016-12-31, date("31-12-2016", "DD-MM-YYYY"));
 
-        assertEq(2016-01-01, date("20160101xxxx"));
+        # text after a complete date is refused; it was ignored
+        assertThrows("INVALID-DATE", \date(), ("20160101xxxx"));
 
         assertThrows("INVALID-DATE", \date(), ("20161301"));
         assertThrows("INVALID-DATE", \date(), ("20161232"));
@@ -382,6 +384,18 @@ class DateTest inherits QUnit::Test {
             "2026-01-01T10:00:00,5Z": (2026-01-01T10:00:00.5Z, 0),
             "2026-01-01T10:00:00,25+02:00": (2026-01-01T08:00:00.25Z, 7200),
             "20260101T100000,5Z": (2026-01-01T10:00:00.5Z, 0),
+            # UTC and GMT after a complete date or time are those zones, never the local one
+            "2026-01-01T10:00:00 UTC": (2026-01-01T10:00:00Z, 0),
+            "2026-01-01T10:00:00 GMT": (2026-01-01T10:00:00Z, 0),
+            "2026-01-01 10:00 UTC": (2026-01-01T10:00:00Z, 0),
+            "2026-01-01T10 utc": (2026-01-01T10:00:00Z, 0),
+            "2026-01-01 UTC": (2026-01-01T00:00:00Z, 0),
+            "20260101T100000 GMT": (2026-01-01T10:00:00Z, 0),
+            # a date with a UTC offset, as a date literal can be written
+            "2026-01-01+02:00": (2025-12-31T22:00:00Z, 7200),
+            "2026-01-01 +02:00": (2025-12-31T22:00:00Z, 7200),
+            # trailing white space
+            "2026-01-01T10:00:00Z \t\r\n": (2026-01-01T10:00:00Z, 0),
             # forms that were already read, for comparison
             "2026-01-01T10:00:00Z": (2026-01-01T10:00:00Z, 0),
             "2026-01-01T10:00:00.5+02:00": (2026-01-01T08:00:00.5Z, 7200),
@@ -411,9 +425,49 @@ class DateTest inherits QUnit::Test {
                 "2026-01-01T10Q")) {
             assertThrows("INVALID-DATE", \date(), text, text);
         }
+        # and so is any text after a complete value, which was ignored
+        TimeZone tokyo("Asia/Tokyo");
+        foreach string text in (("2026-01-01T10:00:00X", "2026-01-01T10:00:00ZX", "2026-01-01X", "2026-01-01T",
+                "2026-01-01-", "2026-01-01 X", "20260101T10005Z", "20260101T10005", "2026-01-01T10:00:",
+                "2026-01-01T10:00:X", "2026-01-01T10:00.5", "2026-01-01T10.5Z", "2026-01-01T10:00:00 UTCX",
+                "2026-01-01T10:00:00 (CET)", "2026-01-01T10:00:00+02:00 (CET", "2026-01-01T10:00:00+02:00 ()",
+                "2026-01-01T10:00:00+02:00 (CET) X", "2026-01-01T10:00:00 Thursday", "2026-01-01T10:00:00Zulu",
+                "2026-01-01T10:00:00+02:", "2026-01-01T10:00:00+02:00:", "2026-01-01T10:00:00 +02 X")) {
+            assertThrows("INVALID-DATE", \date(), text, text);
+            assertThrows("INVALID-DATE", \tokyo.date(), text, "Asia/Tokyo: " + text);
+        }
         # an hour alone without the time designator is not a time
         assertThrows("INVALID-DATE", \date(), "2026010110");
         assertThrows("INVALID-DATE", \date(), "2026-01-01-10");
+    }
+
+    #! Qore's own date strings are read back as the instants they designate
+    dateSuffixTests() {
+        foreach date d in ((2026-01-01T10:00:00.5+02:00, 2026-07-01T10:00:00-05:30, 1999-12-31T23:59:59Z,
+                2026-01-01T00:00:00+14:00, (new TimeZone("Europe/Prague")).date("2026-07-01T10:00:00"),
+                (new TimeZone("America/New_York")).date("2026-01-01T10:00:00"))) {
+            # the "%n" and "%y" formats; "%n" gives the weekday and the zone name too
+            foreach string fmt in (("%n", "%y")) {
+                string text = sprintf(fmt, d);
+                date r = date(text);
+                assertEq(d.getEpochMicroseconds(), r.getEpochMicroseconds(), text);
+                assertEq(d.getUtcOffset(), r.getUtcOffset(), text);
+                # the offset in the text wins over the zone of the time zone that reads it
+                date tzr = (new TimeZone("Asia/Tokyo")).date(text);
+                assertEq(d.getEpochMicroseconds(), tzr.getEpochMicroseconds(), "Asia/Tokyo: " + text);
+                assertEq(d.getUtcOffset(), tzr.getUtcOffset(), "Asia/Tokyo: " + text);
+            }
+        }
+        # the zone name is not read: the offset gives the zone, also when the name is another zone's
+        date d = date("2026-01-01 10:00:00.500000 Thu +02:00 (CET)");
+        assertEq(2026-01-01T08:00:00.5Z, d);
+        assertEq(7200, d.getUtcOffset());
+        # the weekday is not checked against the date, as in the RFC 7231 formats
+        assertEq(2026-01-01T08:00:00Z, date("2026-01-01 10:00:00 Mon +02:00"));
+        assertEq(2026-01-01T10:00:00Z, date("2026-01-01T10:00:00 Thu Z (UTC)"));
+        assertEq(2026-01-01T10:00:00Z, date("2026-01-01T10:00:00 thu UTC"));
+        # a weekday without a zone is the local time
+        assertEq(2026-01-01T10:00:00, date("2026-01-01 10:00:00 Thu"));
     }
 
     #! RFC 5322 section 4.3: the obsolete North American zone names have their offsets, and other zone names are -0000

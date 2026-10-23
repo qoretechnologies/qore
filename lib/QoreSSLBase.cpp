@@ -79,11 +79,9 @@ DateTimeNode* QoreSSLBase::ASN1_TIME_to_DateTime(ASN1_STRING* t) {
 #else
     const unsigned char* data = ASN1_STRING_data(t);
 #endif
+    // a GeneralizedTime without seconds ("YYYYMMDDHHMMZ") is read as Qore's date parser reads a basic ISO 8601 time of
+    // hours and minutes with a zone designator
     QoreString str(reinterpret_cast<const char*>(data), ASN1_STRING_length(t));
-    // ASN.1 permits omitted seconds; Qore's date parser needs them to read the zone.
-    if (str.size() > 12 && (data[12] == 'Z' || data[12] == '+' || data[12] == '-')) {
-        str.insert("00", 12);
-    }
     ExceptionSink xsink;
     ReferenceHolder<DateTimeNode> date(new DateTimeNode(nullptr, str.c_str(), &xsink), &xsink);
     if (xsink) {

@@ -393,6 +393,13 @@ YYYY-MM-DD[THH:mm:SS[.n*]][Z|[+-]HH[:mm[:SS]]]@endverbatim
       (RFC 3339 section 5.6)
     - a fraction of a second after a comma as well as after a full stop: <tt>2026-01-01T10:00:00,5Z</tt>
       (ISO 8601)
+    - \c UTC and \c GMT after the date or the time, which are UTC: <tt>2026-01-01 10:00:00 UTC</tt>
+    - a date with a UTC offset: <tt>2026-01-01+02:00</tt>
+    - the format in which %Qore writes a date with \c "%n": an optional weekday name after the time and a zone name
+      in parentheses after the UTC offset (<tt>2026-01-01 10:00:00.500000 Thu +02:00 (CET)</tt>); the weekday is not
+      checked, and the zone name is not read: the offset gives the zone
+
+    White space after the date or the time is ignored; any other text after it raises \c INVALID-DATE.
 
     Or an alternative format (with a \c '-' instead of a \c 'T' to separate the time component):
 
