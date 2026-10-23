@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class CompoundAssignmentBigIntLeakTest
+
+#! Tests that the compound assignment operators release the integers outside the inline range that they replace
+/** An integer outside the inline (48-bit) range of a value is a heap QoreBigIntNode.  The integer compound
+    assignment operators (+=, -=, *=, /=, %=, |=, &=, ^=, <<=, >>=, ++, --) applied to a hash member, a list element
+    or an object member overwrote such an integer with the result without releasing it, so every operation leaked
+    it.
+
+    The worker counts the heap integers that exist before and after the operations with
+    dbg_get_live_bigint_count(), which needs library debugging, and reports how many they left behind, which must be
+    none.  It runs in every execution mode and as a qcc-compiled executable.
+*/
+class CompoundAssignmentBigIntLeakTest inherits QUnit::Test {
+    public {
+        #! the result printed by the worker
+        const Expected = "[1152921504606846976, 1152921504606846976, 1152921504606846976]";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("CompoundAssignmentBigIntLeak", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        worker = get_script_dir() + DirSep + "compound-assignment-bigint-leak-worker.q";
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        checkDebugging();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, worker)));
+        }
+    }
+
+    testCompiled() {
+        checkDebugging();
+        TmpDir tmp("qore-compound-assignment-bigint-leak-");
+        string exe = tmp.path + DirSep + "leak";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe)));
+    }
+
+    #! skips the test without library debugging, which dbg_get_live_bigint_count() needs
+    private checkDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_get_live_bigint_count() requires library debugging");
+        }
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(Expected, lines[0], label + ": result: " + out);
+        assertEq("live heap integers: 0", lines[1], label + ": heap integers left behind: " + out);
+    }
+}

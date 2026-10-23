@@ -2235,6 +2235,7 @@ int64 LValueHelper::plusEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() + va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2250,6 +2251,7 @@ int64 LValueHelper::minusEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() - va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2265,6 +2267,7 @@ int64 LValueHelper::multiplyEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() * va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2281,6 +2284,7 @@ int64 LValueHelper::divideEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qore_int_div(qv->getAsBigInt(), va);
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2296,6 +2300,7 @@ int64 LValueHelper::orEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() | va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2311,6 +2316,7 @@ int64 LValueHelper::xorEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() ^ va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2326,6 +2332,7 @@ int64 LValueHelper::modulaEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qore_int_mod(qv->getAsBigInt(), va);
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2341,6 +2348,7 @@ int64 LValueHelper::andEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() & va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2356,6 +2364,7 @@ int64 LValueHelper::shiftLeftEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() << va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2371,6 +2380,7 @@ int64 LValueHelper::shiftRightEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() >> va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2386,6 +2396,7 @@ int64 LValueHelper::preIncrementBigInt(const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() + 1;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2401,6 +2412,7 @@ int64 LValueHelper::preDecrementBigInt(const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() - 1;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2417,6 +2429,7 @@ int64 LValueHelper::postIncrementBigInt(const char* desc) {
         return 0;
     }
     int64 oldVal = qv->getAsBigInt();
+    saveTemp(*qv);
     qv->set(oldVal + 1);
     return oldVal;
 }
@@ -2432,6 +2445,7 @@ int64 LValueHelper::postDecrementBigInt(const char* desc) {
         return 0;
     }
     int64 oldVal = qv->getAsBigInt();
+    saveTemp(*qv);
     qv->set(oldVal - 1);
     return oldVal;
 }
@@ -2445,6 +2459,7 @@ double LValueHelper::preIncrementFloat(const char* desc) {
     if (makeFloat(desc))
         return 0.0;
     double newVal = qv->getAsFloat() + 1.0;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2458,6 +2473,7 @@ double LValueHelper::preDecrementFloat(const char* desc) {
     if (makeFloat(desc))
         return 0.0;
     double newVal = qv->getAsFloat() - 1.0;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2471,6 +2487,7 @@ double LValueHelper::postIncrementFloat(const char* desc) {
     if (makeFloat(desc))
         return 0.0;
     double oldVal = qv->getAsFloat();
+    saveTemp(*qv);
     qv->set(oldVal + 1.0);
     return oldVal;
 }
@@ -2484,6 +2501,7 @@ double LValueHelper::postDecrementFloat(const char* desc) {
     if (makeFloat(desc))
         return 0.0;
     double oldVal = qv->getAsFloat();
+    saveTemp(*qv);
     qv->set(oldVal - 1.0);
     return oldVal;
 }
@@ -2497,6 +2515,7 @@ double LValueHelper::plusEqualsFloat(double va, const char* desc) {
     if (makeFloat(desc))
         return 0.0;
     double newVal = qv->getAsFloat() + va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2510,6 +2529,7 @@ double LValueHelper::minusEqualsFloat(double va, const char* desc) {
     if (makeFloat(desc))
         return 0.0;
     double newVal = qv->getAsFloat() - va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2523,6 +2543,7 @@ double LValueHelper::multiplyEqualsFloat(double va, const char* desc) {
     if (makeFloat(desc))
         return 0.0;
     double newVal = qv->getAsFloat() * va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2537,6 +2558,7 @@ double LValueHelper::divideEqualsFloat(double va, const char* desc) {
     if (makeFloat(desc))
         return 0.0;
     double newVal = qv->getAsFloat() / va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
