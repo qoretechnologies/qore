@@ -57,12 +57,17 @@ enum qore_modifier_t {
 
 DLLLOCAL int get_access(ClassAccess access);
 
-//! Checks that the caller may navigate or read or write values in the Program of a reflection object
+//! Checks that the caller may read or write values in the Program of a reflection object
 /** See QoreReflectionCaller::checkProgramAccess() and design/reflection-caller-privilege.md
 
     @return 0 if allowed, -1 if REFLECTION-ACCESS-ERROR was raised
 */
 DLLLOCAL int reflection_check_program_access(const QoreReflectionCaller& caller, const QoreProgram* pgm,
+        const char* what, ExceptionSink* xsink);
+
+//! Checks declaration navigation without comparing explicitly-allowed domains
+/** @return 0 if allowed, -1 if REFLECTION-ACCESS-ERROR was raised */
+DLLLOCAL int reflection_check_structural_access(const QoreReflectionCaller& caller, const QoreProgram* pgm,
         const char* what, ExceptionSink* xsink);
 
 //! Checks the functional domain of a class for a method, constructor, copy method or destructor called through reflection

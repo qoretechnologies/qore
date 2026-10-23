@@ -99,8 +99,8 @@ hash<auto> sub run_child(softint child_po, string probe_func) {
         addTestCase("the creator of an independent Program can navigate and read it", \independentCreatorAllowed());
         addTestCase("the creator of the creator of an independent Program can navigate it",
             \independentCreatorChainAllowed());
-        addTestCase("a less privileged Program that did not create an independent Program cannot navigate it",
-            \independentOtherRefused());
+        addTestCase("a sibling can inspect debugger Program structure but cannot read its values",
+            \independentOtherStructure());
         addTestCase("an equally privileged caller can navigate another Program", \privilegedAllowed());
         addTestCase("a trusted caller reads a static member of an object's class", \trustedMemberAccess());
         set_return_value(main());
@@ -202,15 +202,17 @@ hash<auto> sub run_child(softint child_po, string probe_func) {
         assertEq("chain-value", v.getValue());
     }
 
-    independentOtherRefused() {
-        # a Program that did not create the independent Program and does not allow the debugger is less privileged
+    independentOtherStructure() {
+        # Missing the debugger capability no longer prevents structural inspection.
         Program pgm = independentProgram();
         Program other(BaseOptions);
         other.parse("%requires reflection\n"
-            "auto sub nav(Namespace ns) { try { return ns.getGlobalVars(); } catch (hash<ExceptionInfo> ex) { "
-            "return ex.err; } }", "other");
+            "list<string> sub nav(Namespace ns) { return map $1.getName(), ns.getGlobalVars(); }\n"
+            "auto sub read(Namespace ns) { try { return ns.getGlobalVar('independent_var').getValue(); } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err; } }", "other");
         Namespace root = Namespace::forName(pgm, "::");
-        assertEq("REFLECTION-ACCESS-ERROR", other.callFunction("nav", root));
+        assertEq(("independent_var",), other.callFunction("nav", root));
+        assertEq("REFLECTION-ACCESS-ERROR", other.callFunction("read", root));
     }
 
     privilegedAllowed() {

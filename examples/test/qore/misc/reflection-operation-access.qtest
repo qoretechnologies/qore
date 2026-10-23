@@ -1,0 +1,225 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
+%prepend-module-path "${SCRIPT_DIR}/reflection-operation-access"
+%requires QUnit
+%requires reflection
+%requires ReflectionAccessProbe
+
+%exec-class ReflectionOperationAccessTest
+
+class ReflectionOperationAccessTest inherits QUnit::Test {
+    public {
+        const BaseOptions = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS;
+        const TargetSource = "%modern
+%requires reflection
+namespace Model {
+    our int changed;
+    const Label = \"order\";
+    enum State { Ready = 1, Done = 2 }
+    int sub initialize() { ++changed; return 7; }
+    hashdecl Order { int count = initialize(); }
+    class Record {
+        public { int count = initialize(); static int total = 0; }
+        constructor() { ++changed; }
+        int update() { return ++changed; }
+        static int updateStatic() { return ++changed; }
+        copy() { ++changed; }
+        destructor() { ++changed; }
+    }
+    int sub update(int value = 1) { changed += value; return changed; }
+}
+Model::changed = 0;
+";
+    }
+
+    constructor() : QUnit::Test("ReflectionOperationAccessTest", "1.0") {
+        addTestCase("structure is accessible without injection or debugger privileges", \structure());
+        addTestCase("structure still respects restricting domains and sandbox managers", \restrictedStructure());
+        addTestCase("value reads and writes retain the full privilege check", \values());
+        addTestCase("initializers cannot execute through a structural handle", \defaults());
+        addTestCase("typed hash casts cannot execute initializers through a structural handle", \casts());
+        addTestCase("calls cannot execute target code through a structural handle", \calls());
+        addTestCase("builtin constructors and factories cannot borrow target privileges", \builtinCalls());
+        addTestCase("object methods, copy and destruction check the object's Program", \objectCalls());
+        addTestCase("trusted modules have an exception only for member initializers", \moduleAccess());
+        set_return_value(main());
+    }
+
+    private Program target(int options) {
+        Program pgm(BaseOptions | options, True);
+        pgm.parse(TargetSource, "reflection-operation-target");
+        pgm.run();
+        return pgm;
+    }
+
+    #! Execute an expression in a sibling Program, with no creator relationship to the target.
+    private auto probe(Program pgm, string expression, *auto handle, int options = 0, *SandboxManager sm) {
+        Program reader(BaseOptions | options, True);
+        reader.parse("%modern\n%requires reflection\n"
+            "auto sub probe(Program pgm, auto handle) { try { return " + expression
+            + "; } catch (hash<ExceptionInfo> ex) { return ex.err; } }", "reflection-operation-reader");
+        if (sm) {
+            reader.setSandboxManager(sm);
+        }
+        return reader.callFunction("probe", pgm, handle);
+    }
+
+    structure() {
+        foreach int options in (PO_ALLOW_INJECTION, PO_ALLOW_DEBUGGER, PO_ALLOW_INJECTION | PO_ALLOW_DEBUGGER) {
+            Program pgm = target(options);
+            foreach string expression in (
+                "Namespace::forName(pgm, 'Model').getTypedHash('Order').getMember('count').getType().getName()",
+                "TypedHash::forName(pgm, 'Model::Order').getNamespace().getName()",
+                "Class::forName(pgm, 'Model::Record').getNamespace().getName()",
+                "Class::forName(pgm, 'Model::Record').getMember('count').getType().getName()",
+                "Function::forName(pgm, 'Model::update').getVariants()[0].getParamTypes()[0].getName()",
+                "Constant::forName(pgm, 'Model::Label').getType().getName()",
+                "GlobalVar::forName(pgm, 'Model::changed').getType().getName()",
+                "Enum::forName(pgm, 'Model::State').getMember('Ready').getName()"
+            ) {
+                auto result = probe(pgm, expression);
+                assertEq(False, result == "REFLECTION-ACCESS-ERROR", expression);
+                assertEq(True, inlist(result, ("int", "Model", "string", "Ready")), expression);
+            }
+            assertEq(0, GlobalVar::forName(pgm, "Model::changed").getValue());
+            assertEq(1, probe(pgm, "Enum::forName(pgm, 'Model::State').getMember('Ready').getValue()"));
+            assertEq("Model", probe(pgm, "Constant::forName(pgm, 'Model::Label').getNamespace().getName()"));
+            assertEq(True, probe(pgm, "PluginRegistry::get(pgm).getActiveModules().typeCode() == NT_LIST"));
+        }
+    }
+
+    restrictedStructure() {
+        Program pgm = target(PO_ALLOW_DEBUGGER);
+        string expression = "Namespace::forName(pgm, 'Model').getClasses().size()";
+        assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, expression, NOTHING, PO_NO_NETWORK));
+        assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, expression, NOTHING, 0, new SandboxManager()));
+        # Equal restrictions and the same manager still allow sibling structural access.
+        SandboxManager sm();
+        pgm.setSandboxManager(sm);
+        assertEq(1, probe(pgm, expression, NOTHING, 0, sm));
+    }
+
+    values() {
+        foreach int options in (PO_ALLOW_INJECTION, PO_ALLOW_DEBUGGER) {
+            Program pgm = target(options);
+            GlobalVar var = GlobalVar::forName(pgm, "Model::changed");
+            assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.getValue()", var));
+            assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.setValue(99)", var));
+            assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.getValue()",
+                Constant::forName(pgm, "Model::Label")));
+            StaticMember member = Class::forName(pgm, "Model::Record").getStaticMember("total");
+            assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.getValue()", member));
+            assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.setValue(99)", member));
+            assertEq(0, var.getValue());
+            assertEq(0, probe(pgm, "handle.getValue()", var, options));
+            assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.getDefaultArgs()",
+                Function::forName(pgm, "Model::update").getVariants()[0]));
+            assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.clearFallbackSites()", PluginRegistry::get(pgm)));
+        }
+    }
+
+    casts() {
+        foreach int options in (PO_ALLOW_INJECTION, PO_ALLOW_DEBUGGER) {
+            Program pgm = target(options);
+            TypedHash th = TypedHash::forName(pgm, "Model::Order");
+            foreach string expression in ("handle.doCast({})", "handle.doCastWithOverrides({}, {})",
+                    "handle.doCastValues({'one': {}})", "handle.doCastValuesWithOverrides({'one': {}}, {})") {
+                assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, expression, th));
+            }
+            assertEq(0, GlobalVar::forName(pgm, "Model::changed").getValue());
+            assertEq(7, probe(pgm, "handle.doCast({}).count", th, options));
+            assertEq(1, GlobalVar::forName(pgm, "Model::changed").getValue());
+        }
+    }
+
+    defaults() {
+        foreach int options in (PO_ALLOW_INJECTION, PO_ALLOW_DEBUGGER) {
+            Program pgm = target(options);
+            foreach auto member in (TypedHash::forName(pgm, "Model::Order").getMember("count"),
+                    Class::forName(pgm, "Model::Record").getMember("count")) {
+                assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.getDefaultValue()", member));
+            }
+            assertEq(0, GlobalVar::forName(pgm, "Model::changed").getValue());
+        }
+    }
+
+    calls() {
+        foreach int options in (PO_ALLOW_INJECTION, PO_ALLOW_DEBUGGER) {
+            Program pgm = target(options);
+            Function func = Function::forName(pgm, "Model::update");
+            foreach auto handle in (func, func.getVariants()[0]) {
+                assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.call()", handle));
+                assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.callArgs(())", handle));
+            }
+            Class cls = Class::forName(pgm, "Model::Record");
+            assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.newObject()", cls));
+            assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.newObjectArgs(())", cls));
+            assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.callConstructor((), NOTHING)", cls));
+            foreach auto handle in (cls.getConstructorMethod(), cls.getConstructorVariant(),
+                    cls.getStaticMethod("updateStatic"), cls.getStaticVariant("updateStatic")) {
+                assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.call()", handle));
+                assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.callArgs(())", handle));
+            }
+            assertEq(0, GlobalVar::forName(pgm, "Model::changed").getValue());
+            assertEq(1, probe(pgm, "handle.call()", func, options));
+        }
+    }
+
+    objectCalls() {
+        foreach int options in (PO_ALLOW_INJECTION, PO_ALLOW_DEBUGGER) {
+            Program pgm = target(options);
+            Class cls = Class::forName(pgm, "Model::Record");
+            object obj = cls.newObject();
+            GlobalVar changed = GlobalVar::forName(pgm, "Model::changed");
+            int before = changed.getValue();
+            foreach auto method in (cls.getNormalMethod("update"), cls.getNormalVariant("update"),
+                    cls.getCopyMethod(), cls.getCopyVariant(), cls.getDestructorMethod(), cls.getDestructorVariant()) {
+                assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle[0].call(handle[1])", (method, obj)));
+            }
+            foreach auto method in (cls.getNormalMethod("update"), cls.getNormalVariant("update")) {
+                assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle[0].callArgs(handle[1], ())", (method, obj)));
+            }
+            NormalMember member = cls.getNormalMember("count");
+            assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle[0].getValue(handle[1])", (member, obj)));
+            assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle[0].setValue(handle[1], 99)", (member, obj)));
+            assertEq(before, changed.getValue());
+            assertEq(7, obj.count);
+        }
+    }
+
+    builtinCalls() {
+        foreach int options in (PO_ALLOW_INJECTION, PO_ALLOW_DEBUGGER) {
+            Program pgm = target(options);
+            Class program_class = Class::forName(pgm, "Program");
+            assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.newObject(" + options + ")", program_class));
+            assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.call(" + options + ")",
+                program_class.getConstructorVariants()[0]));
+            Function factory = Function::forName(pgm, "create_object");
+            assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.call('Model::Record')", factory));
+            assertEq("REFLECTION-ACCESS-ERROR", probe(pgm, "handle.call('Model::Record')",
+                factory.getVariants()[0]));
+            assertEq(0, GlobalVar::forName(pgm, "Model::changed").getValue());
+        }
+    }
+
+    moduleAccess() {
+        foreach int options in (PO_ALLOW_INJECTION, PO_ALLOW_DEBUGGER) {
+            Program pgm = target(options);
+            GlobalVar changed = GlobalVar::forName(pgm, "Model::changed");
+            assertThrows("REFLECTION-ACCESS-ERROR", \ReflectionAccessProbe::read(), (changed,));
+            assertThrows("REFLECTION-ACCESS-ERROR", \ReflectionAccessProbe::write(), (changed,));
+            assertThrows("REFLECTION-ACCESS-ERROR", \ReflectionAccessProbe::call(),
+                (Function::forName(pgm, "Model::update"),));
+            assertEq(0, changed.getValue());
+            assertEq(7, ReflectionAccessProbe::defaultValue(TypedHash::forName(pgm, "Model::Order").getMember("count")));
+            assertEq(1, changed.getValue());
+        }
+    }
+}

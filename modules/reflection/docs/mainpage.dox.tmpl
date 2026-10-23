@@ -76,32 +76,37 @@
 
     @section reflection_caller_privilege Reflection and the Privileges of the Calling Code
 
-    Reflection follows the privileges of the code that uses it, not those of the reflection module:
-    - calling a function or method, or constructing an object, through a reflection object is checked against the
-      @ref sandboxing "sandboxing restrictions" of the calling code and of the @ref Qore::Program "Program" that the
-      code belongs to, by the same rule as code written directly; a @ref Qore::Reflection::AbstractVariant "variant"
-      obtained from a reflection object is checked the same way
-    - reading or writing a member, constant or global variable through a reflection object is checked against the
-      functional domain of its class in the same way
-    - navigating the namespaces, classes, functions, constants or values of another @ref Qore::Program "Program"
-      through a reflection object, or reading or writing its values, is allowed only:
-      - from that @ref Qore::Program "Program";
-      - from a @ref Qore::Program "Program" that created it, directly or through @ref Qore::Program "Program"
-        objects that it created, including one created as an independent @ref Qore::Program "Program" (with the
-        \c independent argument of the @ref Qore::Program::constructor() "Program constructor"), which inherits
-        nothing from the code that creates it but is controlled by it; or
-      - from code at least as privileged as it: code whose restrictions forbid no functional domain that the target
-        allows, that allows every functional domain that the target must allow explicitly (for example the debugger
-        domain with @ref Qore::PO_ALLOW_DEBUGGER "PO_ALLOW_DEBUGGER"), and that no sandbox other than the target's own
-        governs; the code of a user module is not less privileged for lacking a domain that a
-        @ref Qore::Program "Program" must allow explicitly, as such options belong to the programs that use the
-        module, so a program with @ref allow-injection "%allow-injection" or @ref allow-debugger "%allow-debugger"
-        can hand its types to modules such as @ref dataproviderintro "DataProvider"
+    Reflection follows the privileges of the code that uses it. Cross-Program access depends on the operation:
 
-      otherwise \c REFLECTION-ACCESS-ERROR is raised
-    - a class, typed hash or enum declared in one @ref Qore::Program "Program" and inherited by or imported into
-      another one keeps no path into the declaring @ref Qore::Program "Program": its namespace, as returned by
-      reflection, is the namespace with the same path in the @ref Qore::Program "Program" of the reflection object
+    |!Operation|!Access rule
+    |Structural inspection: namespace navigation, declarations, names, types, signatures, class hierarchy and fixed enum values|The caller's restricting domains and sandbox manager apply; missing injection or debugger capability does not prevent inspection
+    |Reading constants, globals, object/static members or parameter defaults; writing values|Full Program access, including explicitly-allowed domains
+    |Calling functions or methods, constructing, copying or destroying objects|Full Program access plus the caller's and target's functional-domain checks; object calls also check the object's Program
+    |Reading member defaults or constructing typed hashes with <tt>doCast*</tt>|Full Program access, retaining a narrow exception for trusted user-module code that lacks the target's injection or debugger capability
+
+    Full Program access is allowed from the target @ref Qore::Program "Program", from a Program that created it
+    directly or transitively (including independent Programs), or from code at least as privileged as it. The latter
+    must restrict no functional domain the target allows, allow every explicitly-allowed domain the target allows,
+    and have no governing sandbox manager other than the target's own. Otherwise \c REFLECTION-ACCESS-ERROR is raised.
+    Structural navigation uses the same creator, restricting-domain and sandbox rules, but does not compare
+    explicitly-allowed domains. Existing metadata-only accessors on a supplied handle retain their behavior.
+
+    Inspection never authorizes execution or state access: a caller can discover a function or typed hash without
+    being allowed to call the function or evaluate the hash's initializers. Builtin functions and constructors also
+    require full access: they can create Programs or invoke target constructors, even without a user-code body. Constants remain value access because they may contain
+    objects or call references and may resolve deferred AOT references; enum values are fixed scalar declarations.
+
+    Member defaults can evaluate arbitrary expressions. The trusted user-module exception applies only to
+    @ref Qore::Reflection::AbstractMember::getDefaultValue() "AbstractMember::getDefaultValue()" and the
+    <tt>TypedHash::doCast*</tt> methods that fill missing members, allowing
+    @ref dataproviderintro "DataProvider" to consume types supplied by Programs using
+    @ref allow-injection "%allow-injection" or @ref allow-debugger "%allow-debugger" from source or AOT modules.
+    Restricting domains and sandbox-manager checks still apply. Other callers need full access to evaluate defaults.
+    @ref Qore::Reflection::Type::getDefaultValue() "Type::getDefaultValue()" returns intrinsic empty/zero type
+    defaults and does not evaluate member initializers.
+
+    A class, typed hash or enum inherited or imported from another Program provides no namespace path into its
+    declaring Program: reflection returns the namespace with the same path in the reflection object's own Program.
 
     @section reflectionqlibmodules Qore User Modules
 

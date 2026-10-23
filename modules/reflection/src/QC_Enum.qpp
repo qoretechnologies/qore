@@ -322,10 +322,10 @@ Namespace ns = e.getNamespace();
     @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
     @throw UNKNOWN-NAMESPACE the namespace is not visible in the Program of the reflection object (see @ref reflection_caller_privilege)
  */
-Namespace Enum::getNamespace() [flags=CONSTANT] {
+Namespace Enum::getNamespace() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, e->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, e->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // the declaring namespace of an inherited symbol belongs to the declaring Program; navigation stays in the
@@ -478,7 +478,7 @@ Enum e = Enum::forName(pgm, "::Color");
 static Enum Enum::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+    if (reflection_check_structural_access(caller, *pgm, "look up symbols in", xsink)) {
         return QoreValue();
     }
     // the name is looked up as a C string, which would be cut at a NUL character and name another enum

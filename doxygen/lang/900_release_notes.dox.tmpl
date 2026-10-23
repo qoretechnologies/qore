@@ -29,14 +29,12 @@
     @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()" limits the number of such threads
     running at once and raises \c THREAD-CREATION-FAILURE at the limit.
 
-    <b>Security</b>: @ref reflection "reflection" follows the privileges of the calling code.  Calling a function or
-    method, constructing an object, or reading or writing a member, constant or global variable through a reflection
-    object is checked against the sandboxing restrictions of the calling code and of the program the symbol belongs
-    to, by the same rule as code written directly; a @ref Qore::Reflection::AbstractVariant "variant" obtained from a
-    reflection object no longer skips that check.  Navigating namespaces, classes, functions, constants or values of
-    another program through a reflection object is allowed only from that program, from a program that created it, or
-    from code at least as privileged as it, so sandboxed code can no longer reach objects, constants, classes or
-    global variables outside its program by walking the namespace tree of a class it inherited.
+    <b>Security</b>: @ref reflection "reflection" checks cross-Program access per operation. Structural inspection
+    works even when the target enables injection or debugging, while calls, value access and writes
+    require full Program access. Caller-and-target functional-domain checks remain in place. The trusted
+    user-module exception is limited to member-default evaluation, including typed-hash conversion, so @ref dataproviderintro "DataProvider" continues
+    to consume such Programs' types. Namespace constant handles now retain the requested Program for access checks.
+    See @ref reflection_caller_privilege and <a href="https://github.com/qoretechnologies/qore/issues/5483">issue 5483</a>.
 
     <b>Security</b>: an open connection that a connection pool keeps for reuse is handed only to code whose
     @ref sandboxing "network sandbox" allows where the connection leads, checked as a new connection would be, with

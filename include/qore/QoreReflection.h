@@ -280,7 +280,7 @@ public:
         @param pgm the Program where the function is defined
         @param caller the code calling the function
         @param xsink raises \c INVALID-FUNCTION-ACCESS if the caller or \a pgm does not allow the variant's
-        functional domain
+        functional domain, or \c REFLECTION-ACCESS-ERROR if the caller may not execute code in \a pgm
 
         @note Do not use this function with class methods
 
@@ -588,7 +588,8 @@ DLLEXPORT const QoreNamespace* qore_program_find_namespace(const QoreProgram& pg
     - a call: the functional domain of the code called (builtin function or method variant, or the class of a
       constructor, copy method, destructor or method) must be allowed by the caller and by the target Program
       (allowsDomain()); a variant selected at run time is checked with QoreReflectionCallCheckHelper or the
-      QoreExternalFunction::evalFunction() variant that takes the caller
+      QoreExternalFunction::evalFunction() variant that takes the caller. All calls, including builtins that can
+      construct Programs or enter user code, also require full checkProgramAccess() permission
     - reading or writing a class's members or constants: the class's functional domain is checked in the same way
     - navigation and value access in another Program (checkProgramAccess()): allowed from that Program, from a
       Program that created it (directly or through Programs it created), or when the caller is at least as
@@ -600,6 +601,13 @@ DLLEXPORT const QoreNamespace* qore_program_find_namespace(const QoreProgram& pg
 */
 class DLLEXPORT QoreReflectionCaller {
 public:
+    //! Classifies access by whether it can expose values or execute target code
+    enum class Access {
+        Structural,     //!< Declaration inspection only; explicitly-allowed domains are not compared
+        Value,          //!< Values, state changes and code execution require full Program access
+        MemberDefault,  //!< Full access, retaining the trusted user-module exception for initializers
+    };
+
     //! Captures the Program, runtime parse options and governing sandbox manager of the current thread
     DLLEXPORT QoreReflectionCaller();
 
@@ -644,6 +652,27 @@ public:
         @return 0 if allowed, -1 if an exception was raised
     */
     DLLEXPORT int checkProgramAccess(const QoreProgram* target, const char* what, ExceptionSink* xsink) const;
+
+    //! Checks cross-Program access for a particular reflection operation
+    /** Uses the same creator, restricting-domain and sandbox rules as checkProgramAccess(). Structural access
+        does not compare explicitly-allowed domains. MemberDefault retains that exception only for user-module
+        callers, so DataProvider can evaluate defaults in Programs using injection or debugging.
+
+        @par Example
+        An order-schema browser uses Access::Structural to inspect field declarations in a customer's Program.
+        Reading that Program's order objects or calling its functions instead requires Access::Value.
+
+        @note Structural permission does not authorize initializer evaluation or state access.
+        @param target the target Program; nullptr is always allowed
+        @param what the operation description for the error message
+        @param access the operation's access class
+        @param xsink raises \c REFLECTION-ACCESS-ERROR if access is denied
+        @return 0 if allowed, -1 if an exception was raised
+        @throw REFLECTION-ACCESS-ERROR the caller is not authorized for the requested operation
+        @since %Qore 3.0
+    */
+    DLLEXPORT int checkProgramAccess(const QoreProgram* target, const char* what, Access access,
+        ExceptionSink* xsink) const;
 
 private:
     QoreProgram* pgm;

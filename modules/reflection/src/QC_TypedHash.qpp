@@ -510,10 +510,10 @@ Namespace ns = th.getNamespace();
     @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
     @throw UNKNOWN-NAMESPACE the namespace is not visible in the Program of the reflection object (see @ref reflection_caller_privilege)
  */
-Namespace TypedHash::getNamespace() [flags=CONSTANT] {
+Namespace TypedHash::getNamespace() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, thd->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, thd->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // the declaring namespace of an inherited symbol belongs to the declaring Program; navigation stays in the
@@ -597,8 +597,18 @@ list<TypedHashMember> TypedHash::getMembers() [flags=RET_VALUE_ONLY] {
     @throw RUNTIME-TYPE-ERROR types are not compatible
 
     @since %Qore 0.9.5
+    @throw REFLECTION-ACCESS-ERROR the calling code may not perform this operation in the target Program (see @ref reflection_caller_privilege)
 */
 hash<auto> TypedHash::doCast(hash<auto> h) {
+    QoreReflectionCaller caller;
+    if (caller.checkProgramAccess(thd->pgm, "evaluate typed hash initializers in",
+            QoreReflectionCaller::Access::MemberDefault, xsink)) {
+        return QoreValue();
+    }
+    QoreExternalProgramContextHelper tch(xsink, thd->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
     return thd->th->doRuntimeCast(h, xsink);
 }
 
@@ -622,8 +632,18 @@ hash<auto> info = th.doCastWithOverrides(serialized_info, {
     @throw HASHDECL-INIT-ERROR either initializer contains an unknown member
 
     @since %Qore 3.0
+    @throw REFLECTION-ACCESS-ERROR the calling code may not perform this operation in the target Program (see @ref reflection_caller_privilege)
 */
 hash<auto> TypedHash::doCastWithOverrides(hash<auto> h, hash<auto> overrides) {
+    QoreReflectionCaller caller;
+    if (caller.checkProgramAccess(thd->pgm, "evaluate typed hash initializers in",
+            QoreReflectionCaller::Access::MemberDefault, xsink)) {
+        return QoreValue();
+    }
+    QoreExternalProgramContextHelper tch(xsink, thd->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
     return thd->th->doRuntimeCastWithOverrides(h, overrides, xsink);
 }
 
@@ -645,8 +665,18 @@ hash<auto> typed_values = th.doCastValues({
     @throw HASHDECL-INIT-ERROR an input hash contains an unknown member
 
     @since %Qore 3.0
+    @throw REFLECTION-ACCESS-ERROR the calling code may not perform this operation in the target Program (see @ref reflection_caller_privilege)
 */
 hash<auto> TypedHash::doCastValues(hash<auto> values) {
+    QoreReflectionCaller caller;
+    if (caller.checkProgramAccess(thd->pgm, "evaluate typed hash initializers in",
+            QoreReflectionCaller::Access::MemberDefault, xsink)) {
+        return QoreValue();
+    }
+    QoreExternalProgramContextHelper tch(xsink, thd->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     ConstHashIterator i(values);
     size_t count = 0;
@@ -697,8 +727,18 @@ hash<auto> typed_values = th.doCastValuesWithOverrides({
     @throw HASHDECL-INIT-ERROR an input or matching override hash contains an unknown member
 
     @since %Qore 3.0
+    @throw REFLECTION-ACCESS-ERROR the calling code may not perform this operation in the target Program (see @ref reflection_caller_privilege)
 */
 hash<auto> TypedHash::doCastValuesWithOverrides(hash<auto> values, hash<auto> overrides) {
+    QoreReflectionCaller caller;
+    if (caller.checkProgramAccess(thd->pgm, "evaluate typed hash initializers in",
+            QoreReflectionCaller::Access::MemberDefault, xsink)) {
+        return QoreValue();
+    }
+    QoreExternalProgramContextHelper tch(xsink, thd->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     ConstHashIterator i(values);
     size_t count = 0;
@@ -844,7 +884,7 @@ TypedHash th = TypedHash::forName(pgm, "::ENV");
 static TypedHash TypedHash::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+    if (reflection_check_structural_access(caller, *pgm, "look up symbols in", xsink)) {
         return QoreValue();
     }
     // the name is looked up as a C string, which would be cut at a NUL character and name another typed
@@ -899,7 +939,7 @@ list<TypedHash> l = TypedHash::findAllRegex(pgm, "^S");
 static list<TypedHash> TypedHash::findAllRegex(Program[QoreProgram] pgm, string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+    if (reflection_check_structural_access(caller, *pgm, "look up symbols in", xsink)) {
         return QoreValue();
     }
     return find_all_typedhashes(*pattern, re_opts, *pgm, xsink);

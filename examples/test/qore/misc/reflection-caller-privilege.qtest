@@ -116,10 +116,10 @@ auto sub ccv(ConstructorMethodVariant v) {
     }
 
     functionCallAllowed() {
-        # an unrestricted caller may use the handle
+        # A caller as privileged as the library may execute the builtin in its context.
         Program lib = library();
         Function f = Function::forName(lib, "gethostname");
-        auto rv = inCaller(BaseOptions, "cf", f);
+        auto rv = inCaller(BaseOptions | PO_ALLOW_DEBUGGER, "cf", f);
         assertEq(Type::String, rv.type());
     }
 

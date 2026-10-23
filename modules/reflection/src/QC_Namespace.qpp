@@ -371,7 +371,7 @@ bool Namespace::isRoot() [flags=RET_VALUE_ONLY] {
 *Namespace Namespace::getParentNamespace() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // get read access to program object
@@ -404,7 +404,7 @@ Constant con = n.getConstant(name);
 Constant Namespace::getConstant(string name) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // the name is looked up as a C string, which would be cut at a NUL character and name another constant
@@ -440,7 +440,7 @@ list<Constant> l = n.getConstants();
 list<Constant> Namespace::getConstants() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // get read access to program object
@@ -476,7 +476,7 @@ Namespace con = n.getNamespace(name);
 Namespace Namespace::getNamespace(string name) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // the name is looked up as a C string, which would be cut at a NUL character and name another namespace
@@ -512,7 +512,7 @@ list<Namespace> l = n.getNamespaces();
 list<Namespace> Namespace::getNamespaces() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // get read access to program object
@@ -547,7 +547,7 @@ Class cls = n.getClass(name);
 Class Namespace::getClass(string name) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // the name is looked up as a C string, which would be cut at a NUL character and name another class
@@ -584,7 +584,7 @@ list<Class> l = n.getClasses();
 list<Class> Namespace::getClasses() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // get read access to program object
@@ -622,7 +622,7 @@ Function f = n.getFunction(name);
 Function Namespace::getFunction(string name) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
@@ -664,7 +664,7 @@ list<Function> l = n.getFunctions();
 list<Function> Namespace::getFunctions() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // get read access to program object
@@ -709,7 +709,7 @@ FunctionVariant v = n.getVariant(name, IntType, StringType);
 FunctionVariant Namespace::getVariant(string name, ...) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
@@ -762,7 +762,7 @@ FunctionVariant v = n.getVariantArgs(name, (IntType, StringType));
 FunctionVariant Namespace::getVariantArgs(string name, softlist<Type> argv) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
@@ -804,7 +804,7 @@ list<FunctionVariant> l = n.getVariants();
 list<FunctionVariant> Namespace::getVariants() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // get read access to program object
@@ -844,7 +844,7 @@ GlobalVar cls = n.getGlobalVar(name);
 GlobalVar Namespace::getGlobalVar(string name) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // the name is looked up as a C string, which would be cut at a NUL character and name another variable
@@ -880,7 +880,7 @@ list<GlobalVar> l = n.getGlobalVars();
 list<GlobalVar> Namespace::getGlobalVars() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // get read access to program object
@@ -915,7 +915,7 @@ TypedHash th = n.getTypedHash(name);
 TypedHash Namespace::getTypedHash(string name) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // the name is looked up as a C string, which would be cut at a NUL character and name another typed
@@ -951,7 +951,7 @@ list<TypedHash> l = n.getTypedHashes();
 list<TypedHash> Namespace::getTypedHashes() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // get read access to program object
@@ -988,7 +988,7 @@ Enum e = n.getEnum(name);
 Enum Namespace::getEnum(string name) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // the name is looked up as a C string, which would be cut at a NUL character and name another enum
@@ -1026,7 +1026,7 @@ list<Enum> l = n.getEnums();
 list<Enum> Namespace::getEnums() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // get read access to program object
@@ -1095,7 +1095,7 @@ Namespace n = Namespace::forName(pgm, "Thread::Mutex");
 static Namespace Namespace::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+    if (reflection_check_structural_access(caller, *pgm, "look up symbols in", xsink)) {
         return QoreValue();
     }
     // the name is looked up as a C string, which would be cut at a NUL character and name another namespace
@@ -1149,7 +1149,7 @@ list<Namespace> l = Namespace::findAllRegex(pgm, "^g");
 static list<Namespace> Namespace::findAllRegex(Program[QoreProgram] pgm, string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+    if (reflection_check_structural_access(caller, *pgm, "look up symbols in", xsink)) {
         return QoreValue();
     }
     return find_all_namespaces(*pattern, re_opts, *pgm, xsink);

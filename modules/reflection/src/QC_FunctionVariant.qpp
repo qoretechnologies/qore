@@ -61,6 +61,7 @@ auto val = v.call(arg1, arg2);
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function has been destroyed
     @throw RUNTIME-TYPE-ERROR invalid argument types passed to the variant
     @throw INVALID-FUNCTION-ACCESS the calling code's or the function's Program's sandboxing restrictions do not allow the variant called (see @ref reflection_caller_privilege)
+    @throw REFLECTION-ACCESS-ERROR the calling code may not execute code in the target Program (see @ref reflection_caller_privilege)
 
     @see callArgs()
 */
@@ -90,6 +91,7 @@ auto val = v.callArgs((arg1, arg2));
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function has been destroyed
     @throw RUNTIME-TYPE-ERROR invalid argument types passed to the variant
     @throw INVALID-FUNCTION-ACCESS the calling code's or the function's Program's sandboxing restrictions do not allow the variant called (see @ref reflection_caller_privilege)
+    @throw REFLECTION-ACCESS-ERROR the calling code may not execute code in the target Program (see @ref reflection_caller_privilege)
 
     @see call()
 */

@@ -1526,6 +1526,7 @@ object o = cls.newObject();
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw CREATE-OBJECT-ERROR the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
+    @throw REFLECTION-ACCESS-ERROR the calling code may not execute code in the target Program (see @ref reflection_caller_privilege)
     @throw CONSTRUCTOR-IS-PRIVATE attempt to instantiate an object with a private constructor from outside the class
     @throw ABSTRACT-CLASS-ERROR thrown if the class has abstract methods
 
@@ -1572,6 +1573,7 @@ object o = cls.newObjectArgs(args);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw CREATE-OBJECT-ERROR the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
+    @throw REFLECTION-ACCESS-ERROR the calling code may not execute code in the target Program (see @ref reflection_caller_privilege)
     @throw CONSTRUCTOR-IS-PRIVATE attempt to instantiate an object with a private constructor from outside the class
     @throw ABSTRACT-CLASS-ERROR thrown if the class has abstract methods
 
@@ -1620,6 +1622,7 @@ object q = cls.callConstructor((), (IntType,));
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw CREATE-OBJECT-ERROR the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
+    @throw REFLECTION-ACCESS-ERROR the calling code may not execute code in the target Program (see @ref reflection_caller_privilege)
     @throw CONSTRUCTOR-IS-PRIVATE attempt to instantiate an object with a private constructor from outside the class
     @throw ABSTRACT-CLASS-ERROR thrown if the class has abstract methods
     @throw MISSING-TYPE-ARGUMENTS thrown if the class is generic and explicit type arguments are required
@@ -2042,10 +2045,10 @@ Namespace ns = cls.getNamespace();
     @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
     @throw UNKNOWN-NAMESPACE the namespace is not visible in the Program of the reflection object (see @ref reflection_caller_privilege)
  */
-Namespace Class::getNamespace() [flags=CONSTANT] {
+Namespace Class::getNamespace() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, c->pgm, "navigate the namespaces of", xsink)) {
+    if (reflection_check_structural_access(caller, c->pgm, "navigate the namespaces of", xsink)) {
         return QoreValue();
     }
     // get read access to program object
@@ -2180,7 +2183,7 @@ Class cls = Class::forName(pgm, "Thread::Mutex");
 static Class Class::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+    if (reflection_check_structural_access(caller, *pgm, "look up symbols in", xsink)) {
         return QoreValue();
     }
     // the name is looked up as a C string, which would be cut at a NUL character and name another class
@@ -2250,7 +2253,7 @@ list<Class> l = Class::findAllRegex(pgm, "^T");
 static list<Class> Class::findAllRegex(Program[QoreProgram] pgm, string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+    if (reflection_check_structural_access(caller, *pgm, "look up symbols in", xsink)) {
         return QoreValue();
     }
     return find_all_classes(*pattern, re_opts, *pgm, xsink);

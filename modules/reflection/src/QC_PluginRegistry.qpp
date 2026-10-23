@@ -49,7 +49,7 @@ PluginRegistry registry = PluginRegistry::get(pgm);
 static PluginRegistry PluginRegistry::get(Program[QoreProgram] pgm) [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+    if (reflection_check_structural_access(caller, *pgm, "look up symbols in", xsink)) {
         return QoreValue();
     }
     return new QoreObject(QC_PLUGINREGISTRY, *pgm, new QoreReflectionPluginRegistry(false, *pgm));
@@ -89,8 +89,14 @@ list<string> modules = PluginRegistry::get().getActiveModules();
     @return every active plugin module in this Program-bound view
 
     @throw PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE this method was called on the process-global view
+    @throw REFLECTION-ACCESS-ERROR the calling code may not perform this operation in the target Program (see @ref reflection_caller_privilege)
  */
 list<string> PluginRegistry::getActiveModules() [flags=RET_VALUE_ONLY] {
+    QoreReflectionCaller caller;
+    if (!r->process_global && reflection_check_structural_access(caller, r->pgm,
+            "access the plugin registry of", xsink)) {
+        return QoreValue();
+    }
     if (r->process_global) {
         xsink->raiseException("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", "PluginRegistry::getActiveModules() "
             "requires a Program-bound registry view; use PluginRegistry::get() instead "
@@ -111,8 +117,14 @@ list<hash<auto>> types = PluginRegistry::getProcessRegistry().getTypes("datafram
     @return plugin type descriptor hashes
 
     @throw PLUGIN-REGISTRY-MODULE-NOT-LOADED the module is not loaded in the process, or the module name contains a NUL character (since %Qore 3.0)
+    @throw REFLECTION-ACCESS-ERROR the calling code may not perform this operation in the target Program (see @ref reflection_caller_privilege)
  */
 list<hash<auto>> PluginRegistry::getTypes(string module_name) [flags=RET_VALUE_ONLY] {
+    QoreReflectionCaller caller;
+    if (!r->process_global && reflection_check_structural_access(caller, r->pgm,
+            "access the plugin registry of", xsink)) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another module
     if (q_check_no_nul(module_name->c_str(), module_name->size(), "module name", "module names", "PLUGIN-REGISTRY-MODULE-NOT-LOADED", xsink)) {
         return QoreValue();
@@ -137,8 +149,14 @@ list<hash<auto>> ops = PluginRegistry::getProcessRegistry().getOperations("dataf
     @return plugin operation descriptor hashes
 
     @throw PLUGIN-REGISTRY-MODULE-NOT-LOADED the module is not loaded in the process, or the module name contains a NUL character (since %Qore 3.0)
+    @throw REFLECTION-ACCESS-ERROR the calling code may not perform this operation in the target Program (see @ref reflection_caller_privilege)
  */
 list<hash<auto>> PluginRegistry::getOperations(string module_name) [flags=RET_VALUE_ONLY] {
+    QoreReflectionCaller caller;
+    if (!r->process_global && reflection_check_structural_access(caller, r->pgm,
+            "access the plugin registry of", xsink)) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another module
     if (q_check_no_nul(module_name->c_str(), module_name->size(), "module name", "module names", "PLUGIN-REGISTRY-MODULE-NOT-LOADED", xsink)) {
         return QoreValue();
@@ -167,9 +185,15 @@ list<hash<auto>> PluginRegistry::getOperations(string module_name) [flags=RET_VA
     @throw PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE this method was called on the process-global view
 
     @since %Qore 3.0
+    @throw REFLECTION-ACCESS-ERROR the calling code may not perform this operation in the target Program (see @ref reflection_caller_privilege)
  */
 *hash<auto> PluginRegistry::resolveOperation(Type[QoreType] lhs, Type[QoreType] rhs, string operation_name)
         [flags=RET_VALUE_ONLY] {
+    QoreReflectionCaller caller;
+    if (!r->process_global && reflection_check_structural_access(caller, r->pgm,
+            "access the plugin registry of", xsink)) {
+        return QoreValue();
+    }
     if (r->process_global) {
         xsink->raiseException("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", "PluginRegistry::resolveOperation() "
             "requires a Program-bound registry view; use PluginRegistry::get() instead "
@@ -194,8 +218,14 @@ list<hash<auto>> sites = PluginRegistry::get().getRecentFallbackSites();
     @throw PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE this method was called on the process-global view
 
     @since %Qore 3.0
+    @throw REFLECTION-ACCESS-ERROR the calling code may not perform this operation in the target Program (see @ref reflection_caller_privilege)
  */
 list<hash<auto>> PluginRegistry::getRecentFallbackSites() [flags=RET_VALUE_ONLY] {
+    QoreReflectionCaller caller;
+    if (!r->process_global && reflection_check_program_access(caller, r->pgm,
+            "access the plugin registry of", xsink)) {
+        return QoreValue();
+    }
     if (r->process_global) {
         xsink->raiseException("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", "PluginRegistry::getRecentFallbackSites() "
             "requires a Program-bound registry view; use PluginRegistry::get() instead "
@@ -216,8 +246,14 @@ PluginRegistry::get().clearFallbackSites();
     @throw PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE this method was called on the process-global view
 
     @since %Qore 3.0
+    @throw REFLECTION-ACCESS-ERROR the calling code may not perform this operation in the target Program (see @ref reflection_caller_privilege)
  */
 nothing PluginRegistry::clearFallbackSites() {
+    QoreReflectionCaller caller;
+    if (!r->process_global && reflection_check_program_access(caller, r->pgm,
+            "access the plugin registry of", xsink)) {
+        return QoreValue();
+    }
     if (r->process_global) {
         xsink->raiseException("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", "PluginRegistry::clearFallbackSites() "
             "requires a Program-bound registry view; use PluginRegistry::get() instead "
