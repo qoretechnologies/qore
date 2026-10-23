@@ -386,6 +386,12 @@ public hashdecl RestSchemaFieldOverlayInfo {
     #! A regular expression the value must match
     *string validation_regex;
 
+    #! A description in plain words of the values that @ref validation_regex accepts
+    /** Written to complete "Must be ...", for example \c "a two-letter language code, such as en"; it becomes the
+        option's @ref DataProvider::ActionOptionBaseInfo::validation_regex_desc "validation_regex_desc"
+    */
+    *string validation_regex_desc;
+
     #! An explicit UI type hint
     *string ui_type;
 

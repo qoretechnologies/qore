@@ -1558,6 +1558,15 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_11 DataProvider v3.11
+    - added @ref DataProvider::ActionOptionBaseInfo::validation_regex_desc "validation_regex_desc" to the action
+      option info, beside \c validation_regex: a description in plain words of the values that the pattern accepts,
+      written to complete "Must be ...", so that a user interface can say why it refuses a value instead of saying
+      that the value does not match the pattern; it is read from the \c validation_regex_desc attribute of a field
+      and written back to it, kept in the data provider index, and set by the REST schema field overlays; the string
+      format types (\c email, \c uri, \c uuid, \c hostname, \c ipv4, \c ipv6 and \c phone) give one for their
+      patterns in the new \c qore.validation_regex_desc tag and
+      @ref DataProvider::QoreStringFormatDataType::getValidationRegexDesc()
+      "QoreStringFormatDataType::getValidationRegexDesc()"
     - added @ref DataProvider::DataTypeCatalogue "DataTypeCatalogue" and
       @ref DataProvider::DataTypeCatalogueInfo "DataTypeCatalogueInfo", the names in plain words with which a user
       interface shows the data types to a person: a label (\c "Whole number") and the form used inside a sentence

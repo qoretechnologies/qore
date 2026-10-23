@@ -17,7 +17,9 @@ string.
   serialization, mappers, and value handling are unchanged from a plain string. The semantic identity is
   carried by `getName()` (e.g. `"email"`) and the `qore.external_name` tag (also `"email"`), which is what a
   front end keys off to choose a widget. A permissive validation regex is additionally published in the
-  `qore.validation_regex` tag.
+  `qore.validation_regex` tag, and a description of the values it accepts in plain words, written to complete
+  "Must be ..." (`an email address, such as user@example.com`), in the `qore.validation_regex_desc` tag
+  (`getValidationRegexDesc()`), so that a UI can say why it refuses a value.
 - **Nullable variants for free.** `getOrNothingType()`/`getMandatoryType()` are inherited from
   `QoreDataType` (copy-mutate, `*`-prefix). Both `email` and `*email` are registered.
 - **Server-side validation is a backstop.** `acceptsValue()` validates string input against the format regex
@@ -51,11 +53,12 @@ preserves the `qore.external_name` tag, so the UI identity survives serializatio
 ## App-action options
 
 `DataProviderActionCatalog::getActionOptionFromFields()` propagates a field's `ui_type` (and the existing
-`validation_regex`/`sensitive`) into the derived `ActionOptionInfo`.
+`validation_regex`, `validation_regex_desc` and `sensitive`) into the derived `ActionOptionInfo`.
 
 A semantic-typed field surfaces its identity on the derived option through the option's **type**, not through
 `ActionOptionInfo::ui_type`: `ui_type` is populated only from an explicit field attribute, and a semantic type
-does not set one. A UI reads `option.type.getTag("qore.external_name")` (and `qore.validation_regex`) to pick a
+does not set one. A UI reads `option.type.getTag("qore.external_name")` (and `qore.validation_regex` and
+`qore.validation_regex_desc`) to pick a
 control. Covered by `semanticTypesThroughProviderTest()` in
 `examples/test/qlib/DataProvider/DataProvider.qtest`, which asserts both the tag path and that `ui_type` stays
 unset — see [Open design questions](#open-design-questions) for whether it should be derived.

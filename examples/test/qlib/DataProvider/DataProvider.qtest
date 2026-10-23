@@ -890,6 +890,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("empty action option fields", \emptyActionOptionFieldsTest());
         addTestCase("action option example determinism", \actionOptionExampleDeterminismTest());
         addTestCase("action option semantic attributes", \actionOptionSemanticAttrTest());
+        addTestCase("an option's validation pattern is described in plain words", \validationRegexDescTest());
         addTestCase("semantic string format types", \semanticStringFormatTypesTest());
         addTestCase("semantic types through a provider", \semanticTypesThroughProviderTest());
         addTestCase("app/action catalog tests", \actionCatalogTests());
@@ -1814,6 +1815,95 @@ public class DataProviderTest inherits QUnit::Test {
             DataProviderActionCatalog::getActionOptionFromFields(rawfields);
         assertEq("url", ropts.website.ui_type,
             "ui_type propagates from a raw-hash field");
+    }
+
+    validationRegexDescTest() {
+        const string Regex = "^[a-z]{2}$";
+        const string Desc = "a two-letter language code, such as en";
+
+        # from the attributes of a field
+        QoreDataField lang_field("lang", "Language", AbstractDataProviderTypeMap."string");
+        lang_field.setAttributes({
+            "validation_regex": Regex,
+            "validation_regex_desc": Desc,
+        });
+        hash<string, hash<ActionOptionInfo>> fopts =
+            DataProviderActionCatalog::getActionOptionFromFields({"lang": lang_field});
+        assertEq(Regex, fopts.lang.validation_regex);
+        assertEq(Desc, fopts.lang.validation_regex_desc, "from an AbstractDataField attribute");
+
+        # from a raw field definition
+        hash<string, hash<ActionOptionInfo>> ropts = DataProviderActionCatalog::getActionOptionFromFields({
+            "lang": {
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "the language",
+                "validation_regex": Regex,
+                "validation_regex_desc": Desc,
+            },
+        });
+        assertEq(Regex, ropts.lang.validation_regex);
+        assertEq(Desc, ropts.lang.validation_regex_desc, "from a raw field definition");
+
+        # an option without one has none
+        hash<string, hash<ActionOptionInfo>> nopts = DataProviderActionCatalog::getActionOptionFromFields({
+            "lang": {"type": AbstractDataProviderTypeMap."string", "desc": "the language", "validation_regex": Regex},
+        });
+        assertEq(Regex, nopts.lang.validation_regex);
+        assertNothing(nopts.lang.validation_regex_desc);
+
+        # registered with an action, and back to the fields of the type of the action's options
+        string app = "regex-desc-" + get_random_string();
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": app,
+            "display_name": "Regex Description Test",
+            "short_desc": "Regex description test",
+            "desc": "Tests the description of a validation pattern",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "test.svg",
+            "dynamic": True,
+        });
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": app,
+            "action": "translate",
+            "path": "/translate",
+            "display_name": "Translate",
+            "short_desc": "Translate",
+            "desc": "Translate",
+            "action_code": DPAT_API,
+            "options": fopts,
+        });
+        hash<DataProviderActionInfo> registered = DataProviderActionCatalog::getAppActionEx(app, "translate");
+        assertEq(Desc, registered.options.lang.validation_regex_desc, "the registered action's option");
+
+        AbstractDataProviderType opt_type = DataProviderActionCatalog::getTypeForActionOptions(registered);
+        hash<auto> attr = opt_type.getField("lang").getAttributes();
+        assertEq(Regex, attr.validation_regex);
+        assertEq(Desc, attr.validation_regex_desc, "the field of the options type");
+        # and from those fields back to the option
+        assertEq(Desc, DataProviderActionCatalog::getActionOptionFromFields(opt_type.getFields()).lang
+            .validation_regex_desc, "the round trip");
+
+        # a format type describes its validation pattern in plain words, also when it is optional
+        foreach string name in (("email", "uri", "uuid", "hostname", "ipv4", "ipv6", "phone")) {
+            AbstractDataProviderType type = AbstractDataProviderTypeMap{name};
+            *string desc = type.getTag("qore.validation_regex_desc");
+            assertTrue(desc.val(), name);
+            assertRegex("^an? ", desc, name);
+            assertEq(desc, cast<QoreStringFormatDataType>(type).getValidationRegexDesc(), name);
+            assertEq(desc, AbstractDataProviderTypeMap{"*" + name}.getTag("qore.validation_regex_desc"), "*" + name);
+            # the example value of the format matches its pattern
+            assertTrue(regex(QoreStringFormatDataType::Examples{name}, type.getTag("qore.validation_regex")), name);
+            # the description survives the type description
+            assertEq(desc, AbstractDataProviderType::get(type.getInfo()).getTag("qore.validation_regex_desc"), name);
+        }
+        # a format type without a pattern has no description of one
+        QoreStringFormatDataType plain(StringType, "plain", "Plain", "Plain text", NOTHING, NOTHING, NOTHING,
+            "a description of no pattern");
+        assertNothing(plain.getTag("qore.validation_regex_desc"));
+        assertNothing(plain.getValidationRegexDesc());
     }
 
     emptyActionOptionFieldsTest() {
