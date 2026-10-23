@@ -20326,3 +20326,90 @@ declined without timing. The new probe must preserve handled-error and C++
 unwind output without those costs. Any runtime candidate needs a fresh merged
 baseline, an additive compiler-selected helper and matched disabled control.
 No fresh Java ratio or global performance ceiling is established here.
+
+## Rejected reusable-callback stack address (2026-10-23)
+
+The live stack-address candidate is **rejected and removed**. Baseline
+`86934cf2e` includes `origin/develop` through `8c4350a87`. Runtime builds use
+`-O3 -DNDEBUG`, allocation tracking off, LLVM 22.1.8, and fresh `qcc -O3`
+executables. Three forks, three warmup plus three measured 300 ms windows,
+4096 items, seed 7, and default/reverse/shuffle-487 layouts produce 432 runs
+and 1296 measured windows. No owned build/test/profile overlaps timing.
+
+The four-target geometric mean improves **0.921% versus before** and
+**1.940% versus the same-runtime disabled control**. The fixed gate requires
+at least 3% against both, plus at least 5% on ordinary integer or floating
+callbacks against both. Integer callbacks improve 4.866%/5.127%; floating
+callbacks are 1.393%/1.045% slower. The gate fails; no confirmation or broad55
+run was performed. Single-screen regression flags are not claimed as
+confirmed repeated regressions. Both candidate and disabled closure timings
+are slower than before, so that difference cannot be attributed solely to
+use of the new helper.
+
+Values are ns/item: median of layout medians of per-fork means. They include
+loop, call, computation and checksum work, not isolated call latency.
+
+|!Workload|!Before|!Candidate|!Disabled|!Vs before|!Vs disabled
+|indirect_call|7.076316|6.731972|7.095788|-4.866%|-5.127%
+|indirect_float|6.716872|6.810455|6.740036|+1.393%|+1.045%
+|indirect_int_result|6.499445|6.242462|6.635499|-3.954%|-5.923%
+|indirect_float_result|7.447538|7.746700|7.556019|+4.017%|+2.524%
+|direct_call|1.573687|1.569397|1.566189|-0.273%|+0.205%
+|method_call|1.624773|1.622484|1.624647|-0.141%|-0.133%
+|indirect_affine|7.033985|6.873177|7.170331|-2.286%|-4.144%
+|monomorphic_call|3.540080|3.540738|3.568239|+0.019%|-0.771%
+|monomorphic_float_call|3.521961|3.507948|3.541468|-0.398%|-0.947%
+|polymorphic_call|22.459438|22.328651|22.492787|-0.582%|-0.730%
+|polymorphic_float_call|22.672773|23.096480|23.163640|+1.869%|-0.290%
+|closure_call|15.933042|17.291401|17.251635|+8.525%|+0.231%
+|closure_capture|21.957722|23.138642|23.125791|+5.378%|+0.056%
+|list_build|26.686063|26.805230|27.008174|+0.447%|-0.751%
+|list_mutate|188.649024|189.097804|189.333670|+0.238%|-0.125%
+|temporary_hash|338.198467|334.387384|345.026890|-1.127%|-3.084%
+
+The additive v7 helpers read the address of the live stack limit through
+the reusable frame's existing same-thread pointer. They remove one hot
+pointer load, retain the 208-byte scratch/release ABI and v5 known-closure
+route, and preserve all stack guards, admission checks and per-call reader
+synchronization. No mutable limit value is cached. All four legacy static
+helper bodies match the baseline after normalization; new helper bodies
+match the reviewed probe. Their 80-byte frames/register saves are unchanged.
+The 149 non-startup generated functions match after twelve helper-name
+substitutions; startup differs only in compressed metadata byte count.
+All four timed callers keep their instruction counts and stack/save burden.
+
+Candidate qualification passes 13 selected Release fixtures / 74 cases /
+7319 assertions without skips or source fallback, plus 5550 reference
+comparisons across nine fresh artifacts and an old executable on the new
+runtime. The outer focused session expired before its terminal exit could
+be recovered; that exit is recorded as unknown. All 13 actual waited child
+exits, raw streams, completion manifest, source and artifact hashes were
+independently verified. No outer exit is inferred.
+
+Exact original production and fixture source bytes are restored. The core
+and all 252 qmod targets were rebuilt, with 253 Release source aliases restored.
+Fresh restored Release checks pass 13 fixtures / 74 cases /
+6841 assertions plus 555 IR and 555 legacy-AOT references. The rebuilt
+core artifacts are not byte-identical to the frozen baseline and are qualified
+separately. No production change or speedup is retained.
+
+Two separate result-default compile probes also stop before execution. A
+committed-flag variant removes the default result store but adds a success
+flag move and post-pop branch. Explicit defaults on cold failure/catch paths
+retain the same 80-byte frames but add a post-pop hot branch. Both fail their
+prospective code gates; neither was linked or timed. Whole-helper instruction
+counts include cold paths and do not establish a throughput regression.
+
+The retained-evidence audit covers all 62 items: 7 Pass / 55 N/A / zero Fail.
+Raw measurements, source patches, code checks, provenance, compile probes,
+restoration and the full audit are in
+[results-aot-reusable-stack-address-rejected-macos-arm64.json](results-aot-reusable-stack-address-rejected-macos-arm64.json).
+No new Java ratio, develop comparison or global performance ceiling follows.
+
+Next probe whether the private helper can consume the nonempty owner match
+already established by its public wrapper. Preserve live Program/debugger/
+body/readiness, pending sink, physical stack guards and the full reader wait.
+The larger immutable-frame proposal remains a design investigation: capture
+invocation-owned ancestors, prove every reachable diagnostic field's lifetime,
+and retire before any fallback/cache mutation. A scalar-looking source loop
+or pointer equality does not prove those requirements.

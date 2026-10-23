@@ -4006,3 +4006,21 @@ RESULTS and `results-merge-8c4350a87-macos-arm64.json` preserve failures,
 final validation and the complete 62-item audit. Next inspect explicit cold
 result defaults without a per-success flag or branch. This is a compile-only
 hypothesis; no performance benefit or Java parity is claimed.
+
+## Rejected reusable callback stack-address experiment (2026-10-23)
+
+After merged baseline `86934cf2e` / develop `8c4350a87`, additive v7 helpers
+reused the frame's existing thread pointer for the live stack-limit address.
+One hot load was removed without changing guards, frame sizes or caller
+instruction counts. The optimized three-layout screen improves only 0.921%
+versus before and 1.940% versus disabled across four callback targets, below
+the fixed 3% requirement. The candidate is removed; v4/v5 remain. All source
+bytes are restored and fresh selected Release tests/references pass.
+
+Two result-default compile-only probes also failed their code gates because
+they added hot branches. No probe establishes a speedup or a global ceiling.
+Full evidence and the 62-item retained-evidence audit are in
+`bench/runtime-comparison/results-aot-reusable-stack-address-rejected-macos-arm64.json`.
+Next inspect a private-helper owner-match proof without changing reader
+synchronization. Deferred frame retirement still needs a complete proof of
+ancestor/location/cache ownership and all generic/error cleanup paths.
