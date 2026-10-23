@@ -28,8 +28,8 @@ class RecordingObserver inherits DataProvider::Observer {
 }
 
 #! A Gmail REST client that records every request and answers from canned data instead of the network
-/** Every Gmail API provider sends its request through restDoRequest(), so that is the method overridden;
-    the recorded requests let a test check the exact HTTP method, path, query, and body an action produces
+/** Intercepts both legacy string requests and explicit targets. Explicit targets use the real resolver;
+    the recorded requests let a test check the exact HTTP method, path, query, and body an action produces.
 */
 class MockGmailApiRestClient inherits GoogleRestClient::GoogleRestClientIo {
     public {
@@ -59,7 +59,7 @@ class MockGmailApiRestClient inherits GoogleRestClient::GoogleRestClientIo {
     static hash<auto!> getRestOptions() {
         hash<auto!> opts = {
             "api_profile": "gmail",
-            "url": "https://example.com",
+            "url": "https://example.com/client-root",
             "oauth2_client_id": "test",
             "oauth2_client_secret": "test",
             "oauth2_redirect_url": "https://localhost",
@@ -71,6 +71,11 @@ class MockGmailApiRestClient inherits GoogleRestClient::GoogleRestClientIo {
     #! Returns the paths of the requests made with the given HTTP method, oldest first
     list<string> getPaths(string method) {
         return map $1.path, requests, $1.method == method;
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, auto body, *hash<auto> hdr) {
+        return restDoRequest(method, resolveRequestTarget(target, method).path, body, hdr);
     }
 
     hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
@@ -140,9 +145,6 @@ class TestGmailAttachmentWatch inherits GmailAttachmentWatchDataProvider {
 
 public class GmailActionRequestsTest inherits QUnit::Test {
     private {
-        #! why the Gmail Discovery document could not be loaded, if it could not
-        *string discovery_error;
-
         #! the Message-ID of the message being answered in the threading tests
         const OriginalMessageId = "<original@mail.example.com>";
 
@@ -160,22 +162,10 @@ public class GmailActionRequestsTest inherits QUnit::Test {
         addTestCase("draft and label reference data", \referenceDataTest());
         addTestCase("attachment events carry the thread ID", \attachmentEventThreadTest());
 
-        # the Discovery document is fetched from Google; no Gmail API provider can be built without it, so the
-        # tests that build one are skipped rather than failed when it cannot be fetched
-        try {
-            GoogleDataProviderBase::getRequestInfo(GoogleDiscoveryGmailApiName);
-        } catch (hash<ExceptionInfo> ex) {
-            discovery_error = sprintf("%s: %s", ex.err, ex.desc);
-        }
+        # Gmail's complete Discovery document is shipped with the module; loading it requires no network.
+        GoogleDataProviderBase::getRequestInfo(GoogleDiscoveryGmailApiName);
 
         set_return_value(main());
-    }
-
-    #! Skips the current test if the Gmail Discovery document is not available
-    private checkDiscovery() {
-        if (discovery_error) {
-            testSkip(sprintf("the Gmail Discovery document is not available: %s", discovery_error));
-        }
     }
 
     #! Returns the value of the given header in a serialized MIME message, if present
@@ -276,7 +266,6 @@ public class GmailActionRequestsTest inherits QUnit::Test {
 
     #! send-message must post the thread ID beside the MIME message and nothing else new
     sendMessageRequestTest() {
-        checkDiscovery();
         MockGmailApiRestClient rest();
         GmailMessageSendDataProvider prov(rest);
 
@@ -290,7 +279,7 @@ public class GmailActionRequestsTest inherits QUnit::Test {
         assertEq(1, rest.requests.size());
         hash<auto> req = rest.requests[0];
         assertEq("POST", req.method);
-        assertEq("gmail/v1/users/me/messages/send", req.path);
+        assertEq("/gmail/v1/users/me/messages/send", req.path);
         # the body follows the Discovery schema's field order
         assertEq(("raw", "threadId"), sort(keys req.body));
         assertEq("t-1", req.body.threadId);
@@ -309,7 +298,6 @@ public class GmailActionRequestsTest inherits QUnit::Test {
 
     #! create-draft must post the same message wrapped in a draft, without sending anything
     createDraftRequestTest() {
-        checkDiscovery();
         MockGmailApiRestClient rest();
         GmailCreateDraftDataProvider prov(rest);
 
@@ -323,7 +311,7 @@ public class GmailActionRequestsTest inherits QUnit::Test {
         assertEq(1, rest.requests.size(), "a draft is stored with one request and never sent");
         hash<auto> req = rest.requests[0];
         assertEq("POST", req.method);
-        assertEq("gmail/v1/users/me/drafts", req.path);
+        assertEq("/gmail/v1/users/me/drafts", req.path);
         assertEq(("message",), keys req.body, "the draft body wraps the message");
         assertEq(("raw", "threadId"), keys req.body.message);
         assertEq("t-1", req.body.message.threadId);
@@ -342,7 +330,6 @@ public class GmailActionRequestsTest inherits QUnit::Test {
 
     #! modify-message-labels must post both label lists to the message's modify endpoint
     modifyMessageLabelsRequestTest() {
-        checkDiscovery();
         MockGmailApiRestClient rest();
         GmailModifyMessageLabelsDataProvider prov(rest);
 
@@ -354,7 +341,7 @@ public class GmailActionRequestsTest inherits QUnit::Test {
         assertEq(1, rest.requests.size());
         hash<auto> req = rest.requests[0];
         assertEq("POST", req.method);
-        assertEq("gmail/v1/users/me/messages/m1/modify", req.path, "the message ID is a path argument");
+        assertEq("/gmail/v1/users/me/messages/m1/modify", req.path, "the message ID is a path argument");
         assertEq({
             "addLabelIds": ("Label_1", "STARRED"),
             "removeLabelIds": ("UNREAD",),
@@ -370,7 +357,6 @@ public class GmailActionRequestsTest inherits QUnit::Test {
 
     #! list-with-metadata must list once and then retrieve each listed message in the requested format
     listWithMetadataRequestTest() {
-        checkDiscovery();
         MockGmailApiRestClient rest();
         rest.list_response = {
             "messages": (
@@ -446,7 +432,6 @@ public class GmailActionRequestsTest inherits QUnit::Test {
 
     #! The draft and label actions must offer the account's drafts and labels as dropdown values
     referenceDataTest() {
-        checkDiscovery();
         MockGmailApiRestClient rest();
         rest.labels = (
             {"id": "INBOX", "name": "INBOX", "type": "system"},
@@ -506,7 +491,6 @@ public class GmailActionRequestsTest inherits QUnit::Test {
 
     #! An attachment event must identify the thread of its source message, so a consumer can reply in it
     attachmentEventThreadTest() {
-        checkDiscovery();
         MockGmailApiRestClient rest();
         rest.list_response = {
             "messages": ({"id": "m1", "threadId": "t-1"},),

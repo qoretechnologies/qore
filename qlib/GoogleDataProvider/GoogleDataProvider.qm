@@ -82,6 +82,8 @@ AbstractDataProviderType event = GoogleDataProviderBase::getResponseTypeForSchem
     @section googledataprovider_relnotes Release Notes
 
     @subsection googledataprovider_v2_2 GoogleDataProvider v2.2
+    - compose origin-absolute request targets for Discovery APIs with an empty base path, including Gmail;
+      the supplied REST client's API root is not prepended to schema-generated paths
     - ship complete Calendar v3 and Gmail v1 Discovery documents for deterministic offline metadata resolution;
       while static metadata such as the data provider index is read, live discovery is not used, and the schemas of
       other Google APIs are reported as unavailable (\c GOOGLE-SCHEMA-UNAVAILABLE)
