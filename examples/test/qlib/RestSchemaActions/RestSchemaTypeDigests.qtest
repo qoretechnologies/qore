@@ -1,0 +1,114 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class RestSchemaTypeDigestsTest
+
+#! Verifies that the actions of three large REST-schema modules have the types recorded in type-digests.json
+/** Each action's output type, its options and its other metadata are reduced to a structural digest of their type
+    graphs by RestSchemaModuleTypes.q, which does not depend on how the graph shares its types or on the order they
+    were built in, and compared with the digests recorded in \c type-digests.json.  The modules are Stripe, whose types
+    are one connected graph, and the two applications with the most actions, Azure OpenAI and AWS Bedrock.
+
+    A change that is meant to change the types of these modules records the new digests: run the test with
+    \c QORE_UPDATE_TYPE_DIGESTS=1 in the environment, which writes the file instead of comparing with it.
+*/
+class RestSchemaTypeDigestsTest inherits QUnit::Test {
+    public {
+        #! The modules whose types are recorded
+        const Modules = ("StripeDataProvider", "AzureOpenAiDataProvider", "BedrockDataProvider");
+
+        #! The number of hexadecimal digits of a SHA-256 digest that are recorded
+        const DigestLength = 16;
+    }
+
+    private {
+        #! The file recording the digests
+        string file = get_script_dir() + DirSep + "type-digests.json";
+    }
+
+    constructor() : Test("REST-schema module types are unchanged", "1.0") {
+        addTestCase("the actions of three large REST-schema modules have the recorded types", \digestTest());
+        set_return_value(main());
+    }
+
+    #! Returns the digests of the actions of the modules: app -> action -> digests
+    /** The digests of an action are given as one string, \c "metadata:<digest> output:<digest> options:<digest>",
+        so that the file records an action on one line; the options are digested together, in the order of their
+        names.
+    */
+    private hash<auto> getDigests() {
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string output = dir + DirSep + "types.json";
+        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string cmd = sprintf("%s %s lazy %s %s 2>&1", qore, get_script_dir() + DirSep + "RestSchemaModuleTypes.q",
+            output, Modules.join(" "));
+        string log = backquote(cmd);
+        if (!is_file(output)) {
+            throw "TEST-ERROR", sprintf("%s did not write %s: %s", cmd, output, log);
+        }
+        hash<auto> types = parse_json(ReadOnlyFile::readTextFile(output));
+        hash<auto!> rv = {};
+        foreach hash<auto> app in (types.apps.pairIterator()) {
+            if (app.value.error) {
+                throw "TEST-ERROR", sprintf("%s: %s", app.key, app.value.error);
+            }
+            foreach hash<auto> action in (app.value.actions.pairIterator()) {
+                string options = (map sprintf("%s=%s", $1, action.value.options{$1}),
+                    sort(keys action.value.options)).join(",");
+                rv{app.key}{action.key} = sprintf("metadata:%s output:%s options:%s",
+                    RestSchemaTypeDigestsTest::shorten(action.value.metadata),
+                    action.value.output_type ? RestSchemaTypeDigestsTest::shorten(action.value.output_type) : "-",
+                    options.val() ? RestSchemaTypeDigestsTest::shorten(options.toSHA256()) : "-");
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the recorded part of a digest
+    private static string shorten(string digest) {
+        return digest.substr(0, DigestLength);
+    }
+
+    digestTest() {
+        hash<auto> digests = getDigests();
+        if (ENV.QORE_UPDATE_TYPE_DIGESTS) {
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(make_json(digests, JGF_ADD_FORMATTING) + "\n");
+            printf("wrote %s\n", file);
+            return;
+        }
+        hash<auto> expected = parse_json(ReadOnlyFile::readTextFile(file));
+        assertEq(sort(keys expected), sort(keys digests), "the same applications are registered");
+        # every difference, so that a failure names all of them: app -> action -> what differs
+        hash<auto!> differences = {};
+        foreach hash<auto> app in (expected.pairIterator()) {
+            foreach hash<auto> action in (app.value.pairIterator()) {
+                *string actual = digests{app.key}{action.key};
+                if (!actual) {
+                    differences{app.key}{action.key} = "missing";
+                } else if (actual != action.value) {
+                    list<string> exp = action.value.split(" ");
+                    list<string> act = actual.split(" ");
+                    differences{app.key}{action.key} = (map (exp[$1] =~ x/^([a-z]+):/)[0], xrange(exp.size()),
+                        exp[$1] != act[$1]).join(", ");
+                }
+            }
+            foreach string action in (keys (digests{app.key} - keys app.value)) {
+                differences{app.key}{action} = "not recorded";
+            }
+        }
+        assertEq({}, differences, "the types are the recorded ones");
+    }
+}

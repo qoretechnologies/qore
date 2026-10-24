@@ -323,6 +323,54 @@ is handed, is the field of the bare use, and a use with a description or default
 `examples/test/qlib/RestSchemaValidator/VariantOrder.qtest` builds each variant on its own and after the others,
 for OpenAPI 3 and Swagger 2.0, and requires the same result.
 
+### The type caches of schema objects and the garbage collector
+
+The first output type of a Stripe action builds most of Stripe's types - about 4,000 types and 2,900 fields for
+`get-customer` - because the expandable fields (`anyOf: [string, $ref]`) make them one connected graph, and the
+action does need all of them: the type of a customer reaches every type the customer can expand to. What made that
+build slow was not the number of types but the garbage collector, which spent half of the build rescanning a graph
+it had already scanned: its scans walked 3.2 million graph nodes while those 7,000 objects were built.
+
+An `OpenApi3UnionDataType` validates a value with the schema objects of its alternatives, so it refers to them, and
+every schema object caches the types and fields it builds. With ordinary references the parsed document and the
+type graph were therefore one strongly connected component, and every cache write of the build (thousands of them)
+added an edge inside it, which ended the collector's closed regions (`design/dgc.md`, "Closed regions") and made the
+next scan walk the document and the types built so far again.
+
+The schema objects of a parsed OpenAPI 3 document now hold their type caches through opaque references (`@=`,
+`design/dgc.md`, "Opaque references"; `AbstractRestSchemaValidator::holdTypeCacheOpaquely()`), which the collector
+does not follow, so the document stays out of the type graph, and the scans of the same build walk 46,000 nodes.
+Measured with `bench/rest-schema-first-output-type.qr` (median of 5 processes, modules from the source tree; hoppy,
+arm64 Linux):
+
+| Action | first output type | other output types | peak RSS |
+|---|---|---|---|
+| Stripe `get-customer` | 4.5 s -> 2.0-2.4 s | 0.64-0.77 s -> 0.39-0.47 s | 428 MB -> 434 MB |
+| Azure OpenAI `create-response` | 0.18 s -> 0.19 s | 1.40-1.48 s -> 1.02-1.10 s | 406 MB -> 400-405 MB |
+| AWS Bedrock `apply-guardrail` | 0.11-0.14 s -> 0.11-0.12 s | 1.38-2.47 s -> 0.86-0.89 s | 377 MB -> 377 MB |
+
+A cycle through an opaque reference is never collected, so the rules that keep the document collectable are part of
+the change:
+
+- the document records (by weak reference) every schema object that holds an opaque cache entry and releases their
+  caches when it is destroyed; a type outliving its document still validates with the schema objects it refers to,
+  but those no longer give the types they had cached (they could never build new ones without their document);
+- a document stops making opaque entries, and releases the ones it has once the type build in progress has
+  finished, as soon as it is given a value it did not build - a type given to `replaceTypeForReference()`, or a
+  request body default that is not plain data - because such a value could refer to the document; the types of the
+  other schemas are then built again when they are next asked for, and use the replacement;
+- a document restored from its serialized form never makes them, because restored types own their documents;
+- a copy of a schema object does not keep the opaque caches of the original.
+
+`examples/test/qlib/OpenApi3/OpenApi3TypeCacheLifetime.qtest` checks each rule through weak references, and that
+the collector's work for a document whose schemas refer back to a hub grows with the size of the document instead
+of its square (with the helper `OpenApi3HubScans.q`, run with scan accounting); it fails without the release in the
+destructor and without each of the two rules that stop opaque entries.
+`examples/test/qlib/RestSchemaActions/RestSchemaTypeDigests.qtest` records structural digests of the output type,
+options and metadata of every action of Stripe, Azure OpenAI and AWS Bedrock (`type-digests.json`, recorded before
+the change) and requires them unchanged. `bench/rest-schema-first-output-type.qr` measures the first output type of
+an action in a new process, with the module path deciding which modules are measured.
+
 ## What the first two ports taught
 
 **Measure a schema-support gap construct by construct, against the parser.** The initial Paddle

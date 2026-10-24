@@ -24,6 +24,12 @@
 
 %modern
 
+# the type caches of schema objects hold their types through opaque references while their schema lives; see
+# AbstractRestSchemaValidator::holdTypeCacheOpaquely()
+%allow-opaque-references
+# the schema keeps weak references to the schema objects holding such caches
+%allow-weak-references
+
 # make sure we have the required qore version
 %requires qore >= 2.0
 
@@ -76,6 +82,14 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - the data types of a large schema whose types refer back to each other are built faster: the first output type
+      of a Stripe action is built in about half the time it took before.  The schema objects of a parsed
+      OpenAPI 3 document hold the types they build through references that the garbage collector does not follow
+      (see @ref RestSchemaValidator::AbstractRestSchemaValidator::holdTypeCacheOpaquely() "holdTypeCacheOpaquely()"),
+      so building them no longer makes the collector walk the whole document.  The document releases them when it is
+      destroyed, after which its schema objects no longer give the types they cached, and when it is given a type
+      with @ref RestSchemaValidator::AbstractRestSchemaValidator::replaceTypeForReference() "replaceTypeForReference()",
+      after which the types of its other schemas are built again when they are next asked for, with the replacement
     - added @ref RestSchemaValidator::AbstractRestSchemaValidator::runTypeBuild() "runTypeBuild()", which runs a
       type build of a schema as one transaction: the type builds of the schema are serialized, and a build that
       fails part of the way through leaves the schema's type caches as they were; OpenAPI 3 schemas build their
@@ -1355,6 +1369,13 @@ public namespace RestSchemaValidator {
 
             #! The type given to replaceType(), from which a variant not cached when it was given is derived
             *AbstractDataProviderType replacedDataType;
+
+            #! @ref True if this object holds types it caches through opaque references
+            /** Set when the schema first lets this object hold a cache entry through an opaque reference; see
+                @ref RestSchemaValidator::AbstractRestSchemaValidator::holdTypeCacheOpaquely()
+                "AbstractRestSchemaValidator::holdTypeCacheOpaquely()"
+            */
+            bool holds_opaque_type_caches;
         }
 
         #! Returns the data provider type for a given type/format/items path
@@ -1474,6 +1495,11 @@ public namespace RestSchemaValidator {
             if (!dataType && !orNothingDataType) {
                 return;
             }
+            if (schema) {
+                # the given type is not built by the schema, so the schema cannot know what it refers to; see
+                # AbstractRestSchemaValidator::stopOpaqueTypeCaches()
+                schema.stopOpaqueTypeCaches();
+            }
             if (schema && schema.isTypeBuildActive()) {
                 *AbstractDataProviderType prev = replacedDataType;
                 schema.recordTypeBuildWrite(sub () {
@@ -1506,20 +1532,94 @@ public namespace RestSchemaValidator {
         */
         private setCachedDataType(bool required, AbstractDataProviderType t) {
             *AbstractRestSchemaValidator schema = getTypeBuildSchema();
+            bool opaque;
             if (schema && schema.isTypeBuildActive()) {
+                opaque = holdCacheEntryOpaquely(schema);
                 *AbstractDataProviderType prev = required ? dataType : orNothingDataType;
                 schema.recordTypeBuildWrite(sub () {
+                    # the schema can have stopped opaque type caches since the write
+                    bool opaque_undo = holdCacheEntryOpaquely(schema);
                     if (required) {
-                        dataType = prev;
+                        if (opaque_undo) {
+                            dataType @= prev;
+                        } else {
+                            dataType = prev;
+                        }
+                    } else if (opaque_undo) {
+                        orNothingDataType @= prev;
                     } else {
                         orNothingDataType = prev;
                     }
                 });
             }
             if (required) {
-                dataType = t;
+                if (opaque) {
+                    dataType @= t;
+                } else {
+                    dataType = t;
+                }
+            } else if (opaque) {
+                orNothingDataType @= t;
             } else {
                 orNothingDataType = t;
+            }
+        }
+
+        #! Returns @ref True if this object holds a type it caches in the type build in progress through an opaque reference
+        /** @param schema the schema whose type build is in progress in the calling thread
+
+            @return @ref True if the cache entry is to be assigned with the opaque assignment operator (\c \@=)
+
+            @see @ref RestSchemaValidator::AbstractRestSchemaValidator::holdTypeCacheOpaquely()
+            "AbstractRestSchemaValidator::holdTypeCacheOpaquely()"
+
+            @since RestSchemaValidator 2.5
+        */
+        private bool holdCacheEntryOpaquely(AbstractRestSchemaValidator schema) {
+            if (!schema.holdTypeCacheOpaquely(self)) {
+                return False;
+            }
+            if (!holds_opaque_type_caches) {
+                holds_opaque_type_caches = True;
+            }
+            return True;
+        }
+
+        #! Releases the types and fields that this object caches
+        /** Called by the schema for every schema object it let hold a cache entry through an opaque reference (see
+            @ref RestSchemaValidator::AbstractRestSchemaValidator::holdTypeCacheOpaquely()
+            "AbstractRestSchemaValidator::holdTypeCacheOpaquely()") when it is destroyed, or when it stops letting
+            schema objects do so (see @ref RestSchemaValidator::AbstractRestSchemaValidator::stopOpaqueTypeCaches()
+            "AbstractRestSchemaValidator::stopOpaqueTypeCaches()").  The garbage collector does not follow those
+            references, so a cycle running through one, as from a schema object to the type it caches and from a
+            union alternative of that type back to the schema object, is only released here.
+
+            A type that is still referenced keeps its fields and the schema objects it validates with, so values are
+            validated as before.  A schema object of a schema that still exists builds the types again when they are
+            next asked for; one whose schema has been destroyed cannot build types, so it no longer gives the types
+            it cached.
+
+            @since RestSchemaValidator 2.5
+        */
+        releaseTypeCaches() {
+            remove dataType;
+            remove orNothingDataType;
+            fieldmap = {};
+            usemap = {};
+            holds_opaque_type_caches = False;
+        }
+
+        #! Copies the object without the type caches it holds through opaque references
+        /** A copy is not known to the schema, which releases the opaque type caches of the objects it knows (see
+            releaseTypeCaches()), so a copy of an object holding such caches builds its own types.
+
+            @param old the object copied
+
+            @since RestSchemaValidator 2.5
+        */
+        copy(AbstractRestSchemaObject old) {
+            if (holds_opaque_type_caches) {
+                releaseTypeCaches();
             }
         }
 
@@ -1534,12 +1634,20 @@ public namespace RestSchemaValidator {
         */
         private setCachedField(bool use, string key, string rstr, AbstractDataField field) {
             *AbstractRestSchemaValidator schema = getTypeBuildSchema();
+            bool opaque;
             if (schema && schema.isTypeBuildActive()) {
+                opaque = holdCacheEntryOpaquely(schema);
                 *AbstractDataField prev = use ? usemap{key}{rstr} : fieldmap{key}{rstr};
                 schema.recordTypeBuildWrite(sub () {
+                    # the schema can have stopped opaque type caches since the write
+                    bool opaque_undo = prev && holdCacheEntryOpaquely(schema);
                     if (use) {
                         if (prev) {
-                            usemap{key}{rstr} = prev;
+                            if (opaque_undo) {
+                                usemap{key}{rstr} @= prev;
+                            } else {
+                                usemap{key}{rstr} = prev;
+                            }
                         } else {
                             remove usemap{key}{rstr};
                             if (!usemap{key}) {
@@ -1547,7 +1655,11 @@ public namespace RestSchemaValidator {
                             }
                         }
                     } else if (prev) {
-                        fieldmap{key}{rstr} = prev;
+                        if (opaque_undo) {
+                            fieldmap{key}{rstr} @= prev;
+                        } else {
+                            fieldmap{key}{rstr} = prev;
+                        }
                     } else {
                         remove fieldmap{key}{rstr};
                         if (!fieldmap{key}) {
@@ -1557,7 +1669,13 @@ public namespace RestSchemaValidator {
                 });
             }
             if (use) {
-                usemap{key}{rstr} = field;
+                if (opaque) {
+                    usemap{key}{rstr} @= field;
+                } else {
+                    usemap{key}{rstr} = field;
+                }
+            } else if (opaque) {
+                fieldmap{key}{rstr} @= field;
             } else {
                 fieldmap{key}{rstr} = field;
             }
@@ -1588,6 +1706,13 @@ public namespace RestSchemaValidator {
                 def_body = rest.preprocessRequestBody();
                 if (exists def_body && def_body.typeCode() != NT_HASH) {
                     remove def_body;
+                }
+                # the values become the default values of the fields, which the schema does not build
+                if (def_body && !AbstractRestSchemaObject::isPlainData(def_body)) {
+                    *AbstractRestSchemaValidator schema = getTypeBuildSchema();
+                    if (schema) {
+                        schema.stopOpaqueTypeCaches();
+                    }
                 }
             }
 
@@ -1657,6 +1782,45 @@ public namespace RestSchemaValidator {
             # the canonical field is built for the bare use, whichever use asks for it first; see fieldmap
             return decorateField(getFieldIntern(path, name, NOTHING, required, rest, NOTHING, rstr), ukey, name,
                 desc, required, default_value, rstr);
+        }
+
+        #! Returns @ref True if the value consists of scalar values only, also in its lists and hashes
+        /** Such a value cannot refer to a schema; see
+            @ref RestSchemaValidator::AbstractRestSchemaValidator::stopOpaqueTypeCaches()
+            "AbstractRestSchemaValidator::stopOpaqueTypeCaches()"
+
+            @since RestSchemaValidator 2.5
+        */
+        private static bool isPlainData(auto v) {
+            switch (v.typeCode()) {
+                case NT_NOTHING:
+                case NT_NULL:
+                case NT_INT:
+                case NT_FLOAT:
+                case NT_NUMBER:
+                case NT_STRING:
+                case NT_CHAR:
+                case NT_DATE:
+                case NT_BOOLEAN:
+                case NT_BINARY:
+                    return True;
+                case NT_HASH:
+                    foreach auto e in (v.iterator()) {
+                        if (!AbstractRestSchemaObject::isPlainData(e)) {
+                            return False;
+                        }
+                    }
+                    return True;
+                case NT_LIST:
+                    foreach auto e in (v) {
+                        if (!AbstractRestSchemaObject::isPlainData(e)) {
+                            return False;
+                        }
+                    }
+                    return True;
+            }
+            # an object, a closure, a call reference or any other value that can refer to something else
+            return False;
         }
 
         #! Returns the key identifying one <b>use</b> of this schema as a field
@@ -2225,6 +2389,15 @@ public namespace RestSchemaValidator {
 
             #! How to undo the cache writes of the type build in progress, in the order they were made
             transient list<code> type_build_undo = ();
+
+            #! Whether schema objects may hold the types they cache through opaque references; see holdTypeCacheOpaquely()
+            transient bool opaque_type_caches;
+
+            #! The schema objects holding types they cache through opaque references: unique hash -> weak reference
+            transient hash<auto> opaque_type_cache_holders = {};
+
+            #! Whether the opaque type caches are to be released once the type build in progress has finished
+            transient bool release_opaque_type_caches;
         }
 
         #! Creates the object without a logger
@@ -2233,6 +2406,13 @@ public namespace RestSchemaValidator {
 
         #! Creates the object with the given logger
         constructor(Logger::LoggerInterface logger) : LoggerWrapper(logger) {
+        }
+
+        #! Releases the types that the schema objects of the schema cache through opaque references
+        /** @see holdTypeCacheOpaquely()
+        */
+        destructor() {
+            releaseTypeCaches();
         }
 
         #! Runs a type build of this schema as one transaction
@@ -2272,6 +2452,11 @@ AbstractDataProviderType type = schema.runTypeBuild(AbstractDataProviderType sub
             type_build_lock.lock();
             on_exit type_build_lock.unlock();
             on_exit type_build_undo = ();
+            # run first, while the lock is held; see stopOpaqueTypeCaches()
+            on_exit if (release_opaque_type_caches) {
+                release_opaque_type_caches = False;
+                releaseOpaqueTypeCacheHolders();
+            }
             try {
                 return build();
             } catch (hash<ExceptionInfo> ex) {
@@ -2291,6 +2476,144 @@ AbstractDataProviderType type = schema.runTypeBuild(AbstractDataProviderType sub
         */
         bool isTypeBuildActive() {
             return type_build_lock.lockOwner();
+        }
+
+        #! Returns @ref True if the given schema object may hold a type it caches in the type build in progress through an opaque reference
+        /** A schema object caches the types and fields it builds, and the types of a schema can refer back to schema
+            objects: a union validates each value with the schemas of its alternatives, for example.  With ordinary
+            references a schema object and the types it caches are then part of one strongly connected graph with the
+            parsed document, and every cache write of a type build adds an edge inside it, which makes the garbage
+            collector walk that graph again (see the "Opaque references" section of the garbage collector's design
+            notes).  A cache entry held through an opaque reference is not an edge the collector follows, so the
+            document stays out of the type graph and the collector only walks the types being built.
+
+            The collector cannot release a cycle running through an opaque reference, so the schema records each
+            schema object that holds one and releases their caches when it is destroyed (see
+            @ref RestSchemaValidator::AbstractRestSchemaObject::releaseTypeCaches() "releaseTypeCaches()").  That is
+            only sufficient while nothing a schema object caches can refer to the schema itself, so schema objects
+            hold their caches through opaque references only:
+            - in a schema whose subclass enables it for the documents it parses (see enableOpaqueTypeCaches()), and
+              not in one restored from its serialized form, whose types own their documents
+            - in the type build in progress in the calling thread (see runTypeBuild())
+            - until the schema is given a value that it did not build: a type given to replaceTypeForReference(), or
+              a request body default that is not plain data (see stopOpaqueTypeCaches())
+
+            @param so the schema object making a cache entry
+
+            @return @ref True if the cache entry is to be held through an opaque reference, in which case the schema
+            object is recorded for its cache to be released when the schema is destroyed
+
+            @par Example:
+            A schema object subclass caching a type it built in the type build in progress:
+            @code{.py}
+*AbstractRestSchemaValidator schema = getTypeBuildSchema();
+if (schema && schema.isTypeBuildActive() && schema.holdTypeCacheOpaquely(self)) {
+    cached_type @= t;
+} else {
+    cached_type = t;
+}
+            @endcode
+
+            @since RestSchemaValidator 2.5
+        */
+        bool holdTypeCacheOpaquely(AbstractRestSchemaObject so) {
+            if (!opaque_type_caches || !type_build_lock.lockOwner()) {
+                return False;
+            }
+            string key = so.uniqueHash();
+            # a weak reference to an object that has been destroyed gives no object, and an object created since can
+            # have the same unique hash
+            *AbstractRestSchemaObject holder = opaque_type_cache_holders{key};
+            if (holder != so) {
+                opaque_type_cache_holders{key} := so;
+            }
+            return True;
+        }
+
+        #! Makes the schema objects of this schema hold the types and fields they cache through ordinary references from now on
+        /** Called when the schema is given a value that it did not build, such as a type by
+            replaceTypeForReference().  The schema cannot know what such a value refers to, and a schema object
+            caching it is reachable from the types that other schema objects hold through opaque references, through
+            the union alternatives that refer to it.  If the value referred to the schema, the schema would then be
+            part of a cycle that the garbage collector cannot see and would never be destroyed, so the opaque type
+            caches are released (see @ref RestSchemaValidator::AbstractRestSchemaObject::releaseTypeCaches()
+            "AbstractRestSchemaObject::releaseTypeCaches()") once the type build in progress has finished, or now if
+            there is none, and the types they held are built again when they are next asked for, through ordinary
+            references.
+
+            @par Example:
+            A schema subclass letting an application give the type of a schema object from its own catalog, which
+            refers to the schema:
+            @code{.py}
+setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
+    stopOpaqueTypeCaches();
+    catalog_types{so.uniqueHash()} = t;
+}
+            @endcode
+
+            @since RestSchemaValidator 2.5
+        */
+        stopOpaqueTypeCaches() {
+            if (type_build_lock.lockOwner()) {
+                if (opaque_type_caches) {
+                    opaque_type_caches = False;
+                    # the build in progress refers to the caches; they are released when it has finished
+                    release_opaque_type_caches = True;
+                }
+                return;
+            }
+            # a type build of another thread finishes first
+            type_build_lock.lock();
+            on_exit type_build_lock.unlock();
+            if (opaque_type_caches) {
+                opaque_type_caches = False;
+                releaseOpaqueTypeCacheHolders();
+            }
+        }
+
+        #! Lets the schema objects of this schema hold the types and fields they build through opaque references
+        /** Called by a subclass once it has parsed its document; see holdTypeCacheOpaquely()
+
+            @since RestSchemaValidator 2.5
+        */
+        private enableOpaqueTypeCaches() {
+            opaque_type_caches = True;
+        }
+
+        #! Releases the types that the schema objects of this schema cache through opaque references
+        /** Called when the schema is destroyed; see holdTypeCacheOpaquely()
+
+            @since RestSchemaValidator 2.5
+        */
+        private releaseTypeCaches() {
+            # a thread building types of the schema finishes first; one that starts after this makes no opaque entries
+            bool locked = !type_build_lock.lockOwner();
+            if (locked) {
+                type_build_lock.lock();
+            }
+            on_exit if (locked) {
+                type_build_lock.unlock();
+            }
+            opaque_type_caches = False;
+            releaseOpaqueTypeCacheHolders();
+        }
+
+        #! Releases the type caches of the schema objects holding types through opaque references
+        /** Must be called with the type build lock held, outside a type build or at its end.
+
+            @since RestSchemaValidator 2.5
+        */
+        private releaseOpaqueTypeCacheHolders() {
+            hash<auto> holders = opaque_type_cache_holders;
+            opaque_type_cache_holders = {};
+            foreach string key in (keys holders) {
+                # a holder that has been destroyed has released its cache already, and its weak reference gives no
+                # object
+                *AbstractRestSchemaObject so = holders{key};
+                if (so) {
+                    so.releaseTypeCaches();
+                }
+            }
         }
 
         #! Records how to undo a cache write of the type build of this schema in progress on the calling thread
