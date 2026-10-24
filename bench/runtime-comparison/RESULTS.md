@@ -20838,3 +20838,54 @@ checkpoint: production code and qualified tests remain unchanged.
 Host load/frequency/thermals are not controlled; Java lacks Qore's Program,
 object deletion, observer and cancellation contracts. No Java parity or global
 performance ceiling is established.
+
+## Rejected native location snapshots (2026-10-24)
+
+The candidate snapshots this call's ThreadData and location values before
+publishing/restoring a reusable native frame. It preserves all stores and
+reader synchronization. Optimized helper code removes repeated loads without
+growing stack frames, but the fixed performance screen fails. The complete
+C++ change is removed; no production speedup is retained.
+
+All three runtimes use -O3 -DNDEBUG with allocation tracking OFF and LLVM
+22.1.8; AOT uses qcc -O3. The disabled control compiles the same source with
+QORE_DISABLE_NATIVE_LOCATION_SNAPSHOT. Its four helper bodies match the
+baseline after address relocation normalization. All 150 non-startup LLVM
+function bodies match across variants, and all four callers retain their
+instruction counts and stack frames. Owned samples verify fast-path execution
+before timing. Generic objdump call-name annotations were misleading; a
+Mach-O-aware follow-up verifies the actual stub targets.
+
+The screen retains 108 fresh-process runs / 324 measured windows: four
+workloads, three layouts, three forks, three warmups and three samples of
+300 ms, 4096 items, seed 7. Results are medians of layout medians of fork means.
+Positive time change means slower. These are whole-workload ns/item.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Change vs before|!Change vs disabled
+|indirect_call|7.374|6.679|7.419|-9.43%|-9.98%
+|indirect_float|8.093|7.987|8.162|-1.31%|-2.15%
+|indirect_int_result|7.408|7.911|7.404|+6.80%|+6.85%
+|indirect_float_result|7.847|7.353|7.604|-6.29%|-3.31%
+
+Geometric mean time falls 2.749% versus before and 2.330% versus disabled,
+below the predeclared 5% criterion. Only two of four targets meet the separate
+3% improvement criterion against both controls. Integer-result time rises
+6.80%; all three layouts have disjoint slower fork ranges against both
+controls. The ordinary integer callback also regresses in shuffled layout.
+These are descriptive screening flags, not independently confirmed effects.
+The candidate is rejected without confirmation or the broad 55-workload run.
+
+Initial candidate qualification passes nine fixtures, 16 cases, 5966 assertions
+and 1110 IR/AOT references; preparation checks 4995 references and the disabled
+control another 1110. There are no skipped cases. Exact source restoration
+rebuilds the Release core and all 252 qmods, with 253 Release aliases, then
+passes three fixtures (four cases, 970 assertions) and 1110 references.
+No Debug qualification of the rejected candidate is claimed.
+
+All raw timings, actual exits, source/dependency hashes, generated-code checks,
+rejected patch, restoration evidence and all 62 audit items are recorded in
+[results-aot-native-location-snapshot-rejected-macos-arm64.json](results-aot-native-location-snapshot-rejected-macos-arm64.json). The prior checkpoint's audit tracking is corrected to mark its
+already-resolved merge findings as resolved; performance data are unchanged.
+No new Java/develop comparison or performance ceiling is claimed. Host load,
+frequency and thermals are uncontrolled. Next resume the planned narrow
+callable-input subset proof while preserving binding and ownership semantics.

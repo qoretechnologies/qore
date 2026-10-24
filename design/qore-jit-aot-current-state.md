@@ -4190,3 +4190,17 @@ subset experiment; retain eager location/frame correctness. All 980 runs,
 are recorded in RESULTS and
 `bench/runtime-comparison/results-aot-post-b7-checkpoint-macos-arm64.json`.
 No Java parity, universal speedup or global ceiling is established.
+
+## Rejected native location snapshots (2026-10-24)
+
+Per-call location snapshots reduce generated reloads, but the optimized fixed
+screen improves the four-target geometric mean only 2.75% versus baseline and
+2.33% versus a compile-disabled control. Native integer-result time increases
+6.80%, with adverse ranges in all three layouts. The 5% acceptance gate fails;
+the entire production change is restored and Release requalified. No broad or
+confirmation campaign is claimed. RESULTS and
+`bench/runtime-comparison/results-aot-native-location-snapshot-rejected-macos-arm64.json`
+retain all 108 runs, 324 windows, code checks, patch and restoration evidence.
+
+Resume the narrowly scoped callable-input subset proof for literal references.
+This negative experiment establishes neither Java parity nor a global ceiling.
