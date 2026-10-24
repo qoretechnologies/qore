@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
 
@@ -13,6 +14,8 @@ public class FileStreamTest inherits QUnit::Test {
 
     constructor() : Test("FileStreamTest", "1.0") {
         addTestCase("basic test", \basic());
+        # the byte peeked from a pipe was lost: the position of a pipe cannot be restored
+        addTestCase("peek on a pipe", \pipePeek());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -51,5 +54,48 @@ public class FileStreamTest inherits QUnit::Test {
         assertEq(-1, fis.peek());
         assertEq(NOTHING, fis.read(10));
         assertEq(-1, fis.peek());
+    }
+
+    pipePeek() {
+        string path = tmp_location() + DirSep + sprintf("qore_file_stream_fifo_%d_%s", getpid(), get_random_string(8));
+        if (mkfifo(path)) {
+            throw "MKFIFO-ERROR", sprintf("%s: %s", path, strerror());
+        }
+        on_exit unlink(path);
+
+        # the reader is opened without waiting for a writer
+        FileInputStream fis(path, -1, True);
+        File w();
+        w.open2(path, O_WRONLY);
+        w.write(<616263>);
+        assertEq(0x61, fis.peek(), "the first byte");
+        assertEq(0x61, fis.peek(), "a second peek returns the same byte");
+        assertEq(<616263>, readAll(fis, 3), "the byte peeked is read with the bytes after it");
+
+        # a line that ends with a carriage return and a line feed, read from a pipe: the reader peeks at the line feed
+        w.write("one\r\ntwo\n");
+        StreamReader sr(fis);
+        assertEq("one", sr.readLine(), "the line before CR LF");
+        assertEq("two", sr.readLine(), "the line after CR LF");
+
+        w.write(<7a>);
+        assertEq(0x7a, fis.peek(), "a byte before the end of the pipe");
+        w.close();
+        assertEq(<7a>, fis.read(10), "the byte peeked before the end");
+        assertEq(-1, fis.peek(), "the end of the pipe");
+        assertEq(NOTHING, fis.read(10), "the end of the pipe");
+    }
+
+    #! reads the given number of bytes from the stream, unless it ends first
+    private static binary readAll(InputStream is, int size) {
+        binary b = binary();
+        while (b.size() < size) {
+            *binary d = is.read(size - b.size());
+            if (!d) {
+                break;
+            }
+            b += d;
+        }
+        return b;
     }
 }

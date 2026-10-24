@@ -127,6 +127,13 @@ FileInputStream::constructor(string path, timeout timeout_ms = -1, *bool nonbloc
     @throw FILE-READ-TIMEOUT-ERROR if no byte could be read in the timeout specified in the constructor
 
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
+
+    @note A pipe, a named pipe, a terminal or a socket cannot be repositioned: the stream keeps the byte and returns
+    it as the first byte of the next read.  A wait for the stream's descriptor (see
+    @ref Qore::InputStream::getPollableDescriptor() "getPollableDescriptor()") does not see the byte kept
+
+    @since %Qore 3.0 the byte peeked from a pipe, a named pipe, a terminal or a socket is read by the next read; it
+    was lost, and a second peek returned the byte after it
  */
 int FileInputStream::peek() {
    return is->peekHelper(xsink);
