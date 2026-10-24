@@ -135,7 +135,7 @@ The process environment is protected by two read-write locks (`lib/SystemEnviron
 | Lock | Held shared | Held exclusively | Before `fork()` | In the child |
 |---|---|---|---|---|
 | environment lock (rank 1500) | to copy a variable: `SystemEnvironment::get()`, `isSet()`, `valueExists()`, `QoreEnvironmentValue` | to change the environment: `SystemEnvironment::set()`, `unset()`, `AtomicEnvironmentSetter` | acquired exclusively | reset |
-| environment change lock (not ranked) | to use the environment with the C library directly: `QoreEnvironmentReadLock` (passing `environ` to `posix_spawn()` or `execvp()`, `popen()`, `system()`, `localtime_r()`, c-ares channel creation, OpenSSL's default CA paths, the ENV hash) | to change the environment, before the environment lock | not acquired | reset |
+| environment change lock (not ranked) | to use the environment with the C library directly: `QoreEnvironmentReadLock` (passing `environ` to `posix_spawn()` or `execvp()`, `popen()`, `system()`, `localtime_r()`, c-ares channel creation and the start of a c-ares lookup, which reads `HOSTALIASES`, OpenSSL's default CA paths, the ENV hash) | to change the environment, before the environment lock | not acquired | reset |
 
 - A change takes the change lock and then the environment lock, both exclusively, so while the forking thread holds
   the environment lock, no other thread is changing the environment, and the child gets a consistent copy.

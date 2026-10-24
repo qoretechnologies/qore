@@ -7230,11 +7230,18 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
     hints.ai_protocol = protocol;
 
     started = true;
+    {
+        // c-ares reads the HOSTALIASES environment variable when it starts the lookup of a name without a dot
+        // (ares_lookup_hostaliases()) and uses the string that getenv() returns, so the environment must not change
+        // meanwhile; fork() does not wait for this hold (see qore_cares_init_channel()), and the completion callback,
+        // which can run here, only records the result
+        QoreEnvironmentReadLock env_lock;
 #ifdef DEBUG
-    qore_dbg_cares_lookup_env_read();
+        qore_dbg_cares_lookup_env_read();
 #endif
-    ares_getaddrinfo(channel, has_host ? host.c_str() : nullptr, has_service ? service.c_str() : nullptr,
-        &hints, callback, this);
+        ares_getaddrinfo(channel, has_host ? host.c_str() : nullptr, has_service ? service.c_str() : nullptr,
+            &hints, callback, this);
+    }
     if (done) {
         return status == ARES_SUCCESS ? 0 : raiseError(xsink);
     }
