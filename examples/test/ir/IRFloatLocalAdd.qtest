@@ -15,6 +15,7 @@ class FloatLocalAddTest inherits QUnit::Test {
         string qore = ENV.QORE_BIN ?? libdir + "/qore";
         string qcc = ENV.QCC ?? libdir + "/qcc";
         string behavior = get_script_dir() + "/IRFloatLocalAdd.qr";
+        string direct_behavior = get_script_dir() + "/IRFloatDirectCallAdd.qr";
         string paths = get_script_dir() + "/IRFloatLocalAddPaths.qr";
         const string AstExpected = "float-local-add: ok\nreflection:10.0\n";
         # The baseline IR/native tiers cannot reflect this local by name, even
@@ -39,10 +40,13 @@ class FloatLocalAddTest inherits QUnit::Test {
         return result.out;
     }
     private source() {
-        foreach string prefix in (("", "QORE_DISABLE_IR_FLOAT_LOCAL_ADD=1 ")) {
+        foreach string prefix in (("", "QORE_DISABLE_IR_FLOAT_LOCAL_ADD=1 ",
+                "QORE_DISABLE_IR_FLOAT_DIRECT_CALL_ADD=1 ")) {
             foreach string mode in (("ast", "ir", "jit", "tiered")) {
                 assertEq(mode == "ast" ? AstExpected : CompiledExpected,
                     run((qore, "--exec-mode=" + mode, behavior), prefix), prefix + mode);
+                assertEq("float-direct-add: ok\n",
+                    run((qore, "--exec-mode=" + mode, direct_behavior), prefix), prefix + mode);
             }
         }
     }
@@ -54,7 +58,7 @@ class FloatLocalAddTest inherits QUnit::Test {
             assertEq(expected, run((qore, "--exec-mode=" + mode, paths, "check")), mode);
         }
         foreach string prefix in (("", "QORE_DISABLE_IR_FLOAT_LOCAL_ADD=1 ",
-                "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+                "QORE_DISABLE_IR_FLOAT_DIRECT_CALL_ADD=1 ", "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/paths";
                 string generated = run((qcc, level, "--strip-source", "-o", executable, paths),
@@ -62,7 +66,9 @@ class FloatLocalAddTest inherits QUnit::Test {
                 if (level == "-O3") {
                     foreach string name in (("localFloatAdd", "innerFloatAdd", "innerFloatAccResult", "directFloatAdd")) {
                         int found = 0;
-                        bool selected = name != "directFloatAdd" && !prefix.startsWith("QORE_DISABLE_");
+                        bool selected = !prefix.startsWith("QORE_DISABLE_IR_FLOAT_LOCAL_ADD")
+                            && (name != "directFloatAdd"
+                                || !prefix.startsWith("QORE_DISABLE_IR_FLOAT_DIRECT_CALL_ADD"));
                         foreach string definition in (generated.split("\ndefine ")) {
                             string body = definition.split("\n}")[0];
                             if (!body.split("\n")[0].contains("@" + name + "_")) { continue; }
@@ -80,6 +86,27 @@ class FloatLocalAddTest inherits QUnit::Test {
                 executable = dir.path + "/behavior";
                 run((qcc, level, "--strip-source", "-o", executable, behavior), prefix);
                 assertEq(CompiledExpected, run((executable,)), prefix + level);
+                executable = dir.path + "/direct-behavior";
+                generated = run((qcc, level, "--strip-source", "-o", executable, direct_behavior),
+                    prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
+                if (level == "-O3") {
+                    foreach string name in (("directAdd", "directExpression", "defaultAdd", "coercedAdd",
+                            "optionalAdd", "overloadedAdd", "genericAdd", "mutatedAdd", "unassignedAdd", "conditionalAdd", "removedAdd")) {
+                        bool selected = !prefix.startsWith("QORE_DISABLE_")
+                            && (name == "directAdd" || name == "directExpression"
+                                || name == "defaultAdd" || name == "coercedAdd");
+                        int found = 0;
+                        foreach string definition in (generated.split("\ndefine ")) {
+                            string body = definition.split("\n}")[0];
+                            if (!body.split("\n")[0].contains("@" + name + "_")) { continue; }
+                            ++found;
+                            assertEq(!selected, regex(body, "@qore_rt_lv_path_compound_aot(?:_throwing)?\\("),
+                                "direct-call float mutation path " + name + " " + prefix);
+                        }
+                        assertEq(selected ? 2 : 1, found, "direct-call ordinary/fast entries " + name);
+                    }
+                }
+                assertEq("float-direct-add: ok\n", run((executable,)), prefix + level);
             }
         }
     }

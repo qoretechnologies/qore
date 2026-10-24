@@ -4245,3 +4245,25 @@ assertions and IR/AOT references total 2,220. All 252 qmods/build match their
 runtime and 253 Release aliases are restored. Next investigate exact
 float-returning call facts, then remaining callback/closure and container costs.
 No fresh Java/develop ratio, parity or global ceiling is established.
+
+## Resolved required-float call accumulation (2026-10-24)
+
+Same-Program required-float user-call results now admit existing native local +=
+after successful return validation. This is a consumer-only proof: no ABI,
+global ownership facts or call checks change. Expression-local definite
+assignment is required; optional, runtime-overloaded, explicit-generic,
+cross-Program and shared/reference/capture cases retain the existing path.
+
+Optimized direct-float accumulation improves about 75x. A fresh matched
+comparison measures Qore AOT 0.796 versus Java 0.640 ns/item,
+or 1.24x Java's time, with ordinary inlining permitted. These are whole-loop
+times, not isolated call latency. A targeted callback-result control repeats
+a 4.9% slowdown; wide-callback flags occur in different layouts across phases.
+Four mixed workloads are essentially flat. Retained under the user's explicit
+overall-tradeoff preference; all adverse data and original wrapper errors remain.
+
+RESULTS and `bench/runtime-comparison/results-aot-float-direct-add-macos-arm64.json` retain
+4,596 timing runs, 13,788 windows, fresh Release/Debug 40-fixture qualification,
+391 qmods/build, 2,220 references and the complete audit. Java parity and a
+global ceiling remain unestablished. Next inspect repeated fast-loop diagnostic
+stores and cancellation/exception bookkeeping, then method consumers/callbacks.

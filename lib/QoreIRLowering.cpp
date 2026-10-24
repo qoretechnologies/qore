@@ -7601,12 +7601,35 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     // retain lvalue handling for unassigned, optional, shared or mixed values.
     const QoreIRValueFacts* right_facts = float_local
         ? builder.getFunction()->getValueFacts(right) : nullptr;
-    bool native_float_add = float_local && parse_context
-        && parse_context->isLocalDefinitelyAssigned(float_local->ref.id)
-        && right_facts && right_facts->type_info == floatTypeInfo
+    bool native_float_rhs = right_facts && right_facts->type_info == floatTypeInfo
         && right_facts->assigned_state == QoreIRAssignedState::Assigned
         && right_facts->never_nothing
         && right_facts->representation == QoreIRValueRepresentation::NativeFloat;
+    QoreParseAnalysis float_lhs_analysis;
+    if (float_local && !native_float_rhs && parse_context
+            && getAnalysis(op->getLeft(), float_lhs_analysis)
+            && float_lhs_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && !q_env_is_set("QORE_DISABLE_IR_FLOAT_DIRECT_CALL_ADD")) {
+        auto* call = dynamic_cast<const FunctionCallNode*>(right_expr.getInternalNode());
+        const AbstractQoreFunctionVariant* variant = call ? call->getVariant() : nullptr;
+        const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+        // A resolved user call validates/coerces its required float return before
+        // reaching this continuation, including the NOTHING return guard in AOT
+        // fast entries. Consume that guarantee here without changing call result
+        // ownership/representation facts or the body proof for native return ABIs.
+        // The LHS needs its assignment fact at this expression: the parse-end
+        // state can include the assignment being lowered. Keep runtime overload
+        // dispatch, explicit generic and cross-Program calls generic.
+        native_float_rhs = uvb && uvb->pgm == parse_context->pgm
+            && variant->getReturnTypeInfo() == floatTypeInfo
+            && !call->hasExplicitTypeArgs() && call->getFunction()
+            && (!call->getProgram() || call->getProgram() == parse_context->pgm)
+            && !overloadedDirectCallNeedsRuntimeDispatch(call->getFunction(), variant,
+                call->getParseArgs(), call->getArgs());
+    }
+    bool native_float_add = float_local && parse_context
+        && parse_context->isLocalDefinitelyAssigned(float_local->ref.id)
+        && native_float_rhs;
     if (native_float_add) {
         left_var = float_local;
     }

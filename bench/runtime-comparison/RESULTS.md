@@ -21068,3 +21068,133 @@ parity or global performance ceiling has been established.
 Next investigate the missing native facts for exact float-returning direct calls,
 then measure a separate conservative proof extension. Continue reducing dynamic
 callback/closure overhead and container mutation after the scalar lowering work.
+
+## Native floating accumulation after resolved calls (2026-10-24)
+
+A required private float local can now use AddAssignFloat after a resolved
+same-QoreProgram user call whose required return type is exactly float. The
+callee already validates/coerces that return before successful continuation.
+This consumes the guarantee at += without publishing broader representation or
+ownership facts, weakening return checks, or changing the calling convention.
+The new path requires expression-local definite assignment. Runtime overload
+dispatch, explicit generic calls, cross-Program calls, optional returns and
+unassigned/shared/captured/referenced locals retain the existing path. RHS
+evaluation still precedes the local load. Existing native return ABIs still
+require body proof; boxed fast entries retain their NOTHING return guard.
+
+QORE_DISABLE_IR_FLOAT_DIRECT_CALL_ADD disables this selection at compilation;
+the existing QORE_DISABLE_IR_FLOAT_LOCAL_ADD disables both float-add paths.
+Controls are presence flags. IR/JIT share the lowering; these timings measure
+AOT. All runtimes use -O3 -DNDEBUG, allocation tracking OFF; standalones use
+qcc -O3 --strip-source. The production baseline is feature/performance before
+this candidate, not develop. Branch checkpoint 7cf7d9c3aa includes develop 64eb2468e8.
+The frozen baseline runtime was built at 28316a63d0; the intervening merge changes
+only an unrelated test and evidence/docs, and production-source identity is
+verified. Qualification separately rebuilds the current revision.
+
+Target confirmation: whole-loop nanoseconds per item, not isolated call latency.
+
+|!Workload|!Before|!Candidate|!Disabled|!Change vs before
+|direct_float_add|61.176|0.818|59.881|-98.66%
+|local_float_add|1.077|1.079|1.076|+0.14%
+|callback_float_add|7.967|7.754|7.720|-2.67%
+|result_float_add|7.046|7.389|7.388|+4.87%
+|typed_local_int_unary|7.706|7.403|7.499|-3.94%
+|typed_local_float_unary|8.078|8.146|8.164|+0.84%
+|typed_local_int_result|7.524|7.681|7.729|+2.08%
+|typed_local_float_result|7.688|7.741|7.713|+0.69%
+
+The direct-float target improves about 74.8x in confirmation. Its prospective
+at-least 10% gain gate passes against before and disabled in both phases. The
+result_float_add/default/before control flags repeat: +5.41% in screening and
++4.87% in confirmation (about 0.343 ns/item). Disabled is 7.3885 ns/item versus
+candidate 7.3889 in confirmation; that similarity is not causal proof.
+
+Broad confirmation, selected calls, collections and all four mixed workloads:
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Change vs before
+|direct_call|1.562|1.571|1.566|+0.55%
+|method_call|1.634|1.637|1.642|+0.19%
+|indirect_call|8.145|7.896|7.788|-3.06%
+|indirect_float|8.591|8.588|8.530|-0.04%
+|indirect_int_result|7.834|7.936|7.894|+1.31%
+|indirect_float_result|8.151|8.192|8.303|+0.51%
+|indirect_wide|7.545|7.786|7.794|+3.19%
+|monomorphic_call|3.876|3.945|3.922|+1.77%
+|polymorphic_call|24.510|25.103|24.723|+2.42%
+|closure_call|17.694|17.980|18.009|+1.62%
+|closure_capture|23.766|23.545|23.661|-0.93%
+|list_build|26.849|26.604|26.604|-0.91%
+|list_mutate|188.111|187.555|186.454|-0.30%
+|temporary_hash|330.892|337.350|332.115|+1.95%
+|csv_report|962.581|961.082|963.887|-0.16%
+|object_orders|1813.427|1825.412|1821.790|+0.66%
+|callback_pipeline|85.870|86.226|86.357|+0.41%
+|text_index|1349.161|1355.818|1358.296|+0.49%
+
+Across 55 workloads, aggregate before deltas range -4.32% to +3.11% in screening
+and -5.09% to +3.19% in confirmation. Mixed workloads range -0.71% to +1.17%
+and -0.16% to +0.66%, respectively: essentially flat, not an overall Qore 75x gain.
+No broad flag repeats with the same workload/layout/comparison. Wide callbacks
+nevertheless flag against before in different layouts: default +3.56% screening,
+reverse +3.72% confirmation. Confirmation aggregate is 7.545 -> 7.786 ns/item
+(+3.19%), with disabled 7.794. Dynamic-int fallback/default/before also flags
++3.02% in confirmation. All earlier flags and all 55 results remain in the JSON.
+Equivalent normalized control LLVM bodies do not establish the cause of timing
+differences. Retention follows the user's explicit overall-tradeoff preference,
+accepting these costs alongside the large direct-float gain. This is not a
+no-regression claim. No samples/layouts are excluded or reordered retrospectively.
+
+A separate fresh comparison with Java Temurin 25.0.2+10 and JMH 1.37 uses the same
+binary64 arithmetic, 64-bit induction/masking, varying seed and returned checksum.
+Ordinary inlining is allowed in both languages; HotSpot C2 compilation and hot
+helper inlining are verified in a separate untimed diagnostic. All 15 independent
+reference values match. Java layout labels only pair runs with Qore layouts;
+Java native code order is not imposed.
+
+|!Direct-float loop|!ns/item
+|Qore before|59.633015
+|Qore candidate AOT|0.795861
+|Qore disabled|59.163429
+|Java HotSpot|0.640344
+
+Qore improves 74.93x in this fresh checkpoint and takes
+1.243x Java's time. The two harnesses have different overhead;
+this is a whole-loop comparison, not isolated call latency or general parity.
+The first Java timing wrapper stopped on the known JMH Unsafe deprecation
+warning after four successful child runs. All four measurements were retained;
+the exact warning was admitted and the remaining original schedule resumed.
+No timing run was repeated or discarded; the pause and original failed wrapper
+exit are preserved.
+
+Fixed measurement settings: 4,096 items, seed 7, three warmups and three 300 ms samples
+per process; three Qore layouts (default/reverse/shuffle487), three screening
+forks and five confirmation forks. Nondefault order is fixed from the union of
+default symbols and independently checked. Aggregates are medians of layout
+medians of fork means. Java checkpoint uses five forks per paired layout/variant.
+All 4,596 processes / 13,788 measured windows are independently replayed. No owned
+build/test/profile/analysis/edit runs concurrently with timings. Shared-host
+load, frequency and thermals remain uncontrolled. Observed checksums are parsed,
+not recomputed for every timed seed. Reference cases are independently checked.
+
+Selected qualification rebuilds all 391 qmods for each runtime and runs 40 fixtures
+per Release/Debug: 31 QUnit fixtures and nine standalone fixtures. Release passes
+10035 QUnit assertions and Debug 10035;
+native AST/IR suites pass 11756 assertions and IR/AOT references
+total 2220. Eight Linux-only RSS cases/build are skipped, not passes.
+All 391 Release aliases are restored. No full-suite/sanitizer/cross-platform claim.
+
+Initial generated-code assertions found parse-end assignment insufficient for
+the new LHS proof; the expression-local guard was repaired before any timings.
+An earlier explicit-generic test typo and metadata-only LLVM normalization
+review failure remain in history. Installed XML changed during earlier selected
+qualification, so QUnit was rebuilt and affected tests repeated; the final
+qualification above uses fresh complete runs. AST finds the reflected test local;
+IR/native raise UNKNOWN-VARIABLE before and after, a preserved pre-existing
+visibility difference, not a new fix.
+
+[results-aot-float-direct-add-macos-arm64.json](results-aot-float-direct-add-macos-arm64.json) preserves source, raw measurements,
+process exits, dependencies, controls, qualification and the 62-check audit.
+No fresh develop ratio or global performance ceiling is established. Next inspect
+the remaining fast-loop diagnostic/cancellation bookkeeping, then same-Program
+method result consumers and prepared callback overhead without weakening checks.
