@@ -684,6 +684,14 @@
     closes one end while it still uses the descriptor elsewhere, for example through a descriptor number given to
     another API, must keep the object open as long as the descriptor is used.
 
+    @par Writes to a Nonblocking File Wait for Room
+    A write of a @ref Qore::File "File" whose descriptor is nonblocking, because the file was opened with
+    @ref file_open_constants "O_NONBLOCK" or because another holder of the descriptor made it nonblocking, now waits
+    for room when the descriptor is full, as a write to a blocking descriptor does; it raised \c FILE-WRITE-ERROR
+    (<tt>Resource temporarily unavailable</tt>).  Code that filled a pipe by writing until this error can write while
+    @ref Qore::Socket::poll() "Socket::poll()" reports room for a write.  The wait ends at once when the thread is
+    cancelled or its Program is interrupted.
+
     @par Child Processes Do Not Use the Database Connections of Their Parent
     A child process created with @ref Qore::fork() "fork()" gives up the connections of the
     @ref Qore::SQL::Datasource "Datasource", @ref Qore::SQL::DatasourcePool "DatasourcePool" and
@@ -4911,6 +4919,22 @@ while (*binary chunk = input.read(65536)) {
       call leaked two descriptors for the life of the process, @ref Qore::ReadOnlyFile::close() "close()" on an end
       did nothing, and the reading end never got the end of the input; the ends now close their descriptors with
       \c close() and when they are destroyed
+    - Fixed the reads and writes of a @ref Qore::File "File" on a descriptor that another holder has made
+      nonblocking, as the event loop of an embedded Node.js runtime does with the standard streams of the process, or
+      that was opened with @ref file_open_constants "O_NONBLOCK": a write that found the descriptor full, for example
+      <tt>stderr.printf()</tt> to a pipe whose reader was slow, failed with \c FILE-WRITE-ERROR
+      (<tt>Resource temporarily unavailable</tt>), and @ref Qore::ReadOnlyFile::readLine() "readLine()",
+      @ref Qore::ReadOnlyFile::getchar() "getchar()" and the reads of binary integers returned @ref nothing, as at
+      the end of the file, when no data had arrived yet.  These reads and writes now wait for data or room; the wait
+      ends at once when the thread is cancelled or its Program is interrupted
+    - Fixed the output of @ref Qore::print() "print()", @ref Qore::printf() "printf()" and the other output
+      functions, and the message of an unhandled exception, on a nonblocking standard output or standard error: the
+      part of the output that the descriptor did not take at once was dropped without an error; it is now written
+      whole
+    - Fixed the reads of binary integers, such as @ref Qore::ReadOnlyFile::readi4() "ReadOnlyFile::readi4()", from
+      a pipe that returned the bytes of a value in parts: the value was made of the first part, and the rest was read
+      as the start of the next value; the value is now read whole, and a value that the end of the file cuts short
+      is not returned
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module, not those the \c .qm file sets, so a warning that the \c .qm file
       enables, for example with @ref enable-all-warnings "%enable-all-warnings", was not raised in the other files.

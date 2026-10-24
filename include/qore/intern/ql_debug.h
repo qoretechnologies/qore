@@ -85,6 +85,12 @@ DLLLOCAL extern std::atomic<qore_dbg_deref_collect_hook_t> qore_dbg_deref_collec
 typedef void (*qore_dbg_deref_wait_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_deref_wait_hook_t> qore_dbg_deref_wait_hook;
 
+//! called by qore_fd_wait_ready() right before a read or write of a descriptor that returned EAGAIN waits for the
+//! descriptor (a File, or standard output or standard error written by print(), printf() or an unhandled exception);
+//! called in the waiting thread, which can hold the File's lock, so it must not block; set by dbg_fd_wait_notify()
+typedef void (*qore_dbg_fd_wait_hook_t)(int fd);
+DLLLOCAL extern std::atomic<qore_dbg_fd_wait_hook_t> qore_dbg_fd_wait_hook;
+
 //! called by ClosureVarValue::deref() when a dereference of a closure-bound variable that has a collection decision
 //! to make has taken its count, before it decides; called with no lock held; set by dbg_hold_closure_var_deref()
 typedef void (*qore_dbg_closure_var_decide_hook_t)(const char* name);

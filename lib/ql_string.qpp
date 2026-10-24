@@ -2607,14 +2607,23 @@ string reverse(softstring str) [flags=CONSTANT,NAMED_ARGS] {
 print("hello\n");
     @endcode
 
+    @note the output is written whole, also when standard output is nonblocking (see @ref file_blocking_io
+    "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
+    thread is cancelled or its @ref Qore::Program "Program" is interrupted
+
     @see printf() for a function that allows for formatted output
  */
 nothing print(...) [dom=TERMINAL_IO] {
    if (!args)
       return QoreValue();
 
-   for (unsigned i = 0; i < args->size(); i++)
-      print_node(stdout, get_param_value(args, i));
+   for (unsigned i = 0; i < args->size(); i++) {
+      print_node(stdout, get_param_value(args, i), xsink);
+      // the thread was cancelled or its Program interrupted while the output waited for room
+      if (*xsink) {
+         break;
+      }
+   }
 }
 
 //! Returns a formatted string based on a @ref string_formatting "format string" and other arguments; enforces field widths on arguments larger than the given field width
@@ -2865,13 +2874,17 @@ string vsprintf_bounded(string format, softlist<auto> values, *hash<FormatBounds
 f_printf("%5s", "a long string"); # will print out "a lon"
     @endcode
 
+    @note the output is written whole, also when standard output is nonblocking (see @ref file_blocking_io
+    "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
+    thread is cancelled or its @ref Qore::Program "Program" is interrupted
+
     @see
     - @ref string_formatting for information on the formatting string
     - printf() for a similar function that does not enforce field widths
  */
 string f_printf(string[doc] fmt, ...) [dom=TERMINAL_IO] {
    AbstractQoreNode* node;
-   print_node(stdout, node = q_sprintf(args, 1, 0, xsink));
+   print_node(stdout, node = q_sprintf(args, 1, 0, xsink), xsink);
    return node;
 }
 
@@ -2899,13 +2912,17 @@ string f_printf() [flags=NOOP] {
 printf("%5s", "a long string"); # will print out "a long string"
     @endcode
 
+    @note the output is written whole, also when standard output is nonblocking (see @ref file_blocking_io
+    "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
+    thread is cancelled or its @ref Qore::Program "Program" is interrupted
+
     @see
     - @ref string_formatting for information on the formatting string
     - f_printf() for a similar function that enforces field widths
  */
 string printf(string[doc] fmt, ...) [dom=TERMINAL_IO] {
    AbstractQoreNode* node;
-   print_node(stdout, node = q_sprintf(args, 0, 0, xsink));
+   print_node(stdout, node = q_sprintf(args, 0, 0, xsink), xsink);
    return node;
 }
 
@@ -2933,6 +2950,10 @@ string printf() [flags=NOOP;dom=TERMINAL_IO] {
 f_vprintf("%5s %3d", ("a long string", 5000)); # will print out "a lon 500"
     @endcode
 
+    @note the output is written whole, also when standard output is nonblocking (see @ref file_blocking_io
+    "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
+    thread is cancelled or its @ref Qore::Program "Program" is interrupted
+
     @see
     - @ref string_formatting for information on the formatting string
     - vprintf() for a similar function that does not enforce field widths
@@ -2941,7 +2962,7 @@ f_vprintf("%5s %3d", ("a long string", 5000)); # will print out "a lon 500"
  */
 string f_vprintf(string[doc] format, auto[doc] values) [flags=NAMED_ARGS;dom=TERMINAL_IO] {
    AbstractQoreNode* node;
-   print_node(stdout, node = q_vsprintf(args, 1, 0, xsink));
+   print_node(stdout, node = q_vsprintf(args, 1, 0, xsink), xsink);
    return node;
 }
 
@@ -2962,13 +2983,17 @@ string f_vprintf(string[doc] format, auto[doc] values) [flags=NAMED_ARGS;dom=TER
 vprintf("%5s %3d", ("a long string", 5000)); # will print out "a long string 5000"
     @endcode
 
+    @note the output is written whole, also when standard output is nonblocking (see @ref file_blocking_io
+    "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
+    thread is cancelled or its @ref Qore::Program "Program" is interrupted
+
     @see
     - @ref string_formatting for information on the formatting string
     - f_vprintf() for a similar function that enforces field widths
  */
 string vprintf(string[doc] format, auto[doc] values) [flags=NAMED_ARGS;dom=TERMINAL_IO] {
    AbstractQoreNode* node;
-   print_node(stdout, node = q_vsprintf(args, 0, 0, xsink));
+   print_node(stdout, node = q_vsprintf(args, 0, 0, xsink), xsink);
    return node;
 }
 

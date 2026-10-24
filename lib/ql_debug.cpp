@@ -12652,6 +12652,103 @@ static QoreValue f_dbg_deref_wait_notify(const QoreListNode* params, RuntimeConf
 }
 
 namespace {
+//! the armed notification of dbg_fd_wait_notify(); one at a time
+struct FdWaitNotify {
+    std::mutex m;
+    int fd = -1;
+    //! the queue, with a reference, or nullptr if no notification is armed
+    Queue* queue = nullptr;
+    //! the value pushed, with a reference
+    QoreValue value;
+
+    //! disarms the notification and gives its queue and value to the caller; the lock must be held
+    void take(Queue*& q, QoreValue& v) {
+        q = queue;
+        v = value;
+        queue = nullptr;
+        value = QoreValue();
+        fd = -1;
+        qore_dbg_fd_wait_hook.store(nullptr);
+    }
+};
+
+FdWaitNotify fd_wait_notify;
+
+//! releases a queue and a value taken from the notification
+void dbg_fd_wait_notify_release(Queue* q, QoreValue v) {
+    ExceptionSink xsink;
+    v.discard(&xsink);
+    if (q) {
+        q->deref(&xsink);
+    }
+    xsink.clear();
+}
+
+//! runs in the thread that starts waiting for the descriptor, which can hold the File's lock; disarms itself and
+//! does not block
+void dbg_fd_wait_notify_hook(int fd) {
+    FdWaitNotify& h = fd_wait_notify;
+    Queue* q;
+    QoreValue v;
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.queue || h.fd != fd) {
+            return;
+        }
+        h.take(q, v);
+    }
+    // the queue takes the reference of the value
+    q->pushAndTakeRef(v);
+    dbg_fd_wait_notify_release(q, QoreValue());
+}
+}
+
+//! pushes a value onto a Queue when a read or write of the descriptor next waits for it after EAGAIN
+/** The notification is made once, in qore_fd_wait_ready(), when a read or write of a File, or output to standard output
+    or standard error with print(), printf() or the message of an unhandled exception, finds the descriptor
+    nonblocking with no data or no room and starts waiting for it; tests use it to know, without polling, that the
+    read or write is waiting.  A notification armed before is replaced.
+
+    @param fd the descriptor
+    @param queue the queue
+    @param value the value pushed onto the queue
+*/
+static QoreValue f_dbg_fd_wait_notify(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int fd = static_cast<int>(get_param_value(params, 0).getAsBigInt());
+    QoreObject* obj = get_param_value(params, 1).get<QoreObject>();
+    ReferenceHolder<Queue> queue(static_cast<Queue*>(obj->getReferencedPrivateData(CID_QUEUE, xsink)), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    Queue* old_q;
+    QoreValue old_v;
+    {
+        FdWaitNotify& h = fd_wait_notify;
+        std::lock_guard<std::mutex> l(h.m);
+        h.take(old_q, old_v);
+        h.fd = fd;
+        h.queue = queue.release();
+        h.value = get_param_value(params, 2).refSelf();
+        qore_dbg_fd_wait_hook.store(dbg_fd_wait_notify_hook);
+    }
+    dbg_fd_wait_notify_release(old_q, old_v);
+    return QoreValue();
+}
+
+//! disarms the notification armed with dbg_fd_wait_notify(), if any
+static QoreValue f_dbg_fd_wait_notify_clear(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    Queue* old_q;
+    QoreValue old_v;
+    {
+        FdWaitNotify& h = fd_wait_notify;
+        std::lock_guard<std::mutex> l(h.m);
+        h.take(old_q, old_v);
+    }
+    dbg_fd_wait_notify_release(old_q, old_v);
+    return QoreValue();
+}
+
+namespace {
 //! the armed hold of dbg_hold_closure_var_deref(); one at a time
 struct ClosureVarDerefHold {
     std::mutex m;
@@ -13095,6 +13192,11 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_deref_wait_notify", f_dbg_deref_wait_notify,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "waiting");
+    qns.addBuiltinVariant("dbg_fd_wait_notify", f_dbg_fd_wait_notify, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo,
+        3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", QC_QUEUE->getTypeInfo(), QORE_PARAM_NO_ARG, "queue",
+        autoTypeInfo, QORE_PARAM_NO_ARG, "value");
+    qns.addBuiltinVariant("dbg_fd_wait_notify_clear", f_dbg_fd_wait_notify_clear, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo);
     qns.addBuiltinVariant("dbg_hold_closure_var_deref", f_dbg_hold_closure_var_deref,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,

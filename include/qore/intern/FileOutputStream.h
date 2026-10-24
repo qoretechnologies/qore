@@ -86,7 +86,9 @@ public:
    DLLLOCAL void write(const void *ptr, int64 count, ExceptionSink *xsink) override {
       assert(!isClosed());
       assert(count >= 0);
-      if (f.write(ptr, count, xsink) != count) {
+      // a write that has raised an exception (an I/O error, or the thread cancelled while it waited for room)
+      // reports it alone
+      if (f.write(ptr, count, xsink) != count && !*xsink) {
          xsink->raiseException("FILE-WRITE-ERROR", "Error writing to file");
       }
    }

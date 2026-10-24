@@ -1154,7 +1154,51 @@ DLLLOCAL extern char table64[64];
 
 DLLLOCAL int get_nibble(char c, ExceptionSink* xsink);
 DLLLOCAL BinaryNode* parseHex(const QoreProgramLocation* loc, const char* buf, int len);
-DLLLOCAL void print_node(FILE* fp, const QoreValue qv);
+//! Writes the value as text to the C stdio stream, up to the first NUL character, as print() and printf() do
+/** The text is written whole, also when the stream's descriptor is nonblocking (see qore_stdio_write()); errors
+    writing it are not reported, as these functions never reported them
+
+    @param fp the stream
+    @param qv the value to write
+    @param xsink for the exception raised when the thread is cancelled or its Program is interrupted while the text
+    waits for room
+*/
+DLLLOCAL void print_node(FILE* fp, const QoreValue qv, ExceptionSink* xsink);
+
+//! Waits until a descriptor whose read or write returned EAGAIN or EWOULDBLOCK can be read or written
+/** The reads and writes of a File and of the standard streams are blocking, but their descriptor can be nonblocking
+    all the same: \c O_NONBLOCK is a flag of the open file description, which every holder of the description shares
+    (a process that embeds a runtime such as Node.js, whose event loop sets it on the standard streams, or a parent
+    process that passes a nonblocking pipe), so a read or write returns EAGAIN instead of waiting; the caller waits
+    with this function and then makes the read or write again.
+
+    @param fd the descriptor
+    @param read true to wait for data to read (or the end of the input), false for room to write (or an error)
+    @param xsink for the exception raised when the thread is cancelled or its Program is interrupted, which ends the
+    wait at once; if nullptr, the wait cannot be cancelled (for output that must be written whole even then, such as
+    the message of an unhandled exception)
+    @param operation the operation named in the cancellation exception
+
+    @return 0 when the descriptor is ready, -1 with \c errno set if the wait failed, or @ref QORE_POLL_CANCELLED if
+    \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED has been raised in @p xsink
+*/
+DLLLOCAL int qore_fd_wait_ready(int fd, bool read, ExceptionSink* xsink, const char* operation);
+
+//! Writes all of the data to the descriptor, waiting for room after EAGAIN (see qore_fd_wait_ready())
+/** @return 0 if all of the data was written, -1 with \c errno set for an error, or @ref QORE_POLL_CANCELLED if an
+    exception has been raised in @p xsink
+*/
+DLLLOCAL int qore_fd_write_all(int fd, const void* data, size_t len, ExceptionSink* xsink, const char* operation);
+
+//! Writes the data to the descriptor of the C stdio stream, after the text buffered in the stream
+/** The data is written whole, also when the descriptor is nonblocking (see qore_fd_wait_ready()), with the stream
+    locked, so that it is not mixed with other output to the stream; the C library would drop the text that a
+    nonblocking descriptor does not take at once
+
+    @return 0 if all of the data was written, -1 with \c errno set for an error, or @ref QORE_POLL_CANCELLED if an
+    exception has been raised in @p xsink
+*/
+DLLLOCAL int qore_stdio_write(FILE* fp, const char* data, size_t len, ExceptionSink* xsink, const char* operation);
 DLLLOCAL void delete_global_variables();
 DLLLOCAL void init_lib_intern(char* env[]);
 //! runs the one-time initializations of the network code when the library is initialized (see QoreForkHandlers.h)

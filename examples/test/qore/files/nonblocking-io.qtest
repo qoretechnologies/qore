@@ -1,0 +1,442 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Reads and writes of a File, and the output of print(), printf() and of unhandled exceptions, wait for the
+# descriptor when it is nonblocking.  O_NONBLOCK is a flag of the open file description, which all of its holders
+# share: another holder can set it, such as a runtime embedded in the process (the event loop of Node.js sets it on
+# the standard streams), a parent process, or the File itself, opened with O_NONBLOCK.  A write to such a descriptor
+# that was full failed with FILE-WRITE-ERROR (EAGAIN), print() and printf() dropped the output that the descriptor did
+# not take, and reads of lines, characters and binary integers returned NOTHING, as at the end of the file.
+#
+# The named pipes here are opened with O_NONBLOCK.  A debug build of the library reports when a read or write starts
+# waiting for its descriptor (dbg_fd_wait_notify()), and the other end of the pipe acts only then, so every read and
+# write here waits; with a debug library without the report, a read or write that ends without waiting is checked
+# without the other end acting, and with the other builds, the other end acts at once and the results are checked.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+
+%exec-class NonblockingIoTest
+
+#! the result of a call made in a background thread
+hashdecl NonblockingCallResult {
+    #! the value returned
+    auto value;
+    #! the error code of the exception, if any
+    *string err;
+    #! the description of the exception, if any
+    *string desc;
+}
+
+#! the output of a child process whose standard output or standard error is a nonblocking named pipe
+hashdecl NonblockingChildResult {
+    #! the data read from the pipe
+    binary data = binary();
+    #! the messages of the child: "waiting" when its output waited, then its result
+    list<string> messages = ();
+    #! the exit code of the child
+    int rc = -1;
+}
+
+class NonblockingIoTest inherits QUnit::Test {
+    public {
+        #! the size of the data written: larger than the buffer of a pipe on Linux and macOS (64 KiB at most)
+        const Size = 256 * 1024;
+
+        #! a line of text, as an application writes many of them (the output of qore-data-provider-i18n in CI)
+        const Line = strmul("x", 621) + "\n";
+
+        #! the message pushed when a read or write waits for its descriptor
+        const Waiting = "waiting";
+    }
+
+    private {
+        #! the directory with the pipes
+        string dir;
+
+        #! the number of pipes made
+        int pipes;
+    }
+
+    constructor() : QUnit::Test("Nonblocking descriptors", "1.0", \ARGV) {
+        addTestCase("File writes wait for room", \testWrites());
+        addTestCase("binary integer writes wait for room", \testIntegerWrites());
+        addTestCase("File reads wait for data", \testReads());
+        addTestCase("binary integer reads wait for the rest of the value", \testIntegerReads());
+        addTestCase("a write waiting for room is cancelled", \testCancelWrite());
+        addTestCase("a read waiting for data is cancelled", \testCancelRead());
+        addTestCase("a write waiting for room in a Program is interrupted", \testInterruptWrite());
+        addTestCase("output to nonblocking standard streams is written whole", \testStandardStreams());
+        addTestCase("printf() waiting for room is cancelled", \testCancelPrintf());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = make_tmp_dir("nonblocking-io");
+    }
+
+    globalTearDown() {
+        remove_tree(dir);
+    }
+
+    testWrites() {
+        binary data = makeData(Size);
+        string text = makeText(Size);
+        hash<string, code<nothing(File)>> writes = {
+            "File::write(binary)": sub (File w) { w.write(data); },
+            "File::write(string)": sub (File w) { w.write(text); },
+            "File::print()": sub (File w) { w.print(text); },
+            "File::printf()": sub (File w) { w.printf("%s", text); },
+            "File::vprintf()": sub (File w) { w.vprintf("%s", (text,)); },
+            "File::f_printf()": sub (File w) { w.f_printf("%s", text); },
+            "File::f_vprintf()": sub (File w) { w.f_vprintf("%s", (text,)); },
+            "File::printf() of lines": sub (File w) {
+                for (int i = 0; i < Size / Line.size() + 1; ++i) {
+                    w.printf("%s", Line);
+                }
+            },
+        };
+        foreach hash<auto> i in (writes.pairIterator()) {
+            hash<auto> p = openPipe();
+            File r = p.r;
+            File w = p.w;
+            binary expected = i.key == "File::write(binary)"
+                ? data
+                : (i.key == "File::printf() of lines"
+                    ? binary(strmul(Line, Size / Line.size() + 1))
+                    : binary(text));
+            *binary read_data;
+            hash<NonblockingCallResult> res = runCall(w.getPollableDescriptor(), sub () { call_function(i.value, w); },
+                (sub () { read_data = r.readBinary(expected.size(), -1); },));
+            assertEq(NOTHING, res.err, i.key + ": no error");
+            assertEq(expected.size(), read_data.size(), i.key + ": all of the data is written");
+            assertTrue(expected == read_data, i.key + ": the data is written once and in order");
+        }
+    }
+
+    testIntegerWrites() {
+        hash<auto> p = openPipe();
+        File r = p.r;
+        File w = p.w;
+        int count = Size / 4;
+        *binary read_data;
+        hash<NonblockingCallResult> res = runCall(w.getPollableDescriptor(), sub () {
+            for (int i = 0; i < count; ++i) {
+                w.writei4(i);
+            }
+        }, (sub () { read_data = r.readBinary(count * 4, -1); },));
+        assertEq(NOTHING, res.err, "no error");
+        assertEq(count * 4, read_data.size(), "all of the integers are written");
+        string hex = "";
+        for (int i = 0; i < count; ++i) {
+            hex += sprintf("%08x", i);
+        }
+        assertTrue(parse_hex_string(hex) == read_data, "the integers are written once and in order");
+    }
+
+    testReads() {
+        hash<string, hash<auto>> reads = {
+            "ReadOnlyFile::readLine()": {
+                "call": auto sub (File r) { return r.readLine(); },
+                "data": "line one\nline two\n",
+                "expected": "line one\n",
+            },
+            "ReadOnlyFile::readLine(False)": {
+                "call": auto sub (File r) { return r.readLine(False); },
+                "data": "line one\nline two\n",
+                "expected": "line one",
+            },
+            "ReadOnlyFile::readLine() with an end-of-line marker": {
+                "call": auto sub (File r) { return r.readLine(True, "--"); },
+                "data": "line one--line two--",
+                "expected": "line one--",
+            },
+            "ReadOnlyFile::getchar()": {
+                "call": auto sub (File r) { return r.getchar(); },
+                "data": "ab",
+                "expected": "a",
+            },
+            "ReadOnlyFile::readu1()": {
+                "call": auto sub (File r) { return r.readu1(); },
+                "data": "\x07",
+                "expected": 7,
+            },
+        };
+        foreach hash<auto> i in (reads.pairIterator()) {
+            hash<auto> p = openPipe();
+            File r = p.r;
+            File w = p.w;
+            hash<NonblockingCallResult> res = runCall(r.getPollableDescriptor(),
+                auto sub () { return call_function(i.value.call, r); },
+                (sub () { w.write(i.value.data); },));
+            assertEq(NOTHING, res.err, i.key + ": no error");
+            assertEq(i.value.expected, res.value, i.key + ": the data written once the read waits");
+        }
+
+        # text in a stateful encoding is read with a decoder that keeps the shift state between reads
+        {
+            hash<auto> p = openPipe("UTF-7");
+            File r = p.r;
+            File w = p.w;
+            hash<NonblockingCallResult> res = runCall(r.getPollableDescriptor(), auto sub () { return r.getchar(); },
+                (sub () { w.write(binary("+AOQ-b")); },));
+            assertEq(NOTHING, res.err, "UTF-7 ReadOnlyFile::getchar(): no error");
+            assertEq("ä", res.value, "UTF-7 ReadOnlyFile::getchar(): the character written once the read waits");
+        }
+    }
+
+    testIntegerReads() {
+        hash<auto> p = openPipe();
+        File r = p.r;
+        File w = p.w;
+        # the integer is written in two halves, the second once the read waits again for the rest of it
+        hash<NonblockingCallResult> res = runCall(r.getPollableDescriptor(), auto sub () { return r.readi4(); }, (
+            sub () { w.write(<0102>); },
+            sub () { w.write(<0304>); },
+        ));
+        assertEq(NOTHING, res.err, "readi4(): no error");
+        assertEq(0x01020304, res.value, "readi4(): the integer written in two halves");
+
+        res = runCall(r.getPollableDescriptor(), auto sub () { return r.readi8LSB(); }, (
+            sub () { w.write(<0807060504>); },
+            sub () { w.write(<030201>); },
+        ));
+        assertEq(NOTHING, res.err, "readi8LSB(): no error");
+        assertEq(0x0102030405060708, res.value, "readi8LSB(): the integer written in two parts");
+
+        # a value that the end of the file cuts short is not read
+        w.write(<0a0b>);
+        w.close();
+        assertEq(NOTHING, r.readi4(), "readi4(): a value cut short by the end of the file is not read");
+    }
+
+    testCancelWrite() {
+        hash<auto> p = openPipe();
+        File w = p.w;
+        binary data = makeData(Size);
+        hash<NonblockingCallResult> res = runCancelled(w.getPollableDescriptor(), sub () { w.write(data); });
+        assertEq("THREAD-CANCELLED", res.err, "the write waiting for room is cancelled");
+    }
+
+    testCancelRead() {
+        hash<auto> p = openPipe();
+        File r = p.r;
+        hash<NonblockingCallResult> res = runCancelled(r.getPollableDescriptor(), auto sub () { return r.readLine(); });
+        assertEq("THREAD-CANCELLED", res.err, "the read waiting for data is cancelled");
+        assertEq(NOTHING, res.value, "nothing is read");
+    }
+
+    testInterruptWrite() {
+        hash<auto> p = openPipe();
+        File r = p.r;
+        File w = p.w;
+        SandboxManager sm();
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+        pgm.setSandboxManager(sm);
+        pgm.parse("%new-style\nsub write_data(File w, binary data) { w.write(data); }", "interrupt-write");
+        binary data = makeData(Size);
+        hash<NonblockingCallResult> res = runCall(w.getPollableDescriptor(),
+            sub () { pgm.callFunction("write_data", w, data); },
+            (sub () { sm.requestInterrupt(); },));
+        assertEq("PROGRAM-INTERRUPTED", res.err, "the write waiting for room in the Program is interrupted");
+        # the data that the pipe took before the interrupt is intact
+        w.close();
+        binary read_data = r.readBinary(-1, -1) ?? binary();
+        assertTrue(read_data.size() < Size, "the write was interrupted before the end of the data");
+        assertTrue(data.substr(0, read_data.size()) == read_data, "the data written before the interrupt");
+    }
+
+    testStandardStreams() {
+        int lines = Size / Line.size() + 1;
+        binary lines_data = binary(strmul(Line, lines));
+        binary text_data = binary(makeText(Size));
+        hash<string, list<auto>> outputs = {
+            "print()": ("stdout", "print", text_data),
+            "printf()": ("stdout", "printf", text_data),
+            "printf() of lines": ("stdout", "printf-lines", lines_data),
+            "vprintf()": ("stdout", "vprintf", text_data),
+            "f_printf()": ("stdout", "f_printf", text_data),
+            "f_vprintf()": ("stdout", "f_vprintf", text_data),
+            "stdout.print()": ("stdout", "file-print", text_data),
+            "stdout.printf() of lines": ("stdout", "file-printf-lines", lines_data),
+            "stderr.printf() of lines": ("stderr", "file-printf-lines", lines_data),
+            "stdout_stream.write()": ("stdout", "stream-write", text_data),
+            "StreamWriter::print() to stderr_stream": ("stderr", "StreamWriter", lines_data),
+        };
+        foreach hash<auto> i in (outputs.pairIterator()) {
+            hash<NonblockingChildResult> res = runChild(i.value[0], i.value[1], Size);
+            assertEq(0, res.rc, i.key + ": the child exits normally");
+            assertEq("OK", res.messages.last(), i.key + ": no error");
+            assertEq(i.value[2].size(), res.data.size(), i.key + ": all of the output is written");
+            assertTrue(i.value[2] == res.data, i.key + ": the output is written once and in order");
+        }
+
+        # the message of an unhandled exception is written to standard error
+        hash<NonblockingChildResult> res = runChild("stderr", "unhandled", Size);
+        string out = res.data.toString();
+        assertTrue(out =~ /NONBLOCKING-TEST-ERROR/, "unhandled exception: the error is written");
+        assertTrue(out.find("<" + makeText(Size) + ">") >= 0, "unhandled exception: the description is written whole");
+    }
+
+    testCancelPrintf() {
+        hash<NonblockingChildResult> res = runChild("stdout", "printf-cancel", Size);
+        assertEq(0, res.rc, "the child exits normally");
+        assertEq("ERR THREAD-CANCELLED", res.messages.last(), "printf() waiting for room is cancelled");
+        assertTrue(res.data.size() < Size, "the output ends where printf() was cancelled");
+    }
+
+    #! returns a hash with the read end (\c r) and the write end (\c w) of a new named pipe, both nonblocking
+    private hash<auto> openPipe(*string encoding) {
+        string path = join_paths(dir, sprintf("fifo-%d", ++pipes));
+        if (mkfifo(path)) {
+            throw "MKFIFO-ERROR", sprintf("%s: %s", path, strerror());
+        }
+        # the reader is opened first, so that opening the writer with O_NONBLOCK finds it
+        File r();
+        r.open2(path, O_RDONLY | O_NONBLOCK, 0666, encoding);
+        File w();
+        w.open2(path, O_WRONLY | O_NONBLOCK, 0666, encoding);
+        return {"path": path, "r": r, "w": w};
+    }
+
+    #! runs the call in a background thread; the actions of the other end of the pipe are made in turn, each once
+    #! the call waits for its descriptor
+    /** A debug library reports each wait (dbg_fd_wait_notify()); with a debug library without the report, a call
+        that ends without waiting is returned without any action made, and with any other build, the actions are made
+        at once
+    */
+    private hash<NonblockingCallResult> runCall(int fd, code<auto()> call, list<code<nothing()>> actions) {
+        Queue q();
+        bool notify = exists_function("dbg_fd_wait_notify");
+        on_exit if (notify) {
+            call_function("dbg_fd_wait_notify_clear");
+        }
+        if (notify) {
+            call_function("dbg_fd_wait_notify", fd, q, Waiting);
+        }
+        background sub () {
+            try {
+                q.push(<NonblockingCallResult>{"value": call()});
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(<NonblockingCallResult>{"err": ex.err, "desc": ex.desc});
+            }
+        }();
+%ifndef QoreDebug
+        if (!notify) {
+            foreach code<nothing()> action in (actions) {
+                action();
+            }
+            return q.get();
+        }
+%endif
+        foreach code<nothing()> action in (actions) {
+            auto v = q.get();
+            if (v !== Waiting) {
+                # the call has ended without waiting
+                return v;
+            }
+            # the next wait is reported for the next action
+            if (notify && $# < (actions.size() - 1)) {
+                call_function("dbg_fd_wait_notify", fd, q, Waiting);
+            }
+            action();
+        }
+        return q.get();
+    }
+
+    #! runs the call in a background thread and cancels the thread once the call waits for its descriptor
+    private hash<NonblockingCallResult> runCancelled(int fd, code<auto()> call) {
+        Queue tid_q();
+        hash<NonblockingCallResult> res = runCall(fd, auto sub () {
+            tid_q.push(gettid());
+            return call();
+        }, (sub () { cancel_thread(tid_q.get(), "nonblocking descriptor test"); },));
+        return res;
+    }
+
+    #! runs NonblockingStdio.qr, whose standard output or standard error is the write end of a nonblocking named pipe
+    private hash<NonblockingChildResult> runChild(string stream, string method, int size) {
+        hash<auto> data_pipe = openPipe();
+        File data = data_pipe.r;
+        # the writer is not needed: the child opens its own
+        data_pipe.w.close();
+        # the pipe of the messages of the child; this process writes the exit code of the child to it, so it keeps it
+        # open for writing and the pipe never ends
+        hash<auto> sync_pipe = openPipe();
+        File sync = sync_pipe.r;
+        File sync_w = sync_pipe.w;
+        string sync_path = sync_pipe.path;
+        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string cmd = sprintf("%s %s %s %s %s %s %d", qore, join_paths(get_script_dir(), "NonblockingStdio.qr"),
+            data_pipe.path, sync_path, stream, method, size);
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            int rc = system(cmd);
+            sync_w.write(sprintf("exit %d\n", rc));
+        }();
+        on_exit done.waitForZero();
+
+        hash<NonblockingChildResult> rv = <NonblockingChildResult>{};
+        string buf = "";
+        # the first message: "waiting" when the output of the child waits for room, else the result or the exit
+        string msg = readMessage(sync, \buf);
+        rv.messages += msg;
+        # the output, until the child exits
+        rv.data = data.readBinary(-1, -1) ?? binary();
+        while (msg !~ /^exit /) {
+            msg = readMessage(sync, \buf);
+            rv.messages += msg;
+        }
+        rv.rc = (msg =~ x/^exit (-?[0-9]+)$/)[0].toInt();
+        # the messages without "waiting" and the exit code
+        list<string> results = ();
+        foreach string m in (rv.messages) {
+            if (m != Waiting && m !~ /^exit /) {
+                results += m;
+            }
+        }
+        rv.messages = results ?: ("NONE",);
+        return rv;
+    }
+
+    #! returns the next line written to the pipe of messages
+    private static string readMessage(File sync, reference<string> buf) {
+        while (True) {
+            int i = buf.find("\n");
+            if (i >= 0) {
+                string msg = buf.substr(0, i);
+                splice buf, 0, i + 1;
+                return msg;
+            }
+            *binary b = sync.readShortBinary(4096, -1);
+            if (!b) {
+                throw "NONBLOCKING-TEST-ERROR", "the pipe of the messages has ended";
+            }
+            buf += b.toString();
+        }
+    }
+
+    #! returns binary data of the given size in which every 8 bytes differ from the 8 bytes before them
+    private static binary makeData(int size) {
+        binary b = binary();
+        for (int i = 0; b.size() < size; ++i) {
+            b += binary(sprintf("%08x", i));
+        }
+        return b.substr(0, size);
+    }
+
+    #! returns text of the given size in which every 8 characters differ from the 8 before them
+    private static string makeText(int size) {
+        string s = "";
+        for (int i = 0; s.size() < size; ++i) {
+            s += sprintf("%07x\n", i);
+        }
+        return s.substr(0, size);
+    }
+}

@@ -232,24 +232,21 @@ class FifoWaitsTest inherits QUnit::Test {
         return {"r": r, "w": w};
     }
 
-    #! returns a hash with the ends (\c r and \c w) of a new named pipe that is full; both are opened with O_NONBLOCK
+    #! returns a hash with the ends (\c r and \c w) of a new named pipe that is full, both opened with O_NONBLOCK, and
+    #! the stream (\c os) that filled it
     private hash<auto> openFull() {
         string path = makeFifo();
         File r();
         r.open2(path, O_RDONLY | O_NONBLOCK);
         File w();
         w.open2(path, O_WRONLY | O_NONBLOCK);
+        # a write of the File to a full pipe waits for room, also when the pipe is nonblocking; the stream's writes
+        # that do not wait fill the pipe
+        FileOutputStream os(path);
         binary chunk = binary(strmul("x", 4096));
-        try {
-            while (True) {
-                w.write(chunk);
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "FILE-WRITE-ERROR" || ex.desc !~ /Resource temporarily unavailable/) {
-                rethrow;
-            }
+        while (cpp_api_output_stream_write_with_timeout(os, chunk, 0)) {
         }
-        return {"r": r, "w": w};
+        return {"r": r, "w": w, "os": os};
     }
 
     #! runs the call in a thread, cancels the thread and returns the error that ended the call

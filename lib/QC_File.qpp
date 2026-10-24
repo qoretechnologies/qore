@@ -172,7 +172,10 @@ const O_EXCL = O_EXCL;
 #endif
 //! don't allocate controlling tty (0 on platforms where this is not available)
 const O_NOCTTY = O_NOCTTY;
-//! non-blocking I/O (untested with Qore; 0 on platforms where this is not available)
+//! nonblocking open (0 on platforms where this is not available)
+/** A named pipe, for example, is opened without waiting for the other end; reads and writes of the file still wait
+    for data and room (see @ref file_blocking_io "ReadOnlyFile")
+*/
 const O_NONBLOCK = O_NONBLOCK;
 //! synonym for O_NONBLOCK (untested with Qore; 0 on platforms where this is not available)
 const O_NDELAY = O_NDELAY;
@@ -220,6 +223,10 @@ const SEEK_END = SEEK_END;
 
     This class supports posting events to a @ref Qore::Thread::Queue "Queue". See @ref event_handling for more information.
 
+    Writes wait for room and are made whole, also when the file's descriptor is nonblocking, as reads wait for data
+    (see @ref file_blocking_io "ReadOnlyFile"); this includes @ref Qore::stdout "stdout" and
+    @ref Qore::stderr "stderr" when another holder of the process's standard streams has made them nonblocking.
+
     The events raised by this object are listed in the following table:
 
     @anchor file_events
@@ -231,6 +238,9 @@ const SEEK_END = SEEK_END;
     |@ref EVENT_DELETED|Raised when the object being monitored is deleted
     |@ref EVENT_OPEN_FILE|Raised right before an attempt to open a file is made
     |@ref EVENT_FILE_OPENED|Raised when the file has been successfully opened
+
+    @since %Qore 3.0 writes to a nonblocking descriptor wait for room instead of failing with a
+    \c FILE-WRITE-ERROR exception (\c EAGAIN)
  */
 qclass File [system_constructor=FILE_system_constructor; arg=File* f; vparent=ReadOnlyFile; dom=FILESYSTEM];
 

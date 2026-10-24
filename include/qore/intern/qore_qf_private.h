@@ -508,30 +508,81 @@ struct qore_qf_private {
     }
 #endif
 
-    // unlocked, assumes file is open
+    //! reads exactly @p bs bytes, unless the end of the file comes first; the lock must be held
+    /** A pipe can return fewer bytes than requested: the read continues until all of them have been read.
+
+        @return the number of bytes read (less than @p bs only at the end of the file), or -1 for an error or an
+        exception (\c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED while waiting for data; see read())
+    */
     DLLLOCAL ssize_t readCheck(ExceptionSink* xsink, void* buf, size_t bs) const {
         if (checkNonBlock(xsink)) {
-            return 0;
+            return -1;
         }
 
         if (checkReadOpen(xsink)) {
-            return 0;
+            return -1;
         }
 
-        return read(buf, bs);
+        char* p = static_cast<char*>(buf);
+        size_t total = 0;
+        while (total < bs) {
+            ssize_t rc = read(p + total, bs - total, xsink);
+            if (rc < 0) {
+                return -1;
+            }
+            if (!rc) {
+                break;
+            }
+            total += static_cast<size_t>(rc);
+        }
+        return static_cast<ssize_t>(total);
     }
 
-    // unlocked, assumes file is open
-    DLLLOCAL ssize_t read(void* buf, size_t bs) const {
+    //! returns true if the error is that of a read or write of a nonblocking descriptor that would have waited
+    DLLLOCAL static bool wouldBlock(int err) {
+#if defined(EWOULDBLOCK) && EWOULDBLOCK != EAGAIN
+        return err == EAGAIN || err == EWOULDBLOCK;
+#else
+        return err == EAGAIN;
+#endif
+    }
+
+    //! reads up to @p bs bytes; the lock must be held
+    /** Waits for data when the descriptor is nonblocking and has none (see qore_fd_wait_ready()): the file's reads
+        are blocking, also when another holder of its open file description (an embedded runtime, a parent process)
+        has set \c O_NONBLOCK on it.
+
+        @param buf the buffer for the data
+        @param bs the size of the buffer
+        @param xsink for the exception raised when the thread is cancelled or its Program is interrupted while waiting
+        for data; if nullptr, the wait cannot be cancelled
+
+        @return the number of bytes read, 0 at the end of the file, or -1 for an error, with \c errno set, or with
+        an exception raised in @p xsink
+    */
+    DLLLOCAL ssize_t read(void* buf, size_t bs, ExceptionSink* xsink) const {
         // must be called with the lock held
         assert(m.trylock());
 
         ssize_t rc;
         while (true) {
             rc = ::read(fd, buf, bs);
-            // try again if we were interrupted by a signal
-            if (rc >= 0 || errno != EINTR)
+            if (rc >= 0) {
                 break;
+            }
+            // try again if we were interrupted by a signal
+            if (errno == EINTR) {
+                continue;
+            }
+            if (!wouldBlock(errno)) {
+                break;
+            }
+            // a nonblocking descriptor without data: a named pipe has a writer again (see fifo_end_read)
+            clearFifoEndRead();
+            int wait_rc = qore_fd_wait_ready(fd, true, xsink, "file read");
+            if (wait_rc) {
+                return -1;
+            }
         }
         noteReadResult(rc, bs);
 
@@ -597,8 +648,21 @@ struct qore_qf_private {
         return write(buf, len, xsink);
     }
 
-    // unlocked, assumes file is open
-    DLLLOCAL ssize_t write(const void* buf, size_t len, ExceptionSink* xsink = 0) const {
+    //! writes all of the data; the lock must be held
+    /** Waits for room when the descriptor is nonblocking and full (see qore_fd_wait_ready()): the file's writes are
+        blocking, also when another holder of its open file description (an embedded runtime such as Node.js, a parent
+        process) has set \c O_NONBLOCK on it.  A write that the descriptor takes only in part is continued with the
+        rest of the data.
+
+        @param buf the data
+        @param len the size of the data
+        @param xsink for the exceptions: \c FILE-WRITE-ERROR for an I/O error, \c THREAD-CANCELLED or
+        \c PROGRAM-INTERRUPTED when the thread is cancelled or its Program is interrupted while the write waits for
+        room; if nullptr, no exception is raised, and the wait cannot be cancelled
+
+        @return the number of bytes written, or -1 for an error
+    */
+    DLLLOCAL ssize_t write(const void* buf, size_t len, ExceptionSink* xsink) const {
         // must be called with the lock held
         assert(m.trylock());
 
@@ -626,9 +690,25 @@ struct qore_qf_private {
                 total_written += rc;
                 do_write_event_unlocked(rc, total_written, len);
             } else if (rc < 0) {
+                int write_errno = errno;
+                if (wouldBlock(write_errno)) {
+                    // a nonblocking descriptor that is full: the write continues once there is room
+                    int wait_rc = qore_fd_wait_ready(fd, false, xsink, "file write");
+                    if (wait_rc == QORE_POLL_CANCELLED) {
+                        return -1;
+                    }
+                    if (wait_rc) {
+                        if (xsink) {
+                            xsink->raiseErrnoException("FILE-WRITE-ERROR", errno, "failed waiting to write " QSD
+                                " byte%s to File", remaining, remaining == 1 ? "" : "s");
+                        }
+                        return -1;
+                    }
+                    continue;
+                }
                 if (xsink) {
-                    xsink->raiseErrnoException("FILE-WRITE-ERROR", errno, "failed writing " QSD " byte%s to File", len,
-                        len == 1 ? "" : "s");
+                    xsink->raiseErrnoException("FILE-WRITE-ERROR", write_errno, "failed writing " QSD
+                        " byte%s to File", len, len == 1 ? "" : "s");
                 }
                 return rc;
             } else {
@@ -640,16 +720,21 @@ struct qore_qf_private {
         return total_written;
     }
 
-    // private function, unlocked
-    DLLLOCAL int readChar() const {
+    //! reads one byte; the lock must be held
+    /** @param xsink for the exception raised when the thread is cancelled or its Program is interrupted while waiting
+        for data (see read()); if nullptr, the wait cannot be cancelled
+
+        @return the byte, or -1 at the end of the file, for an error, or with an exception raised in @p xsink
+    */
+    DLLLOCAL int readChar(ExceptionSink* xsink) const {
         unsigned char ch = 0;
-        if (read(&ch, 1) != 1)
+        if (read(&ch, 1, xsink) != 1)
             return -1;
         return (int)ch;
     }
 
-    // private function, unlocked
-    DLLLOCAL int readUnicode(int* n_len = 0) const;
+    //! reads one character and returns its code point; the lock must be held (see readChar())
+    DLLLOCAL int readUnicode(ExceptionSink* xsink, int* n_len = nullptr) const;
 
     DLLLOCAL qore_offset_t readData(void* dest, size_t limit, qore_file_read_deadline& read_deadline,
             const char* mname, ExceptionSink* xsink, const char* timeout_error = "FILE-READ-TIMEOUT",
@@ -818,9 +903,12 @@ struct qore_qf_private {
     //! returns a function object that reads bytes from the file for the decoder; the lock must be held
     DLLLOCAL f_read_t getDecoderReadFunc() {
         return [this](void* dest, size_t limit, ExceptionSink* xsink) -> qore_offset_t {
-            ssize_t rc = read(dest, limit);
+            ssize_t rc = read(dest, limit, xsink);
             if (rc < 0) {
-                xsink->raiseErrnoException("FILE-READ-ERROR", errno, "error reading file");
+                // a wait for data that was cancelled has raised its exception
+                if (!*xsink) {
+                    xsink->raiseErrnoException("FILE-READ-ERROR", errno, "error reading file");
+                }
                 return -1;
             }
             return rc;
@@ -970,7 +1058,7 @@ struct qore_qf_private {
         };
         int ch, rc = -1;
         int char_count = 0;
-        while ((ch = readChar()) >= 0) {
+        while ((ch = readChar(xsink)) >= 0) {
             if (xsink && ++char_count >= 100) {
                 char_count = 0;
                 if (qore_check_cancel(xsink, "file readLine")) {
@@ -990,7 +1078,7 @@ struct qore_qf_private {
                 // a following marker is part of the end of the line if the file is not a terminal
                 if (!tty) {
                     std::string next;
-                    while (next.size() < marker.size() && (ch = readChar()) >= 0) {
+                    while (next.size() < marker.size() && (ch = readChar(xsink)) >= 0) {
                         next.push_back(static_cast<char>(ch));
                     }
                     if (next == marker) {
@@ -1082,7 +1170,7 @@ struct qore_qf_private {
         int char_count = 0;
         const int check_interval = 100;  // Check cancel/interrupt every 100 characters
 
-        while ((ch = readChar()) >= 0) {
+        while ((ch = readChar(xsink)) >= 0) {
             // Check for cancellation or program interrupt periodically
             if (xsink && ++char_count >= check_interval) {
                 char_count = 0;
@@ -1098,7 +1186,7 @@ struct qore_qf_private {
             if (ch == '\r') {
                 // see if next byte is \n' if we're not connected to a terminal device
                 if (!tty) {
-                    ch = readChar();
+                    ch = readChar(xsink);
                     if (ch >= 0) {
                         if (ch == '\n') {
                             if (incl_eol)
@@ -1137,7 +1225,7 @@ struct qore_qf_private {
         int char_count = 0;
         const int check_interval = 100;  // Check cancel/interrupt every 100 characters
 
-        while ((ch = readChar()) >= 0) {
+        while ((ch = readChar(xsink)) >= 0) {
             // Check for cancellation or program interrupt periodically
             if (xsink && ++char_count >= check_interval) {
                 char_count = 0;
@@ -1163,7 +1251,10 @@ struct qore_qf_private {
     DLLLOCAL QoreStringNode* readUntil(const char* bytes, bool incl_bytes, ExceptionSink* xsink) {
         QoreStringNodeHolder str(new QoreStringNode(charset));
 
-        int rc = readUntil(bytes, **str, incl_bytes);
+        int rc = readUntil(bytes, **str, incl_bytes, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
 
         if (rc == -2) {
             xsink->raiseException("FILE-READLINE-ERROR", "file has not been opened");
@@ -1186,7 +1277,7 @@ struct qore_qf_private {
 
         int ch, rc = -1;
 
-        while ((ch = readUnicode()) >= 0) {
+        while ((ch = readUnicode(nullptr)) >= 0) {
             // skip BOM
             if (ch == 0xfeff)
                 continue;
@@ -1206,7 +1297,7 @@ struct qore_qf_private {
                 // see if next byte is \n' if we're not connected to a terminal device
                 if (!tty) {
                     int len = 0;
-                    ch = readUnicode(&len);
+                    ch = readUnicode(nullptr, &len);
                     if (ch >= 0) {
                         if (ch == '\n') {
                             if (incl_eol)
@@ -1244,7 +1335,7 @@ struct qore_qf_private {
 
         int ch, rc = -1;
 
-        while ((ch = readUnicode()) >= 0) {
+        while ((ch = readUnicode(nullptr)) >= 0) {
             // skip BOM
             if (ch == 0xfeff)
                 continue;
@@ -1280,7 +1371,7 @@ struct qore_qf_private {
 
         int ch, rc = -1;
 
-        while ((ch = readUnicode()) >= 0) {
+        while ((ch = readUnicode(nullptr)) >= 0) {
             // skip BOM
             if (ch == 0xfeff)
                 continue;
@@ -1346,7 +1437,7 @@ struct qore_qf_private {
         int char_count = 0;
         const int check_interval = 100;  // Check cancel/interrupt every 100 characters
 
-        while ((ch = readChar()) >= 0) {
+        while ((ch = readChar(xsink)) >= 0) {
             // Check for cancellation or program interrupt periodically
             if (xsink && ++char_count >= check_interval) {
                 char_count = 0;
