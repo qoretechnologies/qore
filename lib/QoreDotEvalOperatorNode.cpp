@@ -35,8 +35,10 @@
 QoreString QoreDotEvalOperatorNode::name("dot eval expression");
 
 QoreValue QoreDotEvalOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder op(left, xsink);
-    if (*xsink) {
+    // a weak reference to a destroyed object reads as no value, but a call through it raises OBJECT-ALREADY-DELETED,
+    // as in the compiled tiers, which keep the reference of a base used only for the call
+    ValueEvalOptimizedRefHolder op(xsink);
+    if (op.evalCallReceiver(left)) {
         return QoreValue();
     }
 

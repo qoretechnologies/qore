@@ -1,0 +1,152 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%allow-weak-references
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires FsUtil
+%requires WeakObjectReadChecks
+%requires ../../../ExecModeHarness.qm
+
+%exec-class WeakObjectReadsTest
+
+#! the target of the weak references
+class Target {
+    int ping() {
+        return 7;
+    }
+}
+
+#! holds a weak reference in an object member
+class Holder {
+    public {
+        auto member;
+    }
+}
+
+#! Tests reading weak references to objects held by hashes and object members
+/** A weak reference to an object that has been destroyed reads as no value, and a method call through it, directly
+    or through a call reference, raises \c OBJECT-ALREADY-DELETED.  The checks are in WeakObjectReadChecks.qm and run
+    in this program, in each execution mode and from a compiled module.
+*/
+class WeakObjectReadsTest inherits QUnit::Test {
+    public {
+        #! the checks of reads
+        const Checks = keys WeakObjectReadChecks::get_results();
+
+        #! the checks of call references
+        const CallReferenceChecks = keys WeakObjectReadChecks::get_call_reference_results();
+
+        #! the execution modes that the worker is run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("WeakObjectReadsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("checks in this program", \testInProgram());
+        addTestCase("reads in the code of the test", \testInTestCode());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    testInProgram() {
+        checkResults("in-program",
+            WeakObjectReadChecks::get_results() + WeakObjectReadChecks::get_call_reference_results(),
+            Checks + CallReferenceChecks);
+    }
+
+    #! the same reads in the code of the test itself, which runs in the execution mode the test is run in
+    testInTestCode() {
+        hash<auto!> h = {};
+        Holder holder();
+        {
+            Target t();
+            h.target := t;
+            holder.member := t;
+            assertTrue(exists h.target, "a live target exists");
+            assertEq(7, h.target.ping(), "a call reaches a live target");
+        }
+        assertFalse(exists h.target, "a hash value referring to a destroyed object has no value");
+        assertFalse(exists holder.member, "a member referring to a destroyed object has no value");
+        assertTrue(h.target === NOTHING, "a hash value referring to a destroyed object is no value");
+        *object o = holder.member;
+        assertNothing(o, "assigning a member referring to a destroyed object assigns no value");
+        assertFalse(WeakObjectReadsTest::hasValue(h.target),
+            "an argument referring to a destroyed object has no value");
+        assertThrows("OBJECT-ALREADY-DELETED", sub () { h.target.ping(); }, (), "a call raises");
+        assertThrows("OBJECT-ALREADY-DELETED", sub () { holder.member.val(); }, (), "a pseudo-method call raises");
+        code c = \h.target.ping();
+        assertThrows("OBJECT-ALREADY-DELETED", c, (), "a call reference created from a hash value raises when called");
+        c = \holder.member.ping();
+        assertThrows("OBJECT-ALREADY-DELETED", c, (), "a call reference created from a member raises when called");
+    }
+
+    #! returns @ref True if the argument has a value
+    private static bool hasValue(*object o) {
+        return exists o;
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            checkWorkerOutput(mode, runWorker(get_script_dir(), "--exec-mode=" + mode, "call-references"),
+                Checks + CallReferenceChecks);
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-weak-object-reads-");
+        string qmod_path = tmp.path + DirSep + "WeakObjectReadChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "WeakObjectReadChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead; see
+        # WeakObjectReadChecks::get_call_reference_results() for the checks of call references
+        checkWorkerOutput("aot", runWorker(tmp.path), Checks);
+    }
+
+    #! runs the worker with the checks module loaded from the given directory and returns its output
+    private string runWorker(string module_dir, string opts = "", string args = "") {
+        string worker = get_script_dir() + DirSep + "weak-object-reads-worker.q";
+        return ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s %s %s",
+            libqore_dir, module_dir, qore_bin, opts, worker, args));
+    }
+
+    #! parses the "name=value" lines printed by the worker and checks them
+    private checkWorkerOutput(string label, string out, list<string> checks) {
+        hash<string, int> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(-?[0-9]+)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1].toInt();
+        }
+        checkResults(label, results, checks);
+    }
+
+    private checkResults(string label, hash<string, int> results, list<string> checks) {
+        assertEq(sort(checks), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (results.pairIterator()) {
+            assertEq(1, i.value, sprintf("%s: %s", label, i.key));
+        }
+    }
+}
