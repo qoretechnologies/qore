@@ -6758,6 +6758,25 @@ static std::string qore_cares_debug_servers(struct ares_options& options, int& o
 #endif
 }
 
+//! Creates a c-ares channel; returns an ARES_* status
+/** c-ares reads the LOCALDOMAIN and RES_OPTIONS environment variables when it creates a channel, so the environment
+    must not change meanwhile.
+
+    @param channel the channel created
+    @param options the options of the channel
+    @param optmask the mask of the options set in \a options
+*/
+static int qore_cares_init_channel(ares_channel_t** channel, struct ares_options* options, int optmask) {
+    QoreEnvironmentReadLock env_lock;
+#ifdef DEBUG
+    // the lock-order probe of the tests found a cycle with fork()
+    if (qore_dbg_fork_cares_channel_setup()) {
+        return ARES_ECANCELLED;
+    }
+#endif
+    return ares_init_options(channel, options, optmask);
+}
+
 //! Makes a new c-ares channel ask the DNS servers that qore_cares_debug_servers() returned; returns an ARES_* status
 static int qore_cares_set_debug_servers(ares_channel_t* channel, const std::string& servers) {
     return servers.empty() ? ARES_SUCCESS : ares_set_servers_ports_csv(channel, servers.c_str());
@@ -7154,12 +7173,7 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
     int optmask = ARES_OPT_SOCK_STATE_CB;
     std::string debug_servers = qore_cares_debug_servers(options, optmask);
 
-    int rc;
-    {
-        // c-ares reads the LOCALDOMAIN and RES_OPTIONS environment variables when it creates a channel
-        QoreEnvironmentReadLock env_lock;
-        rc = ares_init_options(&channel, &options, optmask);
-    }
+    int rc = qore_cares_init_channel(&channel, &options, optmask);
     if (rc != ARES_SUCCESS) {
         xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "ares_init_options() failed: %s",
             ares_strerror(rc));
@@ -7761,12 +7775,7 @@ private:
         int optmask = ARES_OPT_SOCK_STATE_CB;
         std::string debug_servers = qore_cares_debug_servers(options, optmask);
 
-        int rc;
-        {
-            // c-ares reads the LOCALDOMAIN and RES_OPTIONS environment variables when it creates a channel
-            QoreEnvironmentReadLock env_lock;
-            rc = ares_init_options(&channel, &options, optmask);
-        }
+        int rc = qore_cares_init_channel(&channel, &options, optmask);
         if (rc != ARES_SUCCESS) {
             xsink->raiseException("GETHOSTBYADDR-ERROR", "ares_init_options() failed: %s", ares_strerror(rc));
             return -1;
@@ -8340,12 +8349,7 @@ int QoreCaresNameInfoResolver::start(ExceptionSink* xsink) {
     int optmask = ARES_OPT_SOCK_STATE_CB;
     std::string debug_servers = qore_cares_debug_servers(options, optmask);
 
-    int rc;
-    {
-        // c-ares reads the LOCALDOMAIN and RES_OPTIONS environment variables when it creates a channel
-        QoreEnvironmentReadLock env_lock;
-        rc = ares_init_options(&channel, &options, optmask);
-    }
+    int rc = qore_cares_init_channel(&channel, &options, optmask);
     if (rc != ARES_SUCCESS) {
         xsink->raiseException("QOREADDRINFO-GETNAMEINFO-ERROR", "ares_init_options() failed: %s",
             ares_strerror(rc));

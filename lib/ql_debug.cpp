@@ -13165,6 +13165,233 @@ static QoreValue f_dbg_cares_set_servers(const QoreListNode* params, RuntimeConf
     HARD_QORE_VALUE_PARAM(servers, const QoreStringNode, params, 0);
     return new QoreStringNode(qore_dbg_cares_set_servers(servers->c_str()));
 }
+
+namespace {
+//! the state of dbg_fork_lock_cycle_arm(): a stand-in for the lock of the dynamic linker, and what the forking thread
+//! and a thread creating a c-ares channel hold and wait for
+/** On macOS, fork() takes the lock of the dynamic linker (_dyld_dlopen_atfork_prepare()) before it runs the
+    pthread_atfork() prepare handlers, and dlopen() and dlclose() wait for that lock; c-ares calls both whenever it
+    creates a channel (ares_init_sysconfig_macos()).  The stand-in is a lock that a pthread_atfork() prepare handler
+    registered after the library's handlers acquires: such a handler runs before them, as the dynamic linker takes its
+    lock, and its parent handler releases it after them.  The thread creating the channel waits for the stand-in in
+    the hold that the channel's creation takes, as c-ares waits for the lock of the dynamic linker in dlclose(); this
+    happens on every platform, not only macOS, and whenever the test wants, not only when the timing is unlucky.
+
+    The probe detects the lock-order cycle from the state of the two threads, without waiting for time to pass: when
+    the forking thread, holding the stand-in, is about to wait for the environment lock while the thread creating the
+    channel holds that lock and waits for the stand-in, neither can ever continue.  The probe then releases the thread
+    creating the channel without the stand-in, and the channel creation gives up without calling ares_init_options()
+    (on macOS, c-ares would wait in dlclose() for the real lock of the dynamic linker, which the forking thread holds),
+    so that the forking thread continues and the test reports the cycle instead of hanging.
+*/
+struct ForkLockCycleProbe {
+    std::mutex m;
+    std::condition_variable cv;
+    //! a copy of \c armed that the hooks read without the lock, so that they take it only while the probe is armed:
+    //! the hooks run in every fork() and channel creation, also in a child, where another thread may have held the
+    //! lock when the process was copied
+    std::atomic<bool> active{false};
+    //! the probe is armed: the next channel creation waits for the stand-in, and the next fork() acquires it
+    bool armed = false;
+    //! a channel creation has been captured since the probe was armed
+    bool captured = false;
+    //! the channel creation is done waiting (it got the stand-in, the cycle was detected, or the probe was disarmed)
+    bool section_done = false;
+    //! the thread creating the channel holds the environment lock (the lock that the fork handler waits for)
+    bool section_holds_env_lock = false;
+    //! the thread creating the channel waits for the stand-in
+    bool section_waits = false;
+    //! the forking thread holds the stand-in
+    bool standin_held = false;
+    //! fork() acquired the stand-in since the probe was armed
+    bool fork_held_standin = false;
+    //! the forking thread is about to wait for the environment lock while it holds the stand-in
+    bool fork_waits_env_lock = false;
+    //! the lock-order cycle was detected
+    bool cycle = false;
+    //! the thread creating the channel acquired the stand-in after the forking thread released it
+    bool section_got_standin = false;
+    //! decremented once the thread creating the channel has taken its hold
+    Counter* entered = nullptr;
+
+    //! detects the cycle; must be called with the lock held
+    void check() {
+        if (section_waits && fork_waits_env_lock && section_holds_env_lock && !cycle) {
+            cycle = true;
+            cv.notify_all();
+        }
+    }
+};
+
+//! never destroyed: a child created with fork() while a thread of its parent waited on the condition exits with a
+//! condition whose waiter does not exist, which glibc's pthread_cond_destroy() would wait for forever
+ForkLockCycleProbe& fork_lock_cycle_probe = *new ForkLockCycleProbe;
+
+void dbg_fork_lock_cycle_standin_prepare() {
+    ForkLockCycleProbe& p = fork_lock_cycle_probe;
+    if (!p.active.load()) {
+        return;
+    }
+    std::lock_guard<std::mutex> l(p.m);
+    if (p.armed && p.captured && !p.fork_held_standin) {
+        p.standin_held = p.fork_held_standin = true;
+        p.cv.notify_all();
+    }
+}
+
+void dbg_fork_lock_cycle_standin_parent() {
+    ForkLockCycleProbe& p = fork_lock_cycle_probe;
+    if (!p.active.load()) {
+        return;
+    }
+    std::lock_guard<std::mutex> l(p.m);
+    if (p.standin_held) {
+        p.standin_held = false;
+        p.cv.notify_all();
+    }
+}
+
+//! the child does not use the probe: another thread may have held its lock when the process was copied
+void dbg_fork_lock_cycle_standin_child() {
+    fork_lock_cycle_probe.active.store(false);
+}
+}
+
+void qore_dbg_fork_env_prepare() {
+    ForkLockCycleProbe& p = fork_lock_cycle_probe;
+    if (!p.active.load()) {
+        return;
+    }
+    std::lock_guard<std::mutex> l(p.m);
+    if (p.armed && p.standin_held) {
+        p.fork_waits_env_lock = true;
+        p.check();
+    }
+}
+
+bool qore_dbg_fork_cares_channel_setup() {
+    ForkLockCycleProbe& p = fork_lock_cycle_probe;
+    if (!p.active.load()) {
+        return false;
+    }
+    Counter* entered;
+    {
+        std::lock_guard<std::mutex> l(p.m);
+        if (!p.armed || p.captured) {
+            return false;
+        }
+        p.captured = true;
+        p.section_holds_env_lock = qore_dbg_env_lock_held_by_current_thread();
+        entered = p.entered;
+        p.entered = nullptr;
+    }
+    // tells the test that the hold has been taken, so that it can call fork()
+    ExceptionSink xsink;
+    entered->dec(&xsink);
+    entered->deref(&xsink);
+    if (xsink) {
+        printd(0, "qore_dbg_fork_cares_channel_setup(): %s\n", xsink.getExceptionErr().getTypeName());
+        xsink.clear();
+    }
+
+    std::unique_lock<std::mutex> l(p.m);
+    // waits until the forking thread holds the stand-in, as fork() holds the lock of the dynamic linker
+    while (p.armed && !p.fork_held_standin) {
+        p.cv.wait(l);
+    }
+    // waits for the stand-in, as dlclose() waits for the lock of the dynamic linker
+    p.section_waits = true;
+    p.check();
+    while (p.armed && p.standin_held && !p.cycle) {
+        p.cv.wait(l);
+    }
+    p.section_waits = false;
+    if (p.armed && !p.cycle) {
+        p.section_got_standin = true;
+    }
+    p.section_done = true;
+    p.cv.notify_all();
+    return p.cycle;
+}
+
+//! makes the next fork() deadlock-check the lock order of the next c-ares channel creation
+/** The next c-ares channel creation takes the hold that it takes for ares_init_options(), decrements \a entered,
+    and waits until the next fork() has acquired a stand-in for the lock of the dynamic linker (as fork() does on
+    macOS before it runs the fork handlers); it then waits for the stand-in (as c-ares does in dlclose() on macOS),
+    which the forking thread releases after the fork handlers.  If the forking thread is about to wait for the
+    environment lock while the channel creation holds it and waits for the stand-in, the cycle is recorded, and the
+    channel creation is released without the stand-in and fails without creating its channel.
+
+    @param entered decremented once the channel creation has taken its hold
+
+    @throw DBG-ARGUMENT-ERROR the probe is already armed
+*/
+static QoreValue f_dbg_fork_lock_cycle_arm(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<Counter> entered(get_counter_arg(params, 0, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ForkLockCycleProbe& p = fork_lock_cycle_probe;
+    static bool registered = false;
+    std::lock_guard<std::mutex> l(p.m);
+    if (p.armed) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the fork lock-order probe is already armed");
+        return QoreValue();
+    }
+    if (!registered) {
+        // registered after the library's handlers, so its prepare handler runs before them and its parent handler
+        // after them, as the dynamic linker of macOS holds its lock across them
+        int rc = pthread_atfork(dbg_fork_lock_cycle_standin_prepare, dbg_fork_lock_cycle_standin_parent,
+            dbg_fork_lock_cycle_standin_child);
+        if (rc) {
+            xsink->raiseErrnoException("DBG-ARGUMENT-ERROR", rc, "pthread_atfork() failed");
+            return QoreValue();
+        }
+        registered = true;
+    }
+    p.captured = p.section_done = p.section_holds_env_lock = p.section_waits = p.standin_held = p.fork_held_standin
+        = p.fork_waits_env_lock = p.cycle = p.section_got_standin = false;
+    p.entered = entered.release();
+    p.armed = true;
+    p.active.store(true);
+    return QoreValue();
+}
+
+//! disarms the probe of dbg_fork_lock_cycle_arm() and returns what it saw
+/** Waits until a captured channel creation is done waiting; a channel creation that waits for the stand-in or for
+    the fork() is released.
+
+    @return a hash with the following keys:
+    - \c captured: a channel creation took its hold while the probe was armed
+    - \c fork_held_standin: fork() acquired the stand-in while the probe was armed
+    - \c holds_env_lock: the channel creation held the environment lock, which the fork handler waits for
+    - \c cycle: the forking thread was about to wait for the environment lock while the channel creation held it and
+      waited for the stand-in (a deadlock without the probe)
+    - \c got_standin: the channel creation acquired the stand-in once the forking thread released it
+*/
+static QoreValue f_dbg_fork_lock_cycle_result(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ForkLockCycleProbe& p = fork_lock_cycle_probe;
+    ReferenceHolder<Counter> entered(xsink);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    {
+        std::unique_lock<std::mutex> l(p.m);
+        bool was_armed = p.armed;
+        p.armed = false;
+        p.cv.notify_all();
+        while (was_armed && p.captured && !p.section_done) {
+            p.cv.wait(l);
+        }
+        p.active.store(false);
+        entered = p.entered;
+        p.entered = nullptr;
+        h->setKeyValue("captured", p.captured, xsink);
+        h->setKeyValue("fork_held_standin", p.fork_held_standin, xsink);
+        h->setKeyValue("holds_env_lock", p.section_holds_env_lock, xsink);
+        h->setKeyValue("cycle", p.cycle, xsink);
+        h->setKeyValue("got_standin", p.section_got_standin, xsink);
+    }
+    return h.release();
+}
 #endif
 
 //! functional domain for debug and unit-test hooks
@@ -13294,6 +13521,10 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_cares_set_servers", f_dbg_cares_set_servers, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "servers");
+    qns.addBuiltinVariant("dbg_fork_lock_cycle_arm", f_dbg_fork_lock_cycle_arm, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "entered");
+    qns.addBuiltinVariant("dbg_fork_lock_cycle_result", f_dbg_fork_lock_cycle_result, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 0);
     qns.addBuiltinVariant("dbg_register_user_module_from_source", f_dbg_register_user_module_from_source,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         stringTypeInfo, QORE_PARAM_NO_ARG, "src");

@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/ql_debug.h"
 
 #include <cassert>
 #include <cerrno>
@@ -132,6 +133,9 @@ public:
         // fork() must not be called with the environment lock held (see above)
         assert(!qore_env_lock_depth);
         if (!qore_env_lock_depth) {
+#ifdef DEBUG
+            qore_dbg_fork_env_prepare();
+#endif
             int rc = pthread_rwlock_wrlock(&qore_env_lock);
             assert(!rc);
             (void)rc;
@@ -204,6 +208,12 @@ int qore_env_refuse_change() {
     return -1;
 }
 }
+
+#ifdef DEBUG
+bool qore_dbg_env_lock_held_by_current_thread() {
+    return qore_env_lock_depth != 0;
+}
+#endif
 
 // makes the lock usable in child processes created with fork(), by Qore or any other code in the process
 static QoreEnvForkHandler qore_env_fork_handler;
