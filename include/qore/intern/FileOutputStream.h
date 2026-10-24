@@ -87,8 +87,9 @@ public:
       assert(!isClosed());
       assert(count >= 0);
       // a write that has raised an exception (an I/O error, or the thread cancelled while it waited for room)
-      // reports it alone
-      if (f.write(ptr, count, xsink) != count && !*xsink) {
+      // reports it alone; the number of bytes written is 64-bit, as a write can be of 2 GiB or more
+      int64 written = f.write(ptr, static_cast<size_t>(count), xsink);
+      if (written != count && !*xsink) {
          xsink->raiseException("FILE-WRITE-ERROR", "Error writing to file");
       }
    }

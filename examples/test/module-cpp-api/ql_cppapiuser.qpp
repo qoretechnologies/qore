@@ -41,6 +41,7 @@
 #include <poll.h>
 #include <pthread.h>
 #include <signal.h>
+#include <sys/mman.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -54,6 +55,40 @@ extern char** environ;
 #endif
 
 namespace {
+// an anonymous mapping that is never touched, so the system gives it no memory: a buffer for a read or write of
+// 2 GiB or more with a device that does not access the data (/dev/null); unmapped when it goes out of scope
+class UnbackedBuffer {
+public:
+    UnbackedBuffer(size_t size, ExceptionSink* xsink) : size(size) {
+        ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON
+#ifdef MAP_NORESERVE
+            | MAP_NORESERVE
+#endif
+            , -1, 0);
+        if (ptr == MAP_FAILED) {
+            ptr = nullptr;
+            xsink->raiseErrnoException("MMAP-ERROR", errno, "cannot map %lld bytes", static_cast<long long>(size));
+        }
+    }
+
+    ~UnbackedBuffer() {
+        if (ptr) {
+            munmap(ptr, size);
+        }
+    }
+
+    UnbackedBuffer(const UnbackedBuffer&) = delete;
+    UnbackedBuffer& operator=(const UnbackedBuffer&) = delete;
+
+    void* get() const {
+        return ptr;
+    }
+
+private:
+    void* ptr = nullptr;
+    size_t size;
+};
+
 // a pipe whose descriptors are closed when it goes out of scope
 class TestPipe {
 public:
@@ -624,6 +659,82 @@ int cpp_api_output_stream_write_with_timeout(object output_stream, binary data, 
         return QoreValue();
     }
     return rc;
+}
+
+//! writes data of the given size, which is never touched, to a file opened on the path with QoreFile::write()
+/** The data is an anonymous mapping that is never touched, so a write of 2 GiB or more to a device that does not
+    access the data (/dev/null) needs no memory for it.
+
+    @param path the path to open for writing
+    @param size the number of bytes to write
+
+    @return the number of bytes written, as returned by QoreFile::write()
+
+    @throw MMAP-ERROR the buffer cannot be mapped (for example because of a limit of the address space)
+*/
+int cpp_api_file_write_unbacked(string path, int size) {
+    UnbackedBuffer buf(static_cast<size_t>(size), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreFile f;
+    if (f.open2(xsink, path->c_str(), O_WRONLY)) {
+        return QoreValue();
+    }
+    int64 rc = f.write(buf.get(), static_cast<size_t>(size), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return rc;
+}
+
+//! reads up to the given number of bytes into a buffer that is never touched with QoreFile::read() (see above)
+/** @param path the path to open for reading
+    @param size the number of bytes to read at most
+
+    @return the number of bytes read, as returned by QoreFile::read()
+
+    @throw MMAP-ERROR the buffer cannot be mapped
+*/
+int cpp_api_file_read_unbacked(string path, int size) {
+    UnbackedBuffer buf(static_cast<size_t>(size), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreFile f;
+    if (f.open2(xsink, path->c_str(), O_RDONLY)) {
+        return QoreValue();
+    }
+    size_t rc = f.read(buf.get(), static_cast<size_t>(size), -1, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return static_cast<int64>(rc);
+}
+
+//! writes data of the given size, which is never touched, with OutputStream::write() of the stream (see above)
+/** @param output_stream the stream to write to
+    @param size the number of bytes to write
+
+    @throw MMAP-ERROR the buffer cannot be mapped
+*/
+nothing cpp_api_output_stream_write_unbacked(object output_stream, int size) {
+    OutputStream* os = static_cast<OutputStream*>(output_stream->getReferencedPrivateData(CID_OUTPUTSTREAM,
+        xsink));
+    if (!os) {
+        if (!*xsink) {
+            xsink->raiseException("OUTPUT-STREAM-ERROR", "expecting an object derived from OutputStream; got class "
+                "'%s' instead", output_stream->getClassName());
+        }
+        return QoreValue();
+    }
+    ReferenceHolder<OutputStream> holder(os, xsink);
+    UnbackedBuffer buf(static_cast<size_t>(size), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    os->write(buf.get(), size, xsink);
+    return QoreValue();
 }
 
 //! waits for a new pipe to become readable in a loop of the module's own that watches the wakeup descriptor

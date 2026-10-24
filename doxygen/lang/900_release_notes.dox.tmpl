@@ -1605,6 +1605,20 @@ val = "string";      # OK
     - None needed: a value returned with an exception was never meant to be used; use the exception
     @endparblock
 
+    @par C++ API: QoreFile::write() Returns a 64-Bit Integer
+    @parblock
+    The three \c QoreFile::write() variants (for a \c QoreString, a \c BinaryNode, and a buffer with a length) now
+    return \c int64 instead of \c int, so that the number of bytes of a write of 2 GiB or more is returned; it was
+    truncated to 32 bits.  The return type is not part of the exported symbol, so a module compiled with the earlier
+    header still loads and calls the same function: on x86-64 and arm64 it reads the lower 32 bits of the result,
+    as it did before, and only a write of 2 GiB or more returns a truncated number to it.  Code that compares the
+    result with 0 compiles unchanged; code that stores it in an \c int or takes the address of the method with the
+    earlier type must be changed.
+
+    <b>Workarounds:</b>
+    - Store the result in an \c int64, and rebuild the module to get the number of bytes of large writes
+    @endparblock
+
     @par qget Command-Line Changes
     @parblock
     \c qget was rewritten (see the new features); its options follow \c wget for download options and \c curl for
@@ -4945,6 +4959,12 @@ while (*binary chunk = input.read(65536)) {
       first byte of the line after a line that ends with a carriage return and a line feed; the stream now keeps the
       byte and returns it with the next read.  A peek also ends with \c FILE-READ-TIMEOUT-ERROR after the timeout
       of the stream, as documented; it waited without a limit
+    - Fixed writes of 2 GiB or more with @ref Qore::File "File" and @ref Qore::FileOutputStream "FileOutputStream":
+      @ref Qore::File::write() "File::write()" and the other write methods of File returned a wrong number of bytes
+      written, @ref Qore::FileOutputStream::write() "FileOutputStream::write()" raised \c FILE-WRITE-ERROR after
+      it had written all of the data, and on macOS, which refuses a read or write of more than 2 GiB at once, such
+      writes and reads failed with \c EINVAL; reads and writes of files and of the standard streams are now made in
+      parts of at most 1 GiB
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module, not those the \c .qm file sets, so a warning that the \c .qm file
       enables, for example with @ref enable-all-warnings "%enable-all-warnings", was not raised in the other files.

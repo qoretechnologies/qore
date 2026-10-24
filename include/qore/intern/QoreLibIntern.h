@@ -1165,6 +1165,12 @@ DLLLOCAL BinaryNode* parseHex(const QoreProgramLocation* loc, const char* buf, i
 */
 DLLLOCAL void print_node(FILE* fp, const QoreValue qv, ExceptionSink* xsink);
 
+//! The most bytes read or written with one read(2) or write(2) call of a File, a file stream, or the standard streams
+/** macOS refuses a read or write of more than \c INT_MAX bytes with \c EINVAL, and Linux reads or writes at most
+    about 2 GiB at once; a longer read or write is made in parts of this size
+*/
+#define QORE_FD_IO_MAX_SIZE (static_cast<size_t>(1) << 30)
+
 //! Waits until a descriptor whose read or write returned EAGAIN or EWOULDBLOCK can be read or written
 /** The reads and writes of a File and of the standard streams are blocking, but their descriptor can be nonblocking
     all the same: \c O_NONBLOCK is a flag of the open file description, which every holder of the description shares

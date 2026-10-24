@@ -523,7 +523,7 @@ struct qore_qf_private {
 
         ssize_t rc;
         while (true) {
-            rc = ::read(fd, buf, bs);
+            rc = ::read(fd, buf, std::min(bs, QORE_FD_IO_MAX_SIZE));
             if (rc >= 0) {
                 break;
             }
@@ -635,7 +635,7 @@ struct qore_qf_private {
 
             ssize_t rc;
             while (true) {
-                rc = ::write(fd, ptr, remaining);
+                rc = ::write(fd, ptr, std::min(remaining, QORE_FD_IO_MAX_SIZE));
                 // try again if we are interrupted by a signal
                 if (rc >= 0 || errno != EINTR)
                     break;
@@ -710,7 +710,7 @@ struct qore_qf_private {
                     return -1;
                 }
 
-                qore_offset_t rc = ::read(fd, dest, limit);
+                qore_offset_t rc = ::read(fd, dest, std::min(limit, QORE_FD_IO_MAX_SIZE));
                 int read_errno = errno;
                 if (rc >= 0) {
                     noteReadResult(rc, limit);
@@ -793,7 +793,7 @@ struct qore_qf_private {
 #ifdef DEBUG
             qore_dbg_file_read_ready(fd);
 #endif
-            qore_offset_t rc = ::read(fd, dest, limit);
+            qore_offset_t rc = ::read(fd, dest, std::min(limit, QORE_FD_IO_MAX_SIZE));
             int read_errno = errno;
             if (rc >= 0) {
                 noteReadResult(rc, limit);
@@ -1549,7 +1549,7 @@ struct qore_qf_private {
         }
     }
 
-    DLLLOCAL void do_read_event_unlocked(int bytes_read, int total_read, int bufsize) const {
+    DLLLOCAL void do_read_event_unlocked(int64 bytes_read, int64 total_read, int64 bufsize) const {
         // post bytes read on event queue, if any
         if (event_queue) {
             QoreHashNode* h = getEvent(QORE_EVENT_DATA_READ);
@@ -1560,7 +1560,7 @@ struct qore_qf_private {
         }
     }
 
-    DLLLOCAL void do_write_event_unlocked(int bytes_written, int total_written, int bufsize) const {
+    DLLLOCAL void do_write_event_unlocked(int64 bytes_written, int64 total_written, int64 bufsize) const {
         // post bytes sent on event queue, if any
         if (event_queue) {
             QoreHashNode* h = getEvent(QORE_EVENT_DATA_WRITTEN);

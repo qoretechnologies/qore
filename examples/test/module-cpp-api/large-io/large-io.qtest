@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class LargeIoTest
+
+#! Tests reads and writes of 2 GiB or more with File and FileOutputStream
+/** QoreFile::write() returned an int: a write of 2 GiB or more returned a wrong (negative) number of bytes, and
+    FileOutputStream::write() raised FILE-WRITE-ERROR after it had written all of the data.  macOS also refuses a read
+    or write of more than INT_MAX bytes in one call (EINVAL).
+
+    The data is written to /dev/null, which does not access it, from an anonymous mapping that is never touched, so
+    the tests need no memory for the data.
+*/
+class LargeIoTest inherits QUnit::Test {
+    public {
+        #! the size of the reads and writes: more than 3 GiB, and not a multiple of the size of the parts
+        const Size = 3 * 1024 * 1024 * 1024 + 5;
+
+        #! the device that the data is written to
+        const DevNull = "/dev/null";
+    }
+
+    constructor() : QUnit::Test("LargeIoTest", "1.0", \ARGV) {
+        addTestCase("QoreFile::write() of more than 3 GiB", \testFileWrite());
+        addTestCase("FileOutputStream::write() of more than 3 GiB", \testOutputStreamWrite());
+        addTestCase("QoreFile::read() of up to more than 3 GiB", \testFileRead());
+        set_return_value(main());
+    }
+
+    testFileWrite() {
+        *int rc;
+        try {
+            rc = cpp_api_file_write_unbacked(DevNull, Size);
+        } catch (hash<ExceptionInfo> ex) {
+            skipIfUnmapped(ex);
+            rethrow;
+        }
+        assertEq(Size, rc, "the number of bytes written");
+    }
+
+    testOutputStreamWrite() {
+        FileOutputStream os(DevNull);
+        *hash<ExceptionInfo> err;
+        try {
+            cpp_api_output_stream_write_unbacked(os, Size);
+        } catch (hash<ExceptionInfo> ex) {
+            skipIfUnmapped(ex);
+            err = ex;
+        }
+        assertEq(NOTHING, err ? sprintf("%s: %s", err.err, err.desc) : NOTHING, "the write raises no error");
+    }
+
+    testFileRead() {
+        *int rc;
+        try {
+            rc = cpp_api_file_read_unbacked(DevNull, Size);
+        } catch (hash<ExceptionInfo> ex) {
+            skipIfUnmapped(ex);
+            rethrow;
+        }
+        assertEq(0, rc, "the end of the input");
+    }
+
+    #! skips the test if the buffer could not be mapped, as with a limit of the address space
+    private skipIfUnmapped(hash<ExceptionInfo> ex) {
+        if (ex.err == "MMAP-ERROR") {
+            testSkip(sprintf("%s: %s", ex.err, ex.desc));
+        }
+    }
+}

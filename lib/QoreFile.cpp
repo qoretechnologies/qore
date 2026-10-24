@@ -104,7 +104,7 @@ int qore_fd_write_all(int fd, const void* data, size_t len, ExceptionSink* xsink
     // only a wait for room is a cancellation point: output that the descriptor takes at once is written as before,
     // also by a thread that has been cancelled
     while (written < len) {
-        ssize_t rc = ::write(fd, p + written, len - written);
+        ssize_t rc = ::write(fd, p + written, std::min(len - written, QORE_FD_IO_MAX_SIZE));
         if (rc > 0) {
             written += static_cast<size_t>(rc);
             continue;
@@ -223,7 +223,7 @@ public:
             }
             ssize_t rc = ::read(file->fd,
                 reinterpret_cast<void*>(const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + received)),
-                to_read);
+                std::min(to_read, QORE_FD_IO_MAX_SIZE));
 
             if (rc >= 0) {
                 // the end of a named pipe is recorded for the file's later waits (see qore_qf_private::fifo_end_read)
@@ -961,7 +961,7 @@ QoreStringNode* QoreFile::getchar() {
     return str;
 }
 
-int QoreFile::write(const void* data, size_t len, ExceptionSink* xsink) {
+int64 QoreFile::write(const void* data, size_t len, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     if (priv->checkNonBlock(xsink) || priv->checkWriteOpen(xsink)) {
         return -1;
@@ -974,7 +974,7 @@ int QoreFile::write(const void* data, size_t len, ExceptionSink* xsink) {
     return priv->write(data, len, xsink);
 }
 
-int QoreFile::write(const QoreString *str, ExceptionSink* xsink) {
+int64 QoreFile::write(const QoreString *str, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     if (priv->checkNonBlock(xsink) || priv->checkWriteOpen(xsink)) {
         return -1;
@@ -993,7 +993,7 @@ int QoreFile::write(const QoreString *str, ExceptionSink* xsink) {
     return priv->write(wstr->c_str(), wstr->strlen(), xsink);
 }
 
-int QoreFile::write(const BinaryNode* b, ExceptionSink* xsink) {
+int64 QoreFile::write(const BinaryNode* b, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     if (priv->checkNonBlock(xsink) || priv->checkWriteOpen(xsink)) {
         return -1;
