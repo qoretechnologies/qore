@@ -825,6 +825,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         ns(ns),
         ahm(old.ahm),
         constlist(old.constlist, 0, this),    // committed constants
+        member_write_gate(old.member_write_gate),
+        member_write_gate_classid(old.member_write_gate_classid),
         serializer(old.serializer),
         deserializer(old.deserializer),
         classID(old.classID),
@@ -937,6 +939,12 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
             memberGate   = nf;
         else if (i.second == old.memberNotification)
             memberNotification = nf;
+    }
+
+    // Inherited builtin member gates are not entries in the local method map. Base classes
+    // keep their method objects alive, just as they do for inherited method dispatch.
+    if (!memberGate && old.memberGate && old.memberGate->isBuiltin()) {
+        memberGate = old.memberGate;
     }
 
     // copy static methods
@@ -1162,6 +1170,18 @@ static void do_sig(QoreString& csig, ConstantList& clist) {
     ConstantListIterator cli(clist);
     while (cli.next())
         csig.sprintf("%s const %s %s\n", privpub(cli.getAccess()), cli.getName().c_str(), cli.getValue().getTypeName());
+}
+
+// Called before publication from source parsing, builtin member initialization, and AOT class commit.
+static void inherit_builtin_member_gates(qore_class_private& cls, const qore_class_private& base) {
+    if (!cls.member_write_gate && base.member_write_gate) {
+        cls.member_write_gate = base.member_write_gate;
+        cls.member_write_gate_classid = base.member_write_gate_classid;
+    }
+    // Notifications and user-defined gates retain their existing non-inherited semantics.
+    if (!cls.parseHasMemberGate() && base.memberGate && base.memberGate->isBuiltin()) {
+        cls.memberGate = base.memberGate;
+    }
 }
 
 int qore_class_private::initializeIntern() {
@@ -1702,6 +1722,8 @@ void qore_class_private::parseCommit() {
                         }
                     }
                     (*i).sclass->priv->parseCommit();
+                    // AOT loading skips initializeIntern(); inherit after the parent has committed.
+                    inherit_builtin_member_gates(*this, *(*i).sclass->priv);
                     do_sig(csig, *i);
                 }
             }
@@ -2238,6 +2260,9 @@ int BCNode::initializeMembers(QoreClass* cls) {
         return 0;
     }
     int err = sclass->priv->initializeMembers();
+    if (cls->priv->sys) {
+        inherit_builtin_member_gates(*cls->priv, *sclass->priv);
+    }
     // import all base class member definitions into this class
     cls->priv->parseImportMembers(*sclass->priv, access);
     return err;
@@ -2251,6 +2276,7 @@ int BCNode::initialize(QoreClass* cls) {
     int rc = 0;
 
     rc = sclass->priv->initializeIntern();
+    inherit_builtin_member_gates(*cls->priv, *sclass->priv);
     // include all base class domains in this class's domain
     if (!sclass->priv->addBaseClassesToSubclass(cls, is_virtual)) {
         cls->priv->domain |= sclass->priv->domain;
@@ -3222,6 +3248,27 @@ void QoreClass::setSystem() {
             spgm->deref(nullptr);
         }
     }
+}
+
+void QoreClass::setMemberWriteGate(q_member_write_gate_t gate) {
+    assert(!priv->initialized);
+    priv->member_write_gate = gate;
+    priv->member_write_gate_classid = gate ? priv->classID : 0;
+}
+
+bool QoreClass::hasMemberWriteGate() const {
+    return priv->member_write_gate != nullptr;
+}
+
+QoreValue qore_class_private::evalMemberWriteGate(QoreObject* self, const char* member, QoreValue value,
+        QoreMemberWriteOp operation, ExceptionSink* xsink) const {
+    assert(member_write_gate);
+    ReferenceHolder<AbstractPrivateData> data(self->getReferencedPrivateData(member_write_gate_classid, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ValueHolder result(member_write_gate(self, *data, member, value, operation, xsink), xsink);
+    return *xsink ? QoreValue() : result.release();
 }
 
 bool QoreClass::hasMemberGate() const {

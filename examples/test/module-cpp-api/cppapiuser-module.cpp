@@ -107,12 +107,42 @@ static QoreClass* cppapiuser_class_handler(QoreNamespace* ns, const char* cname)
     return qc;
 }
 
+static void member_read_probe_constructor(const QoreMethod& method, const void*, QoreObject* self,
+        const QoreListNode*, RuntimeConfig&, ExceptionSink*) {
+    self->setPrivate(method.getClass()->getID(), new AbstractPrivateData);
+}
+
+static void member_read_probe_destructor(QoreObject*, AbstractPrivateData* data, RuntimeConfig&, ExceptionSink* xsink) {
+    data->deref(xsink);
+}
+
+// A read-only proxy verifies inherited builtin memberGate independently of write-gate registration.
+static QoreValue member_read_probe(const QoreMethod&, const void*, QoreObject*, AbstractPrivateData*,
+        const QoreListNode*, RuntimeConfig&, ExceptionSink*) {
+    return QoreValue(55ll);
+}
+
 static void cppapiuser_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     init_cppapiuser_functions(CppApiTestNs);
     CppApiTestNs.addSystemClass(initProgramContextProbeClass(CppApiTestNs));
     CppApiTestNs.addSystemClass(initSerializationIndexProbeClass(CppApiTestNs));
     CppApiTestNs.addSystemClass(initExceptionResultProbeClass(CppApiTestNs));
     CppApiTestNs.addSystemClass(initPollableProbeClass(CppApiTestNs));
+    QoreClass* write_probe = initMemberWriteProbeClass(CppApiTestNs);
+    write_probe->setMemberWriteGate(member_write_probe);
+    write_probe->addMember("declared", Public, bigIntTypeInfo, QoreValue(7ll));
+    write_probe->addMember("secret", Private, bigIntTypeInfo, QoreValue(9ll));
+    CppApiTestNs.addSystemClass(write_probe);
+    QoreClass* inherited_probe = new QoreClass("MemberWriteDerivedProbe", "Qore::CppApiTest");
+    inherited_probe->addBuiltinBaseClass(write_probe);
+    CppApiTestNs.addSystemClass(inherited_probe);
+    QoreClass* read_probe = new QoreClass("MemberReadProbe", "Qore::CppApiTest");
+    read_probe->setPublicMemberFlag();
+    read_probe->addConstructor(nullptr, member_read_probe_constructor);
+    read_probe->setDestructor(member_read_probe_destructor);
+    read_probe->addMethod(nullptr, "memberGate", member_read_probe, Public, QCF_CONSTANT, QDOM_DEFAULT,
+        autoTypeInfo, {stringTypeInfo}, {}, {"member"});
+    CppApiTestNs.addSystemClass(read_probe);
 }
 
 static void cppapiuser_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {

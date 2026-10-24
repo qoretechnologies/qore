@@ -428,11 +428,14 @@ public:
         return 0;
     }
 
-    DLLLOCAL QoreValue takeMember(ExceptionSink* xsink, const char* mem, bool check_access = true);
+    DLLLOCAL QoreValue takeMember(ExceptionSink* xsink, const char* mem, bool check_access = true, bool for_delete = false);
 
-    DLLLOCAL QoreValue takeMember(LValueHelper& lvh, const char* mem);
+    DLLLOCAL QoreValue takeMember(LValueHelper& lvh, const char* mem, bool for_delete = false, bool* exists = nullptr);
 
-    DLLLOCAL void takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, const QoreListNode* l);
+    DLLLOCAL void takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, const QoreListNode* l, bool for_delete = false);
+
+    // Self member access can use external storage for undeclared members of proxy classes.
+    DLLLOCAL QoreValue getReferencedMemberForSelf(const char* mem, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreValue getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const;
 
@@ -726,16 +729,17 @@ public:
     }
 
     DLLLOCAL static QoreValue takeMember(QoreObject& obj, ExceptionSink* xsink, const char* mem,
-            bool check_access = true) {
-        return obj.priv->takeMember(xsink, mem, check_access);
+            bool check_access = true, bool for_delete = false) {
+        return obj.priv->takeMember(xsink, mem, check_access, for_delete);
     }
 
-    DLLLOCAL static QoreValue takeMember(QoreObject& obj, LValueHelper& lvh, const char* mem) {
-        return obj.priv->takeMember(lvh, mem);
+    DLLLOCAL static QoreValue takeMember(QoreObject& obj, LValueHelper& lvh, const char* mem, bool for_delete = false) {
+        return obj.priv->takeMember(lvh, mem, for_delete);
     }
 
-    DLLLOCAL static void takeMembers(QoreObject& o, QoreLValueGeneric& rv, LValueHelper& lvh, const QoreListNode* l) {
-        o.priv->takeMembers(rv, lvh, l);
+    DLLLOCAL static void takeMembers(QoreObject& o, QoreLValueGeneric& rv, LValueHelper& lvh, const QoreListNode* l,
+            bool for_delete = false) {
+        o.priv->takeMembers(rv, lvh, l, for_delete);
     }
 
     DLLLOCAL static int getLValue(const QoreObject& obj, const char* key, LValueHelper& lvh,

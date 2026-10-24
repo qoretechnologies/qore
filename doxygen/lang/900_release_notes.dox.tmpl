@@ -4,6 +4,12 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Builtin classes can register QoreClass::setMemberWriteGate() to handle assignment, compound and nested writes,
+    removal and deletion of undeclared members held in external storage. Builtin read gates and the new write
+    gate are inherited by Qore subclasses, including accesses through <tt>self</tt>. Declared members retain
+    their normal access rules and storage. See @ref member_write_gate
+    (<a href="https://github.com/qoretechnologies/qore/issues/5511">issue 5511</a>).
+
     Assigning an object member through a variable of type <tt>object</tt> now calls <tt>memberNotification()</tt>
     in IR, JIT and AOT execution, matching AST execution and assignments through class-typed variables.
     Notification exceptions propagate after the value has been stored

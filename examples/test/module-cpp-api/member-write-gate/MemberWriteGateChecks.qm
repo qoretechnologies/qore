@@ -1,0 +1,355 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file MemberWriteGateChecks.qm verifies writes to external members through the builtin C++ gate
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires cppapiuser
+
+module MemberWriteGateChecks {
+    version = "1.0";
+    desc = "checks builtin external member writes in all execution modes";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace MemberWriteGateChecks {
+    class Derived inherits CppApiTest::MemberWriteProbe {
+        public { int local = 4; }
+        private { int reentries = 0; }
+        int reenter() { return ++reentries; }
+        int reentryCount() { return reentries; }
+        auto read() { return self.v; }
+        update() {
+            self.v = 10;
+            self.v += 5;
+            ++self.v;
+            self.l = (1, 2);
+            self.l[0] = 9;
+            self.h = {"k": 1};
+            self.h.k += 2;
+            self.gone = 8;
+            delete self.gone;
+            self.removed = 9;
+            remove self.removed;
+            local = 6;
+        }
+    }
+
+    class ReadDerived inherits CppApiTest::MemberReadProbe {
+        auto read() { return self.v; }
+        int readInt() { return self.v; }
+    }
+
+    class OverrideRead inherits CppApiTest::MemberReadProbe {
+        auto memberGate(string member) { return 66; }
+    }
+
+    class PrivateDerived inherits Derived {
+        private:internal { int hidden = 2; }
+        int readHidden() { return hidden; }
+        updateHidden() { hidden = 3; }
+    }
+
+    class FurtherPrivate inherits PrivateDerived {}
+
+    class Plain { public { int v = 1; } }
+
+    class Tracked {
+        public { static int live = 0; }
+        constructor() { ++live; }
+        destructor() { --live; }
+    }
+
+    #! typed receiver: assignment, arithmetic, nested COW mutation and removal
+    int sub check_typed(CppApiTest::MemberWriteProbe p) {
+        p.write_only = 1;
+        if (p.counts() != (0, 1, 0, 0)) { return 0; }
+        p.v = 10;
+        p.v += 2;
+        ++p.v;
+        p.v--;
+        p.v -= 3;
+        p.v *= 4;
+        if (p.v != 36) { return 0; }
+        p.l = (1, 2);
+        auto before = p.l;
+        p.l[0] = 7;
+        p.l += 3;
+        if (p.l != (7, 2, 3) || before != (1, 2)) { return 0; }
+        p.h = {"k": 1};
+        p.h.k = 5;
+        p.h{"other"} = 8;
+        if (p.h != {"k": 5, "other": 8}) { return 0; }
+        if ((remove p.h.k) != 5) { return 0; }
+        delete p.h.other;
+        if (p.h != {}) { return 0; }
+        if ((remove p.v) != 36 || p.v != NOTHING) { return 0; }
+        p.to_delete = 4;
+        delete p.to_delete;
+        if (p.to_delete != NOTHING || p.counts()[2] != 1 || p.counts()[3] != 1) { return 0; }
+        p.optional = p.optional ?? 99;
+        p.optional = p.optional ?? 100;
+        if (p.optional != 99) { return 0; }
+        string key = "dynamic";
+        p{key} = 8;
+        p{key} += 2;
+        if (p{key} != 10) { return 0; }
+        p.declared = 12;
+        if (p.declared != 12) { return 0; }
+        return 1;
+    }
+
+    #! object receiver: assignment, arithmetic, nested COW mutation and removal
+    int sub check_object(object p) {
+        p.write_only = 1;
+        if (p.counts() != (0, 1, 0, 0)) { return 0; }
+        p.v = 10;
+        p.v += 2;
+        ++p.v;
+        p.v--;
+        p.v -= 3;
+        p.v *= 4;
+        if (p.v != 36) { return 0; }
+        p.l = (1, 2);
+        auto before = p.l;
+        p.l[0] = 7;
+        p.l += 3;
+        if (p.l != (7, 2, 3) || before != (1, 2)) { return 0; }
+        p.h = {"k": 1};
+        p.h.k = 5;
+        p.h{"other"} = 8;
+        if (p.h != {"k": 5, "other": 8}) { return 0; }
+        if ((remove p.h.k) != 5) { return 0; }
+        delete p.h.other;
+        if (p.h != {}) { return 0; }
+        if ((remove p.v) != 36 || p.v != NOTHING) { return 0; }
+        p.to_delete = 4;
+        delete p.to_delete;
+        if (p.to_delete != NOTHING || p.counts()[2] != 1 || p.counts()[3] != 1) { return 0; }
+        p.optional = p.optional ?? 99;
+        p.optional = p.optional ?? 100;
+        if (p.optional != 99) { return 0; }
+        string key = "dynamic";
+        p{key} = 8;
+        p{key} += 2;
+        if (p{key} != 10) { return 0; }
+        p.declared = 12;
+        if (p.declared != 12) { return 0; }
+        return 1;
+    }
+
+    #! auto receiver: assignment, arithmetic, nested COW mutation and removal
+    int sub check_auto(auto p) {
+        p.write_only = 1;
+        if (p.counts() != (0, 1, 0, 0)) { return 0; }
+        p.v = 10;
+        p.v += 2;
+        ++p.v;
+        p.v--;
+        p.v -= 3;
+        p.v *= 4;
+        if (p.v != 36) { return 0; }
+        p.l = (1, 2);
+        auto before = p.l;
+        p.l[0] = 7;
+        p.l += 3;
+        if (p.l != (7, 2, 3) || before != (1, 2)) { return 0; }
+        p.h = {"k": 1};
+        p.h.k = 5;
+        p.h{"other"} = 8;
+        if (p.h != {"k": 5, "other": 8}) { return 0; }
+        if ((remove p.h.k) != 5) { return 0; }
+        delete p.h.other;
+        if (p.h != {}) { return 0; }
+        if ((remove p.v) != 36 || p.v != NOTHING) { return 0; }
+        p.to_delete = 4;
+        delete p.to_delete;
+        if (p.to_delete != NOTHING || p.counts()[2] != 1 || p.counts()[3] != 1) { return 0; }
+        p.optional = p.optional ?? 99;
+        p.optional = p.optional ?? 100;
+        if (p.optional != 99) { return 0; }
+        string key = "dynamic";
+        p{key} = 8;
+        p{key} += 2;
+        if (p{key} != 10) { return 0; }
+        p.declared = 12;
+        if (p.declared != 12) { return 0; }
+        return 1;
+    }
+
+    #! a user subclass inherits the hook, including writes in its own method context
+    int sub check_inheritance() {
+        Derived d();
+        d.update();
+        return d.read() == 16 && d.v == 16 && d.l == (9, 2) && d.h == {"k": 3} && d.gone == NOTHING
+            && d.removed == NOTHING && d.local == 6 && d.reentryCount() > 0 && d.counts()[2] == 1 && d.counts()[3] == 1 ? 1 : 0;
+    }
+
+    #! a rejected assignment reaches catch and releases its value
+    bool sub reject_assignment() {
+        object p = new CppApiTest::MemberWriteProbe();
+        try {
+            p.reject = new Tracked();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err == "WRITE-GATE-ERROR";
+        }
+        return False;
+    }
+
+    int sub check_exception() {
+        # Compiled execution can retain expression temporaries until the function returns.
+        bool rejected = reject_assignment();
+        return rejected && Tracked::live == 0 ? 1 : 0;
+    }
+
+    bool sub reject_result(int kind) {
+        object p = new CppApiTest::MemberWriteProbe();
+        try {
+            if (kind == 0) {
+                auto result = (p.reject = new Tracked());
+            } else if (kind == 1) {
+                auto result = (p.reject += new Tracked());
+            } else {
+                auto result = (p.reject.k = new Tracked());
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err == "WRITE-GATE-ERROR";
+        }
+        return False;
+    }
+
+    #! failures after an operator creates its result must release that result as well
+    int sub check_error_results() {
+        for (int kind = 0; kind < 3; ++kind) {
+            if (!reject_result(kind) || Tracked::live) { return 0; }
+        }
+        object p = new CppApiTest::MemberWriteProbe();
+        try {
+            p.write_only += 1;
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err == "READ-GATE-ERROR" && p.counts()[1] == 0 ? 1 : 0;
+        }
+        return 0;
+    }
+
+    #! private declared members cannot be redirected into external storage
+    int sub check_private() {
+        object p = new CppApiTest::MemberWriteProbe();
+        try {
+            p.secret = 1;
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err == "PRIVATE-MEMBER" && p.counts()[1] == 0 ? 1 : 0;
+        }
+        return 0;
+    }
+
+    #! writes through a reference still update external storage
+    int sub check_reference() {
+        object p = new CppApiTest::MemberWriteProbe();
+        p.v = 5;
+        reference<auto> r = \p.v;
+        r += 2;
+        return p.v == 7 ? 1 : 0;
+    }
+
+    #! inherited reads also work without a write gate, including native getter shortcuts
+    int sub check_read_inheritance() {
+        ReadDerived d();
+        OverrideRead overridden();
+        object o = d;
+        auto a = d;
+        return overridden.v == 66 && d.v == 55 && o.v == 55 && a.v == 55 && d.read() == 55 && d.readInt() == 55 ? 1 : 0;
+    }
+
+    #! inherited internal declarations retain their access checks
+    int sub check_internal() {
+        FurtherPrivate d();
+        d.updateHidden();
+        object o = d;
+        try {
+            o.hidden = 8;
+        } catch (hash<ExceptionInfo> ex) {
+            return d.readHidden() == 3 && d.counts()[1] == 0 ? 1 : 0;
+        }
+        return 0;
+    }
+
+    #! remove returns the object without deleting it; delete destroys it even with another reference
+    int sub check_object_removal() {
+        object p = new CppApiTest::MemberWriteProbe();
+        p.v = new Tracked();
+        object saved = remove p.v;
+        if (Tracked::live != 1) { return 0; }
+        p.v = saved;
+        delete p.v;
+        return Tracked::live == 0 ? 1 : 0;
+    }
+
+    #! nested proxies retain receivers while gates run without lvalue locks
+    int sub check_nested() {
+        object p = new CppApiTest::MemberWriteProbe();
+        p.child = new CppApiTest::MemberWriteProbe();
+        p.child.v = 7;
+        p.child.v += 2;
+        p.h = {"items": (1, 2)};
+        auto before = p.h;
+        p.h.items[1] = 6;
+        p.plain = new Plain();
+        p.plain.v = 4;
+        return p.counts()[1] == 4 && p.plain.v == 4 && p.child.v == 9 && p.h == {"items": (1, 6)} && before == {"items": (1, 2)} ? 1 : 0;
+    }
+
+    #! mixed declared/external slices preserve present keys and omit missing external members
+    int sub check_slice() {
+        object p = new CppApiTest::MemberWriteProbe();
+        p.v = 1;
+        hash<auto> result = remove p{"v", "declared", "missing"};
+        return result == {"v": 1, "declared": 7} && p.counts()[2] == 2 ? 1 : 0;
+    }
+
+    sub make_cycle() {
+        object p = new CppApiTest::MemberWriteProbe();
+        p.child = p;
+        p.value = new Tracked();
+    }
+
+    #! the lvalue and callback references must not keep external-storage cycles alive
+    int sub check_cycle() {
+        make_cycle();
+        return Tracked::live == 0 ? 1 : 0;
+    }
+
+    #! returns the outcome of each check
+    public hash<string, int> sub get_results() {
+        return {"typed": check_typed(new CppApiTest::MemberWriteProbe()),
+            "object": check_object(new CppApiTest::MemberWriteProbe()),
+            "auto": check_auto(new CppApiTest::MemberWriteProbe()),
+            "inheritance": check_inheritance(), "exception": check_exception(),
+            "private": check_private(), "reference": check_reference(),
+            "read-inheritance": check_read_inheritance(), "internal": check_internal(),
+            "object-removal": check_object_removal(), "nested": check_nested(),
+            "error-results": check_error_results(), "slice": check_slice(), "cycle": check_cycle(),
+            "builtin-inheritance": check_object(new CppApiTest::MemberWriteDerivedProbe())};
+    }
+}

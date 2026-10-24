@@ -570,22 +570,27 @@ int ObjCountRec::getDifference() {
     return before ? -1 : 0;
 }
 
-LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool for_remove) : vl(xsink) {
+LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool for_remove,
+        bool for_assignment)
+        : vl(xsink), assignment_only(for_assignment) {
     RuntimeReferenceHelper rh(ref, xsink);
     if (!*xsink) {
         doLValue(lvalue_ref::get(&ref)->vexp, for_remove);
     }
 }
 
-LValueHelper::LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove)
-        : vl(xsink) {
+LValueHelper::LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove,
+        bool for_assignment)
+        : vl(xsink), assignment_only(for_assignment) {
     RuntimeReferenceHelper rh(ref, xsink);
     if (!*xsink) {
         doLValue(lvalue_ref::get(&ref)->vexp, rc, for_remove);
     }
 }
 
-LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove) : vl(xsink) {
+LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove,
+        bool for_assignment)
+        : vl(xsink), assignment_only(for_assignment) {
     // exp can be 0 when called from LValueRefHelper if the attach to the Program fails, for example
     //printd(5, "LValueHelper::LValueHelper() exp: %p (%s %d)\n", exp, get_type_name(exp), get_node_type(exp));
     if (!exp.isNothing() && exp.hasNode()) {
@@ -593,8 +598,9 @@ LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_
     }
 }
 
-LValueHelper::LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove)
-        : vl(xsink) {
+LValueHelper::LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove,
+        bool for_assignment)
+        : vl(xsink), assignment_only(for_assignment) {
     // exp can be 0 when called from LValueRefHelper if the attach to the Program fails, for example
     if (!exp.isNothing() && exp.hasNode()) {
         doLValue(exp, rc, for_remove);
@@ -607,14 +613,16 @@ LValueHelper::LValueHelper(QoreObject& self, ExceptionSink* xsink) : vl(xsink), 
     ocvec.push_back(ObjCountRec(&self));
 }
 
-LValueHelper::LValueHelper(ExceptionSink* xsink) : vl(xsink) {
+LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink), assignment_only(for_assignment) {
 }
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
         ocvec(std::move(o.ocvec)), before(o.before), removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
-        robj(o.robj),
+        member_lvalue(std::move(o.member_lvalue)), assignment_only(o.assignment_only),
+        member_lvalue_modified(o.member_lvalue_modified), robj(o.robj),
         buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
-        buffer_lvalue_value(o.buffer_lvalue_value), val(o.val), typeInfo(o.typeInfo) {
+        buffer_lvalue_value(o.buffer_lvalue_value), val(o.val), qv(o.qv), typeInfo(o.typeInfo) {
+    o.qv = nullptr;
     o.buffer_lvalue = nullptr;
     o.buffer_lvalue_index = 0;
     o.buffer_lvalue_value = QoreValue();
@@ -700,6 +708,12 @@ LValueHelper::~LValueHelper() {
 
     // first free any locks
     vl.del();
+
+    if (member_lvalue && member_lvalue->write_back && member_lvalue_modified && !*vl.xsink) {
+        qore_class_private::get(*member_lvalue->object->getClass())->evalMemberWriteGate(*member_lvalue->object,
+            member_lvalue->member.c_str(), *member_lvalue->value, QoreMemberWriteOp::Assign,
+            vl.xsink).discard(vl.xsink);
+    }
 
     if (static_var_lvalue) {
         // write the value back to the storage the variable mirrors, after the object-count bookkeeping above and
@@ -907,7 +921,11 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     bool negative_offsets = op->hasNegativeOffsets();
 
     // now get left hand side
-    if (doLValue(op->getLeft(), for_remove)) {
+    bool final_assignment = assignment_only;
+    assignment_only = false;
+    int parent_rc = doLValue(op->getLeft(), for_remove);
+    assignment_only = final_assignment;
+    if (parent_rc) {
         return -1;
     }
 
@@ -1042,7 +1060,11 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
     bool negative_offsets = op->hasNegativeOffsets();
 
     // now get left hand side
-    if (doLValue(op->getLeft(), rc, for_remove)) {
+    bool final_assignment = assignment_only;
+    assignment_only = false;
+    int parent_rc = doLValue(op->getLeft(), rc, for_remove);
+    assignment_only = final_assignment;
+    if (parent_rc) {
         return -1;
     }
 
@@ -1174,6 +1196,31 @@ int LValueHelper::setBufferElementLValue(QoreBufferNode* b, size_t index) {
         return -1;
     }
     resetValue(buffer_lvalue_value, b->getElementTypeInfo());
+    return 0;
+}
+
+int LValueHelper::setMemberWriteGateLValue(QoreObject* object, const char* member) {
+    auto entry = std::make_unique<MemberLValue>(object, member, vl.xsink);
+    // Keep the receiver before unlocking the parent lvalue; a gate can call external or Qore code.
+    vl.del();
+    clearPtr();
+    ocvec.clear();
+    robj = nullptr;
+    rdt = 0;
+    if (*vl.xsink) {
+        return -1;
+    }
+    if (!assignment_only) {
+        entry->value = qore_class_private::get(*object->getClass())->evalMemberGate(object, member, vl.xsink);
+        if (*vl.xsink) {
+            return -1;
+        }
+    }
+    setValue(*entry->value, autoTypeInfo);
+    // Crossing an object boundary mutates that object, not the external member holding its reference.
+    // Keep only the final object's temporary; any containing hash/list copies are unchanged by that mutation.
+    member_lvalue = std::move(entry);
+    member_lvalue_modified = false;
     return 0;
 }
 
@@ -1319,7 +1366,11 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
         return -1;
     }
 
-    if (doLValue(op->getLeft(), for_remove)) {
+    bool final_assignment = assignment_only;
+    assignment_only = false;
+    int parent_rc = doLValue(op->getLeft(), for_remove);
+    assignment_only = final_assignment;
+    if (parent_rc) {
         return -1;
     }
 
@@ -1353,7 +1404,11 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
         return -1;
     }
 
-    if (doLValue(op->getLeft(), rc, for_remove)) {
+    bool final_assignment = assignment_only;
+    assignment_only = false;
+    int parent_rc = doLValue(op->getLeft(), rc, for_remove);
+    assignment_only = final_assignment;
+    if (parent_rc) {
         return -1;
     }
 
@@ -1372,6 +1427,9 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
 }
 
 void LValueHelper::setObjectContext(qore_object_private* obj) {
+    if (isMemberWriteGateLValue()) {
+        return;
+    }
     robj = obj;
     ocvec.push_back(ObjCountRec(obj->obj));
 }
@@ -1435,8 +1493,7 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
             return -1;
         }
 
-        robj = qore_object_private::get(*obj);
-        ocvec.push_back(ObjCountRec(obj));
+        setObjectContext(qore_object_private::get(*obj));
     } else if (ntype == NT_CLASS_VARREF) {
         const AbstractQoreNode* node = n.getInternalNode();
         const StaticClassVarRefNode* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
@@ -1549,8 +1606,7 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
             return -1;
         }
 
-        robj = qore_object_private::get(*obj);
-        ocvec.push_back(ObjCountRec(obj));
+        setObjectContext(qore_object_private::get(*obj));
     } else if (ntype == NT_CLASS_VARREF) {
         const AbstractQoreNode* node = n.getInternalNode();
         const StaticClassVarRefNode* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
@@ -1666,6 +1722,8 @@ double LValueHelper::getAsFloat() const {
 int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool for_remove) {
     assert(num_steps > 0);
 
+    const bool final_assignment = assignment_only;
+    assignment_only = final_assignment && num_steps == 1;
     // Step 0: resolve root variable
     const LVPathStep& root = steps[0];
     switch (root.kind) {
@@ -1739,8 +1797,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                 // object already cleared above
                 return -1;
             }
-            robj = qore_object_private::get(*obj);
-            ocvec.push_back(ObjCountRec(obj));
+            setObjectContext(qore_object_private::get(*obj));
             break;
         }
         case LVPathStepKind::StaticVar: {
@@ -1788,6 +1845,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
 
     // Steps 1..N: navigate hash/list members
     for (uint32_t i = 1; i < num_steps; ++i) {
+        assignment_only = final_assignment && i + 1 == num_steps;
         const LVPathStep& step = steps[i];
         qore_type_t t = val ? val->getType() : qv->getType();
         switch (step.kind) {
@@ -2058,6 +2116,7 @@ bool qore_is_indirect_ref_value(const QoreValue& val) {
 }
 
 int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, AssignmentMode mode) {
+    member_lvalue_modified = true;
     assert(!*vl.xsink);
     if (n.hasNode() && n.getInternalNode() == &Nothing) {
         n.set(static_cast<AbstractQoreNode*>(nullptr));
@@ -2142,6 +2201,7 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, Assign
 }
 
 int LValueHelper::makeIntVal(const char* desc) {
+    member_lvalue_modified = true;
     assert(val);
     if (val->isInt()) {
         return 0;
@@ -2158,6 +2218,7 @@ int LValueHelper::makeIntVal(const char* desc) {
 }
 
 int LValueHelper::makeIntQv(const char* desc) {
+    member_lvalue_modified = true;
     assert(qv);
     if (qv->getType() == NT_INT) {
         return 0;
@@ -2174,6 +2235,7 @@ int LValueHelper::makeIntQv(const char* desc) {
 }
 
 int LValueHelper::makeFloat(const char* desc) {
+    member_lvalue_modified = true;
     assert(val || qv);
     if (val) {
         if (val->isFloat()) {
@@ -2205,6 +2267,7 @@ int LValueHelper::makeFloat(const char* desc) {
 }
 
 int LValueHelper::makeNumber(const char* desc) {
+    member_lvalue_modified = true;
     assert(val || qv);
     if ((val && val->getType() == NT_NUMBER) || (qv && qv->getType() == NT_NUMBER)) {
         return 0;
@@ -2646,6 +2709,7 @@ void LValueHelper::divideEqualsNumber(QoreValue r, const char* desc) {
 }
 
 QoreValue LValueHelper::removeValue(bool for_del) {
+    member_lvalue_modified = true;
     if (val)
         return val->removeValue(for_del);
 
@@ -2653,6 +2717,7 @@ QoreValue LValueHelper::removeValue(bool for_del) {
 }
 
 QoreValue LValueHelper::remove(bool& static_assignment) {
+    member_lvalue_modified = true;
     assert(!static_assignment);
     if (val)
         return val->remove(static_assignment);
@@ -2733,7 +2798,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
     }
 
     if (t == NT_SELF_VARREF) {
-        discard(rv.assignInitial(qore_object_private::takeMember(*(runtime_get_stack_object()), xsink, lvalue.get<SelfVarrefNode>()->str, false)), xsink);
+        discard(rv.assignInitial(qore_object_private::takeMember(*(runtime_get_stack_object()), xsink, lvalue.get<SelfVarrefNode>()->str, false, for_del)), xsink);
         return;
     }
 
@@ -2806,7 +2871,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
         const QoreListNode* l = member->get<const QoreListNode>();
 
         if (o) {
-            qore_object_private::takeMembers(*o, rv, lvh, l);
+            qore_object_private::takeMembers(*o, rv, lvh, l, for_del);
             lvh.removedValue(rv.getValue());
         } else {
             unsigned old_count = qore_hash_private::getScanCount(*h);
@@ -2848,7 +2913,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
 
     QoreValue v{};
     if (o)
-        v = qore_object_private::takeMember(*o, lvh, mem.c_str());
+        v = qore_object_private::takeMember(*o, lvh, mem.c_str(), for_del);
     else {
         v = h->takeKeyValue(mem.c_str());
         if (needs_scan(v)) {

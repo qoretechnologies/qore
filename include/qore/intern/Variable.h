@@ -481,6 +481,18 @@ public:
     /** the value is written back through the variable's accessor when this object is destroyed
     */
     DLLLOCAL int setStaticVarAccessorLValue(QoreVarInfo& vi);
+    //! Binds an external member to a temporary; writes are committed after releasing lvalue locks
+    DLLLOCAL int setMemberWriteGateLValue(QoreObject* object, const char* member);
+    // An object reached through an external member has its own identity; mutating it does not replace
+    // the parent's reference. Keep the temporary alive, but stop writing it back to the parent.
+    DLLLOCAL void disableMemberWriteBack() {
+        if (member_lvalue) {
+            member_lvalue->write_back = false;
+        }
+    }
+    DLLLOCAL bool isMemberWriteGateLValue() const {
+        return member_lvalue && qv == &*member_lvalue->value;
+    }
 protected:
     DLLLOCAL int doHashLValue(qore_type_t t, const char* mem, bool for_remove);
     DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove);
@@ -562,6 +574,20 @@ private:
     typedef std::vector<VivifiedEntry> vivvec_t;
     vivvec_t vivified;
 
+    struct MemberLValue {
+        ReferenceHolder<QoreObject> object;
+        std::string member;
+        ValueHolder value;
+        bool write_back = true;
+
+        DLLLOCAL MemberLValue(QoreObject* obj, const char* name, ExceptionSink* xsink)
+            : object(static_cast<QoreObject*>(obj->refSelf()), xsink), member(name), value(xsink) {
+        }
+    };
+    std::unique_ptr<MemberLValue> member_lvalue;
+    bool assignment_only = false;
+    bool member_lvalue_modified = false;
+
     RObject* robj = nullptr;
     //! set when the lvalue is a static variable whose value is held in external storage
     QoreVarInfo* static_var_lvalue = nullptr;
@@ -584,12 +610,16 @@ public:
     */
     q_lvalue_vts_e value_type_source = QLVTS_None;
 
-    DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool for_remove = false);
-    DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove = false);
-    DLLLOCAL LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false);
-    DLLLOCAL LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false);
+    DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool for_remove = false,
+        bool for_assignment = false);
+    DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove = false,
+        bool for_assignment = false);
+    DLLLOCAL LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false,
+        bool for_assignment = false);
+    DLLLOCAL LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false,
+        bool for_assignment = false);
 
-    DLLLOCAL LValueHelper(ExceptionSink* xsink);
+    DLLLOCAL LValueHelper(ExceptionSink* xsink, bool for_assignment = false);
 
     DLLLOCAL LValueHelper(LValueHelper&& o);
 
@@ -875,6 +905,7 @@ public:
     // only call if there is a reference-counted AbstractQoreNode value in place
     // FIXME: port operators to LValueHelper instead and remove this function
     DLLLOCAL void ensureUnique() {
+        member_lvalue_modified = true;
         QoreValue current = getValue();
         if (current.isShortString()) {
             char buf[7];

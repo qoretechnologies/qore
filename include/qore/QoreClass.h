@@ -140,6 +140,26 @@ class QoreExternalStaticMember;
 class QoreExternalNormalMember;
 class QoreExternalConstant;
 
+//! The operation requested from a builtin class's external member write gate
+/** @since %Qore 3.0 */
+enum class QoreMemberWriteOp {
+    Assign, //!< Store the supplied value in external storage
+    Remove, //!< Remove the external member and return its previous value
+    Delete, //!< Remove the external member and return its previous value for deletion by Qore
+};
+
+//! A callback that owns writes to undeclared object members
+/** The object, private data, member name and assigned value are borrowed for the duration of the call.
+    The private data belongs to the class that registered the callback and remains referenced during the call.
+    No Qore object or lvalue lock is held. The callback must implement any external synchronization and sandbox
+    checks its operation needs. Return NOTHING for Assign, or an owned previous value for Remove/Delete.
+    Raise errors through xsink; a returned value is released on error. The value argument is NOTHING for
+    Remove/Delete. Returning NOTHING for a missing member is allowed.
+    @since %Qore 3.0
+*/
+using q_member_write_gate_t = QoreValue (*)(QoreObject* self, AbstractPrivateData* data, const char* member,
+    QoreValue value, QoreMemberWriteOp operation, ExceptionSink* xsink);
+
 //! method type enum
 /** @since %Qore 0.9
 */
@@ -907,6 +927,35 @@ public:
         int64) does.
     */
     DLLEXPORT void setSystem();
+
+    //! Registers a callback for assignments and removals of undeclared members
+    /** Register during builtin class initialization, before publishing the class. The callback is inherited
+        by subclasses; a subclass's own callback takes precedence, otherwise the first inherited gate wins.
+        Declared members, including private members, retain their normal storage and access checks.
+
+        Plain assignment calls the gate without first reading the member. Compound and nested assignments
+        read through memberGate(), modify a temporary with normal copy-on-write rules, then call the gate.
+        The read/modify/write sequence is not atomic; modules must provide synchronization when needed.
+
+        @param gate callback; nullptr disables this class's own gate before initialization
+        @return no value
+        @throw none
+        @note The callback must not be changed after class initialization. It runs without Qore lvalue locks.
+        @par Example
+        @code{.cpp}
+        // A proxy for an external record stores dynamic fields outside the Qore object.
+        record_class->setMemberWriteGate(write_record_field);
+        @endcode
+        @since %Qore 3.0
+    */
+    DLLEXPORT void setMemberWriteGate(q_member_write_gate_t gate);
+
+    //! Returns whether this class has an external member write gate
+    /** @return true if this class or an initialized base supplies a gate
+        @throw none
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool hasMemberWriteGate() const;
 
     //! returns true if the class implements a "memberGate" method
     DLLEXPORT bool hasMemberGate() const;
