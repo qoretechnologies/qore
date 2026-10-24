@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -108,6 +108,10 @@ int BinaryNode::writeTo(size_t pos, const void* nptr, size_t size) {
 }
 
 void BinaryNode::append(const void* nptr, size_t size) {
+    // nothing is appended; a reallocation to 0 bytes would free an empty buffer
+    if (!size) {
+        return;
+    }
     bool self_copy = nptr == ptr;
     ptr = realloc(ptr, len + size);
     if (self_copy) {
@@ -127,6 +131,10 @@ void BinaryNode::append(const BinaryNode &b) {
 }
 
 void BinaryNode::prepend(const void* nptr, size_t size) {
+    // nothing is prepended; a reallocation to 0 bytes would free an empty buffer
+    if (!size) {
+        return;
+    }
     ptr = realloc(ptr, len + size);
     // move memory forward
     memmove((char*)ptr + size, ptr, len);
