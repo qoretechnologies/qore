@@ -32,6 +32,13 @@ class Node {
     }
 }
 
+#! Holds a value in an object member
+class Holder {
+    public {
+        auto slot;
+    }
+}
+
 public class DgcOpaqueReferencesTest inherits QUnit::Test {
     constructor() : QUnit::Test("DgcOpaqueReferencesTest", "1.0") {
         addTestCase("parse option is required", \parseOptionRequired());
@@ -40,6 +47,7 @@ public class DgcOpaqueReferencesTest inherits QUnit::Test {
         addTestCase("hash and list targets", \containerTargets());
         addTestCase("a cycle through @= is not collected", \opaqueCycleNotCollected());
         addTestCase("overwriting releases the old target", \overwriteReleases());
+        addTestCase("a value read through @= is assigned with '=' as an ordinary reference", \readBackIsOrdinary());
         addTestCase("Program teardown breaks an opaque cycle", \teardownBreaksCycle());
         addTestCase("Program teardown breaks a cycle through a container", \teardownBreaksContainerCycle());
         addTestCase("Program teardown leaves another Program's objects alone", \teardownLeavesOtherPrograms());
@@ -158,6 +166,52 @@ public class DgcOpaqueReferencesTest inherits QUnit::Test {
 
         holder{"n"} = NOTHING;
         assertEq(2, Node::destroyed, "clearing the slot released the second target");
+    }
+
+    #! Only the slot that @= wrote holds its reference opaquely: a value read from it is assigned with '=' as an ordinary reference
+    /** Compiled code assigning a value read through an opaque reference to an lvalue path reached through a cast
+        stored the reference opaquely, so the garbage collector did not see an edge made with '=', and a cycle
+        through it was never collected.
+    */
+    readBackIsOrdinary() {
+        Node::destroyed = 0;
+        {
+            Holder holder();
+            {
+                Node a("a");
+                holder.slot @= a;
+                a.other = new Node("b");
+            }
+            # the edge from b back to a is made with '=' from the value read through the opaque reference
+            cast<Node>(holder.slot).other.other = holder.slot;
+        }
+        assertEq(2, Node::destroyed, "a cycle made with '=' from an object member written with '@=' is collected");
+
+        Node::destroyed = 0;
+        {
+            hash<auto> holder = {};
+            {
+                Node a("a");
+                holder.a @= a;
+                a.other = new Node("b");
+            }
+            cast<Node>(holder.a).other.other = holder.a;
+        }
+        assertEq(2, Node::destroyed, "a cycle made with '=' from a hash value written with '@=' is collected");
+
+        Node::destroyed = 0;
+        {
+            Holder holder();
+            {
+                Node a("a");
+                holder.slot @= a;
+                a.other = new Node("b");
+            }
+            # the value read through one opaque reference and assigned with '@=' to another slot
+            cast<Node>(holder.slot).other.other @= holder.slot;
+            holder.slot = NOTHING;
+        }
+        assertEq(0, Node::destroyed, "a cycle through a second '@=' is not collected");
     }
 
     #! A cycle the collector cannot see must still be broken when its Program is torn down
