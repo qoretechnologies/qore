@@ -695,7 +695,12 @@ public:
 #else
                     primary_stack_top = real_base;
 #endif
-                    primary_stack_size = real_size;
+                    // the size reported for a stack that grows on demand can be only the part mapped so far (musl
+                    // reports the mapped size of the initial thread's stack), so the size from the resource limit
+                    // above is used when it is larger
+                    if (real_size > primary_stack_size) {
+                        primary_stack_size = real_size;
+                    }
                 }
 #endif // #ifdef QORE_HAVE_GET_STACK_SIZE
             }
