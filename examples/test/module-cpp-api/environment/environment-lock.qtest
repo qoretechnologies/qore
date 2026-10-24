@@ -15,12 +15,14 @@
 
 #! Tests the C++ API that serializes access to the process environment (SystemEnvironment)
 /** Binary modules read and change the environment through SystemEnvironment, QoreEnvironmentValue,
-    AtomicEnvironmentSetter (the lock held exclusively) and QoreEnvironmentReadLock (the lock held shared), which take
-    the same process-wide lock as the Qore-language environment functions.  The cppapiuser test module exercises them.
+    AtomicEnvironmentSetter (the locks held exclusively) and QoreEnvironmentReadLock (changes excluded), which take
+    the same process-wide locks as the Qore-language environment functions.  The cppapiuser test module exercises
+    them.
 
-    The fork cases create a child process while another thread holds the lock and releases it while fork() waits for
-    it (the fork handlers acquire it before the process is copied).  If that were broken, the child, and with it the
-    test, would wait forever.
+    The fork cases create a child process while another thread holds an AtomicEnvironmentSetter, which it releases
+    while fork() waits for it (the fork handlers wait for changes to the environment before the process is copied),
+    or a QoreEnvironmentReadLock, which fork() does not wait for; the child changes the environment, so the locks
+    must be free in it.  If that were broken, the child, and with it the test, would wait forever.
     The fork() and exec() case creates its children while writer threads start, change the environment and exit
     one after another, so the thread list's lock is taken while the process is copied too.
 */
@@ -52,7 +54,7 @@ class EnvironmentLockTest inherits QUnit::Test {
         addTestCase("AtomicEnvironmentSetter changes variables atomically", \testAtomicPair());
         addTestCase("negative: a thread holding the lock shared cannot change the environment", \testReadLocked());
         addTestCase("the lock nests in an exclusive hold", \testNestedExclusive());
-        addTestCase("fork() waits for another thread that holds the lock", \testForkWhileHeld());
+        addTestCase("fork() while another thread holds the lock", \testForkWhileHeld());
         addTestCase("fork() and exec() while other threads change the environment", \testForkExec());
         set_return_value(main());
     }

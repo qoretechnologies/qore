@@ -42,87 +42,139 @@
 SystemEnvironment SysEnv;
 
 namespace {
-// the process-wide environment lock: every access to the process environment that Qore makes holds it, shared to
-// read the environment and exclusively to change it.  It is initialized statically, so it works in code that runs
-// during static initialization, and it is never destroyed, so it works in code that runs during static destruction.
+// The process environment is protected by two read-write locks (see design/fork-handlers.md, "The environment"):
+//
+// - the environment change lock: held shared while code reads the environment with the C library directly
+//   (QoreEnvironmentReadLock): to pass environ to a new process, or to call a library that reads the environment
+//   itself, such as c-ares, OpenSSL or the C library's time functions; such a call can take a long time and can take
+//   other locks, among them the lock of the dynamic linker (c-ares loads and unloads libSystem on macOS whenever it
+//   creates a channel).  It is held exclusively, before the environment lock, while the environment is changed.
+//   fork() does not wait for it: its holders do not change the environment, and the dynamic linker of macOS takes
+//   its lock before it runs the fork handlers, so a fork handler that waited for a hold across dlclose() would
+//   deadlock.  In the child it is reset.
+// - the environment lock: a leaf lock, held shared while the library copies a variable (SystemEnvironment::get(),
+//   QoreEnvironmentValue) and exclusively while the environment is changed; its holders only copy strings and change
+//   the environment, so the fork handler acquires it exclusively before the process is copied, and the child gets a
+//   consistent environment.
+//
+// Both locks are initialized statically, so they work in code that runs during static initialization, and they are
+// never destroyed, so they work in code that runs during static destruction.
+pthread_rwlock_t qore_env_change_lock = PTHREAD_RWLOCK_INITIALIZER;
 pthread_rwlock_t qore_env_lock = PTHREAD_RWLOCK_INITIALIZER;
 
-// how the current thread holds the lock: 0 = not held, > 0 = shared (the nesting depth), < 0 = exclusively (the
-// negated nesting depth).  A thread that already holds the lock only counts a nested acquisition, so the lock is
-// never acquired twice by one thread: a second shared acquisition can wait forever behind a waiting writer where
-// writers are preferred, as on macOS.
+// how the current thread holds each lock: 0 = not held, > 0 = shared (the nesting depth), < 0 = exclusively (the
+// negated nesting depth).  A thread that already holds a lock only counts a nested acquisition, so a lock is never
+// acquired twice by one thread: a second shared acquisition can wait forever behind a waiting writer where writers
+// are preferred, as on macOS.
+thread_local int qore_env_change_depth = 0;
 thread_local int qore_env_lock_depth = 0;
 
-void qore_env_acquire_shared() {
-    if (qore_env_lock_depth > 0) {
-        ++qore_env_lock_depth;
+void qore_env_rwlock_shared(pthread_rwlock_t& lock, int& depth) {
+    if (depth > 0) {
+        ++depth;
         return;
     }
-    if (qore_env_lock_depth < 0) {
-        --qore_env_lock_depth;
+    if (depth < 0) {
+        --depth;
         return;
     }
-    int rc = pthread_rwlock_rdlock(&qore_env_lock);
+    int rc = pthread_rwlock_rdlock(&lock);
     assert(!rc);
     (void)rc;
-    qore_env_lock_depth = 1;
+    depth = 1;
 }
 
-// acquires the lock exclusively, or, if the thread already holds it shared, only nests the shared hold: the thread
-// cannot wait for the exclusive lock while holding it shared, since it would wait for itself; changes to the
-// environment are then refused (see qore_env_held_exclusively())
-void qore_env_acquire_exclusive() {
-    if (qore_env_lock_depth > 0) {
-        ++qore_env_lock_depth;
+void qore_env_rwlock_exclusive(pthread_rwlock_t& lock, int& depth) {
+    // a thread holding the lock shared cannot wait for it exclusively; the callers check this first
+    assert(depth <= 0);
+    if (depth < 0) {
+        --depth;
         return;
     }
-    if (qore_env_lock_depth < 0) {
-        --qore_env_lock_depth;
-        return;
-    }
-    int rc = pthread_rwlock_wrlock(&qore_env_lock);
+    int rc = pthread_rwlock_wrlock(&lock);
     assert(!rc);
     (void)rc;
-    qore_env_lock_depth = -1;
+    depth = -1;
 }
 
-void qore_env_release() {
-    assert(qore_env_lock_depth);
-    if (qore_env_lock_depth > 1) {
-        --qore_env_lock_depth;
+void qore_env_rwlock_release(pthread_rwlock_t& lock, int& depth) {
+    assert(depth);
+    if (depth > 1) {
+        --depth;
         return;
     }
-    if (qore_env_lock_depth < -1) {
-        ++qore_env_lock_depth;
+    if (depth < -1) {
+        ++depth;
         return;
     }
-    qore_env_lock_depth = 0;
+    depth = 0;
     // lock objects are released right after calls whose errno the caller reads (fork(), popen(), execvp())
     int saved_errno = errno;
-    int rc = pthread_rwlock_unlock(&qore_env_lock);
+    int rc = pthread_rwlock_unlock(&lock);
     assert(!rc);
     (void)rc;
     errno = saved_errno;
 }
 
-bool qore_env_held_exclusively() {
-    return qore_env_lock_depth < 0;
+// holds the change lock shared (QoreEnvironmentReadLock)
+void qore_env_acquire_read() {
+    // the change lock is acquired before the environment lock: a thread copying a variable takes no other lock
+    assert(qore_env_change_depth || !qore_env_lock_depth);
+    qore_env_rwlock_shared(qore_env_change_lock, qore_env_change_depth);
 }
 
-//! the fork handler of the environment lock (see QoreForkHandler)
-/** Before fork(), the lock is acquired exclusively, so that the child gets a consistent copy of the environment.
-    It ranks last among the locks that the fork handlers acquire, since its holders take no other lock.
+void qore_env_release_read() {
+    qore_env_rwlock_release(qore_env_change_lock, qore_env_change_depth);
+}
 
-    A thread must not call fork() while it holds the lock: the fork handlers would acquire the other locks while it
-    is held, and a thread that holds one of them while it waits for the environment lock would deadlock with the
-    forking thread (with a shared hold, on platforms whose read-write locks prefer writers, such as macOS, behind a
-    waiting writer).  In a debug build this is an assertion; otherwise the forking thread's hold, which also
-    excludes changes, is kept: a thread holding the lock shared cannot wait for the exclusive lock.
+// acquires both locks exclusively, or, if the thread already holds the change lock shared, only nests the shared
+// hold: the thread cannot wait for the exclusive lock while holding it shared, since it would wait for itself;
+// changes to the environment are then refused (see qore_env_held_exclusively())
+void qore_env_acquire_exclusive() {
+    if (qore_env_change_depth > 0) {
+        ++qore_env_change_depth;
+        return;
+    }
+    // the change lock is acquired before the environment lock: a thread copying a variable takes no other lock
+    assert(qore_env_change_depth || !qore_env_lock_depth);
+    qore_env_rwlock_exclusive(qore_env_change_lock, qore_env_change_depth);
+    qore_env_rwlock_exclusive(qore_env_lock, qore_env_lock_depth);
+}
+
+void qore_env_release_exclusive() {
+    if (qore_env_change_depth > 0) {
+        qore_env_rwlock_release(qore_env_change_lock, qore_env_change_depth);
+        return;
+    }
+    qore_env_rwlock_release(qore_env_lock, qore_env_lock_depth);
+    qore_env_rwlock_release(qore_env_change_lock, qore_env_change_depth);
+}
+
+bool qore_env_held_exclusively() {
+    return qore_env_change_depth < 0;
+}
+
+//! the fork handler of the environment locks (see QoreForkHandler)
+/** Before fork(), the environment lock is acquired exclusively, so that the child gets a consistent copy of the
+    environment: it waits only for threads that copy a variable or change the environment.  It ranks last among the
+    locks that the fork handlers acquire, since its holders take no other lock.
+
+    The change lock is not acquired: its holders run library code that can wait for locks that the forking thread
+    holds while the fork handlers run (the lock of the dynamic linker on macOS, which fork() takes before it runs
+    them), and they do not change the environment.  A thread changing the environment acquires the change lock
+    first, so while the forking thread holds the environment lock, no other thread can change the environment.
+
+    A thread must not call fork() while it holds the environment lock (inside an AtomicEnvironmentSetter): the fork
+    handlers would acquire the other locks while it is held, and a thread that holds one of them while it waits for
+    the environment lock would deadlock with the forking thread (with a shared hold, on platforms whose read-write
+    locks prefer writers, such as macOS, behind a waiting writer).  In a debug build this is an assertion; otherwise
+    the forking thread's hold, which also excludes changes, is kept.  It can call fork() while it holds a
+    QoreEnvironmentReadLock.
 
     In the child, which runs only the thread that called fork(), the holds of all other threads are gone with them,
-    so the lock is reset, and a hold of the forking thread is restored, so that the lock objects it holds release the
-    lock in the child as in the parent.  The lock is reset by assigning the static initializer: a lock that was held
-    cannot be initialized again with pthread_rwlock_init() (macOS refuses it with EBUSY).
+    so both locks are reset, and the holds of the forking thread are restored, so that the lock objects it holds
+    release the locks in the child as in the parent.  The locks are reset by assigning the static initializer: a
+    lock that was held cannot be initialized again with pthread_rwlock_init() (macOS refuses it with EBUSY).
 */
 class QoreEnvForkHandler : public QoreForkHandler {
 public:
@@ -154,40 +206,46 @@ public:
 
     void child() noexcept override {
         acquired = false;
-        static const pthread_rwlock_t unlocked = PTHREAD_RWLOCK_INITIALIZER;
-        qore_env_lock = unlocked;
-        if (qore_env_lock_depth > 0) {
-            int rc = pthread_rwlock_rdlock(&qore_env_lock);
-            assert(!rc);
-            (void)rc;
-        } else if (qore_env_lock_depth < 0) {
-            int rc = pthread_rwlock_wrlock(&qore_env_lock);
-            assert(!rc);
-            (void)rc;
-        }
+        restore(qore_env_lock, qore_env_lock_depth);
+        restore(qore_env_change_lock, qore_env_change_depth);
     }
 
 private:
     //! set by prepare() if it acquired the lock; only accessed by the forking thread, with the registry lock held
     bool acquired = false;
+
+    //! resets a lock in the child and acquires it again as the forking thread held it
+    static void restore(pthread_rwlock_t& lock, int depth) {
+        static const pthread_rwlock_t unlocked = PTHREAD_RWLOCK_INITIALIZER;
+        lock = unlocked;
+        if (depth > 0) {
+            int rc = pthread_rwlock_rdlock(&lock);
+            assert(!rc);
+            (void)rc;
+        } else if (depth < 0) {
+            int rc = pthread_rwlock_wrlock(&lock);
+            assert(!rc);
+            (void)rc;
+        }
+    }
 };
 
-// holds the lock shared for its lifetime
+// holds the environment lock shared for its lifetime, to copy a variable
 class QoreEnvSharedHelper {
 public:
     QoreEnvSharedHelper() {
-        qore_env_acquire_shared();
+        qore_env_rwlock_shared(qore_env_lock, qore_env_lock_depth);
     }
 
     ~QoreEnvSharedHelper() {
-        qore_env_release();
+        qore_env_rwlock_release(qore_env_lock, qore_env_lock_depth);
     }
 
     QoreEnvSharedHelper(const QoreEnvSharedHelper&) = delete;
     QoreEnvSharedHelper& operator=(const QoreEnvSharedHelper&) = delete;
 };
 
-// holds the lock exclusively for its lifetime
+// holds both locks exclusively for its lifetime, to change the environment
 class QoreEnvExclusiveHelper {
 public:
     QoreEnvExclusiveHelper() {
@@ -195,7 +253,7 @@ public:
     }
 
     ~QoreEnvExclusiveHelper() {
-        qore_env_release();
+        qore_env_release_exclusive();
     }
 
     QoreEnvExclusiveHelper(const QoreEnvExclusiveHelper&) = delete;
@@ -323,7 +381,7 @@ AtomicEnvironmentSetter::AtomicEnvironmentSetter() {
 }
 
 AtomicEnvironmentSetter::~AtomicEnvironmentSetter() {
-    qore_env_release();
+    qore_env_release_exclusive();
 }
 
 int AtomicEnvironmentSetter::set(const char* name, const char* value, bool overwrite) {
@@ -358,11 +416,11 @@ bool AtomicEnvironmentSetter::valueExists(const char* name) {
 }
 
 QoreEnvironmentReadLock::QoreEnvironmentReadLock() {
-    qore_env_acquire_shared();
+    qore_env_acquire_read();
 }
 
 QoreEnvironmentReadLock::~QoreEnvironmentReadLock() {
-    qore_env_release();
+    qore_env_release_read();
 }
 
 QoreEnvironmentValue::QoreEnvironmentValue(const char* name) {

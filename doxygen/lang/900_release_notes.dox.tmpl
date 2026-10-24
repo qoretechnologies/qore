@@ -4894,7 +4894,7 @@ while (*binary chunk = input.read(65536)) {
       access to the environment that %Qore makes, including its own settings read from the environment and the copy
       of the environment that a new process gets from @ref Qore::system() "system()", the
       @ref backquote_operator "backquote operator", @ref Qore::exec() "exec()" and @ref Qore::fork() "fork()", is
-      now serialized with one process-wide lock (reads run in parallel), where this was done only on HP-UX.  Binary
+      now serialized with process-wide locks (reads run in parallel), where this was done only on HP-UX.  Binary
       modules can take the same lock with the new C++ API classes \c QoreEnvironmentReadLock and
       \c QoreEnvironmentValue and with \c SystemEnvironment::isSet(); code that uses the environment without %Qore's
       API, such as a third-party library, is not serialized with it
@@ -4904,11 +4904,13 @@ while (*binary chunk = input.read(65536)) {
       zone or a character encoding.  @ref Qore::fork() "fork()" now briefly waits for threads that hold the
       library's process-wide locks, and the child process gets them free and repairs the state of the threads that
       do not exist in it; this also applies to a \c fork() made by native code.  Objects that another thread was
-      using at the moment of the fork, such as a locked mutex, still cannot be used in the child.  Native code must
-      not hold the environment lock (\c QoreEnvironmentReadLock, \c AtomicEnvironmentSetter) while it calls
-      \c fork(); the child gets a consistent copy of the environment without it.  Binary modules can register fork
-      handlers for their own process-wide locks with the new C++ API function \c qore_register_fork_handler(); the
-      \c i18n, \c linenoise, \c logger_bin, \c ml and \c sshutil modules do, so that a child process can use them
+      using at the moment of the fork, such as a locked mutex, still cannot be used in the child.  A thread that
+      resolves a host name, starts a process or reads the environment through a third-party library while another
+      thread calls \c fork() does not delay it.  Native code must not call \c fork() inside an
+      \c AtomicEnvironmentSetter; the child gets a consistent copy of the environment without it.  Binary modules can
+      register fork handlers for their own process-wide locks with the new C++ API function
+      \c qore_register_fork_handler(); the \c i18n, \c linenoise, \c logger_bin, \c ml and \c sshutil modules do,
+      so that a child process can use them
     - Fixed child processes created with @ref Qore::fork() "fork()" that ended or changed the database sessions of
       their parent: a child that closed or destroyed a @ref Qore::SQL::Datasource "Datasource",
       @ref Qore::SQL::DatasourcePool "DatasourcePool" or @ref Qore::SQL::SQLStatement "SQLStatement" that it had

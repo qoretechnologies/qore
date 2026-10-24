@@ -66,9 +66,10 @@ cannot deadlock with a thread that keeps to the order.
 | 1900 | debug output (`printd()`) | ACQUIRE | allocation tracking |
 | 1950 | allocation tracking (only with `ENABLE_ALLOC_TRACKING`) | ACQUIRE | — |
 
-The environment lock ranks near the top: its holders only copy strings, create processes and read the
-environment, so it is a leaf, and every lock that reads the environment while held (there are hundreds of such
-reads) ranks below it.
+The environment lock ranks near the top: its holders only copy variables and change the environment, so it is a
+leaf, and every lock that reads the environment while held (there are hundreds of such reads) ranks below it. Code
+that creates processes or calls libraries that read the environment holds another lock, which the handlers do not
+acquire (see "The environment" below).
 
 The striped leaf lock arrays (the 64 constant value locks and the 64 opaque target shard locks) are acquired like
 other leaf locks, except with ThreadSanitizer: its deadlock detector handles at most 128 locks held by one thread,
@@ -79,11 +80,17 @@ which the stripes alone would reach, so TSan builds only initialize them again i
 - A handler is registered when its object is constructed (static initialization, or the first use of a
   function-local static) and must not be registered while another registered lock is held.
 - A thread must not call `fork()` while it holds a registered lock that is acquired before `fork()`: it would wait
-  for itself. Holding the environment lock across `fork()` does not make the forking thread wait for itself, but
-  the handlers would then acquire every other lock while it is held, and a thread holding one of them while it waits
-  for the environment lock would deadlock with the forking thread, so it is not allowed either (an assertion in
-  debug builds; see `SystemEnvironment`). Process creation with `fork()` needs no hold, since the handlers hold the
-  lock while the process is copied; `posix_spawn()` runs no handlers, so its callers hold the read lock.
+  for itself. Holding the environment lock across `fork()` (inside an `AtomicEnvironmentSetter`) does not make the
+  forking thread wait for itself, but the handlers would then acquire every other lock while it is held, and a
+  thread holding one of them while it waits for the environment lock would deadlock with the forking thread, so it
+  is not allowed either (an assertion in debug builds; see `SystemEnvironment`). Process creation with `fork()`
+  needs no hold, since the handlers hold the lock while the process is copied; `posix_spawn()` runs no handlers, so
+  its callers hold a `QoreEnvironmentReadLock` (the environment change lock, which `fork()` does not wait for).
+- No lock that the prepare handlers wait for (`ACQUIRE`, the registry, and the locks of modules registered with
+  `qore_register_fork_handler()` in that mode) may be held across a call that can wait for the lock of the dynamic
+  linker: `dlopen()`, `dlclose()`, and every library function that can call them. On macOS, `fork()` takes that lock
+  before it runs the `pthread_atfork()` handlers (see "The dynamic linker" below), so such a hold deadlocks with any
+  `fork()` in the process, made by any code.
 - No user code runs while a registered `ACQUIRE` lock is held. The thread list lock used to be held while a
   Program's thread initialization code ran (`QoreThreadList::activate()`); that code now runs after the lock is
   released.
@@ -93,6 +100,69 @@ which the stripes alone would reach, so TSan builds only initialize them again i
 - A recursive lock must not be created during static initialization: the recursive mutex attributes are only
   initialized by `qore_init()`, and a `QoreRecursiveThreadLock` created before is not recursive. Locks that a handler
   needs before their first use are created in `qore_init()` (`qore_aot_runtime_init_once()`).
+
+### The dynamic linker
+
+On macOS (checked on macOS 26, arm64), `fork()` calls `libSystem_atfork_prepare()`, which takes the lock of the
+dynamic linker before it runs the `pthread_atfork()` prepare handlers, and releases it after the parent and child
+handlers:
+
+```
+libSystem_atfork_prepare:
+    bl _dyld_dlopen_atfork_prepare        ; dyld4::RuntimeLocks::takeDlopenLockBeforeFork()
+    bl _pthread_atfork_prepare_handlers   ; the handlers registered with pthread_atfork(): the library's
+    bl _libSC_info_fork_prepare
+    ...
+    bl _dyld_atfork_prepare               ; the other locks of the dynamic linker
+    bl _malloc_fork_prepare
+    ...
+```
+
+`dlclose()` takes the same lock (`dyld4::APIs::dlclose()` calls `takeDlopenLockBeforeFork()`), and so does
+`dlopen()`; `dlsym()` takes the loaders lock, which `_dyld_atfork_prepare()` takes after the handlers, so it is not
+part of this order. Every lock that a prepare handler waits for therefore ranks after the lock of the dynamic linker
+on macOS, and must not be held across `dlopen()` or `dlclose()`, including those that libraries make internally.
+glibc and musl take their loader locks after the handlers (musl) or only reset them in the child (glibc), but the
+rule holds on every platform, since the library's lock order is the same everywhere.
+
+The module manager's lock is held across `dlopen()` and `dlclose()`; it is reset in the child and never acquired
+before `fork()`. The other library code that calls `dlopen()` or `dlclose()` holds no registered lock.
+
+### The environment
+
+The process environment is protected by two read-write locks (`lib/SystemEnvironment.cpp`):
+
+| Lock | Held shared | Held exclusively | Before `fork()` | In the child |
+|---|---|---|---|---|
+| environment lock (rank 1500) | to copy a variable: `SystemEnvironment::get()`, `isSet()`, `valueExists()`, `QoreEnvironmentValue` | to change the environment: `SystemEnvironment::set()`, `unset()`, `AtomicEnvironmentSetter` | acquired exclusively | reset |
+| environment change lock (not ranked) | to use the environment with the C library directly: `QoreEnvironmentReadLock` (passing `environ` to `posix_spawn()` or `execvp()`, `popen()`, `system()`, `localtime_r()`, c-ares channel creation, OpenSSL's default CA paths, the ENV hash) | to change the environment, before the environment lock | not acquired | reset |
+
+- A change takes the change lock and then the environment lock, both exclusively, so while the forking thread holds
+  the environment lock, no other thread is changing the environment, and the child gets a consistent copy.
+- The handler does not wait for the holders of the change lock: they run library code that can take a long time and
+  can wait for other locks, among them the lock of the dynamic linker that the forking thread holds. c-ares calls
+  `dlopen()` and `dlclose()` whenever it creates a channel on macOS (`ares_init_sysconfig_macos()`), and creating a
+  channel while holding the environment lock deadlocked `qorus-core` with a thread calling `fork()` (the forking
+  thread held the lock of the dynamic linker and the library's other locks, and waited for the environment lock;
+  the thread creating the channel held the environment lock and waited in `dlclose()`; every other thread waited for
+  one of the forking thread's locks).
+- A holder of the change lock can call `fork()`; it cannot change the environment (`EDEADLK`).
+- The change lock is always acquired before the environment lock (an assertion in debug builds). A change waits for
+  the change lock, so it must not hold a lock that the prepare handlers wait for, nor one that a holder of the
+  change lock can wait for: the environment is changed by Qore code (`setenv()`, `unsetenv()`), which runs with no
+  such lock held, and by modules, which must keep to the same rule. In particular, a change must not be made in code
+  that runs with the lock of the dynamic linker held (static initializers and destructors of a library that is being
+  loaded or unloaded), since a holder of the change lock can wait for that lock.
+- How this is enforced: the environment lock is only held inside `lib/SystemEnvironment.cpp`, around `getenv()`,
+  `setenv()` and `unsetenv()` and the copies of the values, and by `AtomicEnvironmentSetter`, whose holders must only
+  read and change the environment; everything else that reads the environment holds the change lock.
+  `examples/test/qore/functions/fork_environment_lock_order.qtest` checks the c-ares channel creation with a
+  stand-in for the lock of the dynamic linker (`dbg_fork_lock_cycle_arm()` in debug builds): a `pthread_atfork()`
+  prepare handler registered after the library's handlers runs before them, as the dynamic linker takes its lock,
+  and the channel creation waits for the stand-in in its hold, as c-ares waits in `dlclose()`. The debug hooks detect
+  the cycle from the state of both threads (the forking thread, holding the stand-in, is about to wait for a lock
+  that the channel creation holds) and make the channel creation fail without calling c-ares (on macOS, c-ares would
+  then wait for the real lock of the dynamic linker), so the test fails instead of hanging, on every platform.
 
 ### Module locks
 

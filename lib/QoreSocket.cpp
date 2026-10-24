@@ -6760,7 +6760,10 @@ static std::string qore_cares_debug_servers(struct ares_options& options, int& o
 
 //! Creates a c-ares channel; returns an ARES_* status
 /** c-ares reads the LOCALDOMAIN and RES_OPTIONS environment variables when it creates a channel, so the environment
-    must not change meanwhile.
+    must not change meanwhile.  On macOS it also loads and unloads libSystem with dlopen() and dlclose() to read the
+    DNS configuration, which wait for the lock of the dynamic linker; fork() takes that lock before it runs the fork
+    handlers, so a fork handler must not wait for the hold taken here.  A QoreEnvironmentReadLock is such a hold: it
+    excludes changes to the environment, and fork() does not wait for it (see design/fork-handlers.md).
 
     @param channel the channel created
     @param options the options of the channel
