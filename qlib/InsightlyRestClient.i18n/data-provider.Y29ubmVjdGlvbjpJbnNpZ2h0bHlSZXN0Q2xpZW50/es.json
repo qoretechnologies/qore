@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Insightly CRM REST API for managing contacts, organizations, opportunities, projects, tasks, leads, and other CRM data.\n\n**To obtain your API key:**\n1. Log in to your Insightly account\n2. Click your profile avatar in the top-right corner\n3. Go to **User Settings**\n4. Find the **API** section and copy your API key\n\n**Pod/Region:**\nYour pod determines the API endpoint URL. It is visible in your Insightly URL (e.g., `na1.insightly.com` means pod `na1`). If not provided, the connection will default to `na1`.\n\n**Rate limits:** 10 requests/second with daily caps based on your plan. Rate limit info is returned in `X-RateLimit-Limit` and `X-RateLimit-Remaining` response headers.",
+          "message": "Una conexión a la API REST de Insightly CRM para gestionar contactos, organizaciones, oportunidades, proyectos, tareas, leads y otros datos de CRM.\n\n**Para obtener su clave de API:**\n1. Inicie sesión en su cuenta de Insightly\n2. Haga clic en su avatar de perfil en la esquina superior derecha\n3. Vaya a **Configuración del usuario**\n4. Busque la sección **API** y copie su clave de API\n\n**Pod/Región:**\nSu pod determina la URL del punto final de la API. Está visible en la URL de Insightly (por ejemplo, `na1.insightly.com` significa pod `na1`). Si no se proporciona, la conexión usará por defecto `na1`.\n\n**Límites de tasa:** 10 solicitudes por segundo con límites diarios según su plan. La información sobre límites de tasa se devuelve en los encabezados de respuesta `X-RateLimit-Limit` y `X-RateLimit-Remaining`."
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Insightly CRM REST Connection",
+          "message": "Conexión REST de Insightly CRM"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Insightly account\n2. Click your profile avatar in the top-right corner\n3. Go to **User Settings**\n4. Find the **API** section and copy your API key\n\n**Important:** The API key provides full access to your Insightly data. Keep it secure and never share it publicly.",
+          "message": "1. Inicie sesión en su cuenta de Insightly\n2. Haga clic en su avatar de perfil en la esquina superior derecha\n3. Vaya a **Configuración del usuario**\n4. Busque la sección **API** y copie su clave de API\n\n**Importante:** La clave de API proporciona acceso completo a sus datos de Insightly. Manténgala segura y nunca la comparta públicamente."
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "Cómo obtener su clave de API"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
+          "source": "Your Insightly pod determines the API endpoint URL. It is visible in your Insightly URL (e.g., `na1.insightly.com` means pod `na1`).\n\n- **na1** — North America (default)\n- **eu1** — Europe\n- **au1** — Australia\n\nIf not sure, check the URL bar when logged into Insightly.",
+          "message": "Su pod de Insightly determina la URL del punto final de la API. Está visible en la URL de Insightly (por ejemplo, `na1.insightly.com` significa pod `na1`).\n\n- **na1** — América del Norte (por defecto)\n- **eu1** — Europa\n- **au1** — Australia\n\nSi no está seguro, compruebe la barra de direcciones cuando esté conectado a Insightly."
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
+          "source": "Select Your Pod/Region",
+          "message": "Seleccione su Pod/Región"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Insightly API key used for HTTP Basic Auth authentication.\n\nThe API key is sent as the username with an empty password.\n\n**To obtain your API key:**\n1. Log in to your Insightly account\n2. Click your profile avatar in the top-right corner\n3. Go to **User Settings**\n4. Find the **API** section and copy your API key",
+          "message": "La clave de API de Insightly utilizada para la autenticación con HTTP Basic Auth.\n\nLa clave de API se envía como nombre de usuario con una contraseña vacía.\n\n**Para obtener su clave de API:**\n1. Inicie sesión en su cuenta de Insightly\n2. Haga clic en su avatar de perfil en la esquina superior derecha\n3. Vaya a **Configuración del usuario**\n4. Busque la sección **API** y copie su clave de API"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clave de API"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Insightly API key for authentication",
+          "message": "Clave de API de Insightly para autenticación"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOm5hMQ.desc": {
+          "source": "North America pod (api.na1.insightly.com)",
+          "message": "Pod de América del Norte (api.na1.insightly.com)"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOm5hMQ.display_name": {
+          "source": "North America",
+          "message": "América del Norte"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOmF1MQ.desc": {
+          "source": "Australia pod (api.au1.insightly.com)",
+          "message": "Pod de Australia (api.au1.insightly.com)"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOmF1MQ.display_name": {
+          "source": "Australia",
+          "message": "Australia"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOmV1MQ.desc": {
+          "source": "Europe pod (api.eu1.insightly.com)",
+          "message": "Pod de Europa (api.eu1.insightly.com)"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOmV1MQ.display_name": {
+          "source": "Europe",
+          "message": "Europa"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.desc": {
+          "source": "The Insightly pod/region that determines the API endpoint URL.\n\nAvailable pods:\n- `na1` - North America (default)\n- `eu1` - Europe\n- `au1` - Australia\n\nYour pod is visible in your Insightly URL (e.g., `na1.insightly.com` means pod `na1`). If not provided, defaults to `na1`.",
+          "message": "El pod/region de Insightly que determina la URL del punto final de la API.\n\nPods disponibles:\n- `na1` - América del Norte (predeterminado)\n- `eu1` - Europa\n- `au1` - Australia\n\nSu pod es visible en la URL de Insightly (por ejemplo, `na1.insightly.com` indica el pod `na1`). Si no se proporciona, se usa el valor predeterminado `na1`."
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.display_name": {
+          "source": "Pod/Region",
+          "message": "Pod/Región"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.short_desc": {
+          "source": "Insightly pod/region (auto-detected if not provided)",
+          "message": "Pod/Región de Insightly (detectado automáticamente si no se proporciona)"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Insightly CRM REST API",
+          "message": "Una conexión con la API REST de CRM Insightly"
+        }
+      }
+    }
+  }
+}

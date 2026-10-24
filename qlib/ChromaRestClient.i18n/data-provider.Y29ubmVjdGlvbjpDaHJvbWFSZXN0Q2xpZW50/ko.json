@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a [Chroma](https://www.trychroma.com) vector database.\n\nChroma is a lightweight, local-first vector database that pairs naturally with local Ollama embeddings for self-hosted RAG.\n\nLocal deployments don't require authentication; supply an `apikey` for Chroma Cloud or reverse-proxied deployments.\n\nThe connection uses the `chroma://` URL scheme for plain HTTP and `chromas://` for servers behind TLS.",
+          "message": "[Chroma](https://www.trychroma.com) 벡터 데이터베이스에 대한 연결입니다.\n\nChroma는 가벼운, 로컬 우선 벡터 데이터베이스로, 로컬 Ollama 임베딩과 함께 자가 호스팅 RAG에 자연스럽게 어울립니다.\n\n로컬 배포는 인증이 필요하지 않습니다; Chroma 클라우드 또는 역방향 프록시 배포에 대해 `apikey`을 제공하세요.\n\n이 연결은 평문 HTTP용 `chroma://` URL 스키마와 TLS 뒤의 서버용 `chromas://`를 사용합니다."
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Chroma Vector Store Connection",
+          "message": "크로마 벡터 스토어 연결"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Optional Bearer token.  Local Chroma servers do not require authentication; supply only for hosted Chroma Cloud or reverse-proxied deployments.",
+          "message": "선택적 베어러 토큰. 로컬 크로마 서버는 인증이 필요하지 않습니다. 크로마 클라우드 또는 역프록시 배포용으로만 제공하세요."
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Optional Bearer token (Chroma Cloud / proxied)",
+          "message": "선택적 베어러 토큰 (크로마 클라우드 / 프록시)"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.ZGF0YWJhc2U.desc": {
+          "source": "Chroma database name.",
+          "message": "크로마 데이터베이스 이름."
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "데이터베이스"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.ZGF0YWJhc2U.short_desc": {
+          "source": "Chroma database",
+          "message": "크로마 데이터베이스"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.dGVuYW50.desc": {
+          "source": "Chroma tenant name.",
+          "message": "크로마 테넌트 이름."
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.dGVuYW50.display_name": {
+          "source": "Tenant",
+          "message": "테넌트"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.dGVuYW50.short_desc": {
+          "source": "Chroma tenant",
+          "message": "크로마 테넌트"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Chroma vector database",
+          "message": "크로마 벡터 데이터베이스에 대한 연결"
+        }
+      }
+    }
+  }
+}

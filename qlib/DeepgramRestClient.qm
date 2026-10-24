@@ -173,7 +173,8 @@ public class DeepgramRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "deepgram://api.deepgram.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("DeepgramRestClient",
+            "DeepgramRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Deepgram REST Connection",
             "short_desc": "A connection to the Deepgram speech (ASR + TTS) REST API",
             "desc": "A connection to the [Deepgram](https://deepgram.com) speech API.\n\n"
@@ -209,7 +210,7 @@ public class DeepgramRestConnection inherits RestClient::RestConnection {
                     {"default_value": DefaultPingHeaders}),
             },
             "required_options": "apikey",
-        };
+        });
 
         #! Default ping method (GET against /v1/projects)
         const DefaultPingMethod = "GET";

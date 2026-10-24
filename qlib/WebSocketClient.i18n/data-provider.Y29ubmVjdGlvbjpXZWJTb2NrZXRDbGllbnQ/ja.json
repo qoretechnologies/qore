@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.desc": {
+          "source": "A connection to a WebSocket server service",
+          "message": "WebSocket サーバーサービスへの接続"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.display_name": {
+          "source": "WebSocket Connection",
+          "message": "WebSocket 接続"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.Y29va2ll.desc": {
+          "source": "An optional cookie value (e.g., `name=value` or `n1=v1; n2=v2`) sent as a `Cookie` header with the initial HTTP WebSocket upgrade request",
+          "message": "オプションのクッキー値 (例: `name=value` または `n1=v1; n2=v2`)。初期の HTTP WebSocket アップグレード要求時に `Cookie` ヘッダーで送信されます"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.Y29va2ll.display_name": {
+          "source": "Cookie",
+          "message": "Cookie"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.Y29va2ll.short_desc": {
+          "source": "Set a cookie value to send with the WebSocket handshake",
+          "message": "WebSocket ハンドシェイクに送信するクッキー値を設定"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.YXN5bmNfaW8.desc": {
+          "source": "Compatibility option; WebSocket socket I/O always uses the global AsyncSocketIoController, and False is ignored",
+          "message": "互換性オプション。WebSocketソケットI/Oは常にグローバルなAsyncSocketIoControllerを使用し、Falseは無視されます"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.YXN5bmNfaW8.display_name": {
+          "source": "Async I/O",
+          "message": "非同期I/O"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.YXN5bmNfaW8.short_desc": {
+          "source": "Compatibility option; WebSocket socket I/O is always async",
+          "message": "互換性オプション。WebSocketソケットI/Oは常に非同期です"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "no serialization is used",
+          "message": "シリアル化は使用しない"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "JSONシリアライズを使用"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.allowed_values.c3RyaW5nOnlhbWw.desc": {
+          "source": "use only YAML serialization",
+          "message": "YAMLシリアライズのみを使用"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.desc": {
+          "source": "Sets the data serialization option",
+          "message": "データのシリアル化オプションを設定"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "データシリアライズ"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.short_desc": {
+          "source": "Sets the data serialization option",
+          "message": "データのシリアル化オプションを設定"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmFpc2VfcGluZ19ldmVudHM.desc": {
+          "source": "Raise events for WebSocket pings?",
+          "message": "WebSocketのpingに対してイベントを発行しますか？"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmFpc2VfcGluZ19ldmVudHM.display_name": {
+          "source": "Raise Ping Events?",
+          "message": "Pingイベントを発行しますか？"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmFpc2VfcGluZ19ldmVudHM.short_desc": {
+          "source": "Raise events for WebSocket pings?",
+          "message": "WebSocketのpingに対してイベントを発行しますか？"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmVjb25uZWN0.desc": {
+          "source": "Try to reconnect when the connection is closed or lost",
+          "message": "接続が閉じられたり失われたときに再接続を試みます"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmVjb25uZWN0.display_name": {
+          "source": "Reconnect?",
+          "message": "再接続しますか？"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmVjb25uZWN0.short_desc": {
+          "source": "Try to reconnect when the connection is closed or lost",
+          "message": "接続が閉じられたり失われたときに再接続を試みます"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW4.desc": {
+          "source": "Any token to use for the initial HTTP request to authenticate with the server",
+          "message": "サーバーとの認証に初期HTTPリクエストで使用するトークン"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "認証トークン"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token",
+          "message": "認証トークンを設定します"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "`Authorization` ヘッダーに使用する `token` のタイプ。`token` オプションが設定されていない場合は無視されます"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "認証トークンタイプ"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "認証トークンのタイプ"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.allowed_values.aW50OjEz.desc": {
+          "source": "Version 13",
+          "message": "バージョン13"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.allowed_values.aW50Ojg.desc": {
+          "source": "Version 8",
+          "message": "バージョン8"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.desc": {
+          "source": "The WebSocket protocol version to use in the client",
+          "message": "クライアントで使用するWebSocketプロトコルバージョン"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.display_name": {
+          "source": "WebSocket Version",
+          "message": "WebSocketバージョン"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.short_desc": {
+          "source": "Sets the WebSocket protocol version",
+          "message": "WebSocketプロトコルバージョンを設定します"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.short_desc": {
+          "source": "A connection to a WebSocket server service",
+          "message": "WebSocket サーバーサービスへの接続"
+        }
+      }
+    }
+  }
+}

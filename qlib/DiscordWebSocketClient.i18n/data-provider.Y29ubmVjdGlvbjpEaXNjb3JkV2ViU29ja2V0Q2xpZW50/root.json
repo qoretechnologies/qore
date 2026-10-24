@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.RGlzY29yZFdlYlNvY2tldENsaWVudA.scheme.RGlzY29yZFdlYlNvY2tldENvbm5lY3Rpb24.display_name": {
+          "source": "Discord WebSocket Connection",
+          "message": "Discord WebSocket Connection"
+        },
+        "connection.RGlzY29yZFdlYlNvY2tldENsaWVudA.scheme.RGlzY29yZFdlYlNvY2tldENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to Discord WebSocket server services",
+          "message": "A connection to Discord WebSocket server services"
+        },
+        "connection.RGlzY29yZFdlYlNvY2tldENsaWVudA.scheme.RGlzY29yZFdlYlNvY2tldENvbm5lY3Rpb24.desc": {
+          "source": "A connection to Discord WebSocket server services",
+          "message": "A connection to Discord WebSocket server services"
+        }
+      }
+    }
+  }
+}

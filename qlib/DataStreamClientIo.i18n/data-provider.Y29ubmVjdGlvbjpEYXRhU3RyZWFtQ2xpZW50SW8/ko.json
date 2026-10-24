@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.desc": {
+          "source": "A connection to a DataStream API server using RestClientIo for multiplexed HTTP/1.1, HTTP/2, and HTTP/3 connections",
+          "message": "RestClientIo를 사용하여 HTTP/1.1, HTTP/2, HTTP/3 연결을 다중화하는 DataStream API 서버로의 연결"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.display_name": {
+          "source": "DataStream REST Connection (Multiplexed I/O)",
+          "message": "DataStream REST 연결 (다중화 I/O)"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.bWF4X21lc3NhZ2Vfc2l6ZQ.desc": {
+          "source": "Maximum message size in bytes for Connect mode (0 = no limit)",
+          "message": "Connect 모드에서의 최대 메시지 크기(바이트 단위, 0은 제한 없음)"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.bWF4X21lc3NhZ2Vfc2l6ZQ.display_name": {
+          "source": "Max Message Size",
+          "message": "최대 메시지 크기"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.bWF4X21lc3NhZ2Vfc2l6ZQ.short_desc": {
+          "source": "Maximum Connect frame payload size",
+          "message": "최대 Connect 프레임 페이로드 크기"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.cHJvdG9jb2w.desc": {
+          "source": "The protocol mode: 'auto' (default), 'connect', or 'datastream'",
+          "message": "프로토콜 모드: 'auto'(기본값), 'connect', 또는 'datastream'"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.cHJvdG9jb2w.display_name": {
+          "source": "Protocol",
+          "message": "프로토콜"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.cHJvdG9jb2w.short_desc": {
+          "source": "DataStream protocol mode",
+          "message": "DataStream 프로토콜 모드"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.short_desc": {
+          "source": "A connection to a DataStream API server using multiplexed I/O",
+          "message": "다중 I/O를 사용한 DataStream API 서버 연결"
+        }
+      }
+    }
+  }
+}

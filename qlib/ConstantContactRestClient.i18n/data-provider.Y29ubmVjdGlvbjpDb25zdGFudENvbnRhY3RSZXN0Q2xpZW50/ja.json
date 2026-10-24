@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Constant Contact REST API for email marketing, contacts, lists, campaigns, and segments",
+          "message": "Constant Contactのメールマーケティング、連絡先、リスト、キャンペーン、セグメント向けREST APIへの接続"
+        },
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Constant Contact REST Connection",
+          "message": "Constant Contact REST接続"
+        },
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "A Constant Contact API key or access token used for Bearer token authentication as an alternative to OAuth2",
+          "message": "OAuth2の代わりにBearerトークン認証に使用するConstant Contact APIキーまたはアクセストークン"
+        },
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key / Access Token",
+          "message": "APIキー / アクセストークン"
+        },
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "A Constant Contact API key or access token for Bearer auth",
+          "message": "Bearer認証用のConstant Contact APIキーまたはアクセストークン"
+        },
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Constant Contact REST API",
+          "message": "Constant Contact REST APIへの接続"
+        }
+      }
+    }
+  }
+}

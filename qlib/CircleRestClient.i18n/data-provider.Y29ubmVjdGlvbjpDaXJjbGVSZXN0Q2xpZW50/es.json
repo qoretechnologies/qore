@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Circle REST API for community management including posts, comments, members, spaces, events, and messaging",
+          "message": "Una conexión con la API REST de Circle para la gestión de comunidades, incluidos publicaciones, comentarios, miembros, espacios, eventos y mensajería"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Circle REST Connection",
+          "message": "Conexión REST de Circle"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Circle community at https://app.circle.so\n2. Click on your community in the top-left corner\n3. Select **Developer** > **Tokens**\n4. Click **Create Token**, select **Admin V2** as the type\n5. Copy the token and paste it into the **API Token** field\n\n**Important:**\n- API access requires a **Business plan** or above\n- Rate limit: 2,000 requests per 5 minutes per IP\n- Store your token securely; treat it like a password",
+          "message": "1. Inicie sesión en su comunidad de Circle en https://app.circle.so\n2. Haga clic en su comunidad en la esquina superior izquierda\n3. Seleccione **Desarrollador** > **Tokens**\n4. Haga clic en **Crear token**, seleccione **Admin V2** como tipo\n5. Copie el token y péguelo en el campo **Token de API**\n\n**Importante:**\n- El acceso a la API requiere un plan **Business** o superior\n- Límite de tasa: 2.000 solicitudes cada 5 minutos por IP\n- Almacene su token con seguridad; trátelo como una contraseña"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Generate Your API Token",
+          "message": "Cómo generar su token de API"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Circle API token used for Bearer token authentication.\n\n**To obtain your API token:**\n1. Log in to your Circle community as an admin\n2. Click on your community in the top-left corner\n3. Select **Developer** > **Tokens**\n4. Click **Create Token** and select **Admin V2**\n\n**Note:** API access requires a Business plan or above.\n\nRate limit: 2,000 requests per 5 minutes per IP",
+          "message": "El token de API de Circle utilizado para la autenticación con Bearer.\n\n**Para obtener su token de API:**\n1. Inicie sesión en su comunidad de Circle como administrador\n2. Haga clic en su comunidad en la esquina superior izquierda\n3. Seleccione **Desarrollador** > **Tokens**\n4. Haga clic en **Crear token** y seleccione **Admin V2**\n\n**Nota:** El acceso a la API requiere un plan Business o superior.\n\nLímite de tasa: 2.000 solicitudes cada 5 minutos por IP"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "Token API"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Circle API token for authentication",
+          "message": "Token de autenticación de la API de Circle"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Circle REST API",
+          "message": "Una conexión con la API REST de Circle"
+        }
+      }
+    }
+  }
+}

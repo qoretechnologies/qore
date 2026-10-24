@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a Microsoft CDS (Common Data Services) REST server",
+          "message": "Una connessione a un server REST di Microsoft CDS (Common Data Services)"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Microsoft CDS REST Server",
+          "message": "Server REST di Microsoft CDS"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "Sets the API version for CDS",
+          "message": "Imposta la versione dell'API per CDS"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Versione API"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "Sets the API version for CDS",
+          "message": "Imposta la versione dell'API per CDS"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "No options are set",
+          "message": "Nessuna opzione impostata"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmR5bmFtaWNz.desc": {
+          "source": "Set REST client options for the Dynamics 365 API",
+          "message": "Imposta le opzioni del client REST per l'API Dynamics 365"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmR5bmFtaWNzLWJ1c2luZXNzLWNlbnRyYWw.desc": {
+          "source": "Set REST client options for the Dynamics 365 Business Central API",
+          "message": "Imposta le opzioni del client REST per l'API Dynamics 365 Business Central"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.desc": {
+          "source": "Sets the API profile according to the CDS API in use; this option will set the REST options if they are not already set (`oauth2_scopes`, `ping_body`, `ping_headers`, and `ping_method`); valid values:\n- `none`: no options configured (default)\n- `dynamics`: set options for the Dynamics 365 API\n- `dynamics-business-central`: set options for the Dynamics 365 Business Central API",
+          "message": "Imposta il profilo API in base all'API CDS in uso; questa opzione imposterà le opzioni REST se non sono già impostate (`oauth2_scopes`, `ping_body`, `ping_headers`, e `ping_method`); valori validi:\n- `none`: nessuna opzione configurata (predefinito)\n- `dynamics`: imposta le opzioni per l'API Dynamics 365\n- `dynamics-business-central`: imposta le opzioni per l'API Dynamics 365 Business Central"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.display_name": {
+          "source": "API Profile",
+          "message": "Profilo API"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.short_desc": {
+          "source": "Sets the API profile for the CDS API to use",
+          "message": "Imposta il profilo API per l'uso con l'API CDS"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnByb2R1Y3Rpb24.display_name": {
+          "source": "Production",
+          "message": "Produzione"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnNhbmRib3g.display_name": {
+          "source": "Sandbox",
+          "message": "Sandbox"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.desc": {
+          "source": "Business Central instance type (e.g., 'sandbox', 'production', or environment GUID); required when api_profile is 'dynamics-business-central'",
+          "message": "Tipo di istanza Business Central (ad esempio 'sandbox', 'produzione' o GUID dell'ambiente); richiesto quando api_profile è 'dynamics-business-central'"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.display_name": {
+          "source": "Instance Type",
+          "message": "Tipo Istanza"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.short_desc": {
+          "source": "Business Central instance type",
+          "message": "Tipo di istanza Business Central"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.dGVuYW50.desc": {
+          "source": "Azure AD tenant ID for authentication",
+          "message": "ID tenant Azure AD per l'autenticazione"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.dGVuYW50.display_name": {
+          "source": "Tenant ID",
+          "message": "ID tenant"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.dGVuYW50.short_desc": {
+          "source": "Azure AD tenant ID",
+          "message": "ID tenant Azure AD"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Microsoft CDS (Common Data Services) REST server",
+          "message": "Una connessione a un server REST di Microsoft CDS (Common Data Services)"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.QnVzaW5lc3NDZW50cmFsUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a Microsoft Dynamics 365 Business Central REST server for ERP data access",
+          "message": "Una connessione a un server REST di Microsoft Dynamics 365 Business Central per l'accesso ai dati ERP"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.QnVzaW5lc3NDZW50cmFsUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Microsoft Business Central REST Server",
+          "message": "Server REST Microsoft Business Central"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.QnVzaW5lc3NDZW50cmFsUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Microsoft Dynamics 365 Business Central REST server",
+          "message": "Una connessione a un server REST di Microsoft Dynamics 365 Business Central"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Microsoft Dynamics REST Server",
+          "message": "Server REST di Microsoft Dynamics"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmR5bmFtaWNz.desc": {
+          "source": "Set REST client options for the Dynamics API",
+          "message": "Imposta le opzioni del client REST per l'API Dynamics"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The Dataverse environment to work in, by its unique name.\n\nThis is **discovered**: authorizing the connection asks Microsoft which environments the credential reaches, uses one, and sets this option to it. Where the credential reaches several, the first is used and the others are logged; set this option to one of those and authorize again to work in it instead.",
+          "message": "L'ambiente Dataverse in cui operare, identificato dal nome univoco.\n\nQuesto viene **rilevato**: l'autorizzazione della connessione richiede a Microsoft quali ambienti sono raggiungibili con le credenziali, ne utilizza uno e imposta questa opzione di conseguenza. Quando le credenziali raggiungono più ambienti, viene usato il primo e gli altri vengono registrati; impostare questa opzione su uno di questi e autorizzare nuovamente per lavorare in esso invece."
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Environment",
+          "message": "Ambiente"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The Dataverse environment to work in",
+          "message": "L'ambiente Dataverse in cui operare"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a Microsoft Dynamics REST server",
+          "message": "Una connessione a un server REST di Microsoft Dynamics"
+        }
+      }
+    }
+  }
+}

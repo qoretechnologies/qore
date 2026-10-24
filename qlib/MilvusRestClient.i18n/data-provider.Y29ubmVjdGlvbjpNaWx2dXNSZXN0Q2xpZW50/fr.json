@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a [Milvus](https://milvus.io) or [Zilliz Cloud](https://zilliz.com) (managed Milvus) vector database via the REST v2 API.\n\nAuthentication: Bearer token (Milvus / Zilliz token).\n\nThe connection uses the `milvus://` URL scheme for plain HTTP and `milvuss://` for servers behind TLS.",
+          "message": "Une connexion à une base de données vectorielle [Milvus](https://milvus.io) ou [Zilliz Cloud](https://zilliz.com) (Milvus géré) via l'API REST v2.\n\nAuthentification : jeton Bearer (jeton Milvus / Zilliz).\n\nLa connexion utilise le schéma `milvus://` pour HTTP simple et `milvuss://` pour les serveurs derrière TLS."
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Milvus Vector DB Connection",
+          "message": "Connexion à la base de données vectorielle Milvus"
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Bearer token.  For local Milvus this is the `<user>:<password>` auth combo; for Zilliz Cloud it's the cluster API key.",
+          "message": "Jeton Bearer. Pour Milvus local, il s'agit du combo d'authentification `<user>:<password>` ; pour Zilliz Cloud, il s'agit de la clé API du cluster."
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clé d'API"
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Milvus / Zilliz token (Bearer)",
+          "message": "Milvus / Zilliz (jeton Bearer)"
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Milvus / Zilliz Cloud vector database",
+          "message": "Une connexion à une base de données vectorielle Milvus / Zilliz Cloud"
+        }
+      }
+    }
+  }
+}

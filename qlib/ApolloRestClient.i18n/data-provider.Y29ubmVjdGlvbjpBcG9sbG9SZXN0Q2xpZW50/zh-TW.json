@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.QXBvbGxvUmVzdENsaWVudA.scheme.QXBvbGxvUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Apollo REST API for B2B sales intelligence, contacts, accounts, deals, and data enrichment",
+          "message": "用於 B2B 銷售智慧、聯絡人、帳戶、交易與資料增強的 Apollo REST API 連接"
+        },
+        "connection.QXBvbGxvUmVzdENsaWVudA.scheme.QXBvbGxvUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Apollo REST Connection",
+          "message": "Apollo REST 連接"
+        },
+        "connection.QXBvbGxvUmVzdENsaWVudA.scheme.QXBvbGxvUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Apollo REST API",
+          "message": "連接到 Apollo REST API 的連接"
+        }
+      }
+    }
+  }
+}

@@ -3,6 +3,106 @@
   "locales": {
     "es": {
       "messages": {
+        "app.U1FMaXRl.connection.option.Y2hhcnNldA.desc": {
+          "source": "The character set to use for the connection (e.g. utf8)",
+          "message": "El conjunto de caracteres que usar para la conexión (por ejemplo, utf8)"
+        },
+        "app.U1FMaXRl.connection.option.Y2hhcnNldA.display_name": {
+          "source": "Character Set",
+          "message": "Conjunto de caracteres"
+        },
+        "app.U1FMaXRl.connection.option.Y2hhcnNldA.short_desc": {
+          "source": "Connection character set",
+          "message": "Conjunto de caracteres de la conexión"
+        },
+        "app.U1FMaXRl.connection.option.ZGI.desc": {
+          "source": "The name of the database to connect to",
+          "message": "El nombre de la base de datos a la que conectarse"
+        },
+        "app.U1FMaXRl.connection.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "Base de datos"
+        },
+        "app.U1FMaXRl.connection.option.ZGI.short_desc": {
+          "source": "Database name",
+          "message": "Nombre de la base de datos"
+        },
+        "app.U1FMaXRl.connection.option.aG9zdA.desc": {
+          "source": "The hostname or IP address of the database server",
+          "message": "La dirección de host o la dirección IP del servidor de base de datos"
+        },
+        "app.U1FMaXRl.connection.option.aG9zdA.display_name": {
+          "source": "Host",
+          "message": "Host"
+        },
+        "app.U1FMaXRl.connection.option.aG9zdA.short_desc": {
+          "source": "Database server hostname",
+          "message": "Nombre de host del servidor de base de datos"
+        },
+        "app.U1FMaXRl.connection.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Número máximo de conexiones en el grupo"
+        },
+        "app.U1FMaXRl.connection.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Tamaño máximo del grupo"
+        },
+        "app.U1FMaXRl.connection.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Conexiones máximas del grupo"
+        },
+        "app.U1FMaXRl.connection.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Número mínimo de conexiones en el grupo"
+        },
+        "app.U1FMaXRl.connection.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Tamaño mínimo del grupo"
+        },
+        "app.U1FMaXRl.connection.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Conexiones mínimas del grupo"
+        },
+        "app.U1FMaXRl.connection.option.cG9ydA.desc": {
+          "source": "The port number of the database server",
+          "message": "Número de puerto del servidor de base de datos"
+        },
+        "app.U1FMaXRl.connection.option.cG9ydA.display_name": {
+          "source": "Port",
+          "message": "Puerto"
+        },
+        "app.U1FMaXRl.connection.option.cG9ydA.short_desc": {
+          "source": "Database server port",
+          "message": "Puerto del servidor de base de datos"
+        },
+        "app.U1FMaXRl.connection.option.cGFzcw.desc": {
+          "source": "The password for database authentication",
+          "message": "La contraseña para la autenticación de la base de datos"
+        },
+        "app.U1FMaXRl.connection.option.cGFzcw.display_name": {
+          "source": "Password",
+          "message": "Contraseña"
+        },
+        "app.U1FMaXRl.connection.option.cGFzcw.short_desc": {
+          "source": "Database password",
+          "message": "Contraseña de la base de datos"
+        },
+        "app.U1FMaXRl.connection.option.dXNlcg.desc": {
+          "source": "The database user name for authentication",
+          "message": "El nombre de usuario de la base de datos para la autenticación"
+        },
+        "app.U1FMaXRl.connection.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Usuario"
+        },
+        "app.U1FMaXRl.connection.option.dXNlcg.short_desc": {
+          "source": "Database user",
+          "message": "Usuario de la base de datos"
+        },
+        "app.U1FMaXRl.desc": {
+          "source": "Create and manage connections to a SQLite embedded database",
+          "message": "Cree y gestione conexiones a una base de datos integrada de SQLite"
+        },
         "app.U1FMaXRl.display_name": {
           "source": "SQLite",
           "message": "SQLite"
@@ -10,10 +110,6 @@
         "app.U1FMaXRl.short_desc": {
           "source": "SQLite embedded database",
           "message": "Base de datos integrada de SQLite"
-        },
-        "app.U1FMaXRl.desc": {
-          "source": "Create and manage connections to a SQLite embedded database",
-          "message": "Cree y gestione conexiones a una base de datos integrada de SQLite"
         }
       }
     }

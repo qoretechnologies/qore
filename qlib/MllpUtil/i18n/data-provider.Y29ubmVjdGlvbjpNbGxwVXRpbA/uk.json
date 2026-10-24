@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.desc": {
+          "source": "A TCP or TLS connection to an MLLP endpoint for HL7 v2 message exchange",
+          "message": "TCP-або TLS-з'єднання з точкою прийому MLLP для обміну повідомленнями HL7 v2"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.display_name": {
+          "source": "MLLP Connection",
+          "message": "З'єднання MLLP"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connection timeout to use in milliseconds (default: 30 seconds)",
+          "message": "Час очікування з'єднання в мілісекундах (за замовчуванням: 30 секунд)"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Тайм-аут з'єднання"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "Тайм-аут з'єднання у мілісекундах"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding used to decode and encode HL7 payloads",
+          "message": "Символьна кодування, що використовується для декодування та кодування тіл повідомлень HL7"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Payload Encoding",
+          "message": "Кодування повідомлення"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The HL7 payload character encoding",
+          "message": "Кодування символів HL7"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.bWF4X2ZyYW1lX3NpemU.desc": {
+          "source": "Rejects inbound MLLP frames larger than this byte count",
+          "message": "Відхиляє входящі фрейми MLLP, розмір яких перевищує цю кількість байтів"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.bWF4X2ZyYW1lX3NpemU.display_name": {
+          "source": "Maximum Frame Size",
+          "message": "Максимальний розмір фрейму"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.bWF4X2ZyYW1lX3NpemU.short_desc": {
+          "source": "The maximum inbound MLLP payload size in bytes",
+          "message": "Максимальний розмір входящого повідомлення MLLP у байтах"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.dGltZW91dA.desc": {
+          "source": "The socket read/write timeout to use in milliseconds (default: 30 seconds)",
+          "message": "Час очікування читання/запису сокета у мілісекундах (за замовчуванням: 30 секунд)"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Таймаут вводу/виводу"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.dGltZW91dA.short_desc": {
+          "source": "The read/write timeout in milliseconds",
+          "message": "Час очікування читання/запису у мілісекундах"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to an MLLP endpoint",
+          "message": "З’єднання з кінцевою точкою MLLP"
+        }
+      }
+    }
+  }
+}

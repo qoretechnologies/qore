@@ -3,6 +3,154 @@
   "locales": {
     "uk": {
       "messages": {
+        "app.T3JhY2xl.connection.option.Y2hhcnNldA.desc": {
+          "source": "The character set to use for the connection (e.g. utf8)",
+          "message": "Символьна множина, яку використовувати для підключення (наприклад, utf8)"
+        },
+        "app.T3JhY2xl.connection.option.Y2hhcnNldA.display_name": {
+          "source": "Character Set",
+          "message": "Символьна множина"
+        },
+        "app.T3JhY2xl.connection.option.Y2hhcnNldA.short_desc": {
+          "source": "Connection character set",
+          "message": "Символьна множина підключення"
+        },
+        "app.T3JhY2xl.connection.option.Y2xhc3NwYXRo.desc": {
+          "source": "The path to the JDBC driver JAR file(s)",
+          "message": "Шлях до файлу(ів) JAR драйвера JDBC"
+        },
+        "app.T3JhY2xl.connection.option.Y2xhc3NwYXRo.display_name": {
+          "source": "JDBC Classpath",
+          "message": "JDBC Classpath"
+        },
+        "app.T3JhY2xl.connection.option.Y2xhc3NwYXRo.short_desc": {
+          "source": "JDBC driver classpath",
+          "message": "JDBC драйвер класpath"
+        },
+        "app.T3JhY2xl.connection.option.ZGI.desc": {
+          "source": "The name of the database to connect to",
+          "message": "Назва бази даних для підключення"
+        },
+        "app.T3JhY2xl.connection.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "База даних"
+        },
+        "app.T3JhY2xl.connection.option.ZGI.short_desc": {
+          "source": "Database name",
+          "message": "Назва бази даних"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOm9kYmM.display_name": {
+          "source": "odbc",
+          "message": "odbc"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOm9kYmM.short_desc": {
+          "source": "ODBC driver",
+          "message": "Драйвер ODBC"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOm9yYWNsZQ.display_name": {
+          "source": "oracle",
+          "message": "oracle"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOm9yYWNsZQ.short_desc": {
+          "source": "Native oracle driver",
+          "message": "Нативний драйвер oracle"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOmpkYmM.display_name": {
+          "source": "jdbc",
+          "message": "jdbc"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOmpkYmM.short_desc": {
+          "source": "JDBC driver",
+          "message": "JDBC драйвер"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.desc": {
+          "source": "The database driver to use for the connection",
+          "message": "Драйвер бази даних для використання при підключенні"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.display_name": {
+          "source": "Driver",
+          "message": "Драйвер"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.short_desc": {
+          "source": "Database driver",
+          "message": "Драйвер бази даних"
+        },
+        "app.T3JhY2xl.connection.option.aG9zdA.desc": {
+          "source": "The hostname or IP address of the database server",
+          "message": "Хост-ім'я або IP-адреса сервера бази даних"
+        },
+        "app.T3JhY2xl.connection.option.aG9zdA.display_name": {
+          "source": "Host",
+          "message": "Хост"
+        },
+        "app.T3JhY2xl.connection.option.aG9zdA.short_desc": {
+          "source": "Database server hostname",
+          "message": "Хост-ім'я сервера бази даних"
+        },
+        "app.T3JhY2xl.connection.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Максимальна кількість з'єднань у пулі"
+        },
+        "app.T3JhY2xl.connection.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Макс. розмір пулу"
+        },
+        "app.T3JhY2xl.connection.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Максимальна кількість підключень до пулу"
+        },
+        "app.T3JhY2xl.connection.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Мінімальна кількість з’єднань у пулі"
+        },
+        "app.T3JhY2xl.connection.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Мінімальний розмір пулу"
+        },
+        "app.T3JhY2xl.connection.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Мінімальна кількість підключень до пулу"
+        },
+        "app.T3JhY2xl.connection.option.cG9ydA.desc": {
+          "source": "The port number of the database server",
+          "message": "Номер порту сервера бази даних"
+        },
+        "app.T3JhY2xl.connection.option.cG9ydA.display_name": {
+          "source": "Port",
+          "message": "Портфоліо"
+        },
+        "app.T3JhY2xl.connection.option.cG9ydA.short_desc": {
+          "source": "Database server port",
+          "message": "Порт сервера бази даних"
+        },
+        "app.T3JhY2xl.connection.option.cGFzcw.desc": {
+          "source": "The password for database authentication",
+          "message": "Пароль для автентифікації бази даних"
+        },
+        "app.T3JhY2xl.connection.option.cGFzcw.display_name": {
+          "source": "Password",
+          "message": "Пароль"
+        },
+        "app.T3JhY2xl.connection.option.cGFzcw.short_desc": {
+          "source": "Database password",
+          "message": "Пароль бази даних"
+        },
+        "app.T3JhY2xl.connection.option.dXNlcg.desc": {
+          "source": "The database user name for authentication",
+          "message": "Ім'я користувача бази даних для автентифікації"
+        },
+        "app.T3JhY2xl.connection.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Користувач"
+        },
+        "app.T3JhY2xl.connection.option.dXNlcg.short_desc": {
+          "source": "Database user",
+          "message": "Користувач бази даних"
+        },
+        "app.T3JhY2xl.desc": {
+          "source": "Create and manage connections to a Oracle database server",
+          "message": "Створення та керування підключеннями до сервера бази даних Oracle"
+        },
         "app.T3JhY2xl.display_name": {
           "source": "Oracle",
           "message": "Oracle"
@@ -10,10 +158,6 @@
         "app.T3JhY2xl.short_desc": {
           "source": "Oracle database server",
           "message": "Сервер бази даних Oracle"
-        },
-        "app.T3JhY2xl.desc": {
-          "source": "Create and manage connections to a Oracle database server",
-          "message": "Створення та керування підключеннями до сервера бази даних Oracle"
         }
       }
     }

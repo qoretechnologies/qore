@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Cohere](https://cohere.com) REST API for chat, embeddings, reranking, and classification.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Cohere dashboard](https://dashboard.cohere.com/api-keys).\n\nThe models used when this connection is selected for chat, embeddings, and reranking are set independently with the `chat-model`, `embedding-model`, and `rerank-model` options.\n\nPings verify the API key without generating content. A successful ping does not mean that a trial key has remaining inference quota.",
+          "message": "[Cohere](https://cohere.com)のREST APIへの接続（チャット、埋め込み、再順序付け、分類用）。\n\nBearer認証のためのAPIキーが必要です。[Cohereダッシュボード](https://dashboard.cohere.com/api-keys)からAPIキーを取得してください。\n\nこの接続がチャット、埋め込み、再順序付けに選択された際の使用モデルは、`chat-model`、`embedding-model`、`rerank-model` オプションで個別に設定されます。\n\nピングはコンテンツ生成を行わずにAPIキーの有効性を検証します。ピング成功は、トライアルキーに残りの推論クォータがあることを意味しません。"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Cohere REST Connection",
+          "message": "Cohere REST接続"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Cohere chat model used by LLM clients when this connection is selected for chat; sent as the `model` parameter to the `/chat` endpoint.\n\nChat models are a separate family from embedding and reranking models and cannot be used interchangeably.\n\nExample values: `command-a-03-2025` (Cohere's default chat model; the default here), `command-a-plus-05-2026` (largest context), `command-r-plus-08-2024` and `command-r-08-2024` (previous generation), `command-r7b-12-2024` (smallest, lowest cost)",
+          "message": "この接続がチャットに選択された際、LLMクライアントで使用されるCohereチャットモデル。`/chat`エンドポイントに`model`パラメータとして送信されます。\n\nチャットモデルは、埋め込みおよび再順序付けモデルとは別々のファミリーであり、互換性がありません。\n\n例: `command-a-03-2025`（Cohereのデフォルトチャットモデル；ここでのデフォルト）、`command-a-plus-05-2026`（最大コンテキスト）、`command-r-plus-08-2024` および `command-r-08-2024`（前世代）、`command-r7b-12-2024`（最小、最低コスト）"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "チャットモデル"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Cohere chat model name",
+          "message": "Cohereチャットモデル名"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1 (Legacy)",
+          "message": "V1（レガシー）"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.allowed_values.c3RyaW5nOnYy.display_name": {
+          "source": "V2",
+          "message": "V2"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The API version for inference requests. App actions use `v2`.",
+          "message": "推論リクエスト用のAPIバージョン。アプリケーションアクションでは `v2` を使用します。"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "使用するAPIバージョン"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Cohere API key used for Bearer authentication.",
+          "message": "Bearer認証に使用されるCohere APIキーです。"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Cohere API key for authentication",
+          "message": "認証用のCohere APIキー"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.desc": {
+          "source": "The Cohere embedding model used by embedding clients when this connection is selected for embeddings; sent as the `model` parameter to the `/embed` endpoint.\n\nExample values: `embed-multilingual-v3.0` (100+ languages; the default), `embed-english-v3.0` (English-only), `embed-multilingual-light-v3.0` (smaller, lower cost)",
+          "message": "この接続がエンベッディングに選択された場合、エンベッディングクライアントで使用されるCohereエンベッディングモデル。`model` パラメータとして `/embed` エンドポイントに送信されます。\n\n例: `embed-multilingual-v3.0`（100語以上に対応；デフォルト）、`embed-english-v3.0`（英語専用）、`embed-multilingual-light-v3.0`（小型でコスト低）"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.display_name": {
+          "source": "Embedding Model",
+          "message": "埋め込みモデル"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.short_desc": {
+          "source": "Cohere embedding model name",
+          "message": "Cohereエンベッディングモデル名"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.desc": {
+          "source": "The Cohere reranking model used by reranking clients when this connection is selected for reranking; sent as the `model` parameter to the `/rerank` endpoint.\n\nReranking models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `rerank-v3.5` (latest cross-encoder; the default), `rerank-multilingual-v3.0` (multilingual v3)",
+          "message": "この接続がリランキングに選択された場合、リランキングクライアントで使用されるCohereリランキングモデル。`model` パラメータとして `/rerank` エンドポイントに送信されます。\n\nリランキングモデルはエンベッディングモデルとは別系列であり、互換性がありません。\n\n例: `rerank-v3.5`（最新のクロスエンコーダー；デフォルト）、`rerank-multilingual-v3.0`（マルチリンガル v3）"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.display_name": {
+          "source": "Reranking Model",
+          "message": "再ランクモデル"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.short_desc": {
+          "source": "Cohere reranking model name",
+          "message": "Cohereリランキングモデル名"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Cohere REST API",
+          "message": "Cohere REST APIへの接続"
+        }
+      }
+    }
+  }
+}

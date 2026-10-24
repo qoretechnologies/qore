@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the GoHighLevel REST API for CRM, contacts, opportunities, calendars, conversations, and marketing automation",
+          "message": "Eine Verbindung zur GoHighLevel REST-API für CRM, Kontakte, Gelegenheiten, Kalender, Gespräche und Marketing-Automatisierung"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "GoHighLevel REST Connection",
+          "message": "GoHighLevel REST-Verbindung"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.option.bG9jYXRpb25faWQ.desc": {
+          "source": "The GoHighLevel location (sub-account) ID for scoping API requests. Automatically extracted from the OAuth2 token response after the user selects their location during authorization.",
+          "message": "Die GoHighLevel-Standort-(Unter-)Konto-ID zur Begrenzung von API-Anfragen. Automatisch aus der OAuth2-Tokenantwort extrahiert, nachdem der Benutzer während der Autorisierung seinen Standort ausgewählt hat."
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "Standort-ID"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "GoHighLevel location/sub-account ID",
+          "message": "GoHighLevel-Standort-/Unter-Konto-ID"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the GoHighLevel REST API",
+          "message": "Eine Verbindung zur GoHighLevel REST-API"
+        }
+      }
+    }
+  }
+}

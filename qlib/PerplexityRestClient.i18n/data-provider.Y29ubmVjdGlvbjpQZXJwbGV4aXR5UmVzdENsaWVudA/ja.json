@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Perplexity AI REST API",
+          "message": "Perplexity AI REST APIへの接続"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Perplexity AI REST Connection",
+          "message": "Perplexity AI REST 接続"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Perplexity AI, you need an API key:\n\n1. Sign in to your account at [perplexity.ai](https://www.perplexity.ai)\n2. Navigate to **Settings** in the menu\n3. Select **API** from the settings options\n4. Generate or copy your API key\n\nKeep your API key secure and never share it publicly.",
+          "message": "Perplexity AI に接続するには API キーが必要です：\n\n1. [perplexity.ai](https://www.perplexity.ai) でアカウントにサインイン\n2. メニューの **設定** に移動\n3. 設定オプションから **API** を選択\n4. API キーを生成またはコピー\n\nAPI キーは安全に保管し、公開しないでください。"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Perplexity API Key",
+          "message": "Perplexity API キーの取得方法"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Perplexity chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `sonar` (the default)",
+          "message": "この接続がチャットに選択された場合、LLM クライアントで使用される Perplexity チャットモデルです。\n\nチャットモデルは埋め込みモデルとは別種であり、互換性がありません。\n\n例: `sonar`（デフォルト）"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "チャットモデル"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Perplexity chat model name",
+          "message": "Perplexity チャットモデル名"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Perplexity API key used for authentication; sent as a Bearer token in the `Authorization` header. To obtain a key, sign in at [perplexity.ai](https://www.perplexity.ai) and navigate to **Settings** → **API**",
+          "message": "認証に使用される Perplexity API キー；`Authorization` ヘッダーに Bearer トークンとして送信されます。キーを取得するには、[perplexity.ai](https://www.perplexity.ai) でサインインし、**設定** → **API** に移動してください。"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Perplexity API key for authentication",
+          "message": "認証用の Perplexity API キー"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Perplexity AI REST API",
+          "message": "Perplexity AI REST APIへの接続"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Deel REST API for global workforce management.\n\nDeel is a global HR platform for hiring, managing, and paying contractors and full-time employees worldwide. This integration supports contracts, timesheets, invoice adjustments, workers, time-off, legal entities, invoices, and event triggers.",
+          "message": "連接到 Deel 雲端薪資平台，用於全球人力資源管理。\n\nDeel 是一個全球性的人力資源平台，支援聘僱、管理及支付全球的自由工作者與全職員工。此整合功能支援合約、工時表、發票調整、工作者、休假、法律實體、發票與事件觸發。"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Deel REST Connection",
+          "message": "Deel REST 連接"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to Deel at https://app.deel.com\n2. Go to the **Developer Center**: https://app.deel.com/developer-center\n3. Click **Create Token** and choose the token type:\n   - **Personal Token**: Linked to your user account and inherits your permissions\n   - **Organization Token**: Service-level access not tied to a specific user\n4. Copy the token value and paste it into the **API Token** field\n\n**Important:**\n- Only Org Admins or IT Developer Admins can create tokens\n- Store your token securely; treat it like a password",
+          "message": "1. 使用 https://app.deel.com 登入 Deel\n2. 前往 **開發者中心**：https://app.deel.com/developer-center\n3. 點選 **建立金鑰**，並選擇金鑰類型：\n   - **個人金鑰**：與您的使用者帳戶關聯，繼承您的權限\n   - **組織金鑰**：服務層級存取權限，不與特定使用者綁定\n4. 複製金鑰值，貼到 **API 金鑰** 欄位\n\n**重要：**\n- 僅組織管理員或 IT 開發者管理員可建立金鑰\n- 請安全儲存您的金鑰；視同密碼處理"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Generate Your API Token",
+          "message": "如何產生您的 API 金鑰"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "**Sandbox environment** is available for safe testing without affecting real data.\n\n- Enable **Use Sandbox** to connect to `https://api-sandbox.demo.deel.com/rest/v2`\n- Sandbox tokens are separate from production tokens — generate one at https://app.deel.com/developer-center\n- Leave **Use Sandbox** disabled for production use",
+          "message": "**沙盒環境** 可用於安全測試，不會影響實際資料。\n\n- 啟用 **使用沙盒** 以連接至 `https://api-sandbox.demo.deel.com/rest/v2`\n- 沙盒金鑰與生產環境金鑰分開 — 請於 https://app.deel.com/developer-center 建立\n- 生產使用時請保持 **使用沙盒** 關閉"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Sandbox vs Production",
+          "message": "沙盒與生產環境"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Deel API access token used for authentication.\n\nGenerate a token in the **Developer Center** at https://app.deel.com/developer-center\n\nBoth **personal tokens** (linked to a user account) and **organization tokens** (service-level access) are supported.",
+          "message": "用於驗證的 Deel API 存取金鑰。\n\n請於 **開發者中心** 的 https://app.deel.com/developer-center 產生金鑰\n\n支援 **個人金鑰**（與使用者帳戶關聯）與 **組織金鑰**（服務層級存取）"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API 金鑰"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Deel API access token",
+          "message": "Deel API 存取金鑰"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.desc": {
+          "source": "If `True`, API calls target the Deel sandbox environment (`https://api-sandbox.demo.deel.com/rest/v2`) for safe testing.\n\nIf `False` (default), API calls target the production environment (`https://api.letsdeel.com/rest/v2`).\n\n**Note:** Sandbox and production use separate API tokens. Generate a sandbox token from the Developer Center when using this option.",
+          "message": "若 `True`，API 請求將指向 Deel 沙盒環境 (`https://api-sandbox.demo.deel.com/rest/v2`) 以進行安全測試。\n\n若 `False`（預設），API 請求將指向生產環境 (`https://api.letsdeel.com/rest/v2`)。\n\n**注意：** 沙盒與生產環境使用獨立的 API 金鑰。使用此選項時，請於開發者中心建立沙盒金鑰。"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.display_name": {
+          "source": "Use Sandbox",
+          "message": "使用沙盒"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.short_desc": {
+          "source": "Use Deel sandbox environment for testing",
+          "message": "使用 Deel 沙盒環境進行測試"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Deel REST API",
+          "message": "與 Deel REST API 的連接"
+        }
+      }
+    }
+  }
+}

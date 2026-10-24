@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the OpenAi REST API",
+          "message": "Připojení k REST API OpenAi"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "OpenAi REST Connection",
+          "message": "Spojení OpenAI REST"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The OpenAI chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `gpt-4o-mini` (the default), `gpt-4o`, `o3-mini`",
+          "message": "Chatový model OpenAI používaný klienty LLM, když je tato připojení vybráno pro chat.\n\nChatové modely tvoří samostatnou rodinu od modelů pro vektorizaci a nelze je navzájem zaměňovat.\n\nPříklady hodnot: `gpt-4o-mini` (výchozí), `gpt-4o`, `o3-mini`"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Chatový model"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "OpenAI chat model name",
+          "message": "Název chatového modelu OpenAI"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The API version to use",
+          "message": "Verze API k použití"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Verze API"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Verze API k použití"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.desc": {
+          "source": "The OpenAI embedding model used by embedding clients when this connection is selected for embeddings",
+          "message": "Model OpenAI pro vektorizaci používaný klienty pro vektorizaci, když je tato připojení vybráno pro vektorizaci"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.display_name": {
+          "source": "Embedding Model",
+          "message": "Model vektorizace"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.short_desc": {
+          "source": "OpenAI embedding model name",
+          "message": "Název modelu OpenAI pro vektorizaci"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.dXNlX3NjaGVtYQ.desc": {
+          "source": "Use the OpenAPI schema for API validation; OpenAI can change the schema at any time, so the schema may be out of date and may cause valid API calls to fail",
+          "message": "Použít OpenAPI schéma pro ověření rozhraní API; OpenAI může schéma kdykoli změnit, takže může být zastaralé a může způsobit selhání platných volání rozhraní API"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.dXNlX3NjaGVtYQ.display_name": {
+          "source": "Use OpenAPI Schema",
+          "message": "Použít schéma OpenAPI"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.dXNlX3NjaGVtYQ.short_desc": {
+          "source": "Use the OpenAPI schema for API validation",
+          "message": "Použít schéma OpenAPI pro ověření rozhraní API"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the OpenAi REST API",
+          "message": "Připojení k REST API OpenAi"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Shippo REST API for shipping, label creation, and order management.\n\nShippo is a multi-carrier shipping API that enables you to connect with multiple shipping carriers (USPS, UPS, FedEx, DHL, and 85+ more) through a single integration.\n\n**Features:**\n- Compare shipping rates across carriers\n- Create shipping labels\n- Track shipments\n- Validate addresses\n- Manage orders\n\n**Authentication:**\nYou can authenticate using either:\n- **API Token**: Recommended for server-to-server integrations\n- **OAuth2**: For user-authorized access",
+          "message": "Připojení k REST API Shippo pro dopravu, vytváření štítků a správu objednávek.\n\nShippo je vícepřepravcový API pro dopravu, který vám umožňuje připojit se k více dopravcům (USPS, UPS, FedEx, DHL a více než 85 dalších) prostřednictvím jediné integrace.\n\n**Funkce:**\n- Srovnávání cen dopravy mezi dopravci\n- Vytváření dopravních štítků\n- Sledování zásilek\n- Ověřování adres\n- Správa objednávek\n\n**Ověření:**\nMůžete se ověřit pomocí:\n- **API tokenu**: Doporučeno pro integrace mezi servery\n- **OAuth2**: Pro uživatelsky autorizovaný přístup"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Shippo REST Connection",
+          "message": "Připojení k REST API Shippo"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "Shippo supports two authentication methods:\n\n**Option 1: OAuth2 (Recommended)**\nSimply click the authorize button to connect your Shippo account.\nNo additional configuration needed.\n\n**Option 2: API Token**\nEnter your Shippo API token in the 'API Token' field.\nUse this if you prefer to authenticate with a token directly.",
+          "message": "Shippo podporuje dvě metody ověření:\n\n**Možnost 1: OAuth2 (doporučeno)**\nStačí kliknout na tlačítko Autorizovat, abyste se připojili ke svému účtu Shippo.\nŽádné další nastavení není potřeba.\n\n**Možnost 2: API token**\nZadejte svůj API token Shippo do pole 'API token'.\nPoužijte tuto možnost, pokud preferujete přímé ověření pomocí tokenu."
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "Authentication Options",
+          "message": "Možnosti ověření"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
+          "source": "If using API Token authentication:\n\n1. Log in to https://apps.goshippo.com/\n2. Navigate to **Settings > API**\n3. Copy your **Live Token** for production\n4. Use **Test Token** for development/testing\n\n**Token formats:**\n- Live: `shippo_live_xxxxx`\n- Test: `shippo_test_xxxxx`\n\nKeep your tokens secure and never share them publicly.",
+          "message": "Používáte-li ověření pomocí API tokenu:\n\n1. Přihlaste se k https://apps.goshippo.com/\n2. Přejděte na **Nastavení > API**\n3. Zkopírujte svůj **Live token** pro produkční prostředí\n4. Pro vývoj a testování použijte **Test token**\n\n**Formáty tokenů:**\n- Live: `shippo_live_xxxxx`\n- Test: `shippo_test_xxxxx`\n\nUchovávejte své tokeny v bezpečí a nikdy je nezveřejňujte."
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
+          "source": "How to Get Your API Token",
+          "message": "Jak získat svůj API token"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Your Shippo API token used for authentication.\n\n**To obtain your API token:**\n1. Log in to https://apps.goshippo.com/\n2. Navigate to **Settings > API**\n3. Copy your **Live Token** for production use\n4. Use **Test Token** for development/testing\n\n**Token format:** `shippo_live_xxxxx` or `shippo_test_xxxxx`\n\n**Note:** Use either API Token OR OAuth2 authentication - not both.",
+          "message": "Váš API token Shippo používaný pro ověření.\n\n**Chcete-li získat svůj API token:**\n1. Přihlaste se k https://apps.goshippo.com/\n2. Přejděte na **Nastavení > API**\n3. Zkopírujte svůj **Live token** pro produkční použití\n4. Pro vývoj a testování použijte **Test token**\n\n**Formát tokenu:** `shippo_live_xxxxx` nebo `shippo_test_xxxxx`\n\n**Poznámka:** Použijte buď API token, nebo ověření OAuth2 – ne obě současně."
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "Token API"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Shippo API token for authentication",
+          "message": "API token Shippo pro ověření"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Shippo shipping API",
+          "message": "Připojení k Shippo API pro doručování"
+        }
+      }
+    }
+  }
+}

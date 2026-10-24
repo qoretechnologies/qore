@@ -1,0 +1,333 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [AWS Bedrock](https://aws.amazon.com/bedrock/) for chat, embeddings, and model-management actions through SigV4-signed REST calls.\n\nThe runtime endpoint is derived from `aws_region`. Authentication uses explicit access keys when supplied, otherwise the standard AWS environment, ECS task-role, or IMDSv2 credential chain. An optional role ARN applies STS AssumeRole after resolving the base credential. The connection ping makes an authenticated, inference-free `ListFoundationModels` request.",
+          "message": "Підключення до [AWS Bedrock](https://aws.amazon.com/bedrock/) для діалогів, векторизації та керування моделями через REST-виклики з підписом SigV4.\n\nТочка доступу виконання визначається з `aws_region`. Аутентифікація використовує явні ключі доступу, якщо вони надані, інакше стандартна AWS-середовища, роль ECS task або ланцюжок credentіалів IMDSv2. Опціонально може застосовуватися ARN ролі для STS AssumeRole після розв’язання базових credentіалів. Пінг підключення виконує автентифікований, без інференції `ListFoundationModels` запит."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "AWS Bedrock Connection",
+          "message": "Підключення до AWS Bedrock"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2V4dGVybmFsX2lk.desc": {
+          "source": "External ID sent to AWS STS when the target role requires one.",
+          "message": "Зовнішній ID, що надсилається AWS STS, коли цільова роль вимагає його."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2V4dGVybmFsX2lk.display_name": {
+          "source": "STS External ID",
+          "message": "Зовнішній ідентифікатор STS"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2V4dGVybmFsX2lk.short_desc": {
+          "source": "Optional external ID required by the role",
+          "message": "Опціональний зовнішній ідентифікатор, необхідний для ролі"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2tleWlk.desc": {
+          "source": "AWS access key ID for explicit credentials. Leave this and `aws_secret` empty to use the AWS environment, ECS task-role, or IMDSv2 credential chain.",
+          "message": "Ключ доступу AWS ID для явних credentіалів. Залиште це поле та `aws_secret` порожніми, щоб використовувати AWS-середовище, роль ECS task або ланцюжок credentіалів IMDSv2."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2tleWlk.display_name": {
+          "source": "AWS Access Key ID",
+          "message": "AWS Access Key ID"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2tleWlk.short_desc": {
+          "source": "Optional access key ID for SigV4 authentication",
+          "message": "Опціональний ключ доступу AWS ID для автентифікації SigV4"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLWNlbnRyYWwtMQ.desc": {
+          "source": "Middle East (UAE)",
+          "message": "Середній Схід (ОАЕ)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLWNlbnRyYWwtMQ.display_name": {
+          "source": "Middle East (UAE)",
+          "message": "Середній Схід (ОАЕ)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLXNvdXRoLTE.desc": {
+          "source": "Middle East (Bahrain)",
+          "message": "Середній Схід (Бахрейн)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLXNvdXRoLTE.display_name": {
+          "source": "Middle East (Bahrain)",
+          "message": "Середній Схід (Бахрейн)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFmLXNvdXRoLTE.desc": {
+          "source": "Africa (Cape Town)",
+          "message": "Африка (Кейп-Таун)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFmLXNvdXRoLTE.display_name": {
+          "source": "Africa (Cape Town)",
+          "message": "Африка (Кейп-Таун)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0x.desc": {
+          "source": "Asia Pacific (Tokyo)",
+          "message": "Азія-Південно-Схід (Токіо)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0x.display_name": {
+          "source": "Asia Pacific (Tokyo)",
+          "message": "Азія-Південно-Схід (Токіо)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0y.desc": {
+          "source": "Asia Pacific (Seoul)",
+          "message": "Азія-Південно-Схід (Сеул)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0y.display_name": {
+          "source": "Asia Pacific (Seoul)",
+          "message": "Азія-Південно-Схід (Сеул)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0z.desc": {
+          "source": "Asia Pacific (Osaka)",
+          "message": "Азія-Південно-Схід (Осака)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0z.display_name": {
+          "source": "Asia Pacific (Osaka)",
+          "message": "Азія-Південно-Схід (Осака)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLWVhc3QtMQ.desc": {
+          "source": "Asia Pacific (Hong Kong)",
+          "message": "Азія та Тихоокеанський регіон (Гонконг)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLWVhc3QtMQ.display_name": {
+          "source": "Asia Pacific (Hong Kong)",
+          "message": "Азія та Тихоокеанський регіон (Гонконг)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTE.desc": {
+          "source": "Asia Pacific (Mumbai)",
+          "message": "Азія та Тихоокеанський регіон (Мумбаї)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTE.display_name": {
+          "source": "Asia Pacific (Mumbai)",
+          "message": "Азія та Тихоокеанський регіон (Мумбаї)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTI.desc": {
+          "source": "Asia Pacific (Hyderabad)",
+          "message": "Азія та Тихоокеанський регіон (Гідрабад)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTI.display_name": {
+          "source": "Asia Pacific (Hyderabad)",
+          "message": "Азія та Тихоокеанський регіон (Гідрабад)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC00.desc": {
+          "source": "Asia Pacific (Melbourne)",
+          "message": "Азія та Тихоокеанський регіон (Мельбурн)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC00.display_name": {
+          "source": "Asia Pacific (Melbourne)",
+          "message": "Азія та Тихоокеанський регіон (Мельбурн)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.desc": {
+          "source": "Asia Pacific (Singapore)",
+          "message": "Азія та Тихоокеанський регіон (Сінгапур)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.display_name": {
+          "source": "Asia Pacific (Singapore)",
+          "message": "Азія та Тихоокеанський регіон (Сінгапур)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0y.desc": {
+          "source": "Asia Pacific (Sydney)",
+          "message": "Азія та Тихоокеанський регіон (Сідней)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0y.display_name": {
+          "source": "Asia Pacific (Sydney)",
+          "message": "Азія та Тихоокеанський регіон (Сідней)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0z.desc": {
+          "source": "Asia Pacific (Jakarta)",
+          "message": "Азія та Тихоокеанський регіон (Джакарта)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0z.display_name": {
+          "source": "Asia Pacific (Jakarta)",
+          "message": "Азія та Тихоокеанський регіон (Джакарта)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLWNlbnRyYWwtMQ.desc": {
+          "source": "Canada (Central)",
+          "message": "Канада (Центральна)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLWNlbnRyYWwtMQ.display_name": {
+          "source": "Canada (Central)",
+          "message": "Канада (Центральна)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLXdlc3QtMQ.desc": {
+          "source": "Canada West (Calgary)",
+          "message": "Канада Західна (Калгари)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLXdlc3QtMQ.display_name": {
+          "source": "Canada West (Calgary)",
+          "message": "Канада Західна (Калгари)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LW5vcnRoLTE.desc": {
+          "source": "Europe (Stockholm)",
+          "message": "Європа (Стокгольм)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LW5vcnRoLTE.display_name": {
+          "source": "Europe (Stockholm)",
+          "message": "Європа (Стокгольм)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMQ.desc": {
+          "source": "Europe (Frankfurt)",
+          "message": "Європа (Франкфурт)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMQ.display_name": {
+          "source": "Europe (Frankfurt)",
+          "message": "Європа (Франкфурт)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMg.desc": {
+          "source": "Europe (Zurich)",
+          "message": "Європа (Цюрих)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMg.display_name": {
+          "source": "Europe (Zurich)",
+          "message": "Європа (Цюрих)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTE.desc": {
+          "source": "Europe (Milan)",
+          "message": "Європа (Мілан)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTE.display_name": {
+          "source": "Europe (Milan)",
+          "message": "Європа (Мілан)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTI.desc": {
+          "source": "Europe (Spain)",
+          "message": "Європа (Іспанія)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTI.display_name": {
+          "source": "Europe (Spain)",
+          "message": "Європа (Іспанія)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMQ.desc": {
+          "source": "Europe (Ireland)",
+          "message": "Європа (Ірландія)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMQ.display_name": {
+          "source": "Europe (Ireland)",
+          "message": "Європа (Ірландія)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMg.desc": {
+          "source": "Europe (London)",
+          "message": "Європа (Лондон)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMg.display_name": {
+          "source": "Europe (London)",
+          "message": "Європа (Лондон)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMw.desc": {
+          "source": "Europe (Paris)",
+          "message": "Європа (Париж)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMw.display_name": {
+          "source": "Europe (Paris)",
+          "message": "Європа (Париж)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmlsLWNlbnRyYWwtMQ.desc": {
+          "source": "Israel (Tel Aviv)",
+          "message": "Ізраїль (Тель-Авів)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmlsLWNlbnRyYWwtMQ.display_name": {
+          "source": "Israel (Tel Aviv)",
+          "message": "Ізраїль (Тель-Авів)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnNhLWVhc3QtMQ.desc": {
+          "source": "South America (São Paulo)",
+          "message": "Південна Америка (Сан-Паулу)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnNhLWVhc3QtMQ.display_name": {
+          "source": "South America (São Paulo)",
+          "message": "Південна Америка (Сан-Паулу)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMQ.desc": {
+          "source": "US East (N. Virginia)",
+          "message": "Північна Вірджинія (Північна Америка)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMQ.display_name": {
+          "source": "US East (N. Virginia)",
+          "message": "Північна Вірджинія (Північна Америка)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMg.desc": {
+          "source": "US East (Ohio)",
+          "message": "Огайо (Північна Америка)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMg.display_name": {
+          "source": "US East (Ohio)",
+          "message": "Огайо (Північна Америка)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMQ.desc": {
+          "source": "US West (N. California)",
+          "message": "Північна Каліфорнія (Північна Америка)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMQ.display_name": {
+          "source": "US West (N. California)",
+          "message": "Північна Каліфорнія (Північна Америка)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMg.desc": {
+          "source": "US West (Oregon)",
+          "message": "Орегон (Північна Америка)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMg.display_name": {
+          "source": "US West (Oregon)",
+          "message": "Орегон (Північна Америка)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.desc": {
+          "source": "AWS region used for Bedrock runtime and control-plane requests. The connection derives both service endpoints from this value.",
+          "message": "Регіон AWS, що використовується для запитів до runtime та control-plane Bedrock. Підключення визначає обидва службові точки доступу з цієї значення."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.short_desc": {
+          "source": "AWS region hosting the Bedrock resources",
+          "message": "Регіон AWS, де розташовані ресурси Bedrock"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfYXJu.desc": {
+          "source": "AWS role ARN to assume after resolving the base credential. The resulting temporary credential signs Bedrock requests.",
+          "message": "ARN ролі AWS, яку слід прийняти після розв’язання базових облікових даних. Отримані тимчасові облікові дані підписують запити до Bedrock."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfYXJu.display_name": {
+          "source": "STS Role ARN",
+          "message": "ARN ролі STS"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfYXJu.short_desc": {
+          "source": "Optional AWS role to assume",
+          "message": "Додаткова AWS роль для прийняття"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.desc": {
+          "source": "Session name sent to AWS STS when `aws_role_arn` is set.",
+          "message": "Ім’я сесії, що надсилається AWS STS, коли встановлено `aws_role_arn`."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.display_name": {
+          "source": "STS Role Session Name",
+          "message": "Ім’я сесії ролі STS"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.short_desc": {
+          "source": "Optional name for the assumed-role session",
+          "message": "Необов’язкове ім’я сесії, що виникає після прийняття ролі"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3NlY3JldA.desc": {
+          "source": "AWS secret access key paired with `aws_keyid`. Leave both fields empty to use the standard AWS credential chain.",
+          "message": "Секретний ключ AWS, який парується з `aws_keyid`. Залиште обидва поля порожніми, щоб використовувати стандартний ланцюжок облікових даних AWS."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3NlY3JldA.display_name": {
+          "source": "AWS Secret Access Key",
+          "message": "AWS Secret Access Key"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3NlY3JldA.short_desc": {
+          "source": "Optional secret key for SigV4 authentication",
+          "message": "Необов’язковий секретний ключ для автентифікації SigV4"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3Rva2Vu.desc": {
+          "source": "AWS session token supplied with temporary access-key credentials.",
+          "message": "Токен сесії AWS, що надається разом із тимчасовими ключами доступу."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3Rva2Vu.display_name": {
+          "source": "AWS Session Token",
+          "message": "Токен сесії AWS"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3Rva2Vu.short_desc": {
+          "source": "Optional token for temporary AWS credentials",
+          "message": "Необов’язковий токен для тимчасових облікових записів AWS"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the AWS Bedrock runtime",
+          "message": "Підключення до середовища виконання AWS Bedrock"
+        }
+      }
+    }
+  }
+}

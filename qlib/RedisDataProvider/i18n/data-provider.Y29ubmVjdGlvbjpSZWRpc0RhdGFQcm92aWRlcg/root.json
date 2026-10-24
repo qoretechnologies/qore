@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.display_name": {
+          "source": "Redis Connection",
+          "message": "Redis Connection"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a Redis server",
+          "message": "A connection to a Redis server"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.desc": {
+          "source": "A connection to a Redis server using the `redis` or `rediss` (TLS) protocols",
+          "message": "A connection to a Redis server using the `redis` or `rediss` (TLS) protocols"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Connect Timeout"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connection timeout in seconds",
+          "message": "The connection timeout in seconds"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connection timeout in seconds",
+          "message": "The connection timeout in seconds"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "Database"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.ZGI.short_desc": {
+          "source": "The Redis database number to select",
+          "message": "The Redis database number to select"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.ZGI.desc": {
+          "source": "The Redis database number to select (0-15 by default, configurable per server)",
+          "message": "The Redis database number to select (0-15 by default, configurable per server)"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Password"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.cGFzc3dvcmQ.short_desc": {
+          "source": "Sets the password for authentication",
+          "message": "Sets the password for authentication"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; only used if no password is set in the URL",
+          "message": "The password for authentication; only used if no password is set in the URL"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "I/O Timeout"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dGltZW91dA.short_desc": {
+          "source": "The I/O timeout in seconds",
+          "message": "The I/O timeout in seconds"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dGltZW91dA.desc": {
+          "source": "The I/O timeout for read and write operations in seconds",
+          "message": "The I/O timeout for read and write operations in seconds"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Username"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for ACL authentication",
+          "message": "Sets the username for ACL authentication"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dXNlcm5hbWU.desc": {
+          "source": "The username for ACL authentication (Redis 6.0+); only used if no username is set in the URL",
+          "message": "The username for ACL authentication (Redis 6.0+); only used if no username is set in the URL"
+        }
+      }
+    }
+  }
+}

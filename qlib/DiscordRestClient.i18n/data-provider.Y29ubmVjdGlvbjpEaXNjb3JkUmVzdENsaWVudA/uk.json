@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Discord REST API",
+          "message": "З’єднання з REST API Discord"
+        },
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Discord REST Connection",
+          "message": "З’єднання Discord REST"
+        },
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "The default API version to use",
+          "message": "За замовчуванням версія API для використання"
+        },
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Версія API"
+        },
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Версія API, яку слід використовувати"
+        },
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Discord REST API",
+          "message": "З’єднання з REST API Discord"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Cin7Core REST API for inventory management, sales, and order processing.\n\nCin7Core (formerly DEAR Inventory) is a comprehensive inventory management and ERP platform that enables you to manage products, sales, purchases, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and suppliers\n- Create and track sales orders\n- Process payments and invoices\n- Monitor inventory and stock levels\n- Handle stock adjustments\n- Track shipments and fulfillment\n\n**Authentication:**\nCin7Core uses Account ID and API Key authentication. Both credentials are required.",
+          "message": "Cin7Core REST API를 사용하여 재고 관리, 판매 및 주문 처리를 연결합니다.\n\nCin7Core(이전 이름: DEAR Inventory)는 제품, 판매, 구매, 고객, 공급업체 및 재고 수준을 관리할 수 있는 포괄적인 재고 관리 및 ERP 플랫폼입니다.\n\n**기능:**\n- 고객 및 공급업체 관리\n- 판매 주문 생성 및 추적\n- 결제 및 송장 처리\n- 재고 및 재고 수준 모니터링\n- 재고 조정 처리\n- 운송 및 출고 추적\n\n**인증:**\nCin7Core는 계정 ID와 API 키 인증을 사용합니다. 두 자격 증명 모두 필요합니다."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Cin7Core REST Connection",
+          "message": "Cin7Core REST 연결"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Cin7Core, you need both an Account ID and API Key:\n\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Open the **Setup** tab for the Application\n4. Copy both credentials:\n   - **Account ID** - Your unique account identifier\n   - **Application Key** - Your API authentication key\n\nKeep your credentials secure and never share them publicly.",
+          "message": "Cin7Core에 연결하려면 계정 ID와 API 키가 모두 필요합니다:\n\n1. https://inventory.dearsystems.com/ExternalApi 로 이동합니다\n2. 새 애플리케이션을 생성하거나 기존 애플리케이션을 선택합니다\n3. 애플리케이션의 **설정** 탭을 엽니다\n4. 다음 두 자격 증명을 복사합니다:\n   - **계정 ID** - 귀하의 고유한 계정 식별자\n   - **애플리케이션 키** - 귀하의 API 인증 키\n\n자격 증명을 안전하게 보관하고 공개적으로 공유하지 마십시오."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Credentials",
+          "message": "API 자격 증명 획득 방법"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.desc": {
+          "source": "Your Cin7Core Account ID used for API authentication.\n\n**To obtain your Account ID:**\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Find your **Account ID** on the **Setup** tab\n\n**Note:** Both Account ID and API Key are required for authentication.",
+          "message": "API 인증에 사용되는 Cin7Core 계정 ID입니다.\n\n**계정 ID를 얻는 방법:**\n1. https://inventory.dearsystems.com/ExternalApi 로 이동합니다\n2. 새 애플리케이션을 생성하거나 기존 애플리케이션을 선택합니다\n3. **설정** 탭에서 귀하의 **계정 ID**를 찾습니다\n\n**참고:** 인증을 위해 계정 ID와 API 키가 모두 필요합니다."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Cin7Core Account ID for authentication",
+          "message": "인증용 Cin7Core 계정 ID"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Your Cin7Core Application/API Key for authentication.\n\n**To obtain your API Key:**\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Find your **Application Key** on the **Setup** tab\n\n**Note:** Both Account ID and API Key are required for authentication.",
+          "message": "API 인증용 Cin7Core 애플리케이션/API 키입니다.\n\n**API 키를 얻는 방법:**\n1. https://inventory.dearsystems.com/ExternalApi 로 이동합니다\n2. 새 애플리케이션을 생성하거나 기존 애플리케이션을 선택합니다\n3. **설정** 탭에서 귀하의 **애플리케이션 키**를 찾습니다\n\n**참고:** 인증을 위해 계정 ID와 API 키가 모두 필요합니다."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Cin7Core Application/API Key",
+          "message": "Cin7Core 애플리케이션/API 키"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Cin7Core (DEAR Inventory) API",
+          "message": "Cin7Core(DEAR Inventory) API에 대한 연결"
+        }
+      }
+    }
+  }
+}

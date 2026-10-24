@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Google Cloud Storage](https://cloud.google.com/storage) — Google's object storage service.  Authentication is via @ref gcpauthintro \"GcpAuth\" using an explicit service-account JSON key or Application Default Credentials.",
+          "message": "Una connessione a [Google Cloud Storage](https://cloud.google.com/storage) — il servizio di archiviazione oggetti di Google. L'autenticazione avviene tramite @ref gcpauthintro \"GcpAuth\" utilizzando una chiave JSON per account di servizio esplicita o le credenziali predefinite dell'applicazione."
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Google Cloud Storage Connection",
+          "message": "Connessione a Google Cloud Storage"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX2FjY2Vzc190b2tlbg.desc": {
+          "source": "A GCP bearer access token to use verbatim instead of obtaining one from a credential, for callers that mint tokens themselves (workload identity federation, service-account impersonation, or a platform that already holds a token).  It is **not** refreshed, so it stops working when it expires; leave it unset to let GcpAuth obtain and refresh tokens.  It must carry the scopes for everything it is used for, including `cloud-platform` if signed URLs are generated.",
+          "message": "Un token di accesso portatore GCP da usare senza modifiche invece di ottenerne uno dalle credenziali, per chiamanti che generano i token autonomamente (federazione di identità di carico, impersonazione di account di servizio o una piattaforma che già dispone di un token). Non viene aggiornato, quindi smette di funzionare quando scade; lasciarlo vuoto per consentire a GcpAuth di ottenere e aggiornare i token. Deve includere gli ambiti per tutto ciò per cui viene utilizzato, incluso `cloud-platform` se vengono generati URL firmati."
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX2FjY2Vzc190b2tlbg.display_name": {
+          "source": "Bearer Access Token",
+          "message": "Token di accesso portatore"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX2FjY2Vzc190b2tlbg.short_desc": {
+          "source": "An externally-minted bearer token to use directly",
+          "message": "Un token portatore generato esternamente da usare direttamente"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3BpbmdfYnVja2V0.desc": {
+          "source": "The bucket whose metadata is fetched to verify the connection.  When unset the project's bucket list is requested instead, which needs the `storage.buckets.list` permission at project level; set this to a single bucket for a service account granted access to that bucket only.",
+          "message": "Il bucket il cui metadato viene recuperato per verificare la connessione. Quando non impostato, viene richiesto l'elenco dei bucket del progetto, il che richiede il permesso `storage.buckets.list` a livello di progetto; impostalo su un singolo bucket per un account di servizio con accesso solo a quel bucket."
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3BpbmdfYnVja2V0.display_name": {
+          "source": "Ping Bucket",
+          "message": "Bucket di ping"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3BpbmdfYnVja2V0.short_desc": {
+          "source": "A bucket to read metadata from when pinging",
+          "message": "Un bucket da cui leggere i metadati durante il ping"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3Byb2plY3RfaWQ.desc": {
+          "source": "GCP project ID; required to list or create buckets, and used as the default billing project for requester-pays buckets.",
+          "message": "ID progetto GCP; richiesto per elencare o creare bucket, e usato come progetto di fatturazione predefinito per i bucket a pagamento richiesto."
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3Byb2plY3RfaWQ.display_name": {
+          "source": "GCP Project ID",
+          "message": "ID Progetto GCP"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3Byb2plY3RfaWQ.short_desc": {
+          "source": "GCP project that owns the buckets",
+          "message": "Progetto GCP che possiede i bucket"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.desc": {
+          "source": "Optional GCP billing/quota project; when set it is sent as the `x-goog-user-project` header so quota and billing are attributed to that project.  Required to read a requester-pays bucket owned by another project.",
+          "message": "Progetto GCP facoltativo per fatturazione/quota; quando impostato viene inviato come intestazione `x-goog-user-project` in modo che la quota e la fatturazione siano attribuite a quel progetto. Richiesto per leggere un bucket a pagamento richiesto appartenente a un altro progetto."
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.display_name": {
+          "source": "GCP Quota Project ID",
+          "message": "ID Progetto Quota GCP"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.short_desc": {
+          "source": "Billing/quota project for the x-goog-user-project header",
+          "message": "Progetto di fatturazione/quota per l'intestazione x-goog-user-project"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOmZ1bGxfY29udHJvbA.desc": {
+          "source": "Read and write buckets and objects and change their ACLs (`devstorage.full_control`)",
+          "message": "Leggi e scrivi bucket e oggetti e modifica i loro ACLs (`devstorage.full_control`)"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOmZ1bGxfY29udHJvbA.display_name": {
+          "source": "Full Control",
+          "message": "Controllo completo"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOnJlYWRfb25seQ.desc": {
+          "source": "Read buckets and objects; no writes (`devstorage.read_only`)",
+          "message": "Leggi bucket e oggetti; nessuna scrittura (`devstorage.read_only`)"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOnJlYWRfb25seQ.display_name": {
+          "source": "Read Only",
+          "message": "Sola lettura"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOnJlYWRfd3JpdGU.desc": {
+          "source": "Read and write buckets and objects (`devstorage.read_write`); this covers the entire object surface of this application",
+          "message": "Leggi e scrivi bucket e oggetti (`devstorage.read_write`); questo copre l'intera superficie oggetto di questa applicazione"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOnJlYWRfd3JpdGU.display_name": {
+          "source": "Read/Write",
+          "message": "Lettura/Scrittura"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.desc": {
+          "source": "The access level to request; only the scope this level names is requested, so a read-only connection cannot write even if the service account is otherwise permitted to.",
+          "message": "Il livello di accesso da richiedere; viene richiesto solo lo scope indicato da questo livello, quindi una connessione in sola lettura non può scrivere anche se il servizio account è altrimenti autorizzato a farlo."
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.display_name": {
+          "source": "Storage Access Level",
+          "message": "Livello di accesso allo storage"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.short_desc": {
+          "source": "The OAuth2 scope requested for storage access",
+          "message": "L'ambito OAuth2 richiesto per l'accesso allo storage"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3NhX2pzb25fcGF0aA.desc": {
+          "source": "Location of a GCP service-account JSON file for JWT-bearer auth; processed with `FileLocationHandler::getTextFileFromLocation()`, so it may be a bare path or any registered scheme (ex: `file:///etc/gcp/sa.json`, `http(s)://`, `sftp://`).  When omitted, Application Default Credentials are used.",
+          "message": "Percorso di un file JSON del servizio account GCP per l'autenticazione JWT-bearer; elaborato con `FileLocationHandler::getTextFileFromLocation()`, quindi può essere un percorso semplice o qualsiasi schema registrato (es: `file:///etc/gcp/sa.json`, `http(s)://`, `sftp://`). Quando omesso, vengono utilizzati i Credenziali Predefinite dell'Applicazione."
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3NhX2pzb25fcGF0aA.display_name": {
+          "source": "Service-Account JSON Location",
+          "message": "Posizione del file JSON del servizio account"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3NhX2pzb25fcGF0aA.short_desc": {
+          "source": "Location of a service-account JSON key file",
+          "message": "Posizione del file chiave JSON del servizio account"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to Google Cloud Storage",
+          "message": "Una connessione a Google Cloud Storage"
+        }
+      }
+    }
+  }
+}

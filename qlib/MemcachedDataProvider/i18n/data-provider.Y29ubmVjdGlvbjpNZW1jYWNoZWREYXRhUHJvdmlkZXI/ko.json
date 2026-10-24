@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.desc": {
+          "source": "Connection to a memcached server for caching data using the memcached binary protocol",
+          "message": "memcached 이진 프로토콜을 사용하여 데이터를 캐싱하기 위한 memcached 서버 연결"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.display_name": {
+          "source": "Memcached Connection",
+          "message": "Memcached 연결"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "Connection timeout in milliseconds (default: 30000)",
+          "message": "연결 시간 초과 (밀리초, 기본값: 30000)"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "연결 제한 시간"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "Connection timeout in milliseconds",
+          "message": "밀리초 단위의 연결 타임아웃"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.aW9fdGltZW91dA.desc": {
+          "source": "I/O timeout in milliseconds for read/write operations (default: 15000)",
+          "message": "읽기/쓰기 작업에 대한 I/O 시간 초과 (밀리초, 기본값: 15000)"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.aW9fdGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "I/O 제한 시간"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.aW9fdGltZW91dA.short_desc": {
+          "source": "Read/write timeout in milliseconds",
+          "message": "읽기/쓰기 시간 초과 (밀리초)"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.short_desc": {
+          "source": "Connection to a memcached server",
+          "message": "memcached 서버에 연결"
+        }
+      }
+    }
+  }
+}

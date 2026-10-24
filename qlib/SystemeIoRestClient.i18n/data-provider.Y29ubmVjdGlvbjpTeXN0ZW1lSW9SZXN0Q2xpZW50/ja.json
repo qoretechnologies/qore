@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Systeme.io REST API for managing contacts, tags, courses, communities, and subscriptions.\n\nSysteme.io is an all-in-one online marketing platform for building sales funnels, running email campaigns, managing courses and communities, and handling affiliate programs.\n\n**To obtain your API key:**\n1. Log in to your Systeme.io account\n2. Go to **Profile Settings**\n3. Navigate to the **Public API keys** section\n4. Click **Create** to generate a new key\n5. Copy the key immediately (it cannot be retrieved later)\n\n**Note:** Maximum 3 API keys per account. Keys are shared across all API integrations.",
+          "message": "連絡先、タグ、コース、コミュニティ、およびサブスクリプションを管理するための Systeme.io REST API への接続。\n\nSysteme.io は、販売フローの構築、メールキャンペーンの実行、コースおよびコミュニティの管理、アフィリエイトプログラムの運用を行う、オールインワンのオンラインマーケティングプラットフォームです。\n\n**API キーを取得するには：**\n1. Systeme.io アカウントにログイン\n2. **プロフィール設定** へ移動\n3. **パブリック API キー** セクションに移動\n4. **作成** をクリックして新しいキーを生成\n5. キーをすぐにコピー（後で再取得できません）\n\n**注意：** アカウントあたり最大 3 つの API キーまで。キーはすべての API インテグレーションで共有されます。"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Systeme.io REST Connection",
+          "message": "Systeme.io REST 接続"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires a **Systeme.io API key**.\n\n**Steps to generate an API key:**\n1. Log in to your Systeme.io account\n2. Go to **Profile Settings**\n3. Navigate to the **Public API keys** section\n4. Click **Create** and give the key a name\n5. Copy the key immediately\n\n**Important:**\n- API keys are only shown once at creation time\n- Maximum 3 API keys per account\n- Rate limits are plan-based and shared across all keys",
+          "message": "この統合には **Systeme.io API キー** が必要です。\n\n**API キーを生成する手順：**\n1. Systeme.io アカウントにログイン\n2. **プロフィール設定** へ移動\n3. **パブリック API キー** セクションに移動\n4. **作成** をクリックし、キーに名前を付ける\n5. キーをすぐにコピー\n\n**重要：**\n- API キーは作成時に一度だけ表示されます\n- アカウントあたり最大 3 つの API キーまで\n- レート制限はプランベースで、すべてのキー間で共有されます"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "APIキーの取得方法"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Systeme.io API key used for authentication via the `X-API-Key` header.\n\n**To obtain your API key:**\n1. Log in to your Systeme.io account\n2. Go to **Profile Settings**\n3. Navigate to the **Public API keys** section\n4. Click **Create** to generate a new key\n5. Copy the key immediately (it cannot be retrieved later)\n\n**Important:** API keys are only visible immediately after creation. If you lose a key, you must delete it and create a new one.",
+          "message": "`X-API-Key` ヘッダーを介して認証に使用される Systeme.io API キー。\n\n**API キーを取得するには：**\n1. Systeme.io アカウントにログイン\n2. **プロフィール設定** へ移動\n3. **パブリック API キー** セクションに移動\n4. **作成** をクリックして新しいキーを生成\n5. キーをすぐにコピー（後で再取得できません）\n\n**重要：** API キーは作成直後にのみ表示されます。キーを紛失した場合、削除して新しいキーを作成する必要があります。"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Systeme.io API key for authentication",
+          "message": "Systeme.io APIキー（認証用）"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Systeme.io REST API",
+          "message": "Systeme.io REST APIへの接続"
+        }
+      }
+    }
+  }
+}

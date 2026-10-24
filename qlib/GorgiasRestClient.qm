@@ -264,7 +264,8 @@ GorgiasRestClient gorgias({
 public class GorgiasRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("GorgiasRestClient",
+            "GorgiasRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Gorgias REST Connection",
             "short_desc": "A connection to the Gorgias REST API",
             "desc": "A connection to the Gorgias REST API for customer support ticket management, "
@@ -280,6 +281,7 @@ public class GorgiasRestConnection inherits RestClient::RestConnection {
             "required_options": "oauth2_client_id,oauth2_client_secret,subdomain",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "Finding Your Gorgias Subdomain",
                     "intent": "info",
                     "content": "Your **subdomain** is the first part of your Gorgias URL.\n\n"
@@ -338,7 +340,7 @@ public class GorgiasRestConnection inherits RestClient::RestConnection {
                         "default_value": True,
                     }),
             },
-        };
+        });
     }
 
     #! creates the GorgiasRestConnection object

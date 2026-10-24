@@ -1,0 +1,385 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to AWS cloud REST API services",
+          "message": "AWS 클라우드 REST API 서비스에 연결"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "AWS REST Connection",
+          "message": "AWS REST 연결"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX2tleWlk.desc": {
+          "source": "The AWS key ID",
+          "message": "AWS 키 ID"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX2tleWlk.display_name": {
+          "source": "AWS Key ID",
+          "message": "AWS 키 ID"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX2tleWlk.short_desc": {
+          "source": "The AWS key ID",
+          "message": "AWS 키 ID"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3JlZ2lvbg.desc": {
+          "source": "The AWS region to use (ex: `us-east-1`)",
+          "message": "사용할 AWS 리전 (예: `us-east-1`)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3JlZ2lvbg.display_name": {
+          "source": "AWS Region",
+          "message": "AWS 리전"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3JlZ2lvbg.short_desc": {
+          "source": "The AWS region to use",
+          "message": "사용할 AWS 리전"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Mz.desc": {
+          "source": "Set to `True` to flag this object for use with AWS S3, which requires special message encoding",
+          "message": "AWS S3와 함께 사용하도록 이 객체를 표시하려면 `True`로 설정하세요. AWS S3는 특수한 메시지 인코딩을 필요로 합니다."
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Mz.display_name": {
+          "source": "AWS S3",
+          "message": "AWS S3"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Mz.short_desc": {
+          "source": "Flag for use with AWS S3",
+          "message": "AWS S3와 함께 사용하도록 표시"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlY3JldA.desc": {
+          "source": "The AWS secret access key value",
+          "message": "AWS 비밀 액세스 키 값"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlY3JldA.display_name": {
+          "source": "AWS Secret",
+          "message": "AWS 비밀"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlY3JldA.short_desc": {
+          "source": "The AWS secret access key value",
+          "message": "AWS 비밀 액세스 키 값"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlcnZpY2U.desc": {
+          "source": "The AWS service to use (ex: `iam`)",
+          "message": "사용할 AWS 서비스 (예: `iam`)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlcnZpY2U.display_name": {
+          "source": "AWS Service",
+          "message": "AWS 서비스"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlcnZpY2U.short_desc": {
+          "source": "The AWS service to use",
+          "message": "사용할 AWS 서비스"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Rva2Vu.desc": {
+          "source": "A temporary session token from AWS Security Token Service for this HTTP session",
+          "message": "이 HTTP 세션용 AWS 보안 토큰 서비스에서 발급된 일시적 세션 토큰"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Rva2Vu.display_name": {
+          "source": "AWS Token",
+          "message": "AWS 토큰"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Rva2Vu.short_desc": {
+          "source": "A temporary session token",
+          "message": "임시 세션 토큰"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "JSON 직렬화 사용"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.ZGF0YQ.desc": {
+          "source": "Data serialization options are limited to `json` with this object",
+          "message": "이 객체에서는 `json`만 사용할 수 있는 데이터 직렬화 옵션"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "데이터 직렬화"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.ZGF0YQ.short_desc": {
+          "source": "The data serialization to use",
+          "message": "사용할 데이터 직렬화"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to AWS cloud REST API services",
+          "message": "AWS 클라우드 REST API 서비스에 연결"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to object storage that speaks the Amazon S3 protocol but is not Amazon S3, such as [MinIO](https://min.io) or [Ceph](https://ceph.io).\n\nRequires the URL the service is reached at, plus an access key ID and secret access key.  The region is whatever the service was configured with, and is often left at `us-east-1`, which is what most S3-compatible services default to.\n\nUse an **Amazon S3** connection instead for Amazon S3 itself; that one derives its URL from the region and needs no URL at all",
+          "message": "Amazon S3 프로토콜을 지원하지만 Amazon S3가 아닌 객체 스토리지 연결, 예: [MinIO](https://min.io) 또는 [Ceph](https://ceph.io).\n\n서비스에 접근할 URL, 액세스 키 ID 및 비밀 액세스 키가 필요합니다. 리전은 서비스가 구성된 값이며, 대부분의 S3 호환 서비스는 `us-east-1`으로 기본 설정됩니다.\n\nAmazon S3 자체를 사용하려면 **Amazon S3** 연결을 사용하세요. 이 연결은 리전에서 URL을 자동으로 생성하며 URL을 별도로 입력할 필요가 없습니다"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "S3-Compatible Storage",
+          "message": "S3 호환 스토리지"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.option.YXdzX3JlZ2lvbg.desc": {
+          "source": "The region the service was configured with; most S3-compatible services default to `us-east-1` and ignore the value beyond using it to sign requests",
+          "message": "서비스가 구성된 리전입니다. 대부분의 S3 호환 서비스는 `us-east-1`으로 기본 설정되며, 이 값은 요청 서명에만 사용됩니다"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.option.cGF0aF9zdHlsZQ.desc": {
+          "source": "Address buckets in the URI path (`https://<host>/<bucket>/<key>`) rather than in the hostname (`https://<bucket>.<host>/<key>`).\n\nThis is the default and currently the only supported mode: virtual-host addressing needs a separate endpoint per bucket, which the data provider module does not yet create.  Most S3-compatible services require path-style addressing in any case",
+          "message": "버킷을 호스트명(`https://<bucket>.<host>/<key>`)이 아닌 URI 경로(`https://<host>/<bucket>/<key>`)에 포함합니다.\n\n이것이 기본값이며 현재 유일하게 지원되는 모드입니다. 가상 호스팅 주소는 버킷당 별도의 엔드포인트가 필요하므로 데이터 제공 모듈은 아직 이를 생성하지 않습니다. 대부분의 S3 호환 서비스는 경로 스타일 주소를 요구합니다"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.option.cGF0aF9zdHlsZQ.display_name": {
+          "source": "Path-Style Addressing",
+          "message": "경로 스타일 주소 지정"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.option.cGF0aF9zdHlsZQ.short_desc": {
+          "source": "Address buckets in the URI path rather than in the hostname",
+          "message": "버킷을 호스트명이 아닌 URI 경로에 주소 지정합니다"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to S3-compatible object storage such as MinIO or Ceph",
+          "message": "MinIO 또는 Ceph와 같은 S3 호환 객체 스토리지에 연결합니다"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [Amazon S3](https://aws.amazon.com/s3/) object storage.\n\nRequires an AWS access key ID and secret access key with permission for the buckets to be used, plus the region the buckets live in.  The URL is derived from the region, and the AWS service and S3 request-encoding options are set automatically.\n\nUse an **S3-Compatible Storage** connection instead for MinIO, Ceph, or another service that speaks the S3 protocol but is not Amazon",
+          "message": "[Amazon S3](https://aws.amazon.com/s3/) 객체 스토리지에 연결합니다.\n\n버킷 사용 권한이 있는 AWS 액세스 키 ID와 비밀 액세스 키, 그리고 버킷이 위치한 리전이 필요합니다. URL은 리전에서 유도되며, AWS 서비스 및 S3 요청 인코딩 옵션은 자동으로 설정됩니다.\n\nMinIO, Ceph 또는 다른 S3 프로토콜을 지원하지만 아마존이 아닌 서비스의 경우 **S3 호환 스토리지** 연결을 사용하세요"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Amazon S3",
+          "message": "Amazon S3"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLWNlbnRyYWwtMQ.desc": {
+          "source": "Middle East (UAE)",
+          "message": "중동 (아랍에미리트)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLWNlbnRyYWwtMQ.display_name": {
+          "source": "Middle East (UAE)",
+          "message": "중동 (아랍에미리트)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLXNvdXRoLTE.desc": {
+          "source": "Middle East (Bahrain)",
+          "message": "중동 (바레인)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLXNvdXRoLTE.display_name": {
+          "source": "Middle East (Bahrain)",
+          "message": "중동 (바레인)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFmLXNvdXRoLTE.desc": {
+          "source": "Africa (Cape Town)",
+          "message": "아프리카 (케이프타운)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFmLXNvdXRoLTE.display_name": {
+          "source": "Africa (Cape Town)",
+          "message": "아프리카 (케이프타운)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0x.desc": {
+          "source": "Asia Pacific (Tokyo)",
+          "message": "아시아 태평양 (도쿄)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0x.display_name": {
+          "source": "Asia Pacific (Tokyo)",
+          "message": "아시아 태평양 (도쿄)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0y.desc": {
+          "source": "Asia Pacific (Seoul)",
+          "message": "아시아 태평양 (서울)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0y.display_name": {
+          "source": "Asia Pacific (Seoul)",
+          "message": "아시아 태평양 (서울)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0z.desc": {
+          "source": "Asia Pacific (Osaka)",
+          "message": "아시아 태평양 (오사카)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0z.display_name": {
+          "source": "Asia Pacific (Osaka)",
+          "message": "아시아 태평양 (오사카)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLWVhc3QtMQ.desc": {
+          "source": "Asia Pacific (Hong Kong)",
+          "message": "아시아 태평양 (홍콩)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLWVhc3QtMQ.display_name": {
+          "source": "Asia Pacific (Hong Kong)",
+          "message": "아시아 태평양 (홍콩)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTE.desc": {
+          "source": "Asia Pacific (Mumbai)",
+          "message": "아시아 태평양 (뭄바이)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTE.display_name": {
+          "source": "Asia Pacific (Mumbai)",
+          "message": "아시아 태평양 (뭄바이)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTI.desc": {
+          "source": "Asia Pacific (Hyderabad)",
+          "message": "아시아 태평양 (하이데라바드)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTI.display_name": {
+          "source": "Asia Pacific (Hyderabad)",
+          "message": "아시아 태평양 (하이데라바드)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC00.desc": {
+          "source": "Asia Pacific (Melbourne)",
+          "message": "아시아 태평양 (멜버른)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC00.display_name": {
+          "source": "Asia Pacific (Melbourne)",
+          "message": "아시아 태평양 (멜버른)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.desc": {
+          "source": "Asia Pacific (Singapore)",
+          "message": "아시아 태평양 (싱가포르)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.display_name": {
+          "source": "Asia Pacific (Singapore)",
+          "message": "아시아 태평양 (싱가포르)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0y.desc": {
+          "source": "Asia Pacific (Sydney)",
+          "message": "아시아 태평양 (시드니)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0y.display_name": {
+          "source": "Asia Pacific (Sydney)",
+          "message": "아시아 태평양 (시드니)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0z.desc": {
+          "source": "Asia Pacific (Jakarta)",
+          "message": "아시아 태평양(자카르타)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0z.display_name": {
+          "source": "Asia Pacific (Jakarta)",
+          "message": "아시아 태평양(자카르타)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLWNlbnRyYWwtMQ.desc": {
+          "source": "Canada (Central)",
+          "message": "캐나다(중앙)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLWNlbnRyYWwtMQ.display_name": {
+          "source": "Canada (Central)",
+          "message": "캐나다(중앙)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLXdlc3QtMQ.desc": {
+          "source": "Canada West (Calgary)",
+          "message": "캐나다 서부(캘거리)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLXdlc3QtMQ.display_name": {
+          "source": "Canada West (Calgary)",
+          "message": "캐나다 서부(캘거리)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LW5vcnRoLTE.desc": {
+          "source": "Europe (Stockholm)",
+          "message": "유럽(스톡홀름)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LW5vcnRoLTE.display_name": {
+          "source": "Europe (Stockholm)",
+          "message": "유럽(스톡홀름)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMQ.desc": {
+          "source": "Europe (Frankfurt)",
+          "message": "유럽(프랑크푸르트)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMQ.display_name": {
+          "source": "Europe (Frankfurt)",
+          "message": "유럽(프랑크푸르트)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMg.desc": {
+          "source": "Europe (Zurich)",
+          "message": "유럽(취리히)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMg.display_name": {
+          "source": "Europe (Zurich)",
+          "message": "유럽(취리히)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTE.desc": {
+          "source": "Europe (Milan)",
+          "message": "유럽(밀라노)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTE.display_name": {
+          "source": "Europe (Milan)",
+          "message": "유럽(밀라노)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTI.desc": {
+          "source": "Europe (Spain)",
+          "message": "유럽(스페인)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTI.display_name": {
+          "source": "Europe (Spain)",
+          "message": "유럽(스페인)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMQ.desc": {
+          "source": "Europe (Ireland)",
+          "message": "유럽 (아일랜드)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMQ.display_name": {
+          "source": "Europe (Ireland)",
+          "message": "유럽 (아일랜드)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMg.desc": {
+          "source": "Europe (London)",
+          "message": "유럽 (런던)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMg.display_name": {
+          "source": "Europe (London)",
+          "message": "유럽 (런던)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMw.desc": {
+          "source": "Europe (Paris)",
+          "message": "유럽 (파리)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMw.display_name": {
+          "source": "Europe (Paris)",
+          "message": "유럽 (파리)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmlsLWNlbnRyYWwtMQ.desc": {
+          "source": "Israel (Tel Aviv)",
+          "message": "이스라엘 (텔 아비브)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmlsLWNlbnRyYWwtMQ.display_name": {
+          "source": "Israel (Tel Aviv)",
+          "message": "이스라엘 (텔 아비브)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnNhLWVhc3QtMQ.desc": {
+          "source": "South America (São Paulo)",
+          "message": "남미 (상파울루)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnNhLWVhc3QtMQ.display_name": {
+          "source": "South America (São Paulo)",
+          "message": "남미 (상파울루)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMQ.desc": {
+          "source": "US East (N. Virginia)",
+          "message": "미국 동부 (버지니아 북부)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMQ.display_name": {
+          "source": "US East (N. Virginia)",
+          "message": "미국 동부 (버지니아 북부)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMg.desc": {
+          "source": "US East (Ohio)",
+          "message": "미국 동부 (오하이오)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMg.display_name": {
+          "source": "US East (Ohio)",
+          "message": "미국 동부 (오하이오)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMQ.desc": {
+          "source": "US West (N. California)",
+          "message": "미국 서부 (캘리포니아 북부)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMQ.display_name": {
+          "source": "US West (N. California)",
+          "message": "미국 서부 (캘리포니아 북부)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMg.desc": {
+          "source": "US West (Oregon)",
+          "message": "미국 서부 (오레곤)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMg.display_name": {
+          "source": "US West (Oregon)",
+          "message": "미국 서부 (오레곤)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.desc": {
+          "source": "The AWS region holding the buckets to be used; this also selects the endpoint the connection is made to, so a region other than the one the buckets live in produces redirects and signature errors",
+          "message": "버킷이 위치한 AWS 리전; 이 리전은 연결이 설정되는 엔드포인트를 결정하므로 버킷이 있는 리전과 다를 경우 리디렉션과 서명 오류가 발생합니다."
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to Amazon S3 object storage",
+          "message": "Amazon S3 객체 스토리지에 대한 연결"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Kit REST API for email marketing including subscribers, tags, custom fields, broadcasts, forms, sequences, and purchases",
+          "message": "メールマーケティング（購読者、タグ、カスタムフィールド、ブロードキャスト、フォーム、シーケンス、購入）向けKit REST APIへの接続"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Kit REST Connection",
+          "message": "Kit REST接続"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Kit API key used for API key authentication via the `X-Kit-Api-Key` header.\n\n**To obtain your API key:**\n1. Log in to your Kit account\n2. Go to **Settings** > **Developer**\n3. Create a new V4 API key\n\nRate limit: 120 requests per 60 seconds with API key authentication",
+          "message": "`X-Kit-Api-Key`ヘッダーによるAPIキー認証で使用されるKit APIキー。\n\n**APIキーの取得手順：**\n1. Kitアカウントにログイン\n2. **設定** > **開発者** へ移動\n3. 新しいV4 APIキーを作成\n\nレート制限：APIキー認証で60秒間に120回のリクエスト"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Kit API key for authentication",
+          "message": "Kit APIキーによる認証"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Kit REST API",
+          "message": "Kit REST APIへの接続"
+        }
+      }
+    }
+  }
+}

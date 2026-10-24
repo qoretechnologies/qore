@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a local [Ollama](https://ollama.com) runtime serving open-weight LLMs from the local machine.\n\nOllama runs locally by default at `http://localhost:11434`.  No authentication is required for local deployments; pass an `apikey` only for hosted Ollama Cloud or reverse-proxied deployments.\n\nThe connection uses the `ollama://` URL scheme for plain HTTP and `ollamas://` for servers behind TLS.",
+          "message": "連接到本地 [Ollama](https://ollama.com) 執行環境，從本機機器提供開放權重的 LLM。\n\nOllama 預設在本機運行於 `http://localhost:11434`。本機部署無需驗證；僅在使用 Ollama Cloud 或反向代理部署時才需提供 `apikey`。\n\n此連接使用 `ollama://` 協定進行純 HTTP，以及 `ollamas://` 用於 TLS 後端伺服器。"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Ollama Local LLM Connection",
+          "message": "Ollama 本地 LLM 連接"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Ollama chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nOllama serves whichever models have been pulled on the target host, so this option has no default; set it to a model that host provides",
+          "message": "當此連接被選取用於對話時，LLM 客戶端所使用的 Ollama 對話模型。\n\n對話模型與嵌入模型屬於不同系列，無法互相替代。\n\nOllama 會提供目標主機上已拉取的模型，因此此選項無預設值；請設定為主機提供的模型"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "對話模型"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Ollama chat model name",
+          "message": "Ollama 聊天模型名稱"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Optional Bearer token.  Local Ollama deployments do not require authentication; supply only for hosted Ollama Cloud or reverse-proxied deployments.",
+          "message": "選擇性 Bearer 權杖。本機 Ollama 部署不需要驗證；僅在使用 Ollama Cloud 或反向代理部署時提供。"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Optional Bearer token (Ollama Cloud / proxied deployments)",
+          "message": "選擇性 Bearer 權杖（Ollama Cloud / 代理部署）"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a local Ollama runtime",
+          "message": "連接到本機 Ollama 執行環境"
+        }
+      }
+    }
+  }
+}

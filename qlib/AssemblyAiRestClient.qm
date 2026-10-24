@@ -542,7 +542,8 @@ public class AssemblyAiRestConnection inherits RestClient::RestConnection {
             $1.key =~ /^(oauth2_|negotiate_|custom_token_|token($|_)|username$|password$)/;
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("AssemblyAiRestClient",
+            "AssemblyAiRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "AssemblyAI REST Connection",
             "short_desc": "A connection to the AssemblyAI speech-to-text REST API",
             "desc": "A connection to the [AssemblyAI](https://www.assemblyai.com) "
@@ -595,7 +596,7 @@ public class AssemblyAiRestConnection inherits RestClient::RestConnection {
                     {"default_value": DefaultPingHeaders}),
             },
             "required_options": "apikey",
-        };
+        });
 
         #! Default ping method
         const DefaultPingMethod = "GET";

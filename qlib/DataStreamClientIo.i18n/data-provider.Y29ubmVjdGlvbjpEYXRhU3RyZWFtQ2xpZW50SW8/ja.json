@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.desc": {
+          "source": "A connection to a DataStream API server using RestClientIo for multiplexed HTTP/1.1, HTTP/2, and HTTP/3 connections",
+          "message": "RestClientIoを使用したマルチプレクスHTTP/1.1、HTTP/2、HTTP/3接続によるDataStream APIサーバーへの接続"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.display_name": {
+          "source": "DataStream REST Connection (Multiplexed I/O)",
+          "message": "DataStream REST接続（マルチプレクスI/O）"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.bWF4X21lc3NhZ2Vfc2l6ZQ.desc": {
+          "source": "Maximum message size in bytes for Connect mode (0 = no limit)",
+          "message": "Connectモードでの最大メッセージサイズ（バイト単位、0は制限なし）"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.bWF4X21lc3NhZ2Vfc2l6ZQ.display_name": {
+          "source": "Max Message Size",
+          "message": "最大メッセージサイズ"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.bWF4X21lc3NhZ2Vfc2l6ZQ.short_desc": {
+          "source": "Maximum Connect frame payload size",
+          "message": "接続フレームの最大ペイロードサイズ"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.cHJvdG9jb2w.desc": {
+          "source": "The protocol mode: 'auto' (default), 'connect', or 'datastream'",
+          "message": "プロトコルモード：'auto'（デフォルト）、'connect'、または'datastream'"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.cHJvdG9jb2w.display_name": {
+          "source": "Protocol",
+          "message": "プロトコル"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.cHJvdG9jb2w.short_desc": {
+          "source": "DataStream protocol mode",
+          "message": "DataStreamプロトコルモード"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.short_desc": {
+          "source": "A connection to a DataStream API server using multiplexed I/O",
+          "message": "マルチプレクスI/Oを使用したDataStream APIサーバーへの接続"
+        }
+      }
+    }
+  }
+}

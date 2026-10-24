@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a local [Ollama](https://ollama.com) runtime serving open-weight LLMs from the local machine.\n\nOllama runs locally by default at `http://localhost:11434`.  No authentication is required for local deployments; pass an `apikey` only for hosted Ollama Cloud or reverse-proxied deployments.\n\nThe connection uses the `ollama://` URL scheme for plain HTTP and `ollamas://` for servers behind TLS.",
+          "message": "Eine Verbindung zu einer lokalen [Ollama](https://ollama.com) Laufzeit, die offene Gewichts-LLMs von der lokalen Maschine bereitstellt.\n\nOllama läuft standardmäßig lokal unter `http://localhost:11434`. Für lokale Bereitstellungen ist keine Authentifizierung erforderlich; übergeben Sie nur ein `apikey` für gehostete Ollama Cloud- oder umgeleitete Bereitstellungen.\n\nDie Verbindung verwendet das `ollama://`-Protokoll für reinen HTTP und `ollamas://` für Server hinter TLS."
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Ollama Local LLM Connection",
+          "message": "Ollama Lokale LLM-Verbindung"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Ollama chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nOllama serves whichever models have been pulled on the target host, so this option has no default; set it to a model that host provides",
+          "message": "Das Ollama-Chatmodell, das von LLM-Clients verwendet wird, wenn diese Verbindung für Chats ausgewählt wird.\n\nChatmodelle bilden eine separate Familie ab, die sich von Embedding-Modellen unterscheidet und nicht austauschbar ist.\n\nOllama stellt diejenigen Modelle bereit, die auf dem Zielhost heruntergeladen wurden, daher gibt es keinen Standardwert; legen Sie es auf ein Modell fest, das der Host bereitstellt"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Chatmodell"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Ollama chat model name",
+          "message": "Name des Ollama-Chat-Modells"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Optional Bearer token.  Local Ollama deployments do not require authentication; supply only for hosted Ollama Cloud or reverse-proxied deployments.",
+          "message": "Optionaler Bearer-Token. Lokale Ollama-Installationen erfordern keine Authentifizierung; geben Sie ihn nur für gehostete Ollama Cloud- oder umgeleitete (reverse-proxied) Installationen an."
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API-Schlüssel"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Optional Bearer token (Ollama Cloud / proxied deployments)",
+          "message": "Optionaler Bearer-Token (Ollama Cloud / umgeleitete Installationen)"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a local Ollama runtime",
+          "message": "Eine Verbindung zu einer lokalen Ollama-Runtime"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a Microsoft CDS (Common Data Services) REST server",
+          "message": "Підключення до сервера REST Microsoft CDS (Common Data Services)"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Microsoft CDS REST Server",
+          "message": "Сервер REST Microsoft CDS"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "Sets the API version for CDS",
+          "message": "Встановлює версію API для CDS"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Версія API"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "Sets the API version for CDS",
+          "message": "Встановлює версію API для CDS"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "No options are set",
+          "message": "Налаштування не встановлені"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmR5bmFtaWNz.desc": {
+          "source": "Set REST client options for the Dynamics 365 API",
+          "message": "Встановлює параметри клієнта REST для API Dynamics 365"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmR5bmFtaWNzLWJ1c2luZXNzLWNlbnRyYWw.desc": {
+          "source": "Set REST client options for the Dynamics 365 Business Central API",
+          "message": "Встановлює параметри клієнта REST для API Dynamics 365 Business Central"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.desc": {
+          "source": "Sets the API profile according to the CDS API in use; this option will set the REST options if they are not already set (`oauth2_scopes`, `ping_body`, `ping_headers`, and `ping_method`); valid values:\n- `none`: no options configured (default)\n- `dynamics`: set options for the Dynamics 365 API\n- `dynamics-business-central`: set options for the Dynamics 365 Business Central API",
+          "message": "Встановлює профіль API відповідно до використовуваного API CDS; цей параметр встановить параметри REST, якщо вони ще не встановлені (`oauth2_scopes`, `ping_body`, `ping_headers`, і `ping_method`); дійсні значення:\n- `none`: параметри не налаштовані (за замовчуванням)\n- `dynamics`: налаштувати параметри для API Dynamics 365\n- `dynamics-business-central`: налаштувати параметри для API Dynamics 365 Business Central"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.display_name": {
+          "source": "API Profile",
+          "message": "Профіль API"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.short_desc": {
+          "source": "Sets the API profile for the CDS API to use",
+          "message": "Встановлює профіль API CDS для використання"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnByb2R1Y3Rpb24.display_name": {
+          "source": "Production",
+          "message": "Продукція"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnNhbmRib3g.display_name": {
+          "source": "Sandbox",
+          "message": "Середовище тестування"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.desc": {
+          "source": "Business Central instance type (e.g., 'sandbox', 'production', or environment GUID); required when api_profile is 'dynamics-business-central'",
+          "message": "Тип екземпляра Business Central (наприклад, «sandbox», «production» або GUID середовища); обов’язково, коли api_profile — «dynamics-business-central»"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.display_name": {
+          "source": "Instance Type",
+          "message": "Тип інстанції"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.short_desc": {
+          "source": "Business Central instance type",
+          "message": "Тип екземпляра Business Central"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.dGVuYW50.desc": {
+          "source": "Azure AD tenant ID for authentication",
+          "message": "ІдентифікаторTenant Azure AD для аутентифікації"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.dGVuYW50.display_name": {
+          "source": "Tenant ID",
+          "message": "ID тенанта"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.dGVuYW50.short_desc": {
+          "source": "Azure AD tenant ID",
+          "message": "ІдентифікаторTenant Azure AD"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Microsoft CDS (Common Data Services) REST server",
+          "message": "Підключення до сервера REST Microsoft CDS (Common Data Services)"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.QnVzaW5lc3NDZW50cmFsUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a Microsoft Dynamics 365 Business Central REST server for ERP data access",
+          "message": "Підключення до REST-сервера Microsoft Dynamics 365 Business Central для доступу до даних ERP"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.QnVzaW5lc3NDZW50cmFsUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Microsoft Business Central REST Server",
+          "message": "REST-сервер Microsoft Business Central"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.QnVzaW5lc3NDZW50cmFsUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Microsoft Dynamics 365 Business Central REST server",
+          "message": "Підключення до REST-сервера Microsoft Dynamics 365 Business Central"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Microsoft Dynamics REST Server",
+          "message": "REST-сервер Microsoft Dynamics"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmR5bmFtaWNz.desc": {
+          "source": "Set REST client options for the Dynamics API",
+          "message": "Налаштуйте параметри REST-клієнта для API Dynamics"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The Dataverse environment to work in, by its unique name.\n\nThis is **discovered**: authorizing the connection asks Microsoft which environments the credential reaches, uses one, and sets this option to it. Where the credential reaches several, the first is used and the others are logged; set this option to one of those and authorize again to work in it instead.",
+          "message": "Окружений Dataverse, з яким потрібно працювати, за його унікальним ім’ям.\n\nЦе **виявляється**: авторизація з’єднання запитує Microsoft, які середовища доступні за цими обліковими даними, вибирає одне і встановлює цей параметр. Якщо облікові дані мають доступ до кількох середовищ, використовується перше, інші — записуються в журнал; встановіть цей параметр на одне з них і авторизуйтеся знову, щоб працювати в ньому."
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Environment",
+          "message": "Середовище"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The Dataverse environment to work in",
+          "message": "Окружений Dataverse, з яким потрібно працювати"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a Microsoft Dynamics REST server",
+          "message": "З’єднання з сервером REST Microsoft Dynamics"
+        }
+      }
+    }
+  }
+}

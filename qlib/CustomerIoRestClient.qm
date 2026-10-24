@@ -333,7 +333,8 @@ public class CustomerIoRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "customerio://api.customer.io/v1/api";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("CustomerIoRestClient",
+            "CustomerIoRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Customer.io REST Connection",
             "short_desc": "A connection to the Customer.io REST API",
             "desc": "A connection to the Customer.io REST API for marketing automation, messaging, and customer "
@@ -432,6 +433,7 @@ public class CustomerIoRestConnection inherits RestClient::RestConnection {
             "required_options": "app_api_key,site_id,tracking_api_key",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "Customer.io API Credentials",
                     "intent": "info",
                     "content": "Customer.io requires three credentials:\n"
@@ -442,6 +444,7 @@ public class CustomerIoRestConnection inherits RestClient::RestConnection {
                         "(https://fly.customer.io/settings/api_credentials)**",
                 },
                 <UiMessageInfo>{
+                    "presentation_id": "setup-2",
                     "title": "Select Your Region",
                     "intent": "info",
                     "content": "Choose the region that matches your Customer.io account:\n"
@@ -450,7 +453,7 @@ public class CustomerIoRestConnection inherits RestClient::RestConnection {
                         "Your region was set when you created your account and cannot be changed.",
                 },
             ),
-        };
+        });
     }
 
     #! creates the CustomerIoRestConnection object

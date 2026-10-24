@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Gorgias REST Connection",
+          "message": "Gorgias REST Connection"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Gorgias REST API",
+          "message": "A connection to the Gorgias REST API"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Gorgias REST API for customer support ticket management, customer data, and helpdesk operations",
+          "message": "A connection to the Gorgias REST API for customer support ticket management, customer data, and helpdesk operations"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Finding Your Gorgias Subdomain",
+          "message": "Finding Your Gorgias Subdomain"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "Your **subdomain** is the first part of your Gorgias URL.\n\nFor example, if you access Gorgias at `https://mycompany.gorgias.com`, your subdomain is `mycompany`.\n\n**How to find it:**\n1. Log in to your Gorgias helpdesk\n2. Look at the URL in your browser's address bar\n3. Copy the part before `.gorgias.com`",
+          "message": "Your **subdomain** is the first part of your Gorgias URL.\n\nFor example, if you access Gorgias at `https://mycompany.gorgias.com`, your subdomain is `mycompany`.\n\n**How to find it:**\n1. Log in to your Gorgias helpdesk\n2. Look at the URL in your browser's address bar\n3. Copy the part before `.gorgias.com`"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.display_name": {
+          "source": "Gorgias Subdomain",
+          "message": "Gorgias Subdomain"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.short_desc": {
+          "source": "Your Gorgias account subdomain",
+          "message": "Your Gorgias account subdomain"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.desc": {
+          "source": "The subdomain for your Gorgias account.\n\nFor example, if your Gorgias URL is `https://mycompany.gorgias.com`, enter `mycompany` as the subdomain.\n\nThis is used to build the API base URL and OAuth2 endpoints.",
+          "message": "The subdomain for your Gorgias account.\n\nFor example, if your Gorgias URL is `https://mycompany.gorgias.com`, enter `mycompany` as the subdomain.\n\nThis is used to build the API base URL and OAuth2 endpoints."
+        }
+      }
+    }
+  }
+}

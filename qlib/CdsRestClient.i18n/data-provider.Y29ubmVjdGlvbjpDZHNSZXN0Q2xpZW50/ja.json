@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a Microsoft CDS (Common Data Services) REST server",
+          "message": "Microsoft CDS（Common Data Services）REST サーバーへの接続"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Microsoft CDS REST Server",
+          "message": "Microsoft CDS REST サーバー"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "Sets the API version for CDS",
+          "message": "CDS の API バージョンを設定する"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "Sets the API version for CDS",
+          "message": "CDS の API バージョンを設定する"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "No options are set",
+          "message": "オプションが設定されていません"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmR5bmFtaWNz.desc": {
+          "source": "Set REST client options for the Dynamics 365 API",
+          "message": "Dynamics 365 API 用の REST クライアントオプションを設定する"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmR5bmFtaWNzLWJ1c2luZXNzLWNlbnRyYWw.desc": {
+          "source": "Set REST client options for the Dynamics 365 Business Central API",
+          "message": "Dynamics 365 Business Central API 用の REST クライアントオプションを設定する"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.desc": {
+          "source": "Sets the API profile according to the CDS API in use; this option will set the REST options if they are not already set (`oauth2_scopes`, `ping_body`, `ping_headers`, and `ping_method`); valid values:\n- `none`: no options configured (default)\n- `dynamics`: set options for the Dynamics 365 API\n- `dynamics-business-central`: set options for the Dynamics 365 Business Central API",
+          "message": "CDS API に応じて API プロファイルを設定します。REST オプションが未設定の場合は、このオプションで設定します (`oauth2_scopes`, `ping_body`, `ping_headers`, および `ping_method`); 有効な値:\n- `none`: オプション未設定 (デフォルト)\n- `dynamics`: Dynamics 365 API 用のオプションを設定\n- `dynamics-business-central`: Dynamics 365 Business Central API 用のオプションを設定"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.display_name": {
+          "source": "API Profile",
+          "message": "API プロファイル"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.short_desc": {
+          "source": "Sets the API profile for the CDS API to use",
+          "message": "CDS API に使用する API プロファイルを設定"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnByb2R1Y3Rpb24.display_name": {
+          "source": "Production",
+          "message": "本番"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnNhbmRib3g.display_name": {
+          "source": "Sandbox",
+          "message": "サンドボックス"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.desc": {
+          "source": "Business Central instance type (e.g., 'sandbox', 'production', or environment GUID); required when api_profile is 'dynamics-business-central'",
+          "message": "Business Central インスタンスの種類 (例: 'sandbox', 'production', または環境 GUID); api_profile が 'dynamics-business-central' の場合に必須"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.display_name": {
+          "source": "Instance Type",
+          "message": "インスタンスタイプ"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.short_desc": {
+          "source": "Business Central instance type",
+          "message": "Business Central インスタンスの種類"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.dGVuYW50.desc": {
+          "source": "Azure AD tenant ID for authentication",
+          "message": "認証用のAzure ADテナントID"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.dGVuYW50.display_name": {
+          "source": "Tenant ID",
+          "message": "テナント ID"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.dGVuYW50.short_desc": {
+          "source": "Azure AD tenant ID",
+          "message": "Azure AD テナント ID"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Microsoft CDS (Common Data Services) REST server",
+          "message": "Microsoft CDS（Common Data Services）REST サーバーへの接続"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.QnVzaW5lc3NDZW50cmFsUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a Microsoft Dynamics 365 Business Central REST server for ERP data access",
+          "message": "ERP データアクセス用の Microsoft Dynamics 365 Business Central REST サーバーへの接続"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.QnVzaW5lc3NDZW50cmFsUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Microsoft Business Central REST Server",
+          "message": "Microsoft Business Central REST サーバー"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.QnVzaW5lc3NDZW50cmFsUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Microsoft Dynamics 365 Business Central REST server",
+          "message": "Microsoft Dynamics 365 Business Central REST サーバーへの接続"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Microsoft Dynamics REST Server",
+          "message": "Microsoft Dynamics REST サーバー"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmR5bmFtaWNz.desc": {
+          "source": "Set REST client options for the Dynamics API",
+          "message": "Dynamics API 用の REST クライアントオプションを設定"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The Dataverse environment to work in, by its unique name.\n\nThis is **discovered**: authorizing the connection asks Microsoft which environments the credential reaches, uses one, and sets this option to it. Where the credential reaches several, the first is used and the others are logged; set this option to one of those and authorize again to work in it instead.",
+          "message": "一意の名前で指定される Dataverse 環境。\n\nこれは **自動検出** されます：接続の認証時に Microsoft がクレデンシャルがアクセス可能な環境を確認し、その中から1つを選択してこのオプションを設定します。複数の環境にアクセス可能な場合、最初の環境が使用され、残りはログに出力されます。別の環境で作業するには、このオプションをその環境に設定し、再度認証を行ってください。"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Environment",
+          "message": "環境"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The Dataverse environment to work in",
+          "message": "作業する Dataverse 環境"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a Microsoft Dynamics REST server",
+          "message": "Microsoft Dynamics REST サーバーへの接続"
+        }
+      }
+    }
+  }
+}

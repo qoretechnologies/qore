@@ -240,7 +240,8 @@ public class AgUiConnection inherits ConnectionProvider::HttpBasedConnection {
         hash<auto> real_opts;
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("AgUi",
+            "AgUiConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "AG-UI Connection",
             "short_desc": "A connection to an AG-UI agent endpoint",
             "desc": "A connection to an agent that speaks the AG-UI (Agent User Interaction) "
@@ -256,7 +257,7 @@ public class AgUiConnection inherits ConnectionProvider::HttpBasedConnection {
                 "http": "agui",
                 "https": "aguis",
             },
-        };
+        });
     }
 
     #! Creates the AgUiConnection object

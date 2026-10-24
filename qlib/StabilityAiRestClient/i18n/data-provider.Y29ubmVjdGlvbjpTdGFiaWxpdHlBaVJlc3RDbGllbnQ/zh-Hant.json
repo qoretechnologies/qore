@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [Stability AI](https://stability.ai) REST API for image generation and editing, audio, and 3D assets.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Stability AI dashboard](https://platform.stability.ai).",
+          "message": "用於影像生成與編輯、音訊及 3D 資產的 [Stability AI](https://stability.ai) REST API 連接。\n\n需使用 API 金鑰進行 Bearer 驗證。請從 [Stability AI 控制台](https://platform.stability.ai) 取得您的 API 金鑰。"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Stability AI Connection",
+          "message": "Stability AI 連接"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Stability AI API key used for Bearer authentication.",
+          "message": "用於 Bearer 驗證的 Stability AI API 金鑰。"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Stability AI API key (Bearer token)",
+          "message": "Stability AI API 金鑰（Bearer 權杖）"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Optional organization ID from the authenticated account's organizations. Omit it to use the API key's default organization.",
+          "message": "從已驗證帳戶的組織中選用的組織 ID。若要使用 API 金鑰的預設組織，請忽略此項。"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Organization whose credits and resources are used",
+          "message": "使用該組織的信用額度與資源"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "Authenticated access to Stability AI media services",
+          "message": "存取 Stability AI 媒體服務的已驗證權限"
+        }
+      }
+    }
+  }
+}

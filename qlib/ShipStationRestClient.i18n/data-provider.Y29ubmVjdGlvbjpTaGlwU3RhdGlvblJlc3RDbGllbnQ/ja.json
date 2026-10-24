@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the ShipStation REST API for shipping and fulfillment management.\n\nShipStation is a web-based shipping software that streamlines order fulfillment for e-commerce businesses. This integration enables managing orders, shipments, carriers, products, stores, and warehouses.\n\n**Important:** This integration uses the ShipStation **V1 API** and requires V1 API credentials (API Key + API Secret pair). ShipStation V2 API keys are not compatible.",
+          "message": "ShipStation REST API による配送および受注処理管理の接続。\n\nShipStation は、eコマース事業者の受注処理を簡素化するウェブベースの配送ソフトウェアです。この統合により、注文、出荷、運送業者、製品、ストア、倉庫の管理が可能になります。\n\n**重要:** この統合では ShipStation **V1 API** を使用し、V1 API 認証情報（API キー + API シークレットのペア）が必要です。ShipStation V2 API キーは互換性がありません。"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "ShipStation REST Connection",
+          "message": "ShipStation REST 接続"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires **ShipStation V1 API credentials** (an API Key + API Secret pair).\n\n**Steps to generate V1 API credentials:**\n1. Log in to ShipStation at https://app.shipstation.com\n2. Click the **gear icon** (Settings) in the top right corner\n3. Navigate to **Account > API Settings**\n4. Make sure **V1** is selected (not V2)\n5. Click **Generate API Keys** if you don't have existing credentials\n6. Copy both your **API Key** and **API Secret**\n\n**Important:**\n- The API Secret is only displayed once when generated; store your credentials securely\n- V1 API credentials are available on ShipStation **Gold, Scale, or higher-tier** plans\n- ShipStation also offers **V2 API keys** (a single token); these are **not compatible** with this integration",
+          "message": "この統合には **ShipStation V1 API 認証情報**（API キー + API シークレットのペア）が必要です。\n\n**V1 API 認証情報を生成する手順:**\n1. https://app.shipstation.com で ShipStation にログイン\n2. 右上隅の **ギアアイコン**（設定）をクリック\n3. **アカウント > API 設定** に移動\n4. **V1** が選択されていることを確認（V2 ではない）\n5. 既存の認証情報がない場合は **API キーの生成** をクリック\n6. **API キー** と **API シークレット** の両方をコピー\n\n**重要:**\n- API シークレットは生成時に一度だけ表示されます；認証情報を安全に保管してください\n- V1 API 認証情報は ShipStation **ゴールド、スケール、またはそれ以上のプラン** で利用可能\n- ShipStation は **V2 API キー**（単一のトークン）も提供していますが、これらはこの統合と**互換性がありません**"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Credentials",
+          "message": "API 認証情報の取得方法"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.desc": {
+          "source": "The ShipStation **V1** API key used as the username for HTTP Basic Auth.\n\n**To obtain your V1 API credentials:**\n1. Log in to ShipStation at https://app.shipstation.com\n2. Click the gear icon (Settings) in the top right\n3. Go to **Account > API Settings**\n4. Click 'Generate API Keys' if you don't have any\n5. Copy your API Key\n\n**Important:** This must be a V1 API key (part of an API Key + API Secret pair). ShipStation V2 API keys (single token) are not compatible with this integration. V1 API keys are available on ShipStation Gold, Scale, or higher-tier plans.",
+          "message": "HTTP Basic 認証のユーザー名として使用される ShipStation **V1** API キー。\n\n**V1 API 認証情報を取得するには:**\n1. https://app.shipstation.com で ShipStation にログイン\n2. 右上隅のギアアイコン（設定）をクリック\n3. **アカウント > API 設定** に移動\n4. 認証情報がなければ **API キーの生成** をクリック\n5. API キーをコピー\n\n**重要:** これは V1 API キー（API キー + API シークレットのペア）でなければなりません。ShipStation V2 API キー（単一のトークン）はこの統合と互換性がありません。V1 API キーは ShipStation Gold、Scale、またはそれ以上のプランで利用可能です。"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.short_desc": {
+          "source": "ShipStation V1 API key for authentication",
+          "message": "認証用の ShipStation V1 API キー"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX3NlY3JldA.desc": {
+          "source": "The ShipStation **V1** API secret used as the password for HTTP Basic Auth.\n\n**To obtain your V1 API credentials:**\n1. Log in to ShipStation at https://app.shipstation.com\n2. Click the gear icon (Settings) in the top right\n3. Go to **Account > API Settings**\n4. Your API Secret is shown alongside your API Key\n\n**Note:** The API Secret is only shown once when generated. If you lose it, you'll need to generate new credentials.",
+          "message": "ShipStation **V1** API シークレットは、HTTP Basic 認証のパスワードとして使用されます。\n\n**V1 API 資格情報を取得するには：**\n1. https://app.shipstation.com で ShipStation にログインします\n2. 右上隅のギアアイコン（設定）をクリックします\n3. **アカウント > API 設定** に移動します\n4. API キーの隣に API シークレットが表示されます\n\n**注意：** API シークレットは生成時に一度だけ表示されます。紛失した場合、新しい資格情報を生成する必要があります。"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX3NlY3JldA.display_name": {
+          "source": "API Secret",
+          "message": "API シークレット"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX3NlY3JldA.short_desc": {
+          "source": "ShipStation V1 API secret for authentication",
+          "message": "認証用の ShipStation V1 API シークレット"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the ShipStation REST API",
+          "message": "ShipStation REST API への接続"
+        }
+      }
+    }
+  }
+}

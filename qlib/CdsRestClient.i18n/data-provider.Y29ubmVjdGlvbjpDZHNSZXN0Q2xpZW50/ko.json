@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a Microsoft CDS (Common Data Services) REST server",
+          "message": "Microsoft CDS(공통 데이터 서비스) REST 서버에 대한 연결"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Microsoft CDS REST Server",
+          "message": "Microsoft CDS REST 서버"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "Sets the API version for CDS",
+          "message": "CDS의 API 버전 설정"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API 버전"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "Sets the API version for CDS",
+          "message": "CDS의 API 버전 설정"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "No options are set",
+          "message": "옵션이 설정되지 않음"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmR5bmFtaWNz.desc": {
+          "source": "Set REST client options for the Dynamics 365 API",
+          "message": "Dynamics 365 API용 REST 클라이언트 옵션 설정"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmR5bmFtaWNzLWJ1c2luZXNzLWNlbnRyYWw.desc": {
+          "source": "Set REST client options for the Dynamics 365 Business Central API",
+          "message": "Dynamics 365 Business Central API용 REST 클라이언트 옵션 설정"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.desc": {
+          "source": "Sets the API profile according to the CDS API in use; this option will set the REST options if they are not already set (`oauth2_scopes`, `ping_body`, `ping_headers`, and `ping_method`); valid values:\n- `none`: no options configured (default)\n- `dynamics`: set options for the Dynamics 365 API\n- `dynamics-business-central`: set options for the Dynamics 365 Business Central API",
+          "message": "사용 중인 CDS API에 따라 API 프로필을 설정합니다; 이 옵션은 REST 옵션이 이미 설정되지 않은 경우 옵션을 설정합니다 (`oauth2_scopes`, `ping_body`, `ping_headers`, 및 `ping_method`); 유효한 값:\n- `none`: 옵션 미설정 (기본값)\n- `dynamics`: Dynamics 365 API용 옵션 설정\n- `dynamics-business-central`: Dynamics 365 Business Central API용 옵션 설정"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.display_name": {
+          "source": "API Profile",
+          "message": "API 프로필"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.short_desc": {
+          "source": "Sets the API profile for the CDS API to use",
+          "message": "CDS API에 사용할 API 프로필을 설정합니다"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnByb2R1Y3Rpb24.display_name": {
+          "source": "Production",
+          "message": "생산"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnNhbmRib3g.display_name": {
+          "source": "Sandbox",
+          "message": "샌드박스"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.desc": {
+          "source": "Business Central instance type (e.g., 'sandbox', 'production', or environment GUID); required when api_profile is 'dynamics-business-central'",
+          "message": "api_profile이 'dynamics-business-central'인 경우에만 필요합니다. 예: 'sandbox', 'production', 또는 환경 GUID"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.display_name": {
+          "source": "Instance Type",
+          "message": "인스턴스 유형"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.short_desc": {
+          "source": "Business Central instance type",
+          "message": "비즈니스 센트럴 인스턴스 유형"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.dGVuYW50.desc": {
+          "source": "Azure AD tenant ID for authentication",
+          "message": "Azure AD 테넌트 ID (인증용)"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.dGVuYW50.display_name": {
+          "source": "Tenant ID",
+          "message": "테넌트 ID"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.option.dGVuYW50.short_desc": {
+          "source": "Azure AD tenant ID",
+          "message": "Azure AD 테넌트 ID"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.Q2RzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Microsoft CDS (Common Data Services) REST server",
+          "message": "Microsoft CDS(공통 데이터 서비스) REST 서버에 대한 연결"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.QnVzaW5lc3NDZW50cmFsUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a Microsoft Dynamics 365 Business Central REST server for ERP data access",
+          "message": "ERP 데이터 접근을 위한 Microsoft Dynamics 365 Business Central REST 서버 연결"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.QnVzaW5lc3NDZW50cmFsUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Microsoft Business Central REST Server",
+          "message": "Microsoft 비즈니스 센트럴 REST 서버"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.QnVzaW5lc3NDZW50cmFsUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Microsoft Dynamics 365 Business Central REST server",
+          "message": "ERP 데이터 접근을 위한 Microsoft Dynamics 365 Business Central REST 서버 연결"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Microsoft Dynamics REST Server",
+          "message": "Microsoft Dynamics REST 서버"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmR5bmFtaWNz.desc": {
+          "source": "Set REST client options for the Dynamics API",
+          "message": "Dynamics API용 REST 클라이언트 옵션 설정"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The Dataverse environment to work in, by its unique name.\n\nThis is **discovered**: authorizing the connection asks Microsoft which environments the credential reaches, uses one, and sets this option to it. Where the credential reaches several, the first is used and the others are logged; set this option to one of those and authorize again to work in it instead.",
+          "message": "작업할 Dataverse 환경을 고유 이름으로 지정합니다.\n\n이 값은 **자동 탐지됨**: 연결 인증 시 Microsoft에서 해당 자격 증명이 접근 가능한 환경을 확인하고, 하나를 선택하여 이 옵션을 설정합니다. 자격 증명이 여러 환경에 접근 가능한 경우 첫 번째 환경이 사용되며, 나머지 환경은 로그에 기록됩니다. 원하는 환경을 이 옵션에 설정한 후 다시 인증하면 해당 환경에서 작업할 수 있습니다."
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Environment",
+          "message": "환경"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The Dataverse environment to work in",
+          "message": "작업할 Dataverse 환경"
+        },
+        "connection.Q2RzUmVzdENsaWVudA.scheme.RHluYW1pY3NSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a Microsoft Dynamics REST server",
+          "message": "Microsoft Dynamics REST 서버에 연결"
+        }
+      }
+    }
+  }
+}

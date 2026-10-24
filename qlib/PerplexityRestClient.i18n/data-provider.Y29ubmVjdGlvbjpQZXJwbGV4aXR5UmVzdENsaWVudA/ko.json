@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Perplexity AI REST API",
+          "message": "Perplexity AI REST API에 연결"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Perplexity AI REST Connection",
+          "message": "Perplexity AI REST 연결"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Perplexity AI, you need an API key:\n\n1. Sign in to your account at [perplexity.ai](https://www.perplexity.ai)\n2. Navigate to **Settings** in the menu\n3. Select **API** from the settings options\n4. Generate or copy your API key\n\nKeep your API key secure and never share it publicly.",
+          "message": "Perplexity AI에 연결하려면 API 키가 필요합니다:\n\n1. [perplexity.ai](https://www.perplexity.ai)에서 계정에 로그인\n2. 메뉴에서 **설정**으로 이동\n3. 설정 옵션에서 **API** 선택\n4. API 키 생성 또는 복사\n\nAPI 키는 보안을 유지하고 공개적으로 공유하지 마세요."
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Perplexity API Key",
+          "message": "Perplexity API 키 획득 방법"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Perplexity chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `sonar` (the default)",
+          "message": "이 연결이 채팅에 선택되었을 때 LLM 클라이언트에서 사용하는 Perplexity 채팅 모델입니다.\n\n채팅 모델은 임베딩 모델과 별개의 계열이며, 상호 교환 사용이 불가능합니다.\n\n예시 값: `sonar` (기본값)"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "채팅 모델"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Perplexity chat model name",
+          "message": "Perplexity 채팅 모델 이름"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Perplexity API key used for authentication; sent as a Bearer token in the `Authorization` header. To obtain a key, sign in at [perplexity.ai](https://www.perplexity.ai) and navigate to **Settings** → **API**",
+          "message": "인증에 사용되는 Perplexity API 키; `Authorization` 헤더에 Bearer 토큰으로 전송됩니다. 키를 얻으려면 [perplexity.ai](https://www.perplexity.ai)에 로그인하여 **설정** → **API**로 이동하세요"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Perplexity API key for authentication",
+          "message": "인증용 Perplexity API 키"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Perplexity AI REST API",
+          "message": "Perplexity AI REST API에 연결"
+        }
+      }
+    }
+  }
+}

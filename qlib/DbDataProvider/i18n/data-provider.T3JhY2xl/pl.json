@@ -3,6 +3,154 @@
   "locales": {
     "pl": {
       "messages": {
+        "app.T3JhY2xl.connection.option.Y2hhcnNldA.desc": {
+          "source": "The character set to use for the connection (e.g. utf8)",
+          "message": "Zestaw znaków do użycia w połączeniu (np. utf8)"
+        },
+        "app.T3JhY2xl.connection.option.Y2hhcnNldA.display_name": {
+          "source": "Character Set",
+          "message": "Zestaw znaków"
+        },
+        "app.T3JhY2xl.connection.option.Y2hhcnNldA.short_desc": {
+          "source": "Connection character set",
+          "message": "Zestaw znaków połączenia"
+        },
+        "app.T3JhY2xl.connection.option.Y2xhc3NwYXRo.desc": {
+          "source": "The path to the JDBC driver JAR file(s)",
+          "message": "Ścieżka do pliku JAR sterownika JDBC"
+        },
+        "app.T3JhY2xl.connection.option.Y2xhc3NwYXRo.display_name": {
+          "source": "JDBC Classpath",
+          "message": "Ścieżka klas JDBC"
+        },
+        "app.T3JhY2xl.connection.option.Y2xhc3NwYXRo.short_desc": {
+          "source": "JDBC driver classpath",
+          "message": "Ścieżka klas sterownika JDBC"
+        },
+        "app.T3JhY2xl.connection.option.ZGI.desc": {
+          "source": "The name of the database to connect to",
+          "message": "Nazwa bazy danych do połączenia"
+        },
+        "app.T3JhY2xl.connection.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "Baza danych"
+        },
+        "app.T3JhY2xl.connection.option.ZGI.short_desc": {
+          "source": "Database name",
+          "message": "Nazwa bazy danych"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOm9kYmM.display_name": {
+          "source": "odbc",
+          "message": "odbc"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOm9kYmM.short_desc": {
+          "source": "ODBC driver",
+          "message": "Sterownik ODBC"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOm9yYWNsZQ.display_name": {
+          "source": "oracle",
+          "message": "oracle"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOm9yYWNsZQ.short_desc": {
+          "source": "Native oracle driver",
+          "message": "Natywny sterownik oracle"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOmpkYmM.display_name": {
+          "source": "jdbc",
+          "message": "jdbc"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOmpkYmM.short_desc": {
+          "source": "JDBC driver",
+          "message": "Sterownik JDBC"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.desc": {
+          "source": "The database driver to use for the connection",
+          "message": "Sterownik bazy danych do użycia przy połączeniu"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.display_name": {
+          "source": "Driver",
+          "message": "Sterownik"
+        },
+        "app.T3JhY2xl.connection.option.ZHJpdmVy.short_desc": {
+          "source": "Database driver",
+          "message": "Sterownik bazy danych"
+        },
+        "app.T3JhY2xl.connection.option.aG9zdA.desc": {
+          "source": "The hostname or IP address of the database server",
+          "message": "Nazwa hosta lub adres IP serwera bazy danych"
+        },
+        "app.T3JhY2xl.connection.option.aG9zdA.display_name": {
+          "source": "Host",
+          "message": "Host"
+        },
+        "app.T3JhY2xl.connection.option.aG9zdA.short_desc": {
+          "source": "Database server hostname",
+          "message": "Nazwa hosta serwera bazy danych"
+        },
+        "app.T3JhY2xl.connection.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Maksymalna liczba połączeń w puli"
+        },
+        "app.T3JhY2xl.connection.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Maksymalny rozmiar puli"
+        },
+        "app.T3JhY2xl.connection.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Maksymalna liczba połączeń w puli"
+        },
+        "app.T3JhY2xl.connection.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Minimalna liczba połączeń w puli"
+        },
+        "app.T3JhY2xl.connection.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Minimalny rozmiar puli"
+        },
+        "app.T3JhY2xl.connection.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Minimalna liczba połączeń w puli"
+        },
+        "app.T3JhY2xl.connection.option.cG9ydA.desc": {
+          "source": "The port number of the database server",
+          "message": "Numer portu serwera bazy danych"
+        },
+        "app.T3JhY2xl.connection.option.cG9ydA.display_name": {
+          "source": "Port",
+          "message": "Port"
+        },
+        "app.T3JhY2xl.connection.option.cG9ydA.short_desc": {
+          "source": "Database server port",
+          "message": "Port serwera bazy danych"
+        },
+        "app.T3JhY2xl.connection.option.cGFzcw.desc": {
+          "source": "The password for database authentication",
+          "message": "Hasło do uwierzytelniania bazy danych"
+        },
+        "app.T3JhY2xl.connection.option.cGFzcw.display_name": {
+          "source": "Password",
+          "message": "Hasło"
+        },
+        "app.T3JhY2xl.connection.option.cGFzcw.short_desc": {
+          "source": "Database password",
+          "message": "Hasło do bazy danych"
+        },
+        "app.T3JhY2xl.connection.option.dXNlcg.desc": {
+          "source": "The database user name for authentication",
+          "message": "Nazwa użytkownika bazy danych do uwierzytelniania"
+        },
+        "app.T3JhY2xl.connection.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Użytkownik"
+        },
+        "app.T3JhY2xl.connection.option.dXNlcg.short_desc": {
+          "source": "Database user",
+          "message": "Użytkownik bazy danych"
+        },
+        "app.T3JhY2xl.desc": {
+          "source": "Create and manage connections to a Oracle database server",
+          "message": "Twórz połączenia i zarządzaj nimi z serwerem bazy danych Oracle"
+        },
         "app.T3JhY2xl.display_name": {
           "source": "Oracle",
           "message": "Oracle"
@@ -10,10 +158,6 @@
         "app.T3JhY2xl.short_desc": {
           "source": "Oracle database server",
           "message": "Serwer bazy danych Oracle"
-        },
-        "app.T3JhY2xl.desc": {
-          "source": "Create and manage connections to a Oracle database server",
-          "message": "Twórz połączenia i zarządzaj nimi z serwerem bazy danych Oracle"
         }
       }
     }

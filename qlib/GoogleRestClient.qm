@@ -296,7 +296,8 @@ public class GoogleRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "grests://www.googleapis.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("GoogleRestClient",
+            "GoogleRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Google REST Connection",
             "short_desc": "A connection to Google cloud REST API services",
             "desc": "A connection to Google cloud REST API services",
@@ -353,7 +354,7 @@ public class GoogleRestConnection inherits RestClient::RestConnection {
             },
             "required_options": "token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
                 "oauth2_client_id,oauth2_client_secret",
-        };
+        });
     }
 
     #! creates the GoogleRestConnection object
@@ -455,7 +456,8 @@ public class GoogleCalendarRestConnection inherits GoogleRestConnection {
         const DefaultConnectionUrl = "gcal://www.googleapis.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("GoogleRestClient",
+            "GoogleCalendarRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Google Calendar REST Connection",
             "short_desc": "A connection to the Google Calendar cloud REST API",
             "desc": "A connection to the Google Calendar cloud REST API",
@@ -479,7 +481,7 @@ public class GoogleCalendarRestConnection inherits GoogleRestConnection {
             "base_scheme_map": {
                 "https": "gcal",
             },
-        };
+        });
     }
 
     #! creates the GoogleRestConnection object
@@ -583,7 +585,8 @@ public class GoogleDriveRestConnection inherits GoogleRestConnection {
         const DefaultConnectionUrl = "gdrive://www.googleapis.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("GoogleRestClient",
+            "GoogleDriveRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Google Drive REST Connection",
             "short_desc": "A connection to the Google Drive cloud REST API",
             "desc": "A connection to the [Google Drive](https://www.google.com/drive/) cloud REST API",
@@ -618,7 +621,7 @@ public class GoogleDriveRestConnection inherits GoogleRestConnection {
             "base_scheme_map": {
                 "https": "gdrive",
             },
-        };
+        });
     }
 
     #! creates the GoogleDriveRestConnection object
@@ -747,7 +750,8 @@ public class GmailRestConnection inherits GoogleRestConnection {
         const DefaultConnectionUrl = "gmail://gmail.googleapis.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("GoogleRestClient",
+            "GmailRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Gmail REST Connection",
             "short_desc": "A connection to the Gmail cloud REST API",
             "desc": "A connection to the Gmail cloud REST API",
@@ -771,7 +775,7 @@ public class GmailRestConnection inherits GoogleRestConnection {
             "base_scheme_map": {
                 "https": "gmail",
             },
-        };
+        });
 
         #! Data provider subtypes supported
         const DataProviderSubtypeMap = {

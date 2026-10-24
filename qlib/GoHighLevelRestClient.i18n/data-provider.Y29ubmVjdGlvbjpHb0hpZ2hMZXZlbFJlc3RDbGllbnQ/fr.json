@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the GoHighLevel REST API for CRM, contacts, opportunities, calendars, conversations, and marketing automation",
+          "message": "Une connexion à l'API REST GoHighLevel pour le CRM, les contacts, les opportunités, les calendriers, les conversations et l'automatisation marketing"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "GoHighLevel REST Connection",
+          "message": "Connexion REST GoHighLevel"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.option.bG9jYXRpb25faWQ.desc": {
+          "source": "The GoHighLevel location (sub-account) ID for scoping API requests. Automatically extracted from the OAuth2 token response after the user selects their location during authorization.",
+          "message": "L’identifiant de localisation (sous-compte) GoHighLevel pour le ciblage des demandes d’API. Extrait automatiquement à partir de la réponse du jeton OAuth2 après que l’utilisateur a sélectionné sa localisation lors de l’autorisation."
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID de l'emplacement"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "GoHighLevel location/sub-account ID",
+          "message": "Identifiant de localisation/sous-compte GoHighLevel"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the GoHighLevel REST API",
+          "message": "Une connexion à l’API REST GoHighLevel"
+        }
+      }
+    }
+  }
+}

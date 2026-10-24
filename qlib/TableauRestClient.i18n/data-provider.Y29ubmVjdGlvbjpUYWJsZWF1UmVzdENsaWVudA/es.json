@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Tableau REST API for analytics and data management",
+          "message": "Una conexión con la API REST de Tableau para análisis y gestión de datos"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Tableau REST Connection",
+          "message": "Conexión REST de Tableau"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "Enter your Tableau Cloud pod name (subdomain) and Personal Access Token credentials.\n\n- **Subdomain**: The pod name from your Tableau Cloud URL (e.g., `us-east-23b` from https://us-east-23b.online.tableau.com)\n- **Token Name / Secret**: Create a Personal Access Token in your Tableau account settings",
+          "message": "Introduzca el nombre de su pod de Tableau Cloud (subdominio) y sus credenciales de token de acceso personal.\n\n- **Subdominio**: El nombre del pod de su URL de Tableau Cloud (por ejemplo, `us-east-23b` de https://us-east-23b.online.tableau.com)\n- **Nombre o secreto del token**: Cree un token de acceso personal en la configuración de su cuenta de Tableau"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Tableau Cloud Connection",
+          "message": "Conexión a Tableau Cloud"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.Y29udGVudF91cmw.desc": {
+          "source": "The content URL (site name) for the Tableau site. Use an empty string for the default site.",
+          "message": "La URL de contenido (nombre del sitio) del sitio de Tableau. Use una cadena vacía para el sitio predeterminado."
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.Y29udGVudF91cmw.display_name": {
+          "source": "Site Name",
+          "message": "Nombre del sitio"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.Y29udGVudF91cmw.short_desc": {
+          "source": "Tableau site content URL",
+          "message": "URL de contenido del sitio de Tableau"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The Tableau REST API version (e.g., `3.27`)",
+          "message": "La versión de la API REST de Tableau (por ejemplo, `3.27`)"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Versión de API"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "Tableau REST API version",
+          "message": "Versión de la API REST de Tableau"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.desc": {
+          "source": "The Tableau Cloud pod name (e.g., `us-east-23b`, `10ax`, `10ay`). For Tableau Cloud, the server address must contain the pod name.",
+          "message": "El nombre del pod de Tableau Cloud (por ejemplo, `us-east-23b`, `10ax`, `10ay`). Para Tableau Cloud, la dirección del servidor debe incluir el nombre del pod."
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.display_name": {
+          "source": "Subdomain",
+          "message": "Subdominio"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.short_desc": {
+          "source": "Tableau Cloud pod name",
+          "message": "Nombre del pod de Tableau Cloud"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fbmFtZQ.desc": {
+          "source": "The name of the Personal Access Token for authentication",
+          "message": "El nombre del token de acceso personal para la autenticación"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fbmFtZQ.display_name": {
+          "source": "Token Name",
+          "message": "Nombre del token"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fbmFtZQ.short_desc": {
+          "source": "Personal Access Token name",
+          "message": "Nombre del token de acceso personal"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fc2VjcmV0.desc": {
+          "source": "The secret value of the Personal Access Token",
+          "message": "El valor secreto del token de acceso personal"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fc2VjcmV0.display_name": {
+          "source": "Token Secret",
+          "message": "Secreto del token"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fc2VjcmV0.short_desc": {
+          "source": "Personal Access Token secret",
+          "message": "Secreto del token de acceso personal"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Tableau REST API",
+          "message": "Una conexión con la API REST de Tableau"
+        }
+      }
+    }
+  }
+}

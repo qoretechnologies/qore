@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [GitHub](https://github.com) for repositories, issues, pull requests, releases and Actions secrets.\n\n**Authentication** is either:\n- a **personal access token** in `token`, fine-grained or classic, sent as a bearer token. A fine-grained token can be scoped to a single repository, which is the narrowest option; or\n- the **OAuth2 authorization code flow** with `oauth2_client_id` and `oauth2_client_secret` from an OAuth app registered on GitHub.\n\nEvery request sends `X-GitHub-Api-Version: 2022-11-28`, because GitHub versions its REST API by date and sending no version means accepting whatever it currently defaults to.\n\nGitHub is a trademark of GitHub, Inc.",
+          "message": "連接到 [GitHub](https://github.com) 的連接，用於儲存庫、問題、拉取請求、發行版本和 Actions 秘密。\n\n**驗證** 方式為：\n- 一個 **個人存取權杖**，以 `token` 傳送，可為細粒度或傳統類型，作為承載權杖。細粒度權杖可限定於單一儲存庫，這是範圍最窄的選項；或\n- 使用 `oauth2_client_id` 和 `oauth2_client_secret` 的 **OAuth2 授權碼流程**，從 GitHub 上註冊的 OAuth 應用程式取得。\n\n每個請求都必須傳送 `X-GitHub-Api-Version: 2022-11-28`，因為 GitHub 以日期版本化其 REST API，若未傳送版本，則會接受目前預設的版本。\n\nGitHub 是 GitHub, Inc. 的商標。"
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "GitHub REST Connection",
+          "message": "GitHub REST 連接"
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.option.aGVhZGVycw.desc": {
+          "source": "Headers sent with every request.\n\n`X-GitHub-Api-Version` pins the REST API version and should be left alone unless you mean to move to a different one: this application's actions describe the fields and responses of **that** version.",
+          "message": "每個請求都會傳送的標頭。\n\n`X-GitHub-Api-Version` 用來鎖定 REST API 版本，除非有意切換至其他版本，否則應保持不變：此應用程式的動作描述了 **該版本** 的欄位與回應內容。"
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A GitHub personal access token, sent as a bearer token.\n\n**To obtain one:** **Settings > Developer settings > Personal access tokens**. A fine-grained token is scoped to chosen repositories and permissions and is the narrower choice; a classic token uses scopes such as `repo`.\n\nLeave this unset to use the OAuth2 flow instead.",
+          "message": "以承載權杖傳送的 GitHub 個人存取權杖。\n\n**取得方式**：**設定 > 開發者設定 > 個人存取權杖**。細粒度權杖可限定於指定的儲存庫與權限，是範圍較窄的選擇；傳統權杖則使用如 `repo` 之類的範圍。\n\n若不使用，則可改用 OAuth2 流程。"
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "存取權杖"
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A GitHub personal access token",
+          "message": "一個 GitHub 個人存取權杖"
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the GitHub REST API",
+          "message": "連接到 GitHub REST API 的連接"
+        }
+      }
+    }
+  }
+}

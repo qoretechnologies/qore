@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Paddle](https://www.paddle.com) REST API for billing, subscriptions and payments.\n\nPaddle is a **merchant of record**: it sells your software on your behalf, so it handles payment processing, sales tax and invoicing, and pays out the balance. An integration works with catalog products and prices, customers, transactions, subscriptions and reports.\n\n**Authentication** is an API key sent as a bearer token; there is no OAuth2 flow. A key is created in the Paddle dashboard under **Paddle > Developer Tools > Authentication** and is granted an explicit set of permissions, so it can be scoped to exactly what the integration needs.\n\n**Sandbox and production are separate environments** with separate data and separate keys. Set `instance_type` to match the key.\n\nPaddle is a trademark of Paddle.com Market Ltd.",
+          "message": "與 [Paddle](https://www.paddle.com) 用於帳單、訂閱和付款的 REST API 連接。\n\nPaddle 是**交易商**：它代表您銷售軟體，處理付款、銷售稅和發票，並支付剩餘款項。整合功能支援目錄產品與價格、客戶、交易、訂閱和報表。\n\n**驗證** 使用作為承載權杖的 API 金鑰；無需 OAuth2 流程。金鑰於 Paddle 面板的 **Paddle > 開發者工具 > 驗證** 中建立，並授予明確的權限，因此可精確限定整合所需的權限範圍。\n\n**沙盒與生產環境分開**，資料與金鑰皆不同。請將 `instance_type` 設定為符合金鑰的環境。\n\nPaddle 是 Paddle.com Market Ltd. 的商標。"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Paddle REST Connection",
+          "message": "Paddle REST 連接"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOmFwaQ.desc": {
+          "source": "The live Paddle environment: real customers, real money",
+          "message": "Paddle 的正式環境：真實客戶，真實金錢"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOmFwaQ.display_name": {
+          "source": "Production",
+          "message": "生產環境"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnNhbmRib3gtYXBp.desc": {
+          "source": "The Paddle test environment: no real money moves",
+          "message": "Paddle 的測試環境：無真實金錢流動"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnNhbmRib3gtYXBp.display_name": {
+          "source": "Sandbox",
+          "message": "沙盒"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.desc": {
+          "source": "The Paddle environment this connection works against, which also determines the target URL.\n\n- `api`: **Production** - `https://api.paddle.com`\n- `sandbox-api`: **Sandbox** - `https://sandbox-api.paddle.com`\n\nThe two environments are entirely separate: they hold different data and accept different API keys, so this must match the key in `token`.\n\nDefaults to **sandbox**, so a connection created without setting this talks to test data rather than billing real customers.",
+          "message": "此連接所對應的 Paddle 環境，也決定目標 URL。\n\n- `api`: **生產** - `https://api.paddle.com`\n- `sandbox-api`: **沙盒** - `https://sandbox-api.paddle.com`\n\n兩個環境完全獨立：資料不同，接受的 API 金鑰也不同，因此必須與 `token` 中的金鑰相符。\n\n預設為 **沙盒**，因此未設定此項的連接會對接測試資料，而非真實客戶的帳單。"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.display_name": {
+          "source": "Instance Type",
+          "message": "執行緒類型"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.short_desc": {
+          "source": "The Paddle environment to connect to",
+          "message": "要連接的 Paddle 環境"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A Paddle API key (`pdl_live_apikey_…` or `pdl_sdbx_apikey_…`), sent as a bearer token.\n\n**To obtain one:**\n1. Log in to the Paddle dashboard for the environment this connection targets\n2. Go to Paddle > Developer Tools > Authentication\n3. Create an API key and grant it the permissions this integration needs\n\n**Note:** a key belongs to one environment only; a sandbox key is rejected by production and the other way round. Set `instance_type` to match.",
+          "message": "Paddle API 金鑰 (`pdl_live_apikey_…` 或 `pdl_sdbx_apikey_…`)，以承載權杖形式傳送。\n\n**取得方式：**\n1. 登入此連接目標環境的 Paddle 面板\n2. 前往 Paddle > 開發者工具 > 驗證\n3. 建立 API 金鑰，並授予此整合所需的權限\n\n**注意：** 金鑰僅屬於一個環境；沙盒金鑰會被生產環境拒絕，反之亦然。請將 `instance_type` 設定為相符環境。"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A Paddle API key",
+          "message": "Paddle API 金鑰"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Paddle REST API",
+          "message": "與 Paddle REST API 的連接"
+        }
+      }
+    }
+  }
+}

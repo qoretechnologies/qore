@@ -211,7 +211,8 @@ BitlyRestClient bitly({
 public class BitlyRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("BitlyRestClient",
+            "BitlyRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Bitly REST Connection",
             "short_desc": "A connection to the Bitly REST API",
             "desc": "A connection to the Bitly REST API for URL shortening, branded links, "
@@ -269,7 +270,7 @@ public class BitlyRestConnection inherits RestClient::RestConnection {
                         "default_value": BitlyRestClientBase::DefaultTokenUrl,
                     }),
             },
-        };
+        });
     }
 
     #! creates the BitlyRestConnection object

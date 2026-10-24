@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Paddle](https://www.paddle.com) REST API for billing, subscriptions and payments.\n\nPaddle is a **merchant of record**: it sells your software on your behalf, so it handles payment processing, sales tax and invoicing, and pays out the balance. An integration works with catalog products and prices, customers, transactions, subscriptions and reports.\n\n**Authentication** is an API key sent as a bearer token; there is no OAuth2 flow. A key is created in the Paddle dashboard under **Paddle > Developer Tools > Authentication** and is granted an explicit set of permissions, so it can be scoped to exactly what the integration needs.\n\n**Sandbox and production are separate environments** with separate data and separate keys. Set `instance_type` to match the key.\n\nPaddle is a trademark of Paddle.com Market Ltd.",
+          "message": "З'єднання з REST API [Paddle](https://www.paddle.com) для обліку, підписок і платежів.\n\nPaddle — це **торговець-посередник**: він продає ваше програмне забезпечення від вашого імені, тому він обробляє оплату, податки та рахунки, а також виплачує залишок. Інтеграція працює з каталогом продуктів і цін, клієнтами, транзакціями, підписками та звітами.\n\n**Аутентифікація** — це ключ API, який надсилається як носій токену; немає потоку OAuth2. Ключ створюється в панелі керування Paddle у розділі **Paddle > Інструменти розробника > Аутентифікація** і надається набір явних дозволів, тому його можна встановити точно під потреби інтеграції.\n\n**Середовища тестування та виробництва — це окремі середовища** з окремими даними та окремими ключами. Встановіть `instance_type` відповідно до ключа.\n\nPaddle — це торговельна марка компанії Paddle.com Market Ltd."
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Paddle REST Connection",
+          "message": "Paddle REST-з’єднання"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOmFwaQ.desc": {
+          "source": "The live Paddle environment: real customers, real money",
+          "message": "Робоче середовище Paddle: справжні клієнти, справжні гроші"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOmFwaQ.display_name": {
+          "source": "Production",
+          "message": "Продукція"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnNhbmRib3gtYXBp.desc": {
+          "source": "The Paddle test environment: no real money moves",
+          "message": "Тестове середовище Paddle: жодних справжніх грошей не переміщається"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnNhbmRib3gtYXBp.display_name": {
+          "source": "Sandbox",
+          "message": "Середовище тестування"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.desc": {
+          "source": "The Paddle environment this connection works against, which also determines the target URL.\n\n- `api`: **Production** - `https://api.paddle.com`\n- `sandbox-api`: **Sandbox** - `https://sandbox-api.paddle.com`\n\nThe two environments are entirely separate: they hold different data and accept different API keys, so this must match the key in `token`.\n\nDefaults to **sandbox**, so a connection created without setting this talks to test data rather than billing real customers.",
+          "message": "Середовище Paddle, з яким це з’єднання працює, що також визначає цільовий URL.\n\n- `api`: **Продукція** - `https://api.paddle.com`\n- `sandbox-api`: **Сендбокс** - `https://sandbox-api.paddle.com`\n\nДва середовища повністю розділені: вони зберігають різні дані та приймають різні ключі API, тому це має відповідати ключу в `token`.\n\nЗа замовчуванням — **сендбокс**, тому з’єднання, створене без встановлення цього параметра, працює з тестовими даними, а не з даними для оплати справжніх клієнтів."
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.display_name": {
+          "source": "Instance Type",
+          "message": "Тип інстанції"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.short_desc": {
+          "source": "The Paddle environment to connect to",
+          "message": "Середовище Paddle для підключення"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A Paddle API key (`pdl_live_apikey_…` or `pdl_sdbx_apikey_…`), sent as a bearer token.\n\n**To obtain one:**\n1. Log in to the Paddle dashboard for the environment this connection targets\n2. Go to Paddle > Developer Tools > Authentication\n3. Create an API key and grant it the permissions this integration needs\n\n**Note:** a key belongs to one environment only; a sandbox key is rejected by production and the other way round. Set `instance_type` to match.",
+          "message": "Ключ API Paddle (`pdl_live_apikey_…` або `pdl_sdbx_apikey_…`), надсилається як bearer-токен.\n\n**Щоб отримати ключ:**\n1. Увійдіть до панелі керування Paddle для середовища, яке це з’єднання використовує\n2. Перейдіть до Paddle > Інструменти розробника > Аутентифікація\n3. Створіть ключ API та надайте йому необхідні дозволи для цього інтеграції\n\n**Зауваження:** ключ належить лише одному середовищу; сендбокс-ключ відхиляється в продукції і навпаки. Встановіть `instance_type` відповідно."
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A Paddle API key",
+          "message": "Ключ API Paddle"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Paddle REST API",
+          "message": "З’єднання з REST API Paddle"
+        }
+      }
+    }
+  }
+}

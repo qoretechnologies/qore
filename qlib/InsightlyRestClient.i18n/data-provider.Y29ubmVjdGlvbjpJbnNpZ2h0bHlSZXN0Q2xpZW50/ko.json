@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Insightly CRM REST API for managing contacts, organizations, opportunities, projects, tasks, leads, and other CRM data.\n\n**To obtain your API key:**\n1. Log in to your Insightly account\n2. Click your profile avatar in the top-right corner\n3. Go to **User Settings**\n4. Find the **API** section and copy your API key\n\n**Pod/Region:**\nYour pod determines the API endpoint URL. It is visible in your Insightly URL (e.g., `na1.insightly.com` means pod `na1`). If not provided, the connection will default to `na1`.\n\n**Rate limits:** 10 requests/second with daily caps based on your plan. Rate limit info is returned in `X-RateLimit-Limit` and `X-RateLimit-Remaining` response headers.",
+          "message": "연락처, 조직, 기회, 프로젝트, 작업, 리드 및 기타 CRM 데이터를 관리하기 위한 Insightly CRM REST API에 대한 연결입니다.\n\n**API 키를 얻으려면:**\n1. Insightly 계정에 로그인하세요\n2. 오른쪽 상단 모서리의 프로필 아바타를 클릭하세요\n3. **사용자 설정**으로 이동하세요\n4. **API** 섹션을 찾아 API 키를 복사하세요\n\n**Pod/지역:**\nPod는 API 엔드포인트 URL을 결정합니다. Insightly URL에서 확인할 수 있습니다 (예: `na1.insightly.com`는 pod `na1`을 의미합니다). 제공되지 않으면 연결은 `na1`로 기본 설정됩니다.\n\n**레이트 제한:** 초당 10건의 요청이며, 계획에 따라 일일 제한이 있습니다. 레이트 제한 정보는 `X-RateLimit-Limit` 및 `X-RateLimit-Remaining` 응답 헤더에 반환됩니다."
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Insightly CRM REST Connection",
+          "message": "Insightly CRM REST 연결"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Insightly account\n2. Click your profile avatar in the top-right corner\n3. Go to **User Settings**\n4. Find the **API** section and copy your API key\n\n**Important:** The API key provides full access to your Insightly data. Keep it secure and never share it publicly.",
+          "message": "1. Insightly 계정에 로그인하세요\n2. 오른쪽 상단 모서리의 프로필 아바타를 클릭하세요\n3. **사용자 설정**으로 이동하세요\n4. **API** 섹션을 찾아 API 키를 복사하세요\n\n**중요:** API 키는 Insightly 데이터에 대한 완전한 접근 권한을 제공합니다. 보안을 유지하고 공개적으로 공유하지 마세요."
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "API 키를 얻는 방법"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
+          "source": "Your Insightly pod determines the API endpoint URL. It is visible in your Insightly URL (e.g., `na1.insightly.com` means pod `na1`).\n\n- **na1** — North America (default)\n- **eu1** — Europe\n- **au1** — Australia\n\nIf not sure, check the URL bar when logged into Insightly.",
+          "message": "귀하의 Insightly pod는 API 엔드포인트 URL을 결정합니다. Insightly URL에서 확인할 수 있습니다 (예: `na1.insightly.com`는 pod `na1`을 의미합니다).\n\n- **na1** — 북미 (기본값)\n- **eu1** — 유럽\n- **au1** — 호주\n\n확실하지 않으시면 Insightly에 로그인할 때 URL 표시줄을 확인하세요."
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
+          "source": "Select Your Pod/Region",
+          "message": "포드/지역 선택"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Insightly API key used for HTTP Basic Auth authentication.\n\nThe API key is sent as the username with an empty password.\n\n**To obtain your API key:**\n1. Log in to your Insightly account\n2. Click your profile avatar in the top-right corner\n3. Go to **User Settings**\n4. Find the **API** section and copy your API key",
+          "message": "HTTP 기본 인증을 위한 Insightly API 키입니다.\n\nAPI 키는 비밀번호가 없는 사용자 이름으로 전송됩니다.\n\n**API 키를 얻으려면:**\n1. Insightly 계정에 로그인합니다\n2. 상단 오른쪽 모서리의 프로필 아바타를 클릭합니다\n3. **사용자 설정**으로 이동합니다\n4. **API** 섹션을 찾아 API 키를 복사합니다"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Insightly API key for authentication",
+          "message": "인증용 Insightly API 키"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOm5hMQ.desc": {
+          "source": "North America pod (api.na1.insightly.com)",
+          "message": "북미 포드 (api.na1.insightly.com)"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOm5hMQ.display_name": {
+          "source": "North America",
+          "message": "북미"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOmF1MQ.desc": {
+          "source": "Australia pod (api.au1.insightly.com)",
+          "message": "오스트레일리아 포드 (api.au1.insightly.com)"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOmF1MQ.display_name": {
+          "source": "Australia",
+          "message": "오스트레일리아"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOmV1MQ.desc": {
+          "source": "Europe pod (api.eu1.insightly.com)",
+          "message": "유럽 포드 (api.eu1.insightly.com)"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOmV1MQ.display_name": {
+          "source": "Europe",
+          "message": "유럽"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.desc": {
+          "source": "The Insightly pod/region that determines the API endpoint URL.\n\nAvailable pods:\n- `na1` - North America (default)\n- `eu1` - Europe\n- `au1` - Australia\n\nYour pod is visible in your Insightly URL (e.g., `na1.insightly.com` means pod `na1`). If not provided, defaults to `na1`.",
+          "message": "Insightly의 API 엔드포인트 URL을 결정하는 Pod/지역입니다.\n\n사용 가능한 Pod:\n- `na1` - 북미 (기본값)\n- `eu1` - 유럽\n- `au1` - 호주\n\n귀하의 Pod는 Insightly URL에서 확인할 수 있습니다 (예: `na1.insightly.com`는 Pod `na1`을 의미합니다). 제공되지 않으면 `na1`로 기본 설정됩니다."
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.display_name": {
+          "source": "Pod/Region",
+          "message": "Pod/지역"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.short_desc": {
+          "source": "Insightly pod/region (auto-detected if not provided)",
+          "message": "Insightly Pod/지역 (제공되지 않으면 자동 감지)"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Insightly CRM REST API",
+          "message": "Insightly CRM REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

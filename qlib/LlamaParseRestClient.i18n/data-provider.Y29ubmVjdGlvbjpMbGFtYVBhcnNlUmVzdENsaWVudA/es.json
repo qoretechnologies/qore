@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started), LlamaIndex's document platform: parsing documents into markdown, text and structured items, extracting structured data against a schema, classifying documents against rules, and splitting a document that holds many.\n\nRequires an API key for Bearer authentication.  Get your API key from the [LlamaCloud dashboard](https://cloud.llamaindex.ai/).\n\nAn API key belongs to one region and is rejected by the other.  When the configured region rejects the key, the connection tries the other known region on the next ping and moves itself to whichever one accepts it.",
+          "message": "Una conexión con [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started), la plataforma de documentos de LlamaIndex: analizar documentos en markdown, texto e items estructurados, extraer datos estructurados según un esquema, clasificar documentos según reglas y dividir un documento que contenga muchos.\n\nRequiere una clave de API para autenticación Bearer. Obtén tu clave de API desde el panel de [LlamaCloud](https://cloud.llamaindex.ai/).\n\nUna clave de API pertenece a una región y es rechazada por la otra. Cuando la región configurada rechaza la clave, la conexión intenta la otra región conocida en el siguiente ping y se mueve a la que la acepte."
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "LlamaParse Connection",
+          "message": "Conexión LlamaParse"
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The LlamaParse API key used for Bearer authentication.",
+          "message": "La clave de API de LlamaParse utilizada para la autenticación Bearer."
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clave de API"
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "LlamaParse API key (Bearer token)",
+          "message": "Clave de API de LlamaParse (token Bearer)"
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the LlamaIndex Cloud document APIs",
+          "message": "Una conexión con las API de documentos de LlamaIndex Cloud"
+        }
+      }
+    }
+  }
+}

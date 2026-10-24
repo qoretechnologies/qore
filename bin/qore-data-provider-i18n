@@ -26,6 +26,7 @@
 
 %modern
 %requires DataProvider
+%requires ConnectionProvider
 %requires FsUtil
 %requires i18n
 %requires json
@@ -54,6 +55,9 @@ class QoreDataProviderI18nCmd {
 
     private {
         Util::TerminalColor color;
+        bool connection_catalogs_ready;
+        hash<string, hash<auto>> connection_catalogs;
+        hash<string, bool> unprepared_connection_owners;
     }
 
     constructor() {
@@ -148,6 +152,7 @@ class QoreDataProviderI18nCmd {
                             contribution.app, contribution.actions,
                             contribution.include_app));
                 }
+                mergeCatalogs(\catalogs, connectionCatalogs(owner));
             }
         } else {
             hash<string, hash<auto>> app_map = {};
@@ -172,6 +177,9 @@ class QoreDataProviderI18nCmd {
                     DataProviderPresentation::buildSourceCatalogs(app,
                         actions));
             }
+        }
+        if (!opt.owner && !opt.app) {
+            mergeCatalogs(\catalogs, connectionCatalogs());
         }
         if (!catalogs) {
             throw "DATA-PROVIDER-I18N-ERROR",
@@ -250,7 +258,7 @@ class QoreDataProviderI18nCmd {
                     seen_search_roots{root.search_root} = True;
                     search_roots += root.search_root;
                 }
-                hash<auto> catalog = I18n::load_native_catalog(root.path);
+                hash<auto> catalog = I18n::load_native_catalog(root.path, DataProviderPresentation::MaxCatalogFileBytes);
                 I18n::MessageCatalog validated(catalog,
                     {"literal_messages": True});
                 if (sort(keys catalog.locales)
@@ -310,12 +318,6 @@ class QoreDataProviderI18nCmd {
         foreach string source_root in (source_roots) {
             collectRootCatalogs(source_root, \roots);
         }
-        if (!roots) {
-            throw "DATA-PROVIDER-I18N-ERROR", sprintf(
-                "no source-owned provider root catalogs found below %y",
-                output);
-        }
-
         hash<string, bool> owner_modules = map {$1: True}, explicit_owners;
         # Catalog-derived discovery cannot see a newly added provider module
         # until its first root catalog exists.  Discover exact source-level
@@ -382,7 +384,7 @@ class QoreDataProviderI18nCmd {
                 continue;
             }
             seen{root.owner}{root.domain} = True;
-            hash<auto> catalog = I18n::load_native_catalog(root.path);
+            hash<auto> catalog = I18n::load_native_catalog(root.path, DataProviderPresentation::MaxCatalogFileBytes);
             I18n::MessageCatalog validated(catalog,
                 {"literal_messages": True});
             if (sort(keys catalog.locales)
@@ -452,12 +454,6 @@ class QoreDataProviderI18nCmd {
         foreach string source_root in (source_roots) {
             collectRootCatalogs(source_root, \roots);
         }
-        if (!roots) {
-            throw "DATA-PROVIDER-I18N-ERROR", sprintf(
-                "no source-owned provider root catalogs found below %y",
-                output);
-        }
-
         hash<string, bool> owner_modules = map {$1: True},
             explicit_owners;
         foreach string source_root in (source_roots) {
@@ -477,6 +473,11 @@ class QoreDataProviderI18nCmd {
             owner_modules{module_name} = True;
             root.owner = module_name;
             owned_roots += root;
+        }
+
+        if (!owner_modules) {
+            throw "DATA-PROVIDER-I18N-ERROR",
+                "no provider owner modules were discovered";
         }
 
         hash<string, bool> modules_to_load = owner_modules;
@@ -518,9 +519,8 @@ class QoreDataProviderI18nCmd {
         foreach string owner in (sort(keys owner_catalogs)) {
             foreach string domain in (sort(keys owner_catalogs{owner})) {
                 if (!seen{owner}{domain}) {
-                    throw "DATA-PROVIDER-I18N-ERROR", sprintf(
-                        "owner module %y has new catalog domain %y with no existing canonical source-tree location",
-                        owner, domain);
+                    string path = newCatalogPath(source_roots, owner, domain);
+                    roots_by_path{path} = {"path": path, "owner": owner, "domain": domain};
                 }
             }
         }
@@ -530,6 +530,7 @@ class QoreDataProviderI18nCmd {
             string data = make_json(
                 owner_catalogs{root.owner}{root.domain},
                 JGF_ADD_FORMATTING) + "\n";
+            mkdir_ex(dirname(path), 0755, True);
             writeFile(path, data);
             ++written;
             if (verbose) {
@@ -539,6 +540,29 @@ class QoreDataProviderI18nCmd {
         }
         printf("updated %d owner module(s), %d catalog domain(s)\n",
             owner_modules.size(), written);
+    }
+
+    #! Resolves one canonical location before writing a newly introduced owner catalog
+    private string newCatalogPath(list<string> source_roots, string owner, string domain) {
+        # Apply the same native domain validation as direct extraction before constructing any filesystem path.
+        list<string> validated_catalog_files = I18n::discover_catalog_files(domain,
+            DataProviderPresentation::RootLocale, {"search_path": ()});
+        list<string> paths;
+        foreach string root in (source_roots) {
+            string directory = root + DirSep + owner;
+            if (is_file(directory + DirSep + owner + ".qm")) {
+                paths += directory + DirSep + "i18n" + DirSep + domain + DirSep + "root.json";
+            }
+            if (is_file(directory + ".qm")) {
+                paths += directory + ".i18n" + DirSep + domain + DirSep + "root.json";
+            }
+        }
+        if (paths.size() != 1) {
+            throw "DATA-PROVIDER-I18N-ERROR", sprintf(
+                "owner module %y catalog %y requires one canonical source location; found %d",
+                owner, domain, paths.size());
+        }
+        return paths.first();
     }
 
     #! Returns the production library roots below a source-tree path
@@ -593,7 +617,9 @@ class QoreDataProviderI18nCmd {
                     "DataProviderActionCatalog::registerApp(",
                     "DataProviderActionCatalog::registerPendingApp(",
                     "DataProviderActionCatalog::registerAction(",
-                    "DataProviderActionCatalog::registerPendingAppAction(")) {
+                    "DataProviderActionCatalog::registerPendingAppAction(",
+                    "ConnectionSchemeCache::registerScheme(",
+                    "connection_scheme_presentation(")) {
                 if (source.find(registration) >= 0) {
                     owns_provider_presentation = True;
                     break;
@@ -604,6 +630,19 @@ class QoreDataProviderI18nCmd {
             }
             string file_name = basename(file);
             owners{file_name.substr(0, file_name.length() - 3)} = True;
+        }
+
+        # A directory module can define source-owned schemes in separated class files.
+        string directory_owner = basename(path);
+        if (is_file(path + DirSep + directory_owner + ".qm")) {
+            foreach string file in (glob(path + DirSep + "*.qc")) {
+                string source = ReadOnlyFile::readTextFile(file);
+                if (source.find("connection_scheme_presentation(") >= 0
+                        || source.find("ConnectionSchemeCache::registerScheme(") >= 0) {
+                    owners{directory_owner} = True;
+                    break;
+                }
+            }
         }
 
         Dir dir();
@@ -634,7 +673,36 @@ class QoreDataProviderI18nCmd {
                     contribution.app, contribution.actions,
                     contribution.include_app));
         }
+        mergeCatalogs(\catalogs, connectionCatalogs(owner));
         return catalogs;
+    }
+
+    #! Snapshots scheme presentation once after all selected modules and pending apps have loaded
+    private hash<string, hash<auto>> connectionCatalogs(*string owner = NOTHING) {
+        if (!connection_catalogs_ready) {
+            hash<auto> schemes = ConnectionProvider::ConnectionSchemeCache::get();
+            foreach hash<auto> scheme in (schemes.values()) {
+                if (!scheme.presentation_owner.val() && scheme.cls) {
+                    *string module_name = scheme.cls.getModuleName();
+                    if (module_name.val()) {
+                        unprepared_connection_owners{module_name} = True;
+                    }
+                }
+            }
+            connection_catalogs = ConnectionPresentation::buildSchemeCatalogs(schemes);
+            connection_catalogs_ready = True;
+        }
+        if ((owner.val() && unprepared_connection_owners{owner})
+                || (!owner.val() && unprepared_connection_owners)) {
+            throw "DATA-PROVIDER-I18N-ERROR", sprintf(
+                "connection schemes have no source presentation identity in module(s) %y",
+                owner.val() ? (owner,) : keys unprepared_connection_owners);
+        }
+        if (!owner.val()) {
+            return connection_catalogs;
+        }
+        string domain = ConnectionPresentation::domain(owner);
+        return exists connection_catalogs{domain} ? {domain: connection_catalogs{domain}} : {};
     }
 
     #! Rejects provider presentation whose producer locale is not explicit

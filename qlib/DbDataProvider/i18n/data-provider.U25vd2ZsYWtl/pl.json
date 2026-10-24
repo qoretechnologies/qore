@@ -3,6 +3,118 @@
   "locales": {
     "pl": {
       "messages": {
+        "app.U25vd2ZsYWtl.connection.option.Y2hhcnNldA.desc": {
+          "source": "The character set to use for the connection (e.g. utf8)",
+          "message": "Zestaw znaków do użycia w połączeniu (np. utf8)"
+        },
+        "app.U25vd2ZsYWtl.connection.option.Y2hhcnNldA.display_name": {
+          "source": "Character Set",
+          "message": "Zestaw znaków"
+        },
+        "app.U25vd2ZsYWtl.connection.option.Y2hhcnNldA.short_desc": {
+          "source": "Connection character set",
+          "message": "Zestaw znaków połączenia"
+        },
+        "app.U25vd2ZsYWtl.connection.option.Y2xhc3NwYXRo.desc": {
+          "source": "The path to the JDBC driver JAR file(s)",
+          "message": "Ścieżka do pliku JAR sterownika JDBC"
+        },
+        "app.U25vd2ZsYWtl.connection.option.Y2xhc3NwYXRo.display_name": {
+          "source": "JDBC Classpath",
+          "message": "Ścieżka klas JDBC"
+        },
+        "app.U25vd2ZsYWtl.connection.option.Y2xhc3NwYXRo.short_desc": {
+          "source": "JDBC driver classpath",
+          "message": "Ścieżka klas sterownika JDBC"
+        },
+        "app.U25vd2ZsYWtl.connection.option.ZGI.desc": {
+          "source": "The name of the database to connect to",
+          "message": "Nazwa bazy danych do połączenia"
+        },
+        "app.U25vd2ZsYWtl.connection.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "Baza danych"
+        },
+        "app.U25vd2ZsYWtl.connection.option.ZGI.short_desc": {
+          "source": "Database name",
+          "message": "Nazwa bazy danych"
+        },
+        "app.U25vd2ZsYWtl.connection.option.aG9zdA.desc": {
+          "source": "The hostname or IP address of the database server",
+          "message": "Nazwa hosta lub adres IP serwera bazy danych"
+        },
+        "app.U25vd2ZsYWtl.connection.option.aG9zdA.display_name": {
+          "source": "Host",
+          "message": "Host"
+        },
+        "app.U25vd2ZsYWtl.connection.option.aG9zdA.short_desc": {
+          "source": "Database server hostname",
+          "message": "Nazwa hosta serwera bazy danych"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Maksymalna liczba połączeń w puli"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Maksymalny rozmiar puli"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Maksymalna liczba połączeń w puli"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Minimalna liczba połączeń w puli"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Minimalny rozmiar puli"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Minimalna liczba połączeń w puli"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cG9ydA.desc": {
+          "source": "The port number of the database server",
+          "message": "Numer portu serwera bazy danych"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cG9ydA.display_name": {
+          "source": "Port",
+          "message": "Port"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cG9ydA.short_desc": {
+          "source": "Database server port",
+          "message": "Port serwera bazy danych"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cGFzcw.desc": {
+          "source": "The password for database authentication",
+          "message": "Hasło do uwierzytelniania bazy danych"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cGFzcw.display_name": {
+          "source": "Password",
+          "message": "Hasło"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cGFzcw.short_desc": {
+          "source": "Database password",
+          "message": "Hasło do bazy danych"
+        },
+        "app.U25vd2ZsYWtl.connection.option.dXNlcg.desc": {
+          "source": "The database user name for authentication",
+          "message": "Nazwa użytkownika bazy danych do uwierzytelniania"
+        },
+        "app.U25vd2ZsYWtl.connection.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Użytkownik"
+        },
+        "app.U25vd2ZsYWtl.connection.option.dXNlcg.short_desc": {
+          "source": "Database user",
+          "message": "Użytkownik bazy danych"
+        },
+        "app.U25vd2ZsYWtl.desc": {
+          "source": "Create and manage connections to a Snowflake cloud data warehouse",
+          "message": "Twórz połączenia i zarządzaj nimi z chmurową hurtownią danych Snowflake"
+        },
         "app.U25vd2ZsYWtl.display_name": {
           "source": "Snowflake",
           "message": "Snowflake"
@@ -10,10 +122,6 @@
         "app.U25vd2ZsYWtl.short_desc": {
           "source": "Snowflake cloud data warehouse",
           "message": "Chmurowa hurtownia danych Snowflake"
-        },
-        "app.U25vd2ZsYWtl.desc": {
-          "source": "Create and manage connections to a Snowflake cloud data warehouse",
-          "message": "Twórz połączenia i zarządzaj nimi z chmurową hurtownią danych Snowflake"
         }
       }
     }

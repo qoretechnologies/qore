@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.U3F1YXJlc3BhY2VSZXN0Q2xpZW50.scheme.U3F1YXJlc3BhY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Squarespace Commerce REST API for orders, products, inventory, and transactions",
+          "message": "用於訂單、產品、庫存和交易的 Squarespace 商業 REST API 連接"
+        },
+        "connection.U3F1YXJlc3BhY2VSZXN0Q2xpZW50.scheme.U3F1YXJlc3BhY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Squarespace REST Connection",
+          "message": "Squarespace REST 連接"
+        },
+        "connection.U3F1YXJlc3BhY2VSZXN0Q2xpZW50.scheme.U3F1YXJlc3BhY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Squarespace Commerce REST API",
+          "message": "與 Squarespace 商業 REST API 的連接"
+        }
+      }
+    }
+  }
+}

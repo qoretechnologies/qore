@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Aftership REST API for package tracking and returns management.\n\nRequires an API key (set as `apikey`) from the [Aftership Dashboard](https://admin.aftership.com/). The connection uses the `aftership://` URL scheme and automatically sets the required `as-api-key` header on all API requests",
+          "message": "Spojenie s Aftership REST API pre sledovanie balíkov a správu vrátení.\n\nVyžaduje kľúč API (nastavený ako `apikey`) z [Aftership Dashboard](https://admin.aftership.com/). Spojeenie používa schému `aftership://` a automaticky nastaví požadovaný hlavičku `as-api-key` na všetky požiadavky API"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Aftership REST Connection",
+          "message": "Spojenie Aftership REST"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Aftership, you need an API key:\n\n1. Sign up or sign in at the [Aftership Dashboard](https://accounts.aftership.com)\n2. Go to **Settings** > **API Keys** (or visit [admin.aftership.com/settings/api-keys](https://admin.aftership.com/settings/api-keys) directly)\n3. Click **Create API key**\n4. Enter a descriptive name, select the `as-api-key` signature type, and set permissions\n5. Click **Save** and copy your new API key\n\nKeep your API key secure and rotate it periodically.",
+          "message": "Na pripojenie k Aftership potrebujete kľúč API:\n\n1. Zaregistrujte sa alebo sa prihláste na [Aftership Dashboard](https://accounts.aftership.com)\n2. Prejdite na **Nastavenia** > **Kľúče API** (alebo navštívte [admin.aftership.com/settings/api-keys](https://admin.aftership.com/settings/api-keys) priamo)\n3. Kliknite na **Vytvoriť kľúč API**\n4. Zadajte popisné meno, vyberte typ podpisu `as-api-key` a nastavte oprávnenia\n5. Kliknite na **Uložiť** a skopírujte váš nový kľúč API\n\nUchovávajte váš kľúč API v bezpečí a občas ho menite."
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Aftership API Key",
+          "message": "Ako získať váš kľúč API pre Aftership"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Aftership API key used for authentication; sent as the `as-api-key` header.\n\nGet your API key from the [Aftership Dashboard](https://admin.aftership.com/)",
+          "message": "Kľúč Aftership API používaný na overenie; odosielaný ako hlavička `as-api-key`.\n\nZískajte svoj kľúč API z [Aftership Dashboard](https://admin.aftership.com/)"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Aftership API key for authentication",
+          "message": "Aftership kľúč API pre overenie"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Aftership REST API",
+          "message": "Spojenie s REST API Aftership"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Customer.io REST API for marketing automation, messaging, and customer engagement.\n\nCustomer.io helps you send targeted emails, push notifications, SMS messages, and more based on customer behavior and attributes.\n\n**APIs:**\n- App API (Bearer token): Read data, trigger broadcasts and transactional messages\n- Track API (Basic auth): Create/update customers, track events\n\n**Rate Limits:**\n- App API: 10 requests/second (standard)\n- Track API: 100 requests/second",
+          "message": "마케팅 자동화, 메시징 및 고객 참여를 위한 Customer.io REST API에 대한 연결.\n\nCustomer.io는 고객 행동 및 속성 기반으로 타겟팅된 이메일, 푸시 알림, SMS 메시지를 보내는 데 도움을 줍니다.\n\n**APIs:**\n- App API (Bearer 토큰): 데이터 읽기, 브로드캐스트 및 트랜잭션 메시지 트리거\n- Track API (Basic 인증): 고객 생성/업데이트, 이벤트 추적\n\n**제한:**\n- App API: 1초당 10건 (표준)\n- Track API: 1초당 100건"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Customer.io REST Connection",
+          "message": "Customer.io REST 연결"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "Customer.io requires three credentials:\n1. **App API Key**: For reading data and triggering messages (Bearer token auth)\n2. **Site ID**: For tracking customer data (Basic auth username)\n3. **Tracking API Key**: For tracking customer data (Basic auth password)\n\nFind all credentials at: **[Settings > API Credentials](https://fly.customer.io/settings/api_credentials)**",
+          "message": "Customer.io는 세 가지 자격 증명이 필요합니다:\n1. **App API 키**: 데이터 읽기 및 메시지 트리거용 (Bearer 토큰 인증)\n2. **사이트 ID**: 고객 데이터 추적용 (Basic 인증 사용자 이름)\n3. **추적 API 키**: 고객 데이터 추적용 (Basic 인증 비밀번호)\n\n모든 자격 증명은 다음에서 찾을 수 있습니다: **[설정 > API 자격 증명](https://fly.customer.io/settings/api_credentials)**"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Customer.io API Credentials",
+          "message": "Customer.io API 자격 증명"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Choose the region that matches your Customer.io account:\n- **US**: United States data center (default)\n- **EU**: European Union data center\n\nYour region was set when you created your account and cannot be changed.",
+          "message": "고객님의 Customer.io 계정과 일치하는 지역을 선택하세요:\n- **미국**: 미국 데이터 센터 (기본값)\n- **EU**: 유럽 연합 데이터 센터\n\n귀하의 지역은 계정 생성 시 설정되었으며, 변경할 수 없습니다."
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Select Your Region",
+          "message": "지역 선택"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.YXBwX2FwaV9rZXk.desc": {
+          "source": "The Customer.io App API key used for Bearer token authentication with the App API.\n\n**To obtain your App API key:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials?keyType=app)\n3. Create or copy your App API Key\n\n**Note:** App API keys are used for reading data and triggering messages.",
+          "message": "App API와 함께 Bearer 토큰 인증에 사용되는 Customer.io App API 키입니다.\n\n**App API 키를 얻으려면:**\n1. [Customer.io](https://fly.customer.io)에 로그인하세요\n2. [설정 > API 자격 증명](https://fly.customer.io/settings/api_credentials?keyType=app)으로 이동하세요\n3. App API 키를 생성하거나 복사하세요\n\n**참고:** App API 키는 데이터 읽기 및 메시지 전송에 사용됩니다."
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.YXBwX2FwaV9rZXk.display_name": {
+          "source": "App API Key",
+          "message": "App API 키"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.YXBwX2FwaV9rZXk.short_desc": {
+          "source": "Customer.io App API key for Bearer token authentication",
+          "message": "Bearer 토큰 인증용 Customer.io App API 키"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.c2l0ZV9pZA.desc": {
+          "source": "The Customer.io Site ID used as the username for Track API Basic authentication.\n\n**To find your Site ID:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials)\n3. Your Site ID is listed under Tracking API Keys",
+          "message": "Track API Basic 인증의 사용자 이름으로 사용되는 Customer.io Site ID입니다.\n\n**Site ID를 찾으려면:**\n1. [Customer.io](https://fly.customer.io)에 로그인하세요\n2. [설정 > API 자격 증명](https://fly.customer.io/settings/api_credentials)으로 이동하세요\n3. 추적 API 키 아래에 Site ID가 표시됩니다."
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.c2l0ZV9pZA.display_name": {
+          "source": "Site ID",
+          "message": "Site ID"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.c2l0ZV9pZA.short_desc": {
+          "source": "Customer.io Site ID for Track API authentication",
+          "message": "Track API 인증용 Customer.io Site ID"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "EU data center (api-eu.customer.io / track-eu.customer.io)",
+          "message": "유럽 데이터 센터 (api-eu.customer.io / track-eu.customer.io)"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "EU",
+          "message": "유럽"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.short_desc": {
+          "source": "European Union",
+          "message": "유럽 연합"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "US data center (api.customer.io / track.customer.io)",
+          "message": "미국 데이터 센터 (api.customer.io / track.customer.io)"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "US",
+          "message": "미국"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.short_desc": {
+          "source": "United States",
+          "message": "미국"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "Select the Customer.io data center region for your account.\n\nYour region is determined when you create your Customer.io account and cannot be changed.",
+          "message": "계정용 Customer.io 데이터 센터 지역을 선택하세요.\n\n귀하의 지역은 Customer.io 계정을 생성할 때 결정되며, 변경할 수 없습니다."
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "리전"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "Customer.io data center region",
+          "message": "Customer.io 데이터 센터 지역"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.dHJhY2tpbmdfYXBpX2tleQ.desc": {
+          "source": "The Customer.io Tracking API key used as the password for Track API Basic authentication.\n\n**To find your Tracking API key:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials)\n3. Your API Key is listed under Tracking API Keys",
+          "message": "Track API 기본 인증의 비밀번호로 사용되는 Customer.io 추적 API 키입니다.\n\n**추적 API 키 찾기:**\n1. [Customer.io](https://fly.customer.io)에 로그인하세요\n2. [설정 > API 자격 증명](https://fly.customer.io/settings/api_credentials)으로 이동하세요\n3. 추적 API 키 아래에 귀하의 API 키가 표시됩니다."
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.dHJhY2tpbmdfYXBpX2tleQ.display_name": {
+          "source": "Tracking API Key",
+          "message": "추적 API 키"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.dHJhY2tpbmdfYXBpX2tleQ.short_desc": {
+          "source": "Customer.io Tracking API key for Track API authentication",
+          "message": "Track API 인증용 Customer.io 추적 API 키"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Customer.io REST API",
+          "message": "Customer.io REST API로의 연결"
+        }
+      }
+    }
+  }
+}

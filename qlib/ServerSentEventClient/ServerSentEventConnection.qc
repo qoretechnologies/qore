@@ -37,7 +37,8 @@ public namespace ServerSentEventClient {
 public class ServerSentEventConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ServerSentEventClient",
+            "ServerSentEventConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "ServerSentEvent Connection",
             "short_desc": "A connection to a ServerSentEvent server service",
             "desc": "A connection to a ServerSentEvent server service",
@@ -139,7 +140,7 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
                     "desc": "AsyncAPI channel name to use when `asyncapi` is configured",
                 },
             },
-        };
+        });
     }
 
     #! creates the ServerSentEventConnection connection object

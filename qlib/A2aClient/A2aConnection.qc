@@ -38,7 +38,8 @@ public class A2aConnection inherits ConnectionProvider::HttpBasedConnection {
         hash<auto> real_opts;
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("A2aClient",
+            "A2aConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "A2A Connection",
             "short_desc": "A connection to an A2A (Agent-to-Agent) agent",
             "desc": "A connection to an A2A agent for agent-to-agent collaboration via JSON-RPC 2.0",
@@ -52,7 +53,7 @@ public class A2aConnection inherits ConnectionProvider::HttpBasedConnection {
                 "https": "a2as",
                 "http": "a2a",
             },
-        };
+        });
     }
 
     #! Creates the A2aConnection object

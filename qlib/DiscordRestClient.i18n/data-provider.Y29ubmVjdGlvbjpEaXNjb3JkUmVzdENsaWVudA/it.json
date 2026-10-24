@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Discord REST API",
+          "message": "Una connessione all'API REST di Discord"
+        },
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Discord REST Connection",
+          "message": "Connessione REST di Discord"
+        },
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "The default API version to use",
+          "message": "La versione API predefinita da utilizzare"
+        },
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Versione API"
+        },
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Versione dell'API da utilizzare"
+        },
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Discord REST API",
+          "message": "Una connessione all'API REST di Discord"
+        }
+      }
+    }
+  }
+}

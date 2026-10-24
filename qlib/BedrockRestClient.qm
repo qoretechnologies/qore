@@ -343,7 +343,8 @@ public class BedrockRestConnection inherits AwsRestClient::AwsRestConnection {
         */
         const DefaultUrl = "bedrock://bedrock-runtime.us-east-1.amazonaws.com";
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("BedrockRestClient",
+            "BedrockRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "AWS Bedrock Connection",
             "short_desc": "A connection to the AWS Bedrock runtime",
             "desc": "A connection to [AWS Bedrock](https://aws.amazon.com/bedrock/) "
@@ -422,7 +423,7 @@ public class BedrockRestConnection inherits AwsRestClient::AwsRestConnection {
                 },
             },
             "required_options": "aws_region",
-        };
+        });
     }
 
     #! Creates a Bedrock connection

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the ShipStation REST API for shipping and fulfillment management.\n\nShipStation is a web-based shipping software that streamlines order fulfillment for e-commerce businesses. This integration enables managing orders, shipments, carriers, products, stores, and warehouses.\n\n**Important:** This integration uses the ShipStation **V1 API** and requires V1 API credentials (API Key + API Secret pair). ShipStation V2 API keys are not compatible.",
+          "message": "用於物流與履行管理的 ShipStation REST API 連接。\n\nShipStation 是一款基於網頁的物流軟體，可簡化電商企業的訂單履行流程。此整合功能可協助管理訂單、運送、運輸商、產品、商店與倉庫。\n\n**重要：** 此整合使用 ShipStation **V1 API**，需提供 V1 API 憑證（API 金鑰 + API 密鑰組合）。ShipStation V2 API 金鑰不相容。"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "ShipStation REST Connection",
+          "message": "ShipStation REST 連接"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires **ShipStation V1 API credentials** (an API Key + API Secret pair).\n\n**Steps to generate V1 API credentials:**\n1. Log in to ShipStation at https://app.shipstation.com\n2. Click the **gear icon** (Settings) in the top right corner\n3. Navigate to **Account > API Settings**\n4. Make sure **V1** is selected (not V2)\n5. Click **Generate API Keys** if you don't have existing credentials\n6. Copy both your **API Key** and **API Secret**\n\n**Important:**\n- The API Secret is only displayed once when generated; store your credentials securely\n- V1 API credentials are available on ShipStation **Gold, Scale, or higher-tier** plans\n- ShipStation also offers **V2 API keys** (a single token); these are **not compatible** with this integration",
+          "message": "此整合需要 **ShipStation V1 API 憑證**（API 金鑰 + API 密鑰組合）。\n\n**產生 V1 API 憑證的步驟：**\n1. 登入 ShipStation 至 https://app.shipstation.com\n2. 點選右上角的 **齒輪圖示**（設定）\n3. 導航至 **帳戶 > API 設定**\n4. 確認已選擇 **V1**（非 V2）\n5. 若無現有憑證，請點選 **產生 API 金鑰**\n6. 複製您的 **API 金鑰** 與 **API 密鑰**\n\n**重要：**\n- API 密鑰僅在產生時顯示一次；請安全儲存您的憑證\n- V1 API 憑證僅提供於 ShipStation **黃金、擴展或更高方案**\n- ShipStation 亦提供 **V2 API 金鑰**（單一權杖）；這些 **不相容** 於此整合"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Credentials",
+          "message": "如何取得您的 API 憑證"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.desc": {
+          "source": "The ShipStation **V1** API key used as the username for HTTP Basic Auth.\n\n**To obtain your V1 API credentials:**\n1. Log in to ShipStation at https://app.shipstation.com\n2. Click the gear icon (Settings) in the top right\n3. Go to **Account > API Settings**\n4. Click 'Generate API Keys' if you don't have any\n5. Copy your API Key\n\n**Important:** This must be a V1 API key (part of an API Key + API Secret pair). ShipStation V2 API keys (single token) are not compatible with this integration. V1 API keys are available on ShipStation Gold, Scale, or higher-tier plans.",
+          "message": "用於 HTTP Basic Auth 的 ShipStation **V1** API 金鑰（作為使用者名稱）。\n\n**取得 V1 API 憑證的方法：**\n1. 登入 ShipStation 至 https://app.shipstation.com\n2. 點選右上角的齒輪圖示（設定）\n3. 前往 **帳戶 > API 設定**\n4. 若無憑證，請點選「產生 API 金鑰」\n5. 複製您的 API 金鑰\n\n**重要：** 必須為 V1 API 金鑰（API 金鑰 + API 密鑰組合）。ShipStation V2 API 金鑰（單一權杖）不相容於此整合。V1 API 金鑰提供於 ShipStation 黃金、擴展或更高方案。"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.short_desc": {
+          "source": "ShipStation V1 API key for authentication",
+          "message": "用於驗證的 ShipStation V1 API 金鑰"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX3NlY3JldA.desc": {
+          "source": "The ShipStation **V1** API secret used as the password for HTTP Basic Auth.\n\n**To obtain your V1 API credentials:**\n1. Log in to ShipStation at https://app.shipstation.com\n2. Click the gear icon (Settings) in the top right\n3. Go to **Account > API Settings**\n4. Your API Secret is shown alongside your API Key\n\n**Note:** The API Secret is only shown once when generated. If you lose it, you'll need to generate new credentials.",
+          "message": "ShipStation **V1** API 秘密，用於 HTTP Basic 認證的密碼。\n\n**取得您的 V1 API 憑證：**\n1. 登入 ShipStation 至 https://app.shipstation.com\n2. 點擊右上角的齒輪圖示（設定）\n3. 前往 **帳戶 > API 設定**\n4. 您的 API 秘密會與 API 金鑰一同顯示\n\n**注意：** API 秘密僅在產生時顯示一次。若遺失，需重新產生憑證。"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX3NlY3JldA.display_name": {
+          "source": "API Secret",
+          "message": "API 秘密"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX3NlY3JldA.short_desc": {
+          "source": "ShipStation V1 API secret for authentication",
+          "message": "用於驗證的 ShipStation V1 API 秘密"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the ShipStation REST API",
+          "message": "連接到 ShipStation REST API 的連線"
+        }
+      }
+    }
+  }
+}

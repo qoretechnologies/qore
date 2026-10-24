@@ -3,6 +3,118 @@
   "locales": {
     "fr": {
       "messages": {
+        "app.Q2xpY2tIb3VzZQ.connection.option.Y2hhcnNldA.desc": {
+          "source": "The character set to use for the connection (e.g. utf8)",
+          "message": "Jeux de caractères à utiliser pour la connexion (par exemple, utf8)"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.Y2hhcnNldA.display_name": {
+          "source": "Character Set",
+          "message": "Jeux de caractères"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.Y2hhcnNldA.short_desc": {
+          "source": "Connection character set",
+          "message": "Jeux de caractères de la connexion"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.Y2xhc3NwYXRo.desc": {
+          "source": "The path to the JDBC driver JAR file(s)",
+          "message": "Chemin vers le fichier JAR du pilote JDBC"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.Y2xhc3NwYXRo.display_name": {
+          "source": "JDBC Classpath",
+          "message": "Chemin de classe JDBC"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.Y2xhc3NwYXRo.short_desc": {
+          "source": "JDBC driver classpath",
+          "message": "Chemin de classe du pilote JDBC"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.ZGI.desc": {
+          "source": "The name of the database to connect to",
+          "message": "Nom de la base de données à laquelle se connecter"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "Base de données"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.ZGI.short_desc": {
+          "source": "Database name",
+          "message": "Nom de la base de données"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.aG9zdA.desc": {
+          "source": "The hostname or IP address of the database server",
+          "message": "L'hôte ou l'adresse IP du serveur de base de données"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.aG9zdA.display_name": {
+          "source": "Host",
+          "message": "Hôte"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.aG9zdA.short_desc": {
+          "source": "Database server hostname",
+          "message": "Nom d'hôte du serveur de base de données"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Nombre maximal de connexions dans le pool"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Taille maximale du pool"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Connexions maximales au pool"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Nombre minimal de connexions dans le pool"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Taille minimale du pool"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Connexions minimales au pool"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.cG9ydA.desc": {
+          "source": "The port number of the database server",
+          "message": "Numéro de port du serveur de base de données"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.cG9ydA.display_name": {
+          "source": "Port",
+          "message": "Port"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.cG9ydA.short_desc": {
+          "source": "Database server port",
+          "message": "Port du serveur de base de données"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.cGFzcw.desc": {
+          "source": "The password for database authentication",
+          "message": "Mot de passe pour l'authentification de la base de données"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.cGFzcw.display_name": {
+          "source": "Password",
+          "message": "Mot de passe"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.cGFzcw.short_desc": {
+          "source": "Database password",
+          "message": "Mot de passe de la base de données"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.dXNlcg.desc": {
+          "source": "The database user name for authentication",
+          "message": "Nom d'utilisateur de la base de données pour l'authentification"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Utilisateur"
+        },
+        "app.Q2xpY2tIb3VzZQ.connection.option.dXNlcg.short_desc": {
+          "source": "Database user",
+          "message": "Utilisateur de la base de données"
+        },
+        "app.Q2xpY2tIb3VzZQ.desc": {
+          "source": "Create and manage connections to a ClickHouse analytics database",
+          "message": "Créer et gérer des connexions à une base de données analytique ClickHouse"
+        },
         "app.Q2xpY2tIb3VzZQ.display_name": {
           "source": "ClickHouse",
           "message": "ClickHouse"
@@ -10,10 +122,6 @@
         "app.Q2xpY2tIb3VzZQ.short_desc": {
           "source": "ClickHouse analytics database",
           "message": "Base de données analytique ClickHouse"
-        },
-        "app.Q2xpY2tIb3VzZQ.desc": {
-          "source": "Create and manage connections to a ClickHouse analytics database",
-          "message": "Créer et gérer des connexions à une base de données analytique ClickHouse"
         }
       }
     }

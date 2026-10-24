@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [GitHub](https://github.com) for repositories, issues, pull requests, releases and Actions secrets.\n\n**Authentication** is either:\n- a **personal access token** in `token`, fine-grained or classic, sent as a bearer token. A fine-grained token can be scoped to a single repository, which is the narrowest option; or\n- the **OAuth2 authorization code flow** with `oauth2_client_id` and `oauth2_client_secret` from an OAuth app registered on GitHub.\n\nEvery request sends `X-GitHub-Api-Version: 2022-11-28`, because GitHub versions its REST API by date and sending no version means accepting whatever it currently defaults to.\n\nGitHub is a trademark of GitHub, Inc.",
+          "message": "Une connexion à [GitHub](https://github.com) pour les dépôts, les problèmes, les demandes de tirage, les versions et les secrets Actions.\n\n**Authentification** est soit :\n- un **jeton d'accès personnel** dans `token`, finement granulaire ou classique, envoyé en tant que jeton porteur. Un jeton finement granulaire peut être limité à un seul dépôt, ce qui est la configuration la plus restrictive ; ou\n- le flux de code d'autorisation OAuth2 avec `oauth2_client_id` et `oauth2_client_secret` provenant d'une application OAuth enregistrée sur GitHub.\n\nChaque requête envoie `X-GitHub-Api-Version: 2022-11-28`, car GitHub versionne son API REST par date et l'envoi d'une version signifie accepter celle qui est actuellement définie par défaut.\n\nGitHub est une marque déposée de GitHub, Inc."
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "GitHub REST Connection",
+          "message": "Connexion REST GitHub"
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.option.aGVhZGVycw.desc": {
+          "source": "Headers sent with every request.\n\n`X-GitHub-Api-Version` pins the REST API version and should be left alone unless you mean to move to a different one: this application's actions describe the fields and responses of **that** version.",
+          "message": "En-têtes envoyés avec chaque requête.\n\n`X-GitHub-Api-Version` fixe la version de l'API REST et doit être laissé tel quel, sauf si vous souhaitez passer à une autre version : les actions de cette application décrivent les champs et les réponses de **cette** version."
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A GitHub personal access token, sent as a bearer token.\n\n**To obtain one:** **Settings > Developer settings > Personal access tokens**. A fine-grained token is scoped to chosen repositories and permissions and is the narrower choice; a classic token uses scopes such as `repo`.\n\nLeave this unset to use the OAuth2 flow instead.",
+          "message": "Un jeton d'accès personnel GitHub, envoyé en tant que jeton porteur.\n\n**Pour en obtenir un :** **Paramètres > Paramètres développeur > Jetons d'accès personnels**. Un jeton à granularité fine est limité à des dépôts et des autorisations spécifiques, et constitue le choix le plus précis ; un jeton classique utilise des portées telles que `repo`.\n\nLaissez ce champ vide pour utiliser le flux OAuth2 à la place."
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "Jeton d'accès"
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A GitHub personal access token",
+          "message": "Un jeton d'accès personnel GitHub"
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the GitHub REST API",
+          "message": "Une connexion à l'API REST GitHub"
+        }
+      }
+    }
+  }
+}

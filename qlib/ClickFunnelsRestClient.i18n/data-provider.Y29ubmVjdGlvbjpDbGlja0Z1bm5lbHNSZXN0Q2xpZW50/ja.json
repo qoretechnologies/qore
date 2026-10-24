@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the ClickFunnels REST API for managing contacts, orders, products, funnels, courses, forms, and fulfillments",
+          "message": "コンタクト、注文、製品、ファンネル、コース、フォーム、および履行を管理するための ClickFunnels REST API への接続"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "ClickFunnels REST Connection",
+          "message": "ClickFunnels REST 接続"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "The **Team Subdomain** is required to connect to your ClickFunnels account.\n\n**How to find it:**\n1. Log in to your ClickFunnels 2.0 account\n2. Look at the URL in your browser: `https://**myteam**.myclickfunnels.com`\n3. The team subdomain is the part before `.myclickfunnels.com`",
+          "message": "ClickFunnels アカウントに接続するには **チームサブドメイン** が必要です。\n\n**見つけ方：**\n1. ClickFunnels 2.0 アカウントにログインする\n2. ブラウザの URL を確認する: `https://**myteam**.myclickfunnels.com`\n3. チームサブドメインは `.myclickfunnels.com` の前の部分です"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Find Your Team Subdomain",
+          "message": "チームサブドメインの見つけ方"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
+          "source": "An **API Token** is required for authentication.\n\n**How to generate one:**\n1. Log in to your ClickFunnels 2.0 account\n2. Go to **Teams List > Your Team > Team Settings > Developer Portal**\n3. Click **Add new platform application** and fill in the required information\n4. Copy the **API access token** from the platform application details\n\n**Note:** Store this token securely; it provides full API access to your ClickFunnels account. API access requires a Scale, Optimize, or Dominate plan",
+          "message": "認証には **API トークン** が必要です。\n\n**生成手順：**\n1. ClickFunnels 2.0 アカウントにログインする\n2. **チーム一覧 > あなたのチーム > チーム設定 > デベロッパー ポータル** へ移動する\n3. **新しいプラットフォームアプリケーションの追加** をクリックし、必要な情報を入力する\n4. プラットフォームアプリケーションの詳細から **API アクセストークン** をコピーする\n\n**注意：** このトークンは完全な ClickFunnels アカウントへの API アクセスを提供するため、安全に保管してください。API アクセスには Scale、Optimize、または Dominate プランが必要です"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
+          "source": "How to Generate an API Token",
+          "message": "API トークンの生成方法"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The ClickFunnels API Bearer token for authentication. Generate this token in ClickFunnels under **Teams List > Your Team > Team Settings > Developer Portal**",
+          "message": "認証用の ClickFunnels API ベアラートークン。**チーム一覧 > あなたのチーム > チーム設定 > デベロッパー ポータル** でトークンを生成してください"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "ClickFunnels API Bearer token",
+          "message": "ClickFunnels API の Bearer トークン"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.dGVhbQ.desc": {
+          "source": "The ClickFunnels team subdomain used to build the API URL. For example, if your ClickFunnels URL is `https://myteam.myclickfunnels.com`, the team value is `myteam`",
+          "message": "API URL を構築するために使用する ClickFunnels チームのサブドメイン。たとえば、ClickFunnels の URL が `https://myteam.myclickfunnels.com` の場合、チーム値は `myteam` になります"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.dGVhbQ.display_name": {
+          "source": "Team Subdomain",
+          "message": "チーム サブドメイン"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.dGVhbQ.short_desc": {
+          "source": "ClickFunnels team subdomain",
+          "message": "ClickFunnels チームのサブドメイン"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the ClickFunnels REST API",
+          "message": "ClickFunnels REST API への接続"
+        }
+      }
+    }
+  }
+}

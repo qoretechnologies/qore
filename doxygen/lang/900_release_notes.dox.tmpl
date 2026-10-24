@@ -4,6 +4,14 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Connection schemes, their setup messages, connection options and allowed values now have source-owned
+    translation catalogs. Unchanged HTTP options reused by REST and other schemes share their original
+    identities; changing a default preserves the identity, while changing a field's wording gives it a new
+    producer identity. Hosts can project connection forms through
+    @ref DataProvider::ConnectionPresentationCatalog "ConnectionPresentationCatalog". Missing translations are
+    marked incomplete and retain their source in producer metadata
+    (<a href="https://github.com/qoretechnologies/qore/issues/5513">issue 5513</a>).
+
     Builtin classes can register QoreClass::setMemberWriteGate() to handle assignment, compound and nested writes,
     removal and deletion of undeclared members held in external storage. Builtin read gates and the new write
     gate are inherited by Qore subclasses, including accesses through <tt>self</tt>. Declared members retain

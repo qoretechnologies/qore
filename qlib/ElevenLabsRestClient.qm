@@ -191,7 +191,8 @@ public class ElevenLabsRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "elevenlabs://api.elevenlabs.io";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ElevenLabsRestClient",
+            "ElevenLabsRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "ElevenLabs REST Connection",
             "short_desc": "A connection to the ElevenLabs REST API",
             "desc": "A connection to the [ElevenLabs](https://elevenlabs.io) REST API for AI voice "
@@ -251,6 +252,7 @@ public class ElevenLabsRestConnection inherits RestClient::RestConnection {
             "required_options": "apikey",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Get Your ElevenLabs API Key",
                     "intent": "info",
                     "content": "To connect to ElevenLabs, you need an API key:\n\n"
@@ -261,7 +263,7 @@ public class ElevenLabsRestConnection inherits RestClient::RestConnection {
                         "Keep your API key secure and never share it publicly.",
                 },
             ),
-        };
+        });
     }
 
     #! Creates the ElevenLabsRestConnection object

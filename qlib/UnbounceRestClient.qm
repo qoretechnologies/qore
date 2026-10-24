@@ -234,7 +234,8 @@ UnbounceRestClient unbounce({
 public class UnbounceRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("UnbounceRestClient",
+            "UnbounceRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Unbounce REST Connection",
             "short_desc": "A connection to the Unbounce REST API",
             "desc": "A connection to the Unbounce REST API for landing pages, popups, sticky bars, "
@@ -281,7 +282,7 @@ public class UnbounceRestConnection inherits RestClient::RestConnection {
                         "default_value": UnbounceRestClientBase::DefaultTokenUrl,
                     }),
             },
-        };
+        });
     }
 
     #! creates the UnbounceRestConnection object

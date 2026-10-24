@@ -216,7 +216,8 @@ SewioRestClient rest(("url": "http://rtlsstudio.com/sensmapserver", "apikey": ap
 public class SewioRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("SewioRestClient",
+            "SewioRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Sewio REST Connection",
             "short_desc": "A connection to the Sewio REST API",
             "desc": "A connection to the Sewio REST API",
@@ -274,7 +275,7 @@ public class SewioRestConnection inherits RestClient::RestConnection {
                 },
             },
             "required_options": foldl $1 + "," + $2, SewioRestClientBase::RequiredOptions,
-        };
+        });
     }
 
     #! creates the SewioRestConnection object

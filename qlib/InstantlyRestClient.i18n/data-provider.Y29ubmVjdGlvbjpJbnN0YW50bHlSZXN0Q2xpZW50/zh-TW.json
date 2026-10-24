@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Instantly REST API for email outreach and sales automation.\n\nInstantly is a platform for cold email outreach that enables managing campaigns, leads, email accounts, and tracking engagement metrics.\n\n**API Version:** v2\n**Authentication:** Bearer token (API key)",
+          "message": "連接到 Instantly 的 REST API，用於電子郵件推廣與銷售自動化。\n\nInstantly 是一個冷郵件推廣平台，可協助管理活動、潛在客戶、郵件帳戶，並追蹤互動指標。\n\n**API 版本：** v2\n**驗證方式：** Bearer 權杖（API 金鑰）"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Instantly REST Connection",
+          "message": "即時 REST 連接"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to Instantly at https://app.instantly.ai\n2. Navigate to **Settings > Integrations > API**\n3. Click **Create API Key**\n4. Select the required scopes for your use case\n5. Copy the generated API key\n\n**Important:**\n- API access requires a Growth plan or higher\n- Store your API key securely\n- You can create multiple keys with different scopes",
+          "message": "1. 登入即時系統至 https://app.instantly.ai\n2. 前往 **設定 > 整合 > API**\n3. 點選 **建立 API 金鑰**\n4. 選取您使用情境所需的範圍\n5. 複製產生的 API 金鑰\n\n**重要：**\n- API 存取需訂閱成長方案或更高方案\n- 請安全儲存您的 API 金鑰\n- 您可建立多個具有不同範圍的金鑰"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "如何取得您的 API 金鑰"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Instantly API key used for Bearer token authentication.\n\n**To obtain your API key:**\n1. Log in to your Instantly account at https://app.instantly.ai\n2. Go to Settings > Integrations > API\n3. Create a new API key with the required scopes\n\n**Note:** API access requires a Growth plan or higher.",
+          "message": "用於 Bearer 權杖驗證的即時 API 金鑰。\n\n**取得您的 API 金鑰：**\n1. 登入您的即時帳戶至 https://app.instantly.ai\n2. 前往 設定 > 整合 > API\n3. 建立具有所需範圍的新 API 金鑰\n\n**注意：** API 存取需訂閱成長方案或更高方案。"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Instantly API key for Bearer token authentication",
+          "message": "用於 Bearer 權杖驗證的即時 API 金鑰"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Instantly REST API",
+          "message": "連接至即時 REST API"
+        }
+      }
+    }
+  }
+}

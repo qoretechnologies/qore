@@ -244,7 +244,8 @@ public class AnthropicRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "anthropic://api.anthropic.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("AnthropicRestClient",
+            "AnthropicRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Anthropic REST Connection",
             "short_desc": "A connection to the Anthropic Claude REST API",
             "desc": "A connection to the Anthropic Claude REST API.\n\n"
@@ -306,7 +307,7 @@ public class AnthropicRestConnection inherits RestClient::RestConnection {
                 }),
             },
             "required_options": "apikey",
-        };
+        });
     }
 
     #! creates the AnthropicRestConnection object

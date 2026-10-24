@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Tally.so REST API for form building and management.\n\nRequires an API key (set as `apikey`) from your [Tally account settings](https://tally.so/settings/api). The connection uses the `tally://` URL scheme",
+          "message": "用於表單建立與管理的 Tally.so REST API 連線。\n\n需要從您的 [Tally 帳戶設定](https://tally.so/settings/api) 設定 API 金鑰（設定為 `apikey`）。此連線使用 `tally://` 通訊協定"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Tally REST Connection",
+          "message": "Tally REST 連線"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Tally, you need an API key:\n\n1. Sign in to your [Tally account](https://tally.so/)\n2. Go to **Settings** → **API**\n3. Click **Create API key**\n4. Copy the key and paste it in the `apikey` field above\n\n**Note**: API access requires a Tally Pro or Business plan",
+          "message": "要連接到 Tally，您需要 API 金鑰：\n\n1. 登入您的 [Tally 帳戶](https://tally.so/)\n2. 前往 **設定** → **API**\n3. 點選 **建立 API 金鑰**\n4. 複製金鑰並貼上至上方的 `apikey` 欄位\n\n**注意**：API 存取需 Tally Pro 或 Business 方案"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Tally API Key",
+          "message": "如何取得您的 Tally API 金鑰"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Tally API key used for authentication; sent as the `Authorization: Bearer` header.\n\nGet your API key from your [Tally account settings](https://tally.so/settings/api)",
+          "message": "用於驗證的 Tally API 金鑰；以 `Authorization: Bearer` 標頭傳送。\n\n請從您的 [Tally 帳戶設定](https://tally.so/settings/api) 取得 API 金鑰"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Tally API key for authentication",
+          "message": "用於驗證的 Tally API 金鑰"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Tally.so REST API",
+          "message": "連接到 Tally.so REST API 的連接"
+        }
+      }
+    }
+  }
+}

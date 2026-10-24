@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Bitbucket Cloud](https://bitbucket.org) for repositories, commits, pull requests, deployments and code search.\n\n**Authentication** is any one of three credentials:\n- an **access token** in `token` - a repository, project or workspace access token, created under the relevant **Settings > Access tokens**. The narrowest option, and the one to prefer;\n- an **app password** in `username` and `password`, sent as basic authentication. The username is the Atlassian account username, **not** the email address;\n- the **OAuth2 authorization code flow**, with `oauth2_client_id` and `oauth2_client_secret` from an OAuth consumer created in workspace settings.\n\nThis connection targets Bitbucket **Cloud**. Bitbucket Data Center is a different product with a different API and is not supported.\n\nBitbucket is a trademark of Atlassian Pty Ltd.",
+          "message": "[Bitbucket Cloud](https://bitbucket.org)에 대한 연결로 저장소, 커밋, 풀 리퀘스트, 배포 및 코드 검색을 수행합니다.\n\n**인증**은 다음 세 가지 자격 증명 중 하나입니다:\n- **액세스 토큰**을 `token`에 입력합니다. 이는 저장소, 프로젝트 또는 워크스페이스 수준의 액세스 토큰으로, 관련 **설정 > 액세스 토큰**에서 생성됩니다. 가장 범위가 좁은 옵션으로, 선호되는 선택입니다;\n- **앱 비밀번호**를 `username` 및 `password`에 입력하고 기본 인증으로 전송합니다. 사용자 이름은 Atlassian 계정 사용자 이름이며, **이메일 주소가 아닙니다**;\n- **OAuth2 인증 코드 흐름**으로, 워크스페이스 설정에서 생성한 OAuth 소비자로부터 `oauth2_client_id` 및 `oauth2_client_secret`를 사용합니다.\n\n이 연결은 Bitbucket **클라우드**를 대상으로 합니다. Bitbucket Data Center는 별도의 제품으로 다른 API를 사용하며 지원되지 않습니다.\n\nBitbucket은 Atlassian Pty Ltd의 상표입니다."
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Bitbucket REST Connection",
+          "message": "Bitbucket REST 연결"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "An app password created under **Personal settings > App passwords**, used with `username`.\n\nThis is not the account password, which Bitbucket does not accept for API access.",
+          "message": "**개인 설정 > 앱 비밀번호**에서 생성한 앱 비밀번호로, `username`와 함께 사용됩니다.\n\n이것은 계정 비밀번호가 아니며, Bitbucket은 API 접근에 계정 비밀번호를 허용하지 않습니다."
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A Bitbucket access token, sent as a bearer token.\n\n**To obtain one:** open the repository, project or workspace **Settings > Access tokens**, create a token, and grant it only the scopes the integration needs.\n\nLeave this unset to authenticate with an app password or the OAuth2 flow instead.",
+          "message": "Bearer 토큰으로 전송되는 Bitbucket 액세스 토큰입니다.\n\n**얻는 방법:** 저장소, 프로젝트 또는 워크스페이스의 **설정 > 액세스 토큰**에서 토큰을 생성하고, 통합에 필요한 범위만 부여합니다.\n\n앱 비밀번호 또는 OAuth2 흐름을 사용하려면 이 값을 비워 두세요."
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "액세스 토큰"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A Bitbucket repository, project or workspace access token",
+          "message": "Bitbucket 저장소, 프로젝트 또는 워크스페이스 액세스 토큰"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The Atlassian account username to use with an app password.\n\n**Not** the email address: Bitbucket rejects an email address here. The username is shown under **Personal settings > Account settings**.",
+          "message": "앱 비밀번호와 함께 사용할 Atlassian 계정 사용자 이름입니다.\n\n**이메일 주소가 아님**: Bitbucket은 여기에 이메일 주소를 거부합니다. 사용자 이름은 **개인 설정 > 계정 설정**에서 확인할 수 있습니다."
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Bitbucket Cloud REST API",
+          "message": "Bitbucket Cloud REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Paddle](https://www.paddle.com) REST API for billing, subscriptions and payments.\n\nPaddle is a **merchant of record**: it sells your software on your behalf, so it handles payment processing, sales tax and invoicing, and pays out the balance. An integration works with catalog products and prices, customers, transactions, subscriptions and reports.\n\n**Authentication** is an API key sent as a bearer token; there is no OAuth2 flow. A key is created in the Paddle dashboard under **Paddle > Developer Tools > Authentication** and is granted an explicit set of permissions, so it can be scoped to exactly what the integration needs.\n\n**Sandbox and production are separate environments** with separate data and separate keys. Set `instance_type` to match the key.\n\nPaddle is a trademark of Paddle.com Market Ltd.",
+          "message": "[Paddle](https://www.paddle.com) REST APIへの接続。請求、サブスクリプション、支払いに使用。\n\nPaddleは**販売業者としての役割**を果たす：自社の代わりにソフトウェアを販売し、支払い処理、売上税、請求書発行を担当し、残高を支払う。統合はカタログ製品と価格、顧客、取引、サブスクリプション、レポートと連携する。\n\n**認証**はベアラートークンとして送信されるAPIキー。OAuth2フローは存在しない。キーはPaddleダッシュボードの**Paddle > 開発者ツール > 認証**で作成され、明示的な権限セットが付与されるため、統合が必要とするものに正確に限定できる。\n\n**ステージング環境と本番環境は別々の環境**であり、データとキーが分離されている。`instance_type` をキーに一致させるように設定する。\n\nPaddleはPaddle.com Market Ltd.の商標です。"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Paddle REST Connection",
+          "message": "Paddle REST 接続"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOmFwaQ.desc": {
+          "source": "The live Paddle environment: real customers, real money",
+          "message": "本番の Paddle 環境：実際の顧客、実際のお金"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOmFwaQ.display_name": {
+          "source": "Production",
+          "message": "本番"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnNhbmRib3gtYXBp.desc": {
+          "source": "The Paddle test environment: no real money moves",
+          "message": "Paddle テスト環境：実際のお金は移動しない"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnNhbmRib3gtYXBp.display_name": {
+          "source": "Sandbox",
+          "message": "サンドボックス"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.desc": {
+          "source": "The Paddle environment this connection works against, which also determines the target URL.\n\n- `api`: **Production** - `https://api.paddle.com`\n- `sandbox-api`: **Sandbox** - `https://sandbox-api.paddle.com`\n\nThe two environments are entirely separate: they hold different data and accept different API keys, so this must match the key in `token`.\n\nDefaults to **sandbox**, so a connection created without setting this talks to test data rather than billing real customers.",
+          "message": "この接続が対象とする Paddle 環境であり、これによりターゲット URL も決定される。\n\n- `api`: **本番** - `https://api.paddle.com`\n- `sandbox-api`: **サンドボックス** - `https://sandbox-api.paddle.com`\n\n2つの環境は完全に分離されている：異なるデータを保持し、異なる API キーを受け入れるため、`token` に設定されたキーと一致させる必要がある。\n\nデフォルトは **sandbox** であるため、この値を設定しないで作成された接続は、実際の請求を対象とするのではなくテストデータに接続する。"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.display_name": {
+          "source": "Instance Type",
+          "message": "インスタンスタイプ"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.short_desc": {
+          "source": "The Paddle environment to connect to",
+          "message": "接続する Paddle 環境"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A Paddle API key (`pdl_live_apikey_…` or `pdl_sdbx_apikey_…`), sent as a bearer token.\n\n**To obtain one:**\n1. Log in to the Paddle dashboard for the environment this connection targets\n2. Go to Paddle > Developer Tools > Authentication\n3. Create an API key and grant it the permissions this integration needs\n\n**Note:** a key belongs to one environment only; a sandbox key is rejected by production and the other way round. Set `instance_type` to match.",
+          "message": "Paddle API キー（`pdl_live_apikey_…` または `pdl_sdbx_apikey_…`）をベアラートークンとして送信する。\n\n**取得方法：**\n1. この接続のターゲットとする環境の Paddle ダッシュボードにログインする\n2. Paddle > 開発者ツール > 認証 に移動する\n3. API キーを作成し、この統合に必要な権限を付与する\n\n**注意：** キーは1つの環境にのみ属する。sandbox キーは本番環境で拒否され、逆もまた然り。`instance_type` を一致させるように設定する。"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A Paddle API key",
+          "message": "Paddle API キー"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Paddle REST API",
+          "message": "Paddle REST API への接続"
+        }
+      }
+    }
+  }
+}

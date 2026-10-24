@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.desc": {
+          "source": "A connection to an IMAP4rev1 server for reading and managing email.\n\nIMAP keeps messages on the server, so mail can be searched, retrieved, flagged, and moved without downloading and deleting it. This is the standard way to integrate with email providers that do not publish their own API",
+          "message": "Une connexion à un serveur IMAP4rev1 pour lire et gérer les courriels.\n\nIMAP conserve les messages sur le serveur, ce qui permet de les rechercher, les récupérer, les marquer et les déplacer sans les télécharger ni les supprimer. C’est la méthode standard pour intégrer des fournisseurs de courriels qui ne publient pas leur propre API"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.display_name": {
+          "source": "IMAP Connection",
+          "message": "Connexion IMAP"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "Le délai d'expiration de connexion en millisecondes"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Délai d'expiration de connexion"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "Le délai d'expiration de connexion en millisecondes"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOk9BVVRIQkVBUkVS.desc": {
+          "source": "OAuth2 bearer-token authentication with SASL `OAUTHBEARER` ([RFC 7628](https://datatracker.ietf.org/doc/html/rfc7628)); requires the `token` option",
+          "message": "Authentification OAuth2 avec jeton porteur et SASL `OAUTHBEARER` ([RFC 7628](https://datatracker.ietf.org/doc/html/rfc7628)); nécessite l’option `token`"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOk9BVVRIQkVBUkVS.display_name": {
+          "source": "SASL OAUTHBEARER",
+          "message": "OAUTHBEARER SASL"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOlBMQUlO.desc": {
+          "source": "Username and password authentication with SASL `PLAIN`, falling back to `LOGIN` on servers without `SASL-IR`",
+          "message": "Authentification par nom d'utilisateur et mot de passe avec SASL `PLAIN`, avec basculement vers `LOGIN` sur les serveurs ne prenant pas en charge `SASL-IR`"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOlBMQUlO.display_name": {
+          "source": "SASL PLAIN",
+          "message": "SASL PLAIN"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOlhPQVVUSDI.desc": {
+          "source": "OAuth2 bearer-token authentication with SASL `XOAUTH2`; requires the `token` option",
+          "message": "Authentification par jeton porteur OAuth2 avec SASL `XOAUTH2` ; nécessite l'option `token`"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOlhPQVVUSDI.display_name": {
+          "source": "SASL XOAUTH2",
+          "message": "SASL XOAUTH2"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOmF1dG8.desc": {
+          "source": "Select the mechanism from the server's `CAPABILITY` list",
+          "message": "Sélectionnez le mécanisme dans la liste `CAPABILITY` fournie par le serveur"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Automatic",
+          "message": "Automatique"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.desc": {
+          "source": "Forces a specific SASL authentication mechanism instead of selecting one from the mechanisms the server advertises in its `CAPABILITY` response.\n\nLeave this at `auto` unless a server advertises a mechanism it cannot actually complete; the automatic selection uses the capability list read after `STARTTLS` and again after login, which is the list that reflects what the connection really supports",
+          "message": "Force un mécanisme d'authentification SASL spécifique au lieu de choisir un mécanisme parmi ceux annoncés par le serveur dans sa réponse `CAPABILITY`.\n\nLaissez cette option à `auto` sauf si un serveur annonce un mécanisme qu'il ne peut pas effectivement exécuter ; la sélection automatique utilise la liste de fonctionnalités lue après `STARTTLS` et à nouveau après la connexion, qui reflète réellement ce que la connexion prend en charge"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.display_name": {
+          "source": "Auth Mechanism",
+          "message": "Mécanisme d'authentification"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.short_desc": {
+          "source": "Forces a specific SASL authentication mechanism",
+          "message": "Force un mécanisme d'authentification SASL spécifique"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.aW9fdGltZW91dA.desc": {
+          "source": "The I/O timeout in milliseconds",
+          "message": "Délai d'attente I/O en millisecondes"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.aW9fdGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Délai d'expiration d'E/S"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.aW9fdGltZW91dA.short_desc": {
+          "source": "The I/O timeout in milliseconds",
+          "message": "Délai d'attente I/O en millisecondes"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.bWF4X3Jlc3BvbnNlX3NpemU.desc": {
+          "source": "The maximum accepted size of a single IMAP response in bytes.\n\nThis bounds memory use when talking to a broken or hostile server; raise it when retrieving very large messages or attachments",
+          "message": "La taille maximale acceptée d'une réponse IMAP unique en octets.\n\nCela limite l'utilisation de la mémoire lors de la communication avec un serveur défectueux ou hostile ; augmentez-la pour récupérer des messages ou pièces jointes très volumineux"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.bWF4X3Jlc3BvbnNlX3NpemU.display_name": {
+          "source": "Maximum Response Size",
+          "message": "Taille maximale de réponse"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.bWF4X3Jlc3BvbnNlX3NpemU.short_desc": {
+          "source": "The maximum accepted size of a single IMAP response in bytes",
+          "message": "La taille maximale acceptée d'une réponse IMAP unique en octets"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; conflicts with the `token` option",
+          "message": "Le mot de passe pour l'authentification ; en conflit avec l'option `token`"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Mot de passe"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for authentication",
+          "message": "Le mot de passe pour l'authentification"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "An OAuth2 bearer token to use for authentication.\n\nWhen set, the connection authenticates with a bearer-token SASL mechanism (`XOAUTH2` or `OAUTHBEARER`) instead of a password, which is what providers that have retired password logins require.\n\n**Requires the `username` option** and conflicts with the `password` option. Access tokens expire; refresh them on the connection rather than relying on a token captured once",
+          "message": "Un jeton porteur OAuth2 à utiliser pour l'authentification.\n\nLorsqu'il est défini, la connexion s'authentifie avec un mécanisme SASL à jeton porteur (`XOAUTH2` ou `OAUTHBEARER`) au lieu d'un mot de passe, ce que les fournisseurs ayant désactivé les connexions par mot de passe exigent.\n\n**Exige l'option `username`** et est en conflit avec l'option `password`. Les jetons d'accès expirent ; actualisez-les sur la connexion plutôt que de compter sur un jeton capturé une seule fois"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Jeton d'autorisation"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "An OAuth2 bearer token for SASL XOAUTH2 / OAUTHBEARER logins",
+          "message": "Un jeton porteur OAuth2 pour les connexions SASL XOAUTH2 / OAUTHBEARER"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.dGxz.desc": {
+          "source": "Issue the `STARTTLS` command after connecting with insecure connections; ignored when the `imaps` scheme is used, since that connection is already secure",
+          "message": "Émettez la commande `STARTTLS` après avoir établi une connexion non sécurisée ; ignorée lorsque le schéma `imaps` est utilisé, car la connexion est déjà sécurisée"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.dGxz.display_name": {
+          "source": "Use STARTTLS?",
+          "message": "Utiliser STARTTLS ?"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.dGxz.short_desc": {
+          "source": "Issue the STARTTLS command after connecting with insecure connections",
+          "message": "Émettez la commande STARTTLS après avoir établi une connexion non sécurisée"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; always required",
+          "message": "Le nom d'utilisateur pour l'authentification ; toujours requis"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Nom d'utilisateur"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "The username for authentication",
+          "message": "Le nom d'utilisateur pour l'authentification"
+        },
+        "connection.SW1hcENsaWVudA.scheme.SW1hcENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to an IMAP server",
+          "message": "Une connexion à un serveur IMAP"
+        }
+      }
+    }
+  }
+}

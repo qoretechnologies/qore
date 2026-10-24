@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.TGluZWFyUmVzdENsaWVudA.scheme.TGluZWFyUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Linear GraphQL API for issue tracking and project management",
+          "message": "Una connessione all'API GraphQL di Linear per il tracciamento di issue e la gestione dei progetti"
+        },
+        "connection.TGluZWFyUmVzdENsaWVudA.scheme.TGluZWFyUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Linear REST Connection",
+          "message": "Connessione REST di Linear"
+        },
+        "connection.TGluZWFyUmVzdENsaWVudA.scheme.TGluZWFyUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Linear GraphQL API",
+          "message": "Una connessione all'API GraphQL di Linear"
+        }
+      }
+    }
+  }
+}

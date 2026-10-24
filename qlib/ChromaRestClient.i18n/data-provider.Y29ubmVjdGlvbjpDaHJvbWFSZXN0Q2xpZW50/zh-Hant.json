@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a [Chroma](https://www.trychroma.com) vector database.\n\nChroma is a lightweight, local-first vector database that pairs naturally with local Ollama embeddings for self-hosted RAG.\n\nLocal deployments don't require authentication; supply an `apikey` for Chroma Cloud or reverse-proxied deployments.\n\nThe connection uses the `chroma://` URL scheme for plain HTTP and `chromas://` for servers behind TLS.",
+          "message": "連接到 [Chroma](https://www.trychroma.com) 向量資料庫。\n\nChroma 是一個輕量級、以本地為首的向量資料庫，與本地 Ollama 嵌入自然搭配，適用於自-hosted RAG。\n\n本地部署不需要驗證；僅在 Chroma Cloud 或反向代理部署時提供 `apikey`。\n\n此連接使用 `chroma://` 通訊協定進行純 HTTP，以及 `chromas://` 用於 TLS 後端的伺服器。"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Chroma Vector Store Connection",
+          "message": "Chroma 向量儲存連接"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Optional Bearer token.  Local Chroma servers do not require authentication; supply only for hosted Chroma Cloud or reverse-proxied deployments.",
+          "message": "選擇性 Bearer 權杖。本地 Chroma 伺服器不需要驗證；僅在主機式 Chroma Cloud 或反向代理部署時提供。"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Optional Bearer token (Chroma Cloud / proxied)",
+          "message": "選擇性 Bearer 權杖（Chroma Cloud / 代理）"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.ZGF0YWJhc2U.desc": {
+          "source": "Chroma database name.",
+          "message": "Chroma 資料庫名稱。"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "資料庫"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.ZGF0YWJhc2U.short_desc": {
+          "source": "Chroma database",
+          "message": "Chroma 資料庫"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.dGVuYW50.desc": {
+          "source": "Chroma tenant name.",
+          "message": "Chroma 租戶名稱。"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.dGVuYW50.display_name": {
+          "source": "Tenant",
+          "message": "租戶"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.dGVuYW50.short_desc": {
+          "source": "Chroma tenant",
+          "message": "Chroma 租戶"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Chroma vector database",
+          "message": "連接到 Chroma 向量資料庫的連接"
+        }
+      }
+    }
+  }
+}

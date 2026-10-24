@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Chargebee REST API for subscription billing and revenue management.\n\nChargebee is a subscription billing and revenue management platform that helps businesses manage their recurring revenue. This integration enables managing subscriptions, customers, invoices, coupons, and receiving event notifications.\n\n**Rate Limits:**\n- ~150 requests per minute for test sites\n- Plan-dependent limits for live sites\n- HTTP 429 with Retry-After header when exceeded",
+          "message": "Připojení k rozhraní API Chargebee pro správu předplatných a příjmy.\n\nChargebee je platforma pro správu předplatných a příjmů, která pomáhá podnikům spravovat jejich opakující se příjmy. Tato integrace umožňuje spravovat předplatná, zákazníky, faktury, kupóny a přijímat oznámení o událostech.\n\n**Omezení rychlosti:**\n- Přibližně 150 požadavků za minutu pro testovací stránky\n- Závislé na plánu pro provozní stránky\n- HTTP 429 s hlavičkou Retry-After při překročení"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Chargebee REST Connection",
+          "message": "Připojení k rozhraní API Chargebee"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Chargebee site (e.g., https://your-site.chargebee.com)\n2. Go to **Settings** > **Configure Chargebee**\n3. Under **API & Webhooks**, click **API Keys**\n4. Copy an existing key or click **Add API Key** to create a new one\n\n**Important:**\n- Use **test site** keys during development\n- Use **live site** keys for production\n- Full-access keys can perform all API operations\n- Read-only keys can only read data",
+          "message": "1. Přihlaste se k vašemu účtu Chargebee (např. https://your-site.chargebee.com)\n2. Přejděte na **Nastavení** > **Konfigurace Chargebee**\n3. V části **API a webhooky** klikněte na **Klíče API**\n4. Zkopírujte existující klíč nebo klikněte na **Přidat klíč API**, abyste vytvořili nový\n\n**Důležité:**\n- Používejte klíče **testovacího účtu** během vývoje\n- Používejte klíče **produkčního účtu** pro produkční prostředí\n- Klíče s plným přístupem mohou provádět všechny operace API\n- Klíče jen pro čtení mohou číst pouze data"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "Jak získat svůj klíč API"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.desc": {
+          "source": "The Chargebee API key used as the username for HTTP Basic Auth.\n\n**To obtain your API key:**\n1. Log in to your Chargebee site\n2. Go to Settings > Configure Chargebee > API Keys (under API & Webhooks)\n3. Copy an existing API key or create a new one\n\n**Note:** Use test site keys for development and live site keys for production.",
+          "message": "Klíč API pro Chargebee používaný jako uživatelské jméno pro HTTP Basic Auth.\n\n**Jak získat klíč API:**\n1. Přihlaste se k vašemu účtu Chargebee\n2. Přejděte na Nastavení > Konfigurace Chargebee > Klíče API (v části API a webhooky)\n3. Zkopírujte existující klíč API nebo vytvořte nový\n\n**Poznámka:** Používejte klíče testovacího účtu pro vývoj a klíče produkčního účtu pro produkční prostředí."
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "Klíč API"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.short_desc": {
+          "source": "Chargebee API key for authentication",
+          "message": "Klíč API pro Chargebee pro ověření"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.c2l0ZQ.desc": {
+          "source": "Your Chargebee site name. This is the subdomain of your Chargebee URL.\n\nFor example, if your Chargebee URL is https://acme-test.chargebee.com, your site name is 'acme-test'.",
+          "message": "Název vašeho účtu Chargebee. Jedná se o poddoménu vaší adresy Chargebee.\n\nNapříklad, pokud je vaše adresa Chargebee https://acme-test.chargebee.com, je název účtu 'acme-test'."
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.c2l0ZQ.display_name": {
+          "source": "Site Name",
+          "message": "Název účtu"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.c2l0ZQ.short_desc": {
+          "source": "Chargebee site name",
+          "message": "Název účtu Chargebee"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Chargebee REST API",
+          "message": "Připojení k REST API Chargebee"
+        }
+      }
+    }
+  }
+}

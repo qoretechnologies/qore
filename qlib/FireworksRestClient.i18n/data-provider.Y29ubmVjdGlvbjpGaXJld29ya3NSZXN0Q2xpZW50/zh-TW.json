@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Fireworks AI](https://fireworks.ai) REST API.\n\nFireworks serves OSS chat models (Llama 3.1/3.3, Qwen, DeepSeek, Mixtral) and embedding models via an OpenAI-compatible API.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Fireworks Dashboard](https://fireworks.ai/account/api-keys).\n\nPings verify authentication by listing accounts without generating tokens.",
+          "message": "連接到 [Fireworks AI](https://fireworks.ai) REST API 的連接。\n\nFireworks 提供開放原始碼聊天模型（Llama 3.1/3.3、Qwen、DeepSeek、Mixtral）和嵌入模型，透過與 OpenAI 兼容的 API 提供服務。\n\n需要 API 金鑰進行 Bearer 驗證。請從 [Fireworks 控制台](https://fireworks.ai/account/api-keys) 取得您的 API 金鑰。\n\nPing 測試會列出帳戶以驗證認證，而不產生任何權杖。"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Fireworks AI REST Connection",
+          "message": "Fireworks AI REST 連接"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Fireworks chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `accounts/fireworks/models/gpt-oss-120b` (the default)",
+          "message": "當此連接被選中用於聊天時，LLM 客戶端所使用的 Fireworks 聊天模型。\n\n聊天模型與嵌入模型屬於不同的系列，無法互相替代。\n\n範例值：`accounts/fireworks/models/gpt-oss-120b`（預設）"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "對話模型"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Fireworks chat model name",
+          "message": "Fireworks 聊天模型名稱"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1",
+          "message": "V1"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The API version to use.",
+          "message": "要使用的 API 版本。"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "要使用的 API 版本"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Fireworks AI API key used for Bearer authentication.\n\nGet your API key from the [Fireworks Dashboard](https://fireworks.ai/account/api-keys).",
+          "message": "用於 Bearer 驗證的 Fireworks AI API 金鑰。\n\n從 [Fireworks 控制台](https://fireworks.ai/account/api-keys) 取得您的 API 金鑰。"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Fireworks AI API key for authentication",
+          "message": "用於驗證的 Fireworks AI API 金鑰"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Fireworks AI REST API",
+          "message": "連接到 Fireworks AI REST API 的連接"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Circle REST API for community management including posts, comments, members, spaces, events, and messaging",
+          "message": "Pripojenie k REST API Circle pre správu komunity vrátane príspevkov, komentárov, členov, priestorov, udalostí a správ"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Circle REST Connection",
+          "message": "Spojenie REST API Circle"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Circle community at https://app.circle.so\n2. Click on your community in the top-left corner\n3. Select **Developer** > **Tokens**\n4. Click **Create Token**, select **Admin V2** as the type\n5. Copy the token and paste it into the **API Token** field\n\n**Important:**\n- API access requires a **Business plan** or above\n- Rate limit: 2,000 requests per 5 minutes per IP\n- Store your token securely; treat it like a password",
+          "message": "1. Prihláste sa do svojej komunity Circle na https://app.circle.so\n2. Kliknite na svoju komunitu v ľavom hornom rohu\n3. Vyberte **Vývojár** > **Tokeny**\n4. Kliknite na **Vytvoriť token**, vyberte typ **Admin V2**\n5. Skopírujte token a vložte ho do poľa **API token**\n\n**Dôležité:**\n- Prístup k API vyžaduje plán **Business** alebo vyšší\n- Limit rýchlosti: 2 000 požiadaviek za 5 minút na IP adresu\n- Uchovávajte token bezpečne; správajte sa s ním ako s heslom"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Generate Your API Token",
+          "message": "Ako vygenerovať váš API token"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Circle API token used for Bearer token authentication.\n\n**To obtain your API token:**\n1. Log in to your Circle community as an admin\n2. Click on your community in the top-left corner\n3. Select **Developer** > **Tokens**\n4. Click **Create Token** and select **Admin V2**\n\n**Note:** API access requires a Business plan or above.\n\nRate limit: 2,000 requests per 5 minutes per IP",
+          "message": "Token API Circle používaný pre overenie cez Bearer token.\n\n**Ako získať váš API token:**\n1. Prihláste sa do svojej komunity Circle ako správca\n2. Kliknite na svoju komunitu v ľavom hornom rohu\n3. Vyberte **Vývojár** > **Tokeny**\n4. Kliknite na **Vytvoriť token** a vyberte **Admin V2**\n\n**Poznámka:** Prístup k API vyžaduje plán Business alebo vyšší.\n\nLimit rýchlosti: 2 000 požiadaviek za 5 minút na IP adresu"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API token"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Circle API token for authentication",
+          "message": "Circle API token pre overenie"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Circle REST API",
+          "message": "Spojenie s REST API Circle"
+        }
+      }
+    }
+  }
+}

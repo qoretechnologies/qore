@@ -229,7 +229,8 @@ public class KitRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "kitrest://api.kit.com/v4";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("KitRestClient",
+            "KitRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Kit REST Connection",
             "short_desc": "A connection to the Kit REST API",
             "desc": "A connection to the Kit REST API for email marketing including subscribers, tags, "
@@ -288,7 +289,7 @@ public class KitRestConnection inherits RestClient::RestConnection {
                         "default_value": KitRestClientBase::DefaultTokenUrl,
                     }),
             },
-        };
+        });
     }
 
     #! creates the KitRestConnection object

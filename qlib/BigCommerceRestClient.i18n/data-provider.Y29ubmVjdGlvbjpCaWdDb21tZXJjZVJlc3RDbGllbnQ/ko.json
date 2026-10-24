@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the BigCommerce REST API for e-commerce management including customers, products, orders, carts, shipments, and blog posts",
+          "message": "전자상거래 관리(고객, 제품, 주문, 장바구니, 배송, 블로그 게시물 포함)를 위한 BigCommerce REST API 연결"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "BigCommerce REST Connection",
+          "message": "BigCommerce REST 연결"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "The **Store Hash** is required to connect to your BigCommerce store.\n\n**How to find it:**\n1. Log in to your BigCommerce admin panel\n2. Look at the URL: `https://store-**XXXXX**.mybigcommerce.com`\n3. The store hash is the `XXXXX` part after `store-`\n\n**Alternative:** Go to **Settings > API Accounts** and check the **API Path**, e.g., `https://api.bigcommerce.com/stores/**XXXXX**/v3`",
+          "message": "**스토어 해시**는 BigCommerce 스토어에 연결하는 데 필수입니다.\n\n**찾는 방법:**\n1. BigCommerce 관리자 패널에 로그인합니다\n2. URL을 확인하세요: `https://store-**XXXXX**.mybigcommerce.com`\n3. `store-` 뒤에 오는 `XXXXX` 부분이 스토어 해시입니다\n\n**대체 방법:** **설정 > API 계정**으로 이동하여 **API 경로**를 확인하세요. 예: `https://api.bigcommerce.com/stores/**XXXXX**/v3`"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Find Your Store Hash",
+          "message": "스토어 해시 찾는 방법"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfaGFzaA.desc": {
+          "source": "The store hash identifying your BigCommerce store. You can find it in the BigCommerce admin under Settings > API Accounts > API Path (e.g., https://api.bigcommerce.com/stores/<store_hash>/v3)",
+          "message": "BigCommerce 스토어를 식별하는 스토어 해시입니다. 설정 > API 계정 > API 경로에서 확인할 수 있습니다 (예: https://api.bigcommerce.com/stores/<store_hash>/v3)"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfaGFzaA.display_name": {
+          "source": "Store Hash",
+          "message": "스토어 해시"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfaGFzaA.short_desc": {
+          "source": "BigCommerce store hash",
+          "message": "BigCommerce 스토어 해시"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the BigCommerce REST API",
+          "message": "BigCommerce REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

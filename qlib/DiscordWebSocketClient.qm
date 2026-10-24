@@ -1120,7 +1120,8 @@ public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConne
         const DefaultConnectionUrl = "discordwss://gateway.discord.gg/";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("DiscordWebSocketClient",
+            "DiscordWebSocketConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Discord WebSocket Connection",
             "short_desc": "A connection to Discord WebSocket server services",
             "desc": "A connection to Discord WebSocket server services",
@@ -1133,7 +1134,7 @@ public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConne
                 "wss": "discordwss",
             },
             "options": WebSocketConnectionObject::ConnectionScheme.options,
-        };
+        });
 
         #! Default Discord gateway URL
         const DefaultGatewayUrl = "wss://gateway.discord.gg/";

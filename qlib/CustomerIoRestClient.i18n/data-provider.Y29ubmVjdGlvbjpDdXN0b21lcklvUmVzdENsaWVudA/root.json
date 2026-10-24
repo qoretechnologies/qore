@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Customer.io REST Connection",
+          "message": "Customer.io REST Connection"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Customer.io REST API",
+          "message": "A connection to the Customer.io REST API"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Customer.io REST API for marketing automation, messaging, and customer engagement.\n\nCustomer.io helps you send targeted emails, push notifications, SMS messages, and more based on customer behavior and attributes.\n\n**APIs:**\n- App API (Bearer token): Read data, trigger broadcasts and transactional messages\n- Track API (Basic auth): Create/update customers, track events\n\n**Rate Limits:**\n- App API: 10 requests/second (standard)\n- Track API: 100 requests/second",
+          "message": "A connection to the Customer.io REST API for marketing automation, messaging, and customer engagement.\n\nCustomer.io helps you send targeted emails, push notifications, SMS messages, and more based on customer behavior and attributes.\n\n**APIs:**\n- App API (Bearer token): Read data, trigger broadcasts and transactional messages\n- Track API (Basic auth): Create/update customers, track events\n\n**Rate Limits:**\n- App API: 10 requests/second (standard)\n- Track API: 100 requests/second"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Customer.io API Credentials",
+          "message": "Customer.io API Credentials"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "Customer.io requires three credentials:\n1. **App API Key**: For reading data and triggering messages (Bearer token auth)\n2. **Site ID**: For tracking customer data (Basic auth username)\n3. **Tracking API Key**: For tracking customer data (Basic auth password)\n\nFind all credentials at: **[Settings > API Credentials](https://fly.customer.io/settings/api_credentials)**",
+          "message": "Customer.io requires three credentials:\n1. **App API Key**: For reading data and triggering messages (Bearer token auth)\n2. **Site ID**: For tracking customer data (Basic auth username)\n3. **Tracking API Key**: For tracking customer data (Basic auth password)\n\nFind all credentials at: **[Settings > API Credentials](https://fly.customer.io/settings/api_credentials)**"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Select Your Region",
+          "message": "Select Your Region"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Choose the region that matches your Customer.io account:\n- **US**: United States data center (default)\n- **EU**: European Union data center\n\nYour region was set when you created your account and cannot be changed.",
+          "message": "Choose the region that matches your Customer.io account:\n- **US**: United States data center (default)\n- **EU**: European Union data center\n\nYour region was set when you created your account and cannot be changed."
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.YXBwX2FwaV9rZXk.display_name": {
+          "source": "App API Key",
+          "message": "App API Key"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.YXBwX2FwaV9rZXk.short_desc": {
+          "source": "Customer.io App API key for Bearer token authentication",
+          "message": "Customer.io App API key for Bearer token authentication"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.YXBwX2FwaV9rZXk.desc": {
+          "source": "The Customer.io App API key used for Bearer token authentication with the App API.\n\n**To obtain your App API key:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials?keyType=app)\n3. Create or copy your App API Key\n\n**Note:** App API keys are used for reading data and triggering messages.",
+          "message": "The Customer.io App API key used for Bearer token authentication with the App API.\n\n**To obtain your App API key:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials?keyType=app)\n3. Create or copy your App API Key\n\n**Note:** App API keys are used for reading data and triggering messages."
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Region"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "Customer.io data center region",
+          "message": "Customer.io data center region"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "Select the Customer.io data center region for your account.\n\nYour region is determined when you create your Customer.io account and cannot be changed.",
+          "message": "Select the Customer.io data center region for your account.\n\nYour region is determined when you create your Customer.io account and cannot be changed."
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "US",
+          "message": "US"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.short_desc": {
+          "source": "United States",
+          "message": "United States"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "US data center (api.customer.io / track.customer.io)",
+          "message": "US data center (api.customer.io / track.customer.io)"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "EU",
+          "message": "EU"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.short_desc": {
+          "source": "European Union",
+          "message": "European Union"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "EU data center (api-eu.customer.io / track-eu.customer.io)",
+          "message": "EU data center (api-eu.customer.io / track-eu.customer.io)"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.c2l0ZV9pZA.display_name": {
+          "source": "Site ID",
+          "message": "Site ID"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.c2l0ZV9pZA.short_desc": {
+          "source": "Customer.io Site ID for Track API authentication",
+          "message": "Customer.io Site ID for Track API authentication"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.c2l0ZV9pZA.desc": {
+          "source": "The Customer.io Site ID used as the username for Track API Basic authentication.\n\n**To find your Site ID:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials)\n3. Your Site ID is listed under Tracking API Keys",
+          "message": "The Customer.io Site ID used as the username for Track API Basic authentication.\n\n**To find your Site ID:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials)\n3. Your Site ID is listed under Tracking API Keys"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.dHJhY2tpbmdfYXBpX2tleQ.display_name": {
+          "source": "Tracking API Key",
+          "message": "Tracking API Key"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.dHJhY2tpbmdfYXBpX2tleQ.short_desc": {
+          "source": "Customer.io Tracking API key for Track API authentication",
+          "message": "Customer.io Tracking API key for Track API authentication"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.dHJhY2tpbmdfYXBpX2tleQ.desc": {
+          "source": "The Customer.io Tracking API key used as the password for Track API Basic authentication.\n\n**To find your Tracking API key:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials)\n3. Your API Key is listed under Tracking API Keys",
+          "message": "The Customer.io Tracking API key used as the password for Track API Basic authentication.\n\n**To find your Tracking API key:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials)\n3. Your API Key is listed under Tracking API Keys"
+        }
+      }
+    }
+  }
+}

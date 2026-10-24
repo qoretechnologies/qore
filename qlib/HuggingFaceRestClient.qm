@@ -168,7 +168,8 @@ public class HuggingFaceRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "huggingface://huggingface.co";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("HuggingFaceRestClient",
+            "HuggingFaceRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Hugging Face REST Connection",
             "short_desc": "A connection to the Hugging Face REST API",
             "desc": "A connection to the Hugging Face REST API.\n\n"
@@ -213,7 +214,7 @@ public class HuggingFaceRestConnection inherits RestClient::RestConnection {
                 }),
             },
             "required_options": "apikey",
-        };
+        });
     }
 
     #! creates the HuggingFaceRestConnection object

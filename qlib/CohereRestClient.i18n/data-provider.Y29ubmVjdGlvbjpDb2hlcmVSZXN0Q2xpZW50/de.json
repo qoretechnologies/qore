@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Cohere](https://cohere.com) REST API for chat, embeddings, reranking, and classification.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Cohere dashboard](https://dashboard.cohere.com/api-keys).\n\nThe models used when this connection is selected for chat, embeddings, and reranking are set independently with the `chat-model`, `embedding-model`, and `rerank-model` options.\n\nPings verify the API key without generating content. A successful ping does not mean that a trial key has remaining inference quota.",
+          "message": "Eine Verbindung zur [Cohere](https://cohere.com) REST-API für Chat, Embeddings, Reranking und Klassifizierung.\n\nBenötigt einen API-Schlüssel für Bearer-Authentifizierung. Holen Sie sich Ihren API-Schlüssel im [Cohere-Dashboard](https://dashboard.cohere.com/api-keys).\n\nDie Modelle, die bei Auswahl dieser Verbindung für Chat, Embeddings und Reranking verwendet werden, werden unabhängig über die Optionen `chat-model`, `embedding-model` und `rerank-model` festgelegt.\n\nPings überprüfen den API-Schlüssel ohne Inhaltsgenerierung. Ein erfolgreicher Ping bedeutet nicht, dass ein Test-Schlüssel noch verbleibende Inference-Kapazität hat."
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Cohere REST Connection",
+          "message": "Cohere REST-Verbindung"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Cohere chat model used by LLM clients when this connection is selected for chat; sent as the `model` parameter to the `/chat` endpoint.\n\nChat models are a separate family from embedding and reranking models and cannot be used interchangeably.\n\nExample values: `command-a-03-2025` (Cohere's default chat model; the default here), `command-a-plus-05-2026` (largest context), `command-r-plus-08-2024` and `command-r-08-2024` (previous generation), `command-r7b-12-2024` (smallest, lowest cost)",
+          "message": "Das Cohere-Chatmodell, das von LLM-Clients verwendet wird, wenn diese Verbindung für Chat ausgewählt ist; wird als `model`-Parameter an den `/chat`-Endpunkt gesendet.\n\nChatmodelle bilden eine separate Familie von Embedding- und Reranking-Modellen und sind nicht austauschbar.\n\nBeispielwerte: `command-a-03-2025` (Cohere-Standard-Chatmodell; Standard hier), `command-a-plus-05-2026` (größter Kontext), `command-r-plus-08-2024` und `command-r-08-2024` (Vorgängergeneration), `command-r7b-12-2024` (kleinste, geringste Kosten)"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Chatmodell"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Cohere chat model name",
+          "message": "Cohere-Chatmodellname"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1 (Legacy)",
+          "message": "V1 (Veraltet)"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.allowed_values.c3RyaW5nOnYy.display_name": {
+          "source": "V2",
+          "message": "V2"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The API version for inference requests. App actions use `v2`.",
+          "message": "Die API-Version für Inferenzanfragen. App-Aktionen verwenden `v2`."
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API-Version"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Die zu verwendende API-Version"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Cohere API key used for Bearer authentication.",
+          "message": "Der Cohere-API-Schlüssel für die Bearer-Authentifizierung."
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API-Schlüssel"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Cohere API key for authentication",
+          "message": "Cohere-API-Schlüssel zur Authentifizierung"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.desc": {
+          "source": "The Cohere embedding model used by embedding clients when this connection is selected for embeddings; sent as the `model` parameter to the `/embed` endpoint.\n\nExample values: `embed-multilingual-v3.0` (100+ languages; the default), `embed-english-v3.0` (English-only), `embed-multilingual-light-v3.0` (smaller, lower cost)",
+          "message": "Das Cohere-Embedding-Modell, das von Embedding-Clients verwendet wird, wenn diese Verbindung für Embeddings ausgewählt ist; wird als der `model`-Parameter an den `/embed`-Endpunkt gesendet.\n\nBeispielwerte: `embed-multilingual-v3.0` (100+ Sprachen; der Standard), `embed-english-v3.0` (nur Englisch), `embed-multilingual-light-v3.0` (kleiner, geringere Kosten)"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.display_name": {
+          "source": "Embedding Model",
+          "message": "Embedding-Modell"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.short_desc": {
+          "source": "Cohere embedding model name",
+          "message": "Cohere-Embedding-Modellname"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.desc": {
+          "source": "The Cohere reranking model used by reranking clients when this connection is selected for reranking; sent as the `model` parameter to the `/rerank` endpoint.\n\nReranking models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `rerank-v3.5` (latest cross-encoder; the default), `rerank-multilingual-v3.0` (multilingual v3)",
+          "message": "Das Cohere-Reranking-Modell, das von Reranking-Clients verwendet wird, wenn diese Verbindung für Reranking ausgewählt ist; wird als der `model`-Parameter an den `/rerank`-Endpunkt gesendet.\n\nReranking-Modelle bilden eine separate Familie ab und können nicht austauschbar verwendet werden.\n\nBeispielwerte: `rerank-v3.5` (aktuelles Cross-Encoder; der Standard), `rerank-multilingual-v3.0` (multilinguales v3)"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.display_name": {
+          "source": "Reranking Model",
+          "message": "Reranking-Modell"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.short_desc": {
+          "source": "Cohere reranking model name",
+          "message": "Cohere-Reranking-Modellname"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Cohere REST API",
+          "message": "Eine Verbindung zur Cohere REST-API"
+        }
+      }
+    }
+  }
+}

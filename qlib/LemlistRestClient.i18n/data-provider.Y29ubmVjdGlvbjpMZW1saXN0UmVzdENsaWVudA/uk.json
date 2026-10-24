@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Lemlist REST API for sales outreach and email campaign management.\n\nLemlist is a sales engagement platform enabling personalized outreach campaigns, lead management, and email automation.\n\n**Rate Limits:**\n- 20 requests per 2 seconds per API key\n- Rate limit headers are included in all responses",
+          "message": "Підключення до REST API Lemlist для продажів та управління електронною поштою.\n\nLemlist — платформа для продажів, що дозволяє створювати персоналізовані кампанії, керувати лідами та автоматизувати електронну пошту.\n\n**Обмеження швидкості:**\n- 20 запитів за 2 секунди на ключ API\n- Усі відповіді містять заголовки обмеження швидкості"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Lemlist REST Connection",
+          "message": "Підключення до REST API Lemlist"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to Lemlist\n2. Go to **Settings** (bottom left corner)\n3. Click **Integrations** → **API & Webhooks**\n4. Click **Generate Key** and copy the key",
+          "message": "1. Увійдіть до Lemlist\n2. Перейдіть до **Налаштувань** (внизу зліва)\n3. Натисніть **Інтеграції** → **API та вебхуки**\n4. Натисніть **Згенерувати ключ** і скопіюйте ключ"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Where to find your API key",
+          "message": "Де знайти ваш ключ API"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Lemlist enforces a rate limit of **20 requests per 2 seconds** per API key.\n\nExceeding this limit will result in HTTP 429 (Too Many Requests) responses.\nWait briefly before retrying if you encounter rate limit errors.",
+          "message": "Lemlist встановлює ліміт швидкості в **20 запитів за 2 секунди** на кожен ключ API.\n\nПеревищення цього ліміту призведе до відповідей HTTP 429 (забагато запитів).\nЯкщо ви отримуєте помилки ліміту швидкості, зачекайте трохи перед повторною спробою."
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Rate Limits",
+          "message": "Ліміти швидкості"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Lemlist API key used for authentication.\n\nTo find your API key, log in to Lemlist and go to **Settings** → **Integrations** → **API & Webhooks**, then click **Generate Key**.",
+          "message": "Ключ API Lemlist, що використовується для автентифікації.\n\nЩоб знайти свій ключ API, увійдіть до Lemlist і перейдіть до **Налаштувань** → **Інтеграції** → **API та вебхуки**, потім натисніть **Створити ключ**."
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Lemlist API key for authentication",
+          "message": "Ключ API Lemlist для автентифікації"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Lemlist REST API",
+          "message": "Підключення до REST API Lemlist"
+        }
+      }
+    }
+  }
+}

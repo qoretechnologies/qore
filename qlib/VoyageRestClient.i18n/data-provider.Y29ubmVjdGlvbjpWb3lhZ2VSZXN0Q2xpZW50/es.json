@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Voyage AI REST API for text embeddings and reranking.\n\nRequires an API key (set as `apikey`) from the [Voyage AI Dashboard](https://dash.voyageai.com/). The connection uses the `voyage://` URL scheme.\n\nThe models used when this connection is selected for embeddings and for reranking are set independently with the `embedding-model` and `rerank-model` options",
+          "message": "Una conexión a la API REST de Voyage AI para embeddings de texto y reordenamiento.\n\nRequiere una clave de API (configurada como `apikey`) del [Panel de control de Voyage AI](https://dash.voyageai.com/). La conexión utiliza el esquema de URL `voyage://`.\n\nLos modelos utilizados cuando esta conexión se selecciona para embeddings y para reordenamiento se configuran independientemente con las opciones `embedding-model` y `rerank-model`"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Voyage AI REST Connection",
+          "message": "Conexión REST de Voyage AI"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The API version to use",
+          "message": "La versión de la API a utilizar"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Versión de API"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "La versión de la API a utilizar"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Voyage AI API key used for authentication; sent as the `Authorization: Bearer` header.\n\nGet your API key from the [Voyage AI Dashboard](https://dash.voyageai.com/)",
+          "message": "La clave de API de Voyage AI utilizada para autenticación; enviada como el encabezado `Authorization: Bearer`.\n\nObtén tu clave de API desde el [Panel de control de Voyage AI](https://dash.voyageai.com/)"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clave de API"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Voyage AI API key for authentication",
+          "message": "Clave de la API de Voyage AI para autenticación"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.desc": {
+          "source": "The Voyage AI embedding model used by embedding clients when this connection is selected for embeddings; sent as the `model` parameter to the `/embeddings` endpoint.\n\nExample values: `voyage-4-large` (highest quality), `voyage-4` (balanced), `voyage-4-lite` (fastest; the default), `voyage-code-3` (source code)",
+          "message": "El modelo de embeddings de Voyage AI utilizado por los clientes de embeddings cuando se selecciona esta conexión; enviado como el parámetro `model` al punto final `/embeddings`.\n\nValores de ejemplo: `voyage-4-large` (más calidad), `voyage-4` (equilibrado), `voyage-4-lite` (más rápido; predeterminado), `voyage-code-3` (código fuente)"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.display_name": {
+          "source": "Embedding Model",
+          "message": "Modelo de incrustación"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.short_desc": {
+          "source": "Voyage AI embedding model name",
+          "message": "Nombre del modelo de embeddings de Voyage AI"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVxdWVzdHMtcGVyLW1pbnV0ZQ.desc": {
+          "source": "The most embedding requests per minute that embedding clients in one process send for this connection's API key and model; requests over the limit wait instead of failing with HTTP 429.\n\nWhen unset, 95% of Voyage's published tier-1 limit (2,000 requests per minute) is used.  Set it for a higher rate-limit tier, or to give each process its share when several processes use the same API key",
+          "message": "Número máximo de solicitudes de embeddings por minuto que los clientes de embeddings en un proceso envían para esta clave de API y modelo; las solicitudes por encima del límite esperan en lugar de fallar con HTTP 429.\n\nCuando no está definido, se usa el 95 % del límite publicado para el nivel 1 de Voyage (2.000 solicitudes por minuto). Establézcalo para un nivel de límite más alto, o para que cada proceso tenga su cuota cuando varios procesos usen la misma clave de API"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVxdWVzdHMtcGVyLW1pbnV0ZQ.display_name": {
+          "source": "Embedding Requests Per Minute",
+          "message": "Solicitudes de embeddings por minuto"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVxdWVzdHMtcGVyLW1pbnV0ZQ.short_desc": {
+          "source": "Client-side limit on embedding requests per minute",
+          "message": "Límite del lado del cliente para solicitudes de embeddings por minuto"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.desc": {
+          "source": "The Voyage AI reranking model used by reranking clients when this connection is selected for reranking; sent as the `model` parameter to the `/rerank` endpoint.\n\nReranking models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `rerank-2.5` (highest quality), `rerank-2.5-lite` (fastest; the default), `rerank-2` (previous generation)",
+          "message": "El modelo de reordenamiento de Voyage AI utilizado por los clientes de reordenamiento cuando se selecciona esta conexión para reordenamiento; enviado como el parámetro `model` al punto final `/rerank`.\n\nLos modelos de reordenamiento forman una familia separada de los modelos de embeddings y no son intercambiables.\n\nValores de ejemplo: `rerank-2.5` (más calidad), `rerank-2.5-lite` (más rápido; predeterminado), `rerank-2` (generación anterior)"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.display_name": {
+          "source": "Reranking Model",
+          "message": "Modelo de reordenación"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.short_desc": {
+          "source": "Voyage AI reranking model name",
+          "message": "Nombre del modelo de reordenamiento de Voyage AI"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXJlcXVlc3RzLXBlci1taW51dGU.desc": {
+          "source": "The most reranking requests per minute that reranking clients in one process send for this connection's API key and reranking model; requests over the limit wait instead of failing with HTTP 429.\n\nWhen unset, 95% of Voyage's published tier-1 limit (2,000 requests per minute) is used. Reranking models are limited separately from embedding models",
+          "message": "El número máximo de solicitudes de reordenamiento por minuto que los clientes de reordenamiento en un proceso envían para la clave de API y modelo de reordenamiento de esta conexión; las solicitudes por encima del límite esperan en lugar de fallar con HTTP 429.\n\nCuando no se establece, se utiliza el 95 % del límite publicado para la categoría 1 de Voyage (2 000 solicitudes por minuto). Los modelos de reordenamiento tienen límites separados de los modelos de incrustación"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXJlcXVlc3RzLXBlci1taW51dGU.display_name": {
+          "source": "Reranking Requests Per Minute",
+          "message": "Solicitudes de Reordenamiento por Minuto"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXJlcXVlc3RzLXBlci1taW51dGU.short_desc": {
+          "source": "Client-side limit on reranking requests per minute",
+          "message": "Límite del lado del cliente para solicitudes de reordenamiento por minuto"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXRva2Vucy1wZXItbWludXRl.desc": {
+          "source": "The most reranking tokens per minute that reranking clients in one process send for this connection's API key and reranking model.\n\nWhen unset, 95% of Voyage's published tier-1 limit for the model is used (4M tokens per minute for the `-lite` models, 2M for the others)",
+          "message": "El número máximo de tokens de reordenamiento por minuto que los clientes de reordenamiento en un proceso envían para la clave de API y modelo de reordenamiento de esta conexión.\n\nCuando no se establece, se utiliza el 95 % del límite publicado para la categoría 1 del modelo (4 millones de tokens por minuto para los modelos `-lite`, 2 millones para los demás)"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXRva2Vucy1wZXItbWludXRl.display_name": {
+          "source": "Reranking Tokens Per Minute",
+          "message": "Tokens de Reordenamiento por Minuto"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXRva2Vucy1wZXItbWludXRl.short_desc": {
+          "source": "Client-side limit on reranking tokens per minute",
+          "message": "Límite del lado del cliente para tokens de reordenamiento por minuto"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.dG9rZW5zLXBlci1taW51dGU.desc": {
+          "source": "The most embedding tokens per minute that embedding clients in one process send for this connection's API key and model; requests over the limit wait instead of failing with HTTP 429.\n\nWhen unset, 95% of Voyage's published tier-1 limit for the model is used (for example 16M tokens per minute for `voyage-4-lite`, 8M for `voyage-4`, and 3M for `voyage-4-large`).  Set it for a higher rate-limit tier, or to give each process its share when several processes use the same API key",
+          "message": "El número máximo de tokens de incrustación por minuto que los clientes de incrustación en un proceso envían para la clave de API y modelo de esta conexión; las solicitudes por encima del límite esperan en lugar de fallar con HTTP 429.\n\nCuando no se establece, se utiliza el 95 % del límite publicado para la categoría 1 del modelo (por ejemplo, 16 millones de tokens por minuto para `voyage-4-lite`, 8 millones para `voyage-4`, y 3 millones para `voyage-4-large`). Establézcalo para una categoría de límite superior, o para asignar una cuota a cada proceso cuando varios procesos usan la misma clave de API"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.dG9rZW5zLXBlci1taW51dGU.display_name": {
+          "source": "Embedding Tokens Per Minute",
+          "message": "Tokens de Incrustación por Minuto"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.dG9rZW5zLXBlci1taW51dGU.short_desc": {
+          "source": "Client-side limit on embedding tokens per minute",
+          "message": "Límite del lado del cliente para tokens de embeddings por minuto"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Voyage AI REST API",
+          "message": "Una conexión con la API REST de Voyage AI"
+        }
+      }
+    }
+  }
+}

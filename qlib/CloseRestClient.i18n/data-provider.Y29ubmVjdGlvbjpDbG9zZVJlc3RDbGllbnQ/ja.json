@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.Q2xvc2VSZXN0Q2xpZW50.scheme.Q2xvc2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Close CRM REST API for managing leads, contacts, opportunities, tasks, and activities",
+          "message": "リード、連絡先、商談、タスク、およびアクティビティを管理するための Close CRM REST API への接続"
+        },
+        "connection.Q2xvc2VSZXN0Q2xpZW50.scheme.Q2xvc2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Close CRM REST Connection",
+          "message": "Close CRM REST 接続"
+        },
+        "connection.Q2xvc2VSZXN0Q2xpZW50.scheme.Q2xvc2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Close API key for HTTP Basic authentication (alternative to OAuth2)",
+          "message": "HTTP Basic 認証用の Close API キー（OAuth2 の代替）"
+        },
+        "connection.Q2xvc2VSZXN0Q2xpZW50.scheme.Q2xvc2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.Q2xvc2VSZXN0Q2xpZW50.scheme.Q2xvc2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Close API key for authentication",
+          "message": "認証用のAPIキーを閉じる"
+        },
+        "connection.Q2xvc2VSZXN0Q2xpZW50.scheme.Q2xvc2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Close CRM REST API",
+          "message": "Close CRM REST APIへの接続"
+        }
+      }
+    }
+  }
+}

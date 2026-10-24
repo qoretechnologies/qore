@@ -188,7 +188,8 @@ public class JinaRestConnection inherits RestClient::RestConnection {
     public {
         const DefaultUrl = "jina://api.jina.ai";
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("JinaRestClient",
+            "JinaRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Jina AI REST Connection",
             "short_desc": "A connection to Jina AI search and content processing APIs",
             "desc": "A connection to the [Jina AI](https://jina.ai) REST API for embeddings "
@@ -263,7 +264,7 @@ public class JinaRestConnection inherits RestClient::RestConnection {
                 }),
             },
             "required_options": "apikey",
-        };
+        });
 
         const DefaultPingMethod = "GET";
         const DefaultPingHeaders = {"Accept": MimeTypeJson};

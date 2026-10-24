@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Zoho Books REST API for accounting and invoicing",
+          "message": "Una connessione all'API REST di Zoho Books per la contabilità e la fatturazione"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Zoho Books REST Connection",
+          "message": "Connessione REST di Zoho Books"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "Select the subdomain and domain that match your Zoho account:\n- **Sub Domain**: 'zoho' (standard) or 'zohocloud' (cloud accounts)\n- **Domain**: Based on your data center region (.com for US/Global, .eu for Europe, .in for India, .com.au for Australia, .ca for Canada, .sa for Saudi Arabia, .jp for Japan)",
+          "message": "Seleziona il sottodomino e il dominio corrispondenti al tuo account Zoho:\n- **Sottodomino**: 'zoho' (predefinito) o 'zohocloud' (account cloud)\n- **Dominio**: in base alla regione del centro dati (.com per Stati Uniti/Mondo, .eu per Europa, .in per India, .com.au per Australia, .ca per Canada, .sa per Arabia Saudita, .jp per Giappone)"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "Select Your Zoho Region",
+          "message": "Seleziona la tua regione Zoho"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jYQ.desc": {
+          "source": "Canada data center",
+          "message": "Centro dati del Canada"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jYQ.display_name": {
+          "source": ".ca",
+          "message": ".ca"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jYQ.short_desc": {
+          "source": "Canada",
+          "message": "Canada"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.desc": {
+          "source": "United States / Global data center",
+          "message": "Centro dati Stati Uniti / Globale"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.display_name": {
+          "source": ".com",
+          "message": ".com"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.short_desc": {
+          "source": "US/Global",
+          "message": "Stati Uniti/Mondo"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20uYXU.desc": {
+          "source": "Australia data center",
+          "message": "centro dati Australia"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20uYXU.display_name": {
+          "source": ".com.au",
+          "message": ".com.au"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20uYXU.short_desc": {
+          "source": "Australia",
+          "message": "Australia"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.desc": {
+          "source": "European Union data center",
+          "message": "centro dati Unione Europea"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.display_name": {
+          "source": ".eu",
+          "message": ".eu"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.short_desc": {
+          "source": "Europe",
+          "message": "Europa"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5pbg.desc": {
+          "source": "India data center",
+          "message": "centro dati India"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5pbg.display_name": {
+          "source": ".in",
+          "message": ".in"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5pbg.short_desc": {
+          "source": "India",
+          "message": "India"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5qcA.desc": {
+          "source": "Japan data center",
+          "message": "centro dati Giappone"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5qcA.display_name": {
+          "source": ".jp",
+          "message": ".jp"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5qcA.short_desc": {
+          "source": "Japan",
+          "message": "Giappone"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5zYQ.desc": {
+          "source": "Saudi Arabia data center",
+          "message": "Centro dati Arabia Saudita"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5zYQ.display_name": {
+          "source": ".sa",
+          "message": ".sa"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5zYQ.short_desc": {
+          "source": "Saudi Arabia",
+          "message": "Arabia Saudita"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.desc": {
+          "source": "Select the Zoho domain for your account based on your data center region.",
+          "message": "Seleziona il dominio Zoho per il tuo account in base alla tua regione del centro dati."
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Dominio"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.short_desc": {
+          "source": "Zoho domain",
+          "message": "Dominio Zoho"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG8.desc": {
+          "source": "Standard Zoho subdomain (accounts.zoho.{domain})",
+          "message": "Sottodominio Zoho standard (accounts.zoho.{domain})"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG8.display_name": {
+          "source": "zoho",
+          "message": "zoho"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG8.short_desc": {
+          "source": "Standard Zoho",
+          "message": "Sottodominio Zoho standard"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG9jbG91ZA.desc": {
+          "source": "Zoho Cloud subdomain (accounts.zohocloud.{domain})",
+          "message": "Sottodominio Zoho Cloud (accounts.zohocloud.{domain})"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG9jbG91ZA.display_name": {
+          "source": "zohocloud",
+          "message": "zohocloud"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG9jbG91ZA.short_desc": {
+          "source": "Zoho Cloud",
+          "message": "Zoho Cloud"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.desc": {
+          "source": "Select the Zoho subdomain for your account.",
+          "message": "Seleziona il sottodominio Zoho per il tuo account."
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.display_name": {
+          "source": "Sub Domain",
+          "message": "Sottodominio"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.short_desc": {
+          "source": "Zoho subdomain",
+          "message": "Sottodominio Zoho"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Zoho Books REST API",
+          "message": "Una connessione all'API REST di Zoho Books"
+        }
+      }
+    }
+  }
+}

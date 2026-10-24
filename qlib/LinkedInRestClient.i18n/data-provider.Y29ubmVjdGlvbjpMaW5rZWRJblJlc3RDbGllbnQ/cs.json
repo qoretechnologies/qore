@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [LinkedIn](https://www.linkedin.com) Pages Data Portability API product, which gives a LinkedIn Page administrator access to the organization's posts, comments, reactions, followers and page analytics.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from a [LinkedIn developer application](https://www.linkedin.com/developers/apps) that has been **approved for the Pages Data Portability API product** — a separate LinkedIn approval that grants the `r_dma_admin_pages_content` permission and takes several business days. The connection uses the `linkedindma://` URL scheme",
+          "message": "Spojení s produktem API pro přístup k datům stránek [LinkedIn](https://www.linkedin.com), které umožňuje správci stránky LinkedIn přístup k příspěvkům, komentářům, reakcím, sledujícím a analýzám stránky.\n\nVyžaduje přihlašovací údaje OAuth2 (`oauth2_client_id` a `oauth2_client_secret`) z [aplikace pro vývojáře LinkedIn](https://www.linkedin.com/developers/apps), která byla **schválena pro produkt API pro přístup k datům stránek** – samostatné schválení od LinkedIn, které uděluje oprávnění `r_dma_admin_pages_content` a trvá několik pracovních dní. Spoje ní používá schéma adresy `linkedindma://`"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "LinkedIn Organizations",
+          "message": "LinkedIn Organizations"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.desc": {
+          "source": "The LinkedIn API version in `YYYYMM` form, sent in the `LinkedIn-Version` header with every versioned request.  LinkedIn never defaults to the latest version: a missing or sunset version is an error, and each version is supported for a limited time, so this must be moved forward periodically.\n\nNote that LinkedIn's Marketing APIs and its Pages Data Portability (DMA) APIs have **separate** version series; a value from one series is not valid in the other.",
+          "message": "Verze rozhraní LinkedIn ve formátu `YYYYMM`, odesílaná v hlavičce `LinkedIn-Version` s každým požadavkem s verzí. LinkedIn nikdy nepoužívá nejnovější verzi jako výchozí: chybějící nebo zastaralá verze je chyba, a každá verze je podporována omezenou dobu, takže ji je třeba pravidelně aktualizovat.\n\nPoznámka: rozhraní LinkedIn pro marketing a rozhraní pro přístup k datům stránek (DMA) mají **oddělené** řady verzí; hodnota z jedné řady není platná ve druhé."
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.display_name": {
+          "source": "LinkedIn API Version",
+          "message": "Verze rozhraní LinkedIn"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.short_desc": {
+          "source": "The LinkedIn API version to send in the LinkedIn-Version header",
+          "message": "Verze rozhraní LinkedIn, která se odesílá v hlavičce LinkedIn-Version"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the LinkedIn Pages Data Portability (DMA) REST API",
+          "message": "Spojení s REST API LinkedIn pro přístup k datům stránek (DMA)"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [LinkedIn](https://www.linkedin.com) REST API for posting and managing content as the authenticated member.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from a [LinkedIn developer application](https://www.linkedin.com/developers/apps) with the **Sign In with LinkedIn using OpenID Connect** and **Share on LinkedIn** products enabled. The connection uses the `linkedin://` URL scheme",
+          "message": "Spojení s [LinkedIn](https://www.linkedin.com) REST rozhraním pro publikování a správu obsahu jako ověřeného uživatele.\n\nVyžaduje přihlašovací údaje OAuth2 (`oauth2_client_id` a `oauth2_client_secret`) z [aplikace pro vývojáře LinkedIn](https://www.linkedin.com/developers/apps) s povolenými produkty **Přihlášení pomocí LinkedIn pomocí OpenID Connect** a **Sdílení na LinkedIn**. Spoje ní používá schéma adresy `linkedin://`"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.desc": {
+          "source": "The LinkedIn API version in `YYYYMM` form, sent in the `LinkedIn-Version` header with every versioned request.  LinkedIn never defaults to the latest version: a missing or sunset version is an error, and each version is supported for a limited time, so this must be moved forward periodically.\n\nNote that LinkedIn's Marketing APIs and its Pages Data Portability (DMA) APIs have **separate** version series; a value from one series is not valid in the other.",
+          "message": "Verze rozhraní LinkedIn ve formátu `YYYYMM`, odesílaná v hlavičce `LinkedIn-Version` s každým požadavkem s verzí. LinkedIn nikdy nepoužívá nejnovější verzi jako výchozí: chybějící nebo zastaralá verze je chyba, a každá verze je podporována omezenou dobu, takže ji je třeba pravidelně aktualizovat.\n\nPoznámka: rozhraní LinkedIn pro marketing a rozhraní pro přístup k datům stránek (DMA) mají **oddělené** řady verzí; hodnota z jedné řady není platná ve druhé."
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.display_name": {
+          "source": "LinkedIn API Version",
+          "message": "Verze rozhraní LinkedIn"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.short_desc": {
+          "source": "The LinkedIn API version to send in the LinkedIn-Version header",
+          "message": "Verze rozhraní LinkedIn, která se odesílá v hlavičce LinkedIn-Version"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the LinkedIn member REST API",
+          "message": "Připojení k REST API členů LinkedIn"
+        }
+      }
+    }
+  }
+}

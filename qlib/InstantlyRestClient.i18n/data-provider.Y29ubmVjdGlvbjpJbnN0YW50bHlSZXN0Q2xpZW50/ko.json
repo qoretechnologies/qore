@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Instantly REST API for email outreach and sales automation.\n\nInstantly is a platform for cold email outreach that enables managing campaigns, leads, email accounts, and tracking engagement metrics.\n\n**API Version:** v2\n**Authentication:** Bearer token (API key)",
+          "message": "이메일 마케팅 및 영업 자동화를 위한 Instantly REST API에 대한 연결입니다.\n\nInstantly는 캠페인, 리드, 이메일 계정 관리 및 참여 지표 추적을 지원하는 플랫폼입니다.\n\n**API 버전:** v2\n**인증 방식:** Bearer 토큰 (API 키)"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Instantly REST Connection",
+          "message": "Instantly REST 연결"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to Instantly at https://app.instantly.ai\n2. Navigate to **Settings > Integrations > API**\n3. Click **Create API Key**\n4. Select the required scopes for your use case\n5. Copy the generated API key\n\n**Important:**\n- API access requires a Growth plan or higher\n- Store your API key securely\n- You can create multiple keys with different scopes",
+          "message": "1. https://app.instantly.ai 에서 Instantly에 로그인합니다\n2. **설정 > 통합 > API**로 이동합니다\n3. **API 키 생성**을 클릭합니다\n4. 사용 사례에 맞는 필요한 범위를 선택합니다\n5. 생성된 API 키를 복사합니다\n\n**중요:**\n- API 접근은 Growth 플랜 이상이 필요합니다\n- API 키는 안전하게 보관하세요\n- 다양한 범위를 가진 여러 키를 생성할 수 있습니다"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "API 키를 얻는 방법"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Instantly API key used for Bearer token authentication.\n\n**To obtain your API key:**\n1. Log in to your Instantly account at https://app.instantly.ai\n2. Go to Settings > Integrations > API\n3. Create a new API key with the required scopes\n\n**Note:** API access requires a Growth plan or higher.",
+          "message": "Bearer 토큰 인증에 사용되는 Instantly API 키입니다.\n\n**API 키 획득 방법:**\n1. https://app.instantly.ai 에서 Instantly 계정에 로그인합니다\n2. 설정 > 통합 > API로 이동합니다\n3. 필요한 범위를 가진 새 API 키를 생성합니다\n\n**참고:** API 접근은 Growth 플랜 이상이 필요합니다"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Instantly API key for Bearer token authentication",
+          "message": "Bearer 토큰 인증을 위한 Instantly API 키"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Instantly REST API",
+          "message": "Instantly REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

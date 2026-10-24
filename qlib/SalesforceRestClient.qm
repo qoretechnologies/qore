@@ -1361,7 +1361,8 @@ sfrest.logout();
 public class SalesforceRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("SalesforceRestClient",
+            "SalesforceRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Salesforce REST Connection",
             "short_desc": "A connection to a Salesforce instance with the REST API",
             "desc": "A connection to a Salesforce instance with the REST API",
@@ -1447,7 +1448,7 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
             },
             # FIXME: username and password are currently optional for backwards compatibility with URL auth options
             "required_options": "oauth2_client_id,oauth2_client_secret",
-        };
+        });
 
         #! options required to support the OAuth2 authorization code grant flow
         const OAuth2AuthRequestOptions = (

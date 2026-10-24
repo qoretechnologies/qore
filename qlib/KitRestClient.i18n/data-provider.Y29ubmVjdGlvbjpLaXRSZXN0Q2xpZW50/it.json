@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Kit REST API for email marketing including subscribers, tags, custom fields, broadcasts, forms, sequences, and purchases",
+          "message": "Una connessione all'API REST di Kit per il marketing via email, inclusi iscritti, tag, campi personalizzati, trasmissioni, moduli, sequenze e acquisti"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Kit REST Connection",
+          "message": "Connessione REST di Kit"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Kit API key used for API key authentication via the `X-Kit-Api-Key` header.\n\n**To obtain your API key:**\n1. Log in to your Kit account\n2. Go to **Settings** > **Developer**\n3. Create a new V4 API key\n\nRate limit: 120 requests per 60 seconds with API key authentication",
+          "message": "La chiave API di Kit utilizzata per l'autenticazione tramite l'intestazione `X-Kit-Api-Key`.\n\n**Per ottenere la tua chiave API:**\n1. Accedi al tuo account Kit\n2. Vai su **Impostazioni** > **Sviluppatore**\n3. Crea una nuova chiave API V4\n\nLimite di velocità: 120 richieste ogni 60 secondi con autenticazione tramite chiave API"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Chiave API"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Kit API key for authentication",
+          "message": "Chiave API di Kit per l'autenticazione"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Kit REST API",
+          "message": "Una connessione all'API REST di Kit"
+        }
+      }
+    }
+  }
+}

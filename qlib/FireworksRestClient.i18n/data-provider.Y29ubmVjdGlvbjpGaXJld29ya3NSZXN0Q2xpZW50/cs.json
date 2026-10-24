@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Fireworks AI](https://fireworks.ai) REST API.\n\nFireworks serves OSS chat models (Llama 3.1/3.3, Qwen, DeepSeek, Mixtral) and embedding models via an OpenAI-compatible API.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Fireworks Dashboard](https://fireworks.ai/account/api-keys).\n\nPings verify authentication by listing accounts without generating tokens.",
+          "message": "Připojení k REST API [Fireworks AI](https://fireworks.ai)\\n\\nFireworks poskytuje modely pro čtení (Llama 3.1/3.3, Qwen, DeepSeek, Mixtral) a modely pro vektorizaci prostřednictvím kompatibilního API s OpenAI.\\n\\nVyžaduje klíč API pro ověření pomocí Bearer. Získejte svůj klíč API na [Fireworks Dashboard](https://fireworks.ai/account/api-keys).\\n\\nPřipojení ověřuje ověření výpisem účtů bez generování tokenů."
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Fireworks AI REST Connection",
+          "message": "REST připojení Fireworks AI"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Fireworks chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `accounts/fireworks/models/gpt-oss-120b` (the default)",
+          "message": "Chatovací model Fireworks používaný klienty LLM, když je toto připojení vybráno pro chat.\\n\\nChatovací modely tvoří samostatnou skupinu oproti modelům pro vektorizaci a nelze je navzájem zaměňovat.\\n\\nPříklad hodnot: `accounts/fireworks/models/gpt-oss-120b` (výchozí)"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Chatový model"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Fireworks chat model name",
+          "message": "Název chatovacího modelu Fireworks"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1",
+          "message": "V1"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The API version to use.",
+          "message": "Verze API, kterou chcete použít."
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Verze API"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Verze API k použití"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Fireworks AI API key used for Bearer authentication.\n\nGet your API key from the [Fireworks Dashboard](https://fireworks.ai/account/api-keys).",
+          "message": "Klíč API Fireworks AI používaný pro ověření pomocí Bearer.\\n\\nZískejte svůj klíč API na [Fireworks Dashboard](https://fireworks.ai/account/api-keys)."
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klíč API"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Fireworks AI API key for authentication",
+          "message": "Klíč API Fireworks AI pro ověření"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Fireworks AI REST API",
+          "message": "Připojení k REST API Fireworks AI"
+        }
+      }
+    }
+  }
+}

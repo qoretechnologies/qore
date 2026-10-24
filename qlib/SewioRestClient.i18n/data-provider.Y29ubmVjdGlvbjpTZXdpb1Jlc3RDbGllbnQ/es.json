@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Sewio REST API",
+          "message": "Una conexión con la API REST de Sewio"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Sewio REST Connection",
+          "message": "Conexión REST de Sewio"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Sewio RTLS Studio API key",
+          "message": "La clave de API de Sewio RTLS Studio"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clave de API"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "The Sewio RTLS Studio API key",
+          "message": "La clave de API de Sewio RTLS Studio"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "utiliza serialización JSON"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.desc": {
+          "source": "Data serialization options are limited to `json` with this object",
+          "message": "Las opciones de serialización de datos están limitadas a `json` con este objeto"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Serialización de datos"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.short_desc": {
+          "source": "Data serialization can only be 'json'",
+          "message": "La serialización de datos solo puede ser 'json'"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "utiliza codificación bzip2"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "utiliza el algoritmo deflate ([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "utiliza codificación GNU zip ([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "no utiliza codificación de contenido"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "Establece el algoritmo de compresión a utilizar al enviar mensajes"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.display_name": {
+          "source": "Send Compression",
+          "message": "Compresión de envío"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.short_desc": {
+          "source": "The compression algorithm to use when sending messages",
+          "message": "El algoritmo de compresión a utilizar al enviar mensajes"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Sewio REST API",
+          "message": "Una conexión con la API REST de Sewio"
+        }
+      }
+    }
+  }
+}

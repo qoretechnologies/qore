@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a [Confluence Cloud](https://www.atlassian.com/software/confluence) site for pages, blog posts, spaces and tasks.\n\n**The site is the connection.** With the OAuth2 authorization code flow the site fills itself in - `cloud_id` is read back from the credential once it is issued - and with an API token it is `site` (ex: `example.atlassian.net`). The target URL is derived from whichever is set, and a stored URL that disagrees is ignored rather than allowed to decide which site is reached.\n\n**Authentication** is either:\n- an **API token** in `password` with the account email in `username`, sent as basic authentication - created at **id.atlassian.com > Security > API tokens**; or\n- the **OAuth2 authorization code flow** with `oauth2_client_id` and `oauth2_client_secret` from an app created in the Atlassian developer console.\n\nThis connection targets Confluence **Cloud**; Confluence Data Center has a different API.\n\nConfluence is a trademark of Atlassian Pty Ltd.",
+          "message": "連接到 [Confluence Cloud](https://www.atlassian.com/software/confluence) 站點，用於頁面、部落格文章、空間和任務。\n\n**站點即為連接。** 使用 OAuth2 授權碼流程時，站點會自動填入 — `cloud_id` 在憑證發出後從憑證中讀取 — 而使用 API 金鑰時則為 `site`（例如 `example.atlassian.net`）。目標 URL 由其中任一設定決定，若儲存的 URL 與之衝突，則會被忽略而非用來決定要連接到哪個站點。\n\n**驗證方式** 為：\n- **API 金鑰** 放在 `password`，帳戶電子郵件放在 `username`，以基本驗證方式傳送 — 在 **id.atlassian.com > 安全性 > API 金鑰** 建立；或\n- **OAuth2 授權碼流程**，使用 `oauth2_client_id` 和 `oauth2_client_secret`，來自 Atlassian 開發者控制台中建立的應用程式。\n\n此連接針對 Confluence **雲端版**；Confluence Data Center 使用不同的 API。\n\nConfluence 是 Atlassian Pty Ltd 的商標。"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Confluence REST Connection",
+          "message": "Confluence REST 連接"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.desc": {
+          "source": "The Confluence site's cloud ID, used with the OAuth2 authorization code flow; the site is then reached through Atlassian's API gateway.\n\n**This is filled in automatically** when the connection is authorized, so it normally needs no attention: a credential is issued against the gateway rather than against a site, and the site it reaches is read back from it afterwards. Where a credential reaches several sites the first one is used and the others are logged; set this to work on one of those instead - a value set here is never overwritten.\n\nSet this **or** `site`, not both.",
+          "message": "Confluence 站點的雲端 ID，用於 OAuth2 授權碼流程；站點會透過 Atlassian 的 API 網關存取。\n\n**此欄位會自動填入**，在連接授權時完成，因此通常無需手動處理：憑證是針對網關發出，而非針對特定站點，而所連接的站點會在憑證發出後讀取回來。若憑證可存取多個站點，則使用第一個，其餘會記錄下來；若需針對其中一個站點操作，可在此設定值 — 此處設定的值永遠不會被覆蓋。\n\n請設定此欄位 **或** `site`，不要同時設定兩者。"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.display_name": {
+          "source": "Cloud ID",
+          "message": "雲端ID"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.short_desc": {
+          "source": "The site's cloud ID, used with the OAuth2 flow",
+          "message": "站點的雲端 ID，用於 OAuth2 流程"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.desc": {
+          "source": "The Confluence site host, ex: `example.atlassian.net`, used with an API token.\n\nSet this **or** `cloud_id`, not both.",
+          "message": "Confluence 站點主機，例如 `example.atlassian.net`，用於 API 金鑰。\n\n請設定此欄位 **或** `cloud_id`，不要同時設定兩者。"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.short_desc": {
+          "source": "The site host, ex: \"example.atlassian.net\"",
+          "message": "站點主機，例如 \"example.atlassian.net\""
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.cGFzc3dvcmQ.desc": {
+          "source": "An API token created at **id.atlassian.com > Security > API tokens**, used with the account email in `username`.\n\nThis is not the account password, which Confluence Cloud does not accept.",
+          "message": "在 **id.atlassian.com > Security > API tokens** 建立的 API 權杖，與帳戶電子郵件一起使用於 `username`。\n\n這不是帳戶密碼，Confluence Cloud 不接受此密碼。"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.dXNlcm5hbWU.desc": {
+          "source": "The Atlassian account email address, used with an API token in `password`",
+          "message": "用於與 API 權杖搭配的 Atlassian 帳戶電子郵件地址，位於 `password`"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a Confluence Cloud site",
+          "message": "連線至 Confluence Cloud 站點"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Oracle NetSuite REST API",
+          "message": "Připojení k REST API Oracle NetSuite"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Oracle NetSuite REST Connection",
+          "message": "Připojení k REST API Oracle NetSuite"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.desc": {
+          "source": "The NetSuite account ID or company ID; if not provided, its value is auto-determined",
+          "message": "ID účtu NetSuite nebo ID společnosti; pokud není zadáno, jeho hodnota je určena automaticky"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.display_name": {
+          "source": "NetSuite Account ID",
+          "message": "ID účtu NetSuite"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "The NetSuite account ID or company ID",
+          "message": "ID účtu NetSuite nebo ID společnosti"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.b2F1dGgyX2xvZ291dF91cmw.desc": {
+          "source": "The logout / deauthorize URL for OAuth2 tokens",
+          "message": "URL pro odhlášení / zrušení autorizace OAuth2 tokenů"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.b2F1dGgyX2xvZ291dF91cmw.display_name": {
+          "source": "OAuth2 Logout URL",
+          "message": "URL pro odhlášení OAuth2"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.b2F1dGgyX2xvZ291dF91cmw.short_desc": {
+          "source": "The logout / deauthorize URL for OAuth2 tokens",
+          "message": "URL pro odhlášení / zrušení autorizace OAuth2 tokenů"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Oracle NetSuite REST API",
+          "message": "Připojení k REST API Oracle NetSuite"
+        }
+      }
+    }
+  }
+}

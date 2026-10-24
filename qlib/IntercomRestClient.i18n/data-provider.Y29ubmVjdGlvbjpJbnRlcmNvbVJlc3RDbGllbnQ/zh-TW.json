@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.SW50ZXJjb21SZXN0Q2xpZW50.scheme.SW50ZXJjb21SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [Intercom](https://www.intercom.com) for contacts, companies, conversations, tags, notes, data events and help center articles.\n\n**Authentication** is the OAuth2 authorization code flow with `oauth2_client_id` and `oauth2_client_secret` from an app created in the Intercom developer hub, or a `token` for an integration that only ever works in its own workspace - Intercom issues one per app for exactly that. Intercom declares no scopes in the flow: what a token may do is set by the permissions granted to the app in its own dashboard, so a capability the integration needs is added there rather than requested here.\n\n**The API revision is sent on every call** as `Intercom-Version: 2.16`, matching the description the actions are generated from. Without it a call would ride whichever revision the workspace's app package happens to name, so the same integration could behave differently in two workspaces.\n\n**Regional hosting**: a workspace lives in the United States (`api.intercom.io`), Europe (`api.eu.intercom.io`) or Australia (`api.au.intercom.io`). Intercom routes a call to the default host on to the right region, so the region normally needs no attention; set the URL to a regional host to address it directly.\n\nIntercom is a trademark of Intercom, Inc.",
+          "message": "連接至 [Intercom](https://www.intercom.com)，用於聯絡人、公司、對話、標籤、筆記、資料事件及幫助中心文章。\n\n**驗證** 使用 OAuth2 授權碼流程，透過在 Intercom 開發者中心建立的應用程式提供的 `oauth2_client_id` 與 `oauth2_client_secret`，或使用僅在自身工作區內運作的整合專用的 `token` —— Intercom 為每個應用程式發行一個，專為此用途設計。此流程中，Intercom 不宣告任何範圍：權限由應用程式在自身儀表板中授予的權限決定，因此整合所需的權限應在儀表板中新增，而非在此請求。\n\n**每次呼叫都會傳送 API 版本**，以 `Intercom-Version: 2.16` 表示，與產生動作的描述相符。若無此版本，呼叫將使用工作區應用程式套件所命名的任意版本，導致相同整合在兩個工作區中行為不同。\n\n**區域主機**：工作區位於美國 (`api.intercom.io`)、歐洲 (`api.eu.intercom.io`) 或澳洲 (`api.au.intercom.io`)。Intercom 會將呼叫路由至對應區域的預設主機，因此通常無需特別設定；若需直接指定區域，可設定 URL 至區域主機。\n\nIntercom 是 Intercom, Inc. 的商標。"
+        },
+        "connection.SW50ZXJjb21SZXN0Q2xpZW50.scheme.SW50ZXJjb21SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Intercom REST Connection",
+          "message": "Intercom REST 連接"
+        },
+        "connection.SW50ZXJjb21SZXN0Q2xpZW50.scheme.SW50ZXJjb21SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Intercom REST API",
+          "message": "連接至 Intercom REST API"
+        }
+      }
+    }
+  }
+}

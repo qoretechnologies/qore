@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [Stability AI](https://stability.ai) REST API for image generation and editing, audio, and 3D assets.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Stability AI dashboard](https://platform.stability.ai).",
+          "message": "[Stability AI](https://stability.ai) REST API への接続（画像生成・編集、オーディオ、3D アセット対応）。\n\nBearer 認証に API キーが必要です。[Stability AI ダッシュボード](https://platform.stability.ai) から API キーを取得してください。"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Stability AI Connection",
+          "message": "Stability AI 接続"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Stability AI API key used for Bearer authentication.",
+          "message": "Bearer 認証に使用される Stability AI API キー"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Stability AI API key (Bearer token)",
+          "message": "Stability AI API キー（Bearer トークン）"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Optional organization ID from the authenticated account's organizations. Omit it to use the API key's default organization.",
+          "message": "認証されたアカウントの組織からオプションの組織ID。APIキーのデフォルト組織を使用するには省略してください。"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Organization whose credits and resources are used",
+          "message": "クレジットとリソースが使用される組織"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "Authenticated access to Stability AI media services",
+          "message": "Stability AIのメディアサービスへの認証されたアクセス"
+        }
+      }
+    }
+  }
+}

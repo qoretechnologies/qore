@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.RHJvcGJveFJlc3RDbGllbnQ.scheme.RHJvcGJveFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [Dropbox](https://www.dropbox.com) REST API for cloud file storage and sharing.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from a [Dropbox app](https://www.dropbox.com/developers/apps). The connection uses the `dropbox://` URL scheme.\n\nThe app must be granted the scopes this connection requests, and `token_access_type` must remain `offline`; Dropbox issues no refresh token otherwise, and the connection stops working four hours after it is authorized",
+          "message": "Une connexion à l’API REST de [Dropbox](https://www.dropbox.com) pour le stockage et le partage de fichiers en nuage.\n\nExige des identifiants OAuth2 (`oauth2_client_id` et `oauth2_client_secret`) provenant d’une [application Dropbox](https://www.dropbox.com/developers/apps). La connexion utilise le schéma d’URL `dropbox://`.\n\nL’application doit obtenir les étendues demandées par cette connexion, et `token_access_type` doit rester `offline` ; Dropbox ne délivre aucun jeton de rafraîchissement dans le cas contraire, et la connexion cesse de fonctionner quatre heures après son autorisation"
+        },
+        "connection.RHJvcGJveFJlc3RDbGllbnQ.scheme.RHJvcGJveFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Dropbox",
+          "message": "Dropbox"
+        },
+        "connection.RHJvcGJveFJlc3RDbGllbnQ.scheme.RHJvcGJveFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Dropbox REST API",
+          "message": "Une connexion à l’API REST de Dropbox"
+        }
+      }
+    }
+  }
+}

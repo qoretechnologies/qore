@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Circle REST API for community management including posts, comments, members, spaces, events, and messaging",
+          "message": "Une connexion à l’API REST de Circle pour la gestion de la communauté, y compris les publications, commentaires, membres, espaces, événements et messages"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Circle REST Connection",
+          "message": "Connexion REST de Circle"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Circle community at https://app.circle.so\n2. Click on your community in the top-left corner\n3. Select **Developer** > **Tokens**\n4. Click **Create Token**, select **Admin V2** as the type\n5. Copy the token and paste it into the **API Token** field\n\n**Important:**\n- API access requires a **Business plan** or above\n- Rate limit: 2,000 requests per 5 minutes per IP\n- Store your token securely; treat it like a password",
+          "message": "1. Connectez-vous à votre communauté Circle à https://app.circle.so\n2. Cliquez sur votre communauté en haut à gauche\n3. Sélectionnez **Développeur** > **Jeton**\n4. Cliquez sur **Créer un jeton**, puis sélectionnez **Admin V2** comme type\n5. Copiez le jeton et collez-le dans le champ **Jeton API**\n\n**Important :**\n- L’accès API nécessite un abonnement **Business** ou supérieur\n- Taux de limitation : 2 000 requêtes toutes les 5 minutes par IP\n- Stockez votre jeton en sécurité ; considérez-le comme un mot de passe"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Generate Your API Token",
+          "message": "Comment générer votre jeton API"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Circle API token used for Bearer token authentication.\n\n**To obtain your API token:**\n1. Log in to your Circle community as an admin\n2. Click on your community in the top-left corner\n3. Select **Developer** > **Tokens**\n4. Click **Create Token** and select **Admin V2**\n\n**Note:** API access requires a Business plan or above.\n\nRate limit: 2,000 requests per 5 minutes per IP",
+          "message": "Le jeton API Circle utilisé pour l’authentification par jeton Bearer.\n\n**Pour obtenir votre jeton API :**\n1. Connectez-vous à votre communauté Circle en tant qu’administrateur\n2. Cliquez sur votre communauté en haut à gauche\n3. Sélectionnez **Développeur** > **Jeton**\n4. Cliquez sur **Créer un jeton** et sélectionnez **Admin V2**\n\n**Remarque :** L’accès API nécessite un abonnement Business ou supérieur.\n\nTaux de limitation : 2 000 requêtes toutes les 5 minutes par IP"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "Jeton API"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Circle API token for authentication",
+          "message": "Jeton API Circle pour l’authentification"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Circle REST API",
+          "message": "Une connexion à l’API REST de Circle"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Freshsales CRM REST API for managing contacts, accounts, deals, tasks, appointments, and notes.\n\n**To obtain your API key:**\n1. Log in to your Freshsales account\n2. Click your profile picture in the top-right corner\n3. Go to **Settings** > **API Settings**\n4. Copy your API key\n\n**To find your subdomain:**\nYour subdomain is the part before `.myfreshworks.com` in your Freshsales URL (e.g., `mycompany` from `https://mycompany.myfreshworks.com`)",
+          "message": "與 Freshsales CRM REST API 的連接，用於管理聯絡人、帳戶、商機、任務、約會和筆記。\n\n**取得您的 API 金鑰：**\n1. 登入您的 Freshsales 帳戶\n2. 點選右上角的個人頭像\n3. 前往 **設定** > **API 設定**\n4. 複製您的 API 金鑰\n\n**尋找您的子網域：**\n您的子網域是 Freshsales URL 中 `.myfreshworks.com` 前面的部分（例如，`mycompany` 來自 `https://mycompany.myfreshworks.com`）"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Freshsales REST Connection",
+          "message": "Freshsales REST 連接"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Freshsales API key used for token authentication.\n\n**To obtain your API key:**\n1. Log in to your Freshsales account\n2. Click your profile picture in the top-right corner\n3. Go to **Settings** > **API Settings**\n4. Copy your API key\n\nRate limit: 1,000 API requests per hour per account",
+          "message": "用於權杖驗證的 Freshsales API 金鑰。\n\n**取得您的 API 金鑰：**\n1. 登入您的 Freshsales 帳戶\n2. 點選右上角的個人頭像\n3. 前往 **設定** > **API 設定**\n4. 複製您的 API 金鑰\n\n速率限制：每帳戶每小時 1,000 次 API 請求"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Freshsales API key for authentication",
+          "message": "用於驗證的 Freshsales API 金鑰"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.desc": {
+          "source": "The domain of your Freshsales account.\n\nYou can provide either:\n- Just the subdomain (e.g., `mycompany`)\n- The full domain (e.g., `mycompany-org.myfreshworks.com`)\n- A full URL (e.g., `https://mycompany-org.myfreshworks.com/crm/sales`)\n\nThe subdomain or domain is extracted automatically",
+          "message": "您的 Freshsales 帳戶網域。\n\n您可以提供：\n- 僅子網域（例如，`mycompany`）\n- 完整網域（例如，`mycompany-org.myfreshworks.com`）\n- 完整 URL（例如，`https://mycompany-org.myfreshworks.com/crm/sales`）\n\n子網域或網域會自動提取"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.display_name": {
+          "source": "Freshsales Domain",
+          "message": "Freshsales 網域"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.short_desc": {
+          "source": "Your Freshsales subdomain or full domain",
+          "message": "您的 Freshsales 子網域或完整網域"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Freshsales CRM REST API",
+          "message": "與 Freshsales CRM REST API 的連接"
+        }
+      }
+    }
+  }
+}

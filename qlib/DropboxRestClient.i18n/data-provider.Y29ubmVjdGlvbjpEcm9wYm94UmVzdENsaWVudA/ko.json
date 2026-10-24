@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.RHJvcGJveFJlc3RDbGllbnQ.scheme.RHJvcGJveFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [Dropbox](https://www.dropbox.com) REST API for cloud file storage and sharing.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from a [Dropbox app](https://www.dropbox.com/developers/apps). The connection uses the `dropbox://` URL scheme.\n\nThe app must be granted the scopes this connection requests, and `token_access_type` must remain `offline`; Dropbox issues no refresh token otherwise, and the connection stops working four hours after it is authorized",
+          "message": "클라우드 파일 저장 및 공유를 위한 [Dropbox](https://www.dropbox.com) REST API에 연결.\n\nOAuth2 자격 증명 (`oauth2_client_id` 및 `oauth2_client_secret`)이 필요하며, [Dropbox 앱](https://www.dropbox.com/developers/apps)에서 발급받아야 합니다. 연결은 `dropbox://` URL 스킴을 사용합니다.\n\n앱은 이 연결이 요청하는 범위를 부여받아야 하며, `token_access_type`는 `offline` 상태로 유지되어야 합니다. 그렇지 않으면 Dropbox는 갱신 토큰을 발급하지 않으며, 인증 후 4시간이 지나면 연결이 작동하지 않습니다."
+        },
+        "connection.RHJvcGJveFJlc3RDbGllbnQ.scheme.RHJvcGJveFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Dropbox",
+          "message": "Dropbox"
+        },
+        "connection.RHJvcGJveFJlc3RDbGllbnQ.scheme.RHJvcGJveFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Dropbox REST API",
+          "message": "Dropbox REST API에 연결"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Cohere](https://cohere.com) REST API for chat, embeddings, reranking, and classification.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Cohere dashboard](https://dashboard.cohere.com/api-keys).\n\nThe models used when this connection is selected for chat, embeddings, and reranking are set independently with the `chat-model`, `embedding-model`, and `rerank-model` options.\n\nPings verify the API key without generating content. A successful ping does not mean that a trial key has remaining inference quota.",
+          "message": "與 [Cohere](https://cohere.com) REST API 的連接，用於對話、嵌入、重排序和分類。\n\n需要 Bearer 認證的 API 金鑰。請從 [Cohere 控制台](https://dashboard.cohere.com/api-keys) 取得您的 API 金鑰。\n\n當此連接被選中用於對話、嵌入和重排序時，所使用的模型由 `chat-model`、`embedding-model` 和 `rerank-model` 選項獨立設定。\n\nPing 測試可驗證 API 金鑰有效性，但不會產生內容。成功的 Ping 不代表試用金鑰仍有推理配額可用。"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Cohere REST Connection",
+          "message": "Cohere REST 連接"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Cohere chat model used by LLM clients when this connection is selected for chat; sent as the `model` parameter to the `/chat` endpoint.\n\nChat models are a separate family from embedding and reranking models and cannot be used interchangeably.\n\nExample values: `command-a-03-2025` (Cohere's default chat model; the default here), `command-a-plus-05-2026` (largest context), `command-r-plus-08-2024` and `command-r-08-2024` (previous generation), `command-r7b-12-2024` (smallest, lowest cost)",
+          "message": "當此連接被選中用於對話時，LLM 客戶端所使用的 Cohere 對話模型；作為 `model` 參數發送到 `/chat` 端點。\n\n對話模型與嵌入和重排序模型屬於不同系列，不可互相替代。\n\n範例值：`command-a-03-2025`（Cohere 的預設對話模型；這裡的預設值），`command-a-plus-05-2026`（最大上下文），`command-r-plus-08-2024` 和 `command-r-08-2024`（前代版本），`command-r7b-12-2024`（最小，成本最低）"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "對話模型"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Cohere chat model name",
+          "message": "Cohere 對話模型名稱"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1 (Legacy)",
+          "message": "V1（舊版）"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.allowed_values.c3RyaW5nOnYy.display_name": {
+          "source": "V2",
+          "message": "V2"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The API version for inference requests. App actions use `v2`.",
+          "message": "用於推論請求的 API 版本。應用程式動作會使用 `v2`。"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "要使用的 API 版本"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Cohere API key used for Bearer authentication.",
+          "message": "用於 Bearer 驗證的 Cohere API 金鑰。"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Cohere API key for authentication",
+          "message": "用於驗證的 Cohere API 金鑰"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.desc": {
+          "source": "The Cohere embedding model used by embedding clients when this connection is selected for embeddings; sent as the `model` parameter to the `/embed` endpoint.\n\nExample values: `embed-multilingual-v3.0` (100+ languages; the default), `embed-english-v3.0` (English-only), `embed-multilingual-light-v3.0` (smaller, lower cost)",
+          "message": "當此連接被選中用於嵌入時，由嵌入客戶端使用的 Cohere 嵌入模型；會作為 `model` 參數發送到 `/embed` 端點。\n\n範例值：`embed-multilingual-v3.0`（支援 100 多種語言；預設值）、`embed-english-v3.0`（僅支援英文）、`embed-multilingual-light-v3.0`（體積較小，成本較低）"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.display_name": {
+          "source": "Embedding Model",
+          "message": "嵌入模型"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.short_desc": {
+          "source": "Cohere embedding model name",
+          "message": "Cohere 嵌入模型名稱"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.desc": {
+          "source": "The Cohere reranking model used by reranking clients when this connection is selected for reranking; sent as the `model` parameter to the `/rerank` endpoint.\n\nReranking models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `rerank-v3.5` (latest cross-encoder; the default), `rerank-multilingual-v3.0` (multilingual v3)",
+          "message": "當此連接被選中用於重排序時，由重排序客戶端使用的 Cohere 重排序模型；會作為 `model` 參數發送到 `/rerank` 端點。\n\n重排序模型與嵌入模型屬於不同的系列，無法互相替代。\n\n範例值：`rerank-v3.5`（最新版 cross-encoder；預設值）、`rerank-multilingual-v3.0`（多語言 v3）"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.display_name": {
+          "source": "Reranking Model",
+          "message": "重排序模型"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.short_desc": {
+          "source": "Cohere reranking model name",
+          "message": "Cohere 重新排序模型名"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Cohere REST API",
+          "message": "連接到 Cohere REST API 的連接"
+        }
+      }
+    }
+  }
+}

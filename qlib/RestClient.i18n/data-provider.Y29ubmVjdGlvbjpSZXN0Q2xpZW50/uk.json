@@ -1,0 +1,717 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a REST server",
+          "message": "Підключення до сервера REST"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "REST Connection",
+          "message": "Підключення REST"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.allowed_values.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "використовувати кодування bzip2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.allowed_values.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "використовувати алгоритм deflate ([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.allowed_values.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "використовувати кодування GNU zip ([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.allowed_values.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "не використовувати кодування вмісту"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.desc": {
+          "source": "Sets the data compression / send encoding (if the `send_encoding` option is not set) and the response encoding used",
+          "message": "Встановлює стиснення даних / кодування надсилання (якщо параметр `send_encoding` не задано) та використовуване кодування відповіді"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.display_name": {
+          "source": "Compression",
+          "message": "Стиснення"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.short_desc": {
+          "source": "Sets data compression / encoding",
+          "message": "Встановлює стиснення даних / кодування"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET` method",
+          "message": "Метод HTTP `GET`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET method",
+          "message": "Метод HTTP GET"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH` method",
+          "message": "Метод HTTP `PATCH`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH method",
+          "message": "Метод HTTP PATCH"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST` method",
+          "message": "Метод HTTP `POST`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST method",
+          "message": "Метод HTTP POST"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT` method",
+          "message": "Метод HTTP `PUT`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT method",
+          "message": "Метод HTTP PUT"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.desc": {
+          "source": "Sets the HTTP method for custom token refresh actions",
+          "message": "Встановлює HTTP-метод для користувацьких дій оновлення токена"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.display_name": {
+          "source": "Custom Token Refresh Method",
+          "message": "Користувацький метод оновлення токена"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.short_desc": {
+          "source": "Sets the HTTP method for custom token refresh actions",
+          "message": "Встановлює HTTP-метод для користувацьких дій оновлення токена"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2F1dGg.allowed_values.c3RyaW5nOmJvZHktdXNlci1wYXNz.desc": {
+          "source": "Include the username and password in the message body; cannot be used with `custom_token_method` = `GET`",
+          "message": "Включити ім'я користувача та пароль у тіло повідомлення; не можна використовувати з `custom_token_method` = `GET`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2F1dGg.desc": {
+          "source": "Sets the auth method for custom token refresh actions",
+          "message": "Встановлює метод автентифікації для користувацьких дій оновлення токена"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2F1dGg.display_name": {
+          "source": "Custom Token Refresh Auth Method",
+          "message": "Користувацький метод автентифікації оновлення токена"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2F1dGg.short_desc": {
+          "source": "Sets the auth method for custom token refresh actions",
+          "message": "Встановлює метод автентифікації для користувацьких дій оновлення токена"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.allowed_values.c3RyaW5nOmJvZHktZGlyZWN0.desc": {
+          "source": "Take the token from the response body directly",
+          "message": "Взяти токен безпосередньо з тіла відповіді"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.allowed_values.c3RyaW5nOmJvZHktcGxhaW4.desc": {
+          "source": "Take the token from the response body without any deserialization",
+          "message": "Взяти токен з тіла відповіді без будь-якої десеріалізації"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.desc": {
+          "source": "Provides the location of the new token in the response",
+          "message": "Вказує розташування нового токена у відповіді"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.display_name": {
+          "source": "Custom Token Refresh Location",
+          "message": "Розташування оновлення користувацького токена"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.short_desc": {
+          "source": "Provides the location of the new token in the response",
+          "message": "Вказує розташування нового токена у відповіді"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX3BhdGg.desc": {
+          "source": "Sets the URI path for the request for custom token refresh actions",
+          "message": "Встановлює шлях URI для запиту користувацьких дій оновлення токена"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX3BhdGg.display_name": {
+          "source": "Custom Token Refresh URI Path",
+          "message": "Шлях URI оновлення користувацького токена"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX3BhdGg.short_desc": {
+          "source": "Sets the URI path for the request for custom token refresh actions",
+          "message": "Встановлює шлях URI для запиту користувацьких дій оновлення токена"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.YWxsb3dfYW55X3Jlc3BvbnNl.desc": {
+          "source": "If set, undeserializable responses will be returned as-is; this is useful when making REST-like requests that return HTML or file data",
+          "message": "Якщо встановлено, несеріалізовані відповіді повертатимуться як є; це корисно під час виконання REST-подібних запитів, які повертають HTML або файлові дані"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.YWxsb3dfYW55X3Jlc3BvbnNl.display_name": {
+          "source": "Allow Any Response?",
+          "message": "Дозволити будь-яку відповідь?"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.YWxsb3dfYW55X3Jlc3BvbnNl.short_desc": {
+          "source": "If set, undeserializable responses will be returned as-is",
+          "message": "Якщо встановлено, несеріалізовані відповіді повертатимуться як є"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOmF1dG8.desc": {
+          "source": "prefers in this order: `json`, `yaml`, `rawxml`, `xml`, `url`, and `text`",
+          "message": "надає перевагу в такому порядку: `json`, `yaml`, `rawxml`, `xml`, `url` та `text`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOmJpbg.desc": {
+          "source": "for binary message bodies without data serialization",
+          "message": "для бінарних тіл повідомлень без серіалізації даних"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "використовувати серіалізацію JSON"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnJhd3htbA.desc": {
+          "source": "use raw XML serialization",
+          "message": "використовувати необроблену серіалізацію XML"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnRleHQ.desc": {
+          "source": "use only plain text; no serialization is used",
+          "message": "використовувати лише простий текст; серіалізація не застосовується"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnVybA.desc": {
+          "source": "for URL-encoded message bodies",
+          "message": "для тіл повідомлень із кодуванням URL"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnhtbA.desc": {
+          "source": "use only XML-RPC serialization",
+          "message": "використовувати лише серіалізацію XML-RPC"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnlhbWw.desc": {
+          "source": "use only YAML serialization",
+          "message": "використовувати лише серіалізацію YAML"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.desc": {
+          "source": "Sets how data is serialized in requests",
+          "message": "Встановлює спосіб серіалізації даних у запитах"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Серіалізація даних"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.short_desc": {
+          "source": "Sets how data is serialized",
+          "message": "Встановлює спосіб серіалізації даних"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.aGVhZGVycw.desc": {
+          "source": "Sets an optional hash of headers to send with every request, these can also be overridden in request method calls",
+          "message": "Встановлює необов’язковий хеш заголовків, які надсилаються з кожним запитом, ці заголовки також можна перезаписати у викликах методів запиту"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.aGVhZGVycw.display_name": {
+          "source": "HTTP Headers",
+          "message": "Заголовки HTTP"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.aGVhZGVycw.short_desc": {
+          "source": "Sets headers to send in each request",
+          "message": "Встановлює заголовки, які надсилаються у кожному запиті"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.desc": {
+          "source": "If OAuth2 tokens should be automatically refreshed",
+          "message": "Чи слід автоматично оновлювати токени OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.display_name": {
+          "source": "OAuth2 Auto Refresh",
+          "message": "Автооновлення OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.short_desc": {
+          "source": "Whether tokens are refreshed automatically",
+          "message": "Чи оновлюються токени автоматично"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfYXJncw.desc": {
+          "source": "Optional arguments for authentication requests for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token. Supply unencoded keys and values; consent URL generation URL-encodes keys and values exactly once, including scope lists",
+          "message": "Необов'язкові аргументи для запитів автентифікації для типу надання доступу `authorization_code`; ігнорується, якщо встановлено параметр `token`. Зверніть увагу, що тип надання доступу `authorization_code` вимагає зовнішньої авторизації користувача для отримання токена доступу. Надавайте незакодовані ключі та значення; під час створення URL-адреси згоди ключі та значення, зокрема списки дозволів, кодуються для URL рівно один раз"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfYXJncw.display_name": {
+          "source": "OAuth2 Authorization Args",
+          "message": "Аргументи авторизації OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfYXJncw.short_desc": {
+          "source": "Extra arguments for authorization_code token requests",
+          "message": "Додаткові аргументи для запитів токенів authorization_code"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfdXJs.desc": {
+          "source": "The OAuth2 authorization URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
+          "message": "URL-адреса авторизації OAuth2 для типу надання доступу `authorization_code`; ігнорується, якщо встановлено параметр `token`. Зверніть увагу, що тип надання доступу `authorization_code` вимагає зовнішньої авторизації користувача для отримання токена доступу"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfdXJs.display_name": {
+          "source": "OAuth2 Auth URL",
+          "message": "URL авторизації OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfdXJs.short_desc": {
+          "source": "Sets the OAuth2 authorization URL for the authorization_code grant type",
+          "message": "Задає URL-адресу авторизації OAuth2 для типу надання authorization_code"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF90b2tlbl91cmw.desc": {
+          "source": "An alternate token URL which will be used to wrap the call to get the token; if this is set, then it takes precedence over `oauth2_token_url`",
+          "message": "Альтернативна URL-адреса токена, яка використовуватиметься для обгортання виклику отримання токена; якщо її встановлено, вона має пріоритет над `oauth2_token_url`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF90b2tlbl91cmw.display_name": {
+          "source": "OAuth2 Alternate Token URL",
+          "message": "Альтернативна URL-адреса токена OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF90b2tlbl91cmw.short_desc": {
+          "source": "An alternate token URL which will be used to wrap the call to get the token",
+          "message": "Альтернативний URL токена, який використовуватиметься для виклику отримання"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.desc": {
+          "source": "Optional URL substitution info for token requests to the alternate server",
+          "message": "Substitute URL for token requests to alternate server"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.display_name": {
+          "source": "OAuth2 Alternate URL Substitution Info",
+          "message": "Інформація підстановки альтернативної URL-адреси OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.short_desc": {
+          "source": "Optional URL substitution info for token requests to the alternate server",
+          "message": "Substitute URL for token requests to alternate server"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FwcA.desc": {
+          "source": "This is a hint to external programs processing OAuth2 requests to external configuration for the OAuth2 configuration",
+          "message": "Це підказка зовнішнім програмам, які обробляють запити OAuth2, щодо зовнішньої конфігурації для конфігурації OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FwcA.display_name": {
+          "source": "OAuth2 Application",
+          "message": "Програма OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FwcA.short_desc": {
+          "source": "Sets a hint to external programs for the OAuth2 config",
+          "message": "Встановлює підказку зовнішнім програмам для конфігурації OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "The OAuth2 client ID; ignored for logins if the `token` option is set (but possibly used when refreshing tokens)",
+          "message": "Ідентифікатор клієнта OAuth2; ігнорується під час входу, якщо встановлено параметр `token` (але може використовуватися під час оновлення токенів)"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9pZA.display_name": {
+          "source": "OAuth2 Client ID",
+          "message": "Ідентифікатор клієнта OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9pZA.short_desc": {
+          "source": "Sets the OAuth2 client ID",
+          "message": "Встановлює ідентифікатор клієнта OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "Sets the OAuth2 client secret; ignored for logins if the `token` option is set (but possibly used when refreshing tokens)",
+          "message": "Встановлює секретний ключ клієнта OAuth2; ігнорується під час входу, якщо встановлено параметр `token` (але може використовуватися під час оновлення токенів)"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.display_name": {
+          "source": "OAuth2 Client Secret",
+          "message": "Секретний ключ клієнта OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.short_desc": {
+          "source": "Sets the OAuth2 client secret",
+          "message": "Встановлює секретний ключ клієнта OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "No OAuth2 grant flow will be used",
+          "message": "Потік надання доступу OAuth2 не використовуватиметься"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOmF1dGhvcml6YXRpb25fY29kZQ.desc": {
+          "source": "OAuth2 2.0 authorization code grant ([RFC 6749 authorization code grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1)); this grant type requires external user authorization to acquire an access token; the `oauth2_auth_url` must be set to inform external code where to request authorization from the external authorization server",
+          "message": "Надання доступу через код авторизації OAuth 2.0 ([RFC 6749 authorization code grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1)); цей тип надання вимагає зовнішньої авторизації користувача для отримання токена доступу; `oauth2_auth_url` має бути встановлено, щоб повідомити зовнішньому коду, де запитувати авторизацію від зовнішнього сервера авторизації"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOmNsaWVudF9jcmVkZW50aWFscw.desc": {
+          "source": "OAuth2 2.0 client credentials grant ([RFC 6749 client credentials grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.4))",
+          "message": "Надання доступу через облікові дані клієнта OAuth 2.0 ([RFC 6749 client credentials grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.4))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOmltcGxpY2l0.desc": {
+          "source": "OAuth2 2.0 implicit grant ([RFC 6749 implicit grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.2)); this grant type returns the access token directly in the redirect URL fragment without a code exchange step; requires external user authorization; the `oauth2_auth_url` must be set; no `oauth2_token_url` is required",
+          "message": "Неявне надання доступу OAuth 2.0 ([RFC 6749 implicit grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.2)); цей тип надання повертає токен доступу безпосередньо у фрагменті URL перенаправлення без кроку обміну коду; вимагає зовнішньої авторизації користувача; `oauth2_auth_url` має бути встановлено; `oauth2_token_url` не потрібен"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOnBhc3N3b3Jk.desc": {
+          "source": "OAuth2 2.0 legacy password grant ([RFC 6749 password grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.3))",
+          "message": "Застаріле надання доступу за паролем OAuth 2.0 ([RFC 6749 password grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.3))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.desc": {
+          "source": "The OAuth2 grant type; ignored for logins if the `token` option is set",
+          "message": "Тип надання доступу OAuth2; ігнорується для входів, якщо встановлено параметр `token`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.display_name": {
+          "source": "OAuth2 Grant Type",
+          "message": "Тип надання доступу OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.short_desc": {
+          "source": "Sets the OAuth2 grant type",
+          "message": "Встановлює тип надання доступу OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.allowed_values.c3RyaW5nOlMyNTY.desc": {
+          "source": "The code challenge will be sent as a URL-encoded SHA-256 digest when PKCE is used",
+          "message": "Перевірка коду (code challenge) надсилатиметься як URL-закодований дайджест SHA-256 у разі використання PKCE"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "PKCE will not be used",
+          "message": "PKCE не використовуватиметься"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.allowed_values.c3RyaW5nOnBsYWlu.desc": {
+          "source": "No encoding will be made with the code challenge when PKCE is used",
+          "message": "Кодування для code challenge не застосовуватиметься у разі використання PKCE"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.desc": {
+          "source": "The code challenge method for PKCE (Proof Key Code Exchange) with the `authorization_code` flow",
+          "message": "Метод code challenge для PKCE (Proof Key Code Exchange) у потоці `authorization_code`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.display_name": {
+          "source": "OAuth2 PKCE",
+          "message": "OAuth2 PKCE"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.short_desc": {
+          "source": "Hint to use PKCE with the authorization code flow",
+          "message": "Вказівка використовувати PKCE з потоком authorization code"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.desc": {
+          "source": "Per OAuth2 spec (RFC 6749), the state parameter should be returned by the authorization server. Some providers (like Trello) do not pass through the state parameter. Set this to False to embed the state in the redirect_uri as a workaround for non-compliant providers. Default: True (spec-compliant behavior).",
+          "message": "Згідно зі специфікацією OAuth2 (RFC 6749), параметр state має повертатися сервером авторизації. Деякі провайдери (як-от Trello) не передають параметр state наскрізно. Встановіть значення False, щоб вбудувати state у redirect_uri як обхідний шлях для несумісних провайдерів. За замовчуванням: True (поведінка відповідно до специфікації)."
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.display_name": {
+          "source": "OAuth2 Redirect Passthrough State?",
+          "message": "Наскрізна передача state перенаправлення OAuth2?"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.short_desc": {
+          "source": "If False, embed state in redirect_uri for non-compliant OAuth2 providers",
+          "message": "Якщо False, вбудовувати state у redirect_uri для несумісних провайдерів OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3VybA.desc": {
+          "source": "The OAuth2 redirect URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token; the special value `auto` (the default) is meant to be interpreted by servers that implement OAuth2 authorization code client handling",
+          "message": "URL-адреса перенаправлення OAuth2 для типу надання доступу `authorization_code`; ігнорується, якщо встановлено параметр `token`. Зверніть увагу, що тип надання доступу `authorization_code` вимагає зовнішньої авторизації користувача для отримання токена доступу; спеціальне значення `auto` (за замовчуванням) призначене для інтерпретації серверами, які реалізують обробку клієнтів коду авторизації OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3VybA.display_name": {
+          "source": "OAuth2 Redirect URL",
+          "message": "URL-адреса перенаправлення OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3VybA.short_desc": {
+          "source": "The OAuth2 redirect URL for the authorization code grant type",
+          "message": "URL-адреса перенаправлення OAuth2 для типу надання доступу authorization_code"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.desc": {
+          "source": "Sets the OAuth2 refresh token, if any (complements option `token`)",
+          "message": "Встановлює токен оновлення OAuth2, якщо є (доповнює параметр `token`)"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.display_name": {
+          "source": "OAuth2 Refresh Token",
+          "message": "Токен оновлення OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.short_desc": {
+          "source": "Sets the OAuth2 refresh token",
+          "message": "Встановлює токен оновлення OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.desc": {
+          "source": "A separator character for OAuth2 scopes in URI arguments",
+          "message": "Символ-розділювач для областей видимості OAuth2 в аргументах URI"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.display_name": {
+          "source": "OAuth2 Scope Separator",
+          "message": "Розділювач областей видимості OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.short_desc": {
+          "source": "A separator character for OAuth2 scopes in URI arguments",
+          "message": "Символ-розділювач для областей видимості OAuth2 в аргументах URI"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3Blcw.desc": {
+          "source": "List of OAuth2 scope strings to request; ignored if the `token` option is set",
+          "message": "Список рядків областей видимості OAuth2 для запиту; ігнорується, якщо встановлено параметр `token`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3Blcw.display_name": {
+          "source": "OAuth2 Scopes",
+          "message": "Області видимості OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3Blcw.short_desc": {
+          "source": "List of OAuth2 scopes to request",
+          "message": "Список областей видимості OAuth2 для запиту"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.desc": {
+          "source": "Use basic authorization with the client secret only when making token requests",
+          "message": "Use client secret only for token requests"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.display_name": {
+          "source": "OAuth2 Token Auth Client Secret Only?",
+          "message": "Автентифікація токена OAuth2 лише з секретом клієнта?"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.short_desc": {
+          "source": "Use basic authorization with the client secret only when making token requests",
+          "message": "Use client secret only for token requests"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2FyZ3M.desc": {
+          "source": "Optional extra arguments for token refresh requests; if this option is set as well as `oauth2_alt_token_url`, then the `oauth2_token_url` value will be added to this as well when the request is made to the `oauth2_alt_token_url`",
+          "message": "Необов'язкові додаткові аргументи для запитів на оновлення токена; якщо цей параметр встановлено разом із `oauth2_alt_token_url`, то значення `oauth2_token_url` також буде додано до цього під час виконання запиту до `oauth2_alt_token_url`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2FyZ3M.display_name": {
+          "source": "OAuth2 Token Refresh Args",
+          "message": "Аргументи оновлення токена OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2FyZ3M.short_desc": {
+          "source": "Optional extra arguments for token requests",
+          "message": "Необов'язкові додаткові аргументи для запитів на отримання токена"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.desc": {
+          "source": "The expiry date for the token",
+          "message": "Дата закінчення терміну дії токена"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.display_name": {
+          "source": "OAuth2 Token Expiry Date",
+          "message": "Дата закінчення терміну дії токена OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.short_desc": {
+          "source": "The expiry date for the token",
+          "message": "Дата закінчення терміну дії токена"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.desc": {
+          "source": "The expected number of minutes that a token will remain valid before it must be refreshed. This option is only used when the connection has a refresh token and the server does not indicate the lifetime of the token in token responses",
+          "message": "Очікувана кількість хвилин, протягом яких токен залишатиметься дійсним до необхідності його оновлення. Цей параметр використовується, лише якщо з'єднання має токен оновлення, а сервер не вказує час життя токена у відповідях"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.display_name": {
+          "source": "OAuth2 Token Lifetime Hint in Minutes",
+          "message": "Підказка щодо часу життя токена OAuth2 у хвилинах"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.short_desc": {
+          "source": "How many minutes a token stays valid",
+          "message": "Скільки хвилин токен залишається дійсним"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VybA.desc": {
+          "source": "The token URL for OAuth2 flows; ignored for logins if the `token` option is set",
+          "message": "URL-адреса токена для потоків OAuth2; ігнорується для входів, якщо встановлено параметр `token`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VybA.display_name": {
+          "source": "OAuth2 Token URL",
+          "message": "URL токена OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VybA.short_desc": {
+          "source": "The token URL for OAuth2 flows",
+          "message": "URL-адреса токена для потоків OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.desc": {
+          "source": "Use basic authorization with the client ID and client secret when making token requests",
+          "message": "Використовувати базову автентифікацію з ідентифікатором та секретом клієнта під час виконання запитів на отримання токена"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.display_name": {
+          "source": "OAuth2 Token Use Basic Auth?",
+          "message": "Використовувати базову автентифікацію для токена OAuth2?"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.short_desc": {
+          "source": "Send the client ID and secret as basic authorization",
+          "message": "Надсилати клієнтський ID і секрет як базову авторизацію"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b3BlbmFwaTM.desc": {
+          "source": "Sets the location of an OpenApi 3 schema to use for message validation; processed with `FileLocationHandler::getTextFileFromLocation()` (ex: `file:///path/to/swagger-schema.json`); conflicts with `swagger` and `validator`",
+          "message": "Встановлює розташування схеми OpenApi 3 для перевірки повідомлень; обробляється з `FileLocationHandler::getTextFileFromLocation()` (наприклад: `file:///path/to/swagger-schema.json`); конфліктує з `swagger` та `validator`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b3BlbmFwaTM.display_name": {
+          "source": "OpenApi 3 Schema",
+          "message": "Схема OpenApi 3"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b3BlbmFwaTM.short_desc": {
+          "source": "Sets the location of an OpenApi 3 schema to use for the connection",
+          "message": "Встановлює розташування схеми OpenApi 3 для використання у з'єднанні"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "використовувати кодування bzip2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "використовувати алгоритм deflate ([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "використовувати кодування GNU zip ([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "не використовувати кодування вмісту"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "Встановлює алгоритм стиснення для відправки повідомлень"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.display_name": {
+          "source": "Send Compression",
+          "message": "Стиснення під час надсилання"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.short_desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "Встановлює алгоритм стиснення для відправки повідомлень"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcg.desc": {
+          "source": "Sets the location of a Swagger schema to use for message validation; processed with `FileLocationHandler::getTextFileFromLocation()` (ex: `file:///path/to/swagger-schema.json`); conflicts with `openapi3` and `validator`",
+          "message": "Встановлює розташування схеми Swagger для перевірки повідомлень; обробляється з `FileLocationHandler::getTextFileFromLocation()` (наприклад: `file:///path/to/swagger-schema.json`); конфліктує з `openapi3` та `validator`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcg.display_name": {
+          "source": "Swagger Schema",
+          "message": "Схема Swagger"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcg.short_desc": {
+          "source": "Sets the location of a Swagger schema to use for the connection",
+          "message": "Встановлює розташування схеми Swagger для з'єднання"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9iYXNlX3BhdGg.desc": {
+          "source": "In case a REST validator is used, the base path in the schema can be overridden with this option (applies to any REST validator; not just Swagger validators)",
+          "message": "У разі використання валідатора REST можна перекрити базовий шлях у схемі цим параметром (діє для будь-якого валідатора REST; не тільки для валідаторів Swagger)"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9iYXNlX3BhdGg.display_name": {
+          "source": "Override Schema Base Path",
+          "message": "Перекрити базовий шлях схеми"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9iYXNlX3BhdGg.short_desc": {
+          "source": "Overrides the base path for REST / Swagger schemas",
+          "message": "Перекриває базовий шлях для схем REST / Swagger"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9sYXhfcGFyc2luZw.desc": {
+          "source": "Try to parse invalid Swagger schemas; this option is not recommended; it will not parse all bad Swagger schemas; schemas should be corrected instead of setting this option",
+          "message": "Спробуйте проаналізувати недійсні схеми Swagger; ця опція не рекомендується; вона не проаналізує всі погані схеми Swagger; схеми слід виправляти замість встановлення цієї опції"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9sYXhfcGFyc2luZw.display_name": {
+          "source": "Swagger Lax Parsing",
+          "message": "Гнучкий аналіз Swagger"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9sYXhfcGFyc2luZw.short_desc": {
+          "source": "Sets lax parsing for Swagger schemas",
+          "message": "Встановлює гнучкий аналіз схем Swagger"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; only used if no username or password is set in the URL and if the `username` option is also used; conflicts with the `token` option",
+          "message": "Пароль для автентифікації; використовується лише тоді, коли в URL-адресі не вказано ім'я користувача або пароль, а також якщо використовується параметр `username`; конфліктує з параметром `token`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Пароль"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for authentication",
+          "message": "Пароль для автентифікації"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19ib2R5.desc": {
+          "source": "Any message body to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set or if `ping_method` is `GET`",
+          "message": "Тіло повідомлення для надсилання під час виконання розширеної операції ping; ігнорується, якщо один із параметрів `ping_method` або `ping_path` не встановлено, або якщо `ping_method` має значення `GET`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19ib2R5.display_name": {
+          "source": "Ping Body",
+          "message": "Тіло Ping"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19ib2R5.short_desc": {
+          "source": "The message body to send with pings",
+          "message": "Тіло повідомлення для надсилання з ping-запитами"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.desc": {
+          "source": "Any HTTP headers to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set",
+          "message": "Будь-які HTTP-заголовки для надсилання під час виконання розширеної операції ping; ігнорується, якщо один із параметрів `ping_method` або `ping_path` не встановлено"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.display_name": {
+          "source": "Ping Headers",
+          "message": "Заголовки Ping"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.short_desc": {
+          "source": "Any HTTP headers to send with pings",
+          "message": "Будь-які HTTP-заголовки для надсилання з ping-запитами"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.desc": {
+          "source": "The HTTP method to use for an advanced ping; this and `ping_path` must be set to make an HTTP request as a part of the socket polling ping operation; must be a valid HTTP method name",
+          "message": "HTTP-метод для використання під час розширеного ping; цей параметр та `ping_path` мають бути встановлені для виконання HTTP-запиту в рамках операції ping через опитування сокета; має бути дійсним ім'ям HTTP-методу"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.display_name": {
+          "source": "Ping Method",
+          "message": "Метод Ping"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.short_desc": {
+          "source": "The HTTP method to use for pings",
+          "message": "HTTP-метод для використання під час ping-запитів"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19wYXRo.desc": {
+          "source": "The URI path to use for an advanced ping; this and `ping_method` must be set to make an HTTP request as a part of the socket polling ping operation.  If the value for this option begins with a `/` character, then it replaces any connection path for the REST client, otherwise the value is appended to the connection path for the REST client.",
+          "message": "Шлях URI для використання під час розширеного ping; цей параметр та `ping_method` мають бути встановлені для виконання HTTP-запиту в рамках операції ping через опитування сокета. Якщо значення цього параметра починається із символу `/`, воно замінює будь-який шлях підключення для клієнта REST, інакше значення додається до шляху підключення для клієнта REST."
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19wYXRo.display_name": {
+          "source": "Ping Path",
+          "message": "Шлях Ping"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19wYXRo.short_desc": {
+          "source": "The URI path to use for pings",
+          "message": "Шлях URI для використання під час ping-запитів"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.desc": {
+          "source": "A hash to check all deserialized bodies from the server to check for authentication errors",
+          "message": "Хеш для перевірки всіх десеріалізованих тіл від сервера на наявність помилок автентифікації"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.display_name": {
+          "source": "REST Body Auth Error Check",
+          "message": "Перевірка помилок автентифікації в тілі REST"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.short_desc": {
+          "source": "Values marking a 200 OK body as an authentication error",
+          "message": "Значення, які позначають тіло 200 OK як помилку автентифікації"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "Any authorization token to use for the connection; will be passed as `Authorization: Bearer ...` (assuming that `token_type` is `Bearer`) in request headers; this option cannot be used with username and password options or authentication information in the URL; if this option is set then most OAuth2 options are ignored for logins",
+          "message": "Будь-який токен авторизації для використання підключення; передаватиметься як `Authorization: Bearer ...` (за умови, що `token_type` має значення `Bearer`) у заголовках запиту; цей параметр не можна використовувати разом із параметрами імені користувача та пароля або інформацією про автентифікацію в URL-адресі; якщо цей параметр встановлено, більшість параметрів OAuth2 для входу ігнорується"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Токен авторизації"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token to be included in requests",
+          "message": "Установити токен авторизації для включення в запити"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.desc": {
+          "source": "The name of the HTTP header where `token` will be sent as an API key; this option is incompatible with OAuth2 options",
+          "message": "Ім'я HTTP-заголовка, де `token` надсилатиметься як ключ API; цей параметр несумісний із параметрами OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.display_name": {
+          "source": "API Key Header",
+          "message": "Заголовок ключа API"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.short_desc": {
+          "source": "The name of the HTTP header where the token will be sent as an API key",
+          "message": "Ім'я HTTP-заголовка, де токен надсилатиметься як ключ API"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "Тип `token` для використання в заголовку `Authorization`; ігнорується, якщо параметр `token` не встановлено"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "Тип токена авторизації"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "Тип токена авторизації"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL; conflicts with the `token` option",
+          "message": "Ім'я користувача для автентифікації; використовується, лише якщо ім'я користувача або пароль не вказано в URL-адресі; конфліктує з параметром `token`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Ім'я користувача"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for authentication",
+          "message": "Встановлює ім'я користувача для автентифікації"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dmFsaWRhdG9y.desc": {
+          "source": "Sets an `AbstractRestSchemaValidator` object for REST message validation; conflicts with `openapi3` and `swagger`",
+          "message": "Встановлює об'єкт `AbstractRestSchemaValidator` для валідації REST-повідомлень; конфліктує з `openapi3` та `swagger`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dmFsaWRhdG9y.display_name": {
+          "source": "Schema Validator",
+          "message": "Валідатор схем"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dmFsaWRhdG9y.short_desc": {
+          "source": "Sets a schema validator object",
+          "message": "Встановлює об'єкт валідатора схем"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a REST server",
+          "message": "Підключення до сервера REST"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Cin7Core REST API for inventory management, sales, and order processing.\n\nCin7Core (formerly DEAR Inventory) is a comprehensive inventory management and ERP platform that enables you to manage products, sales, purchases, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and suppliers\n- Create and track sales orders\n- Process payments and invoices\n- Monitor inventory and stock levels\n- Handle stock adjustments\n- Track shipments and fulfillment\n\n**Authentication:**\nCin7Core uses Account ID and API Key authentication. Both credentials are required.",
+          "message": "Una conexión a la API REST de Cin7Core para la gestión de inventario, ventas y procesamiento de pedidos.\n\nCin7Core (anteriormente DEAR Inventory) es una plataforma integral de gestión de inventario y ERP que le permite gestionar productos, ventas, compras, clientes, proveedores y niveles de stock.\n\n**Características:**\n- Gestionar clientes y proveedores\n- Crear y rastrear pedidos de venta\n- Procesar pagos e facturas\n- Monitorear inventario y niveles de stock\n- Manejar ajustes de stock\n- Rastrear envíos y cumplimiento\n\n**Autenticación:**\nCin7Core utiliza autenticación con ID de cuenta y clave de API. Ambas credenciales son necesarias."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Cin7Core REST Connection",
+          "message": "Conexión REST de Cin7Core"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Cin7Core, you need both an Account ID and API Key:\n\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Open the **Setup** tab for the Application\n4. Copy both credentials:\n   - **Account ID** - Your unique account identifier\n   - **Application Key** - Your API authentication key\n\nKeep your credentials secure and never share them publicly.",
+          "message": "Para conectarse a Cin7Core, necesita tanto un ID de cuenta como una clave de API:\n\n1. Vaya a https://inventory.dearsystems.com/ExternalApi\n2. Cree una nueva aplicación o seleccione una existente\n3. Abra la pestaña **Configuración** de la aplicación\n4. Copie ambas credenciales:\n   - **ID de cuenta** - Su identificador único de cuenta\n   - **Clave de aplicación** - Su clave de autenticación de API\n\nMantenga sus credenciales seguras y nunca las comparta públicamente."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Credentials",
+          "message": "Cómo obtener sus credenciales de API"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.desc": {
+          "source": "Your Cin7Core Account ID used for API authentication.\n\n**To obtain your Account ID:**\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Find your **Account ID** on the **Setup** tab\n\n**Note:** Both Account ID and API Key are required for authentication.",
+          "message": "Su ID de cuenta de Cin7Core utilizado para la autenticación mediante API.\n\n**Para obtener su ID de cuenta:**\n1. Vaya a https://inventory.dearsystems.com/ExternalApi\n2. Cree una nueva aplicación o seleccione una existente\n3. Encuentre su **ID de cuenta** en la pestaña **Configuración**\n\n**Nota:** Se requieren tanto el ID de cuenta como la clave de API para la autenticación."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID de la cuenta"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Cin7Core Account ID for authentication",
+          "message": "ID de cuenta de Cin7Core para autenticación"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Your Cin7Core Application/API Key for authentication.\n\n**To obtain your API Key:**\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Find your **Application Key** on the **Setup** tab\n\n**Note:** Both Account ID and API Key are required for authentication.",
+          "message": "Su clave de aplicación/API de Cin7Core para autenticación.\n\n**Para obtener su clave de API:**\n1. Vaya a https://inventory.dearsystems.com/ExternalApi\n2. Cree una nueva aplicación o seleccione una existente\n3. Encuentre su **Clave de aplicación** en la pestaña **Configuración**\n\n**Nota:** Se requieren tanto el ID de cuenta como la clave de API para la autenticación."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clave de API"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Cin7Core Application/API Key",
+          "message": "Clave de aplicación/API de Cin7Core"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Cin7Core (DEAR Inventory) API",
+          "message": "Una conexión con la API de Cin7Core (DEAR Inventory)"
+        }
+      }
+    }
+  }
+}

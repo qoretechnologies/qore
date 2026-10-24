@@ -278,7 +278,8 @@ ZeyosRestClient zeyos(
 public class ZeyosRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ZeyosRestClient",
+            "ZeyosRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "ZeyOS Connection",
             "short_desc": "A connection to a ZeyOS instance with the REST API",
             "desc": "A connection to a ZeyOS instance with the REST API",
@@ -311,7 +312,7 @@ public class ZeyosRestConnection inherits RestClient::RestConnection {
                 },
             },
             "required_options": foldl $1 + "," + $2, ZeyosRestClientBase::RequiredOptions,
-        };
+        });
     }
 
     #! creates the ZeyosRestConnection object

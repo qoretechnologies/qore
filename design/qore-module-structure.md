@@ -135,6 +135,18 @@ another. Contributions with the same locale and message identity must be
 structurally identical; provider presentation rejects conflicting owner fragments
 instead of selecting text by catalog search-path or filename order.
 
+Connection producers prepare their scheme constants with `connection_scheme_presentation()` before other schemes
+reuse them. Each presentation field carries its defining owner's domain, stable message ID, explicit source locale,
+and exact source text. Unchanged inherited fields keep those references, including when a consumer changes a technical
+default; replacing text assigns that field to the consumer. Scheme aliases share one identity, and static setup
+messages declare a literal `presentation_id`. Extraction emits each reference in its defining owner's connection
+domain, while app-specific connection overrides use the app domain. This lets HTTP, REST, and external module
+consumers reuse the same translations without copying their base catalogs.
+
+Provider catalog loading uses `DataProviderPresentation::MaxCatalogFileBytes` (64 MiB) consistently in extraction,
+validation, and projection. Large static schemas can exceed the general-purpose native i18n loader's 16 MiB default;
+the provider limit remains explicit and bounded.
+
 Catalog source extraction follows the complete reachable option-type graph. Existing flat action-option IDs are
 stable. First-layer nested fields are option scoped (and union-branch qualified); deeper reusable types use stable
 app/action/option/occurrence/type/field identities whose occurrence contains its canonical technical field path and

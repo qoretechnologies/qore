@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Paddle](https://www.paddle.com) REST API for billing, subscriptions and payments.\n\nPaddle is a **merchant of record**: it sells your software on your behalf, so it handles payment processing, sales tax and invoicing, and pays out the balance. An integration works with catalog products and prices, customers, transactions, subscriptions and reports.\n\n**Authentication** is an API key sent as a bearer token; there is no OAuth2 flow. A key is created in the Paddle dashboard under **Paddle > Developer Tools > Authentication** and is granted an explicit set of permissions, so it can be scoped to exactly what the integration needs.\n\n**Sandbox and production are separate environments** with separate data and separate keys. Set `instance_type` to match the key.\n\nPaddle is a trademark of Paddle.com Market Ltd.",
+          "message": "Eine Verbindung zur [Paddle](https://www.paddle.com) REST-API für Abrechnung, Abonnements und Zahlungen.\n\nPaddle ist ein **Merchant of Record**: Es verkauft Ihre Software im Namen Ihres Unternehmens, wodurch es Zahlungsabwicklung, Umsatzsteuer und Rechnungsstellung übernimmt und den Überschuss auszahlt. Eine Integration arbeitet mit Katalogprodukten und Preisen, Kunden, Transaktionen, Abonnements und Berichten.\n\n**Authentifizierung** ist ein API-Schlüssel, der als Bearer-Token gesendet wird; es gibt keinen OAuth2-Flow. Ein Schlüssel wird im Paddle-Dashboard unter **Paddle > Entwickler-Tools > Authentifizierung** erstellt und erhält eine explizite Berechtigungsmenge, sodass er genau auf das beschränkt werden kann, was die Integration benötigt.\n\n**Sandbox- und Produktionsumgebung sind getrennte Umgebungen** mit getrennten Daten und getrennten Schlüsseln. Setzen Sie `instance_type` entsprechend dem Schlüssel.\n\nPaddle ist ein Warenzeichen von Paddle.com Market Ltd."
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Paddle REST Connection",
+          "message": "Paddle REST-Verbindung"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOmFwaQ.desc": {
+          "source": "The live Paddle environment: real customers, real money",
+          "message": "Die Live-Paddle-Umgebung: echte Kunden, echtes Geld"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOmFwaQ.display_name": {
+          "source": "Production",
+          "message": "Produktion"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnNhbmRib3gtYXBp.desc": {
+          "source": "The Paddle test environment: no real money moves",
+          "message": "Die Paddle-Testumgebung: es fließt kein echtes Geld"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnNhbmRib3gtYXBp.display_name": {
+          "source": "Sandbox",
+          "message": "Sandbox"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.desc": {
+          "source": "The Paddle environment this connection works against, which also determines the target URL.\n\n- `api`: **Production** - `https://api.paddle.com`\n- `sandbox-api`: **Sandbox** - `https://sandbox-api.paddle.com`\n\nThe two environments are entirely separate: they hold different data and accept different API keys, so this must match the key in `token`.\n\nDefaults to **sandbox**, so a connection created without setting this talks to test data rather than billing real customers.",
+          "message": "Die Paddle-Umgebung, gegen die diese Verbindung arbeitet, was auch die Ziel-URL bestimmt.\n\n- `api`: **Produktion** - `https://api.paddle.com`\n- `sandbox-api`: **Sandbox** - `https://sandbox-api.paddle.com`\n\nDie beiden Umgebungen sind vollständig getrennt: Sie speichern unterschiedliche Daten und akzeptieren unterschiedliche API-Schlüssel, daher muss dies mit dem Schlüssel in `token` übereinstimmen.\n\nStandardmäßig ist **Sandbox** aktiv, sodass eine Verbindung, die dieses Feld nicht setzt, mit Testdaten arbeitet und nicht echte Kunden abrechnet."
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.display_name": {
+          "source": "Instance Type",
+          "message": "Instanztyp"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.short_desc": {
+          "source": "The Paddle environment to connect to",
+          "message": "Die Paddle-Umgebung, mit der verbunden werden soll"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A Paddle API key (`pdl_live_apikey_…` or `pdl_sdbx_apikey_…`), sent as a bearer token.\n\n**To obtain one:**\n1. Log in to the Paddle dashboard for the environment this connection targets\n2. Go to Paddle > Developer Tools > Authentication\n3. Create an API key and grant it the permissions this integration needs\n\n**Note:** a key belongs to one environment only; a sandbox key is rejected by production and the other way round. Set `instance_type` to match.",
+          "message": "Ein Paddle-API-Schlüssel (`pdl_live_apikey_…` oder `pdl_sdbx_apikey_…`), gesendet als Bearer-Token.\n\n**So erhalten Sie einen:**\n1. Melden Sie sich im Paddle-Dashboard für die Umgebung an, gegen die diese Verbindung gerichtet ist\n2. Gehen Sie zu Paddle > Entwickler-Tools > Authentifizierung\n3. Erstellen Sie einen API-Schlüssel und gewähren Sie ihm die Berechtigungen, die diese Integration benötigt\n\n**Hinweis:** Ein Schlüssel gehört nur einer Umgebung; ein Sandbox-Schlüssel wird von der Produktion abgelehnt und umgekehrt. Setzen Sie `instance_type` entsprechend."
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "API Key",
+          "message": "API-Schlüssel"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A Paddle API key",
+          "message": "Ein Paddle-API-Schlüssel"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Paddle REST API",
+          "message": "Eine Verbindung zur Paddle REST-API"
+        }
+      }
+    }
+  }
+}

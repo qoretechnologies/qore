@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Black Forest Labs](https://bfl.ai) — the company behind FLUX image and video generation models.\n\nRequires an API key sent via the `x-key` header.  Get your API key from the [BFL portal](https://api.bfl.ai).",
+          "message": "Połączenie z [Black Forest Labs](https://bfl.ai) — firmą stworzytą modeli generujących obrazy i filmy FLUX.\n\nWymaga klucza API wysyłanego w nagłówku `x-key`. Pobierz swój klucz API na [porcie BFL](https://api.bfl.ai)."
+        },
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Black Forest Labs Connection",
+          "message": "Połączenie z Black Forest Labs"
+        },
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The BFL API key — sent as the `x-key` header.",
+          "message": "Klucz API BFL — wysyłany jako nagłówek `x-key`."
+        },
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klucz API"
+        },
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "BFL API key (sent as x-key header)",
+          "message": "Klucz API BFL (wysyłany jako nagłówek x-key)"
+        },
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to Black Forest Labs (FLUX models)",
+          "message": "Połączenie z Black Forest Labs (modele FLUX)"
+        }
+      }
+    }
+  }
+}

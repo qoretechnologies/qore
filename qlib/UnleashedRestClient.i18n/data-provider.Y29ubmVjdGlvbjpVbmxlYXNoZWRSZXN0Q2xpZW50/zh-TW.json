@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Unleashed Software REST API for inventory management.\n\nUnleashed is a powerful cloud-based inventory management platform that enables you to manage products, sales orders, purchase orders, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and customer contacts\n- Create and track sales orders\n- Process credit notes\n- Manage products and inventory\n- Track stock levels across warehouses\n\n**Authentication:**\nUnleashed uses HMAC-SHA256 signature authentication. Both API ID and API Key are required.",
+          "message": "與 Unleashed Software 的 REST API 連接，用於庫存管理。\n\nUnleashed 是一個強大的基於雲端的庫存管理平台，可讓您管理產品、銷售訂單、採購訂單、客戶、供應商及庫存水準。\n\n**功能：**\n- 管理客戶與客戶聯絡人\n- 建立並追蹤銷售訂單\n- 處理信用憑證\n- 管理產品與庫存\n- 追蹤各倉庫的庫存水準\n\n**驗證方式：**\nUnleashed 使用 HMAC-SHA256 簽章驗證。API ID 與 API 金鑰皆為必要。"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Unleashed REST Connection",
+          "message": "Unleashed REST 連接"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Unleashed Software, you need your API ID and API Key:\n\n1. Log in to Unleashed as the **Account Owner**\n2. Go to **Settings > Integration > API Access**\n3. Copy your **API ID** and **API Key**\n\n**Important:**\n- Only the account owner can access API credentials\n- Keep your credentials secure - they provide full API access\n- Never share your API Key publicly",
+          "message": "要連接 Unleashed Software，您需要 API ID 和 API 金鑰：\n\n1. 以 **帳戶擁有者** 身分登入 Unleashed\n2. 前往 **設定 > 整合 > API 存取**\n3. 複製您的 **API ID** 與 **API 金鑰**\n\n**重要：**\n- 僅帳戶擁有者可存取 API 憑證\n- 請妥善保管您的憑證 – 它們提供完整的 API 存取權限\n- 永遠不要公開分享您的 API 金鑰"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Credentials",
+          "message": "如何取得您的 API 憑證"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.desc": {
+          "source": "Your Unleashed API ID used for API authentication.\n\n**To obtain your API ID:**\n1. Log in to Unleashed as the Account Owner\n2. Go to Settings > Integration > API Access\n3. Copy your **API ID**\n\n**Note:** Only the account owner can access API credentials.",
+          "message": "用於 API 驗證的 Unleashed API ID。\n\n**取得 API ID 的方法：**\n1. 以帳戶擁有者身分登入 Unleashed\n2. 前往 設定 > 整合 > API 存取\n3. 複製您的 **API ID**\n\n**注意：** 僅帳戶擁有者可存取 API 憑證。"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.display_name": {
+          "source": "API ID",
+          "message": "API ID"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.short_desc": {
+          "source": "Unleashed API ID for authentication",
+          "message": "用於驗證的 Unleashed API ID"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Your Unleashed API Key used for computing HMAC-SHA256 signatures.\n\n**To obtain your API Key:**\n1. Log in to Unleashed as the Account Owner\n2. Go to Settings > Integration > API Access\n3. Copy your **API Key**\n\n**Note:** Only the account owner can access API credentials.\nKeep your API Key secure - it provides full API access to your account.",
+          "message": "您的 Unleashed API 金鑰，用於計算 HMAC-SHA256 簽章。\n\n**取得您的 API 金鑰：**\n1. 以帳戶擁有者身分登入 Unleashed\n2. 前往設定 > 整合 > API 存取\n3. 複製您的 **API 金鑰**\n\n**注意：** 僅帳戶擁有者可存取 API 憑證。\n請妥善保管您的 API 金鑰——它將提供對您帳戶的完整 API 存取權限。"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Unleashed API Key for HMAC signature",
+          "message": "用於 HMAC 簽章的 Unleashed API 金鑰"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Unleashed Software API",
+          "message": "連線至 Unleashed Software API"
+        }
+      }
+    }
+  }
+}

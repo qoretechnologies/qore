@@ -27,7 +27,8 @@ public namespace MllpUtil {
     public class MllpConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
         public {
             #! Connection entry info
-            const ConnectionScheme = <ConnectionSchemeInfo>{
+            const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("MllpUtil",
+            "MllpConnection", "en", <ConnectionSchemeInfo>{
                 "display_name": "MLLP Connection",
                 "short_desc": "A connection to an MLLP endpoint",
                 "desc": "A TCP or TLS connection to an MLLP endpoint for HL7 v2 message exchange",
@@ -66,7 +67,7 @@ public namespace MllpUtil {
                         "default_value": "UTF-8",
                     },
                 },
-            };
+            });
         }
 
         #! Creates the MLLP connection object

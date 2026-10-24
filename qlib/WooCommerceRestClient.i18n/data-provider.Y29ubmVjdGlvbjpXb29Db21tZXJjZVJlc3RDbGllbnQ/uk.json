@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the WooCommerce REST API v3 for e-commerce management.\n\nWooCommerce is the most popular open-source e-commerce platform built on WordPress. This integration enables managing orders, products, customers, coupons, webhooks, reports, shipping, taxes, and store settings.\n\n**Authentication:**\n- Uses HTTP Basic Auth with Consumer Key and Consumer Secret\n- Generate API credentials in WordPress admin: WooCommerce > Settings > Advanced > REST API\n\n**Pagination:**\n- Page-based with `page` and `per_page` parameters (max `100` per page)\n- Total counts available in `X-WP-Total` and `X-WP-TotalPages` response headers",
+          "message": "Підключення до REST API WooCommerce v3 для управління електронною комерцією.\n\nWooCommerce — найпопулярніша платформа для електронної комерції з відкритим кодом, побудована на WordPress. Ця інтеграція дозволяє керувати замовленнями, товарами, клієнтами, купонами, вебхуками, звітами, доставкою, податками та налаштуваннями магазину.\n\n**Аутентифікація:**\n- Використовує HTTP Basic Auth із Consumer Key та Consumer Secret\n- Згенеруйте облікові дані API в адміністративній панелі WordPress: WooCommerce > Налаштування > Додатково > REST API\n\n**Пагінація:**\n- Сторінкова з параметрами `page` та `per_page` (макс. `100` на сторінку)\n- Загальна кількість доступна в заголовках відповіді `X-WP-Total` та `X-WP-TotalPages`"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "WooCommerce REST Connection",
+          "message": "Підключення до REST API WooCommerce"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your **WordPress admin panel**\n2. Navigate to **WooCommerce > Settings > Advanced > REST API**\n3. Click **Add key**\n4. Enter a description (e.g., \"Qorus Integration\")\n5. Select a WordPress user and choose **Read/Write** permissions\n6. Click **Generate API key**\n7. Copy both the **Consumer key** (`ck_...`) and **Consumer secret** (`cs_...`)\n\n**Important:**\n- The Consumer secret is only displayed once when generated\n- Store your credentials securely\n- HTTPS is required for Basic Auth (HTTP requires OAuth 1.0a)",
+          "message": "1. Увійдіть у панель адміністратора WordPress\n2. Перейдіть до **WooCommerce > Налаштування > Додатково > REST API**\n3. Натисніть **Додати ключ**\n4. Введіть опис (наприклад, «Інтеграція Qorus»)\n5. Виберіть користувача WordPress і встановіть дозволи **Читання/Запис**\n6. Натисніть **Згенерувати ключ API**\n7. Скопіюйте обидва ключі: **Consumer key** (`ck_...`) та **Consumer secret** (`cs_...`)\n\n**Важливо:**\n- Consumer secret відображається лише один раз під час генерації\n- Зберігайте облікові дані безпечно\n- HTTPS обов’язковий для Basic Auth (HTTP вимагає OAuth 1.0a)"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Credentials",
+          "message": "Як отримати свої облікові дані API"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfa2V5.desc": {
+          "source": "The WooCommerce REST API consumer key used as the username for HTTP Basic Auth.\n\n**To obtain your API credentials:**\n1. Log in to your WordPress admin panel\n2. Go to **WooCommerce > Settings > Advanced > REST API**\n3. Click **Add key**\n4. Enter a description, select a user, and choose **Read/Write** permissions\n5. Click **Generate API key**\n6. Copy the **Consumer key** (starts with `ck_`)",
+          "message": "Ключ споживача REST API WooCommerce, що використовується як ім’я користувача для HTTP Basic Auth.\n\n**Як отримати облікові дані API:**\n1. Увійдіть у панель адміністратора WordPress\n2. Перейдіть до **WooCommerce > Налаштування > Додатково > REST API**\n3. Натисніть **Додати ключ**\n4. Введіть опис, виберіть користувача та встановіть дозволи **Читання/Запис**\n5. Натисніть **Згенерувати ключ API**\n6. Скопіюйте **Consumer key** (починається з `ck_`)"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfa2V5.display_name": {
+          "source": "Consumer Key",
+          "message": "Ключ споживача"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfa2V5.short_desc": {
+          "source": "WooCommerce consumer key for authentication",
+          "message": "Ключ споживача WooCommerce для аутентифікації"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfc2VjcmV0.desc": {
+          "source": "The WooCommerce REST API consumer secret used as the password for HTTP Basic Auth.\n\n**To obtain your API credentials:**\n1. Follow the same steps as for the Consumer Key above\n2. Copy the **Consumer secret** (starts with `cs_`)\n\n**Note:** The consumer secret is only shown once when generated. If you lose it, you will need to generate new credentials.",
+          "message": "Секрет споживача REST API WooCommerce, що використовується як пароль для HTTP Basic Auth.\n\n**Як отримати облікові дані API:**\n1. Дотримуйтесь тих самих кроків, що й для ключа споживача\n2. Скопіюйте **Consumer secret** (починається з `cs_`)\n\n**Зауваження:** секрет споживача відображається лише один раз під час генерації. Якщо його втрачено, необхідно згенерувати нові облікові дані."
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfc2VjcmV0.display_name": {
+          "source": "Consumer Secret",
+          "message": "Секрет споживача"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfc2VjcmV0.short_desc": {
+          "source": "WooCommerce consumer secret for authentication",
+          "message": "Секрет споживача WooCommerce для аутентифікації"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfdXJs.desc": {
+          "source": "The full URL of your WooCommerce store (e.g., `https://mystore.com`).\n\nThis is the base URL of your WordPress site where WooCommerce is installed. The API path `/wp-json/wc/v3/` will be appended automatically.\n\n**Examples:**\n- `https://mystore.com`\n- `https://shop.example.com`\n- `https://example.com/shop` (if WordPress is in a subdirectory)",
+          "message": "Повний URL вашого магазину WooCommerce (наприклад, `https://mystore.com`).\n\nЦе базовий URL вашого сайту WordPress, де встановлено WooCommerce. Шлях API `/wp-json/wc/v3/` буде додано автоматично.\n\n**Приклади:**\n- `https://mystore.com`\n- `https://shop.example.com`\n- `https://example.com/shop` (якщо WordPress розташований у підкаталозі)"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfdXJs.display_name": {
+          "source": "Store URL",
+          "message": "URL магазину"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfdXJs.short_desc": {
+          "source": "WooCommerce store URL",
+          "message": "URL магазину WooCommerce"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the WooCommerce REST API",
+          "message": "Підключення до REST API WooCommerce"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a [Chroma](https://www.trychroma.com) vector database.\n\nChroma is a lightweight, local-first vector database that pairs naturally with local Ollama embeddings for self-hosted RAG.\n\nLocal deployments don't require authentication; supply an `apikey` for Chroma Cloud or reverse-proxied deployments.\n\nThe connection uses the `chroma://` URL scheme for plain HTTP and `chromas://` for servers behind TLS.",
+          "message": "Połączenie z bazą danych wektorową [Chroma](https://www.trychroma.com).\n\nChroma to lekka, lokalna baza danych wektorowa, która naturalnie współpracuje z lokalnymi embeddings Ollama dla samodzielnie hostowanych rozwiązań RAG.\n\nWdrożenia lokalne nie wymagają uwierzytelniania; podaj `apikey` dla Chroma Cloud lub wdrożeń z odwrotnym proxy.\n\nPołączenie używa schematu `chroma://` dla zwykłego HTTP i `chromas://` dla serwerów z TLS."
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Chroma Vector Store Connection",
+          "message": "Połączenie z magazynem wektorowym Chroma"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Optional Bearer token.  Local Chroma servers do not require authentication; supply only for hosted Chroma Cloud or reverse-proxied deployments.",
+          "message": "Opcjonalny token typu Bearer. Lokalne serwery Chroma nie wymagają uwierzytelniania; podawaj tylko dla hostowanych wersji Chroma Cloud lub wdrożeń z odwrotnym proxy."
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klucz API"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Optional Bearer token (Chroma Cloud / proxied)",
+          "message": "Opcjonalny token typu Bearer (Chroma Cloud / przekierowane)"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.ZGF0YWJhc2U.desc": {
+          "source": "Chroma database name.",
+          "message": "Nazwa bazy danych Chroma."
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "Baza danych"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.ZGF0YWJhc2U.short_desc": {
+          "source": "Chroma database",
+          "message": "Baza danych Chroma"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.dGVuYW50.desc": {
+          "source": "Chroma tenant name.",
+          "message": "Nazwa dzierżawy Chroma."
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.dGVuYW50.display_name": {
+          "source": "Tenant",
+          "message": "Tenant"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.option.dGVuYW50.short_desc": {
+          "source": "Chroma tenant",
+          "message": "Dzierżawa Chroma"
+        },
+        "connection.Q2hyb21hUmVzdENsaWVudA.scheme.Q2hyb21hUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Chroma vector database",
+          "message": "Połączenie z bazą danych wektorową Chroma"
+        }
+      }
+    }
+  }
+}

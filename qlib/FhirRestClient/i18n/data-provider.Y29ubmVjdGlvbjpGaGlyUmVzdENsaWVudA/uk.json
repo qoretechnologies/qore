@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a FHIR REST server using JSON resources",
+          "message": "Підключення до сервера REST FHIR із використанням JSON-ресурсів"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "FHIR REST Connection",
+          "message": "Підключення REST FHIR"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.option.bm9fY2hhcnNldA.desc": {
+          "source": "If `True`, no charset parameter is appended to request Content-Type headers",
+          "message": "Якщо `True`, параметр charset не додається до заголовків Content-Type запитів"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.option.bm9fY2hhcnNldA.display_name": {
+          "source": "No Charset in Content-Type?",
+          "message": "Немає кодування в Content-Type?"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.option.bm9fY2hhcnNldA.short_desc": {
+          "source": "Do not append a charset parameter to request Content-Type headers",
+          "message": "Не додавати параметр кодування до заголовків Content-Type запитів"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a FHIR REST server",
+          "message": "Підключення до сервера REST FHIR"
+        }
+      }
+    }
+  }
+}

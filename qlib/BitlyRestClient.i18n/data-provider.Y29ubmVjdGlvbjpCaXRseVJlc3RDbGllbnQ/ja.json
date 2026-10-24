@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Bitly REST API for URL shortening, branded links, QR codes, campaigns, and click analytics",
+          "message": "URL短縮、ブランドリンク、QRコード、キャンペーン、クリック解析のための Bitly REST API への接続"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Bitly REST Connection",
+          "message": "Bitly REST 接続"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Bitly API access token used for Bearer token authentication.\n\n**To obtain your access token:**\n1. Log in to your Bitly account\n2. Go to **Settings** > **Developer settings** > **API**\n3. Generate a new access token\n\nRate limit: 5 concurrent connections, hourly and monthly limits based on plan",
+          "message": "Bearer トークン認証に使用する Bitly API アクセス トークン。\n\n**アクセス トークンの取得方法：**\n1. Bitly アカウントにログイン\n2. **Settings** > **Developer settings** > **API** に移動\n3. 新しいアクセス トークンを生成\n\nレート制限：5 つの並行接続、プランに応じた時間単位の制限"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Access Token",
+          "message": "API アクセス トークン"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Bitly API access token for authentication",
+          "message": "Bitly API 認証用のアクセストークン"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Bitly REST API",
+          "message": "Bitly REST API への接続"
+        }
+      }
+    }
+  }
+}

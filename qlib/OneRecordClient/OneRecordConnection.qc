@@ -41,7 +41,8 @@ public class OneRecordConnection inherits ConnectionProvider::HttpBasedConnectio
         hash<auto> real_opts;
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("OneRecordClient",
+            "OneRecordConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "ONE Record Connection",
             "short_desc": "A connection to an IATA ONE Record server",
             "desc": "A connection to an IATA ONE Record server for air cargo data sharing via "
@@ -56,7 +57,7 @@ public class OneRecordConnection inherits ConnectionProvider::HttpBasedConnectio
                 "https": "1rs",
                 "http": "1r",
             },
-        };
+        });
     }
 
     #! Creates the OneRecordConnection object

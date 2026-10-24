@@ -40,7 +40,8 @@ public class McpConnection inherits ConnectionProvider::HttpBasedConnection {
         hash<auto> real_opts;
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("McpClient",
+            "McpConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "MCP Connection",
             "short_desc": "A connection to an MCP (Model Context Protocol) server",
             "desc": "A connection to an MCP server for accessing AI tools, resources, and prompts",
@@ -69,7 +70,7 @@ public class McpConnection inherits ConnectionProvider::HttpBasedConnection {
                 "https": "mcps",
                 "http": "mcp",
             },
-        };
+        });
     }
 
     #! Creates the McpConnection object

@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Customer.io REST API for marketing automation, messaging, and customer engagement.\n\nCustomer.io helps you send targeted emails, push notifications, SMS messages, and more based on customer behavior and attributes.\n\n**APIs:**\n- App API (Bearer token): Read data, trigger broadcasts and transactional messages\n- Track API (Basic auth): Create/update customers, track events\n\n**Rate Limits:**\n- App API: 10 requests/second (standard)\n- Track API: 100 requests/second",
+          "message": "З’єднання з REST API Customer.io для маркетингової автоматизації, повідомлень та взаємодії з клієнтами.\n\nCustomer.io допомагає надсилати цільові електронні листи, повідомлення, SMS-повідомлення та інше на основі поведінки та характеристик клієнтів.\n\n**API:**\n- API додатка (Bearer-токен): читання даних, запуск розсилок та транзакційних повідомлень\n- API відстеження (Basic auth): створення/оновлення клієнтів, відстеження подій\n\n**Обмеження швидкості:**\n- API додатка: 10 запитів/секунду (стандартне)\n- API відстеження: 100 запитів/секунду"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Customer.io REST Connection",
+          "message": "З’єднання REST Customer.io"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "Customer.io requires three credentials:\n1. **App API Key**: For reading data and triggering messages (Bearer token auth)\n2. **Site ID**: For tracking customer data (Basic auth username)\n3. **Tracking API Key**: For tracking customer data (Basic auth password)\n\nFind all credentials at: **[Settings > API Credentials](https://fly.customer.io/settings/api_credentials)**",
+          "message": "Customer.io вимагає трьох облікових даних:\n1. **Ключ API додатка**: для читання даних та запуску повідомлень (автентифікація Bearer)\n2. **Ідентифікатор сайту**: для відстеження даних клієнтів (ім’я користувача Basic auth)\n3. **Ключ API відстеження**: для відстеження даних клієнтів (пароль Basic auth)\n\nЗнайдіть усі облікові дані за посиланням: **[Налаштування > Облікові дані API](https://fly.customer.io/settings/api_credentials)**"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Customer.io API Credentials",
+          "message": "Параметри доступу до API Customer.io"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Choose the region that matches your Customer.io account:\n- **US**: United States data center (default)\n- **EU**: European Union data center\n\nYour region was set when you created your account and cannot be changed.",
+          "message": "Виберіть регіон, який відповідає вашому обліковому запису Customer.io:\n- **US**: центр даних США (за замовчуванням)\n- **EU**: центр даних Європейського союзу\n\nРегіон було встановлено під час створення облікового запису і не може бути змінено."
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Select Your Region",
+          "message": "Виберіть свій регіон"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.YXBwX2FwaV9rZXk.desc": {
+          "source": "The Customer.io App API key used for Bearer token authentication with the App API.\n\n**To obtain your App API key:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials?keyType=app)\n3. Create or copy your App API Key\n\n**Note:** App API keys are used for reading data and triggering messages.",
+          "message": "Ключ додатка Customer.io, що використовується для автентифікації Bearer-токеном у додатковому API.\n\n**Щоб отримати ключ додатка:**\n1. Увійдіть у [Customer.io](https://fly.customer.io)\n2. Перейдіть до [Налаштування > Удостовірність API](https://fly.customer.io/settings/api_credentials?keyType=app)\n3. Створіть або скопіюйте свій ключ додатка\n\n**Зауваження:** ключі додатків використовуються для читання даних та запуску повідомлень."
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.YXBwX2FwaV9rZXk.display_name": {
+          "source": "App API Key",
+          "message": "Ключ додатка"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.YXBwX2FwaV9rZXk.short_desc": {
+          "source": "Customer.io App API key for Bearer token authentication",
+          "message": "Ключ додатка Customer.io для автентифікації Bearer-токеном"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.c2l0ZV9pZA.desc": {
+          "source": "The Customer.io Site ID used as the username for Track API Basic authentication.\n\n**To find your Site ID:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials)\n3. Your Site ID is listed under Tracking API Keys",
+          "message": "Ідентифікатор сайту Customer.io, що використовується як ім’я користувача для базової автентифікації Track API.\n\n**Щоб знайти ідентифікатор сайту:**\n1. Увійдіть у [Customer.io](https://fly.customer.io)\n2. Перейдіть до [Налаштування > Удостовірність API](https://fly.customer.io/settings/api_credentials)\n3. Ваш ідентифікатор сайту вказано під ключами API відстеження"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.c2l0ZV9pZA.display_name": {
+          "source": "Site ID",
+          "message": "Ідентифікатор сайту"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.c2l0ZV9pZA.short_desc": {
+          "source": "Customer.io Site ID for Track API authentication",
+          "message": "ID сайту Customer.io для автентифікації Track API"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "EU data center (api-eu.customer.io / track-eu.customer.io)",
+          "message": "EU-центр даних (api-eu.customer.io / track-eu.customer.io)"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "EU",
+          "message": "EU"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.short_desc": {
+          "source": "European Union",
+          "message": "Європейський Союз"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "US data center (api.customer.io / track.customer.io)",
+          "message": "США-центр даних (api.customer.io / track.customer.io)"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "US",
+          "message": "US"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.short_desc": {
+          "source": "United States",
+          "message": "Сполучені Штати"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "Select the Customer.io data center region for your account.\n\nYour region is determined when you create your Customer.io account and cannot be changed.",
+          "message": "Виберіть регіон центру даних Customer.io для вашого облікового запису.\n\nРегіон визначається під час створення облікового запису Customer.io і не може бути змінений."
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Регіон"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "Customer.io data center region",
+          "message": "Регіон центру даних Customer.io"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.dHJhY2tpbmdfYXBpX2tleQ.desc": {
+          "source": "The Customer.io Tracking API key used as the password for Track API Basic authentication.\n\n**To find your Tracking API key:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials)\n3. Your API Key is listed under Tracking API Keys",
+          "message": "Ключ трекінгового API Customer.io, який використовується як пароль для базової автентифікації Track API.\n\n**Щоб знайти свій ключ трекінгового API:**\n1. Увійдіть у [Customer.io](https://fly.customer.io)\n2. Перейдіть до [Налаштування > Удостовірність API](https://fly.customer.io/settings/api_credentials)\n3. Ваш ключ API вказано під розділом Ключі трекінгового API"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.dHJhY2tpbmdfYXBpX2tleQ.display_name": {
+          "source": "Tracking API Key",
+          "message": "Ключ трекінгового API"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.dHJhY2tpbmdfYXBpX2tleQ.short_desc": {
+          "source": "Customer.io Tracking API key for Track API authentication",
+          "message": "Ключ аутентифікації API Track для Customer.io"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Customer.io REST API",
+          "message": "Підключення до REST API Customer.io"
+        }
+      }
+    }
+  }
+}

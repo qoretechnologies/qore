@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.U3F1YXJlc3BhY2VSZXN0Q2xpZW50.scheme.U3F1YXJlc3BhY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Squarespace Commerce REST API for orders, products, inventory, and transactions",
+          "message": "注文、製品、在庫、取引のための Squarespace コマース REST API への接続"
+        },
+        "connection.U3F1YXJlc3BhY2VSZXN0Q2xpZW50.scheme.U3F1YXJlc3BhY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Squarespace REST Connection",
+          "message": "Squarespace REST 接続"
+        },
+        "connection.U3F1YXJlc3BhY2VSZXN0Q2xpZW50.scheme.U3F1YXJlc3BhY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Squarespace Commerce REST API",
+          "message": "Squarespace コマース REST API への接続"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.RHJvcGJveFJlc3RDbGllbnQ.scheme.RHJvcGJveFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [Dropbox](https://www.dropbox.com) REST API for cloud file storage and sharing.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from a [Dropbox app](https://www.dropbox.com/developers/apps). The connection uses the `dropbox://` URL scheme.\n\nThe app must be granted the scopes this connection requests, and `token_access_type` must remain `offline`; Dropbox issues no refresh token otherwise, and the connection stops working four hours after it is authorized",
+          "message": "З’єднання з REST API [Dropbox](https://www.dropbox.com) для хмарного зберігання та спільного доступу до файлів.\n\nВимагає OAuth2-credentіали (`oauth2_client_id` та `oauth2_client_secret`) від [додатку Dropbox](https://www.dropbox.com/developers/apps). З’єднання використовує схему URL `dropbox://`.\n\nДодаток має бути наділений дозволами, які вимагає це з’єднання, і `token_access_type` має залишатися `offline`; інакше Dropbox не видаватиме оновлювальний токен, і з’єднання перестане працювати через чотири години після авторизації"
+        },
+        "connection.RHJvcGJveFJlc3RDbGllbnQ.scheme.RHJvcGJveFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Dropbox",
+          "message": "Dropbox"
+        },
+        "connection.RHJvcGJveFJlc3RDbGllbnQ.scheme.RHJvcGJveFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Dropbox REST API",
+          "message": "З’єднання з REST API Dropbox"
+        }
+      }
+    }
+  }
+}

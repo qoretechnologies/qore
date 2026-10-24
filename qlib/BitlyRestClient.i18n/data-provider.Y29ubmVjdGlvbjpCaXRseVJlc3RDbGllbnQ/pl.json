@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Bitly REST API for URL shortening, branded links, QR codes, campaigns, and click analytics",
+          "message": "Połączenie z interfejsem API REST Bitly do skracania URL, tworzenia spersonalizowanych linków, kodów QR, kampanii i analizy kliknięć"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Bitly REST Connection",
+          "message": "Połączenie REST Bitly"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Bitly API access token used for Bearer token authentication.\n\n**To obtain your access token:**\n1. Log in to your Bitly account\n2. Go to **Settings** > **Developer settings** > **API**\n3. Generate a new access token\n\nRate limit: 5 concurrent connections, hourly and monthly limits based on plan",
+          "message": "Token dostępu do interfejsu API Bitly używany do uwierzytelniania typu Bearer.\n\n**Aby uzyskać token dostępu:**\n1. Zaloguj się na swoje konto Bitly\n2. Przejdź do **Ustawienia** > **Ustawienia dewelopera** > **API**\n3. Wygeneruj nowy token dostępu\n\nLimit szybkości: 5 połączeń równoległych, limity godzinne i miesięczne zależą od planu"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Access Token",
+          "message": "Token dostępu do interfejsu API"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Bitly API access token for authentication",
+          "message": "Token dostępu do interfejsu API Bitly do uwierzytelniania"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Bitly REST API",
+          "message": "Połączenie z interfejsem API REST Bitly"
+        }
+      }
+    }
+  }
+}

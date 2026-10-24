@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [ElevenLabs](https://elevenlabs.io) REST API for AI voice synthesis, text-to-speech, and audio processing services.\n\nAn API key is required for authentication. To obtain one, sign in to your ElevenLabs account and navigate to **Profile + API Key** in the bottom-left menu at [elevenlabs.io](https://elevenlabs.io)",
+          "message": "與 [ElevenLabs](https://elevenlabs.io) 的 REST API 連線，用於 AI 語音合成、語音轉文字及音訊處理服務。\n\n需要 API 金鑰進行驗證。請登入 ElevenLabs 帳戶，並在 [elevenlabs.io](https://elevenlabs.io) 的左下角選單中前往 **個人檔案 + API 金鑰**"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "ElevenLabs REST Connection",
+          "message": "ElevenLabs REST 連線"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "To connect to ElevenLabs, you need an API key:\n\n1. Sign in to your account at [elevenlabs.io](https://elevenlabs.io)\n2. Click your **profile icon** in the bottom-left corner\n3. Select **Profile + API Key**\n4. Click the **eye icon** to reveal your API key, then copy it\n\nKeep your API key secure and never share it publicly.",
+          "message": "連線 ElevenLabs 需要 API 金鑰：\n\n1. 請至 [elevenlabs.io](https://elevenlabs.io) 登入帳戶\n2. 點選左下角的 **個人檔案圖示**\n3. 選取 **個人檔案 + API 金鑰**\n4. 點擊 **眼睛圖示** 以顯示 API 金鑰，然後複製\n\n請妥善保管您的 API 金鑰，切勿公開分享"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your ElevenLabs API Key",
+          "message": "如何取得您的 ElevenLabs API 金鑰"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The ElevenLabs API key used for authentication; sent as the `xi-api-key` header. To obtain a key, sign in at [elevenlabs.io](https://elevenlabs.io) and navigate to **Profile + API Key** in the bottom-left menu",
+          "message": "用於驗證的 ElevenLabs API 金鑰；以 `xi-api-key` 標頭傳送。請登入 [elevenlabs.io](https://elevenlabs.io)，並在左下角選單中前往 **個人檔案 + API 金鑰**"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "ElevenLabs API key for authentication",
+          "message": "用於驗證的 ElevenLabs API 金鑰"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "Use the EU data residency endpoint (api.eu.residency.elevenlabs.io)",
+          "message": "使用歐洲資料存放區端點 (api.eu.residency.elevenlabs.io)"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "EU",
+          "message": "歐洲"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "Use the global API endpoint (api.elevenlabs.io)",
+          "message": "使用全球 API 端點 (api.elevenlabs.io)"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "US (Global)",
+          "message": "美國（全球）"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "The API region to use; `us` (default) uses the global endpoint, `eu` uses the EU data residency endpoint",
+          "message": "要使用的 API 區域；`us`（預設）使用全球端點，`eu` 使用歐洲資料保留端點"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "區域"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "The API region to use",
+          "message": "要使用的 API 區域"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the ElevenLabs REST API",
+          "message": "連接到 ElevenLabs REST API 的連線"
+        }
+      }
+    }
+  }
+}

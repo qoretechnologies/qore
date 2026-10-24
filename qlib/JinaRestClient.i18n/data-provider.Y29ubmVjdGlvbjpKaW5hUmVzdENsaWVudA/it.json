@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [Jina AI](https://jina.ai) REST API for embeddings and reranking, classification, content extraction, and batch processing.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Jina AI dashboard](https://jina.ai/?sui=apikey).\n\nThe models used when this connection is selected for embeddings and for reranking are set independently with the `embedding-model` and `rerank-model` options. The connection ping checks authentication using a small account batch listing without generating embeddings.",
+          "message": "Una connessione all'API REST di [Jina AI](https://jina.ai) per embedding e riordino, classificazione, estrazione di contenuti e elaborazione batch.\n\nRichiede una chiave API per l'autenticazione Bearer. Ottieni la tua chiave API dal [dashboard di Jina AI](https://jina.ai/?sui=apikey).\n\nI modelli utilizzati quando questa connessione viene selezionata per gli embedding e per il riordino sono impostati in modo indipendente con le opzioni `embedding-model` e `rerank-model`. Il ping della connessione verifica l'autenticazione tramite un elenco di piccole partite di account senza generare embedding."
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Jina AI REST Connection",
+          "message": "Connessione REST di Jina AI"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1",
+          "message": "V1"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "The API version to use.",
+          "message": "La versione dell'API da utilizzare."
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Versione API"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Versione dell'API da utilizzare"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Jina AI API key used for Bearer authentication. Get a key from the [Jina AI dashboard](https://jina.ai/api-dashboard/key-manager).",
+          "message": "La chiave API di Jina AI utilizzata per l'autenticazione Bearer. Ottienila dal [dashboard di Jina AI](https://jina.ai/api-dashboard/key-manager)."
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Chiave API"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Jina AI API key for authentication",
+          "message": "Chiave API di Jina AI per l'autenticazione"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmVsc2VyLXYy.display_name": {
+          "source": "Elser V2",
+          "message": "Elser V2"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtY29kZS1lbWJlZGRpbmdzLTAuNWI.display_name": {
+          "source": "Jina Code Embeddings 0.5B",
+          "message": "Jina Code Embeddings 0.5B"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtY29kZS1lbWJlZGRpbmdzLTEuNWI.display_name": {
+          "source": "Jina Code Embeddings 1.5B",
+          "message": "Jina Code Embeddings 1.5B"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtY29sYmVydC12MS1lbg.display_name": {
+          "source": "Jina Colbert V1 En",
+          "message": "Jina Colbert V1 En"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtY29sYmVydC12Mg.display_name": {
+          "source": "Jina Colbert V2",
+          "message": "Jina Colbert V2"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtY2xpcC12MQ.display_name": {
+          "source": "Jina Clip V1",
+          "message": "Jina Clip V1"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtY2xpcC12Mg.display_name": {
+          "source": "Jina Clip V2",
+          "message": "Jina Clip V2"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtZW1iZWRkaW5ncy12Mi1iYXNlLWNvZGU.display_name": {
+          "source": "Jina Embeddings V2 Base Code",
+          "message": "Jina Embeddings V2 Base Code"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtZW1iZWRkaW5ncy12Mi1iYXNlLWRl.display_name": {
+          "source": "Jina Embeddings V2 Base De",
+          "message": "Jina Embeddings V2 Base De"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtZW1iZWRkaW5ncy12Mi1iYXNlLWVu.display_name": {
+          "source": "Jina Embeddings V2 Base En",
+          "message": "Jina Embeddings V2 Base En"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtZW1iZWRkaW5ncy12Mi1iYXNlLWVz.display_name": {
+          "source": "Jina Embeddings V2 Base Es",
+          "message": "Jina Embeddings V2 Base Es"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtZW1iZWRkaW5ncy12Mi1iYXNlLXpo.display_name": {
+          "source": "Jina Embeddings V2 Base Zh",
+          "message": "Jina Embeddings V2 Base Zh"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtZW1iZWRkaW5ncy12Mw.display_name": {
+          "source": "Jina Embeddings V3",
+          "message": "Jina Embeddings V3"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtZW1iZWRkaW5ncy12NA.display_name": {
+          "source": "Jina Embeddings V4",
+          "message": "Jina Embeddings V4"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtZW1iZWRkaW5ncy12NS10ZXh0LW5hbm8.display_name": {
+          "source": "Jina Embeddings V5 Text Nano",
+          "message": "Jina Embeddings V5 Text Nano"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtZW1iZWRkaW5ncy12NS10ZXh0LXNtYWxs.display_name": {
+          "source": "Jina Embeddings V5 Text Small",
+          "message": "Jina Embeddings V5 Text Small"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtZW1iZWRkaW5ncy12NS1vbW5pLW5hbm8.display_name": {
+          "source": "Jina Embeddings V5 Omni Nano",
+          "message": "Jina Embeddings V5 Omni Nano"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtZW1iZWRkaW5ncy12NS1vbW5pLXNtYWxs.display_name": {
+          "source": "Jina Embeddings V5 Omni Small",
+          "message": "Jina Embeddings V5 Omni Small"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.desc": {
+          "source": "The Jina AI embedding model used by embedding clients when this connection is selected for embeddings; sent as the `model` parameter to the `/embeddings` endpoint.\n\nExample values: `jina-embeddings-v3` (multilingual, task-aware; the default), `jina-embeddings-v2-base-en` (English-only v2), `jina-embeddings-v2-base-code` (code-specialized)",
+          "message": "Il modello di embedding di Jina AI utilizzato dai client di embedding quando questa connessione è selezionata; inviato come parametro `model` all'endpoint `/embeddings`.\n\nValori di esempio: `jina-embeddings-v3` (multilingue, consapevole del compito; predefinito), `jina-embeddings-v2-base-en` (inglese solo v2), `jina-embeddings-v2-base-code` (specializzato in codice"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.display_name": {
+          "source": "Embedding Model",
+          "message": "Modello di embedding"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.ZW1iZWRkaW5nLW1vZGVs.short_desc": {
+          "source": "Jina AI embedding model name",
+          "message": "Nome del modello di embedding di Jina AI"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.cmVyYW5rLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtY29sYmVydC12MS1lbg.display_name": {
+          "source": "Jina Colbert V1 En",
+          "message": "Jina Colbert V1 En"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.cmVyYW5rLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtY29sYmVydC12Mg.display_name": {
+          "source": "Jina Colbert V2",
+          "message": "Jina Colbert V2"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.cmVyYW5rLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtcmVyYW5rZXItbTA.display_name": {
+          "source": "Jina Reranker M0",
+          "message": "Jina Reranker M0"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.cmVyYW5rLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtcmVyYW5rZXItdjEtYmFzZS1lbg.display_name": {
+          "source": "Jina Reranker V1 Base En",
+          "message": "Jina Reranker V1 Base En"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.cmVyYW5rLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtcmVyYW5rZXItdjEtdGlueS1lbg.display_name": {
+          "source": "Jina Reranker V1 Tiny En",
+          "message": "Jina Reranker V1 Tiny En"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.cmVyYW5rLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtcmVyYW5rZXItdjEtdHVyYm8tZW4.display_name": {
+          "source": "Jina Reranker V1 Turbo En",
+          "message": "Jina Reranker V1 Turbo En"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.cmVyYW5rLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtcmVyYW5rZXItdjItYmFzZS1tdWx0aWxpbmd1YWw.display_name": {
+          "source": "Jina Reranker V2 Base Multilingual",
+          "message": "Jina Reranker V2 Base Multilingual"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.cmVyYW5rLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtcmVyYW5rZXItdjM.display_name": {
+          "source": "Jina Reranker V3",
+          "message": "Jina Reranker V3"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.cmVyYW5rLW1vZGVs.allowed_values.c3RyaW5nOmppbmEtcmVyYW5rZXItdjMuNQ.display_name": {
+          "source": "Jina Reranker V3.5",
+          "message": "Jina Reranker V3.5"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.cmVyYW5rLW1vZGVs.desc": {
+          "source": "The Jina AI reranking model used by reranking clients when this connection is selected for reranking; sent as the `model` parameter to the `/rerank` endpoint.\n\nReranking models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `jina-reranker-v2-base-multilingual` (multilingual cross-encoder; the default), `jina-colbert-v2` (late-interaction, multi-vector)",
+          "message": "Il modello di reranking di Jina AI utilizzato dai client di reranking quando questa connessione è selezionata; inviato come parametro `model` all'endpoint `/rerank`.\n\nI modelli di reranking costituiscono una famiglia separata rispetto ai modelli di embedding e non possono essere usati in modo intercambiabile.\n\nValori di esempio: `jina-reranker-v2-base-multilingual` (cross-encoder multilingue; predefinito), `jina-colbert-v2` (interazione tardiva, multi-vettore)"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.cmVyYW5rLW1vZGVs.display_name": {
+          "source": "Reranking Model",
+          "message": "Modello di rielaborazione"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.option.cmVyYW5rLW1vZGVs.short_desc": {
+          "source": "Jina AI reranking model name",
+          "message": "Nome del modello di reranking di Jina AI"
+        },
+        "connection.SmluYVJlc3RDbGllbnQ.scheme.SmluYVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to Jina AI search and content processing APIs",
+          "message": "Una connessione alle API di ricerca e elaborazione contenuti di Jina AI"
+        }
+      }
+    }
+  }
+}

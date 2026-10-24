@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.desc": {
+          "source": "A connection to an SMTP server",
+          "message": "SMTPサーバーへの接続"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.display_name": {
+          "source": "SMTP Connection",
+          "message": "SMTP 接続"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOk9BVVRIQkVBUkVS.desc": {
+          "source": "OAuth2 bearer-token authentication with SASL `OAUTHBEARER` ([RFC 7628](https://datatracker.ietf.org/doc/html/rfc7628)); requires the `token` option",
+          "message": "SASL `OAUTHBEARER` を用いた OAuth2 ベアラートークン認証 ([RFC 7628](https://datatracker.ietf.org/doc/html/rfc7628)); `token` オプションが必要"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOk9BVVRIQkVBUkVS.display_name": {
+          "source": "SASL OAUTHBEARER",
+          "message": "SASL OAUTHBEARER"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOlBMQUlO.desc": {
+          "source": "Username and password authentication with SASL `PLAIN`",
+          "message": "SASL `PLAIN` を用いたユーザー名とパスワード認証"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOlBMQUlO.display_name": {
+          "source": "SASL PLAIN",
+          "message": "SASL PLAIN"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOlhPQVVUSDI.desc": {
+          "source": "OAuth2 bearer-token authentication with SASL `XOAUTH2`; requires the `token` option",
+          "message": "SASL `XOAUTH2` を用いた OAuth2 ベアラートークン認証；`token` オプションが必要"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOlhPQVVUSDI.display_name": {
+          "source": "SASL XOAUTH2",
+          "message": "SASL XOAUTH2"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOmF1dG8.desc": {
+          "source": "Select the mechanism from the server's `EHLO` capability list",
+          "message": "サーバーの `EHLO` 機能リストからメカニズムを選択"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Automatic",
+          "message": "自動"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.desc": {
+          "source": "Forces a specific SASL authentication mechanism instead of selecting one from the mechanisms the server advertises in its `EHLO` reply.\n\nLeave this at `auto` unless a server advertises a mechanism it cannot actually complete; the automatic selection always uses the capability list read after `STARTTLS`, which is the list that reflects what the secure connection really supports",
+          "message": "サーバーが `EHLO` 応答で広告するメカニズムから自動選択するのではなく、特定の SASL 認証メカニズムを強制します。\n\nサーバーが実際に完了できないメカニズムを広告している場合を除き、`auto` のままにしてください。自動選択は `STARTTLS` の後に読み取った機能リストを使用し、これは安全な接続が実際にサポートする内容を反映しています"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.display_name": {
+          "source": "Auth Mechanism",
+          "message": "認証メカニズム"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.short_desc": {
+          "source": "Forces a specific SASL authentication mechanism",
+          "message": "特定のSASL認証メカニズムを強制します"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.allowed_values.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Security implied only by the protocol scheme",
+          "message": "プロトコルスキームによるセキュリティの暗黙的指定"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.allowed_values.c3RyaW5nOnNzbA.desc": {
+          "source": "Immediately negotiate an SSL session; fo not use `STARTTLS`",
+          "message": "即座に SSL セッションをネゴシエートします。`STARTTLS` を使用しないでください"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.allowed_values.c3RyaW5nOnRscw.desc": {
+          "source": "Make a standard socket connection and immediately issue a `STARTTLS` command for a secure connection",
+          "message": "標準のソケット接続を行い、即座に安全な接続用の `STARTTLS` コマンドを発行"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.desc": {
+          "source": "Sets the security option for the object; note that this option, if set to any value other than `default` will override any security implied by the URL scheme",
+          "message": "オブジェクトのセキュリティオプションを設定します。`default` 以外の値に設定すると、URLスキームによるセキュリティの暗黙的指定が上書きされます"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.display_name": {
+          "source": "Security Type",
+          "message": "セキュリティの種類"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.short_desc": {
+          "source": "Sets the type of security to use",
+          "message": "使用するセキュリティの種類を設定します"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; only used if no username or password is set in the URL and if the `username` option is also used; conflicts with the `token` option",
+          "message": "認証用パスワード。URL にユーザー名またはパスワードが設定されておらず、`username` オプションも使用されている場合にのみ使用されます。`token` オプションと競合します"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "パスワード"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password to use for authentication",
+          "message": "認証に使用するパスワード"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "An OAuth2 bearer token to use for authentication.\n\nWhen set, the connection authenticates with a bearer-token SASL mechanism (`XOAUTH2` or `OAUTHBEARER`) instead of a password, which is what providers that have retired password logins require.\n\n**Requires the `username` option** and conflicts with the `password` option and with credentials given in the URL. Access tokens expire; refresh them on the connection rather than relying on a token captured once",
+          "message": "認証に使用するOAuth2ベアラートークン。\n\n設定された場合、接続はベアラートークンSASLメカニズム (`XOAUTH2` または `OAUTHBEARER`) を使って認証し、パスワードではなくなります。これはパスワードログインを廃止したプロバイダーが必要とするものです。\n\n**`username` オプションが必要**であり、`password` オプションとURLに渡された資格情報と競合します。アクセストークンは有効期限が切れます。一度取得したトークンに頼るのではなく、接続内でトークンを更新してください"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "認証トークン"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "An OAuth2 bearer token for SASL XOAUTH2 / OAUTHBEARER logins",
+          "message": "SASL XOAUTH2 / OAUTHBEARER ログイン用のOAuth2ベアラートークン"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL and if either the `password` or the `token` option is also used",
+          "message": "認証に使用するユーザー名。URLにユーザー名またはパスワードが設定されておらず、かつ `password` または `token` オプションも使用されている場合にのみ使用されます"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "ユーザー名"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "The username to use for authentication",
+          "message": "認証に使用するユーザー名"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to an SMTP server",
+          "message": "SMTPサーバーへの接続"
+        }
+      }
+    }
+  }
+}

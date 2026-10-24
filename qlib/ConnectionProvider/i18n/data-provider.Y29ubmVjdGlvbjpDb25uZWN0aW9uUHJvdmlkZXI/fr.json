@@ -1,0 +1,485 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.desc": {
+          "source": "A connection to the local filesystem",
+          "message": "Une connexion au système de fichiers local"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.display_name": {
+          "source": "Filesystem Connection",
+          "message": "Connexion système de fichiers"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.desc": {
+          "source": "Does not mark the connection as down if the filesystem location is read only; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
+          "message": "Ne marque pas la connexion comme inactive si l'emplacement du système de fichiers est en lecture seule ; à utiliser par exemple si la connexion doit pointer vers un répertoire de base en lecture seule ; les répertoires d'interface doivent normalement être modifiables"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.display_name": {
+          "source": "Read-Only",
+          "message": "En lecture seule"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.short_desc": {
+          "source": "Sets the read-only flag on the connection",
+          "message": "Définit le drapeau en lecture seule sur la connexion"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the local filesystem",
+          "message": "Une connexion au système de fichiers local"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to an FTP server with the `ftp` or `ftps` (secure, not to be confused with sftp) protocols",
+          "message": "Une connexion à un serveur FTP avec les protocoles `ftp` ou `ftps` (sécurisés, à ne pas confondre avec sftp)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.display_name": {
+          "source": "FTP Connection",
+          "message": "Connexion FTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; only used if no username or password is set in the URL and if the `username` option is also used",
+          "message": "Le mot de passe pour l'authentification ; utilisé uniquement si aucun nom d'utilisateur ou mot de passe n'est défini dans l'URL et si l'option `username` est également utilisée"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Mot de passe"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.cGFzc3dvcmQ.short_desc": {
+          "source": "Sets the password for authentication",
+          "message": "Définit le mot de passe pour l'authentification"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL and if the `password` option is also used",
+          "message": "Le nom d'utilisateur pour l'authentification ; utilisé uniquement si aucun nom d'utilisateur ou mot de passe n'est défini dans l'URL et si l'option `password` est également utilisée"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Nom d'utilisateur"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for authentication",
+          "message": "Définit le nom d'utilisateur pour l'authentification"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to an FTP server",
+          "message": "Une connexion à un serveur FTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.desc": {
+          "source": "A connectioas to a HTTP server",
+          "message": "Une connexion à un serveur HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.display_name": {
+          "source": "HTTP Connection",
+          "message": "Connexion HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connection timeout to use in milliseconds (default: 45 seconds)",
+          "message": "Le délai d'expiration de connexion à utiliser en millisecondes (par défaut : 45 secondes)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Délai d'expiration de connexion"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "Le délai d'expiration de connexion en millisecondes"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.YXNzdW1lX2VuY29kaW5n.desc": {
+          "source": "Assumes the given encoding if the server does not send a `charset` value",
+          "message": "Suppose l'encodage donné si le serveur n'envoie pas de valeur `charset`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.YXNzdW1lX2VuY29kaW5n.display_name": {
+          "source": "Assume Character Encoding",
+          "message": "Supposer l'encodage de caractères"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.YXNzdW1lX2VuY29kaW5n.short_desc": {
+          "source": "Sets the character encoding to assume if 'charset' is missing",
+          "message": "Définit l'encodage de caractères à supposer si 'charset' est manquant"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.desc": {
+          "source": "Disables automatic pings; useful for rate-limited or metered connections",
+          "message": "Désactive les pings automatiques ; utile pour les connexions limitées en débit ou mesurées"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.display_name": {
+          "source": "Disable Automatic Pings?",
+          "message": "Désactiver les pings automatiques ?"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.short_desc": {
+          "source": "Disables automatic pings",
+          "message": "Désactive les pings automatiques"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZW5jb2RlX2NoYXJz.desc": {
+          "source": "A set of additional characters to subject to percent encoding in URLs",
+          "message": "Caractères supplémentaires à encoder en pourcentage dans les URL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZW5jb2RlX2NoYXJz.display_name": {
+          "source": "Encode URL Characters",
+          "message": "Encoder les caractères d'URL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZW5jb2RlX2NoYXJz.short_desc": {
+          "source": "A set of additional characters to subject to percent encoding in URLs",
+          "message": "Caractères supplémentaires à encoder en pourcentage dans les URL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True` then HTTP status codes indicating errors will not cause an `HTTP-CLIENT-RECEIVE-ERROR` exception to be raised, rather such responses will be passed through to the caller like any other response",
+          "message": "Si `True`, alors les codes d'état HTTP indiquant des erreurs ne lèveront pas d'exception `HTTP-CLIENT-RECEIVE-ERROR` ; ces réponses seront plutôt transmises à l'appelant comme n'importe quelle autre réponse"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Error Passthrough",
+          "message": "Transmission directe des erreurs"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "If errors should be returned like normal successful responses",
+          "message": "Indique si les erreurs doivent être renvoyées comme des succès"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aGVhZGVycw.desc": {
+          "source": "Sets HTTP headers to include in each outgoing request",
+          "message": "Définit les en-têtes HTTP à inclure dans chaque requête sortante"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aGVhZGVycw.display_name": {
+          "source": "HTTP Headers",
+          "message": "En-têtes HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aGVhZGVycw.short_desc": {
+          "source": "Sets HTTP headers to include in each request",
+          "message": "Définit les en-têtes HTTP à inclure dans chaque requête"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOjEuMA.desc": {
+          "source": "HTTP/1.0 only",
+          "message": "HTTP/1.0 uniquement"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOjEuMQ.desc": {
+          "source": "HTTP/1.1 only",
+          "message": "HTTP/1.1 uniquement"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOjIuMA.desc": {
+          "source": "Require HTTP/2, fail if the server doesn't support it (TLS required)",
+          "message": "Exiger HTTP/2, échouer si le serveur ne le prend pas en charge (TLS requis)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOjMuMA.desc": {
+          "source": "Require HTTP/3 (QUIC), fail if unavailable (TLS required)",
+          "message": "Exiger HTTP/3 (QUIC), échouer si indisponible (TLS requis)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOmF1dG8.desc": {
+          "source": "Use HTTP/3-first happy eyeballs for HTTPS; fall back to HTTP/2 if needed (default)",
+          "message": "Utiliser Happy Eyeballs privilégiant HTTP/3 pour HTTPS ; basculer vers HTTP/2 si nécessaire (par défaut)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.desc": {
+          "source": "The HTTP version to use: `auto` (HTTP/3-first happy eyeballs for HTTPS, default), `1.0`, `1.1`, `2.0`, or `3.0`. HTTP/2 requires TLS and is negotiated via ALPN. HTTP/3 requires TLS and uses QUIC as the transport protocol",
+          "message": "Version HTTP à utiliser : `auto` (Happy Eyeballs privilégiant HTTP/3 pour HTTPS, par défaut), `1.0`, `1.1`, `2.0` ou `3.0`. HTTP/2 requiert TLS et est négocié via ALPN. HTTP/3 requiert TLS et utilise QUIC comme protocole de transport"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.display_name": {
+          "source": "HTTP Version",
+          "message": "Version HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.short_desc": {
+          "source": "The HTTP version to use",
+          "message": "La version HTTP à utiliser"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3JlZGlyZWN0cw.desc": {
+          "source": "Sets the maximum HTTP redirects to support in a single request",
+          "message": "Définit le nombre maximal de redirections HTTP à prendre en charge pour une seule requête"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3JlZGlyZWN0cw.display_name": {
+          "source": "Max Redirects",
+          "message": "Redirections max"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3JlZGlyZWN0cw.short_desc": {
+          "source": "Sets the maximum HTTP redirects to support",
+          "message": "Définit le nombre maximal de redirections HTTP à prendre en charge"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.desc": {
+          "source": "The maximum size in bytes of a response body that is received into memory, as received and after its content encoding (such as `gzip`) is decoded; `0` (the default) means no limit.\n\nA larger response fails the request, so a huge response, or a small compressed response that expands to a huge size, cannot exhaust memory.",
+          "message": "La taille maximale en octets d'un corps de réponse reçu en mémoire, tel que reçu et après le décodage de son encodage de contenu (comme `gzip`) ; `0` (la valeur par défaut) signifie aucune limite.\n\nUne réponse plus grande fait échouer la requête, de sorte qu'une réponse énorme, ou une petite réponse compressée qui se décompresse en une taille énorme, ne peut pas épuiser la mémoire."
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.display_name": {
+          "source": "Max Response Body Size",
+          "message": "Taille maximale du corps de réponse"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.short_desc": {
+          "source": "The maximum size of a response body received into memory",
+          "message": "La taille maximale d'un corps de réponse reçu en mémoire"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2F1dGg.desc": {
+          "source": "Enables Kerberos/SPNEGO HTTP Negotiate authentication for REST clients that support it; raw HTTPClient paths reject this option with HTTP-NEGOTIATE-AUTH-ERROR",
+          "message": "Active l'authentification Kerberos/SPNEGO HTTP Negotiate pour les clients REST qui la prennent en charge ; les chemins HTTPClient bruts rejettent cette option avec HTTP-NEGOTIATE-AUTH-ERROR"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2F1dGg.display_name": {
+          "source": "Kerberos Negotiate Auth?",
+          "message": "Authentification Kerberos Negotiate ?"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2F1dGg.short_desc": {
+          "source": "Enables Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Active l'authentification Kerberos/SPNEGO HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.desc": {
+          "source": "Credential cache to use for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Cache d'identifiants à utiliser pour l'authentification Kerberos/SPNEGO HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.display_name": {
+          "source": "Kerberos Credential Cache",
+          "message": "Cache d'identifiants Kerberos"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.short_desc": {
+          "source": "Credential cache for Kerberos HTTP Negotiate authentication",
+          "message": "Cache d'identifiants pour l'authentification Kerberos HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "Do not delegate credentials",
+          "message": "Ne pas déléguer les identifiants"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed_values.c3RyaW5nOmRpcmVjdA.desc": {
+          "source": "Delegate the initiator credential directly where supported",
+          "message": "Déléguer directement l'identifiant de l'initiateur lorsque c'est pris en charge"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed_values.c3RyaW5nOnM0dQ.desc": {
+          "source": "Use constrained delegation with S4U where supported",
+          "message": "Utiliser la délégation contrainte avec S4U lorsque c'est pris en charge"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.desc": {
+          "source": "Delegation mode for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Mode de délégation pour l'authentification Kerberos/SPNEGO HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.display_name": {
+          "source": "Kerberos Delegation Mode",
+          "message": "Mode de délégation Kerberos"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.short_desc": {
+          "source": "Delegation mode for Kerberos HTTP Negotiate authentication",
+          "message": "Mode de délégation pour l'authentification Kerberos HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2tleXRhYg.desc": {
+          "source": "Client keytab to use for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Fichier keytab client à utiliser pour l'authentification Kerberos/SPNEGO HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2tleXRhYg.display_name": {
+          "source": "Kerberos Client Keytab",
+          "message": "Keytab client Kerberos"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2tleXRhYg.short_desc": {
+          "source": "Client keytab for Kerberos HTTP Negotiate authentication",
+          "message": "Fichier keytab client pour l'authentification Kerberos HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.desc": {
+          "source": "If True, send the initial Negotiate token before receiving a 401 challenge",
+          "message": "Si True, envoyer le jeton Negotiate initial avant de recevoir un défi 401"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.display_name": {
+          "source": "Preemptive Kerberos Negotiate?",
+          "message": "Kerberos Negotiate préemptif ?"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.short_desc": {
+          "source": "Sends the initial Negotiate token without waiting for a 401 challenge",
+          "message": "Envoie le jeton Negotiate initial sans attendre de défi 401"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.desc": {
+          "source": "The Kerberos service principal to use for HTTP Negotiate authentication; if omitted, REST clients derive a host-based HTTP service name from the URL",
+          "message": "Le principal de service Kerberos à utiliser pour l'authentification HTTP Negotiate ; si omis, les clients REST dérivent un nom de service HTTP basé sur l'hôte à partir de l'URL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.display_name": {
+          "source": "Kerberos Service Principal",
+          "message": "Principal de service Kerberos"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.short_desc": {
+          "source": "The Kerberos HTTP service principal",
+          "message": "Le principal de service HTTP Kerberos"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfZGF0YQ.desc": {
+          "source": "The X.509 certificate data in PEM format (string) or in DER format (binary); if this option is set, then `ssl_cert_path` is ignored",
+          "message": "Les données du certificat X.509 au format PEM (chaîne) ou au format DER (binaire) ; si cette option est définie, `ssl_cert_path` est ignorée"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfZGF0YQ.display_name": {
+          "source": "SSL Certificate Data",
+          "message": "Données du certificat SSL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfZGF0YQ.short_desc": {
+          "source": "X.509 certificate data",
+          "message": "Données du certificat X.509"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfcGF0aA.desc": {
+          "source": "The location of a X.509 client certificate file in PEM format; processed with `FileLocationHandler`, so it may be a bare path or any registered scheme (`file://`, `http(s)://`, `sftp://`, ...)",
+          "message": "Emplacement du fichier de certificat client X.509 au format PEM ; traité avec `FileLocationHandler`, donc il peut être un chemin simple ou un schéma enregistré (`file://`, `http(s)://`, `sftp://`, ...)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfcGF0aA.display_name": {
+          "source": "SSL Certificate Location",
+          "message": "Emplacement du certificat SSL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfcGF0aA.short_desc": {
+          "source": "The location of the X.509 client certificate to use",
+          "message": "Emplacement du certificat client X.509 à utiliser"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9kYXRh.desc": {
+          "source": "The X.509 private key data in PEM format (string) or in DER format (binary); if this option is set, then `ssl_key_path` is ignored",
+          "message": "Données de clé privée X.509 au format PEM (chaîne) ou au format DER (binaire) ; si cette option est définie, `ssl_key_path` est ignoré"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9kYXRh.display_name": {
+          "source": "SSL Key Data",
+          "message": "Données de clé SSL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9kYXRh.short_desc": {
+          "source": "X.509 private key data",
+          "message": "Données de clé privée X.509"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXNzd29yZA.desc": {
+          "source": "The password to the private key given with `ssl_key_path`",
+          "message": "Mot de passe de la clé privée fourni avec `ssl_key_path`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXNzd29yZA.display_name": {
+          "source": "SSL Key Password",
+          "message": "Mot de passe de la clé SSL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXNzd29yZA.short_desc": {
+          "source": "The password to the private key",
+          "message": "Mot de passe de la clé privée"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXRo.desc": {
+          "source": "The location of a private key file in PEM format for the X.509 client certificate; processed with `FileLocationHandler`, so it may be a bare path or any registered scheme (`file://`, `http(s)://`, `sftp://`, ...)",
+          "message": "Emplacement du fichier de clé privée au format PEM pour le certificat client X.509 ; traité avec `FileLocationHandler`, donc il peut être un chemin simple ou n'importe quel schéma enregistré (`file://`, `http(s)://`, `sftp://`, ...)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXRo.display_name": {
+          "source": "SSL Key Location",
+          "message": "Emplacement de la clé SSL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXRo.short_desc": {
+          "source": "The location of the private key file",
+          "message": "Emplacement du fichier de clé privée"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX3ZlcmlmeV9jZXJ0.desc": {
+          "source": "if `True` then the server's certificate will only be accepted if it's verified",
+          "message": "si `True` alors le certificat du serveur ne sera accepté que s'il est vérifié"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX3ZlcmlmeV9jZXJ0.display_name": {
+          "source": "SSL Verify Certificate",
+          "message": "Vérifier le certificat SSL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX3ZlcmlmeV9jZXJ0.short_desc": {
+          "source": "If true then server certificates will be verified",
+          "message": "Si vrai, les certificats du serveur seront vérifiés"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for HTTP basic authentication; only used if no username or password is set in the URL and if the `username` option is also used",
+          "message": "Mot de passe pour l'authentification basique HTTP ; utilisé uniquement si aucun nom d'utilisateur ou mot de passe n'est défini dans l'URL et si l'option `username` est également utilisée"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Mot de passe"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for HTTP basic authentication",
+          "message": "Mot de passe pour l'authentification basique HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19ib2R5.desc": {
+          "source": "Any message body to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set or if `ping_method` is `GET`",
+          "message": "Tout corps de message à envoyer lors de l'exécution d'une opération de ping avancée ; ignoré si l'un de `ping_method` ou `ping_path` n'est pas défini ou si `ping_method` est `GET`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19ib2R5.display_name": {
+          "source": "Ping Body",
+          "message": "Corps du ping"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19ib2R5.short_desc": {
+          "source": "The message body to send with pings",
+          "message": "Le corps du message à envoyer avec les pings"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.desc": {
+          "source": "Any HTTP headers to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set",
+          "message": "Tous les en-têtes HTTP à envoyer lors de l'exécution d'une opération de ping avancée ; ignoré si l'un de `ping_method` ou `ping_path` n'est pas défini"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.display_name": {
+          "source": "Ping Headers",
+          "message": "En-têtes de ping"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.short_desc": {
+          "source": "Any HTTP headers to send with pings",
+          "message": "Tous les en-têtes HTTP à envoyer avec les pings"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.desc": {
+          "source": "The HTTP method to use for an advanced ping; this and `ping_path` must be set to make an HTTP request as a part of the socket polling ping operation; must be a valid HTTP method name",
+          "message": "La méthode HTTP à utiliser pour un ping avancé ; cette option et `ping_path` doivent être définies pour effectuer une requête HTTP dans le cadre de l'opération de ping par scrutation de socket ; doit être un nom de méthode HTTP valide"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.display_name": {
+          "source": "Ping Method",
+          "message": "Méthode de ping"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.short_desc": {
+          "source": "The HTTP method to use for pings",
+          "message": "La méthode HTTP à utiliser pour les pings"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19wYXRo.desc": {
+          "source": "The URI path to use for an advanced ping; this and `ping_method` must be set to make an HTTP request as a part of the socket polling ping operation.  If the value for this option begins with a `/` character, then it replaces any connection path for the HTTP client, otherwise the value is appended to the connection path for the HTTP client.",
+          "message": "Chemin URI à utiliser pour une requête ping avancée ; ce paramètre et `ping_method` doivent être définis pour effectuer une requête HTTP dans le cadre de l'opération de ping par sondage du socket. Si la valeur de ce paramètre commence par un caractère `/`, elle remplace le chemin de connexion pour le client HTTP, sinon elle est ajoutée au chemin de connexion pour le client HTTP."
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19wYXRo.display_name": {
+          "source": "Ping Path",
+          "message": "Chemin du ping"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19wYXRo.short_desc": {
+          "source": "The URI path to use for pings",
+          "message": "Le chemin d'URI à utiliser pour les pings"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJlX2VuY29kZWRfdXJscw.desc": {
+          "source": "If `true` then all URI paths in URLs are assumed to be already [percent encoded](https://en.wikipedia.org/wiki/Percent-encoding); if this flag is set and any unencoded characters are sent in a URL with a new request, an exception is raised",
+          "message": "Si `true`, tous les chemins d'URI dans les URL sont supposés déjà [encodés en pourcentage](https://en.wikipedia.org/wiki/Percent-encoding) ; si ce drapeau est activé et que des caractères non encodés sont envoyés dans une URL avec une nouvelle requête, une exception est levée"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJlX2VuY29kZWRfdXJscw.display_name": {
+          "source": "Pre-Encoded URLs",
+          "message": "URL pré-encodées"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJlX2VuY29kZWRfdXJscw.short_desc": {
+          "source": "If true then URLs are assumed to be preencoded",
+          "message": "Si vrai, les URL sont supposées être pré-encodées"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJveHk.desc": {
+          "source": "The HTTP proxy URL to use",
+          "message": "L'URL du proxy HTTP à utiliser"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJveHk.display_name": {
+          "source": "HTTP Proxy",
+          "message": "Proxy HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJveHk.short_desc": {
+          "source": "The HTTP proxy to use",
+          "message": "Le proxy HTTP à utiliser"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cmVkaXJlY3RfcGFzc3RocnU.desc": {
+          "source": "If `True` then redirect responses will be passed to the caller instead of processed",
+          "message": "Si `True`, les réponses de redirection seront transmises à l'appelant au lieu d'être traitées"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cmVkaXJlY3RfcGFzc3RocnU.display_name": {
+          "source": "Redirect Passthrough",
+          "message": "Passerelle de redirection"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cmVkaXJlY3RfcGFzc3RocnU.short_desc": {
+          "source": "If true then redirect responses are returned to the caller",
+          "message": "Si vrai, les réponses de redirection sont renvoyées à l'appelant"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dGltZW91dA.desc": {
+          "source": "The transfer timeout to use in milliseconds (default: 45 seconds)",
+          "message": "Le délai d'expiration du transfert à utiliser en millisecondes (par défaut : 45 secondes)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Délai d'expiration d'E/S"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dGltZW91dA.short_desc": {
+          "source": "The maximum time an individual I/O operation can take in milliseconds",
+          "message": "Durée max. d'une opération d'E/S individuelle en millisecondes"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL and if the `password` option is also used",
+          "message": "Le nom d'utilisateur pour l'authentification ; utilisé uniquement si aucun nom d'utilisateur ou mot de passe n'est défini dans l'URL et si l'option `password` est également utilisée"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Nom d'utilisateur"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for HTTP basic authentication",
+          "message": "Définit le nom d'utilisateur pour l'authentification basique HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a HTTP server",
+          "message": "Une connexion à un serveur HTTP"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [DeepSeek](https://platform.deepseek.com) REST API.\n\nRequires an API key for Bearer authentication.  Get your API key from the [DeepSeek Platform](https://platform.deepseek.com/api_keys).",
+          "message": "З’єднання з REST API [DeepSeek](https://platform.deepseek.com).\n\nВимагає ключа API для автентифікації типу Bearer. Отримайте свій ключ API на [платформі DeepSeek](https://platform.deepseek.com/api_keys)."
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "DeepSeek REST Connection",
+          "message": "З’єднання REST DeepSeek"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.allowed_values.c3RyaW5nOmRlZXBzZWVrLWZsYXNo.display_name": {
+          "source": "DeepSeek V4.1 Flash",
+          "message": "DeepSeek V4.1 Flash"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.allowed_values.c3RyaW5nOmRlZXBzZWVrLXY0LXBybw.display_name": {
+          "source": "DeepSeek V4 Pro",
+          "message": "DeepSeek V4 Pro"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "Model ID for chat through this connection. Use the app's `List Models` action to inspect available models. Custom model IDs are accepted.",
+          "message": "Ідентифікатор моделі для чату через це з'єднання. Використовуйте дію `List Models` у додатку, щоб переглянути доступні моделі. Приймаються власні ідентифікатори моделей."
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Модель чату"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "DeepSeek chat model name",
+          "message": "Назва моделі DeepSeek для чату"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBp.allowed_values.c3RyaW5nOmJldGE.display_name": {
+          "source": "Beta API",
+          "message": "Бета API"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "Stable API",
+          "message": "Стабільне API"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBp.desc": {
+          "source": "Select the stable API or the beta API for prefix completion and strict tools.",
+          "message": "Виберіть стабільне API або бета API для префіксного завершення та строгого використання інструментів."
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Версія API"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Версія API, яку слід використовувати"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The DeepSeek API key used for Bearer authentication.\n\nGet your API key from the [DeepSeek Platform](https://platform.deepseek.com/api_keys).",
+          "message": "Ключ API DeepSeek, що використовується для автентифікації типу Bearer.\n\nОтримайте свій ключ API на [платформі DeepSeek](https://platform.deepseek.com/api_keys)."
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "DeepSeek API key for authentication",
+          "message": "Ключ API DeepSeek для автентифікації"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the DeepSeek REST API",
+          "message": "З’єднання з REST API DeepSeek"
+        }
+      }
+    }
+  }
+}

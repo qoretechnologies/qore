@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Unleashed Software REST API for inventory management.\n\nUnleashed is a powerful cloud-based inventory management platform that enables you to manage products, sales orders, purchase orders, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and customer contacts\n- Create and track sales orders\n- Process credit notes\n- Manage products and inventory\n- Track stock levels across warehouses\n\n**Authentication:**\nUnleashed uses HMAC-SHA256 signature authentication. Both API ID and API Key are required.",
+          "message": "在庫管理用のUnleashed Software REST APIへの接続。\n\nUnleashedは、製品、販売注文、仕入注文、顧客、仕入先、在庫レベルを管理できる強力なクラウドベースの在庫管理プラットフォームです。\n\n**機能：**\n- 顧客および顧客連絡先の管理\n- 販売注文の作成と追跡\n- 信用伝票の処理\n- 製品および在庫の管理\n- 仓库間の在庫レベルの追跡\n\n**認証：**\nUnleashedはHMAC-SHA256署名認証を使用します。API IDとAPIキーの両方が必要です。"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Unleashed REST Connection",
+          "message": "Unleashed REST 接続"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Unleashed Software, you need your API ID and API Key:\n\n1. Log in to Unleashed as the **Account Owner**\n2. Go to **Settings > Integration > API Access**\n3. Copy your **API ID** and **API Key**\n\n**Important:**\n- Only the account owner can access API credentials\n- Keep your credentials secure - they provide full API access\n- Never share your API Key publicly",
+          "message": "Unleashed Softwareに接続するには、API IDとAPIキーが必要です：\n\n1. **アカウントオーナー**としてUnleashedにログイン\n2. **設定 > 統合 > APIアクセス**に移動\n3. **API ID**と**APIキー**をコピー\n\n**重要：**\n- API資格情報はアカウントオーナーのみがアクセス可能\n- 資格情報を安全に保管してください - これによりAPIへの完全なアクセスが可能になります\n- APIキーを公開してはいけません"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Credentials",
+          "message": "API資格情報の取得方法"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.desc": {
+          "source": "Your Unleashed API ID used for API authentication.\n\n**To obtain your API ID:**\n1. Log in to Unleashed as the Account Owner\n2. Go to Settings > Integration > API Access\n3. Copy your **API ID**\n\n**Note:** Only the account owner can access API credentials.",
+          "message": "API認証に使用するUnleashedのAPI ID。\n\n**API IDの取得方法：**\n1. アカウントオーナーとしてUnleashedにログイン\n2. 設定 > 統合 > APIアクセスに移動\n3. **API ID**をコピー\n\n**注意：** アカウントオーナーのみがAPI資格情報をアクセスできます。"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.display_name": {
+          "source": "API ID",
+          "message": "API ID"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.short_desc": {
+          "source": "Unleashed API ID for authentication",
+          "message": "認証用のUnleashed API ID"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Your Unleashed API Key used for computing HMAC-SHA256 signatures.\n\n**To obtain your API Key:**\n1. Log in to Unleashed as the Account Owner\n2. Go to Settings > Integration > API Access\n3. Copy your **API Key**\n\n**Note:** Only the account owner can access API credentials.\nKeep your API Key secure - it provides full API access to your account.",
+          "message": "HMAC-SHA256署名の計算に使用されるUnleashed API Keyです。\n\n**API Keyを取得するには：**\n1. アカウント所有者としてUnleashedにログイン\n2. 設定 > 統合 > APIアクセスに移動\n3. **API Key**をコピー\n\n**注意：** API資格情報にアクセスできるのはアカウント所有者だけです。\nAPI Keyは安全に保管してください。これはアカウントの全APIアクセスを許可します。"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Unleashed API Key for HMAC signature",
+          "message": "HMAC署名用のUnleashed API Key"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Unleashed Software API",
+          "message": "Unleashed Software APIへの接続"
+        }
+      }
+    }
+  }
+}

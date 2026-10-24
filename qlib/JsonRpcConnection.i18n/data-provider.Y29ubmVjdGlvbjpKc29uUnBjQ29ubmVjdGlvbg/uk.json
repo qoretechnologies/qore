@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.SnNvblJwY0Nvbm5lY3Rpb24.scheme.SnNvblJwY0Nvbm5lY3Rpb24.desc": {
+          "source": "A connection to a JSON-RPC server",
+          "message": "Підключення до сервера JSON-RPC"
+        },
+        "connection.SnNvblJwY0Nvbm5lY3Rpb24.scheme.SnNvblJwY0Nvbm5lY3Rpb24.display_name": {
+          "source": "JSON-RPC Connection",
+          "message": "Підключення JSON-RPC"
+        },
+        "connection.SnNvblJwY0Nvbm5lY3Rpb24.scheme.SnNvblJwY0Nvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a JSON-RPC server",
+          "message": "Підключення до сервера JSON-RPC"
+        }
+      }
+    }
+  }
+}

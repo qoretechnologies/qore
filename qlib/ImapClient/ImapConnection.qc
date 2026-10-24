@@ -31,7 +31,8 @@ public namespace ImapClient {
 public class ImapConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ImapClient",
+            "ImapConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "IMAP Connection",
             "short_desc": "A connection to an IMAP server",
             "desc": "A connection to an IMAP4rev1 server for reading and managing email.\n\n"
@@ -137,7 +138,7 @@ public class ImapConnection inherits ConnectionProvider::AbstractConnectionWithI
                     "desc": "The username for authentication; always required",
                 },
             },
-        };
+        });
     }
 
     #! creates the ImapConnection object

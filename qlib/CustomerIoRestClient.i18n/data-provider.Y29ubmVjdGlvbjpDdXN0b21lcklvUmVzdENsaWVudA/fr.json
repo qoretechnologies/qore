@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Customer.io REST API for marketing automation, messaging, and customer engagement.\n\nCustomer.io helps you send targeted emails, push notifications, SMS messages, and more based on customer behavior and attributes.\n\n**APIs:**\n- App API (Bearer token): Read data, trigger broadcasts and transactional messages\n- Track API (Basic auth): Create/update customers, track events\n\n**Rate Limits:**\n- App API: 10 requests/second (standard)\n- Track API: 100 requests/second",
+          "message": "Une connexion à l’API REST de Customer.io pour l’automatisation du marketing, les messages et l’engagement client.\n\nCustomer.io vous aide à envoyer des e-mails ciblés, des notifications push, des messages SMS et plus encore, basés sur le comportement et les attributs des clients.\n\n**APIs :**\n- API App (jeton Bearer) : Lire des données, déclencher des diffusions et des messages transactionnels\n- API Track (authentification basique) : Créer/mettre à jour des clients, suivre des événements\n\n**Limites de débit :**\n- API App : 10 requêtes/seconde (standard)\n- API Track : 100 requêtes/seconde"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Customer.io REST Connection",
+          "message": "Connexion REST de Customer.io"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "Customer.io requires three credentials:\n1. **App API Key**: For reading data and triggering messages (Bearer token auth)\n2. **Site ID**: For tracking customer data (Basic auth username)\n3. **Tracking API Key**: For tracking customer data (Basic auth password)\n\nFind all credentials at: **[Settings > API Credentials](https://fly.customer.io/settings/api_credentials)**",
+          "message": "Customer.io nécessite trois identifiants :\n1. **Clé API App** : pour lire les données et déclencher des messages (authentification par jeton Bearer)\n2. **ID Site** : pour suivre les données clients (nom d'utilisateur d'authentification de base)\n3. **Clé API de suivi** : pour suivre les données clients (mot de passe d'authentification de base)\n\nTrouvez tous les identifiants à : **[Paramètres > Identifiants API](https://fly.customer.io/settings/api_credentials)**"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Customer.io API Credentials",
+          "message": "Identifiants API Customer.io"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Choose the region that matches your Customer.io account:\n- **US**: United States data center (default)\n- **EU**: European Union data center\n\nYour region was set when you created your account and cannot be changed.",
+          "message": "Sélectionnez la région correspondant à votre compte Customer.io :\n- **US** : centre de données aux États-Unis (par défaut)\n- **EU** : centre de données de l'Union européenne\n\nVotre région a été définie lors de la création de votre compte et ne peut pas être modifiée."
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Select Your Region",
+          "message": "Sélectionnez votre région"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.YXBwX2FwaV9rZXk.desc": {
+          "source": "The Customer.io App API key used for Bearer token authentication with the App API.\n\n**To obtain your App API key:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials?keyType=app)\n3. Create or copy your App API Key\n\n**Note:** App API keys are used for reading data and triggering messages.",
+          "message": "La clé API App Customer.io utilisée pour l'authentification par jeton Bearer avec l'API App.\n\n**Pour obtenir votre clé API App :**\n1. Connectez-vous à [Customer.io](https://fly.customer.io)\n2. Allez dans [Paramètres > Identifiants API](https://fly.customer.io/settings/api_credentials?keyType=app)\n3. Créez ou copiez votre clé API App\n\n**Remarque :** les clés API App sont utilisées pour lire les données et déclencher des messages."
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.YXBwX2FwaV9rZXk.display_name": {
+          "source": "App API Key",
+          "message": "Clé API App"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.YXBwX2FwaV9rZXk.short_desc": {
+          "source": "Customer.io App API key for Bearer token authentication",
+          "message": "Clé API App Customer.io pour l'authentification par jeton Bearer"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.c2l0ZV9pZA.desc": {
+          "source": "The Customer.io Site ID used as the username for Track API Basic authentication.\n\n**To find your Site ID:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials)\n3. Your Site ID is listed under Tracking API Keys",
+          "message": "L'ID Site Customer.io utilisé comme nom d'utilisateur pour l'authentification de base de l'API de suivi.\n\n**Pour trouver votre ID Site :**\n1. Connectez-vous à [Customer.io](https://fly.customer.io)\n2. Allez dans [Paramètres > Identifiants API](https://fly.customer.io/settings/api_credentials)\n3. Votre ID Site est indiqué sous les clés d'API de suivi"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.c2l0ZV9pZA.display_name": {
+          "source": "Site ID",
+          "message": "ID du site"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.c2l0ZV9pZA.short_desc": {
+          "source": "Customer.io Site ID for Track API authentication",
+          "message": "ID du site Customer.io pour l'authentification de l'API Track"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "EU data center (api-eu.customer.io / track-eu.customer.io)",
+          "message": "Centre de données UE (api-eu.customer.io / track-eu.customer.io)"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "EU",
+          "message": "UE"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.short_desc": {
+          "source": "European Union",
+          "message": "Union européenne"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "US data center (api.customer.io / track.customer.io)",
+          "message": "Centre de données US (api.customer.io / track.customer.io)"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "US",
+          "message": "US"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.short_desc": {
+          "source": "United States",
+          "message": "États-Unis"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "Select the Customer.io data center region for your account.\n\nYour region is determined when you create your Customer.io account and cannot be changed.",
+          "message": "Sélectionnez la région du centre de données Customer.io pour votre compte.\n\nVotre région est déterminée lors de la création de votre compte Customer.io et ne peut pas être modifiée."
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Région"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "Customer.io data center region",
+          "message": "Région du centre de données Customer.io"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.dHJhY2tpbmdfYXBpX2tleQ.desc": {
+          "source": "The Customer.io Tracking API key used as the password for Track API Basic authentication.\n\n**To find your Tracking API key:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials)\n3. Your API Key is listed under Tracking API Keys",
+          "message": "La clé d'API de suivi Customer.io utilisée comme mot de passe pour l'authentification de base de l'API Track.\n\n**Pour trouver votre clé d'API de suivi :**\n1. Connectez-vous à [Customer.io](https://fly.customer.io)\n2. Allez dans [Paramètres > Identifiants API](https://fly.customer.io/settings/api_credentials)\n3. Votre clé d'API est indiquée sous les clés d'API de suivi"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.dHJhY2tpbmdfYXBpX2tleQ.display_name": {
+          "source": "Tracking API Key",
+          "message": "Clé d'authentification Tracking API"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.dHJhY2tpbmdfYXBpX2tleQ.short_desc": {
+          "source": "Customer.io Tracking API key for Track API authentication",
+          "message": "Clé d'authentification Track API Customer.io"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Customer.io REST API",
+          "message": "Une connexion à l'API REST Customer.io"
+        }
+      }
+    }
+  }
+}

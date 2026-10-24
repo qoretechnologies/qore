@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Unstructured.io](https://unstructured.io), which turns documents into data an AI application can use.\n\nOne connection serves both of Unstructured's APIs with the same key:\n- the **Partition API**, which breaks PDFs, Office files, HTML, images and emails into a typed element tree\n- the **Platform API**, which manages the source and destination connectors, the workflows that join them and the jobs that run them\n\nWorks against Unstructured's hosted deployments and self-hosted deployments — same module, different URL.  An API key is issued for one deployment and is rejected by the others; when the configured deployment rejects the key, the connection tries the other known deployments on the next ping and moves itself to whichever one accepts it.\n\nAuth: the `unstructured-api-key` header, which the ping verifies.",
+          "message": "Połączenie z [Unstructured.io](https://unstructured.io), które przekształca dokumenty w dane, które aplikacja AI może wykorzystać.\n\nJedno połączenie obsługuje oba interfejsy API Unstructured za pomocą tego samego klucza:\n- **interfejs Partition API**, który dzieli pliki PDF, dokumenty Office, HTML, obrazy i e-maile na drzewo elementów z typami\n- **interfejs Platform API**, który zarządza połączonymi źródłami i miejscami docelowymi, przepływami, które je łączą, oraz zadaniami, które je uruchamiają\n\nDziała z hostowanymi i samodzielnie hostowanymi wersjami Unstructured — ten sam moduł, inne adresy URL. Klucz API jest wydawany dla jednej wersji i odrzucany przez inne; gdy skonfigurowana wersja odrzuca klucz, połączenie próbuje inne znane wersje podczas kolejnego pinga i przenosi się do tej, która go zaakceptuje.\n\nUwierzytelnianie: nagłówek `unstructured-api-key`, który sprawdzany jest podczas pingu."
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Unstructured.io Connection",
+          "message": "Połączenie Unstructured.io"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Unstructured.io API key — sent as the `unstructured-api-key` header.",
+          "message": "Klucz API Unstructured.io — wysyłany jako nagłówek `unstructured-api-key`."
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klucz API"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Unstructured.io API key",
+          "message": "Klucz API Unstructured.io"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.cGxhdGZvcm1fdXJs.desc": {
+          "source": "URL of the Unstructured **Platform API**, which manages connectors, workflows and jobs.\n\nUnstructured serves its two APIs on separate hosts, paired per deployment, so this is derived from the connection's own URL and only has to be set for a self-hosted deployment.",
+          "message": "Adres URL platformy Unstructured **Platform API**, która zarządza łącznikami, przepływami i zadaniami.\n\nUnstructured obsługuje swoje dwa interfejsy API na oddzielnych hostach, sparowanych na potrzeby każdej wdrożenia, więc ten adres jest wyprowadzany z adresu połączenia i musi być ustawiony tylko w przypadku wdrożenia samodzielnie."
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.cGxhdGZvcm1fdXJs.display_name": {
+          "source": "Platform API URL",
+          "message": "Adres URL platformy API"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.cGxhdGZvcm1fdXJs.short_desc": {
+          "source": "Overrides the derived Unstructured Platform API URL",
+          "message": "Zastępuje wyprowadzony adres URL platformy Unstructured Platform API"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Unstructured.io REST APIs",
+          "message": "Połączenie z REST API Unstructured.io"
+        }
+      }
+    }
+  }
+}

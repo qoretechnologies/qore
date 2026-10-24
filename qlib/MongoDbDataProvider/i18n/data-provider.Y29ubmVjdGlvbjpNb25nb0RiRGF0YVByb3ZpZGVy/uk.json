@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.desc": {
+          "source": "A connection to a [MongoDB](https://www.mongodb.com) server or a [MongoDB Atlas](https://www.mongodb.com/atlas) cluster, for document storage, retrieval, aggregation and Atlas Vector Search.\n\nUse a `mongodb://` URL for a server or replica set whose hosts are known, and a `mongodb+srv://` URL for Atlas, where the hosts are discovered from DNS and TLS is implied.  An Atlas connection string looks like `mongodb+srv://cluster0.abcde.mongodb.net`.\n\nSupply the credentials as the `username` and `password` options rather than in the URL: they are then stored as connection options - the password as a password - and are URL-encoded when the client is created, so a password containing `@`, `:` or `/` works without the caller having to encode it.",
+          "message": "Підключення до сервера [MongoDB](https://www.mongodb.com) або кластера [MongoDB Atlas](https://www.mongodb.com/atlas) для зберігання, отримання, агрегації документів та пошуку векторів у Atlas.\n\nВикористовуйте `mongodb://` URL для сервера або репліка-сету з відомими хостами, і `mongodb+srv://` URL для Atlas, де хостів виявляють через DNS, а TLS передбачається. URL-адреса підключення до Atlas має вигляд `mongodb+srv://cluster0.abcde.mongodb.net`.\n\nПідставте облікові дані як параметри `username` та `password`, а не в URL: вони зберігаються як параметри підключення — пароль як пароль — і URL-кодуються під час створення клієнта, тому пароль із `@`, `:` або `/` працює без необхідності кодування відповідно до викликача."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.display_name": {
+          "source": "MongoDB Connection",
+          "message": "Підключення до MongoDB"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "How long to wait for a connection to be established, sent as the `connectTimeoutMS` URI option.",
+          "message": "Час очікування підключення до сервера, передається як параметр URI `connectTimeoutMS`."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Тайм-аут з'єднання"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "How long to wait for a connection to be established",
+          "message": "Час очікування підключення до сервера"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXBwbmFtZQ.desc": {
+          "source": "The name this client reports to the server, sent as the `appName` URI option.\n\nAtlas shows it against every operation in the cluster's monitoring, which is what makes one application's load distinguishable from another's.  Defaults to `qore-mongodb` when neither this option nor the URL sets one.",
+          "message": "Ім'я, яке цей клієнт повідомляє серверу, передається як параметр URI `appName`.\n\nAtlas відображає його поруч із кожним операцією в моніторингу кластера, що дозволяє відрізняти навантаження одного додатку від іншого. За замовчуванням — `qore-mongodb`, якщо цей параметр і URL не встановлюють інше."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXBwbmFtZQ.display_name": {
+          "source": "Application Name",
+          "message": "Назва додатку"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXBwbmFtZQ.short_desc": {
+          "source": "The name this client reports to the server",
+          "message": "Ім'я, яке цей клієнт повідомляє серверу"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXV0aHNvdXJjZQ.desc": {
+          "source": "The database holding the user's credentials, sent as the `authSource` URI option.\n\nAtlas keeps database users in `admin`, which is also what the server assumes when this is not set; set it only where the credentials live elsewhere.",
+          "message": "База даних, що містить облікові дані користувача, передається як параметр URI `authSource`.\n\nAtlas зберігає користувачів баз даних у `admin`, що також є значенням за замовчуванням сервера, якщо цей параметр не встановлено; встановлюйте його лише тоді, коли облікові дані знаходяться в іншому місці."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXV0aHNvdXJjZQ.display_name": {
+          "source": "Authentication Database",
+          "message": "База автентифікації"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXV0aHNvdXJjZQ.short_desc": {
+          "source": "The database holding the user's credentials",
+          "message": "База даних, що містить облікові дані користувача"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.ZGF0YWJhc2U.desc": {
+          "source": "The database used when an action does not name one, and the default authentication database when `authsource` is not set.",
+          "message": "База даних, що використовується, коли дія не вказує її, і база аутентифікації за замовчуванням, коли `authsource` не встановлено."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.ZGF0YWJhc2U.display_name": {
+          "source": "Default Database",
+          "message": "База даних за замовчуванням"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.ZGF0YWJhc2U.short_desc": {
+          "source": "The database used when an action does not name one",
+          "message": "База даних, що використовується, коли дія не вказує її"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c29ja2V0X3RpbWVvdXQ.desc": {
+          "source": "How long to wait for a reply on an established connection, sent as the `socketTimeoutMS` URI option.\n\nThis is the only timeout that bounds a server which completes the TCP handshake and then stops answering - a hung `mongod`, a firewall dropping an established flow, a stale NAT mapping, a suspended container - because `connect_timeout` and `server_selection_timeout` have both finished by the time a reply is awaited.\n\n**It applies to every operation on the client**, so it has to be longer than the slowest query the connection is expected to run; to bound an unattended monitor ping, set `ping_timeout` rather than lowering this.",
+          "message": "Час очікування відповіді на встановленому з’єднанні, переданий як параметр URI `socketTimeoutMS`.\n\nЦе єдиний таймаут, що обмежує сервер, який завершив TCP-рукостискання, але перестав відповідати — завислий `mongod`, брандмауер, що відкидає встановлений потік, застаріла NAT-картка, призупинений контейнер — оскільки `connect_timeout` та `server_selection_timeout` завершилися до моменту очікування відповіді.\n\n**Він діє для кожної операції на клієнті**, тому має бути довшим, ніж найдовший запит, який очікується від з’єднання; щоб обмежити пінг монітора без уваги, встановіть `ping_timeout`, а не зменшуйте цей параметр."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c29ja2V0X3RpbWVvdXQ.display_name": {
+          "source": "Socket Timeout",
+          "message": "Таймаут з’єднання"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c29ja2V0X3RpbWVvdXQ.short_desc": {
+          "source": "How long to wait for a reply on an established connection",
+          "message": "Час очікування відповіді на встановленому з’єднанні"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c2VydmVyX3NlbGVjdGlvbl90aW1lb3V0.desc": {
+          "source": "How long to wait for a suitable server to be found, sent as the `serverSelectionTimeoutMS` URI option.\n\nThis is the timeout a connection to an unreachable cluster actually waits on, because the driver selects a server before it connects to one.",
+          "message": "Час очікування підходящого сервера, переданий як параметр URI `serverSelectionTimeoutMS`.\n\nЦе таймаут, на який очікує з’єднання з недоступним кластером, оскільки драйвер вибирає сервер перед тим, як підключитися до нього."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c2VydmVyX3NlbGVjdGlvbl90aW1lb3V0.display_name": {
+          "source": "Server Selection Timeout",
+          "message": "Час очікування вибору сервера"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c2VydmVyX3NlbGVjdGlvbl90aW1lb3V0.short_desc": {
+          "source": "How long to wait for a suitable server to be found",
+          "message": "Час очікування на вибір придатного сервера"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database user.\n\nGiven here rather than in the URL, it is stored as a password and is URL-encoded when the client is created, so a password containing `@`, `:`, `/` or `?` works without the caller having to encode it.",
+          "message": "Пароль для користувача бази даних.\n\nВказується тут, а не в URL, зберігається як пароль і URL-кодується під час створення клієнта, тому пароль, що містить `@`, `:`, `/` або `?`, працює без необхідності кодування викликачем."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Пароль"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for the database user",
+          "message": "Пароль для користувача бази даних"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGluZ190aW1lb3V0.desc": {
+          "source": "The upper bound on a single connection ping.\n\nA ping runs unattended, on a timer, in a thread that something else waits on, so it is bounded independently of the timeouts that apply to data operations: the client the ping uses caps `connectTimeoutMS`, `serverSelectionTimeoutMS` and `socketTimeoutMS` at this value, whatever the URL or the other options say, and the client returned for data operations is left alone.",
+          "message": "Верхня межа для одного пінгу з'єднання.\n\nПінг виконується без уваги, за таймером, у потоці, на який чекає щось інше, тому він обмежений незалежно від тайм-аутів, що застосовуються до операцій з даними: клієнт, який використовується для пінгу, обмежує `connectTimeoutMS`, `serverSelectionTimeoutMS` та `socketTimeoutMS` цим значенням, незалежно від URL або інших параметрів, і клієнт, повернутий для операцій з даними, залишається без змін."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGluZ190aW1lb3V0.display_name": {
+          "source": "Ping Timeout",
+          "message": "Час очікування пінгу"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGluZ190aW1lb3V0.short_desc": {
+          "source": "The upper bound on a single connection ping",
+          "message": "Верхня межа для одного пінгу з'єднання"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dGxz.desc": {
+          "source": "Encrypt the connection with TLS.\n\nAtlas requires TLS and a `mongodb+srv://` URL implies it, so this is only needed for a `mongodb://` server that requires TLS without advertising it.",
+          "message": "Шифрувати з'єднання за допомогою TLS.\n\nAtlas вимагає TLS, і `mongodb+srv://` URL передбачає це, тому це потрібно лише для `mongodb://` сервера, який вимагає TLS, але не оголошує про це."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dGxz.display_name": {
+          "source": "Use TLS",
+          "message": "Використовувати TLS"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dGxz.short_desc": {
+          "source": "Encrypt the connection with TLS",
+          "message": "Шифрувати з'єднання за допомогою TLS"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The database user to authenticate as.\n\nFor Atlas this is a database user, created under **Database Access** in the Atlas UI - not the Atlas account itself.\n\nGiven here rather than in the URL, the value is URL-encoded when the client is created, so it needs no encoding of its own.",
+          "message": "Користувач бази даних, яким потрібно автентифікуватися.\n\nДля Atlas це користувач бази даних, створений у розділі **Доступ до бази даних** у інтерфейсі Atlas — не сам обліковий запис Atlas.\n\nЗазначається тут, а не в URL, тому значення кодується у форматі URL при створенні клієнта, і йому не потрібно додаткового кодування."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Ім'я користувача"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "The database user to authenticate as",
+          "message": "Користувач бази даних, яким потрібно автентифікуватися"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a MongoDB server or an Atlas cluster",
+          "message": "З'єднання з сервером MongoDB або кластером Atlas"
+        }
+      }
+    }
+  }
+}

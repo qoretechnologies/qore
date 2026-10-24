@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Unleashed Software REST API for inventory management.\n\nUnleashed is a powerful cloud-based inventory management platform that enables you to manage products, sales orders, purchase orders, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and customer contacts\n- Create and track sales orders\n- Process credit notes\n- Manage products and inventory\n- Track stock levels across warehouses\n\n**Authentication:**\nUnleashed uses HMAC-SHA256 signature authentication. Both API ID and API Key are required.",
+          "message": "Una conexión con la API REST de Unleashed Software para gestión de inventario.\n\nUnleashed es una potente plataforma en la nube para la gestión de inventario que te permite gestionar productos, pedidos de venta, pedidos de compra, clientes, proveedores y niveles de stock.\n\n**Características:**\n- Gestionar clientes y contactos de clientes\n- Crear y rastrear pedidos de venta\n- Procesar notas de crédito\n- Gestionar productos e inventario\n- Rastrear niveles de stock en almacenes\n\n**Autenticación:**\nUnleashed utiliza autenticación con firma HMAC-SHA256. Se requieren tanto el ID de API como la clave de API."
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Unleashed REST Connection",
+          "message": "Conexión REST de Unleashed"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Unleashed Software, you need your API ID and API Key:\n\n1. Log in to Unleashed as the **Account Owner**\n2. Go to **Settings > Integration > API Access**\n3. Copy your **API ID** and **API Key**\n\n**Important:**\n- Only the account owner can access API credentials\n- Keep your credentials secure - they provide full API access\n- Never share your API Key publicly",
+          "message": "Para conectarte con Unleashed Software, necesitas tu ID de API y tu clave de API:\n\n1. Inicia sesión en Unleashed como **Propietario de la cuenta**\n2. Ve a **Configuración > Integración > Acceso a API**\n3. Copia tu **ID de API** y tu **clave de API**\n\n**Importante:**\n- Solo el propietario de la cuenta puede acceder a las credenciales de API\n- Mantén tus credenciales seguras: otorgan acceso completo a la API\n- Nunca compartas tu clave de API públicamente"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Credentials",
+          "message": "Cómo obtener sus credenciales de API"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.desc": {
+          "source": "Your Unleashed API ID used for API authentication.\n\n**To obtain your API ID:**\n1. Log in to Unleashed as the Account Owner\n2. Go to Settings > Integration > API Access\n3. Copy your **API ID**\n\n**Note:** Only the account owner can access API credentials.",
+          "message": "Tu ID de API de Unleashed utilizado para la autenticación de API.\n\n**Para obtener tu ID de API:**\n1. Inicia sesión en Unleashed como Propietario de la cuenta\n2. Ve a Configuración > Integración > Acceso a API\n3. Copia tu **ID de API**\n\n**Nota:** Solo el propietario de la cuenta puede acceder a las credenciales de API."
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.display_name": {
+          "source": "API ID",
+          "message": "ID de API"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.short_desc": {
+          "source": "Unleashed API ID for authentication",
+          "message": "ID de API de Unleashed para autenticación"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Your Unleashed API Key used for computing HMAC-SHA256 signatures.\n\n**To obtain your API Key:**\n1. Log in to Unleashed as the Account Owner\n2. Go to Settings > Integration > API Access\n3. Copy your **API Key**\n\n**Note:** Only the account owner can access API credentials.\nKeep your API Key secure - it provides full API access to your account.",
+          "message": "Tu clave de API de Unleashed utilizada para calcular firmas HMAC-SHA256.\n\n**Para obtener tu clave de API:**\n1. Inicia sesión en Unleashed como Propietario de la cuenta\n2. Ve a Configuración > Integración > Acceso a API\n3. Copia tu **clave de API**\n\n**Nota:** Solo el propietario de la cuenta puede acceder a las credenciales de API.\nMantén tu clave de API segura: otorga acceso completo a tu cuenta a través de la API."
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clave de API"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Unleashed API Key for HMAC signature",
+          "message": "Clave de API de Unleashed para firma HMAC"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Unleashed Software API",
+          "message": "Una conexión con la API de software Unleashed"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Kit REST API for email marketing including subscribers, tags, custom fields, broadcasts, forms, sequences, and purchases",
+          "message": "Une connexion à l’API REST Kit pour le marketing par e-mail incluant les abonnés, les balises, les champs personnalisés, les envois, les formulaires, les séquences et les achats"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Kit REST Connection",
+          "message": "Connexion REST Kit"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Kit API key used for API key authentication via the `X-Kit-Api-Key` header.\n\n**To obtain your API key:**\n1. Log in to your Kit account\n2. Go to **Settings** > **Developer**\n3. Create a new V4 API key\n\nRate limit: 120 requests per 60 seconds with API key authentication",
+          "message": "La clé API Kit utilisée pour l’authentification par clé API via l’en-tête `X-Kit-Api-Key`.\n\n**Pour obtenir votre clé API :**\n1. Connectez-vous à votre compte Kit\n2. Allez dans **Paramètres** > **Développeur**\n3. Créez une nouvelle clé API V4\n\nLimite de taux : 120 requêtes toutes les 60 secondes avec authentification par clé API"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clé d'API"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Kit API key for authentication",
+          "message": "Clé API Kit pour l’authentification"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Kit REST API",
+          "message": "Une connexion à l’API REST Kit"
+        }
+      }
+    }
+  }
+}

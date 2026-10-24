@@ -372,7 +372,8 @@ public class LlamaParseRestConnection inherits RestClient::RestConnection {
         */
         const PingPath = "/api/v2/projects";
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("LlamaParseRestClient",
+            "LlamaParseRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "LlamaParse Connection",
             "short_desc": "A connection to the LlamaIndex Cloud document APIs",
             "desc": "A connection to [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started), "
@@ -399,7 +400,7 @@ public class LlamaParseRestConnection inherits RestClient::RestConnection {
                 },
             },
             "required_options": "apikey",
-        };
+        });
     }
 
     constructor(string name, string description, string url = DefaultUrl,

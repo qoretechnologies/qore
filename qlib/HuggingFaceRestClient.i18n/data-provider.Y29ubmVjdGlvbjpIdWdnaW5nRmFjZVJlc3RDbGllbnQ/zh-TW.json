@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Hugging Face REST API.\n\nRequires an API key (set as `apikey`) from [Hugging Face Settings](https://huggingface.co/settings/tokens). The connection uses the `huggingface://` URL scheme and provides access to the Hub API for models, datasets, and spaces",
+          "message": "與 Hugging Face REST API 的連接。\n\n需要 API 金鑰（設定為 `apikey`）來自 [Hugging Face 設定](https://huggingface.co/settings/tokens)。此連接使用 `huggingface://` 通訊協定，並提供對模型、資料集與空間的 Hub API 存取權"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Hugging Face REST Connection",
+          "message": "Hugging Face REST 連接"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBp.desc": {
+          "source": "The API base path to use",
+          "message": "要用的 API 基本路徑"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBp.display_name": {
+          "source": "API Path",
+          "message": "API 路徑"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBp.short_desc": {
+          "source": "The API base path",
+          "message": "API 基本路徑"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Hugging Face API token used for authentication; sent as the `Authorization: Bearer` header.\n\nGet your token from [Hugging Face Settings](https://huggingface.co/settings/tokens)",
+          "message": "用於驗證的 Hugging Face API 金鑰；以 `Authorization: Bearer` 標頭傳送。\n\n從 [Hugging Face 設定](https://huggingface.co/settings/tokens) 取得您的金鑰"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Hugging Face API token for authentication",
+          "message": "用於驗證的 Hugging Face API 金鑰"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Hugging Face REST API",
+          "message": "與 Hugging Face REST API 的連接"
+        }
+      }
+    }
+  }
+}

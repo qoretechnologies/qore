@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Mailgun REST API for email sending and management.\n\n**To obtain your API key:**\n1. Log in to your Mailgun account at https://app.mailgun.com\n2. Go to API Security in the settings\n3. Create a new API key or copy your existing private key\n\n**Region Selection:**\n- **US**: For US-hosted accounts (api.mailgun.net)\n- **EU**: For EU-hosted accounts with EU data residency (api.eu.mailgun.net)",
+          "message": "メール送信および管理用の Mailgun REST API への接続。\n\n**API キーの取得手順：**\n1. https://app.mailgun.com で Mailgun アカウントにログイン\n2. 設定の「API セキュリティ」に移動\n3. 新しい API キーを作成するか、既存のプライベートキーをコピー\n\n**リージョン選択：**\n- **US**：US ホストのアカウント用（api.mailgun.net）\n- **EU**：EU データ保持を希望するアカウント用（api.eu.mailgun.net）"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Mailgun REST Connection",
+          "message": "Mailgun REST 接続"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Mailgun account at https://app.mailgun.com\n2. Navigate to **Settings > API Security**\n3. Click **Add new key** or copy your existing private API key\n\n**Important:**\n- Use your **Private API key**, not a Domain Sending Key\n- Keep your API key secure and never share it publicly",
+          "message": "1. https://app.mailgun.com で Mailgun アカウントにログイン\n2. **設定 > API セキュリティ** に移動\n3. **新しいキーの追加** をクリックするか、既存のプライベート API キーをコピー\n\n**重要：**\n- **プライベート API キー** を使用してください。ドメイン送信キーではありません。\n- API キーを安全に保管し、公開しないでください"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "APIキーの取得方法"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Choose your API region based on where your Mailgun account is hosted:\n\n- **US (api.mailgun.net)**: Default for most accounts\n- **EU (api.eu.mailgun.net)**: For EU data residency requirements\n\nIf you're unsure, check your Mailgun dashboard URL:\n- US accounts: app.mailgun.com\n- EU accounts: app.eu.mailgun.com",
+          "message": "Mailgunアカウントのホスト場所に基づいてAPIリージョンを選択してください：\n\n- **US (api.mailgun.net)**：ほとんどのアカウントのデフォルト\n- **EU (api.eu.mailgun.net)**：EUデータ保存要件に対応\n\n不明な場合は、MailgunダッシュボードのURLを確認してください：\n- USアカウント：app.mailgun.com\n- EUアカウント：app.eu.mailgun.com"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Selecting the Right API Region",
+          "message": "適切なAPIリージョンの選択"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMw.content": {
+          "source": "The **Sending Domain** is required for:\n- Sending emails\n- Registering webhooks for email events\n\nIt is **not required** for:\n- Listing domains\n- Managing mailing lists\n- Creating routes\n- Validating email addresses\n\nYou can find your verified domains in the Mailgun dashboard under **Sending > Domains**.",
+          "message": "**送信ドメイン**は以下の目的に必要です：\n- メールの送信\n- メールイベント用のWebhookの登録\n\n以下の目的には**必要ありません**：\n- ドメインの一覧表示\n- メーリングリストの管理\n- ルートの作成\n- メールアドレスの検証\n\n確認済みドメインは、Mailgunダッシュボードの **送信 > ドメイン** で確認できます。"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMw.title": {
+          "source": "When is Sending Domain Required?",
+          "message": "送信ドメインが必要となる状況"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.desc": {
+          "source": "The Mailgun sending domain to use for email operations.\n\nThis is typically a subdomain like mg.example.com that you have verified in your Mailgun account.",
+          "message": "メール操作に使用するMailgun送信ドメインです。\n\n通常、mg.example.comなどのサブドメインで、Mailgunアカウント内で確認済みのものです。"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Sending Domain",
+          "message": "送信ドメイン"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "Mailgun sending domain",
+          "message": "Mailgun送信ドメイン"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOkVV.desc": {
+          "source": "EU API endpoint - https://api.eu.mailgun.net/v3",
+          "message": "EU APIエンドポイント - https://api.eu.mailgun.net/v3"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOkVV.display_name": {
+          "source": "European Union",
+          "message": "欧州連合"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOkVV.short_desc": {
+          "source": "EU region API",
+          "message": "EUリージョンAPI"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOlVT.desc": {
+          "source": "US API endpoint - https://api.mailgun.net/v3",
+          "message": "US APIエンドポイント - https://api.mailgun.net/v3"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOlVT.display_name": {
+          "source": "United States",
+          "message": "アメリカ合衆国"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOlVT.short_desc": {
+          "source": "US region API",
+          "message": "USリージョンAPI"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.desc": {
+          "source": "Select the Mailgun API region based on where your account is hosted:\n\n- **US**: For US-hosted accounts (default)\n- **EU**: For EU-hosted accounts with EU data residency",
+          "message": "アカウントのホスティング場所に応じて、Mailgun APIリージョンを選択してください。\n\n- **US**: USホスティングアカウント用（デフォルト）\n- **EU**: EUデータ保存用のEUホスティングアカウント用"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.display_name": {
+          "source": "API Region",
+          "message": "APIリージョン"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.short_desc": {
+          "source": "Mailgun API region",
+          "message": "Mailgun APIリージョン"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Mailgun API key for authentication.\n\n**To obtain your API key:**\n1. Log in to your Mailgun account at https://app.mailgun.com\n2. Go to Settings > API Security\n3. Create a new API key or copy your existing private key\n\n**Note:** Keep your API key secure and never share it publicly.",
+          "message": "認証用のMailgun APIキー。\n\n**APIキーの取得手順：**\n1. https://app.mailgun.com でMailgunアカウントにログイン\n2. 設定 > APIセキュリティ へ移動\n3. 新しいAPIキーを作成するか、既存のプライベートキーをコピー\n\n**注意:** APIキーは安全に保管し、公開しないでください。"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Mailgun API key for authentication",
+          "message": "認証用のMailgun APIキー"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Mailgun REST API",
+          "message": "Mailgun REST API への接続"
+        }
+      }
+    }
+  }
+}

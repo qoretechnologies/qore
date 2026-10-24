@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Aftership REST API for package tracking and returns management.\n\nRequires an API key (set as `apikey`) from the [Aftership Dashboard](https://admin.aftership.com/). The connection uses the `aftership://` URL scheme and automatically sets the required `as-api-key` header on all API requests",
+          "message": "用於包裹追蹤與退貨管理的 Aftership REST API 連接。\n\n需要從 [Aftership 控制台](https://admin.aftership.com/) 設定 API 金鑰（以 `apikey` 表示）。此連接使用 `aftership://` URL 方案，並在所有 API 請求中自動設定所需的 `as-api-key` 標頭"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Aftership REST Connection",
+          "message": "Aftership REST 連接"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Aftership, you need an API key:\n\n1. Sign up or sign in at the [Aftership Dashboard](https://accounts.aftership.com)\n2. Go to **Settings** > **API Keys** (or visit [admin.aftership.com/settings/api-keys](https://admin.aftership.com/settings/api-keys) directly)\n3. Click **Create API key**\n4. Enter a descriptive name, select the `as-api-key` signature type, and set permissions\n5. Click **Save** and copy your new API key\n\nKeep your API key secure and rotate it periodically.",
+          "message": "要連接到 Aftership，您需要 API 金鑰：\n\n1. 前往 [Aftership 控制台](https://accounts.aftership.com) 進行註冊或登入\n2. 前往 **設定** > **API 金鑰**（或直接造訪 [admin.aftership.com/settings/api-keys](https://admin.aftership.com/settings/api-keys)）\n3. 點選 **建立 API 金鑰**\n4. 輸入描述性名稱，選擇 `as-api-key` 簽名類型，並設定權限\n5. 點選 **儲存** 並複製您的新 API 金鑰\n\n請妥善保管您的 API 金鑰並定期更換"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Aftership API Key",
+          "message": "如何取得您的 Aftership API 金鑰"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Aftership API key used for authentication; sent as the `as-api-key` header.\n\nGet your API key from the [Aftership Dashboard](https://admin.aftership.com/)",
+          "message": "用於驗證的 Aftership API 金鑰；以 `as-api-key` 標頭傳送。\n\n請從 [Aftership 控制台](https://admin.aftership.com/) 取得您的 API 金鑰"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Aftership API key for authentication",
+          "message": "用於驗證的 Aftership API 金鑰"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Aftership REST API",
+          "message": "與 Aftership REST API 的連接"
+        }
+      }
+    }
+  }
+}

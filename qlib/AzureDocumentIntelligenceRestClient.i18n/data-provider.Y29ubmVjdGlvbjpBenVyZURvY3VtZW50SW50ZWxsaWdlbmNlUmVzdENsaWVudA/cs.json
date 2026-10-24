@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Connection setup**:\n- Use the resource URL (`https://<resource-name>.cognitiveservices.azure.com`)\n- Supply either a subscription key or an Entra bearer token\n- Find the endpoint and key under **Keys and Endpoint** in the Azure portal\n\n**Entra authentication**: tokens require the `https://cognitiveservices.azure.com/.default` audience and resource permissions. **The caller renews expiring tokens.** Ping reads resource information and verifies authentication; other operations may require additional permissions.",
+          "message": "Připojení k [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (dříve Form Recognizer) — spravovaná služba pro extrakci dokumentů od Microsoftu.\n\n**Nastavení připojení**:\n- Použijte adresu URL prostředku (`https://<resource-name>.cognitiveservices.azure.com`)\n- Zadejte buď klíč předplatného nebo nosič tokenu Entra\n- Koncový bod a klíč najdete v části **Klíče a koncový bod** v Azure Portal\n\n**Autentizace Entra**: tokeny vyžadují účastníka `https://cognitiveservices.azure.com/.default` a oprávnění k prostředku. **Volající obnovuje vypršelé tokeny.** Ping čte informace o prostředku a ověřuje autentizaci; ostatní operace mohou vyžadovat další oprávnění."
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Azure Document Intelligence Connection",
+          "message": "Připojení k Azure Document Intelligence"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "Azure Document Intelligence subscription key — sent as the `Ocp-Apim-Subscription-Key` header.",
+          "message": "Klíč předplatného Azure Document Intelligence — odesílán jako hlavička `Ocp-Apim-Subscription-Key`."
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "Subscription Key",
+          "message": "Klíč předplatného"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Azure Document Intelligence subscription key",
+          "message": "Klíč předplatného Azure Document Intelligence"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.ZW50cmFfdG9rZW4.desc": {
+          "source": "Access token for `https://cognitiveservices.azure.com/.default`. Use instead of a subscription key and replace it before expiration.",
+          "message": "Přístupový token pro `https://cognitiveservices.azure.com/.default`. Použijte místo klíče předplatného a nahraďte jej před vypršením platnosti."
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.ZW50cmFfdG9rZW4.display_name": {
+          "source": "Entra Bearer Token",
+          "message": "Entra Bearer Token"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.ZW50cmFfdG9rZW4.short_desc": {
+          "source": "A caller-managed Microsoft Entra access token",
+          "message": "Volajícím spravovaný přístupový token Microsoft Entra"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to Azure Document Intelligence",
+          "message": "Připojení k Azure Document Intelligence"
+        }
+      }
+    }
+  }
+}

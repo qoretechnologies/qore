@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.desc": {
+          "source": "A connection to a WebSocket server service",
+          "message": "Підключення до сервера WebSocket-сервісу"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.display_name": {
+          "source": "WebSocket Connection",
+          "message": "Підключення WebSocket"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.Y29va2ll.desc": {
+          "source": "An optional cookie value (e.g., `name=value` or `n1=v1; n2=v2`) sent as a `Cookie` header with the initial HTTP WebSocket upgrade request",
+          "message": "Необов’язкове значення cookie (наприклад, `name=value` або `n1=v1; n2=v2`) відправляється як заголовок `Cookie` у першому HTTP-запиті на підвищення до WebSocket"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.Y29va2ll.display_name": {
+          "source": "Cookie",
+          "message": "Cookies"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.Y29va2ll.short_desc": {
+          "source": "Set a cookie value to send with the WebSocket handshake",
+          "message": "Встановити значення cookie для відправлення під час рукостиснення WebSocket"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.YXN5bmNfaW8.desc": {
+          "source": "Compatibility option; WebSocket socket I/O always uses the global AsyncSocketIoController, and False is ignored",
+          "message": "Опція сумісності; I/O сокета WebSocket завжди використовує глобальний AsyncSocketIoController, і False ігнорується"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.YXN5bmNfaW8.display_name": {
+          "source": "Async I/O",
+          "message": "Асинхронне I/O"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.YXN5bmNfaW8.short_desc": {
+          "source": "Compatibility option; WebSocket socket I/O is always async",
+          "message": "Опція сумісності; I/O сокета WebSocket завжди асинхронне"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "no serialization is used",
+          "message": "серіалізація не використовується"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "використовувати серіалізацію JSON"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.allowed_values.c3RyaW5nOnlhbWw.desc": {
+          "source": "use only YAML serialization",
+          "message": "використовувати лише серіалізацію YAML"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.desc": {
+          "source": "Sets the data serialization option",
+          "message": "Встановлює опцію серіалізації даних"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Серіалізація даних"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.short_desc": {
+          "source": "Sets the data serialization option",
+          "message": "Встановлює опцію серіалізації даних"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmFpc2VfcGluZ19ldmVudHM.desc": {
+          "source": "Raise events for WebSocket pings?",
+          "message": "Виробляти події для пінгів WebSocket?"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmFpc2VfcGluZ19ldmVudHM.display_name": {
+          "source": "Raise Ping Events?",
+          "message": "Виробляти події пінгів?"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmFpc2VfcGluZ19ldmVudHM.short_desc": {
+          "source": "Raise events for WebSocket pings?",
+          "message": "Виробляти події для пінгів WebSocket?"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmVjb25uZWN0.desc": {
+          "source": "Try to reconnect when the connection is closed or lost",
+          "message": "Спробувати перепідключитися, коли з'єднання закрито або втрачено"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmVjb25uZWN0.display_name": {
+          "source": "Reconnect?",
+          "message": "Повторно підключити?"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmVjb25uZWN0.short_desc": {
+          "source": "Try to reconnect when the connection is closed or lost",
+          "message": "Спробувати перепідключитися, коли з'єднання закрито або втрачено"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW4.desc": {
+          "source": "Any token to use for the initial HTTP request to authenticate with the server",
+          "message": "Будь-який токен для використання у першому HTTP-запиті для автентифікації з сервером"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Токен авторизації"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token",
+          "message": "Встановити токен автентифікації"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "Тип `token` для використання в заголовку `Authorization`; ігнорується, якщо параметр `token` не встановлено"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "Тип токена авторизації"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "Тип токена авторизації"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.allowed_values.aW50OjEz.desc": {
+          "source": "Version 13",
+          "message": "Версія 13"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.allowed_values.aW50Ojg.desc": {
+          "source": "Version 8",
+          "message": "Версія 8"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.desc": {
+          "source": "The WebSocket protocol version to use in the client",
+          "message": "Версія протоколу WebSocket, яку використовувати в клієнті"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.display_name": {
+          "source": "WebSocket Version",
+          "message": "Версія WebSocket"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.short_desc": {
+          "source": "Sets the WebSocket protocol version",
+          "message": "Встановлює версію протоколу WebSocket"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.short_desc": {
+          "source": "A connection to a WebSocket server service",
+          "message": "Підключення до сервера WebSocket-сервісу"
+        }
+      }
+    }
+  }
+}

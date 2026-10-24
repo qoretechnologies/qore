@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.UGRmQ29SZXN0Q2xpZW50.scheme.UGRmQ29SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the PDF.co REST API for document processing.\n\nPDF.co provides APIs for PDF conversion, manipulation, data extraction, barcode generation/reading, document classification, and more.",
+          "message": "문서 처리를 위한 PDF.co REST API에 대한 연결.\n\nPDF.co는 PDF 변환, 조작, 데이터 추출, 바코드 생성/읽기, 문서 분류 등 다양한 API를 제공합니다."
+        },
+        "connection.UGRmQ29SZXN0Q2xpZW50.scheme.UGRmQ29SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "PDF.co REST Connection",
+          "message": "PDF.co REST 연결"
+        },
+        "connection.UGRmQ29SZXN0Q2xpZW50.scheme.UGRmQ29SZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "1. Sign up or log in at https://app.pdf.co/\n2. Navigate to the **API Keys** section in your dashboard\n3. Copy your API key and paste it into the **API Key** field\n\n**Note:** PDF.co uses a credit-based billing system. Check your remaining credits in the dashboard.",
+          "message": "1. https://app.pdf.co/ 에서 회원 가입 또는 로그인\n2. 대시보드의 **API 키** 섹션으로 이동\n3. API 키를 복사하여 **API 키** 필드에 붙여넣기\n\n**참고:** PDF.co는 크레딧 기반 청구 시스템을 사용합니다. 대시보드에서 남은 크레딧을 확인하세요."
+        },
+        "connection.UGRmQ29SZXN0Q2xpZW50.scheme.UGRmQ29SZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Key",
+          "message": "API 키 획득 방법"
+        },
+        "connection.UGRmQ29SZXN0Q2xpZW50.scheme.UGRmQ29SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The PDF.co API key used for authentication.\n\nGet your API key from your [PDF.co dashboard](https://app.pdf.co/).",
+          "message": "인증에 사용되는 PDF.co API 키입니다.\n\n[PDF.co 대시보드](https://app.pdf.co/)에서 API 키를 획득하세요."
+        },
+        "connection.UGRmQ29SZXN0Q2xpZW50.scheme.UGRmQ29SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.UGRmQ29SZXN0Q2xpZW50.scheme.UGRmQ29SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "PDF.co API key",
+          "message": "PDF.co API 키"
+        },
+        "connection.UGRmQ29SZXN0Q2xpZW50.scheme.UGRmQ29SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the PDF.co REST API",
+          "message": "PDF.co REST API에 연결"
+        }
+      }
+    }
+  }
+}

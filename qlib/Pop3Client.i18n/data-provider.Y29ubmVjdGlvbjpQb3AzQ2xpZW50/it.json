@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.desc": {
+          "source": "A connection to a POP3 server for receiving emails",
+          "message": "Una connessione a un server POP3 per ricevere email"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.display_name": {
+          "source": "POP3 Connection",
+          "message": "Connessione POP3"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "Il timeout di connessione in millisecondi"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Timeout connessione"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "Il timeout di connessione in millisecondi"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.aW9fdGltZW91dA.desc": {
+          "source": "The I/O timeout in milliseconds",
+          "message": "Timeout I/O in millisecondi"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.aW9fdGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Timeout di I/O"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.aW9fdGltZW91dA.short_desc": {
+          "source": "The I/O timeout in milliseconds",
+          "message": "Timeout I/O in millisecondi"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; conflicts with the `token` option",
+          "message": "La password per l'autenticazione; in conflitto con l'opzione `token`"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Password"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for authentication",
+          "message": "La password per l'autenticazione"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "Any authorization token to use for the connection; will be used for SASL XOAUTH2 logins; conflicts with the `password` option",
+          "message": "Qualsiasi token di autorizzazione da utilizzare per la connessione; verrà usato per accessi SASL XOAUTH2; in conflitto con l'opzione `password`"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Token di autorizzazione"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token for an SASL XOAUTH2 login",
+          "message": "Imposta un token di autorizzazione per un accesso SASL XOAUTH2"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dGxz.desc": {
+          "source": "Use the `STLS` command after connecting with insecure connections",
+          "message": "Usa il comando `STLS` dopo esserti connesso tramite connessioni non sicure"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dGxz.display_name": {
+          "source": "Secure?",
+          "message": "Sicuro?"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dGxz.short_desc": {
+          "source": "Use the STLS command after connecting with insecure connections",
+          "message": "Usa il comando STLS dopo esserti connesso tramite connessioni non sicure"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; always required",
+          "message": "Il nome utente per l'autenticazione; obbligatorio in ogni caso"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Nome utente"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for authentication",
+          "message": "Imposta il nome utente per l'autenticazione"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a POP3 server",
+          "message": "Una connessione a un server POP3"
+        }
+      }
+    }
+  }
+}

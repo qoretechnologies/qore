@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Deel REST API for global workforce management.\n\nDeel is a global HR platform for hiring, managing, and paying contractors and full-time employees worldwide. This integration supports contracts, timesheets, invoice adjustments, workers, time-off, legal entities, invoices, and event triggers.",
+          "message": "グローバルな人材管理のための Deel REST API への接続。\n\nDeel は、世界中のコンタクトやフルタイム従業員の採用、管理、支払いを行うグローバルなHRプラットフォームです。この統合は、契約、タイムシート、請求書調整、従業員、休暇、法的実体、請求書、イベントトリガーをサポートしています。"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Deel REST Connection",
+          "message": "Deel REST 接続"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to Deel at https://app.deel.com\n2. Go to the **Developer Center**: https://app.deel.com/developer-center\n3. Click **Create Token** and choose the token type:\n   - **Personal Token**: Linked to your user account and inherits your permissions\n   - **Organization Token**: Service-level access not tied to a specific user\n4. Copy the token value and paste it into the **API Token** field\n\n**Important:**\n- Only Org Admins or IT Developer Admins can create tokens\n- Store your token securely; treat it like a password",
+          "message": "1. https://app.deel.com で Deel にログイン\n2. **開発者センター**に移動：https://app.deel.com/developer-center\n3. **トークンの作成**をクリックし、トークンの種類を選択します：\n   - **個人用トークン**：あなたのユーザー アカウントに関連し、あなたの権限を引き継ぎます\n   - **組織用トークン**：ユーザーに紐づかないサービスレベルのアクセス\n4. トークンの値をコピーし、**API トークン**フィールドに貼り付けます\n\n**重要：**\n- トークンの作成は、組織管理者またはIT開発管理者のみが可能です\n- トークンを安全に保管してください。パスワードと同様に扱ってください"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Generate Your API Token",
+          "message": "API トークンの発行方法"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "**Sandbox environment** is available for safe testing without affecting real data.\n\n- Enable **Use Sandbox** to connect to `https://api-sandbox.demo.deel.com/rest/v2`\n- Sandbox tokens are separate from production tokens — generate one at https://app.deel.com/developer-center\n- Leave **Use Sandbox** disabled for production use",
+          "message": "**サンドボックス環境**は、実データに影響を与えることなく安全にテストできるようになっています。\n\n- **サンドボックスを使用**を有効にして `https://api-sandbox.demo.deel.com/rest/v2` に接続します\n- サンドボックス用トークンは本番用トークンとは別です。https://app.deel.com/developer-center で生成してください\n- 本番使用の場合は **サンドボックスを使用** を無効のままにしてください"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Sandbox vs Production",
+          "message": "サンドボックス vs 本番"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Deel API access token used for authentication.\n\nGenerate a token in the **Developer Center** at https://app.deel.com/developer-center\n\nBoth **personal tokens** (linked to a user account) and **organization tokens** (service-level access) are supported.",
+          "message": "認証に使用されるDeel APIのアクセストークンです。\n\nhttps://app.deel.com/developer-center の **Developer Center** でトークンを生成してください。\n\n**個人用トークン**（ユーザーアカウントに紐づく）と **組織用トークン**（サービスレベルのアクセス）の両方をサポートしています。"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "APIトークン"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Deel API access token",
+          "message": "Deel APIアクセストークン"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.desc": {
+          "source": "If `True`, API calls target the Deel sandbox environment (`https://api-sandbox.demo.deel.com/rest/v2`) for safe testing.\n\nIf `False` (default), API calls target the production environment (`https://api.letsdeel.com/rest/v2`).\n\n**Note:** Sandbox and production use separate API tokens. Generate a sandbox token from the Developer Center when using this option.",
+          "message": "`True` の場合、API呼び出しは安全なテスト用にDeelサンドボックス環境 (`https://api-sandbox.demo.deel.com/rest/v2`) を対象とします。\n\n`False` （デフォルト）の場合は、API呼び出しは本番環境 (`https://api.letsdeel.com/rest/v2`) を対象とします。\n\n**注意:** サンドボックスと本番環境では別々のAPIトークンを使用します。このオプションを使用する際は、Developer Centerからサンドボックス用トークンを生成してください。"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.display_name": {
+          "source": "Use Sandbox",
+          "message": "サンドボックスを使用"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.short_desc": {
+          "source": "Use Deel sandbox environment for testing",
+          "message": "テスト用にDeelサンドボックス環境を使用"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Deel REST API",
+          "message": "Deel REST APIへの接続"
+        }
+      }
+    }
+  }
+}

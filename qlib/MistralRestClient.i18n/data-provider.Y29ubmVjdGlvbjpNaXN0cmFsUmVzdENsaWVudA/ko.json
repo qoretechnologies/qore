@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [Mistral AI](https://mistral.ai) REST API for chat (Mistral Large/Small/Nemo), embeddings (mistral-embed), and document OCR (`mistral-ocr`).\n\nRequires an API key for Bearer authentication.  Get your API key from the [Mistral Console](https://console.mistral.ai/api-keys/).",
+          "message": "[Mistral AI](https://mistral.ai) REST API에 대한 연결 (Mistral Large/Small/Nemo), 임베딩 (mistral-embed), 문서 OCR (`mistral-ocr`).\n\nBearer 인증을 위해 API 키가 필요합니다. [Mistral 콘솔](https://console.mistral.ai/api-keys/)에서 API 키를 가져오세요."
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Mistral AI REST Connection",
+          "message": "Mistral AI REST 연결"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Mistral chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `mistral-large-latest` (the default)",
+          "message": "이 연결이 채팅에 선택되었을 때 LLM 클라이언트가 사용하는 Mistral 채팅 모델입니다.\n\n채팅 모델은 임베딩 모델과 별개의 계열이며, 상호 교환할 수 없습니다.\n\n예시 값: `mistral-large-latest` (기본값)"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "채팅 모델"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Mistral chat model name",
+          "message": "Mistral 채팅 모델 이름"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1",
+          "message": "V1"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.allowed_values.c3RyaW5nOnYy.display_name": {
+          "source": "V2",
+          "message": "V2"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "The default API version for direct REST calls. App actions select their documented version; connection pings always use `v1`.",
+          "message": "직접 REST 호출에 사용되는 기본 API 버전입니다. 앱 작업은 문서화된 버전을 선택합니다; 연결 핑은 항상 `v1`을 사용합니다."
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API 버전"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "사용할 API 버전"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Mistral AI API key used for Bearer authentication.",
+          "message": "Bearer 인증에 사용되는 Mistral AI API 키입니다."
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Mistral AI API key for authentication",
+          "message": "인증을 위한 Mistral AI API 키"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Mistral AI REST API",
+          "message": "Mistral AI REST API에 연결"
+        }
+      }
+    }
+  }
+}

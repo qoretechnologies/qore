@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Tavily](https://www.tavily.com) — a search API built for programs: semantic web search, page extraction, site crawling and mapping, and research agents that search, read and reason until they can answer.\n\nRequires an API key, sent as a Bearer token.  Get one from the [Tavily dashboard](https://app.tavily.com/).",
+          "message": "與 [Tavily](https://www.tavily.com) 的連接 — 一個為程式設計打造的搜尋 API：語意網路搜尋、頁面擷取、網站爬蟲與地圖製作，以及能搜尋、閱讀與推理直到回答問題的研究代理程式。\n\n需要 API 金鑰，以 Bearer 權杖形式傳送。請從 [Tavily 控制台](https://app.tavily.com/) 取得。"
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Tavily Connection",
+          "message": "Tavily 連接"
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Tavily API key, sent as a Bearer token.  Keys begin with `tvly-`; get one from the [Tavily dashboard](https://app.tavily.com/).\n\nThe connection ping reads the account's credit usage with this key, so a key Tavily does not accept makes the connection fail rather than appear healthy.",
+          "message": "Tavily API 金鑰，以 Bearer 權杖形式傳送。金鑰以 `tvly-` 開頭，請從 [Tavily 控制台](https://app.tavily.com/) 取得。\n\n連接 ping 會讀取此金鑰的帳戶信用使用狀況，因此若 Tavily 不接受的金鑰會導致連接失敗，而非顯示為正常狀態。"
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "The Tavily API key",
+          "message": "Tavily API 金鑰"
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Tavily search, extraction and research API",
+          "message": "與 Tavily 搜尋、擷取與研究 API 的連接"
+        }
+      }
+    }
+  }
+}

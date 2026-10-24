@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Perplexity AI REST API",
+          "message": "Spojenie s REST API Perplexity AI"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Perplexity AI REST Connection",
+          "message": "Spojenie REST pre Perplexity AI"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Perplexity AI, you need an API key:\n\n1. Sign in to your account at [perplexity.ai](https://www.perplexity.ai)\n2. Navigate to **Settings** in the menu\n3. Select **API** from the settings options\n4. Generate or copy your API key\n\nKeep your API key secure and never share it publicly.",
+          "message": "Pre pripojenie k Perplexity AI potrebujete kľúč API:\n\n1. Prihláste sa do svojho účtu na [perplexity.ai](https://www.perplexity.ai)\n2. Prejdite do **Nastavení** v ponuke\n3. Vyberte **API** medzi možnosťami nastavenia\n4. Vytvorte alebo skopírujte svoj kľúč API\n\nUchovávajte svoj kľúč API v bezpečí a nikdy ho nezdieľajte verejne."
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Perplexity API Key",
+          "message": "Ako získať svoj kľúč API pre Perplexity"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Perplexity chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `sonar` (the default)",
+          "message": "Chatový model Perplexity používaný klientmi LLM, keď je toto spojenie vybrané pre chat.\n\nChatové modely tvoria samostatnú skupinu od modelov pre vektorizáciu a nie sú navzájom navzájom nahrádzateľné.\n\nPríklad hodnôt: `sonar` (predvolené)"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Chatovací model"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Perplexity chat model name",
+          "message": "Názov chatového modelu Perplexity"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Perplexity API key used for authentication; sent as a Bearer token in the `Authorization` header. To obtain a key, sign in at [perplexity.ai](https://www.perplexity.ai) and navigate to **Settings** → **API**",
+          "message": "Kľúč API pre Perplexity používaný na overenie; odosielaný ako nosný token v hlavičke `Authorization`. K získaniu kľúča sa prihláste na [perplexity.ai](https://www.perplexity.ai) a prejdite do **Nastavení** → **API**"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Perplexity API key for authentication",
+          "message": "Kľúč API pre Perplexity na overenie"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Perplexity AI REST API",
+          "message": "Spojenie s REST API Perplexity AI"
+        }
+      }
+    }
+  }
+}

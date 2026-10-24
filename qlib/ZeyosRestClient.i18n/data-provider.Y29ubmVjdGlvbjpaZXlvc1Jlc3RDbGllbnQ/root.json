@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "ZeyOS Connection",
+          "message": "ZeyOS Connection"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a ZeyOS instance with the REST API",
+          "message": "A connection to a ZeyOS instance with the REST API"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to a ZeyOS instance with the REST API",
+          "message": "A connection to a ZeyOS instance with the REST API"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.YXBwc2VjcmV0.display_name": {
+          "source": "Zeyos App Secret",
+          "message": "Zeyos App Secret"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.YXBwc2VjcmV0.short_desc": {
+          "source": "Sets the Zeyos application secret",
+          "message": "Sets the Zeyos application secret"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.YXBwc2VjcmV0.desc": {
+          "source": "Sets the Zeyos application secret",
+          "message": "Sets the Zeyos application secret"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aWRlbnRpZmllcg.display_name": {
+          "source": "Zeyos Identifier",
+          "message": "Zeyos Identifier"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aWRlbnRpZmllcg.short_desc": {
+          "source": "Sets the Zeyos identifier",
+          "message": "Sets the Zeyos identifier"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aWRlbnRpZmllcg.desc": {
+          "source": "Sets the Zeyos identifier; if none is provided, a random identifier string is used",
+          "message": "Sets the Zeyos identifier; if none is provided, a random identifier string is used"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aW5zdGFuY2U.display_name": {
+          "source": "Zeyos Instance",
+          "message": "Zeyos Instance"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aW5zdGFuY2U.short_desc": {
+          "source": "Sets the Zeyos instance name",
+          "message": "Sets the Zeyos instance name"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aW5zdGFuY2U.desc": {
+          "source": "Sets the Zeyos instance name (first segment of URI path)",
+          "message": "Sets the Zeyos instance name (first segment of URI path)"
+        }
+      }
+    }
+  }
+}

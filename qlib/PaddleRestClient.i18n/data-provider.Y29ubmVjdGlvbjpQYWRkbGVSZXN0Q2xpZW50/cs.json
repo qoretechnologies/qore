@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Paddle](https://www.paddle.com) REST API for billing, subscriptions and payments.\n\nPaddle is a **merchant of record**: it sells your software on your behalf, so it handles payment processing, sales tax and invoicing, and pays out the balance. An integration works with catalog products and prices, customers, transactions, subscriptions and reports.\n\n**Authentication** is an API key sent as a bearer token; there is no OAuth2 flow. A key is created in the Paddle dashboard under **Paddle > Developer Tools > Authentication** and is granted an explicit set of permissions, so it can be scoped to exactly what the integration needs.\n\n**Sandbox and production are separate environments** with separate data and separate keys. Set `instance_type` to match the key.\n\nPaddle is a trademark of Paddle.com Market Ltd.",
+          "message": "Připojení k REST API [Paddle](https://www.paddle.com) pro účtování, předplatná a platby.\n\nPaddle je **obchodníkem zodpovědným za prodej**: prodává vaši software za vaše jméno, takže zpracovává platby, daň z přidané hodnoty a fakturaci a vyplácí zůstatek. Integrace pracuje s katalogovými produkty a cenami, zákazníky, transakcemi, předplatnými a výkazy.\n\n**Autentizace** je klíč API odesílaný jako nosný token; neexistuje tok OAuth2. Klíč se vytvoří v rozhraní Paddle pod **Paddle > Nástroje pro vývojáře > Autentizace** a je mu přidělený přesně definovaný soubor oprávnění, takže může být přesně omezen na to, co integrace potřebuje.\n\n**Sandbox a produkční prostředí jsou samostatná** s oddělenými daty a oddělenými klíči. Nastavte `instance_type` tak, aby odpovídalo klíči.\n\nPaddle je ochranná známka společnosti Paddle.com Market Ltd."
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Paddle REST Connection",
+          "message": "Připojení k REST API Paddle"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOmFwaQ.desc": {
+          "source": "The live Paddle environment: real customers, real money",
+          "message": "Živé prostředí Paddle: skuteční zákazníci, skutečné peníze"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOmFwaQ.display_name": {
+          "source": "Production",
+          "message": "Produkční"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnNhbmRib3gtYXBp.desc": {
+          "source": "The Paddle test environment: no real money moves",
+          "message": "Testovací prostředí Paddle: žádné skutečné peníze nejsou přenášeny"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnNhbmRib3gtYXBp.display_name": {
+          "source": "Sandbox",
+          "message": "Přípravné prostředí"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.desc": {
+          "source": "The Paddle environment this connection works against, which also determines the target URL.\n\n- `api`: **Production** - `https://api.paddle.com`\n- `sandbox-api`: **Sandbox** - `https://sandbox-api.paddle.com`\n\nThe two environments are entirely separate: they hold different data and accept different API keys, so this must match the key in `token`.\n\nDefaults to **sandbox**, so a connection created without setting this talks to test data rather than billing real customers.",
+          "message": "Prostředí Paddle, proti kterému se toto připojení provádí, což také určuje cílovou adresu URL.\n\n- `api`: **Produkční** - `https://api.paddle.com`\n- `sandbox-api`: **Přípravné prostředí** - `https://sandbox-api.paddle.com`\n\nObě prostředí jsou naprosto oddělená: uchovávají různá data a přijímají různé klíče API, takže to musí odpovídat klíči v `token`.\n\nVe výchozím nastavení je **sandbox**, takže připojení vytvořené bez nastavení tohoto parametru komunikuje s testovacími daty, nikoli s reálnými zákazníky."
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.display_name": {
+          "source": "Instance Type",
+          "message": "Typ instance"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.short_desc": {
+          "source": "The Paddle environment to connect to",
+          "message": "Prostředí Paddle, ke kterému se připojit"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A Paddle API key (`pdl_live_apikey_…` or `pdl_sdbx_apikey_…`), sent as a bearer token.\n\n**To obtain one:**\n1. Log in to the Paddle dashboard for the environment this connection targets\n2. Go to Paddle > Developer Tools > Authentication\n3. Create an API key and grant it the permissions this integration needs\n\n**Note:** a key belongs to one environment only; a sandbox key is rejected by production and the other way round. Set `instance_type` to match.",
+          "message": "Klíč API Paddle (`pdl_live_apikey_…` nebo `pdl_sdbx_apikey_…`), odesílaný jako nosný token.\n\n**Jak získat klíč:**\n1. Přihlaste se do rozhraní Paddle pro prostředí, které toto připojení cílí\n2. Přejděte na Paddle > Nástroje pro vývojáře > Autentizace\n3. Vytvořte klíč API a udělte mu oprávnění potřebná pro tuto integraci\n\n**Poznámka:** klíč patří pouze jednomu prostředí; sandboxový klíč je zamítnut produkčním prostředím a naopak. Nastavte `instance_type` tak, aby odpovídal."
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "API Key",
+          "message": "Klíč API"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A Paddle API key",
+          "message": "Klíč API Paddle"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Paddle REST API",
+          "message": "Připojení k REST API Paddle"
+        }
+      }
+    }
+  }
+}

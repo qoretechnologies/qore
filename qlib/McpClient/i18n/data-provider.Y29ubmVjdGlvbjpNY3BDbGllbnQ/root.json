@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.display_name": {
+          "source": "MCP Connection",
+          "message": "MCP Connection"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to an MCP (Model Context Protocol) server",
+          "message": "A connection to an MCP (Model Context Protocol) server"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to an MCP server for accessing AI tools, resources, and prompts",
+          "message": "A connection to an MCP server for accessing AI tools, resources, and prompts"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X25hbWU.display_name": {
+          "source": "Client Name",
+          "message": "Client Name"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X25hbWU.short_desc": {
+          "source": "The client name to use for MCP initialization",
+          "message": "The client name to use for MCP initialization"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X25hbWU.desc": {
+          "source": "The name of this client to report to the MCP server during initialization",
+          "message": "The name of this client to report to the MCP server during initialization"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X3ZlcnNpb24.display_name": {
+          "source": "Client Version",
+          "message": "Client Version"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X3ZlcnNpb24.short_desc": {
+          "source": "The client version to use for MCP initialization",
+          "message": "The client version to use for MCP initialization"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X3ZlcnNpb24.desc": {
+          "source": "The version of this client to report to the MCP server during initialization",
+          "message": "The version of this client to report to the MCP server during initialization"
+        }
+      }
+    }
+  }
+}

@@ -224,7 +224,8 @@ public class WooCommerceRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "woocommerce://localhost";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("WooCommerceRestClient",
+            "WooCommerceRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "WooCommerce REST Connection",
             "short_desc": "A connection to the WooCommerce REST API",
             "desc": "A connection to the WooCommerce REST API v3 for e-commerce management.\n\n"
@@ -304,6 +305,7 @@ public class WooCommerceRestConnection inherits RestClient::RestConnection {
             "required_options": "store_url,consumer_key,consumer_secret",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Obtain Your API Credentials",
                     "intent": "info",
                     "content": "1. Log in to your **WordPress admin panel**\n"
@@ -319,7 +321,7 @@ public class WooCommerceRestConnection inherits RestClient::RestConnection {
                         "- HTTPS is required for Basic Auth (HTTP requires OAuth 1.0a)",
                 },
             ),
-        };
+        });
     }
 
     #! creates the WooCommerceRestConnection object

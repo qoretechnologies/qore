@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the BaseLinker REST API for managing orders, products, inventories, couriers, and external storage integrations.\n\nBaseLinker exposes an RPC-over-HTTP API: every operation is a POST to a single endpoint (`https://api.baselinker.com/connector.php`) with a form-encoded body of the form `method=<name>&parameters=<URL-encoded JSON>`.\n\nAuthentication is performed by sending the raw API token in the `X-BLToken` HTTP header (no `Bearer` prefix).\n\n**To obtain your API token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Generate a new token and copy its value\n\n**Note:** The token is sent on every request as the `X-BLToken` header.",
+          "message": "주문, 제품, 재고, 운송사 및 외부 스토리지 통합을 관리하기 위한 BaseLinker REST API에 대한 연결.\n\nBaseLinker는 RPC-over-HTTP API를 제공합니다: 모든 작업은 `https://api.baselinker.com/connector.php`로 POST 요청을 보내며, form-encoded 본문 형식은 `method=<name>&parameters=<URL-encoded JSON>`입니다.\n\n인증은 `X-BLToken` HTTP 헤더에 원시 API 토큰을 전송하여 수행됩니다 (`Bearer` 접두사 없음).\n\n**API 토큰을 얻는 방법:**\n1. BaseLinker 패널에 로그인합니다\n2. **계정 및 기타** → **내 계정**을 엽니다\n3. **API** 탭을 엽니다\n4. 새 토큰을 생성하고 값을 복사합니다\n\n**참고:** 토큰은 모든 요청에서 `X-BLToken` 헤더로 전송됩니다."
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "BaseLinker REST Connection",
+          "message": "BaseLinker REST 연결"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires a **BaseLinker API token**.\n\n**Steps to generate a token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Click to generate a new token and copy its value\n\n**How it is used:**\n- The token is sent on every request as the `X-BLToken` HTTP header\n- No `Bearer` prefix is used — the token is sent raw\n- Every BaseLinker call is a POST to a single RPC endpoint (`/connector.php`) with a form-encoded body",
+          "message": "이 통합을 위해서는 **BaseLinker API 토큰**이 필요합니다.\n\n**토큰 생성 단계:**\n1. BaseLinker 패널에 로그인합니다\n2. **계정 및 기타** → **내 계정**을 엽니다\n3. **API** 탭을 엽니다\n4. 새 토큰을 생성하고 값을 복사합니다\n\n**사용 방법:**\n- 토큰은 모든 요청에서 `X-BLToken` HTTP 헤더로 전송됩니다\n- `Bearer` 접두사가 사용되지 않습니다 — 토큰은 원시 상태로 전송됩니다\n- 모든 BaseLinker 호출은 단일 RPC 엔드포인트 (`/connector.php`)로 POST 요청을 보내며, form-encoded 본문을 사용합니다"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Token",
+          "message": "API 토큰을 얻는 방법"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The BaseLinker API token used for authentication. It is sent on every request as the `X-BLToken` HTTP header (raw token, no `Bearer` prefix).\n\n**To obtain your API token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Generate a new token and copy its value",
+          "message": "BaseLinker API 토큰은 인증에 사용됩니다. 요청마다 `X-BLToken` HTTP 헤더로 전송되며(원시 토큰, `Bearer` 접두사 없음).\n\n**API 토큰을 얻으려면:**\n1. BaseLinker 패널에 로그인합니다\n2. **계정 및 기타** → **내 계정**을 엽니다\n3. **API** 탭을 엽니다\n4. 새 토큰을 생성하고 값을 복사합니다"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API 토큰"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "BaseLinker API token for authentication",
+          "message": "BaseLinker 인증용 API 토큰"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the BaseLinker REST API",
+          "message": "BaseLinker REST API 연결"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the LinkedIn member REST API",
+          "message": "A connection to the LinkedIn member REST API"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [LinkedIn](https://www.linkedin.com) REST API for posting and managing content as the authenticated member.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from a [LinkedIn developer application](https://www.linkedin.com/developers/apps) with the **Sign In with LinkedIn using OpenID Connect** and **Share on LinkedIn** products enabled. The connection uses the `linkedin://` URL scheme",
+          "message": "A connection to the [LinkedIn](https://www.linkedin.com) REST API for posting and managing content as the authenticated member.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from a [LinkedIn developer application](https://www.linkedin.com/developers/apps) with the **Sign In with LinkedIn using OpenID Connect** and **Share on LinkedIn** products enabled. The connection uses the `linkedin://` URL scheme"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.display_name": {
+          "source": "LinkedIn API Version",
+          "message": "LinkedIn API Version"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.short_desc": {
+          "source": "The LinkedIn API version to send in the LinkedIn-Version header",
+          "message": "The LinkedIn API version to send in the LinkedIn-Version header"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.desc": {
+          "source": "The LinkedIn API version in `YYYYMM` form, sent in the `LinkedIn-Version` header with every versioned request.  LinkedIn never defaults to the latest version: a missing or sunset version is an error, and each version is supported for a limited time, so this must be moved forward periodically.\n\nNote that LinkedIn's Marketing APIs and its Pages Data Portability (DMA) APIs have **separate** version series; a value from one series is not valid in the other.",
+          "message": "The LinkedIn API version in `YYYYMM` form, sent in the `LinkedIn-Version` header with every versioned request.  LinkedIn never defaults to the latest version: a missing or sunset version is an error, and each version is supported for a limited time, so this must be moved forward periodically.\n\nNote that LinkedIn's Marketing APIs and its Pages Data Portability (DMA) APIs have **separate** version series; a value from one series is not valid in the other."
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "LinkedIn Organizations",
+          "message": "LinkedIn Organizations"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the LinkedIn Pages Data Portability (DMA) REST API",
+          "message": "A connection to the LinkedIn Pages Data Portability (DMA) REST API"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [LinkedIn](https://www.linkedin.com) Pages Data Portability API product, which gives a LinkedIn Page administrator access to the organization's posts, comments, reactions, followers and page analytics.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from a [LinkedIn developer application](https://www.linkedin.com/developers/apps) that has been **approved for the Pages Data Portability API product** — a separate LinkedIn approval that grants the `r_dma_admin_pages_content` permission and takes several business days. The connection uses the `linkedindma://` URL scheme",
+          "message": "A connection to the [LinkedIn](https://www.linkedin.com) Pages Data Portability API product, which gives a LinkedIn Page administrator access to the organization's posts, comments, reactions, followers and page analytics.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from a [LinkedIn developer application](https://www.linkedin.com/developers/apps) that has been **approved for the Pages Data Portability API product** — a separate LinkedIn approval that grants the `r_dma_admin_pages_content` permission and takes several business days. The connection uses the `linkedindma://` URL scheme"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.display_name": {
+          "source": "LinkedIn API Version",
+          "message": "LinkedIn API Version"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.short_desc": {
+          "source": "The LinkedIn API version to send in the LinkedIn-Version header",
+          "message": "The LinkedIn API version to send in the LinkedIn-Version header"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.desc": {
+          "source": "The LinkedIn API version in `YYYYMM` form, sent in the `LinkedIn-Version` header with every versioned request.  LinkedIn never defaults to the latest version: a missing or sunset version is an error, and each version is supported for a limited time, so this must be moved forward periodically.\n\nNote that LinkedIn's Marketing APIs and its Pages Data Portability (DMA) APIs have **separate** version series; a value from one series is not valid in the other.",
+          "message": "The LinkedIn API version in `YYYYMM` form, sent in the `LinkedIn-Version` header with every versioned request.  LinkedIn never defaults to the latest version: a missing or sunset version is an error, and each version is supported for a limited time, so this must be moved forward periodically.\n\nNote that LinkedIn's Marketing APIs and its Pages Data Portability (DMA) APIs have **separate** version series; a value from one series is not valid in the other."
+        }
+      }
+    }
+  }
+}

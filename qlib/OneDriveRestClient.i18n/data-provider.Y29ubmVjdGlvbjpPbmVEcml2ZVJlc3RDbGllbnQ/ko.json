@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Microsoft OneDrive REST API via Microsoft Graph for cloud file storage and management.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from your [Azure app registration](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps). The connection uses the `onedrive://` URL scheme",
+          "message": "클라우드 파일 저장 및 관리를 위한 Microsoft Graph를 통한 Microsoft OneDrive REST API에 연결.\n\nOAuth2 자격 증명(`oauth2_client_id` 및 `oauth2_client_secret`)이 필요합니다. [Azure 앱 등록](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps)에서 가져오세요. 연결은 `onedrive://` URL 스키마를 사용합니다."
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Microsoft OneDrive",
+          "message": "Microsoft OneDrive"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.allowed_values.c3RyaW5nOm9yZ2FuaXphdGlvbnM.display_name": {
+          "source": "Organizations (Work/School Only)",
+          "message": "조직(업무/학교 전용)"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.allowed_values.c3RyaW5nOmNvbW1vbg.display_name": {
+          "source": "Common (All Account Types)",
+          "message": "공통(모든 계정 유형)"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.allowed_values.c3RyaW5nOmNvbnN1bWVycw.display_name": {
+          "source": "Consumers (Personal Only)",
+          "message": "소비자(개인 전용)"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.desc": {
+          "source": "Azure AD tenant ID for authentication; use `common` for multi-tenant apps, `organizations` for work/school accounts only, `consumers` for personal accounts only, or provide a specific tenant ID or domain name",
+          "message": "인증을 위한 Azure AD 테넌트 ID; 다중 테넌트 앱에는 `common`을, 업무/학교 계정 전용에는 `organizations`을, 개인 계정 전용에는 `consumers`을 사용하거나, 특정 테넌트 ID 또는 도메인 이름을 제공하세요."
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.display_name": {
+          "source": "Tenant ID",
+          "message": "테넌트 ID"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.short_desc": {
+          "source": "Azure AD tenant ID",
+          "message": "Azure AD 테넌트 ID"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Microsoft OneDrive REST API via Microsoft Graph",
+          "message": "Microsoft Graph를 통한 Microsoft OneDrive REST API에 연결"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.U2hhcmVQb2ludFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to Microsoft SharePoint via the Microsoft Graph API, for document libraries and lists.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from your [Azure app registration](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps). The connection uses the `sharepoint://` URL scheme",
+          "message": "문서 라이브러리 및 목록을 위한 Microsoft Graph API를 통한 Microsoft SharePoint에 연결.\n\nOAuth2 자격 증명(`oauth2_client_id` 및 `oauth2_client_secret`)이 필요합니다. [Azure 앱 등록](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps)에서 가져오세요. 연결은 `sharepoint://` URL 스키마를 사용합니다."
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.U2hhcmVQb2ludFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Microsoft SharePoint",
+          "message": "Microsoft SharePoint"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.U2hhcmVQb2ludFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to Microsoft SharePoint via the Microsoft Graph API",
+          "message": "Microsoft Graph API를 통해 Microsoft SharePoint에 연결"
+        }
+      }
+    }
+  }
+}

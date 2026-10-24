@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a Qdrant vector database server",
+          "message": "Una connessione a un server del database vettoriale Qdrant"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Qdrant REST Connection",
+          "message": "Connessione REST di Qdrant"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.desc": {
+          "source": "The API key for authenticating with the Qdrant server; sent as the `api-key` header",
+          "message": "La chiave API per l'autenticazione con il server Qdrant; inviata come intestazione `api-key`"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "Chiave API"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.short_desc": {
+          "source": "The Qdrant API key for authentication",
+          "message": "La chiave API di Qdrant per l'autenticazione"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.desc": {
+          "source": "HTTP headers to send with ping requests; defaults to `{\"Connection\": \"close\"}` to force a fresh TCP connection on each ping, preventing stale keep-alive connection failures against qdrant's actix-web server (which closes idle keep-alive connections after a short timeout)",
+          "message": "Intestazioni HTTP da inviare con le richieste di ping; predefinito a `{\"Connection\": \"close\"}` per forzare una nuova connessione TCP a ogni ping, evitando i fallimenti causati da connessioni keep-alive obsolete contro il server actix-web di qdrant (che chiude le connessioni keep-alive inattive dopo un breve timeout)"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.cGluZ19wYXRo.desc": {
+          "source": "The URI path to use for pings; defaults to `/collections`, which requires authentication and therefore verifies the credential as well as reachability.  Do not use `/`: qdrant serves the root path outside its authentication layer, so a ping against it succeeds even when the connection carries no credential at all and no real operation can be performed",
+          "message": "Il percorso URI da usare per i ping; predefinito a `/collections`, che richiede autenticazione e quindi verifica sia le credenziali sia la raggiungibilità. Non usare `/`: qdrant serve il percorso radice al di fuori del livello di autenticazione, quindi un ping su di esso ha successo anche quando la connessione non contiene alcuna credenziale e nessuna operazione reale può essere eseguita"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Qdrant vector database server",
+          "message": "Una connessione a un server del database vettoriale Qdrant"
+        }
+      }
+    }
+  }
+}

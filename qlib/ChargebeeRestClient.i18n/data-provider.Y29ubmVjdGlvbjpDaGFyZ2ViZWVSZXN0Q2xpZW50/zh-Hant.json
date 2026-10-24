@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Chargebee REST API for subscription billing and revenue management.\n\nChargebee is a subscription billing and revenue management platform that helps businesses manage their recurring revenue. This integration enables managing subscriptions, customers, invoices, coupons, and receiving event notifications.\n\n**Rate Limits:**\n- ~150 requests per minute for test sites\n- Plan-dependent limits for live sites\n- HTTP 429 with Retry-After header when exceeded",
+          "message": "與 Chargebee REST API 的連接，用於訂閱計費與收益管理。\n\nChargebee 是一個訂閱計費與收益管理平台，協助企業管理其定期收入。此整合功能可協助管理訂閱、客戶、發票、優惠券，並接收事件通知。\n\n**速率限制：**\n- 測試網站約每分鐘 150 次請求\n- 正式網站依計畫而定\n- 超出時回傳 HTTP 429 並附帶 Retry-After 標頭"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Chargebee REST Connection",
+          "message": "Chargebee REST 連接"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Chargebee site (e.g., https://your-site.chargebee.com)\n2. Go to **Settings** > **Configure Chargebee**\n3. Under **API & Webhooks**, click **API Keys**\n4. Copy an existing key or click **Add API Key** to create a new one\n\n**Important:**\n- Use **test site** keys during development\n- Use **live site** keys for production\n- Full-access keys can perform all API operations\n- Read-only keys can only read data",
+          "message": "1. 登入您的 Chargebee 網站（例如 https://your-site.chargebee.com ）\n2. 前往 **設定** > **設定 Chargebee**\n3. 在 **API 與 Webhook** 下，點選 **API 金鑰**\n4. 複製現有的金鑰，或點選 **新增 API 金鑰** 建立新金鑰\n\n**重要：**\n- 開發時使用 **測試網站** 金鑰\n- 正式環境使用 **正式網站** 金鑰\n- 完全存取金鑰可執行所有 API 操作\n- 只讀金鑰僅能讀取資料"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "如何取得您的 API 金鑰"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.desc": {
+          "source": "The Chargebee API key used as the username for HTTP Basic Auth.\n\n**To obtain your API key:**\n1. Log in to your Chargebee site\n2. Go to Settings > Configure Chargebee > API Keys (under API & Webhooks)\n3. Copy an existing API key or create a new one\n\n**Note:** Use test site keys for development and live site keys for production.",
+          "message": "用於 HTTP Basic 認證的 Chargebee API 金鑰。\n\n**取得 API 金鑰的方法：**\n1. 登入您的 Chargebee 網站\n2. 前往 設定 > 設定 Chargebee > API 金鑰（位於 API 與 Webhook 下）\n3. 複製現有的 API 金鑰或建立新的金鑰\n\n**注意：** 開發時使用測試網站金鑰，正式環境使用正式網站金鑰。"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.short_desc": {
+          "source": "Chargebee API key for authentication",
+          "message": "用於驗證的 Chargebee API 金鑰"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.c2l0ZQ.desc": {
+          "source": "Your Chargebee site name. This is the subdomain of your Chargebee URL.\n\nFor example, if your Chargebee URL is https://acme-test.chargebee.com, your site name is 'acme-test'.",
+          "message": "您的 Chargebee 網站名稱。這是您 Chargebee URL 的子網域。\n\n例如，若您的 Chargebee URL 為 https://acme-test.chargebee.com ，則網站名稱為 'acme-test'。"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.c2l0ZQ.display_name": {
+          "source": "Site Name",
+          "message": "網站名稱"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.c2l0ZQ.short_desc": {
+          "source": "Chargebee site name",
+          "message": "Chargebee 站點名稱"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Chargebee REST API",
+          "message": "連接到 Chargebee REST API 的連接"
+        }
+      }
+    }
+  }
+}

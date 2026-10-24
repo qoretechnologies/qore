@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a ServiceNow instance using the REST API",
+          "message": "透過 REST API 連接到 ServiceNow 實例"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "ServiceNow REST Connection",
+          "message": "ServiceNow REST 連接"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "the API version for ServiceNow; if not set the latest version is used",
+          "message": "ServiceNow 的 API 版本；若未設定，則使用最新版本"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "要使用的 API 版本"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "the REST API key",
+          "message": "REST API 金鑰"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "The REST API key",
+          "message": "REST API 金鑰"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5X2hlYWRlcg.desc": {
+          "source": "the REST API key header",
+          "message": "REST API 金鑰標頭"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5X2hlYWRlcg.display_name": {
+          "source": "API Key Header",
+          "message": "API 金鑰標頭"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5X2hlYWRlcg.short_desc": {
+          "source": "The REST API key header",
+          "message": "REST API 金鑰標頭"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "the ServiceNow OAuth2 client ID",
+          "message": "ServiceNow OAuth2 客戶端 ID"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "the ServiceNow OAuth2 client secret",
+          "message": "ServiceNow 的 OAuth2 客戶端密碼"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.cGFzc3dvcmQ.desc": {
+          "source": "the ServiceNow password",
+          "message": "ServiceNow 密碼"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.dXNlcm5hbWU.desc": {
+          "source": "the ServiceNow username",
+          "message": "ServiceNow 使用者名稱"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a ServiceNow instance using the REST API",
+          "message": "透過 REST API 連接到 ServiceNow 實例"
+        }
+      }
+    }
+  }
+}

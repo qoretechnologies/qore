@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the EasyPost REST API for shipping label generation, tracking, address verification, rate shopping, and multi-carrier fulfillment.\n\nEasyPost provides a unified API across 100+ carriers (USPS, UPS, FedEx, DHL, and more).\n\n**Authentication:** A single API key is used as the HTTP Basic Auth username (with an empty password).\n\n**Test vs. production keys:**\n- Test keys (prefixed `EZTK...`) only return mocked label/tracker data and are free\n- Production keys (prefixed `EZAK...`) bill the EasyPost wallet for real shipments",
+          "message": "Una conexión con la API REST de EasyPost para la generación de etiquetas de envío, seguimiento, verificación de direcciones, comparación de tarifas y cumplimiento multi-carrier.\n\nEasyPost ofrece una API unificada a través de más de 100 transportistas (USPS, UPS, FedEx, DHL y más).\n\n**Autenticación:** se utiliza una única clave de API como nombre de usuario en la autenticación HTTP básica (con contraseña vacía).\n\n**Claves de prueba frente a producción:**\n- Claves de prueba (prefijadas con `EZTK...`): solo devuelven datos simulados de etiquetas y seguimiento, y son gratuitas.\n- Claves de producción (prefijadas con `EZAK...`): facturan el monedero de EasyPost por envíos reales."
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "EasyPost REST Connection",
+          "message": "Conexión REST de EasyPost"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your EasyPost account at https://www.easypost.com/account/api-keys\n2. You will see two sets of keys:\n   - **Test keys** (prefixed `EZTK...`): free, return mocked label/tracker data; use these for development and integration testing\n   - **Production keys** (prefixed `EZAK...`): bill the EasyPost wallet for real shipments; use these only when you are ready to ship live\n3. Copy the appropriate key for your environment\n\n**Important:**\n- Production keys incur real charges; treat them as secrets\n- Test keys cannot purchase real labels or generate real tracking numbers\n- The API key is used as the HTTP Basic Auth username with an empty password",
+          "message": "1. Inicie sesión en su cuenta de EasyPost en https://www.easypost.com/account/api-keys\n2. Verá dos conjuntos de claves:\n   - **Claves de prueba** (prefijadas con `EZTK...`): gratuitas, devuelven datos simulados de etiquetas y seguimiento; úselas para desarrollo y pruebas de integración\n   - **Claves de producción** (prefijadas con `EZAK...`): facturan el monedero de EasyPost por envíos reales; úselas solo cuando esté listo para enviar paquetes en producción\n3. Copie la clave adecuada para su entorno\n\n**Importante:**\n- Las claves de producción generan cargos reales; trátelas como secretos\n- Las claves de prueba no pueden comprar etiquetas reales ni generar números de seguimiento reales\n- La clave de API se usa como nombre de usuario en la autenticación HTTP básica con contraseña vacía"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your EasyPost API Key",
+          "message": "Cómo obtener su clave de API de EasyPost"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Your EasyPost API key. Test keys are prefixed `EZTK...` and only return mocked label/tracker data; production keys are prefixed `EZAK...` and bill the wallet for real shipments. Obtain a key at https://www.easypost.com/account/api-keys.",
+          "message": "Su clave de API de EasyPost. Las claves de prueba tienen el prefijo `EZTK...` y solo devuelven datos simulados de etiquetas y seguimiento; las claves de producción tienen el prefijo `EZAK...` y facturan el monedero por envíos reales. Obtenga una clave en https://www.easypost.com/account/api-keys."
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clave de API"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "EasyPost API key for HTTP Basic Auth",
+          "message": "Clave de API de EasyPost para autenticación HTTP básica"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the EasyPost REST API",
+          "message": "Una conexión con la API REST de EasyPost"
+        }
+      }
+    }
+  }
+}

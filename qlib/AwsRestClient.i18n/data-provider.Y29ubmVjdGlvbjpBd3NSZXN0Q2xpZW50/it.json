@@ -1,0 +1,385 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to AWS cloud REST API services",
+          "message": "Una connessione ai servizi REST cloud di AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "AWS REST Connection",
+          "message": "Connessione REST AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX2tleWlk.desc": {
+          "source": "The AWS key ID",
+          "message": "L'ID chiave AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX2tleWlk.display_name": {
+          "source": "AWS Key ID",
+          "message": "ID chiave AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX2tleWlk.short_desc": {
+          "source": "The AWS key ID",
+          "message": "L'ID chiave AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3JlZ2lvbg.desc": {
+          "source": "The AWS region to use (ex: `us-east-1`)",
+          "message": "La regione AWS da utilizzare (es: `us-east-1`)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3JlZ2lvbg.display_name": {
+          "source": "AWS Region",
+          "message": "Regione AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3JlZ2lvbg.short_desc": {
+          "source": "The AWS region to use",
+          "message": "La regione AWS da utilizzare"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Mz.desc": {
+          "source": "Set to `True` to flag this object for use with AWS S3, which requires special message encoding",
+          "message": "Impostare su `True` per contrassegnare questo oggetto per l'uso con AWS S3, che richiede un encoding speciale dei messaggi"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Mz.display_name": {
+          "source": "AWS S3",
+          "message": "AWS S3"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Mz.short_desc": {
+          "source": "Flag for use with AWS S3",
+          "message": "Contrassegna per l'uso con AWS S3"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlY3JldA.desc": {
+          "source": "The AWS secret access key value",
+          "message": "Il valore della chiave di accesso segreta AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlY3JldA.display_name": {
+          "source": "AWS Secret",
+          "message": "Segreto AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlY3JldA.short_desc": {
+          "source": "The AWS secret access key value",
+          "message": "Il valore della chiave di accesso segreta AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlcnZpY2U.desc": {
+          "source": "The AWS service to use (ex: `iam`)",
+          "message": "Il servizio AWS da utilizzare (es: `iam`)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlcnZpY2U.display_name": {
+          "source": "AWS Service",
+          "message": "Servizio AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlcnZpY2U.short_desc": {
+          "source": "The AWS service to use",
+          "message": "Il servizio AWS da utilizzare"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Rva2Vu.desc": {
+          "source": "A temporary session token from AWS Security Token Service for this HTTP session",
+          "message": "Un token di sessione temporaneo dal Servizio di sicurezza AWS per questa sessione HTTP"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Rva2Vu.display_name": {
+          "source": "AWS Token",
+          "message": "Token AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Rva2Vu.short_desc": {
+          "source": "A temporary session token",
+          "message": "Un token di sessione temporaneo"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "usa la serializzazione JSON"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.ZGF0YQ.desc": {
+          "source": "Data serialization options are limited to `json` with this object",
+          "message": "Le opzioni di serializzazione dei dati sono limitate a `json` con questo oggetto"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Serializzazione dati"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.ZGF0YQ.short_desc": {
+          "source": "The data serialization to use",
+          "message": "La serializzazione dei dati da utilizzare"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to AWS cloud REST API services",
+          "message": "Una connessione ai servizi REST cloud di AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to object storage that speaks the Amazon S3 protocol but is not Amazon S3, such as [MinIO](https://min.io) or [Ceph](https://ceph.io).\n\nRequires the URL the service is reached at, plus an access key ID and secret access key.  The region is whatever the service was configured with, and is often left at `us-east-1`, which is what most S3-compatible services default to.\n\nUse an **Amazon S3** connection instead for Amazon S3 itself; that one derives its URL from the region and needs no URL at all",
+          "message": "Una connessione a un archivio oggetti che utilizza il protocollo Amazon S3 ma non è Amazon S3, come [MinIO](https://min.io) o [Ceph](https://ceph.io).\n\nRichiede l'URL del servizio, oltre a un ID chiave di accesso e una chiave segreta. La regione è quella con cui il servizio è stato configurato, e di solito viene lasciata a `us-east-1`, che è il valore predefinito per la maggior parte dei servizi compatibili con S3.\n\nUsa invece una connessione **Amazon S3** per Amazon S3 stesso; questa deriva l'URL dalla regione e non richiede alcun URL"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "S3-Compatible Storage",
+          "message": "Archiviazione Compatibile S3"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.option.YXdzX3JlZ2lvbg.desc": {
+          "source": "The region the service was configured with; most S3-compatible services default to `us-east-1` and ignore the value beyond using it to sign requests",
+          "message": "La regione con cui il servizio è stato configurato; la maggior parte dei servizi compatibili con S3 predefinisce `us-east-1` e ignora il valore al di là dell'uso per firmare le richieste"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.option.cGF0aF9zdHlsZQ.desc": {
+          "source": "Address buckets in the URI path (`https://<host>/<bucket>/<key>`) rather than in the hostname (`https://<bucket>.<host>/<key>`).\n\nThis is the default and currently the only supported mode: virtual-host addressing needs a separate endpoint per bucket, which the data provider module does not yet create.  Most S3-compatible services require path-style addressing in any case",
+          "message": "Indirizza i bucket nell'URI path (`https://<host>/<bucket>/<key>`) invece che nell'hostname (`https://<bucket>.<host>/<key>`).\n\nQuesto è il valore predefinito e attualmente l'unico supportato: l'indirizzamento virtuale-host richiede un endpoint separato per ogni bucket, che il modulo del provider di dati non crea ancora. La maggior parte dei servizi compatibili con S3 richiede l'indirizzamento in stile path in ogni caso"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.option.cGF0aF9zdHlsZQ.display_name": {
+          "source": "Path-Style Addressing",
+          "message": "Indirizzamento in stile percorso"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.option.cGF0aF9zdHlsZQ.short_desc": {
+          "source": "Address buckets in the URI path rather than in the hostname",
+          "message": "Indirizza gli bucket nell'URI path invece che nell'hostname"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to S3-compatible object storage such as MinIO or Ceph",
+          "message": "Una connessione a un archivio oggetti compatibile con S3, come MinIO o Ceph"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [Amazon S3](https://aws.amazon.com/s3/) object storage.\n\nRequires an AWS access key ID and secret access key with permission for the buckets to be used, plus the region the buckets live in.  The URL is derived from the region, and the AWS service and S3 request-encoding options are set automatically.\n\nUse an **S3-Compatible Storage** connection instead for MinIO, Ceph, or another service that speaks the S3 protocol but is not Amazon",
+          "message": "Una connessione a [Amazon S3](https://aws.amazon.com/s3/) archivio oggetti.\n\nRichiede un ID chiave di accesso AWS e una chiave segreta con permessi sui bucket da utilizzare, oltre alla regione in cui risiedono i bucket. L'URL viene derivato dalla regione, e i parametri del servizio AWS e l'encoding delle richieste S3 vengono impostati automaticamente.\n\nUsa invece una connessione **Archivio Compatibile con S3** per MinIO, Ceph o un altro servizio che supporta il protocollo S3 ma non è Amazon"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Amazon S3",
+          "message": "Amazon S3"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLWNlbnRyYWwtMQ.desc": {
+          "source": "Middle East (UAE)",
+          "message": "Medio Oriente (Emirati Arabi Uniti)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLWNlbnRyYWwtMQ.display_name": {
+          "source": "Middle East (UAE)",
+          "message": "Medio Oriente (Emirati Arabi Uniti)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLXNvdXRoLTE.desc": {
+          "source": "Middle East (Bahrain)",
+          "message": "Medio Oriente (Bahrein)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLXNvdXRoLTE.display_name": {
+          "source": "Middle East (Bahrain)",
+          "message": "Medio Oriente (Bahrein)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFmLXNvdXRoLTE.desc": {
+          "source": "Africa (Cape Town)",
+          "message": "Africa (Città del Capo)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFmLXNvdXRoLTE.display_name": {
+          "source": "Africa (Cape Town)",
+          "message": "Africa (Città del Capo)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0x.desc": {
+          "source": "Asia Pacific (Tokyo)",
+          "message": "Asia Pacifico (Tokyo)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0x.display_name": {
+          "source": "Asia Pacific (Tokyo)",
+          "message": "Asia Pacifico (Tokyo)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0y.desc": {
+          "source": "Asia Pacific (Seoul)",
+          "message": "Asia Pacific (Seul)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0y.display_name": {
+          "source": "Asia Pacific (Seoul)",
+          "message": "Asia Pacific (Seul)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0z.desc": {
+          "source": "Asia Pacific (Osaka)",
+          "message": "Asia Pacific (Osaka)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0z.display_name": {
+          "source": "Asia Pacific (Osaka)",
+          "message": "Asia Pacific (Osaka)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLWVhc3QtMQ.desc": {
+          "source": "Asia Pacific (Hong Kong)",
+          "message": "Asia Pacific (Hong Kong)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLWVhc3QtMQ.display_name": {
+          "source": "Asia Pacific (Hong Kong)",
+          "message": "Asia Pacific (Hong Kong)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTE.desc": {
+          "source": "Asia Pacific (Mumbai)",
+          "message": "Asia Pacific (Mumbai)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTE.display_name": {
+          "source": "Asia Pacific (Mumbai)",
+          "message": "Asia Pacific (Mumbai)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTI.desc": {
+          "source": "Asia Pacific (Hyderabad)",
+          "message": "Asia Pacific (Hyderabad)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTI.display_name": {
+          "source": "Asia Pacific (Hyderabad)",
+          "message": "Asia Pacific (Hyderabad)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC00.desc": {
+          "source": "Asia Pacific (Melbourne)",
+          "message": "Asia Pacific (Melbourne)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC00.display_name": {
+          "source": "Asia Pacific (Melbourne)",
+          "message": "Asia Pacific (Melbourne)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.desc": {
+          "source": "Asia Pacific (Singapore)",
+          "message": "Asia Pacific (Singapore)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.display_name": {
+          "source": "Asia Pacific (Singapore)",
+          "message": "Asia Pacific (Singapore)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0y.desc": {
+          "source": "Asia Pacific (Sydney)",
+          "message": "Asia Pacific (Sydney)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0y.display_name": {
+          "source": "Asia Pacific (Sydney)",
+          "message": "Asia Pacific (Sydney)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0z.desc": {
+          "source": "Asia Pacific (Jakarta)",
+          "message": "Asia Pacific (Giakarta)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0z.display_name": {
+          "source": "Asia Pacific (Jakarta)",
+          "message": "Asia Pacific (Giakarta)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLWNlbnRyYWwtMQ.desc": {
+          "source": "Canada (Central)",
+          "message": "Canada (Centrale)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLWNlbnRyYWwtMQ.display_name": {
+          "source": "Canada (Central)",
+          "message": "Canada (Centrale)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLXdlc3QtMQ.desc": {
+          "source": "Canada West (Calgary)",
+          "message": "Canada Ovest (Calgary)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLXdlc3QtMQ.display_name": {
+          "source": "Canada West (Calgary)",
+          "message": "Canada Ovest (Calgary)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LW5vcnRoLTE.desc": {
+          "source": "Europe (Stockholm)",
+          "message": "Europa (Stoccolma)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LW5vcnRoLTE.display_name": {
+          "source": "Europe (Stockholm)",
+          "message": "Europa (Stoccolma)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMQ.desc": {
+          "source": "Europe (Frankfurt)",
+          "message": "Europa (Francoforte)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMQ.display_name": {
+          "source": "Europe (Frankfurt)",
+          "message": "Europa (Francoforte)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMg.desc": {
+          "source": "Europe (Zurich)",
+          "message": "Europa (Zurigo)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMg.display_name": {
+          "source": "Europe (Zurich)",
+          "message": "Europa (Zurigo)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTE.desc": {
+          "source": "Europe (Milan)",
+          "message": "Europa (Milano)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTE.display_name": {
+          "source": "Europe (Milan)",
+          "message": "Europa (Milano)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTI.desc": {
+          "source": "Europe (Spain)",
+          "message": "Europa (Spagna)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTI.display_name": {
+          "source": "Europe (Spain)",
+          "message": "Europa (Spagna)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMQ.desc": {
+          "source": "Europe (Ireland)",
+          "message": "Europa (Irlanda)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMQ.display_name": {
+          "source": "Europe (Ireland)",
+          "message": "Europa (Irlanda)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMg.desc": {
+          "source": "Europe (London)",
+          "message": "Europa (Londra)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMg.display_name": {
+          "source": "Europe (London)",
+          "message": "Europa (Londra)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMw.desc": {
+          "source": "Europe (Paris)",
+          "message": "Europa (Parigi)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMw.display_name": {
+          "source": "Europe (Paris)",
+          "message": "Europa (Parigi)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmlsLWNlbnRyYWwtMQ.desc": {
+          "source": "Israel (Tel Aviv)",
+          "message": "Israele (Tel Aviv)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmlsLWNlbnRyYWwtMQ.display_name": {
+          "source": "Israel (Tel Aviv)",
+          "message": "Israele (Tel Aviv)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnNhLWVhc3QtMQ.desc": {
+          "source": "South America (São Paulo)",
+          "message": "America del Sud (São Paulo)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnNhLWVhc3QtMQ.display_name": {
+          "source": "South America (São Paulo)",
+          "message": "America del Sud (São Paulo)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMQ.desc": {
+          "source": "US East (N. Virginia)",
+          "message": "Stati Uniti Est (Virginia del Nord)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMQ.display_name": {
+          "source": "US East (N. Virginia)",
+          "message": "Stati Uniti Est (Virginia del Nord)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMg.desc": {
+          "source": "US East (Ohio)",
+          "message": "Stati Uniti Est (Ohio)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMg.display_name": {
+          "source": "US East (Ohio)",
+          "message": "Stati Uniti Est (Ohio)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMQ.desc": {
+          "source": "US West (N. California)",
+          "message": "Stati Uniti Ovest (California del Nord)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMQ.display_name": {
+          "source": "US West (N. California)",
+          "message": "Stati Uniti Ovest (California del Nord)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMg.desc": {
+          "source": "US West (Oregon)",
+          "message": "US Occidentale (Oregon)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMg.display_name": {
+          "source": "US West (Oregon)",
+          "message": "US Occidentale (Oregon)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.desc": {
+          "source": "The AWS region holding the buckets to be used; this also selects the endpoint the connection is made to, so a region other than the one the buckets live in produces redirects and signature errors",
+          "message": "La regione AWS che contiene i bucket da utilizzare; questa seleziona anche l'endpoint a cui viene stabilita la connessione, quindi una regione diversa da quella in cui si trovano i bucket causa reindirizzamenti e errori di firma"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to Amazon S3 object storage",
+          "message": "Una connessione all'archiviazione oggetti Amazon S3"
+        }
+      }
+    }
+  }
+}

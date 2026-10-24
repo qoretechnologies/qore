@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.VW5ib3VuY2VSZXN0Q2xpZW50.scheme.VW5ib3VuY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Unbounce REST API for landing pages, popups, sticky bars, leads, form submissions, and A/B testing",
+          "message": "Une connexion à l'API REST Unbounce pour les pages de destination, les popups, les barres fixes, les leads, les soumissions de formulaires et les tests A/B"
+        },
+        "connection.VW5ib3VuY2VSZXN0Q2xpZW50.scheme.VW5ib3VuY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Unbounce REST Connection",
+          "message": "Connexion API REST Unbounce"
+        },
+        "connection.VW5ib3VuY2VSZXN0Q2xpZW50.scheme.VW5ib3VuY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Unbounce REST API",
+          "message": "Une connexion à l'API REST Unbounce"
+        }
+      }
+    }
+  }
+}

@@ -250,7 +250,8 @@ public class PaddleRestConnection inherits RestClient::RestConnection {
             + ".paddle.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("PaddleRestClient",
+            "PaddleRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Paddle REST Connection",
             "short_desc": "A connection to the Paddle REST API",
             "desc": "A connection to the [Paddle](https://www.paddle.com) REST API for billing, "
@@ -335,7 +336,7 @@ public class PaddleRestConnection inherits RestClient::RestConnection {
                     "default_value": PaddleRestClientBase::DefaultTokenType,
                 }),
             },
-        };
+        });
     }
 
     #! Creates the PaddleRestConnection object

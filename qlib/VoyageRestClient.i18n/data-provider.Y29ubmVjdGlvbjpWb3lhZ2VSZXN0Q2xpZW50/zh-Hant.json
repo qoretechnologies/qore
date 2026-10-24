@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Voyage AI REST API for text embeddings and reranking.\n\nRequires an API key (set as `apikey`) from the [Voyage AI Dashboard](https://dash.voyageai.com/). The connection uses the `voyage://` URL scheme.\n\nThe models used when this connection is selected for embeddings and for reranking are set independently with the `embedding-model` and `rerank-model` options",
+          "message": "連接到 Voyage AI REST API 以進行文字嵌入與重排序的連線。\n\n需要 API 金鑰（設定為 `apikey`），來自 [Voyage AI 控制台](https://dash.voyageai.com/)。此連線使用 `voyage://` 通訊協定。。\n\n當此連線用於嵌入與重排序時，所使用的模型分別由 `embedding-model` 與 `rerank-model` 選項獨立設定"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Voyage AI REST Connection",
+          "message": "Voyage AI REST 連接"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The API version to use",
+          "message": "要使用的 API 版本"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "要使用的 API 版本"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Voyage AI API key used for authentication; sent as the `Authorization: Bearer` header.\n\nGet your API key from the [Voyage AI Dashboard](https://dash.voyageai.com/)",
+          "message": "用於驗證的 Voyage AI API 金鑰；以 `Authorization: Bearer` 標頭傳送。\n\n從 [Voyage AI 控制台](https://dash.voyageai.com/) 取得您的 API 金鑰"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Voyage AI API key for authentication",
+          "message": "用於驗證的 Voyage AI API 金鑰"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.desc": {
+          "source": "The Voyage AI embedding model used by embedding clients when this connection is selected for embeddings; sent as the `model` parameter to the `/embeddings` endpoint.\n\nExample values: `voyage-4-large` (highest quality), `voyage-4` (balanced), `voyage-4-lite` (fastest; the default), `voyage-code-3` (source code)",
+          "message": "當此連接被選取用於嵌入時，由嵌入客戶端使用的 Voyage AI 嵌入模型；以 `model` 參數傳送至 `/embeddings` 端點。\n\n範例值：`voyage-4-large`（最高品質），`voyage-4`（平衡），`voyage-4-lite`（最快；預設），`voyage-code-3`（原始碼）"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.display_name": {
+          "source": "Embedding Model",
+          "message": "嵌入模型"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.short_desc": {
+          "source": "Voyage AI embedding model name",
+          "message": "Voyage AI 嵌入模型名稱"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVxdWVzdHMtcGVyLW1pbnV0ZQ.desc": {
+          "source": "The most embedding requests per minute that embedding clients in one process send for this connection's API key and model; requests over the limit wait instead of failing with HTTP 429.\n\nWhen unset, 95% of Voyage's published tier-1 limit (2,000 requests per minute) is used.  Set it for a higher rate-limit tier, or to give each process its share when several processes use the same API key",
+          "message": "同一程序中嵌入客戶端針對此連接的 API 金鑰與模型，每分鐘最多發送的嵌入請求次數；超過限制的請求將等待而非以 HTTP 429 失敗。\n\n未設定時，使用 Voyage 公開一級限制（每分鐘 2,000 次）的 95%。設定以取得更高頻率限制層級，或當多個程序共用同一 API 金鑰時，為每個程序分配其應有配額"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVxdWVzdHMtcGVyLW1pbnV0ZQ.display_name": {
+          "source": "Embedding Requests Per Minute",
+          "message": "每分鐘嵌入請求次數"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVxdWVzdHMtcGVyLW1pbnV0ZQ.short_desc": {
+          "source": "Client-side limit on embedding requests per minute",
+          "message": "客戶端端每分鐘嵌入請求次數限制"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.desc": {
+          "source": "The Voyage AI reranking model used by reranking clients when this connection is selected for reranking; sent as the `model` parameter to the `/rerank` endpoint.\n\nReranking models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `rerank-2.5` (highest quality), `rerank-2.5-lite` (fastest; the default), `rerank-2` (previous generation)",
+          "message": "Voyage AI 重排序模型，當此連接被選中進行重排序時，由重排序客戶端使用；作為 `model` 參數發送到 `/rerank` 端點。\n\n重排序模型與嵌入模型屬於不同系列，不可互換使用。\n\n範例值：`rerank-2.5`（最高品質），`rerank-2.5-lite`（最快；預設），`rerank-2`（前一代）"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.display_name": {
+          "source": "Reranking Model",
+          "message": "重排序模型"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.short_desc": {
+          "source": "Voyage AI reranking model name",
+          "message": "Voyage AI 重排序模型名稱"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXJlcXVlc3RzLXBlci1taW51dGU.desc": {
+          "source": "The most reranking requests per minute that reranking clients in one process send for this connection's API key and reranking model; requests over the limit wait instead of failing with HTTP 429.\n\nWhen unset, 95% of Voyage's published tier-1 limit (2,000 requests per minute) is used. Reranking models are limited separately from embedding models",
+          "message": "此連接的 API 金鑰與重排序模型對應的單一程序中，重排序客戶端每分鐘可發送的最大重排序請求次數；超過限制的請求將等待而非返回 HTTP 429 錯誤。\n\n未設定時，使用 Voyage 公布的 tier-1 限制的 95%（每分鐘 2,000 次請求）。重排序模型的限制與嵌入模型分開設定"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXJlcXVlc3RzLXBlci1taW51dGU.display_name": {
+          "source": "Reranking Requests Per Minute",
+          "message": "每分鐘重排序請求次數"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXJlcXVlc3RzLXBlci1taW51dGU.short_desc": {
+          "source": "Client-side limit on reranking requests per minute",
+          "message": "客戶端側每分鐘重排序請求次數限制"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXRva2Vucy1wZXItbWludXRl.desc": {
+          "source": "The most reranking tokens per minute that reranking clients in one process send for this connection's API key and reranking model.\n\nWhen unset, 95% of Voyage's published tier-1 limit for the model is used (4M tokens per minute for the `-lite` models, 2M for the others)",
+          "message": "此連接的 API 金鑰與重排序模型對應的單一程序中，重排序客戶端每分鐘可發送的最大重排序詞元數量。\n\n未設定時，使用該模型公布的 tier-1 限制的 95%（`-lite` 模型為每分鐘 400 萬詞元，其他模型為每分鐘 200 萬詞元）"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXRva2Vucy1wZXItbWludXRl.display_name": {
+          "source": "Reranking Tokens Per Minute",
+          "message": "每分鐘重排序詞元數量"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXRva2Vucy1wZXItbWludXRl.short_desc": {
+          "source": "Client-side limit on reranking tokens per minute",
+          "message": "客戶端側每分鐘重排序詞元數量限制"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.dG9rZW5zLXBlci1taW51dGU.desc": {
+          "source": "The most embedding tokens per minute that embedding clients in one process send for this connection's API key and model; requests over the limit wait instead of failing with HTTP 429.\n\nWhen unset, 95% of Voyage's published tier-1 limit for the model is used (for example 16M tokens per minute for `voyage-4-lite`, 8M for `voyage-4`, and 3M for `voyage-4-large`).  Set it for a higher rate-limit tier, or to give each process its share when several processes use the same API key",
+          "message": "每分鐘最多發送的嵌入式標記數，由同一程序中的嵌入式客戶端針對此連接的 API 金鑰和模型發送；超過限制的請求將等待而非以 HTTP 429 錯誤失敗。\n\n未設定時，將使用 Voyage 發布的第 1 級限制的 95%（例如 `voyage-4-lite` 為每分鐘 1600 萬標記，`voyage-4` 為 800 萬，`voyage-4-large` 為 300 萬）。設定此值可提升速率限制等級，或在多個程序共用同一 API 金鑰時，為每個程序分配獨立配額"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.dG9rZW5zLXBlci1taW51dGU.display_name": {
+          "source": "Embedding Tokens Per Minute",
+          "message": "每分鐘嵌入式標記數"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.dG9rZW5zLXBlci1taW51dGU.short_desc": {
+          "source": "Client-side limit on embedding tokens per minute",
+          "message": "客戶端端每分鐘嵌入式標記數上限"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Voyage AI REST API",
+          "message": "連接到 Voyage AI REST API 的連接"
+        }
+      }
+    }
+  }
+}

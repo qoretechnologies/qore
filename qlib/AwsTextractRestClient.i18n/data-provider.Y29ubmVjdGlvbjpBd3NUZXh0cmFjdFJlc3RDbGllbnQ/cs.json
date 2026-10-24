@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [AWS Textract](https://aws.amazon.com/textract/) for document text and structure extraction via SigV4-signed REST calls.  Inherits all AWS credential modes from AwsRestConnection (static keys, env vars, ECS task-role, IMDSv2, STS AssumeRole). The ping authenticates with `ListAdapters` and requires `textract:ListAdapters`; an authorization denial is reported as a failure.",
+          "message": "Připojení k [AWS Textract](https://aws.amazon.com/textract/) pro extrakci textu a struktury dokumentů prostřednictvím podepsaných REST volání s SigV4. Dědí všechny režimy přihlašovacích údajů AWS z AwsRestConnection (pevné klíče, proměnné prostředí, úloha ECS, IMDSv2, STS AssumeRole). Ping ověřuje pomocí `ListAdapters` a vyžaduje `textract:ListAdapters`; odmítnutí oprávnění je hlášeno jako selhání."
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "AWS Textract Connection",
+          "message": "Připojení k AWS Textract"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2V4dGVybmFsX2lk.desc": {
+          "source": "External ID for an STS role requiring cross-account verification.",
+          "message": "Externí ID pro roli STS vyžadující ověření mezi účty."
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2V4dGVybmFsX2lk.display_name": {
+          "source": "STS External ID",
+          "message": "Externí ID pro STS"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2V4dGVybmFsX2lk.short_desc": {
+          "source": "Optional external ID required by the role",
+          "message": "Volitelný externí ID vyžadované rolí"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2ltZHNfZGlzYWJsZWQ.desc": {
+          "source": "Set to `True` when credentials must come from explicit options or the environment.",
+          "message": "Nastavte na `True` pokud musí být přihlašovací údaje získány z explicitních možností nebo prostředí."
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2ltZHNfZGlzYWJsZWQ.display_name": {
+          "source": "Disable Instance Credentials",
+          "message": "Zakázat přístup k instančním přihlašovacím údajům"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2ltZHNfZGlzYWJsZWQ.short_desc": {
+          "source": "Disable ECS and instance metadata credential lookup",
+          "message": "Zakázat vyhledávání přihlašovacích údajů z ECS a instančních metadat"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfYXJu.desc": {
+          "source": "Role ARN to assume after resolving the base credentials.",
+          "message": "ARN role, kterou převzít po vyřešení základních přihlašovacích údajů."
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfYXJu.display_name": {
+          "source": "STS Role ARN",
+          "message": "ARN role pro STS"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfYXJu.short_desc": {
+          "source": "Optional AWS role to assume",
+          "message": "Volitelná AWS role k převzetí"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.desc": {
+          "source": "Session name sent with `aws_role_arn` to AWS STS.",
+          "message": "Název relace odeslaný s `aws_role_arn` do AWS STS."
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.display_name": {
+          "source": "STS Role Session Name",
+          "message": "Název relace role STS"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.short_desc": {
+          "source": "Name of the assumed-role session",
+          "message": "Název předpokládané relace role"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to AWS Textract document-extraction services",
+          "message": "Připojení k službám pro extrakci dokumentů AWS Textract"
+        }
+      }
+    }
+  }
+}

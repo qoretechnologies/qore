@@ -183,7 +183,8 @@ public class HueRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "hue://api.meethue.com/route/api";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("HueRestClient",
+            "HueRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Philips Hue REST Connection",
             "short_desc": "A connection to the Philips Hue REST API",
             "desc": "A connection to the Philips Hue REST API",
@@ -211,7 +212,7 @@ public class HueRestConnection inherits RestClient::RestConnection {
             },
             "required_options": "token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
                 "oauth2_client_id,oauth2_client_secret",
-        };
+        });
     }
 
     #! creates the HueRestConnection object

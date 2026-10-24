@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [Klaviyo](https://www.klaviyo.com) for profiles, lists, segments, tags, campaigns, events and subscriptions.\n\n**Authentication** is the OAuth2 authorization code flow with `oauth2_client_id` and `oauth2_client_secret` from an app registered in Klaviyo's developer portal. Klaviyo requires PKCE and takes the client credentials as HTTP basic authentication on the token endpoint, both of which are set by default. The scopes requested are the ones the registered app holds; asking for one outside that set fails authorization before a user sees a consent screen.\n\nA **private API key** works as an alternative for an integration that only ever serves one account: set `token` to the key and `token_type` to `Klaviyo-API-Key`, which is how Klaviyo spells that credential. It carries the account's full permissions and cannot be scoped, so prefer OAuth2 where both are available.\n\n**The API revision is sent on every call** as `revision: 2026-07-15`, matching the description the actions are generated from. Klaviyo declares that header required on almost every operation, and a revision is removed two years after it ships, so it is never left to a default.\n\nKlaviyo is a trademark of Klaviyo, Inc.",
+          "message": "Una conexión con [Klaviyo](https://www.klaviyo.com) para perfiles, listas, segmentos, etiquetas, campañas, eventos y suscripciones.\n\n**Autenticación** es el flujo de autorización OAuth2 con `oauth2_client_id` y `oauth2_client_secret` desde una aplicación registrada en el portal de desarrolladores de Klaviyo. Klaviyo requiere PKCE y envía las credenciales del cliente como autenticación básica HTTP en el punto final de token, ambos configurados por defecto. Los ámbitos solicitados son los que posee la aplicación registrada; solicitar uno fuera de ese conjunto falla la autorización antes de que el usuario vea la pantalla de consentimiento.\n\nUna **clave privada de API** funciona como alternativa para una integración que solo sirve una cuenta: establece `token` con la clave y `token_type` con `Klaviyo-API-Key`, que es cómo Klaviyo nombra este credencial. Tiene todos los permisos de la cuenta y no se puede limitar, por lo que se prefiere OAuth2 cuando ambos están disponibles.\n\n**La revisión de la API se envía en cada llamada** como `revision: 2026-07-15`, coincidiendo con la descripción de las acciones generadas. Klaviyo declara que este encabezado es obligatorio en casi todas las operaciones, y una revisión se elimina dos años después de su lanzamiento, por lo que nunca se deja como predeterminado.\n\nKlaviyo es una marca registrada de Klaviyo, Inc."
+        },
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Klaviyo REST Connection",
+          "message": "Conexión REST de Klaviyo"
+        },
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Klaviyo REST API",
+          "message": "Una conexión con la API REST de Klaviyo"
+        }
+      }
+    }
+  }
+}

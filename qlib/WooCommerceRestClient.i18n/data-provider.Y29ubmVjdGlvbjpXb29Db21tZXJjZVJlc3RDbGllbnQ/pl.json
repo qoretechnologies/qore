@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the WooCommerce REST API v3 for e-commerce management.\n\nWooCommerce is the most popular open-source e-commerce platform built on WordPress. This integration enables managing orders, products, customers, coupons, webhooks, reports, shipping, taxes, and store settings.\n\n**Authentication:**\n- Uses HTTP Basic Auth with Consumer Key and Consumer Secret\n- Generate API credentials in WordPress admin: WooCommerce > Settings > Advanced > REST API\n\n**Pagination:**\n- Page-based with `page` and `per_page` parameters (max `100` per page)\n- Total counts available in `X-WP-Total` and `X-WP-TotalPages` response headers",
+          "message": "Połączenie z API REST WooCommerce v3 do zarządzania e-commerce.\n\nWooCommerce to najpopularniejszy platforma open-source do e-commerce oparta na WordPressie. Integracja ta umożliwia zarządzanie zamówieniami, produktami, klientami, kuponami, webhookami, raportami, wysyłką, podatkami oraz ustawieniami sklepu.\n\n**Uwierzytelnianie:**\n- Używa uwierzytelniania HTTP Basic z kluczem konsumenta i sekretem konsumenta\n- Utwórz poświadczenia API w panelu administracyjnym WordPress: WooCommerce > Ustawienia > Zaawansowane > API REST\n\n**Stronicowanie:**\n- Stronicowanie oparte na stronach z parametrami `page` i `per_page` (maks. `100` na stronę)\n- Całkowite liczby dostępne w nagłówkach odpowiedzi `X-WP-Total` i `X-WP-TotalPages`"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "WooCommerce REST Connection",
+          "message": "Połączenie REST WooCommerce"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your **WordPress admin panel**\n2. Navigate to **WooCommerce > Settings > Advanced > REST API**\n3. Click **Add key**\n4. Enter a description (e.g., \"Qorus Integration\")\n5. Select a WordPress user and choose **Read/Write** permissions\n6. Click **Generate API key**\n7. Copy both the **Consumer key** (`ck_...`) and **Consumer secret** (`cs_...`)\n\n**Important:**\n- The Consumer secret is only displayed once when generated\n- Store your credentials securely\n- HTTPS is required for Basic Auth (HTTP requires OAuth 1.0a)",
+          "message": "1. Zaloguj się do panelu administracyjnego WordPress\n2. Przejdź do **WooCommerce > Ustawienia > Zaawansowane > API REST**\n3. Kliknij **Dodaj klucz**\n4. Wprowadź opis (np. \"Integracja Qorus\")\n5. Wybierz użytkownika WordPress i uprawnienia **Odczyt/Zapis**\n6. Kliknij **Wygeneruj klucz API**\n7. Skopiuj zarówno **Klucz konsumenta** (`ck_...`) jak i **Sekret konsumenta** (`cs_...`)\n\n**Uwaga:**\n- Sekret konsumenta jest wyświetlany tylko raz przy generowaniu\n- Przechowuj swoje poświadczenia bezpiecznie\n- HTTPS jest wymagane dla uwierzytelniania Basic (HTTP wymaga OAuth 1.0a)"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Credentials",
+          "message": "Jak uzyskać swoje poświadczenia API"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfa2V5.desc": {
+          "source": "The WooCommerce REST API consumer key used as the username for HTTP Basic Auth.\n\n**To obtain your API credentials:**\n1. Log in to your WordPress admin panel\n2. Go to **WooCommerce > Settings > Advanced > REST API**\n3. Click **Add key**\n4. Enter a description, select a user, and choose **Read/Write** permissions\n5. Click **Generate API key**\n6. Copy the **Consumer key** (starts with `ck_`)",
+          "message": "Klucz konsumenta API REST WooCommerce używany jako nazwa użytkownika dla uwierzytelniania HTTP Basic.\n\n**Aby uzyskać poświadczenia API:**\n1. Zaloguj się do panelu administracyjnego WordPress\n2. Przejdź do **WooCommerce > Ustawienia > Zaawansowane > API REST**\n3. Kliknij **Dodaj klucz**\n4. Wprowadź opis, wybierz użytkownika i uprawnienia **Odczyt/Zapis**\n5. Kliknij **Wygeneruj klucz API**\n6. Skopiuj **Klucz konsumenta** (zaczyna się od `ck_`)"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfa2V5.display_name": {
+          "source": "Consumer Key",
+          "message": "Klucz konsumenta"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfa2V5.short_desc": {
+          "source": "WooCommerce consumer key for authentication",
+          "message": "Klucz konsumenta WooCommerce do uwierzytelniania"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfc2VjcmV0.desc": {
+          "source": "The WooCommerce REST API consumer secret used as the password for HTTP Basic Auth.\n\n**To obtain your API credentials:**\n1. Follow the same steps as for the Consumer Key above\n2. Copy the **Consumer secret** (starts with `cs_`)\n\n**Note:** The consumer secret is only shown once when generated. If you lose it, you will need to generate new credentials.",
+          "message": "Sekret konsumenta API REST WooCommerce używany jako hasło dla uwierzytelniania HTTP Basic.\n\n**Aby uzyskać poświadczenia API:**\n1. Postępuj tak samo, jak dla klucza konsumenta powyżej\n2. Skopiuj **Sekret konsumenta** (zaczyna się od `cs_`)\n\n**Uwaga:** Sekret konsumenta jest wyświetlany tylko raz przy generowaniu. Jeśli go stracisz, będziesz musiał wygenerować nowe poświadczenia."
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfc2VjcmV0.display_name": {
+          "source": "Consumer Secret",
+          "message": "Sekret konsumenta"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfc2VjcmV0.short_desc": {
+          "source": "WooCommerce consumer secret for authentication",
+          "message": "Sekret konsumenta WooCommerce do uwierzytelniania"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfdXJs.desc": {
+          "source": "The full URL of your WooCommerce store (e.g., `https://mystore.com`).\n\nThis is the base URL of your WordPress site where WooCommerce is installed. The API path `/wp-json/wc/v3/` will be appended automatically.\n\n**Examples:**\n- `https://mystore.com`\n- `https://shop.example.com`\n- `https://example.com/shop` (if WordPress is in a subdirectory)",
+          "message": "Pełny adres URL Twojego sklepu WooCommerce (np. `https://mystore.com`).\n\nJest to podstawowy adres Twojej strony WordPress, gdzie zainstalowano WooCommerce. Ścieżka interfejsu API `/wp-json/wc/v3/` zostanie dodana automatycznie.\n\n**Przykłady:**\n- `https://mystore.com`\n- `https://shop.example.com`\n- `https://example.com/shop` (jeśli WordPress znajduje się w podkatalogu)"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfdXJs.display_name": {
+          "source": "Store URL",
+          "message": "Adres URL sklepu"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfdXJs.short_desc": {
+          "source": "WooCommerce store URL",
+          "message": "Adres URL sklepu WooCommerce"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the WooCommerce REST API",
+          "message": "Połączenie z interfejsem REST WooCommerce"
+        }
+      }
+    }
+  }
+}

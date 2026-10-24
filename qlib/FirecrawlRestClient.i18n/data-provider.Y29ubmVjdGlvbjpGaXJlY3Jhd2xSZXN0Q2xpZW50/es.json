@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Firecrawl REST API for web scraping, crawling, and data extraction",
+          "message": "Una conexión a la API REST de Firecrawl para rastreo web, exploración y extracción de datos"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Firecrawl REST Connection",
+          "message": "Conexión REST de Firecrawl"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Firecrawl, you need an API key:\n\n1. Sign in to your account at [firecrawl.dev](https://www.firecrawl.dev)\n2. Navigate to your **Dashboard**\n3. Find or generate your API key\n4. Copy the key (it starts with `fc-`)\n\nKeep your API key secure and never share it publicly.",
+          "message": "Para conectarte a Firecrawl, necesitas una clave de API:\n\n1. Inicia sesión en tu cuenta en [firecrawl.dev](https://www.firecrawl.dev)\n2. Navega hasta tu **Panel de control**\n3. Encuentra o genera tu clave de API\n4. Copia la clave (comienza con `fc-`)\n\nMantén tu clave de API segura y no la compartas públicamente."
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Firecrawl API Key",
+          "message": "Cómo obtener tu clave de API de Firecrawl"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Firecrawl API key used for authentication; sent as a Bearer token in the `Authorization` header. To obtain a key, sign in at [firecrawl.dev](https://www.firecrawl.dev) and navigate to your dashboard",
+          "message": "La clave de API de Firecrawl utilizada para autenticación; se envía como token Bearer en el encabezado `Authorization`. Para obtener una clave, inicia sesión en [firecrawl.dev](https://www.firecrawl.dev) y navega hasta tu panel de control"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clave de API"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Firecrawl API key for authentication",
+          "message": "Clave de API de Firecrawl para autenticación"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Firecrawl REST API",
+          "message": "Una conexión con la API REST de Firecrawl"
+        }
+      }
+    }
+  }
+}

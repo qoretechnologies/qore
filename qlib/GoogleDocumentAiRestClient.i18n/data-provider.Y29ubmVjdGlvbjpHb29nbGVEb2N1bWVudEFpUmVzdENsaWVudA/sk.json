@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [Google Document AI](https://cloud.google.com/document-ai) — a managed document-extraction service.  Authentication is via GcpAuth using Application Default Credentials or an explicit service-account or authorized-user credential file.",
+          "message": "Spojenie s [Google Document AI](https://cloud.google.com/document-ai) — spravovanou službou na extrakciu dát z dokumentov. Overenie sa vykonáva prostredníctvom GcpAuth pomocou predvolených prihlasovacích údajov aplikácie alebo súboru s explicitným službovým účtom alebo prihlasovacím údajom autorizovaného užívateľa."
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Google Document AI Connection",
+          "message": "Spojenie Google Document AI"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3Byb2plY3RfaWQ.desc": {
+          "source": "GCP project ID (required for the process URL).",
+          "message": "ID projektu GCP (vyžadované pre proces URL)."
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3Byb2plY3RfaWQ.display_name": {
+          "source": "GCP Project ID",
+          "message": "ID GCP projektu"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3Byb2plY3RfaWQ.short_desc": {
+          "source": "GCP project that owns the Document AI processors",
+          "message": "Projekt GCP, ktorý vlastní procesory Document AI"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.desc": {
+          "source": "Overrides `GOOGLE_CLOUD_QUOTA_PROJECT` and the credential file's `quota_project_id`. Sent as `x-goog-user-project`; independent of the resource project. The credential needs `serviceusage.services.use` on this project.",
+          "message": "Prepína `GOOGLE_CLOUD_QUOTA_PROJECT` a `quota_project_id` v súbore s prihlasovacími údajmi. Odosielané ako `x-goog-user-project`; nezávislé od projektu s prostriedkami. Prihlasovacie údaje vyžadujú `serviceusage.services.use` na tomto projekte."
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.display_name": {
+          "source": "Quota Project",
+          "message": "Projekt kvóty"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.short_desc": {
+          "source": "Optional project used for API quota and billing",
+          "message": "Voliteľný projekt používaný na kvóty API a účtovanie"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOm5vcnRoYW1lcmljYS1ub3J0aGVhc3Qx.display_name": {
+          "source": "Montreal",
+          "message": "Montreal"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOmF1c3RyYWxpYS1zb3V0aGVhc3Qx.display_name": {
+          "source": "Sydney",
+          "message": "Sydney"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOmFzaWEtc291dGgx.display_name": {
+          "source": "Mumbai",
+          "message": "Mumbai"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOmFzaWEtc291dGhlYXN0MQ.display_name": {
+          "source": "Singapore",
+          "message": "Singapur"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "European Union",
+          "message": "Európska únia"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1cm9wZS13ZXN0Mg.display_name": {
+          "source": "London",
+          "message": "Londýn"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1cm9wZS13ZXN0Mw.display_name": {
+          "source": "Frankfurt",
+          "message": "Frankfurt"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "United States",
+          "message": "Spojené štáty"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3Q3.display_name": {
+          "source": "United States East (us-east7)",
+          "message": "Spojené štáty východ (us-east7)"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.desc": {
+          "source": "Document AI region (e.g. `us`, `eu`).  Determines the regional endpoint hostname.",
+          "message": "Oblasť Document AI (napr. `us`, `eu`). Určuje názov hostiteľa regiónového koncového bodu."
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.display_name": {
+          "source": "GCP Region",
+          "message": "Oblasť GCP"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.short_desc": {
+          "source": "Document AI processor region",
+          "message": "Oblasť spracovateľa Document AI"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3NhX2pzb25fcGF0aA.desc": {
+          "source": "Location of a GCP service-account or authorized-user JSON file; processed with `FileLocationHandler::getTextFileFromLocation()`, so it may be a bare path or any registered scheme (ex: `file:///etc/gcp/sa.json`, `http(s)://`, `sftp://`).  When omitted, Application Default Credentials are used.",
+          "message": "Umiestnenie súboru JSON pre služobný účet GCP alebo overeného užívateľa; spracováva sa s `FileLocationHandler::getTextFileFromLocation()`, takže môže byť základná cesta alebo akýkoľvek registrovaný schéma (napr. `file:///etc/gcp/sa.json`, `http(s)://`, `sftp://`). Ak nie je zadané, použijú sa predvolené prihlasovacie údaje aplikácie."
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3NhX2pzb25fcGF0aA.display_name": {
+          "source": "Google Credential Location",
+          "message": "Umiestnenie povolenia pre Google"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3NhX2pzb25fcGF0aA.short_desc": {
+          "source": "Location of a service-account or authorized-user credential file",
+          "message": "Umiestnenie súboru súkromného kľúča služby alebo povolenia pre užívateľa"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to Google Document AI",
+          "message": "Spojenie s Google Document AI"
+        }
+      }
+    }
+  }
+}

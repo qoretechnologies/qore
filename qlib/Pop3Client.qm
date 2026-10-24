@@ -2527,7 +2527,8 @@ public class Pop3FetchPollOperation {
 public class Pop3Connection inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("Pop3Client",
+            "Pop3Connection", "en", <ConnectionSchemeInfo>{
             "display_name": "POP3 Connection",
             "short_desc": "A connection to a POP3 server",
             "desc": "A connection to a POP3 server for receiving emails",
@@ -2580,7 +2581,7 @@ public class Pop3Connection inherits ConnectionProvider::AbstractConnectionWithI
                     "desc": "The username for authentication; always required",
                 },
             },
-        };
+        });
     }
 
     #! creates the Pop3Connection connection object

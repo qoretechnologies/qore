@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.V2F2ZVJlc3RDbGllbnQ.scheme.V2F2ZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Wave GraphQL API for accounting and invoicing",
+          "message": "連接到 Wave GraphQL API 以進行會計與發票處理"
+        },
+        "connection.V2F2ZVJlc3RDbGllbnQ.scheme.V2F2ZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Wave REST Connection",
+          "message": "Wave REST 連接"
+        },
+        "connection.V2F2ZVJlc3RDbGllbnQ.scheme.V2F2ZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Wave GraphQL API",
+          "message": "連接到 Wave GraphQL API"
+        }
+      }
+    }
+  }
+}

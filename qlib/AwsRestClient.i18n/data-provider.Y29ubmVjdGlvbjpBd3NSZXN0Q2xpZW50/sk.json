@@ -1,0 +1,385 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to AWS cloud REST API services",
+          "message": "Pripojenie k službám AWS cloud REST API"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "AWS REST Connection",
+          "message": "Pripojenie k AWS REST"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX2tleWlk.desc": {
+          "source": "The AWS key ID",
+          "message": "ID klúča AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX2tleWlk.display_name": {
+          "source": "AWS Key ID",
+          "message": "ID klúča AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX2tleWlk.short_desc": {
+          "source": "The AWS key ID",
+          "message": "ID klúča AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3JlZ2lvbg.desc": {
+          "source": "The AWS region to use (ex: `us-east-1`)",
+          "message": "Oblasť AWS na použitie (napr. `us-east-1`)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3JlZ2lvbg.display_name": {
+          "source": "AWS Region",
+          "message": "AWS región"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3JlZ2lvbg.short_desc": {
+          "source": "The AWS region to use",
+          "message": "AWS región, ktorú použiť"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Mz.desc": {
+          "source": "Set to `True` to flag this object for use with AWS S3, which requires special message encoding",
+          "message": "Nastaviť na `True` pre označenie tohto objektu na použitie s AWS S3, čo vyžaduje špeciálnu kódovaciu správu"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Mz.display_name": {
+          "source": "AWS S3",
+          "message": "AWS S3"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Mz.short_desc": {
+          "source": "Flag for use with AWS S3",
+          "message": "Príznak pre použitie s AWS S3"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlY3JldA.desc": {
+          "source": "The AWS secret access key value",
+          "message": "Hodnota privátneho prístupového kľúča AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlY3JldA.display_name": {
+          "source": "AWS Secret",
+          "message": "AWS tajný kľúč"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlY3JldA.short_desc": {
+          "source": "The AWS secret access key value",
+          "message": "Hodnota privátneho prístupového kľúča AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlcnZpY2U.desc": {
+          "source": "The AWS service to use (ex: `iam`)",
+          "message": "AWS služba na použitie (napr: `iam`)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlcnZpY2U.display_name": {
+          "source": "AWS Service",
+          "message": "AWS služba"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlcnZpY2U.short_desc": {
+          "source": "The AWS service to use",
+          "message": "AWS služba, ktorú chcete použiť"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Rva2Vu.desc": {
+          "source": "A temporary session token from AWS Security Token Service for this HTTP session",
+          "message": "Dočasný relačný token z AWS Security Token Service pre tento HTTP session"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Rva2Vu.display_name": {
+          "source": "AWS Token",
+          "message": "AWS token"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Rva2Vu.short_desc": {
+          "source": "A temporary session token",
+          "message": "Dočasný relačný token"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "použiť serializáciu JSON"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.ZGF0YQ.desc": {
+          "source": "Data serialization options are limited to `json` with this object",
+          "message": "Možnosti serializácie dát sú obmedzené na `json` s týmto objektom"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Serializácia dát"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.ZGF0YQ.short_desc": {
+          "source": "The data serialization to use",
+          "message": "Serializácia dát na použitie"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to AWS cloud REST API services",
+          "message": "Pripojenie k službám AWS cloud REST API"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to object storage that speaks the Amazon S3 protocol but is not Amazon S3, such as [MinIO](https://min.io) or [Ceph](https://ceph.io).\n\nRequires the URL the service is reached at, plus an access key ID and secret access key.  The region is whatever the service was configured with, and is often left at `us-east-1`, which is what most S3-compatible services default to.\n\nUse an **Amazon S3** connection instead for Amazon S3 itself; that one derives its URL from the region and needs no URL at all",
+          "message": "Spojenie s úložiskom objektov, ktoré používa protokol Amazon S3, ale nie je Amazon S3, napríklad [MinIO](https://min.io) alebo [Ceph](https://ceph.io).\n\nVyžaduje URL služby, kľúč prístupu a tajný kľúč prístupu. Oblasť je tá, s ktorou bola služba nakonfigurovaná, a často sa necháva na `us-east-1`, čo je výchozí stav väčšiny služieb kompatibilných s S3.\n\nPoužite spojenie **Amazon S3** pre samotný Amazon S3; to získava URL z oblasti a nemá potrebu URL vlastne"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "S3-Compatible Storage",
+          "message": "Úložisko kompatibilné s S3"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.option.YXdzX3JlZ2lvbg.desc": {
+          "source": "The region the service was configured with; most S3-compatible services default to `us-east-1` and ignore the value beyond using it to sign requests",
+          "message": "Oblasť, s ktorou bola služba nakonfigurovaná; väčšina služieb kompatibilných s S3 má výchozí stav `us-east-1` a hodnotu ignoruje okrem použitia na podpis žiadostí"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.option.cGF0aF9zdHlsZQ.desc": {
+          "source": "Address buckets in the URI path (`https://<host>/<bucket>/<key>`) rather than in the hostname (`https://<bucket>.<host>/<key>`).\n\nThis is the default and currently the only supported mode: virtual-host addressing needs a separate endpoint per bucket, which the data provider module does not yet create.  Most S3-compatible services require path-style addressing in any case",
+          "message": "Adresovať kontajnery v ceste URI (`https://<host>/<bucket>/<key>`) namiesto hostiteľa (`https://<bucket>.<host>/<key>`).\n\nToto je výchozí a momentálne jediný podporovaný režim: virtuálne adresovanie vyžaduje samostatný koncový bod pre každý kontajner, ktorý modul spracovania dát ešte nevytvára. Väčšina služieb kompatibilných s S3 vyžaduje adresovanie v ceste"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.option.cGF0aF9zdHlsZQ.display_name": {
+          "source": "Path-Style Addressing",
+          "message": "Adresovanie v ceste"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.option.cGF0aF9zdHlsZQ.short_desc": {
+          "source": "Address buckets in the URI path rather than in the hostname",
+          "message": "Adresovať kontajnery v ceste URI namiesto hostiteľa"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to S3-compatible object storage such as MinIO or Ceph",
+          "message": "Spojenie s úložiskom objektov kompatibilným s S3, ako je MinIO alebo Ceph"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [Amazon S3](https://aws.amazon.com/s3/) object storage.\n\nRequires an AWS access key ID and secret access key with permission for the buckets to be used, plus the region the buckets live in.  The URL is derived from the region, and the AWS service and S3 request-encoding options are set automatically.\n\nUse an **S3-Compatible Storage** connection instead for MinIO, Ceph, or another service that speaks the S3 protocol but is not Amazon",
+          "message": "Spojenie s úložiskom objektov [Amazon S3](https://aws.amazon.com/s3/).\n\nVyžaduje prístupový kľúč AWS a tajný prístupový kľúč s oprávnením na používanie úložných miest, spolu s regiónom, v ktorom sa úložné miesta nachádzajú. Adresa URL sa odvodzuje z regiónu a nastavia sa automaticky AWS služba a možnosti kódovania požiadaviek S3.\n\nPoužite spojenie **Úložisko kompatibilné s S3** namiesto toho pre MinIO, Ceph alebo inú službu, ktorá používa protokol S3, ale nie je Amazon"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Amazon S3",
+          "message": "Amazon S3"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLWNlbnRyYWwtMQ.desc": {
+          "source": "Middle East (UAE)",
+          "message": "Stredný východ (A.E.U.)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLWNlbnRyYWwtMQ.display_name": {
+          "source": "Middle East (UAE)",
+          "message": "Stredný východ (A.E.U.)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLXNvdXRoLTE.desc": {
+          "source": "Middle East (Bahrain)",
+          "message": "Stredný východ (Bahrain)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLXNvdXRoLTE.display_name": {
+          "source": "Middle East (Bahrain)",
+          "message": "Stredný východ (Bahrain)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFmLXNvdXRoLTE.desc": {
+          "source": "Africa (Cape Town)",
+          "message": "Afrika (Kap Town)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFmLXNvdXRoLTE.display_name": {
+          "source": "Africa (Cape Town)",
+          "message": "Afrika (Kap Town)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0x.desc": {
+          "source": "Asia Pacific (Tokyo)",
+          "message": "Ázia-Pacifik (Tokio)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0x.display_name": {
+          "source": "Asia Pacific (Tokyo)",
+          "message": "Ázia-Pacifik (Tokio)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0y.desc": {
+          "source": "Asia Pacific (Seoul)",
+          "message": "Ázia-Pacifik (Seul)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0y.display_name": {
+          "source": "Asia Pacific (Seoul)",
+          "message": "Ázia-Pacifik (Seul)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0z.desc": {
+          "source": "Asia Pacific (Osaka)",
+          "message": "Ázia-Pacifik (Osaka)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0z.display_name": {
+          "source": "Asia Pacific (Osaka)",
+          "message": "Ázia-Pacifik (Osaka)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLWVhc3QtMQ.desc": {
+          "source": "Asia Pacific (Hong Kong)",
+          "message": "Ázia Pacifický (Hongkong)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLWVhc3QtMQ.display_name": {
+          "source": "Asia Pacific (Hong Kong)",
+          "message": "Ázia Pacifický (Hongkong)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTE.desc": {
+          "source": "Asia Pacific (Mumbai)",
+          "message": "Ázia Pacifický (Mumbai)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTE.display_name": {
+          "source": "Asia Pacific (Mumbai)",
+          "message": "Ázia Pacifický (Mumbai)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTI.desc": {
+          "source": "Asia Pacific (Hyderabad)",
+          "message": "Ázia Pacifický (Hyderabad)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTI.display_name": {
+          "source": "Asia Pacific (Hyderabad)",
+          "message": "Ázia Pacifický (Hyderabad)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC00.desc": {
+          "source": "Asia Pacific (Melbourne)",
+          "message": "Ázia Pacifický (Melbourne)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC00.display_name": {
+          "source": "Asia Pacific (Melbourne)",
+          "message": "Ázia Pacifický (Melbourne)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.desc": {
+          "source": "Asia Pacific (Singapore)",
+          "message": "Ázia Pacifický (Singapur)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.display_name": {
+          "source": "Asia Pacific (Singapore)",
+          "message": "Ázia Pacifický (Singapur)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0y.desc": {
+          "source": "Asia Pacific (Sydney)",
+          "message": "Ázia Pacifický (Sydney)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0y.display_name": {
+          "source": "Asia Pacific (Sydney)",
+          "message": "Ázia Pacifický (Sydney)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0z.desc": {
+          "source": "Asia Pacific (Jakarta)",
+          "message": "Ázia Pacifický (Džakarta)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0z.display_name": {
+          "source": "Asia Pacific (Jakarta)",
+          "message": "Ázia Pacifický (Džakarta)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLWNlbnRyYWwtMQ.desc": {
+          "source": "Canada (Central)",
+          "message": "Kanada (stredná)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLWNlbnRyYWwtMQ.display_name": {
+          "source": "Canada (Central)",
+          "message": "Kanada (stredná)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLXdlc3QtMQ.desc": {
+          "source": "Canada West (Calgary)",
+          "message": "Kanada Západ (Calgary)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLXdlc3QtMQ.display_name": {
+          "source": "Canada West (Calgary)",
+          "message": "Kanada Západ (Calgary)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LW5vcnRoLTE.desc": {
+          "source": "Europe (Stockholm)",
+          "message": "Európa (Stockholm)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LW5vcnRoLTE.display_name": {
+          "source": "Europe (Stockholm)",
+          "message": "Európa (Stockholm)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMQ.desc": {
+          "source": "Europe (Frankfurt)",
+          "message": "Európa (Frankfurt)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMQ.display_name": {
+          "source": "Europe (Frankfurt)",
+          "message": "Európa (Frankfurt)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMg.desc": {
+          "source": "Europe (Zurich)",
+          "message": "Európa (Zúrich)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMg.display_name": {
+          "source": "Europe (Zurich)",
+          "message": "Európa (Zúrich)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTE.desc": {
+          "source": "Europe (Milan)",
+          "message": "Európa (Miláno)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTE.display_name": {
+          "source": "Europe (Milan)",
+          "message": "Európa (Miláno)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTI.desc": {
+          "source": "Europe (Spain)",
+          "message": "Európa (Španielsko)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTI.display_name": {
+          "source": "Europe (Spain)",
+          "message": "Európa (Španielsko)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMQ.desc": {
+          "source": "Europe (Ireland)",
+          "message": "Európa (Írsko)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMQ.display_name": {
+          "source": "Europe (Ireland)",
+          "message": "Európa (Írsko)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMg.desc": {
+          "source": "Europe (London)",
+          "message": "Európa (Londýn)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMg.display_name": {
+          "source": "Europe (London)",
+          "message": "Európa (Londýn)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMw.desc": {
+          "source": "Europe (Paris)",
+          "message": " Európa (Paříž)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMw.display_name": {
+          "source": "Europe (Paris)",
+          "message": " Európa (Paříž)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmlsLWNlbnRyYWwtMQ.desc": {
+          "source": "Israel (Tel Aviv)",
+          "message": " Izrael (Tel Aviv)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmlsLWNlbnRyYWwtMQ.display_name": {
+          "source": "Israel (Tel Aviv)",
+          "message": " Izrael (Tel Aviv)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnNhLWVhc3QtMQ.desc": {
+          "source": "South America (São Paulo)",
+          "message": " Južná Amerika (São Paulo)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnNhLWVhc3QtMQ.display_name": {
+          "source": "South America (São Paulo)",
+          "message": " Južná Amerika (São Paulo)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMQ.desc": {
+          "source": "US East (N. Virginia)",
+          "message": " USA Východ (N. Virginia)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMQ.display_name": {
+          "source": "US East (N. Virginia)",
+          "message": " USA Východ (N. Virginia)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMg.desc": {
+          "source": "US East (Ohio)",
+          "message": " USA Východ (Ohio)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMg.display_name": {
+          "source": "US East (Ohio)",
+          "message": " USA Východ (Ohio)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMQ.desc": {
+          "source": "US West (N. California)",
+          "message": " USA Západ (N. Kalifornia)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMQ.display_name": {
+          "source": "US West (N. California)",
+          "message": " USA Západ (N. Kalifornia)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMg.desc": {
+          "source": "US West (Oregon)",
+          "message": " USA Západ (Oregon)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMg.display_name": {
+          "source": "US West (Oregon)",
+          "message": " USA Západ (Oregon)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.desc": {
+          "source": "The AWS region holding the buckets to be used; this also selects the endpoint the connection is made to, so a region other than the one the buckets live in produces redirects and signature errors",
+          "message": " Oblasť AWS, kde sú uložené kontajnery; určuje aj koncový bod, ku ktorému sa pripája, preto iná oblasť ako tá, kde sú kontajnery, spôsobí presmerovania a chyby podpisu"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to Amazon S3 object storage",
+          "message": "Spojenie s úložiskom objektov Amazon S3"
+        }
+      }
+    }
+  }
+}

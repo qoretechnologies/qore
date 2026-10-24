@@ -135,9 +135,44 @@ set QORE_CONNECTION_PROVIDERS=MyConnectionProvider;OtherConnectionProvider
 $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     @endverbatim
 
+    @subsection connectionprovider_presentation Connection Form Translations
+
+    Define scheme constants with @ref connection_scheme_presentation() before reusing their options:
+    @code{.q}
+    const ConnectionScheme = ConnectionProvider::connection_scheme_presentation(
+        "ExampleConnections", "ExampleConnection", "en", <ConnectionSchemeInfo>{
+            "cls": Class::forName("ExampleConnection"),
+            "schemes": {"example": True, "examples": True},
+            "display_name": "Example Connection",
+            "options": HttpConnection::ConnectionScheme.options,
+        });
+    @endcode
+    The owner is the exact module name, and the identity is a stable logical scheme name shared by aliases.
+    The source locale must explicitly identify the producer's language. Each static scheme message needs a
+    distinct, stable @c presentation_id; retain it when reordering messages or changing wording.
+
+    Each presentation field retains its source reference when copied unchanged. Changing defaults or technical
+    properties preserves that reference. Changing wording creates an identity in the new producer's catalog.
+    Use @ref connection_option_override() for partial option overrides so flags and references are preserved.
+    Catalog extraction never constructs a connection or calls dynamic metadata callbacks.
+
+    Run @c qore-data-provider-i18n with @c --update-source-tree to extract catalogs, then translate all twelve
+    @ref DataProvider::DataProviderPresentation::StandardTranslationLocales "standard locales". Validate with
+    @c --check-source-tree @c --require-standard-locales @c --require-complete-locales before shipping.
+    Catalog files are installed with their owning module; inherited fields also require the base module's catalogs.
+
+    A host creates an operation-scoped @ref DataProvider::ConnectionPresentationCatalog projector for its requested
+    locale and calls @c projectScheme(), @c projectOptions(), or @c projectAppOptions() before UI value encoding.
+    A missing or stale translation yields empty text, @c presentation_incomplete, and the original text in
+    @c producer_presentation. That metadata includes per-field source languages for mixed-language inheritance.
+    @c root requests producer text. Option and allowed-value messages without stable identities remain incomplete;
+    app legal notices retain their original text.
+
     @section connectionproviderrelnotes Release Notes
 
     @subsection connectionprovider_3_1 ConnectionProvider 3.1
+    - added source-owned connection presentation and catalogs for shared scheme options and setup messages;
+      see @ref connectionprovider_presentation
     - the errors of invalid connections, of connection URLs with control characters and of inaccessible filesystem
       directories, and the URL errors and log messages of HTTP connections, give the URL without its password
     - added @ref ConnectionProvider::connection_option_override() "connection_option_override()" (defined in the

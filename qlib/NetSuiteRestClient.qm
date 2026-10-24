@@ -279,7 +279,8 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "netsuite://auto-detected";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("NetSuiteRestClient",
+            "NetSuiteRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Oracle NetSuite REST Connection",
             "short_desc": "A connection to the Oracle NetSuite REST API",
             "desc": "A connection to the Oracle NetSuite REST API",
@@ -323,7 +324,7 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
             },
             "required_options": "token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
                 "oauth2_client_id,oauth2_client_secret",
-        };
+        });
     }
 
     #! creates the NetSuiteRestConnection object

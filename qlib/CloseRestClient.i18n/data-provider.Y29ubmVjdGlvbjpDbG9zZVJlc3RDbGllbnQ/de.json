@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.Q2xvc2VSZXN0Q2xpZW50.scheme.Q2xvc2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Close CRM REST API for managing leads, contacts, opportunities, tasks, and activities",
+          "message": "Eine Verbindung zur Close CRM-REST-API zum Verwalten von Leads, Kontakten, Gelegenheiten, Aufgaben und Aktivitäten"
+        },
+        "connection.Q2xvc2VSZXN0Q2xpZW50.scheme.Q2xvc2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Close CRM REST Connection",
+          "message": "Close CRM REST-Verbindung"
+        },
+        "connection.Q2xvc2VSZXN0Q2xpZW50.scheme.Q2xvc2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Close API key for HTTP Basic authentication (alternative to OAuth2)",
+          "message": "Der Close-API-Schlüssel für die HTTP-Basic-Authentifizierung (Alternative zu OAuth2)"
+        },
+        "connection.Q2xvc2VSZXN0Q2xpZW50.scheme.Q2xvc2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API-Schlüssel"
+        },
+        "connection.Q2xvc2VSZXN0Q2xpZW50.scheme.Q2xvc2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Close API key for authentication",
+          "message": "Schließen Sie den API-Schlüssel für die Authentifizierung"
+        },
+        "connection.Q2xvc2VSZXN0Q2xpZW50.scheme.Q2xvc2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Close CRM REST API",
+          "message": "Eine Verbindung zur Close CRM REST-API"
+        }
+      }
+    }
+  }
+}

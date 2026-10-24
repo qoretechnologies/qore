@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Cohere](https://cohere.com) REST API for chat, embeddings, reranking, and classification.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Cohere dashboard](https://dashboard.cohere.com/api-keys).\n\nThe models used when this connection is selected for chat, embeddings, and reranking are set independently with the `chat-model`, `embedding-model`, and `rerank-model` options.\n\nPings verify the API key without generating content. A successful ping does not mean that a trial key has remaining inference quota.",
+          "message": "Una connessione all'API REST di [Cohere](https://cohere.com) per chat, embedding, riordino e classificazione.\n\nRichiede una chiave API per l'autenticazione Bearer. Ottieni la tua chiave API dal [dashboard di Cohere](https://dashboard.cohere.com/api-keys).\n\nI modelli utilizzati quando questa connessione viene selezionata per chat, embedding e riordino sono impostati in modo indipendente con le opzioni `chat-model`, `embedding-model` e `rerank-model`.\n\nI ping verificano la chiave API senza generare contenuti. Un ping riuscito non significa che una chiave di prova abbia ancora quota di inferenza disponibile."
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Cohere REST Connection",
+          "message": "Connessione REST di Cohere"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Cohere chat model used by LLM clients when this connection is selected for chat; sent as the `model` parameter to the `/chat` endpoint.\n\nChat models are a separate family from embedding and reranking models and cannot be used interchangeably.\n\nExample values: `command-a-03-2025` (Cohere's default chat model; the default here), `command-a-plus-05-2026` (largest context), `command-r-plus-08-2024` and `command-r-08-2024` (previous generation), `command-r7b-12-2024` (smallest, lowest cost)",
+          "message": "Il modello di chat di Cohere utilizzato dai client LLM quando questa connessione viene selezionata per la chat; inviato come parametro `model` all'endpoint `/chat`.\n\nI modelli di chat costituiscono una famiglia separata rispetto ai modelli di embedding e riordino e non possono essere usati in modo intercambiabile.\n\nValori di esempio: `command-a-03-2025` (modello di chat predefinito di Cohere; predefinito qui), `command-a-plus-05-2026` (massimo contesto), `command-r-plus-08-2024` e `command-r-08-2024` (generazione precedente), `command-r7b-12-2024` (più piccolo, costo più basso)"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Modello di chat"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Cohere chat model name",
+          "message": "Nome del modello di chat di Cohere"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1 (Legacy)",
+          "message": "V1 (Legacy)"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.allowed_values.c3RyaW5nOnYy.display_name": {
+          "source": "V2",
+          "message": "V2"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The API version for inference requests. App actions use `v2`.",
+          "message": "La versione dell'API per le richieste di inferenza. Le azioni dell'applicazione usano `v2`."
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Versione API"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Versione dell'API da utilizzare"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Cohere API key used for Bearer authentication.",
+          "message": "La chiave API di Cohere usata per l'autenticazione Bearer."
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Chiave API"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Cohere API key for authentication",
+          "message": "Chiave API di Cohere per l'autenticazione"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.desc": {
+          "source": "The Cohere embedding model used by embedding clients when this connection is selected for embeddings; sent as the `model` parameter to the `/embed` endpoint.\n\nExample values: `embed-multilingual-v3.0` (100+ languages; the default), `embed-english-v3.0` (English-only), `embed-multilingual-light-v3.0` (smaller, lower cost)",
+          "message": "Il modello di embedding di Cohere usato dai client di embedding quando questa connessione è selezionata per gli embedding; inviato come parametro `model` all'endpoint `/embed`.\n\nValori di esempio: `embed-multilingual-v3.0` (più di 100 lingue; predefinito), `embed-english-v3.0` (inglese solo), `embed-multilingual-light-v3.0` (più piccolo, costo inferiore)"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.display_name": {
+          "source": "Embedding Model",
+          "message": "Modello di embedding"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.short_desc": {
+          "source": "Cohere embedding model name",
+          "message": "Nome del modello di embedding di Cohere"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.desc": {
+          "source": "The Cohere reranking model used by reranking clients when this connection is selected for reranking; sent as the `model` parameter to the `/rerank` endpoint.\n\nReranking models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `rerank-v3.5` (latest cross-encoder; the default), `rerank-multilingual-v3.0` (multilingual v3)",
+          "message": "Il modello di riordino di Cohere usato dai client di riordino quando questa connessione è selezionata per il riordino; inviato come parametro `model` all'endpoint `/rerank`.\n\nI modelli di riordino costituiscono una famiglia separata rispetto ai modelli di embedding e non possono essere usati in modo intercambiabile.\n\nValori di esempio: `rerank-v3.5` (ultimo cross-encoder; predefinito), `rerank-multilingual-v3.0` (v3 multilingue)"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.display_name": {
+          "source": "Reranking Model",
+          "message": "Modello di rielaborazione"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.short_desc": {
+          "source": "Cohere reranking model name",
+          "message": "Nome del modello di riordino di Cohere"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Cohere REST API",
+          "message": "Una connessione all'API REST di Cohere"
+        }
+      }
+    }
+  }
+}

@@ -243,7 +243,8 @@ public class GrokRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "grok://api.x.ai";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("GrokRestClient",
+            "GrokRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "xAI Grok REST Connection",
             "short_desc": "A connection to the xAI Grok REST API",
             "desc": "A connection to the xAI Grok REST API.\n\n"
@@ -296,7 +297,7 @@ public class GrokRestConnection inherits RestClient::RestConnection {
                 }),
             },
             "required_options": "apikey",
-        };
+        });
 
         #! Default Grok ping method
         const DefaultPingMethod = "GET";

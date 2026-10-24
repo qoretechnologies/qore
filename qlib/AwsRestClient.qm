@@ -1323,7 +1323,8 @@ AwsRestClient rest({
 public class AwsRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("AwsRestClient",
+            "AwsRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "AWS REST Connection",
             "short_desc": "A connection to AWS cloud REST API services",
             "desc": "A connection to AWS cloud REST API services",
@@ -1392,7 +1393,7 @@ public class AwsRestConnection inherits RestClient::RestConnection {
                 },
             },
             "required_options": foldl $1 + "," + $2, AwsRestClientBase::RequiredOptions,
-        };
+        });
     }
 
     #! creates the AwsRestConnection object
@@ -2346,7 +2347,8 @@ public class AwsS3RestConnection inherits AwsS3RestConnectionBase {
         const DefaultRegion = "us-east-1";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("AwsRestClient",
+            "AwsS3RestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Amazon S3",
             "short_desc": "A connection to Amazon S3 object storage",
             "desc": "A connection to [Amazon S3](https://aws.amazon.com/s3/) object storage.\n\n"
@@ -2378,7 +2380,7 @@ public class AwsS3RestConnection inherits AwsS3RestConnectionBase {
                 }),
             },
             "required_options": "aws_keyid,aws_secret,aws_region",
-        };
+        });
 
         #! The URL used when no region is set
         /** @note carries the \c "s3" connection scheme rather than \c "https".  A connection stores this URL and
@@ -2463,7 +2465,8 @@ public class AwsS3RestConnection inherits AwsS3RestConnectionBase {
 public class AwsS3CompatibleRestConnection inherits AwsS3RestConnectionBase {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("AwsRestClient",
+            "AwsS3CompatibleRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "S3-Compatible Storage",
             "short_desc": "A connection to S3-compatible object storage such as MinIO or Ceph",
             "desc": "A connection to object storage that speaks the Amazon S3 protocol but is not Amazon S3, "
@@ -2503,7 +2506,7 @@ public class AwsS3CompatibleRestConnection inherits AwsS3RestConnectionBase {
                 },
             },
             "required_options": "aws_keyid,aws_secret",
-        };
+        });
     }
 
     #! creates the AwsS3CompatibleRestConnection object

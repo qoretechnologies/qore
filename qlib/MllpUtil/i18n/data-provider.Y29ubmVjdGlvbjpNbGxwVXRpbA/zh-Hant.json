@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.desc": {
+          "source": "A TCP or TLS connection to an MLLP endpoint for HL7 v2 message exchange",
+          "message": "至 MLLP 端點的 TCP 或 TLS 連線，用於 HL7 v2 消息交換"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.display_name": {
+          "source": "MLLP Connection",
+          "message": "MLLP 連線"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connection timeout to use in milliseconds (default: 30 seconds)",
+          "message": "連接逾時時間（毫秒），預設值：30 秒"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "連線逾時"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "連線逾時（毫秒）"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding used to decode and encode HL7 payloads",
+          "message": "用於解碼和編碼 HL7 負載的字元編碼"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Payload Encoding",
+          "message": "負載編碼"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The HL7 payload character encoding",
+          "message": "HL7 負載字元編碼"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.bWF4X2ZyYW1lX3NpemU.desc": {
+          "source": "Rejects inbound MLLP frames larger than this byte count",
+          "message": "拒絕大於此位元組數的入站 MLLP 幀"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.bWF4X2ZyYW1lX3NpemU.display_name": {
+          "source": "Maximum Frame Size",
+          "message": "最大幀大小"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.bWF4X2ZyYW1lX3NpemU.short_desc": {
+          "source": "The maximum inbound MLLP payload size in bytes",
+          "message": "入站 MLLP 負載的最大大小（位元組）"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.dGltZW91dA.desc": {
+          "source": "The socket read/write timeout to use in milliseconds (default: 30 seconds)",
+          "message": "Socket 讀取/寫入逾時時間（毫秒），預設值：30 秒"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "I/O 逾時"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.dGltZW91dA.short_desc": {
+          "source": "The read/write timeout in milliseconds",
+          "message": "讀取/寫入逾時（毫秒）"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to an MLLP endpoint",
+          "message": "連接到 MLLP 端點的連接"
+        }
+      }
+    }
+  }
+}

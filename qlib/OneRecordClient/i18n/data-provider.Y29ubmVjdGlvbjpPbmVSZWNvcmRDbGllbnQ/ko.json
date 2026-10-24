@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.T25lUmVjb3JkQ2xpZW50.scheme.T25lUmVjb3JkQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to an IATA ONE Record server for air cargo data sharing via REST/JSON-LD",
+          "message": "REST/JSON-LD를 통해 항공화물 데이터 공유를 위한 IATA ONE Record 서버에 연결"
+        },
+        "connection.T25lUmVjb3JkQ2xpZW50.scheme.T25lUmVjb3JkQ29ubmVjdGlvbg.display_name": {
+          "source": "ONE Record Connection",
+          "message": "ONE Record 연결"
+        },
+        "connection.T25lUmVjb3JkQ2xpZW50.scheme.T25lUmVjb3JkQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to an IATA ONE Record server",
+          "message": "IATA ONE Record 서버에 연결"
+        }
+      }
+    }
+  }
+}

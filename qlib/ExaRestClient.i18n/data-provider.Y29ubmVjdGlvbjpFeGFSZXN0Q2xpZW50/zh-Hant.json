@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Exa](https://exa.ai) (formerly Metaphor) — a neural web-search API providing embedding-based semantic retrieval alongside keyword search, plus answers with citations, an autonomous research agent, and websets: structured, verified lists of things found on the web.\n\nRequires an API key sent as the `x-api-key` header (NOT `Authorization: Bearer`).  Get your API key from the [Exa dashboard](https://dashboard.exa.ai/).",
+          "message": "與 [Exa](https://exa.ai) 的連接（原名 Metaphor）—— 一個神經網路網路搜尋 API，提供基於嵌入的語意檢索與關鍵字搜尋，並附帶引用的答案、自主研究代理程式，以及 Websets：結構化且經過驗證的網路內容清單。\n\n需要透過 `x-api-key` 標頭傳送 API 金鑰（非 `Authorization: Bearer`）。請至 [Exa 控制台](https://dashboard.exa.ai/) 取得您的 API 金鑰。"
+        },
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Exa Connection",
+          "message": "Exa 連接"
+        },
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Exa API key — sent as the `x-api-key` header.",
+          "message": "Exa API 金鑰 —— 以 `x-api-key` 標頭傳送。"
+        },
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Exa API key (x-api-key header)",
+          "message": "Exa API 金鑰（x-api-key 標頭）"
+        },
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Exa web search and research API",
+          "message": "與 Exa 網路搜尋與研究 API 的連接"
+        }
+      }
+    }
+  }
+}

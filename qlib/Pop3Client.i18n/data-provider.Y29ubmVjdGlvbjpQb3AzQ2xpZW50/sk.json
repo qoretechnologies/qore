@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.desc": {
+          "source": "A connection to a POP3 server for receiving emails",
+          "message": "Pripojenie k serveru POP3 na prijímanie e-mailov"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.display_name": {
+          "source": "POP3 Connection",
+          "message": "Pripojenie POP3"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "Časový limit pripojenia v milisekundách"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Časový limit pripojenia"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "Časový limit pripojenia v milisekundách"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.aW9fdGltZW91dA.desc": {
+          "source": "The I/O timeout in milliseconds",
+          "message": "Časový limit I/O v milisekundách"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.aW9fdGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Časový limit I/O"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.aW9fdGltZW91dA.short_desc": {
+          "source": "The I/O timeout in milliseconds",
+          "message": "Časový limit I/O v milisekundách"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; conflicts with the `token` option",
+          "message": "Heslo pre overenie; konfliktné s možnosťou `token`"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Heslo"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for authentication",
+          "message": "Heslo na overenie"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "Any authorization token to use for the connection; will be used for SASL XOAUTH2 logins; conflicts with the `password` option",
+          "message": "Akýkoľvek autorizačný token na použitie pre pripojenie; bude použitý pri prihlasovaní cez SASL XOAUTH2; konfliktný s možnosťou `password`"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Autorizačný token"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token for an SASL XOAUTH2 login",
+          "message": "Nastaviť autorizačný token pre prihlásenie cez SASL XOAUTH2"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dGxz.desc": {
+          "source": "Use the `STLS` command after connecting with insecure connections",
+          "message": "Použite príkaz `STLS` po pripojení cez nezabezpečené spojenia"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dGxz.display_name": {
+          "source": "Secure?",
+          "message": "Zabezpečené?"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dGxz.short_desc": {
+          "source": "Use the STLS command after connecting with insecure connections",
+          "message": "Použite príkaz STLS po pripojení cez nezabezpečené spojenie"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; always required",
+          "message": "Užívateľské meno pre overenie; vždy vyžadované"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Používateľské meno"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for authentication",
+          "message": "Nastavuje používateľské meno na autentifikáciu"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a POP3 server",
+          "message": "Spojenie s POP3 serverom"
+        }
+      }
+    }
+  }
+}

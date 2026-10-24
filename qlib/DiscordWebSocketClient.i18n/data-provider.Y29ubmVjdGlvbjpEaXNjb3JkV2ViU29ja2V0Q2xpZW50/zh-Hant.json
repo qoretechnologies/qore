@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.RGlzY29yZFdlYlNvY2tldENsaWVudA.scheme.RGlzY29yZFdlYlNvY2tldENvbm5lY3Rpb24.desc": {
+          "source": "A connection to Discord WebSocket server services",
+          "message": "連接到 Discord WebSocket 伺服器服務的連接"
+        },
+        "connection.RGlzY29yZFdlYlNvY2tldENsaWVudA.scheme.RGlzY29yZFdlYlNvY2tldENvbm5lY3Rpb24.display_name": {
+          "source": "Discord WebSocket Connection",
+          "message": "Discord WebSocket 連接"
+        },
+        "connection.RGlzY29yZFdlYlNvY2tldENsaWVudA.scheme.RGlzY29yZFdlYlNvY2tldENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to Discord WebSocket server services",
+          "message": "連接到 Discord WebSocket 伺服器服務的連接"
+        }
+      }
+    }
+  }
+}

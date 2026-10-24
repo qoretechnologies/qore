@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.desc": {
+          "source": "A connection to a DataStream API server using RestClientIo for multiplexed HTTP/1.1, HTTP/2, and HTTP/3 connections",
+          "message": "使用 RestClientIo 連線至 DataStream API 伺服器，支援多路複用的 HTTP/1.1、HTTP/2 與 HTTP/3 連線"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.display_name": {
+          "source": "DataStream REST Connection (Multiplexed I/O)",
+          "message": "DataStream REST 連接（多路複用 I/O）"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.bWF4X21lc3NhZ2Vfc2l6ZQ.desc": {
+          "source": "Maximum message size in bytes for Connect mode (0 = no limit)",
+          "message": "Connect 模式下訊息最大大小（位元組），0 表示無限制"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.bWF4X21lc3NhZ2Vfc2l6ZQ.display_name": {
+          "source": "Max Message Size",
+          "message": "最大訊息大小"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.bWF4X21lc3NhZ2Vfc2l6ZQ.short_desc": {
+          "source": "Maximum Connect frame payload size",
+          "message": "最大 Connect 幀有效負載大小"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.cHJvdG9jb2w.desc": {
+          "source": "The protocol mode: 'auto' (default), 'connect', or 'datastream'",
+          "message": "通訊協定模式：'auto'（預設）、'connect' 或 'datastream'"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.cHJvdG9jb2w.display_name": {
+          "source": "Protocol",
+          "message": "協定"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.cHJvdG9jb2w.short_desc": {
+          "source": "DataStream protocol mode",
+          "message": "DataStream 通訊協定模式"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.short_desc": {
+          "source": "A connection to a DataStream API server using multiplexed I/O",
+          "message": "使用多路複用 I/O 連接至 DataStream API 伺服器"
+        }
+      }
+    }
+  }
+}

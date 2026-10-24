@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Connection setup**:\n- Use the resource URL (`https://<resource-name>.cognitiveservices.azure.com`)\n- Supply either a subscription key or an Entra bearer token\n- Find the endpoint and key under **Keys and Endpoint** in the Azure portal\n\n**Entra authentication**: tokens require the `https://cognitiveservices.azure.com/.default` audience and resource permissions. **The caller renews expiring tokens.** Ping reads resource information and verifies authentication; other operations may require additional permissions.",
+          "message": "Підключення до [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (раніше Form Recognizer) — служби витягування документів від Microsoft.\n\n**Налаштування підключення**:\n- Використовуйте URL ресурсу (`https://<resource-name>.cognitiveservices.azure.com`)\n- Надавайте ключ підписки або токен носія Entra\n- Знайдіть кінцеву точку та ключ у розділі **Ключі та кінцева точка** на порталі Azure\n\n**Аутентифікація Entra**: токени потребують аудиторії `https://cognitiveservices.azure.com/.default` та дозволів ресурсу. **Викликавчий код відновлює токени, що закінчуються.** Пінг читає інформацію про ресурс і перевіряє аутентифікацію; інші операції можуть вимагати додаткових дозволів."
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Azure Document Intelligence Connection",
+          "message": "Підключення Azure Document Intelligence"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "Azure Document Intelligence subscription key — sent as the `Ocp-Apim-Subscription-Key` header.",
+          "message": "Ключ підписки Azure Document Intelligence — надсилається як заголовок `Ocp-Apim-Subscription-Key`."
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "Subscription Key",
+          "message": "Ключ підписки"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Azure Document Intelligence subscription key",
+          "message": "Ключ підписки Azure Document Intelligence"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.ZW50cmFfdG9rZW4.desc": {
+          "source": "Access token for `https://cognitiveservices.azure.com/.default`. Use instead of a subscription key and replace it before expiration.",
+          "message": "Токен доступу для `https://cognitiveservices.azure.com/.default`. Використовуйте замість ключа підписки і замініть його до закінчення терміну дії."
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.ZW50cmFfdG9rZW4.display_name": {
+          "source": "Entra Bearer Token",
+          "message": "Токен носія Entra"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.ZW50cmFfdG9rZW4.short_desc": {
+          "source": "A caller-managed Microsoft Entra access token",
+          "message": "Токен доступу Microsoft Entra, що керується викликавчим кодом"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to Azure Document Intelligence",
+          "message": "Підключення до Azure Document Intelligence"
+        }
+      }
+    }
+  }
+}

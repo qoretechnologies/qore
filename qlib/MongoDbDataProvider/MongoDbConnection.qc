@@ -29,7 +29,8 @@ public namespace MongoDbDataProvider {
 public class MongoDbConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {
         #! Connection scheme information
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("MongoDbDataProvider",
+            "MongoDbConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "MongoDB Connection",
             "short_desc": "A connection to a MongoDB server or an Atlas cluster",
             "desc": "A connection to a [MongoDB](https://www.mongodb.com) server or a "
@@ -52,7 +53,7 @@ public class MongoDbConnection inherits ConnectionProvider::AbstractConnectionWi
                 "tcp": "mongodb",
             },
             "options": ConnectionOptions,
-        };
+        });
 
         #! The URL scheme for an Atlas (DNS seed list) cluster
         /** MongoDB spells this scheme with a \c "+", which is legal in a URL scheme and which

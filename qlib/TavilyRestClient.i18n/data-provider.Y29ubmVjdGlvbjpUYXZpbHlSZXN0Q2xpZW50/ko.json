@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Tavily](https://www.tavily.com) — a search API built for programs: semantic web search, page extraction, site crawling and mapping, and research agents that search, read and reason until they can answer.\n\nRequires an API key, sent as a Bearer token.  Get one from the [Tavily dashboard](https://app.tavily.com/).",
+          "message": "[Tavily](https://www.tavily.com)에 대한 연결 — 프로그램용으로 설계된 검색 API: 의미적 웹 검색, 페이지 추출, 사이트 크롤링 및 맵핑, 그리고 질문에 답할 수 있을 때까지 검색, 읽고 추론하는 연구 에이전트를 지원합니다.\n\nAPI 키가 필요하며, Bearer 토큰으로 전송됩니다. [Tavily 대시보드](https://app.tavily.com/)에서 키를 얻으세요"
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Tavily Connection",
+          "message": "Tavily 연결"
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Tavily API key, sent as a Bearer token.  Keys begin with `tvly-`; get one from the [Tavily dashboard](https://app.tavily.com/).\n\nThe connection ping reads the account's credit usage with this key, so a key Tavily does not accept makes the connection fail rather than appear healthy.",
+          "message": "Tavily API 키는 Bearer 토큰으로 전송됩니다. 키는 `tvly-`로 시작하며, [Tavily 대시보드](https://app.tavily.com/)에서 발급받을 수 있습니다.\n\n연결 핑은 이 키로 계정의 크레딧 사용량을 확인하므로, Tavily가 수락하지 않는 키는 연결이 실패하게 되며 건강 상태로 표시되지 않습니다."
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "The Tavily API key",
+          "message": "Tavily API 키"
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Tavily search, extraction and research API",
+          "message": "Tavily 검색, 추출 및 연구 API에 대한 연결"
+        }
+      }
+    }
+  }
+}

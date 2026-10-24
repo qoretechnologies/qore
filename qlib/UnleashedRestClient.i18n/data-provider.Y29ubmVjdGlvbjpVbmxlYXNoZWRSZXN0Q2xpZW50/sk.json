@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Unleashed Software REST API for inventory management.\n\nUnleashed is a powerful cloud-based inventory management platform that enables you to manage products, sales orders, purchase orders, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and customer contacts\n- Create and track sales orders\n- Process credit notes\n- Manage products and inventory\n- Track stock levels across warehouses\n\n**Authentication:**\nUnleashed uses HMAC-SHA256 signature authentication. Both API ID and API Key are required.",
+          "message": "Spojenie s Unleashed Software REST API pre správu zásob.\n\nUnleashed je výkonná cloudu založená platforma na správu zásob, ktorá vám umožňuje spravovať produkty, predajné objednávky, nákupné objednávky, zákazníkov, dodávateľov a úrovne zásob.\n\n**Funkcie:**\n- Spravovať zákazníkov a kontaktov zákazníkov\n- Vytvárať a sledovať predajné objednávky\n- Spracovávať kreditné účty\n- Spravovať produkty a zásoby\n- Sledovať úrovne zásob v rôznych skladoch\n\n**Overenie:**\nUnleashed používa overenie podpisom HMAC-SHA256. Je potrebné mať obidva: ID API a kľúč API."
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Unleashed REST Connection",
+          "message": "Unleashed REST spojenie"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Unleashed Software, you need your API ID and API Key:\n\n1. Log in to Unleashed as the **Account Owner**\n2. Go to **Settings > Integration > API Access**\n3. Copy your **API ID** and **API Key**\n\n**Important:**\n- Only the account owner can access API credentials\n- Keep your credentials secure - they provide full API access\n- Never share your API Key publicly",
+          "message": "Na pripojenie k Unleashed Software potrebujete svoje ID API a kľúč API:\n\n1. Prihláste sa do Unleashed ako **Vlastník účtu**\n2. Prejdite na **Nastavenia > Integrácia > Prístup k API**\n3. Skopírujte svoje **ID API** a **kľúč API**\n\n**Dôležité:**\n- K prístupu k údajom API má len vlastník účtu\n- Uchovávajte svoje údaje bezpečne – poskytujú plný prístup k API\n- Nikdy nezdieľajte svoj kľúč API verejne"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Credentials",
+          "message": "Ako získať svoje API povolenia"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.desc": {
+          "source": "Your Unleashed API ID used for API authentication.\n\n**To obtain your API ID:**\n1. Log in to Unleashed as the Account Owner\n2. Go to Settings > Integration > API Access\n3. Copy your **API ID**\n\n**Note:** Only the account owner can access API credentials.",
+          "message": "Vaše ID API Unleashed používané na overenie prístupu k API.\n\n**Ako získať svoje ID API:**\n1. Prihláste sa do Unleashed ako Vlastník účtu\n2. Prejdite na Nastavenia > Integrácia > Prístup k API\n3. Skopírujte svoje **ID API**\n\n**Poznámka:** Len vlastník účtu má prístup k údajom API."
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.display_name": {
+          "source": "API ID",
+          "message": "ID API"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.short_desc": {
+          "source": "Unleashed API ID for authentication",
+          "message": "ID rozhrania Unleashed pre overenie"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Your Unleashed API Key used for computing HMAC-SHA256 signatures.\n\n**To obtain your API Key:**\n1. Log in to Unleashed as the Account Owner\n2. Go to Settings > Integration > API Access\n3. Copy your **API Key**\n\n**Note:** Only the account owner can access API credentials.\nKeep your API Key secure - it provides full API access to your account.",
+          "message": "Váš kľúč API Unleashed používaný na výpočet podpisov HMAC-SHA256.\n\n**Ak chcete získať váš kľúč API:**\n1. Prihláste sa do Unleashed ako vlastník účtu\n2. Prejdite na Nastavenia > Integrácia > Prístup k rozhraniu API\n3. Skopírujte váš **kľúč API**\n\n**Poznámka:** K prístupu k údajom o rozhraní API má prístup len vlastník účtu.\nUchovávajte váš kľúč API v bezpečí – poskytuje plný prístup k rozhraniu vášho účtu."
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Unleashed API Key for HMAC signature",
+          "message": "Kľúč API Unleashed pre podpis HMAC"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Unleashed Software API",
+          "message": "Spojenie s rozhraním API softvéru Unleashed"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.U3F1YXJlc3BhY2VSZXN0Q2xpZW50.scheme.U3F1YXJlc3BhY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Squarespace Commerce REST API for orders, products, inventory, and transactions",
+          "message": "Připojení k REST API Squarespace Commerce pro objednávky, produkty, inventář a transakce"
+        },
+        "connection.U3F1YXJlc3BhY2VSZXN0Q2xpZW50.scheme.U3F1YXJlc3BhY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Squarespace REST Connection",
+          "message": "Připojení k REST API Squarespace"
+        },
+        "connection.U3F1YXJlc3BhY2VSZXN0Q2xpZW50.scheme.U3F1YXJlc3BhY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Squarespace Commerce REST API",
+          "message": "Připojení k REST API Squarespace Commerce"
+        }
+      }
+    }
+  }
+}

@@ -201,7 +201,8 @@ public class SegmentRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "segment://api.segmentapis.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("SegmentRestClient",
+            "SegmentRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Segment REST Connection",
             "short_desc": "A connection to the Twilio Segment REST API",
             "desc": "A connection to the Twilio Segment Public API for managing your Customer Data Platform "
@@ -274,6 +275,7 @@ public class SegmentRestConnection inherits RestClient::RestConnection {
             "required_options": "apikey",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "Segment API Key",
                     "intent": "info",
                     "content": "To connect to Segment, you need a Public API token:\n\n"
@@ -283,6 +285,7 @@ public class SegmentRestConnection inherits RestClient::RestConnection {
                         "Only Workspace Owners can create tokens. Keep your token secure.",
                 },
                 <UiMessageInfo>{
+                    "presentation_id": "setup-2",
                     "title": "Select Your Region",
                     "intent": "info",
                     "content": "Choose the region that matches your Segment workspace:\n"
@@ -291,7 +294,7 @@ public class SegmentRestConnection inherits RestClient::RestConnection {
                         "Your region was set when you created your workspace and cannot be changed.",
                 },
             ),
-        };
+        });
     }
 
     #! creates the SegmentRestConnection object

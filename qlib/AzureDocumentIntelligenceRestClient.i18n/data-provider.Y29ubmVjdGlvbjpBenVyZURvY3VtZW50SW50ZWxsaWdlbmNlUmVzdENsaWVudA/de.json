@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Connection setup**:\n- Use the resource URL (`https://<resource-name>.cognitiveservices.azure.com`)\n- Supply either a subscription key or an Entra bearer token\n- Find the endpoint and key under **Keys and Endpoint** in the Azure portal\n\n**Entra authentication**: tokens require the `https://cognitiveservices.azure.com/.default` audience and resource permissions. **The caller renews expiring tokens.** Ping reads resource information and verifies authentication; other operations may require additional permissions.",
+          "message": "Eine Verbindung zu [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (ehemals Form Recognizer) – Microsofts verwalteter Dienst zur Dokumentextraktion.\n\n**Verbindungssetup**:\n- Verwenden Sie die Ressourcen-URL (`https://<resource-name>.cognitiveservices.azure.com`)\n- Geben Sie entweder einen Abonnement-Schlüssel oder ein Entra-Bearertoken an\n- Finden Sie den Endpunkt und den Schlüssel unter **Schlüssel und Endpunkt** im Azure-Portal\n\n**Entra-Authentifizierung**: Token erfordern den `https://cognitiveservices.azure.com/.default` Audience und Ressourcenberechtigungen. **Der Aufrufer verlängert ablaufende Token.** Ping liest Ressourceninformationen und überprüft die Authentifizierung; andere Operationen können zusätzliche Berechtigungen erfordern."
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Azure Document Intelligence Connection",
+          "message": "Azure Document Intelligence-Verbindung"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "Azure Document Intelligence subscription key — sent as the `Ocp-Apim-Subscription-Key` header.",
+          "message": "Azure Document Intelligence-Abonnement-Schlüssel – wird als `Ocp-Apim-Subscription-Key`-Header gesendet."
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "Subscription Key",
+          "message": "Abonnement-Schlüssel"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Azure Document Intelligence subscription key",
+          "message": "Azure Document Intelligence-Abonnement-Schlüssel"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.ZW50cmFfdG9rZW4.desc": {
+          "source": "Access token for `https://cognitiveservices.azure.com/.default`. Use instead of a subscription key and replace it before expiration.",
+          "message": "Zugangstoken für `https://cognitiveservices.azure.com/.default`. Verwenden Sie stattdessen ein Abonnement-Schlüssel und ersetzen Sie es vor Ablauf."
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.ZW50cmFfdG9rZW4.display_name": {
+          "source": "Entra Bearer Token",
+          "message": "Entra-Bearertoken"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.ZW50cmFfdG9rZW4.short_desc": {
+          "source": "A caller-managed Microsoft Entra access token",
+          "message": "Ein vom Aufrufer verwaltetes Microsoft Entra-Zugangstoken"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to Azure Document Intelligence",
+          "message": "Eine Verbindung zu Azure Document Intelligence"
+        }
+      }
+    }
+  }
+}

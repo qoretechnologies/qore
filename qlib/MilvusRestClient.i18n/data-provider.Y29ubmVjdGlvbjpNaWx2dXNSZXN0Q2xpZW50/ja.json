@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a [Milvus](https://milvus.io) or [Zilliz Cloud](https://zilliz.com) (managed Milvus) vector database via the REST v2 API.\n\nAuthentication: Bearer token (Milvus / Zilliz token).\n\nThe connection uses the `milvus://` URL scheme for plain HTTP and `milvuss://` for servers behind TLS.",
+          "message": "[Milvus](https://milvus.io) または [Zilliz Cloud](https://zilliz.com)（マネージド Milvus）の REST v2 API を通じたベクトルデータベース接続。\n\n認証：Bearer トークン（Milvus / Zilliz トークン）。\n\n接続は、プレーン HTTP には `milvus://` URL スキーム、TLS 背後のサーバーには `milvuss://` を使用します。"
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Milvus Vector DB Connection",
+          "message": "Milvus ベクター DB 接続"
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Bearer token.  For local Milvus this is the `<user>:<password>` auth combo; for Zilliz Cloud it's the cluster API key.",
+          "message": "Bearer トークン。ローカルの Milvus では `<user>:<password>` 認証コンビネーション；Zilliz Cloud ではクラスタ API キーです。"
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Milvus / Zilliz token (Bearer)",
+          "message": "Milvus / Zilliz トークン（Bearer）"
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Milvus / Zilliz Cloud vector database",
+          "message": "Milvus / Zilliz Cloud ベクター DB への接続"
+        }
+      }
+    }
+  }
+}

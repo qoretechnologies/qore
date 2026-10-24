@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a Qdrant vector database server",
+          "message": "Qdrant 벡터 데이터베이스 서버에 연결"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Qdrant REST Connection",
+          "message": "Qdrant REST 연결"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.desc": {
+          "source": "The API key for authenticating with the Qdrant server; sent as the `api-key` header",
+          "message": "Qdrant 서버 인증용 API 키; `api-key` 헤더로 전송"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.short_desc": {
+          "source": "The Qdrant API key for authentication",
+          "message": "Qdrant API 키 (인증용)"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.desc": {
+          "source": "HTTP headers to send with ping requests; defaults to `{\"Connection\": \"close\"}` to force a fresh TCP connection on each ping, preventing stale keep-alive connection failures against qdrant's actix-web server (which closes idle keep-alive connections after a short timeout)",
+          "message": "핑 요청 시 전송할 HTTP 헤더; 기본값은 `{\"Connection\": \"close\"}`로, 각 핑마다 새 TCP 연결을 강제하여 qdrant의 actix-web 서버(짧은 타임아웃 후 유휴 keep-alive 연결을 종료)에서 발생하는 오래된 keep-alive 연결 오류를 방지"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.cGluZ19wYXRo.desc": {
+          "source": "The URI path to use for pings; defaults to `/collections`, which requires authentication and therefore verifies the credential as well as reachability.  Do not use `/`: qdrant serves the root path outside its authentication layer, so a ping against it succeeds even when the connection carries no credential at all and no real operation can be performed",
+          "message": "핑에 사용할 URI 경로; 기본값은 `/collections`이며, 인증이 필요하므로 자격 증명과 접근 가능성도 함께 검증합니다. `/`을 사용하지 마세요: qdrant은 인증 계층 외부에서 루트 경로를 제공하므로, 자격 증명이 없어도 핑이 성공하지만 실제 작업은 수행할 수 없습니다"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Qdrant vector database server",
+          "message": "Qdrant 벡터 데이터베이스 서버에 연결"
+        }
+      }
+    }
+  }
+}

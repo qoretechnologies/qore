@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a FHIR REST server using JSON resources",
+          "message": "Eine Verbindung zu einem FHIR-REST-Server mit JSON-Ressourcen"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "FHIR REST Connection",
+          "message": "FHIR-REST-Verbindung"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.option.bm9fY2hhcnNldA.desc": {
+          "source": "If `True`, no charset parameter is appended to request Content-Type headers",
+          "message": "Wenn `True`, wird kein Charset-Parameter an die Anfrage-Content-Type-Kopfzeilen angehängt"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.option.bm9fY2hhcnNldA.display_name": {
+          "source": "No Charset in Content-Type?",
+          "message": "Kein Charset in Content-Type?"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.option.bm9fY2hhcnNldA.short_desc": {
+          "source": "Do not append a charset parameter to request Content-Type headers",
+          "message": "Fügen Sie keinen Charset-Parameter zu Anfrage-Content-Type-Kopfzeilen hinzu"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a FHIR REST server",
+          "message": "Eine Verbindung zu einem FHIR-REST-Server"
+        }
+      }
+    }
+  }
+}

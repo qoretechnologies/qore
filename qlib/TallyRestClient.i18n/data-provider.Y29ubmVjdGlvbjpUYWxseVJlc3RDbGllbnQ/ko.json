@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Tally.so REST API for form building and management.\n\nRequires an API key (set as `apikey`) from your [Tally account settings](https://tally.so/settings/api). The connection uses the `tally://` URL scheme",
+          "message": "폼 빌딩 및 관리를 위한 Tally.so REST API에 대한 연결.\n\n`apikey`로 설정된 API 키가 필요합니다. [Tally 계정 설정](https://tally.so/settings/api)에서 확인하세요. 연결은 `tally://` URL 스킴을 사용합니다."
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Tally REST Connection",
+          "message": "Tally REST 연결"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Tally, you need an API key:\n\n1. Sign in to your [Tally account](https://tally.so/)\n2. Go to **Settings** → **API**\n3. Click **Create API key**\n4. Copy the key and paste it in the `apikey` field above\n\n**Note**: API access requires a Tally Pro or Business plan",
+          "message": "Tally에 연결하려면 API 키가 필요합니다:\n\n1. [Tally 계정](https://tally.so/)에 로그인합니다\n2. **설정** → **API**로 이동합니다\n3. **API 키 생성**을 클릭합니다\n4. 키를 복사하여 위의 `apikey` 필드에 붙여넣습니다\n\n**참고**: API 접근은 Tally Pro 또는 비즈니스 플랜이 필요합니다"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Tally API Key",
+          "message": "Tally API 키 받는 방법"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Tally API key used for authentication; sent as the `Authorization: Bearer` header.\n\nGet your API key from your [Tally account settings](https://tally.so/settings/api)",
+          "message": "인증에 사용되는 Tally API 키입니다; `Authorization: Bearer` 헤더로 전송됩니다.\n\n[Tally 계정 설정](https://tally.so/settings/api)에서 API 키를 얻으세요"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Tally API key for authentication",
+          "message": "인증용 Tally API 키"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Tally.so REST API",
+          "message": "Tally.so REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

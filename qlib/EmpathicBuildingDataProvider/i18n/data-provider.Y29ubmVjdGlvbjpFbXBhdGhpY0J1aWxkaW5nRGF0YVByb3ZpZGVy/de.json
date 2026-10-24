@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a Haltian Empathic Building REST server",
+          "message": "Eine Verbindung zu einem Haltian Empathic Building REST-Server"
+        },
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Haltian Empathic Building REST Connection",
+          "message": "Haltian Empathic Building REST-Verbindung"
+        },
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.option.cmVmcmVzaF90b2tlbg.desc": {
+          "source": "Sets the Haltian refresh token, if any (complements option `token`)",
+          "message": "Legt das Haltian-Refresh-Token fest, falls vorhanden (ergänzt die Option `token`)"
+        },
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.option.cmVmcmVzaF90b2tlbg.display_name": {
+          "source": "Refresh Token",
+          "message": "Aktualisierungstoken"
+        },
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.option.cmVmcmVzaF90b2tlbg.short_desc": {
+          "source": "Sets the Haltian refresh token",
+          "message": "Legt das Haltian-Refresh-Token fest"
+        },
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a Haltian Empathic Building REST server",
+          "message": "Eine Verbindung zu einem Haltian Empathic Building REST-Server"
+        }
+      }
+    }
+  }
+}

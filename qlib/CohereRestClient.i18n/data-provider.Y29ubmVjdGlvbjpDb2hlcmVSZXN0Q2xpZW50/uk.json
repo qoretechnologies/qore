@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Cohere](https://cohere.com) REST API for chat, embeddings, reranking, and classification.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Cohere dashboard](https://dashboard.cohere.com/api-keys).\n\nThe models used when this connection is selected for chat, embeddings, and reranking are set independently with the `chat-model`, `embedding-model`, and `rerank-model` options.\n\nPings verify the API key without generating content. A successful ping does not mean that a trial key has remaining inference quota.",
+          "message": "Підключення до REST API [Cohere](https://cohere.com) для чату, векторизації, переранжування та класифікації.\n\nВимагає ключ API для автентифікації Bearer. Отримайте свій ключ API на [панелі керування Cohere](https://dashboard.cohere.com/api-keys).\n\nМоделі, які використовуються при виборі цього підключення для чату, векторизації та переранжування, налаштовуються окремо за допомогою параметрів `chat-model`, `embedding-model` та `rerank-model`.\n\nТестові пінги перевіряють ключ API без генерації вмісту. Успішний пінг не означає, що пробний ключ має залишковий квоту для інференції."
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Cohere REST Connection",
+          "message": "Підключення до REST API Cohere"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Cohere chat model used by LLM clients when this connection is selected for chat; sent as the `model` parameter to the `/chat` endpoint.\n\nChat models are a separate family from embedding and reranking models and cannot be used interchangeably.\n\nExample values: `command-a-03-2025` (Cohere's default chat model; the default here), `command-a-plus-05-2026` (largest context), `command-r-plus-08-2024` and `command-r-08-2024` (previous generation), `command-r7b-12-2024` (smallest, lowest cost)",
+          "message": "Модель чату Cohere, яка використовується клієнтами LLM при виборі цього підключення для чату; надсилається як параметр `model` до кінцевої точки `/chat`.\n\nМоделі чату утворюють окрему родину порівняно з моделями векторизації та переранжування і не можуть використовуватися взаємозамінно.\n\nПриклади значень: `command-a-03-2025` (стандартна модель чату Cohere; за замовчуванням тут), `command-a-plus-05-2026` (найбільший контекст), `command-r-plus-08-2024` та `command-r-08-2024` (попередні покоління), `command-r7b-12-2024` (найменша, найнижча вартість)"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Модель чату"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Cohere chat model name",
+          "message": "Назва моделі чату Cohere"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1 (Legacy)",
+          "message": "V1 (устарілий)"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.allowed_values.c3RyaW5nOnYy.display_name": {
+          "source": "V2",
+          "message": "V2"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The API version for inference requests. App actions use `v2`.",
+          "message": "Версія API для запитів інференції. Дії додатка використовують `v2`."
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Версія API"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Версія API, яку слід використовувати"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Cohere API key used for Bearer authentication.",
+          "message": "Ключ API Cohere, який використовується для автентифікації Bearer."
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Cohere API key for authentication",
+          "message": "Ключ API Cohere для автентифікації"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.desc": {
+          "source": "The Cohere embedding model used by embedding clients when this connection is selected for embeddings; sent as the `model` parameter to the `/embed` endpoint.\n\nExample values: `embed-multilingual-v3.0` (100+ languages; the default), `embed-english-v3.0` (English-only), `embed-multilingual-light-v3.0` (smaller, lower cost)",
+          "message": "Модель векторного представлення Cohere, яка використовується клієнтами векторних представлень, коли це з'єднання вибрано для векторизації; надсилається як параметр `model` до кінцевої точки `/embed`.\n\nПриклади значень: `embed-multilingual-v3.0` (понад 100 мов; за замовчуванням), `embed-english-v3.0` (лише англійська), `embed-multilingual-light-v3.0` (менші за розміром, нижчі за вартість)"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.display_name": {
+          "source": "Embedding Model",
+          "message": "Модель векторного представлення"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.short_desc": {
+          "source": "Cohere embedding model name",
+          "message": "Назва моделі векторного представлення Cohere"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.desc": {
+          "source": "The Cohere reranking model used by reranking clients when this connection is selected for reranking; sent as the `model` parameter to the `/rerank` endpoint.\n\nReranking models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `rerank-v3.5` (latest cross-encoder; the default), `rerank-multilingual-v3.0` (multilingual v3)",
+          "message": "Модель перерозподілу важливості Cohere, яка використовується клієнтами перерозподілу важливості, коли це з'єднання вибрано для перерозподілу; надсилається як параметр `model` до кінцевої точки `/rerank`.\n\nМоделі перерозподілу важливості — це окрема родина від моделей векторного представлення і не можуть використовуватися взаємозамінно.\n\nПриклади значень: `rerank-v3.5` (найновіший крос-енкодер; за замовчуванням), `rerank-multilingual-v3.0` (мультимовна v3)"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.display_name": {
+          "source": "Reranking Model",
+          "message": "Модель переранжування"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.short_desc": {
+          "source": "Cohere reranking model name",
+          "message": "Назва моделі перерозподілу важливості Cohere"
+        },
+        "connection.Q29oZXJlUmVzdENsaWVudA.scheme.Q29oZXJlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Cohere REST API",
+          "message": "З'єднання з REST API Cohere"
+        }
+      }
+    }
+  }
+}

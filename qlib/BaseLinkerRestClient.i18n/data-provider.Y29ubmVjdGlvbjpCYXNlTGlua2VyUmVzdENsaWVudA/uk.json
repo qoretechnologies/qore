@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the BaseLinker REST API for managing orders, products, inventories, couriers, and external storage integrations.\n\nBaseLinker exposes an RPC-over-HTTP API: every operation is a POST to a single endpoint (`https://api.baselinker.com/connector.php`) with a form-encoded body of the form `method=<name>&parameters=<URL-encoded JSON>`.\n\nAuthentication is performed by sending the raw API token in the `X-BLToken` HTTP header (no `Bearer` prefix).\n\n**To obtain your API token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Generate a new token and copy its value\n\n**Note:** The token is sent on every request as the `X-BLToken` header.",
+          "message": "Підключення до REST API BaseLinker для керування замовленнями, товарами, запасами, кур’єрами та інтеграціями ззовнішніми сховищами.\n\nBaseLinker надає RPC-інтерфейс через HTTP: кожна операція — це POST до одного ендпоїнту (`https://api.baselinker.com/connector.php`) з тілом у форматі form-encoded у вигляді `method=<name>&parameters=<URL-encoded JSON>`.\n\nАвтентифікація виконується шляхом надсилання сирового API-токену у заголовку `X-BLToken` HTTP (без префікса `Bearer`).\n\n**Щоб отримати свій API-токен:**\n1. Увійдіть у панель BaseLinker\n2. Відкрийте **Обліковий запис та інше** → **Мій обліковий запис**\n3. Відкрийте вкладку **API**\n4. Створіть новий токен і скопіюйте його значення\n\n**Примітка:** Токен надсилається на кожному запиті як заголовок `X-BLToken`."
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "BaseLinker REST Connection",
+          "message": "Підключення до REST BaseLinker"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires a **BaseLinker API token**.\n\n**Steps to generate a token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Click to generate a new token and copy its value\n\n**How it is used:**\n- The token is sent on every request as the `X-BLToken` HTTP header\n- No `Bearer` prefix is used — the token is sent raw\n- Every BaseLinker call is a POST to a single RPC endpoint (`/connector.php`) with a form-encoded body",
+          "message": "Ця інтеграція вимагає **токен API BaseLinker**.\n\n**Кроки для створення токена:**\n1. Увійдіть у панель BaseLinker\n2. Відкрийте **Обліковий запис та інше** → **Мій обліковий запис**\n3. Відкрийте вкладку **API**\n4. Натисніть, щоб створити новий токен, і скопіюйте його значення\n\n**Як використовується:**\n- Токен надсилається на кожен запит як заголовок `X-BLToken`\n- Префікс `Bearer` не використовується — токен надсилається сировим\n- Кожний виклик BaseLinker — це POST до одного RPC-ендпоїнту (`/connector.php`) з тілом у форматі form-encoded"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Token",
+          "message": "Як отримати свій API-токен"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The BaseLinker API token used for authentication. It is sent on every request as the `X-BLToken` HTTP header (raw token, no `Bearer` prefix).\n\n**To obtain your API token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Generate a new token and copy its value",
+          "message": "API-токен BaseLinker, що використовується для автентифікації. Він надсилається на кожен запит як заголовок `X-BLToken` (сировий токен, без префікса `Bearer`).\n\n**Щоб отримати свій API-токен:**\n1. Увійдіть у панель BaseLinker\n2. Відкрийте **Обліковий запис та інше** → **Мій обліковий запис**\n3. Відкрийте вкладку **API**\n4. Створіть новий токен і скопіюйте його значення"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API-токен"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "BaseLinker API token for authentication",
+          "message": "Токен API BaseLinker для автентифікації"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the BaseLinker REST API",
+          "message": "Підключення до REST API BaseLinker"
+        }
+      }
+    }
+  }
+}

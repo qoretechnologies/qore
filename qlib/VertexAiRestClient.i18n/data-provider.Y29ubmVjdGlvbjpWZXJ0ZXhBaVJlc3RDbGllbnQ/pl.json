@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to Google Vertex AI for generative model access via regional REST endpoints. Authentication is via Application Default Credentials or an explicit service-account JSON key file.",
+          "message": "Połączenie z Google Vertex AI do uzyskiwania dostępu do modeli generatywnych przez regionalne punkty końcowe REST. Uwierzytelnianie odbywa się za pomocą domyślnych poświadczeń aplikacji lub pliku klucza usługi w formacie JSON."
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Google Vertex AI Connection",
+          "message": "Połączenie z Google Vertex AI"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Vertex AI chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `gemini-2.0-flash` (the default), `gemini-2.5-pro`",
+          "message": "Model czatowy Vertex AI używany przez klientów LLM, gdy to połączenie jest wybrane do czatu.\n\nModele czatowe to osobna rodzina niż modele embeddingowe i nie mogą być wymienione między sobą.\n\nPrzykładowe wartości: `gemini-2.0-flash` (domyślna), `gemini-2.5-pro`"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Model czatowy"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Vertex AI chat model name",
+          "message": "Nazwa modelu czatowego Vertex AI"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3Byb2plY3RfaWQ.desc": {
+          "source": "GCP project ID (required)",
+          "message": "ID projektu GCP (wymagane)"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3Byb2plY3RfaWQ.display_name": {
+          "source": "GCP Project ID",
+          "message": "ID projektu GCP"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3Byb2plY3RfaWQ.short_desc": {
+          "source": "GCP project that owns the Vertex AI workload",
+          "message": "Projekt GCP, który zarządza obciążeniem Vertex AI"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.desc": {
+          "source": "Optional GCP billing/quota project; when set it is sent as the x-goog-user-project header so quota and billing are attributed to that project. Not required for the project-scoped Vertex endpoints, where the project in the URL path is authoritative",
+          "message": "Opcjonalny projekt GCP do rozliczeń/kwot; jeśli ustawiony, wysyłany jest jako nagłówek x-goog-user-project, więc kwoty i rozliczenia są przypisywane do tego projektu. Nie jest wymagany dla punktów końcowych Vertex na poziomie projektu, gdzie projekt w ścieżce URL jest autorytatywny"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.display_name": {
+          "source": "GCP Quota Project ID",
+          "message": "ID projektu do rozliczeń GCP"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.short_desc": {
+          "source": "Billing/quota project for the x-goog-user-project header",
+          "message": "Projekt rozliczeniowy/quota dla nagłówka x-goog-user-project"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3JlZ2lvbg.desc": {
+          "source": "Vertex AI region (e.g. us-central1, europe-west4), multi-region (us or eu), or global location",
+          "message": "Region Vertex AI (np. us-central1, europe-west4), region wielopunktowy (us lub eu) lub lokalizacja globalna"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3JlZ2lvbg.display_name": {
+          "source": "GCP Region",
+          "message": "Strefa GCP"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3JlZ2lvbg.short_desc": {
+          "source": "Vertex AI region",
+          "message": "Region Vertex AI"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3NhX2pzb25fcGF0aA.desc": {
+          "source": "Location of a GCP service-account JSON file for JWT-bearer auth; processed with `FileLocationHandler::getTextFileFromLocation()`, so it may be a bare path or any registered scheme (ex: `file:///etc/gcp/sa.json`, `http(s)://`, `sftp://`); when omitted, Application Default Credentials are used",
+          "message": "Lokalizacja pliku JSON konta usługi GCP do uwierzytelniania JWT-bearer; przetwarzany za pomocą `FileLocationHandler::getTextFileFromLocation()`, więc może to być prosta ścieżka lub dowolny zarejestrowany schemat (np. `file:///etc/gcp/sa.json`, `http(s)://`, `sftp://`); jeśli pominięty, używane są domyślne poświadczenia aplikacji"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3NhX2pzb25fcGF0aA.display_name": {
+          "source": "Service-Account JSON Location",
+          "message": "Lokalizacja pliku JSON konta usługi"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3NhX2pzb25fcGF0aA.short_desc": {
+          "source": "Location of a service-account JSON key file",
+          "message": "Lokalizacja pliku klucza JSON konta usługi"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to Google Vertex AI",
+          "message": "Połączenie z Google Vertex AI"
+        }
+      }
+    }
+  }
+}

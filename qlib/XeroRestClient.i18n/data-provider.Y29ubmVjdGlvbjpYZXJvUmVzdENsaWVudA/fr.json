@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [Xero](https://www.xero.com) for contacts, invoices, payments, bank transactions, quotes, projects and payroll employees.\n\n**Authentication** is the OAuth2 authorization code flow with `oauth2_client_id` and `oauth2_client_secret` from an app registered in the Xero developer portal. The `offline_access` scope is requested by default, without which the connection stops working when the access token expires.\n\n**`tenant_id` names the organisation.** A Xero credential can reach several organisations and every call has to say which one it means, so the tenant belongs here rather than to each action - a connection is a connection to one organisation's books. It is filled in automatically when the connection is authorized, from `GET /connections` - which lists what the credential can reach and is also the ping.\n\n**`payroll_region`** selects the payroll API: Australia is served at `payroll.xro/1.0` and New Zealand and the United Kingdom at `payroll.xro/2.0`, which are different API versions rather than the same one at different addresses.\n\nXero is a trademark of Xero Limited.",
+          "message": "Une connexion à [Xero](https://www.xero.com) pour les contacts, les factures, les paiements, les transactions bancaires, les devis, les projets et les employés du paie.\n\n**Authentification** est le flux d'autorisation OAuth2 avec `oauth2_client_id` et `oauth2_client_secret` provenant d'une application enregistrée dans le portail développeur Xero. La portée `offline_access` est demandée par défaut, sans laquelle la connexion cesse de fonctionner lorsque le jeton d'accès expire.\n\n**`tenant_id` nomme l'organisation.** Un identifiant Xero peut accéder à plusieurs organisations et chaque appel doit préciser laquelle est concernée, donc le locataire appartient ici plutôt qu'à chaque action – une connexion est une connexion à un ensemble de livres d'une organisation. Il est rempli automatiquement lors de l'autorisation de la connexion, à partir de `GET /connections` – qui liste ce que le credential peut atteindre et sert également de ping.\n\n**`payroll_region`** sélectionne l'API paie : l'Australie est servie via `payroll.xro/1.0` et la Nouvelle-Zélande ainsi que le Royaume-Uni via `payroll.xro/2.0`, qui sont des versions différentes de l'API plutôt que la même à des adresses différentes.\n\nXero est une marque déposée de Xero Limited."
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Xero REST Connection",
+          "message": "Connexion REST Xero"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.cGF5cm9sbF9yZWdpb24.allowed_values.c3RyaW5nOm56.desc": {
+          "source": "New Zealand (payroll.xro/2.0)",
+          "message": "Nouvelle-Zélande (payroll.xro/2.0)"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.cGF5cm9sbF9yZWdpb24.allowed_values.c3RyaW5nOmF1.desc": {
+          "source": "Australia (payroll.xro/1.0)",
+          "message": "Australie (payroll.xro/1.0)"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.cGF5cm9sbF9yZWdpb24.allowed_values.c3RyaW5nOnVr.desc": {
+          "source": "United Kingdom (payroll.xro/2.0)",
+          "message": "Royaume-Uni (payroll.xro/2.0)"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.cGF5cm9sbF9yZWdpb24.desc": {
+          "source": "Which regional payroll API the employee actions use.\n\nXero has no single payroll API: Australia is served at `payroll.xro/1.0` and New Zealand and the United Kingdom at `payroll.xro/2.0`, and the two versions differ in what they accept. Leave this unset for an organisation that does not use Xero payroll; the employee actions then report that no region is set rather than guessing one.",
+          "message": "Quel API régional de paie les actions des employés utilisent.\n\nXero n’a pas une seule API de paie : l’Australie est servie via `payroll.xro/1.0` et la Nouvelle-Zélande ainsi que le Royaume-Uni via `payroll.xro/2.0`, et les deux versions diffèrent dans ce qu’elles acceptent. Laissez ce champ vide pour une organisation qui n’utilise pas la paie Xero ; les actions des employés indiqueront alors qu’aucune région n’est définie au lieu de deviner une région."
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.cGF5cm9sbF9yZWdpb24.display_name": {
+          "source": "Payroll Region",
+          "message": "Région de paie"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.cGF5cm9sbF9yZWdpb24.short_desc": {
+          "source": "Which regional payroll API to use",
+          "message": "Quel API régional de paie utiliser"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.dGVuYW50X2lk.desc": {
+          "source": "The ID of the Xero organisation this connection works in, sent as `Xero-Tenant-Id` with every call.\n\n**This is filled in automatically** when the connection is authorized, so it normally needs no attention. A credential can reach several organisations, and a call that does not name one is rejected; the first organisation `GET /connections` lists is used, and the others are logged. Set this to work in one of those instead - a value set here is never overwritten.",
+          "message": "L’identifiant de l’organisation Xero avec laquelle cette connexion fonctionne, envoyé en tant que `Xero-Tenant-Id` avec chaque appel.\n\n**Ceci est rempli automatiquement** lors de l’autorisation de la connexion, donc cela ne nécessite normalement aucune attention. Un identifiant peut accéder à plusieurs organisations, et un appel qui n’en précise pas une est rejeté ; la première organisation `GET /connections` listée est utilisée, les autres sont enregistrées. Définissez cette valeur pour travailler avec l’une de ces organisations au lieu de la première ; une valeur définie ici n’est jamais écrasée."
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.dGVuYW50X2lk.display_name": {
+          "source": "Tenant ID",
+          "message": "ID de locataire"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.dGVuYW50X2lk.short_desc": {
+          "source": "The Xero organisation this connection works in",
+          "message": "L’organisation Xero avec laquelle cette connexion fonctionne"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Xero REST API",
+          "message": "Une connexion à l’API REST de Xero"
+        }
+      }
+    }
+  }
+}

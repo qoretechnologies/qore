@@ -155,7 +155,8 @@ public class TavilyRestConnection inherits RestClient::RestConnection {
         */
         const PingPath = "/usage";
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("TavilyRestClient",
+            "TavilyRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Tavily Connection",
             "short_desc": "A connection to the Tavily search, extraction and research API",
             "desc": "A connection to [Tavily](https://www.tavily.com) — a search API built for "
@@ -182,7 +183,7 @@ public class TavilyRestConnection inherits RestClient::RestConnection {
                 },
             },
             "required_options": "apikey",
-        };
+        });
     }
 
     constructor(string name, string description, string url = DefaultUrl,

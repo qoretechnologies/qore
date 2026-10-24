@@ -119,7 +119,8 @@ public class JsonRpcConnection inherits ConnectionProvider::HttpBasedConnection 
         hash<auto> real_opts;
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("JsonRpcConnection",
+            "JsonRpcConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "JSON-RPC Connection",
             "short_desc": "A connection to a JSON-RPC server",
             "desc": "A connection to a JSON-RPC server",
@@ -133,7 +134,7 @@ public class JsonRpcConnection inherits ConnectionProvider::HttpBasedConnection 
                 "https": "jsonrpcs",
                 "http": "jsonrpc",
             },
-        };
+        });
     }
 
     #! creates the JsonRpcConnection object

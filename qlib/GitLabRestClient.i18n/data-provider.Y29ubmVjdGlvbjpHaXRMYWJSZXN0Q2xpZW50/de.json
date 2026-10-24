@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [GitLab](https://gitlab.com) for source code, issues, merge requests, CI/CD variables and wikis.\n\n**The instance is the connection.** `hostname` names the GitLab installation this connection works against - `https://gitlab.com` or a self-managed instance - and the target URL and both OAuth2 endpoints are derived from it. GitLab.com and a self-managed instance run the same API over entirely different data, so an integration pointed at the wrong one does not fail; it succeeds against the wrong repositories.\n\n**Authentication** is either an access token or the OAuth2 authorization code flow:\n- a personal, project or group access token with the `api` scope, created under **User Settings > Access Tokens**, sent as a bearer token; or\n- `oauth2_client_id` and `oauth2_client_secret` from an OAuth application registered in the instance itself. There is no shared application, so a self-managed instance needs its own.\n\nGitLab is a trademark of GitLab B.V.",
+          "message": "Eine Verbindung zu [GitLab](https://gitlab.com) für Quellcode, Issues, Merge Requests, CI/CD-Variablen und Wikis.\n\n**Die Instanz ist die Verbindung.** `hostname` benennt die GitLab-Installation, gegen die diese Verbindung arbeitet – `https://gitlab.com` oder eine selbst gehostete Instanz – und die Ziel-URL sowie beide OAuth2-Endpunkte werden daraus abgeleitet. GitLab.com und eine selbst gehostete Instanz führen die gleiche API über völlig unterschiedliche Daten aus, sodass eine Integration, die an der falschen Instanz ausgerichtet ist, nicht fehlschlägt; sie schlägt erfolgreich bei den falschen Repositories fehl.\n\n**Authentifizierung** ist entweder ein Zugriffstoken oder der OAuth2-Autorisierungscode-Fluss:\n- ein persönlicher, projekt- oder gruppenweiter Zugriffstoken mit dem `api`-Berechtigungsgruppe, erstellt unter **Benutzereinstellungen > Zugriffstoken**, gesendet als Bearer-Token; oder\n- `oauth2_client_id` und `oauth2_client_secret` aus einer in der Instanz selbst registrierten OAuth-Anwendung. Es gibt keine gemeinsame Anwendung, daher benötigt eine selbst gehostete Instanz ihre eigene.\n\nGitLab ist ein Warenzeichen von GitLab B.V."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "GitLab REST Connection",
+          "message": "GitLab REST-Verbindung"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.aG9zdG5hbWU.desc": {
+          "source": "The base URL of the GitLab installation this connection works against, ex: `https://gitlab.com` or `https://gitlab.example.com`.\n\nThis is the connection's defining option: the target URL and both OAuth2 endpoints are derived from it, and a stored URL that disagrees with it is ignored rather than allowed to decide where requests go.\n\nA bare host is given `https`.",
+          "message": "Die Basis-URL der GitLab-Installation, gegen die diese Verbindung arbeitet, z. B. `https://gitlab.com` oder `https://gitlab.example.com`.\n\nDies ist die definierende Option der Verbindung: Die Ziel-URL und beide OAuth2-Endpunkte werden daraus abgeleitet, und eine gespeicherte URL, die davon abweicht, wird ignoriert, anstatt zu bestimmen, wohin Anfragen gesendet werden.\n\nEin bloßer Hostname wird als `https` behandelt."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.aG9zdG5hbWU.display_name": {
+          "source": "GitLab Hostname",
+          "message": "GitLab-Hostname"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.aG9zdG5hbWU.short_desc": {
+          "source": "The GitLab instance to work against",
+          "message": "Die GitLab-Instanz, gegen die gearbeitet werden soll"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "The client ID of an OAuth application registered in this GitLab instance.\n\nOnly needed for the OAuth2 flow; an access token in `token` needs neither this nor `oauth2_client_secret`. Register the application under **Admin > Applications** (or **User Settings > Applications**) with `https://api.qoretechnologies.com/qorus-oauth2-redirect` as the redirect URI.",
+          "message": "Die Client-ID einer in dieser GitLab-Instanz registrierten OAuth-Anwendung.\n\nNur erforderlich für den OAuth2-Flow; ein Zugriffstoken in `token` benötigt weder dies noch `oauth2_client_secret`. Registrieren Sie die Anwendung unter **Admin > Anwendungen** (oder **Benutzereinstellungen > Anwendungen**) mit `https://api.qoretechnologies.com/qorus-oauth2-redirect` als Umleitungs-URI."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "The client secret of an OAuth application registered in this GitLab instance.\n\nOnly needed for the OAuth2 flow; see `oauth2_client_id`.",
+          "message": "Das Client-Geheimnis einer in dieser GitLab-Instanz registrierten OAuth-Anwendung.\n\nNur erforderlich für den OAuth2-Flow; siehe `oauth2_client_id`."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A GitLab access token, sent as a bearer token.\n\n**To obtain one:**\n1. Log in to the GitLab instance this connection targets\n2. Go to **User Settings > Access Tokens** (or a project's or group's **Settings > Access Tokens**)\n3. Create a token with the `api` scope, or `read_api` for read-only use\n\nLeave this unset to use the OAuth2 flow instead.",
+          "message": "Ein GitLab-Zugriffstoken, gesendet als Bearer-Token.\n\n**So erhalten Sie eines:**\n1. Melden Sie sich bei der GitLab-Instanz an, gegen die diese Verbindung gerichtet ist\n2. Gehen Sie zu **Benutzereinstellungen > Zugriffstoken** (oder zu einem Projekt- oder Gruppen-**Einstellungen > Zugriffstoken**)\n3. Erstellen Sie ein Token mit dem `api`-Berechtigung, oder `read_api` für Lesezugriff\n\nLassen Sie dies leer, um stattdessen den OAuth2-Flow zu verwenden."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "Zugriffstoken"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A GitLab personal, project or group access token",
+          "message": "Ein GitLab-Personal-, Projekt- oder Gruppentoken"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a GitLab instance",
+          "message": "Eine Verbindung zu einer GitLab-Instanz"
+        }
+      }
+    }
+  }
+}

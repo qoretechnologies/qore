@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.S2F0YW5hUmVzdENsaWVudA.scheme.S2F0YW5hUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the **Katana MRP** REST API for managing products, materials, stock, sales orders, purchase orders, manufacturing orders, and related manufacturing/inventory resources.\n\nKatana is a cloud-based manufacturing and inventory management (MRP) platform. The API uses Bearer token authentication; the API key is sent on every request in the `Authorization: Bearer <apikey>` header.\n\n**To obtain your API key:**\n1. Log in to your Katana account\n2. Open **Settings** > **API**\n3. Click **+ Add new API key** and copy the generated key\n\n**Important:** API access requires the **Professional plan** (or higher). The key has full access to your Katana data — keep it secure and never share it publicly.",
+          "message": "Eine Verbindung zur **Katana MRP** REST-API zur Verwaltung von Produkten, Materialien, Lagerbeständen, Verkaufsaufträgen, Einkaufsaufträgen, Fertigungsaufträgen und verwandten Fertigungs-/Lagerressourcen.\n\nKatana ist eine cloudbasierte Plattform für Fertigungs- und Lagerverwaltung (MRP). Die API verwendet Bearer-Token-Authentifizierung; der API-Schlüssel wird bei jeder Anfrage im `Authorization: Bearer <apikey>`-Header gesendet.\n\n**So erhalten Sie Ihren API-Schlüssel:**\n1. Melden Sie sich bei Ihrem Katana-Konto an\n2. Öffnen Sie **Einstellungen** > **API**\n3. Klicken Sie auf **+ Neuen API-Schlüssel hinzufügen** und kopieren Sie den generierten Schlüssel\n\n**Wichtig:** Der API-Zugriff erfordert den **Professional-Plan** (oder höher). Der Schlüssel hat vollen Zugriff auf Ihre Katana-Daten – bewahren Sie ihn sicher auf und teilen Sie ihn niemals öffentlich."
+        },
+        "connection.S2F0YW5hUmVzdENsaWVudA.scheme.S2F0YW5hUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Katana MRP REST Connection",
+          "message": "Katana MRP REST-Verbindung"
+        },
+        "connection.S2F0YW5hUmVzdENsaWVudA.scheme.S2F0YW5hUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires a **Katana MRP API key**.\n\n**Steps to generate a key:**\n1. Log in to your Katana account\n2. Open **Settings** > **API**\n3. Click **+ Add new API key**\n4. Copy the generated key value\n\n**Plan requirement:** Katana API access is only available on the **Professional plan** (or higher). If you do not see the API section under Settings, please upgrade your subscription.\n\n**How it is used:**\n- The key is sent on every request as the `Authorization: Bearer <apikey>` HTTP header\n- The key provides full access to your Katana data; keep it secure and never share it publicly",
+          "message": "Diese Integration erfordert einen **Katana MRP-API-Schlüssel**.\n\n**Schritte zum Generieren eines Schlüssels:**\n1. Melden Sie sich bei Ihrem Katana-Konto an\n2. Öffnen Sie **Einstellungen** > **API**\n3. Klicken Sie auf **+ Neuen API-Schlüssel hinzufügen**\n4. Kopieren Sie den generierten Schlüsselwert\n\n**Plan-Anforderung:** Der API-Zugriff ist nur im **Professional-Plan** (oder höher) verfügbar. Wenn Sie unter Einstellungen keinen API-Bereich sehen, aktualisieren Sie bitte Ihr Abonnement.\n\n**Verwendung:**\n- Der Schlüssel wird bei jeder Anfrage als `Authorization: Bearer <apikey>`-HTTP-Header gesendet\n- Der Schlüssel gewährt vollen Zugriff auf Ihre Katana-Daten; bewahren Sie ihn sicher auf und teilen Sie ihn niemals öffentlich"
+        },
+        "connection.S2F0YW5hUmVzdENsaWVudA.scheme.S2F0YW5hUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "So erhalten Sie Ihren API-Schlüssel"
+        },
+        "connection.S2F0YW5hUmVzdENsaWVudA.scheme.S2F0YW5hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Katana MRP API key. Sent on every request in the `Authorization: Bearer <apikey>` HTTP header.\n\n**To obtain your API key:**\n1. Log in to your Katana account\n2. Open **Settings** > **API**\n3. Click **+ Add new API key** and copy the generated value\n\n**Note:** Katana API access requires the **Professional plan** (or higher). The key has full access to your Katana data — **keep it secure** and never share it publicly.",
+          "message": "Der Katana MRP-API-Schlüssel. Wird bei jeder Anfrage im HTTP-Kopfzeilenfeld `Authorization: Bearer <apikey>` gesendet.\n\n**So erhalten Sie Ihren API-Schlüssel:**\n1. Melden Sie sich bei Ihrem Katana-Konto an\n2. Öffnen Sie **Einstellungen** > **API**\n3. Klicken Sie auf **+ Neuen API-Schlüssel hinzufügen** und kopieren Sie den generierten Wert\n\n**Hinweis:** Der Zugriff auf die Katana-API erfordert den **Professional-Plan** (oder höher). Der Schlüssel hat vollen Zugriff auf Ihre Katana-Daten — **bewahren Sie ihn sicher auf** und teilen Sie ihn niemals öffentlich mit."
+        },
+        "connection.S2F0YW5hUmVzdENsaWVudA.scheme.S2F0YW5hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API-Schlüssel"
+        },
+        "connection.S2F0YW5hUmVzdENsaWVudA.scheme.S2F0YW5hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Katana MRP API key for Bearer authentication",
+          "message": "Katana MRP-API-Schlüssel für Bearer-Authentifizierung"
+        },
+        "connection.S2F0YW5hUmVzdENsaWVudA.scheme.S2F0YW5hUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Katana MRP REST API",
+          "message": "Eine Verbindung zur Katana MRP REST-API"
+        }
+      }
+    }
+  }
+}

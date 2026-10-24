@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Sewio REST API",
+          "message": "Připojení k REST API Sewio"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Sewio REST Connection",
+          "message": "Připojení Sewio REST"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Sewio RTLS Studio API key",
+          "message": "Klíč rozhraní API Sewio RTLS Studio"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klíč API"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "The Sewio RTLS Studio API key",
+          "message": "Klíč rozhraní API Sewio RTLS Studio"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "použít serializaci JSON"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.desc": {
+          "source": "Data serialization options are limited to `json` with this object",
+          "message": "Možnosti serializace dat jsou omezeny na `json` s tímto objektem"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Serializace dat"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.short_desc": {
+          "source": "Data serialization can only be 'json'",
+          "message": "Serializace dat může být pouze 'json'"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "použít kódování bzip2"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "použít algoritmus deflate ([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "použít kódování GNU zip ([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "nepoužívat žádné kódování obsahu"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "Nastavuje kompresní algoritmus, který se má použít při odesílání zpráv"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.display_name": {
+          "source": "Send Compression",
+          "message": "Komprese odesílání"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.short_desc": {
+          "source": "The compression algorithm to use when sending messages",
+          "message": "Komprese algoritmus používaný při odesílání zpráv"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Sewio REST API",
+          "message": "Připojení k REST API Sewio"
+        }
+      }
+    }
+  }
+}

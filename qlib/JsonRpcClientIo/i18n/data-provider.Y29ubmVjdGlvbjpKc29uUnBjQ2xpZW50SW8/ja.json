@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to a JSON-RPC server using async I/O via HttpClientIo with automatic protocol negotiation (HTTP/3, HTTP/2, HTTP/1.1)",
+          "message": "HttpClientIoを介した非同期I/Oと自動プロトコルネゴシエーション（HTTP/3、HTTP/2、HTTP/1.1）を使用するJSON-RPCサーバーへの接続"
+        },
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.display_name": {
+          "source": "JSON-RPC (Async I/O) Connection",
+          "message": "JSON-RPC（非同期I/O）接続"
+        },
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.option.dmVyc2lvbg.desc": {
+          "source": "The JSON-RPC protocol version to use (\"1.0\", \"1.1\", or \"2.0\")",
+          "message": "使用するJSON-RPCプロトコルバージョン（\"1.0\"、\"1.1\"、または\"2.0\"）"
+        },
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.option.dmVyc2lvbg.display_name": {
+          "source": "JSON-RPC Version",
+          "message": "JSON-RPCバージョン"
+        },
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.option.dmVyc2lvbg.short_desc": {
+          "source": "The JSON-RPC protocol version",
+          "message": "JSON-RPCプロトコルのバージョン"
+        },
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a JSON-RPC server using async I/O",
+          "message": "非同期I/Oを使用したJSON-RPCサーバーへの接続"
+        }
+      }
+    }
+  }
+}

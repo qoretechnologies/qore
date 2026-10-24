@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Mailgun REST API for email sending and management.\n\n**To obtain your API key:**\n1. Log in to your Mailgun account at https://app.mailgun.com\n2. Go to API Security in the settings\n3. Create a new API key or copy your existing private key\n\n**Region Selection:**\n- **US**: For US-hosted accounts (api.mailgun.net)\n- **EU**: For EU-hosted accounts with EU data residency (api.eu.mailgun.net)",
+          "message": "Підключення до REST API Mailgun для відправки та управління електронною поштою.\n\n**Щоб отримати свій ключ API:**\n1. Увійдіть у свій обліковий запис Mailgun за адресою https://app.mailgun.com\n2. Перейдіть до розділу Безпека API в налаштуваннях\n3. Створіть новий ключ API або скопіюйте існуючий приватний ключ\n\n**Вибір регіону:**\n- **США**: для облікових записів, розташованих у США (api.mailgun.net)\n- **Європа**: для облікових записів, розташованих в Європі, з даними, що зберігаються в Європі (api.eu.mailgun.net)"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Mailgun REST Connection",
+          "message": "Підключення REST Mailgun"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Mailgun account at https://app.mailgun.com\n2. Navigate to **Settings > API Security**\n3. Click **Add new key** or copy your existing private API key\n\n**Important:**\n- Use your **Private API key**, not a Domain Sending Key\n- Keep your API key secure and never share it publicly",
+          "message": "1. Увійдіть у свій обліковий запис Mailgun за адресою https://app.mailgun.com\n2. Перейдіть до **Налаштування > Безпека API**\n3. Натисніть **Додати новий ключ** або скопіюйте існуючий приватний ключ API\n\n**Важливо:**\n- Використовуйте свій **приватний ключ API**, а не ключ відправки домену\n- Зберігайте свій ключ API в безпеці та ніколи не діліться ним публічно"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "Як отримати свій ключ API"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Choose your API region based on where your Mailgun account is hosted:\n\n- **US (api.mailgun.net)**: Default for most accounts\n- **EU (api.eu.mailgun.net)**: For EU data residency requirements\n\nIf you're unsure, check your Mailgun dashboard URL:\n- US accounts: app.mailgun.com\n- EU accounts: app.eu.mailgun.com",
+          "message": "Виберіть регіон API залежно від місця розташування вашого облікового запису Mailgun:\n\n- **США (api.mailgun.net)**: За замовчуванням для більшості облікових записів\n- **ЄС (api.eu.mailgun.net)**: Для вимог щодо розміщення даних в ЄС\n\nЯкщо ви не впевнені, перевірте URL-адресу вашого панелі керування Mailgun:\n- Облікові записи США: app.mailgun.com\n- Облікові записи ЄС: app.eu.mailgun.com"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Selecting the Right API Region",
+          "message": "Вибір правильного регіону API"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMw.content": {
+          "source": "The **Sending Domain** is required for:\n- Sending emails\n- Registering webhooks for email events\n\nIt is **not required** for:\n- Listing domains\n- Managing mailing lists\n- Creating routes\n- Validating email addresses\n\nYou can find your verified domains in the Mailgun dashboard under **Sending > Domains**.",
+          "message": "**Надсилання домену** необхідний для:\n- Надсилання електронних листів\n- Реєстрації вебхуків для подій електронної пошти\n\nНе потрібен для:\n- Переліку доменів\n- Керування розсилками\n- Створення маршрутів\n- Перевірки адрес електронної пошти\n\nВи можете знайти свої перевірені домени в панелі керування Mailgun у розділі **Надсилання > Домени**."
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMw.title": {
+          "source": "When is Sending Domain Required?",
+          "message": "Коли потрібен домен надсилання?"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.desc": {
+          "source": "The Mailgun sending domain to use for email operations.\n\nThis is typically a subdomain like mg.example.com that you have verified in your Mailgun account.",
+          "message": "Домен надсилання Mailgun для операцій з електронною поштою.\n\nЦе зазвичай піддомен, як mg.example.com, який ви перевірили в своєму обліковому записі Mailgun."
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Sending Domain",
+          "message": "Домен надсилання"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "Mailgun sending domain",
+          "message": "Домен надсилання Mailgun"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOkVV.desc": {
+          "source": "EU API endpoint - https://api.eu.mailgun.net/v3",
+          "message": "ЄС-ендпоінт API - https://api.eu.mailgun.net/v3"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOkVV.display_name": {
+          "source": "European Union",
+          "message": "Європейський Союз"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOkVV.short_desc": {
+          "source": "EU region API",
+          "message": "API регіону EU"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOlVT.desc": {
+          "source": "US API endpoint - https://api.mailgun.net/v3",
+          "message": "Точка входу API US - https://api.mailgun.net/v3"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOlVT.display_name": {
+          "source": "United States",
+          "message": "Сполучені Штати"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOlVT.short_desc": {
+          "source": "US region API",
+          "message": "API регіону US"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.desc": {
+          "source": "Select the Mailgun API region based on where your account is hosted:\n\n- **US**: For US-hosted accounts (default)\n- **EU**: For EU-hosted accounts with EU data residency",
+          "message": "Виберіть регіон API Mailgun залежно від місця розташування вашого облікового запису:\n\n- **US**: для облікових записів, розташованих у США (за замовчуванням)\n- **EU**: для облікових записів, розташованих у Європі, з дотриманням регуляторних вимог щодо даних"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.display_name": {
+          "source": "API Region",
+          "message": "Регіон API"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.short_desc": {
+          "source": "Mailgun API region",
+          "message": "Регіон API Mailgun"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Mailgun API key for authentication.\n\n**To obtain your API key:**\n1. Log in to your Mailgun account at https://app.mailgun.com\n2. Go to Settings > API Security\n3. Create a new API key or copy your existing private key\n\n**Note:** Keep your API key secure and never share it publicly.",
+          "message": "Ключ API Mailgun для автентифікації.\n\n**Щоб отримати свій ключ API:**\n1. Увійдіть у свій обліковий запис Mailgun за адресою https://app.mailgun.com\n2. Перейдіть до налаштувань > Безпека API\n3. Створіть новий ключ API або скопіюйте існуючий приватний ключ\n\n**Зауваження:** зберігайте свій ключ API в безпеці та ніколи не публікуйте його публічно."
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Mailgun API key for authentication",
+          "message": "Ключ API Mailgun для автентифікації"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Mailgun REST API",
+          "message": "Підключення до REST API Mailgun"
+        }
+      }
+    }
+  }
+}

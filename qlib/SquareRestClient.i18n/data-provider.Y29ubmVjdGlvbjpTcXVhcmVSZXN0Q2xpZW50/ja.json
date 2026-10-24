@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.U3F1YXJlUmVzdENsaWVudA.scheme.U3F1YXJlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Square REST API for payments, orders, invoices, customers, inventory, and bookings",
+          "message": "決済、注文、請求書、顧客、在庫、予約のためのSquare REST APIへの接続"
+        },
+        "connection.U3F1YXJlUmVzdENsaWVudA.scheme.U3F1YXJlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Square REST Connection",
+          "message": "Square REST 接続"
+        },
+        "connection.U3F1YXJlUmVzdENsaWVudA.scheme.U3F1YXJlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Square REST API",
+          "message": "Square REST API への接続"
+        }
+      }
+    }
+  }
+}

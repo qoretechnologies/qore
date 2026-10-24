@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the xAI Grok REST API.\n\nRequires an API key for Bearer authentication. Get your API key from the [xAI Console](https://console.x.ai/)",
+          "message": "xAI Grok REST API への接続。\n\nBearer 認証には API キーが必要です。API キーは [xAI コンソール](https://console.x.ai/) から取得できます"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "xAI Grok REST Connection",
+          "message": "xAI Grok REST 接続"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The xAI Grok chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `grok-3` (the default)",
+          "message": "この接続がチャットに選択された場合、LLMクライアントで使用されるxAI Grokチャットモデル。\n\nチャットモデルは埋め込みモデルとは別々のファミリーであり、互換性がありません。\n\n例: `grok-3`（デフォルト）"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "チャットモデル"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "xAI Grok chat model name",
+          "message": "xAI Grokチャットモデル名"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "The API version to use",
+          "message": "使用するAPIバージョン"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "使用するAPIバージョン"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The xAI Grok API key used for Bearer authentication.\n\nGet your API key from the [xAI Console](https://console.x.ai/)",
+          "message": "Bearer認証に使用されるxAI Grok APIキー。\n\nAPIキーは[xAIコンソール](https://console.x.ai/)から取得できます"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "xAI Grok API key for authentication",
+          "message": "認証用xAI Grok APIキー"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the xAI Grok REST API",
+          "message": "xAI Grok REST APIへの接続"
+        }
+      }
+    }
+  }
+}

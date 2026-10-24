@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [Google Document AI](https://cloud.google.com/document-ai) — a managed document-extraction service.  Authentication is via GcpAuth using Application Default Credentials or an explicit service-account or authorized-user credential file.",
+          "message": "[Google Document AI](https://cloud.google.com/document-ai) への接続 — 管理型のドキュメント抽出サービス。認証は GcpAuth を使用し、アプリケーション デフォルト資格情報、明示的なサービスアカウント、または承認済みユーザー資格情報ファイルによって行われます。"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Google Document AI Connection",
+          "message": "Google Document AI 接続"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3Byb2plY3RfaWQ.desc": {
+          "source": "GCP project ID (required for the process URL).",
+          "message": "プロセス URL に必要な GCP プロジェクト ID"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3Byb2plY3RfaWQ.display_name": {
+          "source": "GCP Project ID",
+          "message": "GCPプロジェクトID"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3Byb2plY3RfaWQ.short_desc": {
+          "source": "GCP project that owns the Document AI processors",
+          "message": "Document AI プロセッサを所有する GCP プロジェクト"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.desc": {
+          "source": "Overrides `GOOGLE_CLOUD_QUOTA_PROJECT` and the credential file's `quota_project_id`. Sent as `x-goog-user-project`; independent of the resource project. The credential needs `serviceusage.services.use` on this project.",
+          "message": "`GOOGLE_CLOUD_QUOTA_PROJECT` および認証ファイルの `quota_project_id` をオーバーライドします。`x-goog-user-project` として送信されます。リソースプロジェクトとは無関係です。認証にはこのプロジェクトでの `serviceusage.services.use` が必要です。"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.display_name": {
+          "source": "Quota Project",
+          "message": "クォータプロジェクト"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.short_desc": {
+          "source": "Optional project used for API quota and billing",
+          "message": "API クォータおよび請求に使用されるオプションのプロジェクト"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOm5vcnRoYW1lcmljYS1ub3J0aGVhc3Qx.display_name": {
+          "source": "Montreal",
+          "message": "モントリオール"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOmF1c3RyYWxpYS1zb3V0aGVhc3Qx.display_name": {
+          "source": "Sydney",
+          "message": "シドニー"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOmFzaWEtc291dGgx.display_name": {
+          "source": "Mumbai",
+          "message": "ムンバイ"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOmFzaWEtc291dGhlYXN0MQ.display_name": {
+          "source": "Singapore",
+          "message": "シンガポール"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "European Union",
+          "message": "欧州連合"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1cm9wZS13ZXN0Mg.display_name": {
+          "source": "London",
+          "message": "ロンドン"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1cm9wZS13ZXN0Mw.display_name": {
+          "source": "Frankfurt",
+          "message": "フランクフルト"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "United States",
+          "message": "アメリカ合衆国"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3Q3.display_name": {
+          "source": "United States East (us-east7)",
+          "message": "アメリカ合衆国東部 (us-east7)"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.desc": {
+          "source": "Document AI region (e.g. `us`, `eu`).  Determines the regional endpoint hostname.",
+          "message": "Document AI のリージョン (例: `us`, `eu`)。リージョンエンドポイントのホスト名を決定します。"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.display_name": {
+          "source": "GCP Region",
+          "message": "GCP リージョン"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3JlZ2lvbg.short_desc": {
+          "source": "Document AI processor region",
+          "message": "Document AI プロセッサのリージョン"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3NhX2pzb25fcGF0aA.desc": {
+          "source": "Location of a GCP service-account or authorized-user JSON file; processed with `FileLocationHandler::getTextFileFromLocation()`, so it may be a bare path or any registered scheme (ex: `file:///etc/gcp/sa.json`, `http(s)://`, `sftp://`).  When omitted, Application Default Credentials are used.",
+          "message": "GCP サービスアカウントまたは承認済みユーザーの JSON ファイルの場所；`FileLocationHandler::getTextFileFromLocation()` で処理されるため、パスそのものまたは登録済みスキーム (例: `file:///etc/gcp/sa.json`, `http(s)://`, `sftp://`) が使用可能です。省略された場合、アプリケーションデフォルト資格情報が使用されます。"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3NhX2pzb25fcGF0aA.display_name": {
+          "source": "Google Credential Location",
+          "message": "Googleの資格情報の場所"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.option.Z2NwX3NhX2pzb25fcGF0aA.short_desc": {
+          "source": "Location of a service-account or authorized-user credential file",
+          "message": "サービスアカウントまたは承認済みユーザーの資格情報ファイルの場所"
+        },
+        "connection.R29vZ2xlRG9jdW1lbnRBaVJlc3RDbGllbnQ.scheme.R29vZ2xlRG9jdW1lbnRBaVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to Google Document AI",
+          "message": "Google Document AIへの接続"
+        }
+      }
+    }
+  }
+}

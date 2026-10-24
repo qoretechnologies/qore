@@ -241,7 +241,8 @@ Sap4HanaRestClient rest({"url": "https://sandbox.api.sap.com/s4hanacloud/sap/opu
 public class Sap4HanaRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("Sap4HanaRestClient",
+            "Sap4HanaRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "SAP S/4 Hana REST Connection",
             "short_desc": "A connection to SAP S/4 Hana REST API services",
             "desc": "A connection to SAP S/4 Hana REST API services",
@@ -271,7 +272,7 @@ public class Sap4HanaRestConnection inherits RestClient::RestConnection {
                 }),
             },
             "required_options": "client_id,client_secret|apikey",
-        };
+        });
 
         #! options required to support the OAuth2 authorization code grant flow
         const OAuth2AuthRequestOptions = (

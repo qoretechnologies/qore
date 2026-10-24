@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the BaseLinker REST API for managing orders, products, inventories, couriers, and external storage integrations.\n\nBaseLinker exposes an RPC-over-HTTP API: every operation is a POST to a single endpoint (`https://api.baselinker.com/connector.php`) with a form-encoded body of the form `method=<name>&parameters=<URL-encoded JSON>`.\n\nAuthentication is performed by sending the raw API token in the `X-BLToken` HTTP header (no `Bearer` prefix).\n\n**To obtain your API token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Generate a new token and copy its value\n\n**Note:** The token is sent on every request as the `X-BLToken` header.",
+          "message": "Eine Verbindung zur BaseLinker REST-API zum Verwalten von Bestellungen, Produkten, Lagerbeständen, Versanddienstleistern und externen Speicherintegrationen.\n\nBaseLinker bietet eine RPC-over-HTTP-API: Jede Operation ist eine POST-Anfrage an einen einzigen Endpunkt (`https://api.baselinker.com/connector.php`) mit einem formularcodierten Body im Format `method=<name>&parameters=<URL-encoded JSON>`.\n\nDie Authentifizierung erfolgt durch Senden des rohen API-Tokens im HTTP-Kopfzeilenfeld `X-BLToken` (kein `Bearer`-Präfix).\n\n**So erhalten Sie Ihren API-Token:**\n1. Melden Sie sich in Ihrem BaseLinker-Panel an\n2. Öffnen Sie **Konto und Sonstiges** → **Mein Konto**\n3. Öffnen Sie die Registerkarte **API**\n4. Generieren Sie einen neuen Token und kopieren Sie seinen Wert\n\n**Hinweis:** Der Token wird bei jeder Anfrage als Header `X-BLToken` gesendet."
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "BaseLinker REST Connection",
+          "message": "BaseLinker REST-Verbindung"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires a **BaseLinker API token**.\n\n**Steps to generate a token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Click to generate a new token and copy its value\n\n**How it is used:**\n- The token is sent on every request as the `X-BLToken` HTTP header\n- No `Bearer` prefix is used — the token is sent raw\n- Every BaseLinker call is a POST to a single RPC endpoint (`/connector.php`) with a form-encoded body",
+          "message": "Diese Integration erfordert einen **BaseLinker-API-Token**.\n\n**Schritte zum Generieren eines Tokens:**\n1. Melden Sie sich in Ihrem BaseLinker-Panel an\n2. Öffnen Sie **Konto und Sonstiges** → **Mein Konto**\n3. Öffnen Sie die **API**-Registerkarte\n4. Klicken Sie zum Generieren eines neuen Tokens und kopieren Sie dessen Wert\n\n**Verwendung:**\n- Der Token wird bei jeder Anfrage als HTTP-Header `X-BLToken` gesendet\n- Es wird kein `Bearer`-Präfix verwendet — der Token wird unverändert übertragen\n- Jeder BaseLinker-Aufruf ist eine POST-Anfrage an einen einzigen RPC-Endpunkt (`/connector.php`) mit einem form-encoded Body"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Token",
+          "message": "So erhalten Sie Ihren API-Token"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The BaseLinker API token used for authentication. It is sent on every request as the `X-BLToken` HTTP header (raw token, no `Bearer` prefix).\n\n**To obtain your API token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Generate a new token and copy its value",
+          "message": "Der BaseLinker-API-Token zur Authentifizierung. Er wird bei jeder Anfrage als HTTP-Header `X-BLToken` gesendet (unverändert, ohne `Bearer`-Präfix).\n\n**So erhalten Sie Ihren API-Token:**\n1. Melden Sie sich in Ihrem BaseLinker-Panel an\n2. Öffnen Sie **Konto und Sonstiges** → **Mein Konto**\n3. Öffnen Sie die **API**-Registerkarte\n4. Generieren Sie einen neuen Token und kopieren Sie dessen Wert"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API-Token"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "BaseLinker API token for authentication",
+          "message": "BaseLinker-API-Token zur Authentifizierung"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the BaseLinker REST API",
+          "message": "Eine Verbindung zur BaseLinker REST-API"
+        }
+      }
+    }
+  }
+}

@@ -141,7 +141,8 @@ public class OllamaRestConnection inherits RestClient::RestConnection {
     public {
         const DefaultUrl = "ollama://localhost:11434";
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("OllamaRestClient",
+            "OllamaRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Ollama Local LLM Connection",
             "short_desc": "A connection to a local Ollama runtime",
             "desc": "A connection to a local [Ollama](https://ollama.com) runtime serving "
@@ -191,7 +192,7 @@ public class OllamaRestConnection inherits RestClient::RestConnection {
                     "default_value": DefaultPingPath,
                 }),
             },
-        };
+        });
 
         const DefaultPingMethod = "GET";
         const DefaultPingHeaders = {"Accept": MimeTypeJson};

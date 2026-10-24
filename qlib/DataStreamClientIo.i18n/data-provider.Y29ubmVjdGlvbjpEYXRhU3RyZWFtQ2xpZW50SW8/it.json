@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.desc": {
+          "source": "A connection to a DataStream API server using RestClientIo for multiplexed HTTP/1.1, HTTP/2, and HTTP/3 connections",
+          "message": "Una connessione a un server API DataStream usando RestClientIo per connessioni multiplexate HTTP/1.1, HTTP/2 e HTTP/3"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.display_name": {
+          "source": "DataStream REST Connection (Multiplexed I/O)",
+          "message": "Connessione REST DataStream (I/O multiplexato)"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.bWF4X21lc3NhZ2Vfc2l6ZQ.desc": {
+          "source": "Maximum message size in bytes for Connect mode (0 = no limit)",
+          "message": "Dimensione massima del messaggio in byte per il modo Connect (0 = nessun limite)"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.bWF4X21lc3NhZ2Vfc2l6ZQ.display_name": {
+          "source": "Max Message Size",
+          "message": "Dimensione massima messaggio"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.bWF4X21lc3NhZ2Vfc2l6ZQ.short_desc": {
+          "source": "Maximum Connect frame payload size",
+          "message": "Dimensione massima del payload del frame Connect"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.cHJvdG9jb2w.desc": {
+          "source": "The protocol mode: 'auto' (default), 'connect', or 'datastream'",
+          "message": "Modalità del protocollo: 'auto' (predefinito), 'connect' o 'datastream'"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.cHJvdG9jb2w.display_name": {
+          "source": "Protocol",
+          "message": "Protocollo"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.option.cHJvdG9jb2w.short_desc": {
+          "source": "DataStream protocol mode",
+          "message": "Modalità del protocollo DataStream"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudElv.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb25Jbw.short_desc": {
+          "source": "A connection to a DataStream API server using multiplexed I/O",
+          "message": "Una connessione a un server API DataStream con I/O multiplexato"
+        }
+      }
+    }
+  }
+}

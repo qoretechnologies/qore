@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [AssemblyAI](https://www.assemblyai.com) speech-to-text REST API.\n\nAssemblyAI offers recorded and real-time transcription, short-audio dictation, language models, voice agents, and speech analysis (summarization, sentiment, entity detection, content safety, topic detection).\n\nRequires an API key for `Authorization` header authentication (note: AssemblyAI sends the bare key with no `Bearer` / `Token` prefix).  Get your API key from the [AssemblyAI dashboard](https://www.assemblyai.com/app).",
+          "message": "Połączenie z REST API przetwarzania mowy [AssemblyAI](https://www.assemblyai.com).\n\nAssemblyAI oferuje transkrypcję nagranych i czasu rzeczywistego, krótką transkrypcję głosową, modele językowe, agenty głosowe oraz analizę mowy (podsumowanie, sentyment, wykrywanie istot, bezpieczeństwo treści, wykrywanie tematów).\n\nWymaga klucza API do uwierzytelniania w nagłówku `Authorization` (zauważ: AssemblyAI wysyła klucz bez prefiksu `Bearer` / `Token`). Pobierz swój klucz API na [pulpicie AssemblyAI](https://www.assemblyai.com/app)."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "AssemblyAI REST Connection",
+          "message": "Połączenie REST AssemblyAI"
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.Y3VzdG9tX3Rva2VuX2F1dGg.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.Y3VzdG9tX3Rva2VuX3BhdGg.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The AssemblyAI API key — sent as the bare `Authorization` header value with no `Bearer` / `Token` prefix.",
+          "message": "Klucz interfejsu API AssemblyAI — wysyłany jako wartość nagłówka `Authorization` bez prefiksu `Bearer` / `Token`."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klucz API"
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "AssemblyAI API key (sent as bare Authorization header)",
+          "message": "Klucz interfejsu API AssemblyAI (nagłówek Authorization bez prefiksu)"
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2F1dGhfYXJncw.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2F1dGhfdXJs.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2FsdF90b2tlbl91cmw.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2FwcA.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2dyYW50X3R5cGU.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX3BrY2U.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX3JlZGlyZWN0X3VybA.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX3Njb3Blcw.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX3Rva2VuX2FyZ3M.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX3Rva2VuX3VybA.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.bmVnb3RpYXRlX2F1dGg.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.bmVnb3RpYXRlX2tleXRhYg.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.cGFzc3dvcmQ.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "European Union",
+          "message": "Unia Europejska"
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "United States",
+          "message": "Stany Zjednoczone"
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "Choose the US or EU endpoints for transcription, LLM Gateway, Sync STT, dictation, and streaming. Voice Agents uses its separately documented global endpoint.",
+          "message": "Wybierz punkty końcowe US lub EU dla transkrypcji, bramki LLM, STT synchronicznego, dikcji i strumieniowania. Usługa Voice Agents używa oddzielnie dokumentowanego globalnego punktu końcowego."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Region"
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "Region for transcription and regional companion services",
+          "message": "Region dla transkrypcji i usług towarzyszących regionalnych"
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.dG9rZW4.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.option.dXNlcm5hbWU.desc": {
+          "source": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+          "message": "Zachowane dla istniejących konfiguracji połączeń. AssemblyAI uwierzytelnia się za pomocą opcji klucza API."
+        },
+        "connection.QXNzZW1ibHlBaVJlc3RDbGllbnQ.scheme.QXNzZW1ibHlBaVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the AssemblyAI speech-to-text REST API",
+          "message": "Połączenie z interfejsem API REST AssemblyAI do przetwarzania mowy na tekst"
+        }
+      }
+    }
+  }
+}

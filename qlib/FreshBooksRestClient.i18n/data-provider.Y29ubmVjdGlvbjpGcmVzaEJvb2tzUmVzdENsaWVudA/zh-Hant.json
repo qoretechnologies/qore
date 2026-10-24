@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the FreshBooks REST API for accounting, invoicing, and time tracking",
+          "message": "用於會計、發票和時間追蹤的 FreshBooks REST API 連線"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "FreshBooks REST Connection",
+          "message": "FreshBooks REST 連線"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID, used for accounting API endpoints (clients, invoices, expenses, estimates, items). Find this by calling GET /auth/api/v1/users/me after authentication - it appears as 'account_id' in the business_memberships array, or in your FreshBooks URL (e.g. https://my.freshbooks.com/service/ACCOUNT_ID/...).",
+          "message": "用於會計 API 端點（客戶、發票、支出、估價、項目）的 FreshBooks 帳戶 ID。登入後呼叫 GET /auth/api/v1/users/me 可取得此值，它會出現在 business_memberships 陣列中的 'account_id'，或出現在您的 FreshBooks URL 中（例如 https://my.freshbooks.com/service/ACCOUNT_ID/ ...）。"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "帳戶 ID"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 帳戶 ID"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID, used for time tracking API endpoints (services, time entries, projects). Find this by calling GET /auth/api/v1/users/me after authentication - it appears as 'business.id' in the business_memberships array.",
+          "message": "用於時間追蹤 API 端點（服務、時間記錄、專案）的 FreshBooks 商業 ID。登入後呼叫 GET /auth/api/v1/users/me 可取得此值，它會出現在 business_memberships 陣列中的 'business.id'。"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "商業 ID"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "FreshBooks 商家 ID"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the FreshBooks REST API",
+          "message": "與 FreshBooks REST API 的連接"
+        }
+      }
+    }
+  }
+}

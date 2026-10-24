@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Shippo REST Connection",
+          "message": "Shippo REST Connection"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Shippo shipping API",
+          "message": "A connection to the Shippo shipping API"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Shippo REST API for shipping, label creation, and order management.\n\nShippo is a multi-carrier shipping API that enables you to connect with multiple shipping carriers (USPS, UPS, FedEx, DHL, and 85+ more) through a single integration.\n\n**Features:**\n- Compare shipping rates across carriers\n- Create shipping labels\n- Track shipments\n- Validate addresses\n- Manage orders\n\n**Authentication:**\nYou can authenticate using either:\n- **API Token**: Recommended for server-to-server integrations\n- **OAuth2**: For user-authorized access",
+          "message": "A connection to the Shippo REST API for shipping, label creation, and order management.\n\nShippo is a multi-carrier shipping API that enables you to connect with multiple shipping carriers (USPS, UPS, FedEx, DHL, and 85+ more) through a single integration.\n\n**Features:**\n- Compare shipping rates across carriers\n- Create shipping labels\n- Track shipments\n- Validate addresses\n- Manage orders\n\n**Authentication:**\nYou can authenticate using either:\n- **API Token**: Recommended for server-to-server integrations\n- **OAuth2**: For user-authorized access"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "Authentication Options",
+          "message": "Authentication Options"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "Shippo supports two authentication methods:\n\n**Option 1: OAuth2 (Recommended)**\nSimply click the authorize button to connect your Shippo account.\nNo additional configuration needed.\n\n**Option 2: API Token**\nEnter your Shippo API token in the 'API Token' field.\nUse this if you prefer to authenticate with a token directly.",
+          "message": "Shippo supports two authentication methods:\n\n**Option 1: OAuth2 (Recommended)**\nSimply click the authorize button to connect your Shippo account.\nNo additional configuration needed.\n\n**Option 2: API Token**\nEnter your Shippo API token in the 'API Token' field.\nUse this if you prefer to authenticate with a token directly."
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
+          "source": "How to Get Your API Token",
+          "message": "How to Get Your API Token"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
+          "source": "If using API Token authentication:\n\n1. Log in to https://apps.goshippo.com/\n2. Navigate to **Settings > API**\n3. Copy your **Live Token** for production\n4. Use **Test Token** for development/testing\n\n**Token formats:**\n- Live: `shippo_live_xxxxx`\n- Test: `shippo_test_xxxxx`\n\nKeep your tokens secure and never share them publicly.",
+          "message": "If using API Token authentication:\n\n1. Log in to https://apps.goshippo.com/\n2. Navigate to **Settings > API**\n3. Copy your **Live Token** for production\n4. Use **Test Token** for development/testing\n\n**Token formats:**\n- Live: `shippo_live_xxxxx`\n- Test: `shippo_test_xxxxx`\n\nKeep your tokens secure and never share them publicly."
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API Token"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Shippo API token for authentication",
+          "message": "Shippo API token for authentication"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Your Shippo API token used for authentication.\n\n**To obtain your API token:**\n1. Log in to https://apps.goshippo.com/\n2. Navigate to **Settings > API**\n3. Copy your **Live Token** for production use\n4. Use **Test Token** for development/testing\n\n**Token format:** `shippo_live_xxxxx` or `shippo_test_xxxxx`\n\n**Note:** Use either API Token OR OAuth2 authentication - not both.",
+          "message": "Your Shippo API token used for authentication.\n\n**To obtain your API token:**\n1. Log in to https://apps.goshippo.com/\n2. Navigate to **Settings > API**\n3. Copy your **Live Token** for production use\n4. Use **Test Token** for development/testing\n\n**Token format:** `shippo_live_xxxxx` or `shippo_test_xxxxx`\n\n**Note:** Use either API Token OR OAuth2 authentication - not both."
+        }
+      }
+    }
+  }
+}

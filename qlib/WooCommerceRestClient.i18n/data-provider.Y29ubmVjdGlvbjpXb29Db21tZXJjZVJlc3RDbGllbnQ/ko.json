@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the WooCommerce REST API v3 for e-commerce management.\n\nWooCommerce is the most popular open-source e-commerce platform built on WordPress. This integration enables managing orders, products, customers, coupons, webhooks, reports, shipping, taxes, and store settings.\n\n**Authentication:**\n- Uses HTTP Basic Auth with Consumer Key and Consumer Secret\n- Generate API credentials in WordPress admin: WooCommerce > Settings > Advanced > REST API\n\n**Pagination:**\n- Page-based with `page` and `per_page` parameters (max `100` per page)\n- Total counts available in `X-WP-Total` and `X-WP-TotalPages` response headers",
+          "message": "전자상거래 관리를 위한 WooCommerce REST API v3 연결.\n\nWooCommerce는 WordPress 기반의 가장 인기 있는 오픈소스 전자상거래 플랫폼입니다. 이 통합은 주문, 제품, 고객, 쿠폰, 웹훅, 보고서, 배송, 세금 및 스토어 설정을 관리할 수 있게 합니다.\n\n**인증:**\n- HTTP 기본 인증을 사용하며, 소비자 키와 소비자 시크릿을 사용합니다\n- WordPress 관리자에서 API 자격 증명을 생성: WooCommerce > 설정 > 고급 > REST API\n\n**페이지 나누기:**\n- 페이지 기반으로 `page` 및 `per_page` 매개변수 사용 (페이지당 최대 `100`개)\n- 총 개수는 `X-WP-Total` 및 `X-WP-TotalPages` 응답 헤더에서 확인 가능"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "WooCommerce REST Connection",
+          "message": "WooCommerce REST 연결"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your **WordPress admin panel**\n2. Navigate to **WooCommerce > Settings > Advanced > REST API**\n3. Click **Add key**\n4. Enter a description (e.g., \"Qorus Integration\")\n5. Select a WordPress user and choose **Read/Write** permissions\n6. Click **Generate API key**\n7. Copy both the **Consumer key** (`ck_...`) and **Consumer secret** (`cs_...`)\n\n**Important:**\n- The Consumer secret is only displayed once when generated\n- Store your credentials securely\n- HTTPS is required for Basic Auth (HTTP requires OAuth 1.0a)",
+          "message": "1. **WordPress 관리자 패널**에 로그인합니다\n2. **WooCommerce > 설정 > 고급 > REST API**로 이동합니다\n3. **키 추가**를 클릭합니다\n4. 설명을 입력합니다 (예: \"Qorus 통합\")\n5. WordPress 사용자를 선택하고 **읽기/쓰기** 권한을 선택합니다\n6. **API 키 생성**을 클릭합니다\n7. **소비자 키** (`ck_...`)와 **소비자 시크릿** (`cs_...`)를 복사합니다\n\n**중요:**\n- 소비자 시크릿은 생성 시 한 번만 표시됩니다\n- 자격 증명을 안전하게 보관하세요\n- 기본 인증은 HTTPS가 필요합니다 (HTTP는 OAuth 1.0a를 사용해야 합니다)"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Credentials",
+          "message": "API 자격 증명 확보 방법"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfa2V5.desc": {
+          "source": "The WooCommerce REST API consumer key used as the username for HTTP Basic Auth.\n\n**To obtain your API credentials:**\n1. Log in to your WordPress admin panel\n2. Go to **WooCommerce > Settings > Advanced > REST API**\n3. Click **Add key**\n4. Enter a description, select a user, and choose **Read/Write** permissions\n5. Click **Generate API key**\n6. Copy the **Consumer key** (starts with `ck_`)",
+          "message": "HTTP 기본 인증의 사용자 이름으로 사용되는 WooCommerce REST API 소비자 키입니다.\n\n**API 자격 증명을 얻으려면:**\n1. WordPress 관리자 패널에 로그인합니다\n2. **WooCommerce > 설정 > 고급 > REST API**로 이동합니다\n3. **키 추가**를 클릭합니다\n4. 설명을 입력하고 사용자를 선택한 후 **읽기/쓰기** 권한을 선택합니다\n5. **API 키 생성**을 클릭합니다\n6. **소비자 키** (`ck_`로 시작)를 복사합니다"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfa2V5.display_name": {
+          "source": "Consumer Key",
+          "message": "소비자 키"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfa2V5.short_desc": {
+          "source": "WooCommerce consumer key for authentication",
+          "message": "인증을 위한 WooCommerce 소비자 키"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfc2VjcmV0.desc": {
+          "source": "The WooCommerce REST API consumer secret used as the password for HTTP Basic Auth.\n\n**To obtain your API credentials:**\n1. Follow the same steps as for the Consumer Key above\n2. Copy the **Consumer secret** (starts with `cs_`)\n\n**Note:** The consumer secret is only shown once when generated. If you lose it, you will need to generate new credentials.",
+          "message": "HTTP 기본 인증의 비밀번호로 사용되는 WooCommerce REST API 소비자 시크릿입니다.\n\n**API 자격 증명을 얻으려면:**\n1. 위의 소비자 키와 동일한 단계를 따르세요\n2. **소비자 시크릿**(`cs_`로 시작)을 복사하세요\n\n**참고:** 소비자 시크릿은 생성 시 한 번만 표시됩니다. 분실할 경우 새 자격 증명을 생성해야 합니다."
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfc2VjcmV0.display_name": {
+          "source": "Consumer Secret",
+          "message": "소비자 시크릿"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfc2VjcmV0.short_desc": {
+          "source": "WooCommerce consumer secret for authentication",
+          "message": "인증을 위한 WooCommerce 소비자 시크릿"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfdXJs.desc": {
+          "source": "The full URL of your WooCommerce store (e.g., `https://mystore.com`).\n\nThis is the base URL of your WordPress site where WooCommerce is installed. The API path `/wp-json/wc/v3/` will be appended automatically.\n\n**Examples:**\n- `https://mystore.com`\n- `https://shop.example.com`\n- `https://example.com/shop` (if WordPress is in a subdirectory)",
+          "message": "귀하의 WooCommerce 스토어의 전체 URL(예: `https://mystore.com`).\n\n이 URL은 WooCommerce가 설치된 WordPress 사이트의 기본 URL입니다. API 경로 `/wp-json/wc/v3/`는 자동으로 추가됩니다.\n\n**예시:**\n- `https://mystore.com`\n- `https://shop.example.com`\n- `https://example.com/shop` (WordPress가 하위 디렉터리에 있는 경우)"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfdXJs.display_name": {
+          "source": "Store URL",
+          "message": "스토어 URL"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfdXJs.short_desc": {
+          "source": "WooCommerce store URL",
+          "message": "WooCommerce 스토어 URL"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the WooCommerce REST API",
+          "message": "WooCommerce REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

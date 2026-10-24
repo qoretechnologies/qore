@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Unstructured.io](https://unstructured.io), which turns documents into data an AI application can use.\n\nOne connection serves both of Unstructured's APIs with the same key:\n- the **Partition API**, which breaks PDFs, Office files, HTML, images and emails into a typed element tree\n- the **Platform API**, which manages the source and destination connectors, the workflows that join them and the jobs that run them\n\nWorks against Unstructured's hosted deployments and self-hosted deployments — same module, different URL.  An API key is issued for one deployment and is rejected by the others; when the configured deployment rejects the key, the connection tries the other known deployments on the next ping and moves itself to whichever one accepts it.\n\nAuth: the `unstructured-api-key` header, which the ping verifies.",
+          "message": "連線至 [Unstructured.io](https://unstructured.io)，將文件轉換為 AI 應用程式可使用的資料。\n\n一個連線可同時使用 Unstructured 的兩個 API，並使用相同的金鑰：\n- **Partition API**，將 PDF、Office 檔案、HTML、影像與電子郵件拆解為類型化的元素樹狀結構\n- **Platform API**，管理來源與目標連接器、串接它們的工作流程，以及執行中的工作\n\n支援 Unstructured 的主機部署與自主部署——相同模組，不同 URL。金鑰僅針對特定部署發行，其他部署會拒絕該金鑰；當設定的部署拒絕金鑰時，連線會在下次 ping 時嘗試其他已知部署，並自動切換至接受該金鑰的部署。\n\n驗證：`unstructured-api-key` 標頭，由 ping 進行驗證。"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Unstructured.io Connection",
+          "message": "Unstructured.io 連線"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Unstructured.io API key — sent as the `unstructured-api-key` header.",
+          "message": "Unstructured.io API 金鑰——以 `unstructured-api-key` 標頭傳送。"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Unstructured.io API key",
+          "message": "Unstructured.io API 金鑰"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.cGxhdGZvcm1fdXJs.desc": {
+          "source": "URL of the Unstructured **Platform API**, which manages connectors, workflows and jobs.\n\nUnstructured serves its two APIs on separate hosts, paired per deployment, so this is derived from the connection's own URL and only has to be set for a self-hosted deployment.",
+          "message": "Unstructured **Platform API** 的 URL，用於管理連接器、工作流程與工作。\n\nUnstructured 在不同主機上提供其兩個 API，每組部署配對使用，因此此 URL 由連線本身的 URL 衍生而來，僅需在自主部署時設定。"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.cGxhdGZvcm1fdXJs.display_name": {
+          "source": "Platform API URL",
+          "message": "平台 API 位址"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.cGxhdGZvcm1fdXJs.short_desc": {
+          "source": "Overrides the derived Unstructured Platform API URL",
+          "message": "覆蓋推導出的 Unstructured 平台 API 位址"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Unstructured.io REST APIs",
+          "message": "連接到 Unstructured.io 的 REST API"
+        }
+      }
+    }
+  }
+}

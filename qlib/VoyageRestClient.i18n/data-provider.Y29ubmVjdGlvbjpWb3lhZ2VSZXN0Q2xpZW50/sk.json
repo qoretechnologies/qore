@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Voyage AI REST API for text embeddings and reranking.\n\nRequires an API key (set as `apikey`) from the [Voyage AI Dashboard](https://dash.voyageai.com/). The connection uses the `voyage://` URL scheme.\n\nThe models used when this connection is selected for embeddings and for reranking are set independently with the `embedding-model` and `rerank-model` options",
+          "message": "Spojenie s REST rozhraním Voyage AI pre textové vložky a re-ranking.\n\nVyžaduje API kľúč (nastavený ako `apikey`) z [Dashboardu Voyage AI](https://dash.voyageai.com/). Spojeenie používa schému `voyage://`.\n\nModely použité pri výbere tejto spojenia pre vložky a re-ranking sú nastavené nezávisle pomocou možností `embedding-model` a `rerank-model`"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Voyage AI REST Connection",
+          "message": "Spojenie REST Voyage AI"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The API version to use",
+          "message": "Verzia API na použitie"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Verzia API na použitie"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Voyage AI API key used for authentication; sent as the `Authorization: Bearer` header.\n\nGet your API key from the [Voyage AI Dashboard](https://dash.voyageai.com/)",
+          "message": "Kľúč API Voyage AI používaný na overenie; odosielaný ako hlavička `Authorization: Bearer`.\n\nZískajte svoj kľúč API z [Dashboardu Voyage AI](https://dash.voyageai.com/"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Voyage AI API key for authentication",
+          "message": "Kľúč API Voyage AI na overenie"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.desc": {
+          "source": "The Voyage AI embedding model used by embedding clients when this connection is selected for embeddings; sent as the `model` parameter to the `/embeddings` endpoint.\n\nExample values: `voyage-4-large` (highest quality), `voyage-4` (balanced), `voyage-4-lite` (fastest; the default), `voyage-code-3` (source code)",
+          "message": "Voyage AI model pre vloženie používaný klientmi vloženia, keď je toto spojenie vybrané pre vloženie; odosielaný ako parameter `model` na koncový bod `/embeddings`.\n\nPríklad hodnôt: `voyage-4-large` (najvyššia kvalita), `voyage-4` (vyvážené), `voyage-4-lite` (najrýchlejšie; predvolené), `voyage-code-3` (zdrojový kód)"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.display_name": {
+          "source": "Embedding Model",
+          "message": "Model pre vektorizáciu"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.short_desc": {
+          "source": "Voyage AI embedding model name",
+          "message": "Názov modelu Voyage AI pre vloženie"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVxdWVzdHMtcGVyLW1pbnV0ZQ.desc": {
+          "source": "The most embedding requests per minute that embedding clients in one process send for this connection's API key and model; requests over the limit wait instead of failing with HTTP 429.\n\nWhen unset, 95% of Voyage's published tier-1 limit (2,000 requests per minute) is used.  Set it for a higher rate-limit tier, or to give each process its share when several processes use the same API key",
+          "message": "Maximálny počet požiadaviek na vloženie za minútu, ktoré klienti v jednom procese odosielajú pre tento kľúč API a model; požiadavky presahujúce limit čakajú namiesto chyby HTTP 429.\n\nAk nie je nastavené, použije sa 95 % publikovaného limitu úrovne 1 (2 000 požiadaviek za minútu). Nastavte ho pre vyšší limit úrovne, alebo pre rozdelenie medzi viaceré procesy používajúce rovnaký kľúč API"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVxdWVzdHMtcGVyLW1pbnV0ZQ.display_name": {
+          "source": "Embedding Requests Per Minute",
+          "message": "Počet požiadaviek na vloženie za minútu"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVxdWVzdHMtcGVyLW1pbnV0ZQ.short_desc": {
+          "source": "Client-side limit on embedding requests per minute",
+          "message": "Klientský limit počtu požiadaviek na vloženie za minútu"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.desc": {
+          "source": "The Voyage AI reranking model used by reranking clients when this connection is selected for reranking; sent as the `model` parameter to the `/rerank` endpoint.\n\nReranking models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `rerank-2.5` (highest quality), `rerank-2.5-lite` (fastest; the default), `rerank-2` (previous generation)",
+          "message": "Rerankingový model Voyage AI používaný klientami pri rerankingovani, keď je táto spojenie vybraná pre reranking; odoslaný ako parameter `model` na koncový bod `/rerank`.\n\nRerankingové modely tvoria samostatnú skupinu oproti embeddingovým modelom a nemôžu byť navzájom nahrádzané.\n\nPríklad hodnôt: `rerank-2.5` (najvyššia kvalita), `rerank-2.5-lite` (najrýchlejší; predvolený), `rerank-2` (predchádzajúca generácia)"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.display_name": {
+          "source": "Reranking Model",
+          "message": "Model pre preradenie"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLW1vZGVs.short_desc": {
+          "source": "Voyage AI reranking model name",
+          "message": "Názov rerankingového modelu Voyage AI"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXJlcXVlc3RzLXBlci1taW51dGU.desc": {
+          "source": "The most reranking requests per minute that reranking clients in one process send for this connection's API key and reranking model; requests over the limit wait instead of failing with HTTP 429.\n\nWhen unset, 95% of Voyage's published tier-1 limit (2,000 requests per minute) is used. Reranking models are limited separately from embedding models",
+          "message": "Maximálny počet rerankingových požiadaviek za minútu, ktoré klienti v jednom procese odosielajú pre tento API kľúč a rerankingový model tejto spojenia; požiadavky presahujúce limit čakajú namiesto chyby HTTP 429.\n\nAk nie je nastavené, použije sa 95 % publikovanej hranice úrovne 1 pre Voyage (2 000 požiadaviek za minútu). Rerankingové modely sú obmedzené samostatne od embeddingových modelov"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXJlcXVlc3RzLXBlci1taW51dGU.display_name": {
+          "source": "Reranking Requests Per Minute",
+          "message": "Rerankingové požiadavky za minútu"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXJlcXVlc3RzLXBlci1taW51dGU.short_desc": {
+          "source": "Client-side limit on reranking requests per minute",
+          "message": "Klientské obmedzenie počtu rerankingových požiadaviek za minútu"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXRva2Vucy1wZXItbWludXRl.desc": {
+          "source": "The most reranking tokens per minute that reranking clients in one process send for this connection's API key and reranking model.\n\nWhen unset, 95% of Voyage's published tier-1 limit for the model is used (4M tokens per minute for the `-lite` models, 2M for the others)",
+          "message": "Maximálny počet rerankingových tokenov za minútu, ktoré klienti v jednom procese odosielajú pre tento API kľúč a rerankingový model tejto spojenia.\n\nAk nie je nastavené, použije sa 95 % publikovanej hranice úrovne 1 pre model (4 milióny tokenov za minútu pre modely `-lite`, 2 milióny pre ostatné)"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXRva2Vucy1wZXItbWludXRl.display_name": {
+          "source": "Reranking Tokens Per Minute",
+          "message": "Rerankingové tokeny za minútu"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.cmVyYW5rLXRva2Vucy1wZXItbWludXRl.short_desc": {
+          "source": "Client-side limit on reranking tokens per minute",
+          "message": "Klientské obmedzenie počtu rerankingových tokenov za minútu"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.dG9rZW5zLXBlci1taW51dGU.desc": {
+          "source": "The most embedding tokens per minute that embedding clients in one process send for this connection's API key and model; requests over the limit wait instead of failing with HTTP 429.\n\nWhen unset, 95% of Voyage's published tier-1 limit for the model is used (for example 16M tokens per minute for `voyage-4-lite`, 8M for `voyage-4`, and 3M for `voyage-4-large`).  Set it for a higher rate-limit tier, or to give each process its share when several processes use the same API key",
+          "message": "Maximálne počet vložených tokenov za minútu, ktoré môže klient v jednom procese odoslať pre tento spojenie s kľúčom API a modelom; po prekročení limitu sa požiadavky čakajú namiesto chyby HTTP 429.\n\nAk nie je nastavené, použije sa 95 % publikovaného limitu pre tier-1 modelu (napr. 16M tokenov za minútu pre `voyage-4-lite`, 8M pre `voyage-4` a 3M pre `voyage-4-large`). Nastavte ho pre vyšší rýchlostný limit alebo pre rozdelenie rýchlosti medzi viaceré procesy používajúce rovnaký kľúč API"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.dG9rZW5zLXBlci1taW51dGU.display_name": {
+          "source": "Embedding Tokens Per Minute",
+          "message": "Vložené tokeny za minútu"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.option.dG9rZW5zLXBlci1taW51dGU.short_desc": {
+          "source": "Client-side limit on embedding tokens per minute",
+          "message": "Klientský limit vložených tokenov za minútu"
+        },
+        "connection.Vm95YWdlUmVzdENsaWVudA.scheme.Vm95YWdlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Voyage AI REST API",
+          "message": "Spojenie s REST API Voyage AI"
+        }
+      }
+    }
+  }
+}

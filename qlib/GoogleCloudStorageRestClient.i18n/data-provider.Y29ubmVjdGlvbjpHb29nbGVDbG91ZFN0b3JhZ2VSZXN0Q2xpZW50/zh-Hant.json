@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Google Cloud Storage](https://cloud.google.com/storage) — Google's object storage service.  Authentication is via @ref gcpauthintro \"GcpAuth\" using an explicit service-account JSON key or Application Default Credentials.",
+          "message": "連線至 [Google Cloud Storage](https://cloud.google.com/storage) — Google 的物件儲存服務。透過 @ref gcpauthintro \"GcpAuth\" 使用明確的服務帳戶 JSON 金鑰或應用程式預設憑證進行驗證。"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Google Cloud Storage Connection",
+          "message": "Google Cloud Storage 連接"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX2FjY2Vzc190b2tlbg.desc": {
+          "source": "A GCP bearer access token to use verbatim instead of obtaining one from a credential, for callers that mint tokens themselves (workload identity federation, service-account impersonation, or a platform that already holds a token).  It is **not** refreshed, so it stops working when it expires; leave it unset to let GcpAuth obtain and refresh tokens.  It must carry the scopes for everything it is used for, including `cloud-platform` if signed URLs are generated.",
+          "message": "用於直接使用而非從憑證取得的 GCP 擁護存取權杖，適用於自行產生權杖的呼叫者（工作負載身分識別聯邦、服務帳戶偽裝，或已持有權杖的平台）。此權杖**不會**自動更新，因此到期後將失效；若不設定，則由 GcpAuth 自行取得並更新權杖。權杖必須包含所有使用情境所需的範圍，若產生簽署 URL，還需包含 `cloud-platform`。"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX2FjY2Vzc190b2tlbg.display_name": {
+          "source": "Bearer Access Token",
+          "message": "擁護存取權杖"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX2FjY2Vzc190b2tlbg.short_desc": {
+          "source": "An externally-minted bearer token to use directly",
+          "message": "直接使用的外部產生擁護權杖"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3BpbmdfYnVja2V0.desc": {
+          "source": "The bucket whose metadata is fetched to verify the connection.  When unset the project's bucket list is requested instead, which needs the `storage.buckets.list` permission at project level; set this to a single bucket for a service account granted access to that bucket only.",
+          "message": "用來驗證連接的桶位元資料。未設定時，會請求專案的桶位清單，這需要專案層級的 `storage.buckets.list` 權限；若僅授予單一桶位存取權，請設定為該桶位。"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3BpbmdfYnVja2V0.display_name": {
+          "source": "Ping Bucket",
+          "message": "連接測試桶位"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3BpbmdfYnVja2V0.short_desc": {
+          "source": "A bucket to read metadata from when pinging",
+          "message": "用於測試時讀取資料的桶位"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3Byb2plY3RfaWQ.desc": {
+          "source": "GCP project ID; required to list or create buckets, and used as the default billing project for requester-pays buckets.",
+          "message": "GCP 專案 ID；用於列出或建立桶位，並作為請求者付費桶位的預設計費專案。"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3Byb2plY3RfaWQ.display_name": {
+          "source": "GCP Project ID",
+          "message": "GCP 專案 ID"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3Byb2plY3RfaWQ.short_desc": {
+          "source": "GCP project that owns the buckets",
+          "message": "擁有儲存桶的 GCP 專案"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.desc": {
+          "source": "Optional GCP billing/quota project; when set it is sent as the `x-goog-user-project` header so quota and billing are attributed to that project.  Required to read a requester-pays bucket owned by another project.",
+          "message": "選擇性 GCP 計費/配額專案；設定時會以 `x-goog-user-project` 標頭傳送，使配額與計費歸屬於該專案。讀取由其他專案擁有的請求者付費儲存桶時為必要。"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.display_name": {
+          "source": "GCP Quota Project ID",
+          "message": "GCP 配額專案 ID"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.short_desc": {
+          "source": "Billing/quota project for the x-goog-user-project header",
+          "message": "x-goog-user-project 標頭的計費/配額專案"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOmZ1bGxfY29udHJvbA.desc": {
+          "source": "Read and write buckets and objects and change their ACLs (`devstorage.full_control`)",
+          "message": "讀取和寫入儲存桶與物件，並變更其 ACL (`devstorage.full_control`)"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOmZ1bGxfY29udHJvbA.display_name": {
+          "source": "Full Control",
+          "message": "完全控制"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOnJlYWRfb25seQ.desc": {
+          "source": "Read buckets and objects; no writes (`devstorage.read_only`)",
+          "message": "讀取儲存桶與物件；無法寫入 (`devstorage.read_only`)"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOnJlYWRfb25seQ.display_name": {
+          "source": "Read Only",
+          "message": "唯讀"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOnJlYWRfd3JpdGU.desc": {
+          "source": "Read and write buckets and objects (`devstorage.read_write`); this covers the entire object surface of this application",
+          "message": "讀取並寫入儲存桶與物件 (`devstorage.read_write`)；這涵蓋此應用程式的全部物件介面"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOnJlYWRfd3JpdGU.display_name": {
+          "source": "Read/Write",
+          "message": "讀取/寫入"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.desc": {
+          "source": "The access level to request; only the scope this level names is requested, so a read-only connection cannot write even if the service account is otherwise permitted to.",
+          "message": "所請求的存取層級；僅請求此層級所命名的範圍，因此即使服務帳戶在其他方面被允許寫入，唯讀連接亦無法寫入。"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.display_name": {
+          "source": "Storage Access Level",
+          "message": "儲存空間存取層級"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.short_desc": {
+          "source": "The OAuth2 scope requested for storage access",
+          "message": "用於儲存空間存取的 OAuth2 範圍"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3NhX2pzb25fcGF0aA.desc": {
+          "source": "Location of a GCP service-account JSON file for JWT-bearer auth; processed with `FileLocationHandler::getTextFileFromLocation()`, so it may be a bare path or any registered scheme (ex: `file:///etc/gcp/sa.json`, `http(s)://`, `sftp://`).  When omitted, Application Default Credentials are used.",
+          "message": "GCP 服務帳戶 JSON 檔案的位置，用於 JWT 持有者驗證；會以 `FileLocationHandler::getTextFileFromLocation()` 處理，因此可以是純路徑或任何註冊的通訊協定（例如：`file:///etc/gcp/sa.json`、`http(s)://`、`sftp://`）。若省略，則使用應用程式預設憑證。"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3NhX2pzb25fcGF0aA.display_name": {
+          "source": "Service-Account JSON Location",
+          "message": "服務帳戶 JSON 位置"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3NhX2pzb25fcGF0aA.short_desc": {
+          "source": "Location of a service-account JSON key file",
+          "message": "服務帳戶 JSON 金鑰檔案的位置"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to Google Cloud Storage",
+          "message": "與 Google Cloud Storage 的連接"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Circle REST API for community management including posts, comments, members, spaces, events, and messaging",
+          "message": "コミュニティ管理（投稿、コメント、メンバー、スペース、イベント、メッセージ）のための Circle REST API への接続"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Circle REST Connection",
+          "message": "Circle REST 接続"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Circle community at https://app.circle.so\n2. Click on your community in the top-left corner\n3. Select **Developer** > **Tokens**\n4. Click **Create Token**, select **Admin V2** as the type\n5. Copy the token and paste it into the **API Token** field\n\n**Important:**\n- API access requires a **Business plan** or above\n- Rate limit: 2,000 requests per 5 minutes per IP\n- Store your token securely; treat it like a password",
+          "message": "1. Circle コミュニティに https://app.circle.so でログイン\n2. 左上隅のコミュニティをクリック\n3. **開発者** > **トークン** を選択\n4. **トークンの作成** をクリックし、タイプとして **Admin V2** を選択\n5. トークンをコピーして **API トークン** フィールドに貼り付け\n\n**重要：**\n- API アクセスには **Business プラン** 以上が必要\n- レート制限：IP あたり 5 分間に 2,000 リクエスト\n- トークンは安全に保管してください。パスワードと同じ扱いにしてください"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Generate Your API Token",
+          "message": "API トークンの発行方法"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Circle API token used for Bearer token authentication.\n\n**To obtain your API token:**\n1. Log in to your Circle community as an admin\n2. Click on your community in the top-left corner\n3. Select **Developer** > **Tokens**\n4. Click **Create Token** and select **Admin V2**\n\n**Note:** API access requires a Business plan or above.\n\nRate limit: 2,000 requests per 5 minutes per IP",
+          "message": "Bearer トークン認証に使用される Circle API トークン。\n\n**API トークンを取得するには：**\n1. 管理者として Circle コミュニティにログイン\n2. 左上隅のコミュニティをクリック\n3. **開発者** > **トークン** を選択\n4. **トークンの作成** をクリックし、**Admin V2** を選択\n\n**注意：** API アクセスには Business プラン以上が必要です。\n\nレート制限：IP あたり 5 分間に 2,000 リクエスト"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "APIトークン"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Circle API token for authentication",
+          "message": "認証用の Circle API トークン"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Circle REST API",
+          "message": "Circle REST API への接続"
+        }
+      }
+    }
+  }
+}

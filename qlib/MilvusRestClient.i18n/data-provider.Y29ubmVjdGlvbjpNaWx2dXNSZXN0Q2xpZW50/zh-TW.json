@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a [Milvus](https://milvus.io) or [Zilliz Cloud](https://zilliz.com) (managed Milvus) vector database via the REST v2 API.\n\nAuthentication: Bearer token (Milvus / Zilliz token).\n\nThe connection uses the `milvus://` URL scheme for plain HTTP and `milvuss://` for servers behind TLS.",
+          "message": "透過 REST v2 API 連接到 [Milvus](https://milvus.io) 或 [Zilliz Cloud](https://zilliz.com)（管理式 Milvus）向量資料庫。\n\n驗證方式：Bearer 權杖（Milvus / Zilliz 權杖）。\n\n此連接使用 `milvus://` 通訊協定進行純文字 HTTP，以及 `milvuss://` 用於 TLS 後端的伺服器。"
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Milvus Vector DB Connection",
+          "message": "Milvus 向量資料庫連接"
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Bearer token.  For local Milvus this is the `<user>:<password>` auth combo; for Zilliz Cloud it's the cluster API key.",
+          "message": "Bearer 權杖。用於本地 Milvus 時，為 `<user>:<password>` 驗證組合；用於 Zilliz Cloud 時，為叢集 API 金鑰。"
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Milvus / Zilliz token (Bearer)",
+          "message": "Milvus / Zilliz 權杖（Bearer）"
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Milvus / Zilliz Cloud vector database",
+          "message": "連接到 Milvus / Zilliz Cloud 向量資料庫的連接"
+        }
+      }
+    }
+  }
+}

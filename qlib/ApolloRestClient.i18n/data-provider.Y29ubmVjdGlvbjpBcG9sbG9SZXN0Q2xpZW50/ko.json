@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.QXBvbGxvUmVzdENsaWVudA.scheme.QXBvbGxvUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Apollo REST API for B2B sales intelligence, contacts, accounts, deals, and data enrichment",
+          "message": "B2B 판매 인텔리전스, 연락처, 계정, 거래 및 데이터 업그레이드를 위한 Apollo REST API에 대한 연결"
+        },
+        "connection.QXBvbGxvUmVzdENsaWVudA.scheme.QXBvbGxvUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Apollo REST Connection",
+          "message": "Apollo REST 연결"
+        },
+        "connection.QXBvbGxvUmVzdENsaWVudA.scheme.QXBvbGxvUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Apollo REST API",
+          "message": "Apollo REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

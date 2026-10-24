@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Sewio REST API",
+          "message": "連接到 Sewio REST API"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Sewio REST Connection",
+          "message": "Sewio REST 連接"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Sewio RTLS Studio API key",
+          "message": "Sewio RTLS Studio API 金鑰"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "The Sewio RTLS Studio API key",
+          "message": "Sewio RTLS Studio API 金鑰"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "使用 JSON 序列化"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.desc": {
+          "source": "Data serialization options are limited to `json` with this object",
+          "message": "此物件的資料序列化選項僅限於 `json`"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "資料序列化"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.short_desc": {
+          "source": "Data serialization can only be 'json'",
+          "message": "資料序列化只能是 'json'"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "使用 bzip2 編碼"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "使用 deflate 演算法 ([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "使用 GNU zip 編碼 ([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "不使用內容編碼"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "設定傳送訊息時使用的壓縮演算法"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.display_name": {
+          "source": "Send Compression",
+          "message": "傳送壓縮"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.short_desc": {
+          "source": "The compression algorithm to use when sending messages",
+          "message": "傳送訊息時使用的壓縮演算法"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Sewio REST API",
+          "message": "連接到 Sewio REST API"
+        }
+      }
+    }
+  }
+}

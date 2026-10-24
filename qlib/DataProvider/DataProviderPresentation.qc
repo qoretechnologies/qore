@@ -35,6 +35,12 @@ public class DataProviderPresentation {
         const CatalogDomainPrefix = "data-provider.";
         const UnknownLocale = "und";
         const RootLocale = "root";
+        #! Maximum size of one provider catalog file, in bytes
+        /** Large static API schemas can exceed the native i18n loader's general-purpose 16 MiB default.
+            Provider extraction, validation, and projection share this bounded 64 MiB limit.
+            @since %DataProvider 3.11
+        */
+        const MaxCatalogFileBytes = 64 * 1024 * 1024;
         #! Translation locales required for the standard provider catalog set
         /** This policy is shared by Qore and independently released provider
             modules so their CI checks cannot silently diverge. Locale tags are
@@ -568,6 +574,9 @@ public class DataProviderPresentation {
                     return appMessageId(app.name, field);
                 });
         }
+        if (include_app) {
+            ConnectionPresentation::addAppMessages(\domain_messages{app_domain}, app);
+        }
         foreach hash<auto> action in (actions) {
             if (action.app.toString() != app.name.toString()) {
                 throw "DATA-PROVIDER-PRESENTATION-CATALOG-ERROR",
@@ -774,7 +783,7 @@ public class DataProviderPresentation {
                     # intentional: native discovery also returns root and
                     # parent-locale fallbacks, which are not translations for
                     # the locale currently being inspected.
-                    hash<auto> catalog = I18n::load_native_catalog(path);
+                    hash<auto> catalog = I18n::load_native_catalog(path, MaxCatalogFileBytes);
                     I18n::MessageCatalog validated(catalog,
                         {"literal_messages": True});
                     if (sort(keys catalog.locales) != (locale,)) {
@@ -1269,9 +1278,25 @@ public class DataProviderPresentationCatalog {
             discovery_index);
         list<hash<auto>> native_catalogs = ();
         foreach string path in (files) {
-            native_catalogs += I18n::load_native_catalog(path);
+            native_catalogs += I18n::load_native_catalog(path, DataProviderPresentation::MaxCatalogFileBytes);
         }
         catalog = composeCatalog(files, native_catalogs);
+    }
+
+    #! Looks up a translation only when its recorded producer source still matches
+    /** @param id exact technical message identity
+        @param source current producer text
+        @return translated text, or NOTHING when untranslated or stale
+        @throw I18N-CATALOG-ERROR for invalid catalog data
+        @note Root fallback is deliberately excluded from a non-source-locale projection.
+    */
+    *string lookupSourceMessage(string id, string source) {
+        *string message_locale = catalog.getMessageLocale(id, locale);
+        if (message_locale.val() && message_locale != DataProviderPresentation::RootLocale
+                && catalog.getMessageSource(id, locale) == source) {
+            return catalog.tc(id, source, locale);
+        }
+        return NOTHING;
     }
 
     #! Creates a projection catalog from an already composed message catalog
@@ -1521,7 +1546,7 @@ public class DataProviderPresentationCatalog {
             list<hash<auto>> native_catalogs = ();
             foreach string path in (files) {
                 hash<auto> native_catalog = parsed{path}
-                    ?? I18n::load_native_catalog(path);
+                    ?? I18n::load_native_catalog(path, DataProviderPresentation::MaxCatalogFileBytes);
                 native_catalogs += native_catalog;
                 if (--remaining_uses{path}) {
                     parsed{path} = native_catalog;
@@ -1550,11 +1575,16 @@ public class DataProviderPresentationCatalog {
         @throw I18N-LOCALE-ERROR if the producer source locale is invalid
     */
     hash<auto> projectApp(hash<auto> app) {
-        return project(app, app.name, DataProviderPresentation::appSourceLocale(
+        hash<auto> rv = project(app, app.name, DataProviderPresentation::appSourceLocale(
             app), string sub (string field) {
                 return DataProviderPresentation::appMessageId(app.name,
                     field);
             });
+        if (app.connection_options.typeCode() == NT_HASH) {
+            ConnectionPresentationCatalog connections(locale, discovery_opts);
+            rv.connection_options = connections.projectOptions(ConnectionPresentation::appOptions(app));
+        }
+        return rv;
     }
 
     #! Projects localized action presentation while preserving technical identity

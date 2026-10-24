@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Instantly REST API for email outreach and sales automation.\n\nInstantly is a platform for cold email outreach that enables managing campaigns, leads, email accounts, and tracking engagement metrics.\n\n**API Version:** v2\n**Authentication:** Bearer token (API key)",
+          "message": "Підключення до REST API Instantly для електронної пошти та автоматизації продажів.\n\nInstantly — це платформа для холодної електронної пошти, яка дозволяє керувати кампаніями, лідами, поштовими обліковими записами та відстежувати метрики взаємодії.\n\n**Версія API:** v2\n**Аутентифікація:** Bearer-токен (ключ API)"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Instantly REST Connection",
+          "message": "Підключення до REST API Instantly"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to Instantly at https://app.instantly.ai\n2. Navigate to **Settings > Integrations > API**\n3. Click **Create API Key**\n4. Select the required scopes for your use case\n5. Copy the generated API key\n\n**Important:**\n- API access requires a Growth plan or higher\n- Store your API key securely\n- You can create multiple keys with different scopes",
+          "message": "1. Увійдіть до Instantly за адресою https://app.instantly.ai\n2. Перейдіть до **Налаштування > Інтеграції > API**\n3. Натисніть **Створити ключ API**\n4. Виберіть необхідні дозволи для вашого випадку використання\n5. Скопіюйте згенерований ключ API\n\n**Важливо:**\n- Доступ до API вимагає тарифного плану Growth або вище\n- Зберігайте свій ключ API безпечно\n- Ви можете створювати кілька ключів із різними дозволами"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "Як отримати свій ключ API"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Instantly API key used for Bearer token authentication.\n\n**To obtain your API key:**\n1. Log in to your Instantly account at https://app.instantly.ai\n2. Go to Settings > Integrations > API\n3. Create a new API key with the required scopes\n\n**Note:** API access requires a Growth plan or higher.",
+          "message": "Ключ API Instantly для автентифікації за допомогою Bearer-токенів.\n\n**Щоб отримати свій ключ API:**\n1. Увійдіть до свого облікового запису Instantly за адресою https://app.instantly.ai\n2. Перейдіть до Налаштування > Інтеграції > API\n3. Створіть новий ключ API з необхідними дозволами\n\n**Примітка:** доступ до API вимагає тарифного плану Growth або вище."
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Instantly API key for Bearer token authentication",
+          "message": "Ключ API Instantly для автентифікації за допомогою Bearer-токенів"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Instantly REST API",
+          "message": "Підключення до REST API Instantly"
+        }
+      }
+    }
+  }
+}

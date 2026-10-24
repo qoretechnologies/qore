@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.U3F1YXJlUmVzdENsaWVudA.scheme.U3F1YXJlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Square REST API for payments, orders, invoices, customers, inventory, and bookings",
+          "message": "Připojení k REST API Square pro platby, objednávky, faktury, zákazníky, inventář a rezervace"
+        },
+        "connection.U3F1YXJlUmVzdENsaWVudA.scheme.U3F1YXJlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Square REST Connection",
+          "message": "Připojení k REST API Square"
+        },
+        "connection.U3F1YXJlUmVzdENsaWVudA.scheme.U3F1YXJlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Square REST API",
+          "message": "Připojení k REST API Square"
+        }
+      }
+    }
+  }
+}

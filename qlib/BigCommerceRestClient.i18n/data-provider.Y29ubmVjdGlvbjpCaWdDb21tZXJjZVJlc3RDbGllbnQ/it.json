@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the BigCommerce REST API for e-commerce management including customers, products, orders, carts, shipments, and blog posts",
+          "message": "Una connessione all'API REST di BigCommerce per la gestione degli e-commerce, inclusi clienti, prodotti, ordini, carrelli, spedizioni e blog"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "BigCommerce REST Connection",
+          "message": "Connessione REST di BigCommerce"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "The **Store Hash** is required to connect to your BigCommerce store.\n\n**How to find it:**\n1. Log in to your BigCommerce admin panel\n2. Look at the URL: `https://store-**XXXXX**.mybigcommerce.com`\n3. The store hash is the `XXXXX` part after `store-`\n\n**Alternative:** Go to **Settings > API Accounts** and check the **API Path**, e.g., `https://api.bigcommerce.com/stores/**XXXXX**/v3`",
+          "message": "Il **Store Hash** è obbligatorio per connettersi al tuo negozio BigCommerce.\n\n**Come trovarlo:**\n1. Accedi al pannello amministrativo di BigCommerce\n2. Controlla l'URL: `https://store-**XXXXX**.mybigcommerce.com`\n3. Il store hash è la parte `XXXXX` dopo `store-`\n\n**Alternativa:** Vai su **Impostazioni > Account API** e verifica il **Percorso API**, ad esempio `https://api.bigcommerce.com/stores/**XXXXX**/v3`"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Find Your Store Hash",
+          "message": "Come trovare il tuo Store Hash"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfaGFzaA.desc": {
+          "source": "The store hash identifying your BigCommerce store. You can find it in the BigCommerce admin under Settings > API Accounts > API Path (e.g., https://api.bigcommerce.com/stores/<store_hash>/v3)",
+          "message": "Il hash del negozio che identifica il tuo negozio BigCommerce. Puoi trovarlo nel pannello amministrativo di BigCommerce in Impostazioni > Account API > Percorso API (ad esempio, https://api.bigcommerce.com/stores/<store_hash>/v3)"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfaGFzaA.display_name": {
+          "source": "Store Hash",
+          "message": "Hash del negozio"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfaGFzaA.short_desc": {
+          "source": "BigCommerce store hash",
+          "message": "Hash del negozio BigCommerce"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the BigCommerce REST API",
+          "message": "Una connessione all'API REST di BigCommerce"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.UGRmQ29SZXN0Q2xpZW50.scheme.UGRmQ29SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the PDF.co REST API for document processing.\n\nPDF.co provides APIs for PDF conversion, manipulation, data extraction, barcode generation/reading, document classification, and more.",
+          "message": "Połączenie z interfejsem REST PDF.co do przetwarzania dokumentów.\n\nPDF.co oferuje interfejsy API do konwersji PDF, modyfikacji dokumentów, wyodrębniania danych, generowania i odczytu kodów kreskowych, klasyfikacji dokumentów i wielu innych funkcji."
+        },
+        "connection.UGRmQ29SZXN0Q2xpZW50.scheme.UGRmQ29SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "PDF.co REST Connection",
+          "message": "Połączenie REST PDF.co"
+        },
+        "connection.UGRmQ29SZXN0Q2xpZW50.scheme.UGRmQ29SZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "1. Sign up or log in at https://app.pdf.co/\n2. Navigate to the **API Keys** section in your dashboard\n3. Copy your API key and paste it into the **API Key** field\n\n**Note:** PDF.co uses a credit-based billing system. Check your remaining credits in the dashboard.",
+          "message": "1. Zarejestruj się lub zaloguj się na https://app.pdf.co/\n2. Przejdź do sekcji **Klucze API** w swoim panelu\n3. Skopiuj swój klucz API i wklej go do pola **Klucz API**\n\n**Uwaga:** PDF.co korzysta z systemu rozliczeń opartego na kredytach. Sprawdź swoje pozostałe kredyty w panelu."
+        },
+        "connection.UGRmQ29SZXN0Q2xpZW50.scheme.UGRmQ29SZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Key",
+          "message": "Jak uzyskać klucz API"
+        },
+        "connection.UGRmQ29SZXN0Q2xpZW50.scheme.UGRmQ29SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The PDF.co API key used for authentication.\n\nGet your API key from your [PDF.co dashboard](https://app.pdf.co/).",
+          "message": "Klucz API PDF.co używany do uwierzytelniania.\n\nUzyskaj swój klucz API z [panelu PDF.co](https://app.pdf.co/)."
+        },
+        "connection.UGRmQ29SZXN0Q2xpZW50.scheme.UGRmQ29SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klucz API"
+        },
+        "connection.UGRmQ29SZXN0Q2xpZW50.scheme.UGRmQ29SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "PDF.co API key",
+          "message": "Klucz API PDF.co"
+        },
+        "connection.UGRmQ29SZXN0Q2xpZW50.scheme.UGRmQ29SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the PDF.co REST API",
+          "message": "Połączenie z interfejsem REST PDF.co"
+        }
+      }
+    }
+  }
+}

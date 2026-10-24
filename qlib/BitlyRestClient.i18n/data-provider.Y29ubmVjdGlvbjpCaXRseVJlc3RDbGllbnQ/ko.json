@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Bitly REST API for URL shortening, branded links, QR codes, campaigns, and click analytics",
+          "message": "URL 단축, 브랜드 링크, QR 코드, 캠페인 및 클릭 분석을 위한 Bitly REST API에 대한 연결"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Bitly REST Connection",
+          "message": "Bitly REST 연결"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Bitly API access token used for Bearer token authentication.\n\n**To obtain your access token:**\n1. Log in to your Bitly account\n2. Go to **Settings** > **Developer settings** > **API**\n3. Generate a new access token\n\nRate limit: 5 concurrent connections, hourly and monthly limits based on plan",
+          "message": "Bearer 토큰 인증에 사용되는 Bitly API 액세스 토큰입니다.\n\n**액세스 토큰을 얻으려면:**\n1. Bitly 계정에 로그인합니다\n2. **설정** > **개발자 설정** > **API**로 이동합니다\n3. 새 액세스 토큰을 생성합니다\n\n제한: 동시 연결 5건, 플랜에 따라 시간당 및 월별 제한이 있습니다"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Access Token",
+          "message": "API 액세스 토큰"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Bitly API access token for authentication",
+          "message": "인증을 위한 Bitly API 액세스 토큰"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Bitly REST API",
+          "message": "Bitly REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

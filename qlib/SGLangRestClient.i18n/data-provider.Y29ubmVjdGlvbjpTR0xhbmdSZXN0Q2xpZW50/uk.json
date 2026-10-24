@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to an [SGLang](https://github.com/sgl-project/sglang) model server.\n\nSGLang exposes an OpenAI-compatible API at `/v1/*` plus SGLang-native endpoints (`/generate` for constrained decoding, `/get_server_info`, `/flush_cache`).\n\nThe target instance serves exactly one model; the `model` option is required.  If the deployment requires authentication, set `apikey`.\n\nThe connection uses the `sglang://` URL scheme for plain HTTP and `sglangs://` for servers behind TLS.",
+          "message": "Підключення до сервера моделі [SGLang](https://github.com/sgl-project/sglang).\n\nSGLang надає API, сумісне з OpenAI, за `/v1/*`, а також власні точки входу SGLang (`/generate` для обмеженого декодування, `/get_server_info`, `/flush_cache`).\n\nЦільовий екземпляр обслуговує лише одну модель; обов'язково встановити опцію `model`. Якщо розгортання вимагає автентифікації, встановіть `apikey`.\n\nПідключення використовує схему URL `sglang://` для звичайного HTTP та `sglangs://` для серверів за TLS."
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "SGLang REST Connection",
+          "message": "Підключення SGLang REST"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The OpenAI-compatible API version segment used for `/v1/*` routing.  Defaults to `v1`; SGLang currently exposes only `v1` but this option allows forward compatibility.",
+          "message": "Сегмент версії API OpenAI-сумісного інтерфейсу, що використовується для маршрутизації `/v1/*`. За замовчуванням — `v1`; SGLang наразі надає лише `v1`, але ця опція дозволяє забезпечити сумісність у майбутньому."
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "OpenAI-Compatible API Version",
+          "message": "Версія API, сумісна з OpenAI"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The OpenAI-compatible API version segment",
+          "message": "Сегмент версії API, сумісної з OpenAI"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Optional API key for SGLang deployments that enable authentication; sent as the `Authorization: Bearer` header.  Local inference deployments typically do not require a key.",
+          "message": "Необов’язковий ключ API для розгортань SGLang, що вимагають автентифікації; надсилається як заголовок `Authorization: Bearer`. Локальні розгортання інференції зазвичай не потребують ключа."
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "API key for SGLang servers with authentication enabled",
+          "message": "Ключ API для серверів SGLang із увімкненою автентифікацією"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.bW9kZWw.desc": {
+          "source": "The model name served by the target SGLang instance; SGLang serves exactly one model per server, so the connection captures it here.  Used by client code (e.g. via `getModel()`) to populate the `model` field of OpenAI-compatible request bodies.",
+          "message": "Назва моделі, що надається цільовим екземпляром SGLang; SGLang надає рівно одну модель на сервер, тому це значення фіксується у з’єднанні. Використовується клієнтським кодом (наприклад, через `getModel()`) для заповнення поля `model` тіл запитів, сумісних з OpenAI."
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.bW9kZWw.display_name": {
+          "source": "Model Name",
+          "message": "Назва моделі"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.bW9kZWw.short_desc": {
+          "source": "The model served by the target SGLang instance",
+          "message": "Модель, що надається цільовим екземпляром SGLang"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to an SGLang model server",
+          "message": "З’єднання з сервером моделі SGLang"
+        }
+      }
+    }
+  }
+}

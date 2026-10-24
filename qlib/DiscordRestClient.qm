@@ -482,7 +482,8 @@ public class DiscordRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "discord://discord.com/api";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("DiscordRestClient",
+            "DiscordRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Discord REST Connection",
             "short_desc": "A connection to the Discord REST API",
             "desc": "A connection to the Discord REST API",
@@ -536,7 +537,7 @@ public class DiscordRestConnection inherits RestClient::RestConnection {
             },
             "required_options": "token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
                 "oauth2_client_id,oauth2_client_secret",
-        };
+        });
 
         #! Data provider subtypes supported
         const DataProviderSubtypeMap = {

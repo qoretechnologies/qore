@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Firecrawl REST API for web scraping, crawling, and data extraction",
+          "message": "Підключення до REST API Firecrawl для веб-скрапінгу, краулінгу та витягування даних"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Firecrawl REST Connection",
+          "message": "Підключення до Firecrawl REST"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Firecrawl, you need an API key:\n\n1. Sign in to your account at [firecrawl.dev](https://www.firecrawl.dev)\n2. Navigate to your **Dashboard**\n3. Find or generate your API key\n4. Copy the key (it starts with `fc-`)\n\nKeep your API key secure and never share it publicly.",
+          "message": "Щоб підключитися до Firecrawl, вам потрібен ключ API:\n\n1. Увійдіть у свій обліковий запис на [firecrawl.dev](https://www.firecrawl.dev)\n2. Перейдіть до свого **Панелі керування**\n3. Знайдіть або створіть свій ключ API\n4. Скопіюйте ключ (він починається з `fc-`)\n\nЗберігайте свій ключ API в безпеці та ніколи не діліться ним публічно."
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Firecrawl API Key",
+          "message": "Як отримати свій ключ API Firecrawl"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Firecrawl API key used for authentication; sent as a Bearer token in the `Authorization` header. To obtain a key, sign in at [firecrawl.dev](https://www.firecrawl.dev) and navigate to your dashboard",
+          "message": "Ключ API Firecrawl для автентифікації; надсилається як токен Bearer у заголовку `Authorization`. Щоб отримати ключ, увійдіть на [firecrawl.dev](https://www.firecrawl.dev) та перейдіть до панелі керування"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Firecrawl API key for authentication",
+          "message": "Ключ API Firecrawl для автентифікації"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Firecrawl REST API",
+          "message": "Підключення до REST API Firecrawl"
+        }
+      }
+    }
+  }
+}

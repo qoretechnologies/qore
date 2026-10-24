@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.WWFtbFJwY0NsaWVudA.scheme.WWFtbFJwY0Nvbm5lY3Rpb24.desc": {
+          "source": "A connection to an YAML-RPC server",
+          "message": "Připojení k serveru YAML-RPC"
+        },
+        "connection.WWFtbFJwY0NsaWVudA.scheme.WWFtbFJwY0Nvbm5lY3Rpb24.display_name": {
+          "source": "YAML-RPC Connection",
+          "message": "Připojení YAML-RPC"
+        },
+        "connection.WWFtbFJwY0NsaWVudA.scheme.WWFtbFJwY0Nvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to an YAML-RPC server",
+          "message": "Připojení k serveru YAML-RPC"
+        }
+      }
+    }
+  }
+}

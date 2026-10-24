@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.SW50ZXJjb21SZXN0Q2xpZW50.scheme.SW50ZXJjb21SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [Intercom](https://www.intercom.com) for contacts, companies, conversations, tags, notes, data events and help center articles.\n\n**Authentication** is the OAuth2 authorization code flow with `oauth2_client_id` and `oauth2_client_secret` from an app created in the Intercom developer hub, or a `token` for an integration that only ever works in its own workspace - Intercom issues one per app for exactly that. Intercom declares no scopes in the flow: what a token may do is set by the permissions granted to the app in its own dashboard, so a capability the integration needs is added there rather than requested here.\n\n**The API revision is sent on every call** as `Intercom-Version: 2.16`, matching the description the actions are generated from. Without it a call would ride whichever revision the workspace's app package happens to name, so the same integration could behave differently in two workspaces.\n\n**Regional hosting**: a workspace lives in the United States (`api.intercom.io`), Europe (`api.eu.intercom.io`) or Australia (`api.au.intercom.io`). Intercom routes a call to the default host on to the right region, so the region normally needs no attention; set the URL to a regional host to address it directly.\n\nIntercom is a trademark of Intercom, Inc.",
+          "message": "Połączenie z [Intercom](https://www.intercom.com) dla kontaktów, firm, rozmów, tagów, notatek, zdarzeń danych i artykułów centrum pomocy.\n\n**Uwierzytelnianie** odbywa się za pomocą przepływu kodu autoryzacyjnego OAuth2 z `oauth2_client_id` i `oauth2_client_secret` z aplikacji utworzonej w centrum deweloperskim Intercom, lub z `token` dla integracji, która działa wyłącznie w własnym środowisku — Intercom wydaje jeden na każdą aplikację właśnie do tego celu. Intercom nie deklaruje zakresów w przepływie: to uprawnienia przypisane aplikacji w jej własnym panelu decydują o tym, co token może robić, więc potrzebna funkcjonalność dodawana jest tam, a nie tu.\n\n**Wersja API jest wysyłana przy każdym wywołaniu** jako `Intercom-Version: 2.16`, zgodnie z opisem akcji, z których są generowane. Bez niej wywołanie korzystałoby z wersji, którą pakiet aplikacji w danym środowisku nazwał, więc ta sama integracja mogła działać inaczej w dwóch różnych środowiskach.\n\n**Hostowanie regionalne**: środowisko znajduje się w Stanach Zjednoczonych (`api.intercom.io`), Europie (`api.eu.intercom.io`) lub Australii (`api.au.intercom.io`). Intercom przekierowuje wywołanie do odpowiedniego hosta, więc region zazwyczaj nie wymaga uwagi; ustaw URL na host regionalny, aby skierować do niego bezpośrednio.\n\nIntercom to znak towarowy firmy Intercom, Inc."
+        },
+        "connection.SW50ZXJjb21SZXN0Q2xpZW50.scheme.SW50ZXJjb21SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Intercom REST Connection",
+          "message": "Połączenie REST Intercom"
+        },
+        "connection.SW50ZXJjb21SZXN0Q2xpZW50.scheme.SW50ZXJjb21SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Intercom REST API",
+          "message": "Połączenie z REST API Intercom"
+        }
+      }
+    }
+  }
+}

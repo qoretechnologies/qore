@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to a [BGE-M3](https://huggingface.co/BAAI/bge-m3) FastAPI embedding sidecar.\n\nBGE-M3 is a multilingual text embedding model supporting dense, sparse, and multi-vector representations.  The sidecar exposes:\n- `POST /embed` — generate dense and/or sparse embeddings\n- `GET /health` — liveness with host memory pressure info\n- `GET /metrics` — Prometheus text-format metrics\n\nThe sidecar serves a single model; the `model` option defaults to `bge-m3` and is reported back via `getModel()` for collection-metadata bookkeeping.\n\nIf the deployment requires authentication, set `apikey`; it is sent as the `Authorization: Bearer` header.\n\nThe connection uses the `bge-m3://` URL scheme; `bge-m3-fastapi://` is accepted as an alias.",
+          "message": "Eine Verbindung zu einem [BGE-M3](https://huggingface.co/BAAI/bge-m3) FastAPI-Embedding-Sidecar.\n\nBGE-M3 ist ein mehrsprachiges Text-Embedding-Modell, das dichte, spärliche und mehrdimensionale Darstellungen unterstützt. Der Sidecar bietet:\n- `POST /embed` — Erzeugung dichter und/oder spärlicher Embeddings\n- `GET /health` — Erreichbarkeit mit Host-Memory-Druck-Informationen\n- `GET /metrics` — Prometheus-Textformat-Metriken\n\nDer Sidecar dient einem einzigen Modell; die `model`-Option ist standardmäßig auf `bge-m3` gesetzt und wird über `getModel()` für die Sammlungs-Metadaten-Verwaltung zurückgemeldet.\n\nFalls die Bereitstellung Authentifizierung erfordert, setzen Sie `apikey`; er wird als `Authorization: Bearer`-Header gesendet.\n\nDie Verbindung verwendet das `bge-m3://`-Protokoll; `bge-m3-fastapi://` wird als Alias akzeptiert."
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "BGE-M3 FastAPI Connection",
+          "message": "BGE-M3 FastAPI-Verbindung"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Optional API key for sidecar deployments that enable authentication; sent as the `Authorization: Bearer` header.  Local deployments typically do not require a key.\n\n**Note that this connection's ping cannot verify this option.**  The BGE-M3 sidecar serves `/health`, `/metrics` and `/embed` without authentication, and `/health` - the ping target - is also the Kubernetes liveness and readiness probe path, so it must stay unauthenticated even where a gateway enforces authentication in front of the sidecar.  There is therefore no endpoint that answers 401 for a missing or wrong key.  A successful ping means the sidecar is reachable and the model is loaded; it does not mean this key is correct.  Where a gateway does enforce authentication, a wrong or missing key surfaces on the first `/embed` call instead.",
+          "message": "Optionaler API-Schlüssel für Sidecar-Bereitstellungen mit aktivierter Authentifizierung; wird als `Authorization: Bearer`-Header gesendet. Lokale Bereitstellungen benötigen typischerweise keinen Schlüssel.\n\n**Beachten Sie, dass die Ping-Prüfung dieser Verbindung diesen Parameter nicht überprüfen kann.** Der BGE-M3-Sidecar bietet `/health`, `/metrics` und `/embed` ohne Authentifizierung an, und `/health` — der Ping-Zielendpunkt — ist auch der Kubernetes-Liveness- und Readiness-Probe-Pfad, daher muss er selbst dann unauthentifiziert bleiben, wenn ein Gateway vor dem Sidecar Authentifizierung erzwingt. Es gibt daher keinen Endpunkt, der mit 401 auf einen fehlenden oder falschen Schlüssel antwortet. Ein erfolgreicher Ping bedeutet nur, dass der Sidecar erreichbar ist und das Modell geladen ist; er sagt nichts über die Richtigkeit dieses Schlüssels aus. Wo ein Gateway Authentifizierung erzwingt, wird ein falscher oder fehlender Schlüssel erst bei der ersten `/embed`-Anfrage sichtbar."
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API-Schlüssel"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "API key for sidecar deployments with authentication enabled",
+          "message": "API-Schlüssel für Sidecar-Bereitstellungen mit aktivierter Authentifizierung"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.bW9kZWw.desc": {
+          "source": "The model name reported back via `getModel()`.  The BGE-M3 FastAPI sidecar always serves the `bge-m3` model; this option exists so downstream collection metadata can record the model name without an extra server-info round trip.",
+          "message": "Der Modellname, der über `getModel()` zurückgemeldet wird. Der BGE-M3 FastAPI-Sidecar dient immer dem `bge-m3`-Modell; diese Option existiert, damit nachgelagerte Sammlungs-Metadaten den Modellnamen ohne zusätzlichen Server-Info-Rundtrip erfassen können."
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.bW9kZWw.display_name": {
+          "source": "Model Name",
+          "message": "Modellname"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.bW9kZWw.short_desc": {
+          "source": "The model reported back via getModel()",
+          "message": "Das über getModel() zurückgegebene Modell"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a BGE-M3 FastAPI embedding sidecar",
+          "message": "Eine Verbindung zu einem BGE-M3 FastAPI-Embedding-Sidecar"
+        }
+      }
+    }
+  }
+}

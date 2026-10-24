@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [Weaviate](https://weaviate.io) — an open-source vector database supporting hybrid search (vector + keyword), multi-tenancy, and a wide range of vectorizer modules.\n\nAuthentication: optional Bearer token (Weaviate Cloud Services / WCD) or anonymous (local deployments).\n\nThe connection uses the `weaviate://` URL scheme for plain HTTP and `weaviates://` for servers behind TLS.",
+          "message": "[Weaviate](https://weaviate.io)에 대한 연결 — 하이브리드 검색(벡터 + 키워드), 멀티테넌시, 다양한 벡터화 모듈을 지원하는 오픈소스 벡터 데이터베이스입니다.\n\n인증: 선택적 Bearer 토큰(Weaviate Cloud Services / WCD) 또는 익명(로컬 배포).\n\n이 연결은 일반 HTTP용 `weaviate://` URL 스키마와 TLS 뒤의 서버용 `weaviates://`을 사용합니다."
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Weaviate Vector DB Connection",
+          "message": "Weaviate 벡터 DB 연결"
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Optional Bearer token.  Local Weaviate servers don't require authentication.",
+          "message": "선택적 Bearer 토큰. 로컬 Weaviate 서버는 인증이 필요하지 않습니다."
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Optional Bearer token (WCD / proxied)",
+          "message": "선택적 Bearer 토큰 (WCD / 프록시됨)"
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a Weaviate vector database",
+          "message": "Weaviate 벡터 데이터베이스에 대한 연결"
+        }
+      }
+    }
+  }
+}

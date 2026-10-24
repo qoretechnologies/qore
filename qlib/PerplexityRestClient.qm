@@ -293,7 +293,8 @@ public class PerplexityRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "perplexity://api.perplexity.ai";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("PerplexityRestClient",
+            "PerplexityRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Perplexity AI REST Connection",
             "short_desc": "A connection to the Perplexity AI REST API",
             "desc": "A connection to the Perplexity AI REST API",
@@ -340,6 +341,7 @@ public class PerplexityRestConnection inherits RestClient::RestConnection {
             "required_options": "apikey",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Get Your Perplexity API Key",
                     "intent": "info",
                     "content": "To connect to Perplexity AI, you need an API key:\n\n"
@@ -350,7 +352,7 @@ public class PerplexityRestConnection inherits RestClient::RestConnection {
                         "Keep your API key secure and never share it publicly.",
                 },
             ),
-        };
+        });
     }
 
     #! creates the PerplexityRestConnection object

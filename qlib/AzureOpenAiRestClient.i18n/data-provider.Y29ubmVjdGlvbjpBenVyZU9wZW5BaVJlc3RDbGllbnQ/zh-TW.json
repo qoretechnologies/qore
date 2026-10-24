@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "Connect to an Azure OpenAI resource for model inference, files, batches, and retrieval. Authenticate with a resource API key or Microsoft Entra ID. Connection pings verify authentication without generating content.",
+          "message": "連接到 Azure OpenAI 資源以進行模型推論、檔案、批次和檢索。使用資源 API 金鑰或 Microsoft Entra ID 進行驗證。連接測試會驗證認證，而不會產生內容。"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Azure OpenAI Connection",
+          "message": "Azure OpenAI 連接"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.desc": {
+          "source": "Key 1 or Key 2 from the Azure resource Keys and Endpoint page. Either key works.",
+          "message": "Azure 資源「金鑰與端點」頁面的金鑰 1 或金鑰 2。任一金鑰皆可使用。"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.short_desc": {
+          "source": "Azure OpenAI resource api-key",
+          "message": "Azure OpenAI 資源 API 金鑰"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X2lk.desc": {
+          "source": "Application (client) ID of the Entra application. Assign it access to this Azure OpenAI resource.",
+          "message": "Entra 應用程式（用戶端）ID。請指派存取權限給此 Azure OpenAI 資源。"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X2lk.display_name": {
+          "source": "Entra Client ID",
+          "message": "Entra 用戶端 ID"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X2lk.short_desc": {
+          "source": "Client ID for Entra auth",
+          "message": "Entra 認證用的用戶端 ID"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X3NlY3JldA.desc": {
+          "source": "Client secret value of the Entra application, not the secret identifier.",
+          "message": "Entra 應用程式之用戶端密碼值，而非密碼識別碼。"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X3NlY3JldA.display_name": {
+          "source": "Entra Client Secret",
+          "message": "Entra 用戶端密碼"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X3NlY3JldA.short_desc": {
+          "source": "Client secret for Entra auth",
+          "message": "Entra 認證用的用戶端密碼"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXBpX3ZlcnNpb24.allowed_values.c3RyaW5nOjIwMjQtMTAtMjE.display_name": {
+          "source": "2024-10-21 (Stable)",
+          "message": "2024-10-21（穩定版）"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXBpX3ZlcnNpb24.desc": {
+          "source": "API version for the LLM provider and legacy deployment URLs. The v1 actions do not require an API version. Use a supported date or preview version.",
+          "message": "用於 LLM 供應商和舊版部署 URL 的 API 版本。v1 操作不需要 API 版本。請使用支援的日期或預覽版本。"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXBpX3ZlcnNpb24.display_name": {
+          "source": "Legacy API Version",
+          "message": "舊版 API 版本"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXBpX3ZlcnNpb24.short_desc": {
+          "source": "Azure OpenAI REST API version",
+          "message": "Azure OpenAI REST API 版本"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmFwaV9rZXk.desc": {
+          "source": "Azure resource api-key header",
+          "message": "Azure 資源 api-key 標頭"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmFwaV9rZXk.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmVudHJhX21hbmFnZWRfaWRlbnRpdHk.desc": {
+          "source": "Azure managed-identity (IMDS-for-Azure)",
+          "message": "Azure 受控識別（IMDS-for-Azure）"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmVudHJhX21hbmFnZWRfaWRlbnRpdHk.display_name": {
+          "source": "Entra Managed Identity",
+          "message": "Entra 受控識別"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmVudHJhX2NsaWVudF9jcmVkZW50aWFscw.desc": {
+          "source": "Entra (Azure AD) client_credentials grant",
+          "message": "Entra（Azure AD）client_credentials 授權"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmVudHJhX2NsaWVudF9jcmVkZW50aWFscw.display_name": {
+          "source": "Entra Client Credentials",
+          "message": "Entra 應用程式憑證"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.desc": {
+          "source": "Use a resource API key for development, a registered Entra application for a service, or the identity assigned to an Azure host.",
+          "message": "開發時使用資源 API金鑰，服務時使用註冊的 Entra 應用程式，或使用指派給 Azure 主機的身分識別。"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.display_name": {
+          "source": "Authentication",
+          "message": "驗證"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.short_desc": {
+          "source": "Authentication mode",
+          "message": "驗證模式"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZGVwbG95bWVudA.desc": {
+          "source": "Deployment used by the LLM provider. In the Azure Foundry portal, open Models and endpoints and copy the deployment name. Actions can choose another deployment.",
+          "message": "LLM 提供者使用的部署。在 Azure Foundry 入口網站中，開啟「模型與端點」，並複製部署名稱。動作可選擇其他部署。"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZGVwbG95bWVudA.display_name": {
+          "source": "Default Model Deployment",
+          "message": "預設模型部署"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZGVwbG95bWVudA.short_desc": {
+          "source": "Azure OpenAI deployment name",
+          "message": "Azure OpenAI 部署名稱"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZW50cmFfc2NvcGU.desc": {
+          "source": "Leave empty to select the token scope for this endpoint automatically. Foundry projects use `https://ai.azure.com/.default`; Azure OpenAI resources use `https://cognitiveservices.azure.com/.default`.",
+          "message": "留空以自動選擇此端點的權杖範圍。Foundry 專案使用 `https://ai.azure.com/.default`；Azure OpenAI 資源使用 `https://cognitiveservices.azure.com/.default`。"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZW50cmFfc2NvcGU.display_name": {
+          "source": "Entra Scope",
+          "message": "Entra 權限範圍"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZW50cmFfc2NvcGU.short_desc": {
+          "source": "OAuth2 scope to request",
+          "message": "要用來請求的 OAuth2 權限範圍"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfbWFuYWdlZF9pZGVudGl0eV9jbGllbnRfaWQ.desc": {
+          "source": "Leave empty to use the host's system-assigned identity. For a user-assigned identity, supply its client ID. The host must provide Azure managed identity access.",
+          "message": "留空以使用主機的系統指派身分。若使用使用者指派的身分，請提供其用戶端識別碼。主機必須提供 Azure 指派身分存取權。"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfbWFuYWdlZF9pZGVudGl0eV9jbGllbnRfaWQ.display_name": {
+          "source": "Managed Identity Client ID",
+          "message": "受管理身分識別用戶端ID"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfbWFuYWdlZF9pZGVudGl0eV9jbGllbnRfaWQ.short_desc": {
+          "source": "Optional client ID of a user-assigned managed identity",
+          "message": "使用者指派的管理身分之可選用戶端識別碼"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfdGVuYW50X2lk.desc": {
+          "source": "Tenant ID or domain of the Entra application used for authentication.",
+          "message": "用於驗證的 Entra 應用程式之租用戶 ID 或網域。"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfdGVuYW50X2lk.display_name": {
+          "source": "Entra Tenant ID",
+          "message": "Entra 租用戶 ID"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfdGVuYW50X2lk.short_desc": {
+          "source": "Tenant ID for Entra auth",
+          "message": "用於 Entra 驗證的租用戶 ID"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to an Azure OpenAI Service resource",
+          "message": "連線至 Azure OpenAI 服務資源"
+        }
+      }
+    }
+  }
+}

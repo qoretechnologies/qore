@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Aftership REST API for package tracking and returns management.\n\nRequires an API key (set as `apikey`) from the [Aftership Dashboard](https://admin.aftership.com/). The connection uses the `aftership://` URL scheme and automatically sets the required `as-api-key` header on all API requests",
+          "message": "패키지 추적 및 반품 관리를 위한 Aftership REST API에 연결합니다.\n\nAPI 키(`apikey`)는 [Aftership 대시보드](https://admin.aftership.com/)에서 설정해야 합니다. 연결은 `aftership://` URL 스키마를 사용하며, 모든 API 요청에 대해 필요한 `as-api-key` 헤더를 자동으로 설정합니다."
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Aftership REST Connection",
+          "message": "Aftership REST 연결"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Aftership, you need an API key:\n\n1. Sign up or sign in at the [Aftership Dashboard](https://accounts.aftership.com)\n2. Go to **Settings** > **API Keys** (or visit [admin.aftership.com/settings/api-keys](https://admin.aftership.com/settings/api-keys) directly)\n3. Click **Create API key**\n4. Enter a descriptive name, select the `as-api-key` signature type, and set permissions\n5. Click **Save** and copy your new API key\n\nKeep your API key secure and rotate it periodically.",
+          "message": "Aftership에 연결하려면 API 키가 필요합니다:\n\n1. [Aftership 대시보드](https://accounts.aftership.com)에서 가입하거나 로그인합니다.\n2. **설정** > **API 키**로 이동하세요 (또는 [admin.aftership.com/settings/api-keys](https://admin.aftership.com/settings/api-keys)로 직접 이동합니다).\n3. **API 키 생성**을 클릭합니다.\n4. 설명용 이름을 입력하고 `as-api-key` 서명 유형을 선택한 후 권한을 설정합니다.\n5. **저장**을 클릭하고 새 API 키를 복사합니다.\n\nAPI 키는 보안을 유지하고 주기적으로 교체하세요."
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Aftership API Key",
+          "message": "Aftership API 키 받는 방법"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Aftership API key used for authentication; sent as the `as-api-key` header.\n\nGet your API key from the [Aftership Dashboard](https://admin.aftership.com/)",
+          "message": "인증에 사용되는 Aftership API 키이며, `as-api-key` 헤더로 전송됩니다.\n\n[Aftership 대시보드](https://admin.aftership.com/)에서 API 키를 가져오세요."
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Aftership API key for authentication",
+          "message": "인증용 Aftership API 키"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Aftership REST API",
+          "message": "Aftership REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

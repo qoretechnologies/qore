@@ -3,6 +3,106 @@
   "locales": {
     "ja": {
       "messages": {
+        "app.U1FMaXRl.connection.option.Y2hhcnNldA.desc": {
+          "source": "The character set to use for the connection (e.g. utf8)",
+          "message": "接続に使用する文字セット（例：utf8）"
+        },
+        "app.U1FMaXRl.connection.option.Y2hhcnNldA.display_name": {
+          "source": "Character Set",
+          "message": "文字セット"
+        },
+        "app.U1FMaXRl.connection.option.Y2hhcnNldA.short_desc": {
+          "source": "Connection character set",
+          "message": "接続文字セット"
+        },
+        "app.U1FMaXRl.connection.option.ZGI.desc": {
+          "source": "The name of the database to connect to",
+          "message": "接続するデータベースの名前"
+        },
+        "app.U1FMaXRl.connection.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "データベース"
+        },
+        "app.U1FMaXRl.connection.option.ZGI.short_desc": {
+          "source": "Database name",
+          "message": "データベース名"
+        },
+        "app.U1FMaXRl.connection.option.aG9zdA.desc": {
+          "source": "The hostname or IP address of the database server",
+          "message": "データベースサーバーのホスト名またはIPアドレス"
+        },
+        "app.U1FMaXRl.connection.option.aG9zdA.display_name": {
+          "source": "Host",
+          "message": "ホスト"
+        },
+        "app.U1FMaXRl.connection.option.aG9zdA.short_desc": {
+          "source": "Database server hostname",
+          "message": "データベースサーバーのホスト名"
+        },
+        "app.U1FMaXRl.connection.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "プール内の最大接続数"
+        },
+        "app.U1FMaXRl.connection.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "最大プールサイズ"
+        },
+        "app.U1FMaXRl.connection.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "プール接続の最大数"
+        },
+        "app.U1FMaXRl.connection.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "プール内の最小接続数"
+        },
+        "app.U1FMaXRl.connection.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "最小プールサイズ"
+        },
+        "app.U1FMaXRl.connection.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "プール接続の最小数"
+        },
+        "app.U1FMaXRl.connection.option.cG9ydA.desc": {
+          "source": "The port number of the database server",
+          "message": "データベースサーバーのポート番号"
+        },
+        "app.U1FMaXRl.connection.option.cG9ydA.display_name": {
+          "source": "Port",
+          "message": "ポートレート"
+        },
+        "app.U1FMaXRl.connection.option.cG9ydA.short_desc": {
+          "source": "Database server port",
+          "message": "データベースサーバーのポート"
+        },
+        "app.U1FMaXRl.connection.option.cGFzcw.desc": {
+          "source": "The password for database authentication",
+          "message": "データベース認証用のパスワード"
+        },
+        "app.U1FMaXRl.connection.option.cGFzcw.display_name": {
+          "source": "Password",
+          "message": "パスワード"
+        },
+        "app.U1FMaXRl.connection.option.cGFzcw.short_desc": {
+          "source": "Database password",
+          "message": "データベースのパスワード"
+        },
+        "app.U1FMaXRl.connection.option.dXNlcg.desc": {
+          "source": "The database user name for authentication",
+          "message": "認証用のデータベースユーザー名"
+        },
+        "app.U1FMaXRl.connection.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.U1FMaXRl.connection.option.dXNlcg.short_desc": {
+          "source": "Database user",
+          "message": "データベースユーザー"
+        },
+        "app.U1FMaXRl.desc": {
+          "source": "Create and manage connections to a SQLite embedded database",
+          "message": "SQLite 組込みデータベースへの接続を作成および管理します"
+        },
         "app.U1FMaXRl.display_name": {
           "source": "SQLite",
           "message": "SQLite"
@@ -10,10 +110,6 @@
         "app.U1FMaXRl.short_desc": {
           "source": "SQLite embedded database",
           "message": "SQLite 組込みデータベース"
-        },
-        "app.U1FMaXRl.desc": {
-          "source": "Create and manage connections to a SQLite embedded database",
-          "message": "SQLite 組込みデータベースへの接続を作成および管理します"
         }
       }
     }

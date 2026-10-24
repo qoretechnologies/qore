@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Bitbucket Cloud](https://bitbucket.org) for repositories, commits, pull requests, deployments and code search.\n\n**Authentication** is any one of three credentials:\n- an **access token** in `token` - a repository, project or workspace access token, created under the relevant **Settings > Access tokens**. The narrowest option, and the one to prefer;\n- an **app password** in `username` and `password`, sent as basic authentication. The username is the Atlassian account username, **not** the email address;\n- the **OAuth2 authorization code flow**, with `oauth2_client_id` and `oauth2_client_secret` from an OAuth consumer created in workspace settings.\n\nThis connection targets Bitbucket **Cloud**. Bitbucket Data Center is a different product with a different API and is not supported.\n\nBitbucket is a trademark of Atlassian Pty Ltd.",
+          "message": "Una conexión a [Bitbucket Cloud](https://bitbucket.org) para repositorios, confirmaciones, solicitudes de extracción, despliegues y búsqueda de código.\n\n**Autenticación** es cualquiera de estas tres credenciales:\n- un **token de acceso** en `token` - un token de acceso para repositorios, proyectos o espacios de trabajo, creado en **Configuración > Tokens de acceso**. La opción más específica, y la que se recomienda;\n- una **contraseña de aplicación** en `username` y `password`, enviada como autenticación básica. El nombre de usuario es el nombre de usuario de la cuenta de Atlassian, **no** la dirección de correo electrónico;\n- el flujo de autorización OAuth2, con `oauth2_client_id` y `oauth2_client_secret` de un consumidor OAuth creado en la configuración del espacio de trabajo.\n\nEsta conexión apunta a Bitbucket **Cloud**. Bitbucket Data Center es un producto diferente con una API distinta y no está soportado.\n\nBitbucket es una marca registrada de Atlassian Pty Ltd."
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Bitbucket REST Connection",
+          "message": "Conexión REST de Bitbucket"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "An app password created under **Personal settings > App passwords**, used with `username`.\n\nThis is not the account password, which Bitbucket does not accept for API access.",
+          "message": "Una contraseña de aplicación creada en **Configuración personal > Contraseñas de aplicaciones**, utilizada con `username`.\n\nEsta no es la contraseña de la cuenta, que Bitbucket no acepta para acceso a la API."
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A Bitbucket access token, sent as a bearer token.\n\n**To obtain one:** open the repository, project or workspace **Settings > Access tokens**, create a token, and grant it only the scopes the integration needs.\n\nLeave this unset to authenticate with an app password or the OAuth2 flow instead.",
+          "message": "Un token de acceso de Bitbucket, enviado como token portador.\n\n**Para obtener uno:** abre el repositorio, proyecto o espacio de trabajo **Configuración > Tokens de acceso**, crea un token y otórgale solo los ámbitos que necesita la integración.\n\nDeja este campo vacío para autenticarte con una contraseña de aplicación o el flujo OAuth2 en su lugar."
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "Token de acceso"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A Bitbucket repository, project or workspace access token",
+          "message": "Token de acceso para un repositorio, proyecto o espacio de trabajo"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The Atlassian account username to use with an app password.\n\n**Not** the email address: Bitbucket rejects an email address here. The username is shown under **Personal settings > Account settings**.",
+          "message": "El nombre de usuario de la cuenta de Atlassian a usar con una contraseña de aplicación.\n\n**No** es la dirección de correo electrónico: Bitbucket rechaza una dirección de correo aquí. El nombre de usuario se muestra en **Configuración personal > Configuración de la cuenta**."
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Bitbucket Cloud REST API",
+          "message": "Una conexión con la API REST de Bitbucket Cloud"
+        }
+      }
+    }
+  }
+}

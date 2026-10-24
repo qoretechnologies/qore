@@ -32,6 +32,12 @@ public namespace ConnectionProvider {
     @since %DataProvider 3.3 (moved from ConnectionProvider to DataProvider)
 */
 public hashdecl ConnectionOptionInfo inherits DataProvider::BaseOptionInfo {
+    #! Source-bound references for shared option and allowed-value presentation
+    /** Prepared at the producer boundary; copied unchanged when only technical settings are overridden.
+        @since %DataProvider 3.11
+    */
+    *hash<string, hash<DataProvider::ConnectionPresentationSource>> presentation_sources;
+
     #! Option value type
     /** In addition to Qore type names, the following option types are supported:
         - \c "boolean": a \c bool value

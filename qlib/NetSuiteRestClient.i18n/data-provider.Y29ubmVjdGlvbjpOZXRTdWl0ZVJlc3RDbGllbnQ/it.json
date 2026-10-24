@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Oracle NetSuite REST API",
+          "message": "Una connessione all'API REST Oracle NetSuite"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Oracle NetSuite REST Connection",
+          "message": "Connessione REST Oracle NetSuite"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.desc": {
+          "source": "The NetSuite account ID or company ID; if not provided, its value is auto-determined",
+          "message": "L'ID account NetSuite o l'ID azienda; se non fornito, il valore viene determinato automaticamente"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.display_name": {
+          "source": "NetSuite Account ID",
+          "message": "ID account NetSuite"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "The NetSuite account ID or company ID",
+          "message": "L'ID del conto NetSuite o l'ID aziendale"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.b2F1dGgyX2xvZ291dF91cmw.desc": {
+          "source": "The logout / deauthorize URL for OAuth2 tokens",
+          "message": "L'URL di disconnessione / deautorizzazione per i token OAuth2"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.b2F1dGgyX2xvZ291dF91cmw.display_name": {
+          "source": "OAuth2 Logout URL",
+          "message": "URL di disconnessione OAuth2"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.b2F1dGgyX2xvZ291dF91cmw.short_desc": {
+          "source": "The logout / deauthorize URL for OAuth2 tokens",
+          "message": "L'URL di disconnessione / deautorizzazione per i token OAuth2"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Oracle NetSuite REST API",
+          "message": "Una connessione all'API REST Oracle NetSuite"
+        }
+      }
+    }
+  }
+}

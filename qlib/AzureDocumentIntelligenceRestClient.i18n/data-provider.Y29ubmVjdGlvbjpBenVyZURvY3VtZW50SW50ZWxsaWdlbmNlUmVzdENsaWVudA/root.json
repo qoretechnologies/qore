@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Azure Document Intelligence Connection",
+          "message": "Azure Document Intelligence Connection"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to Azure Document Intelligence",
+          "message": "A connection to Azure Document Intelligence"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Connection setup**:\n- Use the resource URL (`https://<resource-name>.cognitiveservices.azure.com`)\n- Supply either a subscription key or an Entra bearer token\n- Find the endpoint and key under **Keys and Endpoint** in the Azure portal\n\n**Entra authentication**: tokens require the `https://cognitiveservices.azure.com/.default` audience and resource permissions. **The caller renews expiring tokens.** Ping reads resource information and verifies authentication; other operations may require additional permissions.",
+          "message": "A connection to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Connection setup**:\n- Use the resource URL (`https://<resource-name>.cognitiveservices.azure.com`)\n- Supply either a subscription key or an Entra bearer token\n- Find the endpoint and key under **Keys and Endpoint** in the Azure portal\n\n**Entra authentication**: tokens require the `https://cognitiveservices.azure.com/.default` audience and resource permissions. **The caller renews expiring tokens.** Ping reads resource information and verifies authentication; other operations may require additional permissions."
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "Subscription Key",
+          "message": "Subscription Key"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Azure Document Intelligence subscription key",
+          "message": "Azure Document Intelligence subscription key"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "Azure Document Intelligence subscription key — sent as the `Ocp-Apim-Subscription-Key` header.",
+          "message": "Azure Document Intelligence subscription key — sent as the `Ocp-Apim-Subscription-Key` header."
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.ZW50cmFfdG9rZW4.display_name": {
+          "source": "Entra Bearer Token",
+          "message": "Entra Bearer Token"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.ZW50cmFfdG9rZW4.short_desc": {
+          "source": "A caller-managed Microsoft Entra access token",
+          "message": "A caller-managed Microsoft Entra access token"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.ZW50cmFfdG9rZW4.desc": {
+          "source": "Access token for `https://cognitiveservices.azure.com/.default`. Use instead of a subscription key and replace it before expiration.",
+          "message": "Access token for `https://cognitiveservices.azure.com/.default`. Use instead of a subscription key and replace it before expiration."
+        }
+      }
+    }
+  }
+}

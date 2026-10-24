@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Connection setup**:\n- Use the resource URL (`https://<resource-name>.cognitiveservices.azure.com`)\n- Supply either a subscription key or an Entra bearer token\n- Find the endpoint and key under **Keys and Endpoint** in the Azure portal\n\n**Entra authentication**: tokens require the `https://cognitiveservices.azure.com/.default` audience and resource permissions. **The caller renews expiring tokens.** Ping reads resource information and verifies authentication; other operations may require additional permissions.",
+          "message": "連接到 [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence)（先前稱為 Form Recognizer）—— Microsoft 的托管文件提取服務。\n\n**連接設定**：\n- 使用資源 URL (`https://<resource-name>.cognitiveservices.azure.com`)\n- 提供訂閱金鑰或 Entra 權杖\n- 在 Azure 入口網站的「金鑰和終端節點」中尋找終端節點和金鑰\n\n**Entra 認證**：權杖需包含 `https://cognitiveservices.azure.com/.default` 用戶端和資源權限。**呼叫者負責更新即將到期的權杖。** Ping 用於讀取資源資訊並驗證認證；其他操作可能需要額外權限。"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Azure Document Intelligence Connection",
+          "message": "Azure Document Intelligence 連接"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "Azure Document Intelligence subscription key — sent as the `Ocp-Apim-Subscription-Key` header.",
+          "message": "Azure Document Intelligence 訂閱金鑰——作為 `Ocp-Apim-Subscription-Key` 標頭傳送。"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "Subscription Key",
+          "message": "訂用金鑰"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Azure Document Intelligence subscription key",
+          "message": "Azure 文件智慧訂用金鑰"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.ZW50cmFfdG9rZW4.desc": {
+          "source": "Access token for `https://cognitiveservices.azure.com/.default`. Use instead of a subscription key and replace it before expiration.",
+          "message": "用於 `https://cognitiveservices.azure.com/.default` 的存取權杖。請取代訂用金鑰，並在到期前更新。"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.ZW50cmFfdG9rZW4.display_name": {
+          "source": "Entra Bearer Token",
+          "message": "Entra Bearer 權杖"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.option.ZW50cmFfdG9rZW4.short_desc": {
+          "source": "A caller-managed Microsoft Entra access token",
+          "message": "由呼叫者管理的 Microsoft Entra 存取權杖"
+        },
+        "connection.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDbGllbnQ.scheme.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to Azure Document Intelligence",
+          "message": "連接到 Azure 文件智慧"
+        }
+      }
+    }
+  }
+}

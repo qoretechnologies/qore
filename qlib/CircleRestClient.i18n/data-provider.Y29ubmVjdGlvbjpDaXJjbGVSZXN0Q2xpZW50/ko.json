@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Circle REST API for community management including posts, comments, members, spaces, events, and messaging",
+          "message": "게시물, 댓글, 회원, 공간, 이벤트 및 메시징을 포함한 커뮤니티 관리를 위한 Circle REST API에 대한 연결"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Circle REST Connection",
+          "message": "Circle REST 연결"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Circle community at https://app.circle.so\n2. Click on your community in the top-left corner\n3. Select **Developer** > **Tokens**\n4. Click **Create Token**, select **Admin V2** as the type\n5. Copy the token and paste it into the **API Token** field\n\n**Important:**\n- API access requires a **Business plan** or above\n- Rate limit: 2,000 requests per 5 minutes per IP\n- Store your token securely; treat it like a password",
+          "message": "1. https://app.circle.so 에서 Circle 커뮤니티에 로그인하세요\n2. 상단 왼쪽 모서리의 커뮤니티 이름을 클릭하세요\n3. **개발자** > **토큰**을 선택하세요\n4. **토큰 생성**을 클릭하고, 유형으로 **Admin V2**를 선택하세요\n5. 토큰을 복사하여 **API 토큰** 필드에 붙여넣으세요\n\n**중요:**\n- API 접근은 **비즈니스 플랜** 이상이 필요합니다\n- 요청 제한: IP당 5분에 2,000건\n- 토큰을 안전하게 보관하세요; 비밀번호처럼 취급하세요"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Generate Your API Token",
+          "message": "API 토큰 생성 방법"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Circle API token used for Bearer token authentication.\n\n**To obtain your API token:**\n1. Log in to your Circle community as an admin\n2. Click on your community in the top-left corner\n3. Select **Developer** > **Tokens**\n4. Click **Create Token** and select **Admin V2**\n\n**Note:** API access requires a Business plan or above.\n\nRate limit: 2,000 requests per 5 minutes per IP",
+          "message": "Bearer 토큰 인증에 사용되는 Circle API 토큰입니다.\n\n**API 토큰을 얻으려면:**\n1. 관리자 권한으로 Circle 커뮤니티에 로그인하세요\n2. 상단 왼쪽 모서리의 커뮤니티 이름을 클릭하세요\n3. **개발자** > **토큰**을 선택하세요\n4. **토큰 생성**을 클릭하고, **Admin V2**를 선택하세요\n\n**참고:** API 접근은 비즈니스 플랜 이상이 필요합니다.\n\n요청 제한: IP당 5분에 2,000건"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API 토큰"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Circle API token for authentication",
+          "message": "인증용 Circle API 토큰"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Circle REST API",
+          "message": "Circle REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

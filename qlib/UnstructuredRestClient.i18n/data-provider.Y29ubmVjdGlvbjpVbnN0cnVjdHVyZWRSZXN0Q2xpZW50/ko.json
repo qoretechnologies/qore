@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Unstructured.io](https://unstructured.io), which turns documents into data an AI application can use.\n\nOne connection serves both of Unstructured's APIs with the same key:\n- the **Partition API**, which breaks PDFs, Office files, HTML, images and emails into a typed element tree\n- the **Platform API**, which manages the source and destination connectors, the workflows that join them and the jobs that run them\n\nWorks against Unstructured's hosted deployments and self-hosted deployments — same module, different URL.  An API key is issued for one deployment and is rejected by the others; when the configured deployment rejects the key, the connection tries the other known deployments on the next ping and moves itself to whichever one accepts it.\n\nAuth: the `unstructured-api-key` header, which the ping verifies.",
+          "message": "[Unstructured.io](https://unstructured.io)로의 연결, AI 애플리케이션이 사용할 수 있는 데이터로 문서를 변환합니다.\n\n하나의 연결이 Unstructured의 두 API를 동일한 키로 사용합니다:\n- **Partition API**: PDF, Office 파일, HTML, 이미지, 이메일을 유형이 지정된 요소 트리로 분할합니다.\n- **Platform API**: 소스 및 목적지 커넥터, 이를 연결하는 워크플로우, 그리고 실행되는 작업을 관리합니다.\n\nUnstructured의 호스팅된 배포와 자체 호스팅 배포 모두에서 작동합니다 — 동일한 모듈, 다른 URL입니다. API 키는 하나의 배포에 대해 발급되며 다른 배포에서는 거부됩니다. 구성된 배포에서 키가 거부되면 연결은 다음 핑에서 다른 알려진 배포를 시도하고, 허용하는 쪽으로 이동합니다.\n\n인증: `unstructured-api-key` 헤더, 핑이 이를 검증합니다."
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Unstructured.io Connection",
+          "message": "Unstructured.io 연결"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Unstructured.io API key — sent as the `unstructured-api-key` header.",
+          "message": "Unstructured.io API 키 — `unstructured-api-key` 헤더로 전송됩니다."
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Unstructured.io API key",
+          "message": "Unstructured.io API 키"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.cGxhdGZvcm1fdXJs.desc": {
+          "source": "URL of the Unstructured **Platform API**, which manages connectors, workflows and jobs.\n\nUnstructured serves its two APIs on separate hosts, paired per deployment, so this is derived from the connection's own URL and only has to be set for a self-hosted deployment.",
+          "message": "Unstructured **Platform API**의 URL, 커넥터, 워크플로우, 작업을 관리합니다.\n\nUnstructured은 두 API를 별도의 호스트에서 제공하며, 각 배포마다 쌍으로 연결되므로 이 URL은 연결 자체의 URL에서 유도되며, 자체 호스팅 배포에서만 설정해야 합니다."
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.cGxhdGZvcm1fdXJs.display_name": {
+          "source": "Platform API URL",
+          "message": "Platform API URL"
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.option.cGxhdGZvcm1fdXJs.short_desc": {
+          "source": "Overrides the derived Unstructured Platform API URL",
+          "message": "유도된 Unstructured Platform API URL을 오버라이드합니다."
+        },
+        "connection.VW5zdHJ1Y3R1cmVkUmVzdENsaWVudA.scheme.VW5zdHJ1Y3R1cmVkUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Unstructured.io REST APIs",
+          "message": "Unstructured.io REST API로의 연결"
+        }
+      }
+    }
+  }
+}

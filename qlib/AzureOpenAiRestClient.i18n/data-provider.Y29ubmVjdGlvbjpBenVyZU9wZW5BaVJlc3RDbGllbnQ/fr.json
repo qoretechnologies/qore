@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "Connect to an Azure OpenAI resource for model inference, files, batches, and retrieval. Authenticate with a resource API key or Microsoft Entra ID. Connection pings verify authentication without generating content.",
+          "message": "Connectez-vous à une ressource Azure OpenAI pour l'inférence de modèles, les fichiers, les lots et la récupération. Authentifiez-vous avec une clé API de ressource ou avec Azure Active Directory. Les pings de connexion vérifient l'authentification sans générer de contenu."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Azure OpenAI Connection",
+          "message": "Connexion Azure OpenAI"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.desc": {
+          "source": "Key 1 or Key 2 from the Azure resource Keys and Endpoint page. Either key works.",
+          "message": "Clé 1 ou Clé 2 de la page Clés et point de terminaison de la ressource Azure. Les deux clés fonctionnent."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "Clé d'API"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.short_desc": {
+          "source": "Azure OpenAI resource api-key",
+          "message": "Clé API de la ressource Azure OpenAI"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X2lk.desc": {
+          "source": "Application (client) ID of the Entra application. Assign it access to this Azure OpenAI resource.",
+          "message": "ID d'application (client) de l'application Entra. Attribuez-lui l'accès à cette ressource Azure OpenAI."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X2lk.display_name": {
+          "source": "Entra Client ID",
+          "message": "ID client Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X2lk.short_desc": {
+          "source": "Client ID for Entra auth",
+          "message": "ID client pour l’authentification Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X3NlY3JldA.desc": {
+          "source": "Client secret value of the Entra application, not the secret identifier.",
+          "message": "Valeur du secret client de l’application Entra, pas l’identificateur de secret."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X3NlY3JldA.display_name": {
+          "source": "Entra Client Secret",
+          "message": "Secret client Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X3NlY3JldA.short_desc": {
+          "source": "Client secret for Entra auth",
+          "message": "Secret client pour l’authentification Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXBpX3ZlcnNpb24.allowed_values.c3RyaW5nOjIwMjQtMTAtMjE.display_name": {
+          "source": "2024-10-21 (Stable)",
+          "message": "2024-10-21 (Stable)"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXBpX3ZlcnNpb24.desc": {
+          "source": "API version for the LLM provider and legacy deployment URLs. The v1 actions do not require an API version. Use a supported date or preview version.",
+          "message": "Version de l’API pour les URL de déploiement du fournisseur LLM et des anciens déploiements. Les actions v1 n’exigent pas de version d’API. Utilisez une date prise en charge ou une version préliminaire."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXBpX3ZlcnNpb24.display_name": {
+          "source": "Legacy API Version",
+          "message": "Version d’API héritée"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXBpX3ZlcnNpb24.short_desc": {
+          "source": "Azure OpenAI REST API version",
+          "message": "Version de l’API REST Azure OpenAI"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmFwaV9rZXk.desc": {
+          "source": "Azure resource api-key header",
+          "message": "En-tête de clé API pour la ressource Azure"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmFwaV9rZXk.display_name": {
+          "source": "API Key",
+          "message": "Clé d'API"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmVudHJhX21hbmFnZWRfaWRlbnRpdHk.desc": {
+          "source": "Azure managed-identity (IMDS-for-Azure)",
+          "message": "Identité managée Azure (IMDS pour Azure)"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmVudHJhX21hbmFnZWRfaWRlbnRpdHk.display_name": {
+          "source": "Entra Managed Identity",
+          "message": "Identité managée Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmVudHJhX2NsaWVudF9jcmVkZW50aWFscw.desc": {
+          "source": "Entra (Azure AD) client_credentials grant",
+          "message": "Octroi client_credentials (Entra [AD Azure])"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmVudHJhX2NsaWVudF9jcmVkZW50aWFscw.display_name": {
+          "source": "Entra Client Credentials",
+          "message": "Informations d'identification client Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.desc": {
+          "source": "Use a resource API key for development, a registered Entra application for a service, or the identity assigned to an Azure host.",
+          "message": "Utilisez une clé API de ressource pour le développement, une application Entra enregistrée pour un service, ou l'identité affectée à un hôte Azure."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.display_name": {
+          "source": "Authentication",
+          "message": "Authentification"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.short_desc": {
+          "source": "Authentication mode",
+          "message": "Mode d'authentification"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZGVwbG95bWVudA.desc": {
+          "source": "Deployment used by the LLM provider. In the Azure Foundry portal, open Models and endpoints and copy the deployment name. Actions can choose another deployment.",
+          "message": "Déploiement utilisé par le fournisseur de modèles linguistiques. Dans le portail Azure Foundry, ouvrez Modèles et points de terminaison, puis copiez le nom du déploiement. Les actions peuvent choisir un autre déploiement."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZGVwbG95bWVudA.display_name": {
+          "source": "Default Model Deployment",
+          "message": "Déploiement de modèle par défaut"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZGVwbG95bWVudA.short_desc": {
+          "source": "Azure OpenAI deployment name",
+          "message": "Nom du déploiement Azure OpenAI"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZW50cmFfc2NvcGU.desc": {
+          "source": "Leave empty to select the token scope for this endpoint automatically. Foundry projects use `https://ai.azure.com/.default`; Azure OpenAI resources use `https://cognitiveservices.azure.com/.default`.",
+          "message": "Laissez vide pour sélectionner automatiquement la portée de jeton pour ce point de terminaison. Les projets Foundry utilisent `https://ai.azure.com/.default`; les ressources Azure OpenAI utilisent `https://cognitiveservices.azure.com/.default`."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZW50cmFfc2NvcGU.display_name": {
+          "source": "Entra Scope",
+          "message": "Portée Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZW50cmFfc2NvcGU.short_desc": {
+          "source": "OAuth2 scope to request",
+          "message": "Portée OAuth2 à demander"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfbWFuYWdlZF9pZGVudGl0eV9jbGllbnRfaWQ.desc": {
+          "source": "Leave empty to use the host's system-assigned identity. For a user-assigned identity, supply its client ID. The host must provide Azure managed identity access.",
+          "message": "Laissez vide pour utiliser l'identité attribuée par le système de l'hôte. Pour une identité attribuée par l'utilisateur, indiquez son ID client. L'hôte doit fournir l'accès à l'identité managée Azure."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfbWFuYWdlZF9pZGVudGl0eV9jbGllbnRfaWQ.display_name": {
+          "source": "Managed Identity Client ID",
+          "message": "ID client de l'identité gérée"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfbWFuYWdlZF9pZGVudGl0eV9jbGllbnRfaWQ.short_desc": {
+          "source": "Optional client ID of a user-assigned managed identity",
+          "message": "ID client facultatif d'une identité managée attribuée par l'utilisateur"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfdGVuYW50X2lk.desc": {
+          "source": "Tenant ID or domain of the Entra application used for authentication.",
+          "message": "ID du locataire ou domaine de l’application Entra utilisée pour l’authentification."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfdGVuYW50X2lk.display_name": {
+          "source": "Entra Tenant ID",
+          "message": "ID du locataire Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfdGVuYW50X2lk.short_desc": {
+          "source": "Tenant ID for Entra auth",
+          "message": "ID du locataire pour l’authentification Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to an Azure OpenAI Service resource",
+          "message": "Une connexion à une ressource Service Azure OpenAI"
+        }
+      }
+    }
+  }
+}

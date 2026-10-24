@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a Salesforce instance with the REST API",
+          "message": "REST API를 사용하는 Salesforce 인스턴스에 대한 연결"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Salesforce REST Connection",
+          "message": "Salesforce REST 연결"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "The Salesforce API version to use; use `auto` (the default) to use the latest API version",
+          "message": "사용할 Salesforce API 버전; 최신 API 버전을 사용하려면 `auto`을 사용하세요(기본값)"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API 버전"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "사용할 API 버전"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.aW5zdGFuY2VfdXJs.desc": {
+          "source": "The Salesforce.com instance URL returned in the OAuth2 login process (set automatically on login)",
+          "message": "OAuth2 로그인 프로세스에서 반환된 Salesforce.com 인스턴스 URL(로그인 시 자동 설정됨)"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.aW5zdGFuY2VfdXJs.display_name": {
+          "source": "Instance URL",
+          "message": "인스턴스 URL"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.aW5zdGFuY2VfdXJs.short_desc": {
+          "source": "The Salesforce.com instance URL",
+          "message": "Salesforce.com 인스턴스 URL"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.aWRfc2VydmljZV91cmw.desc": {
+          "source": "The Salesforce.com identity service URL returned in the OAuth2 login process (set automatically on login)",
+          "message": "OAuth2 로그인 프로세스에서 반환된 Salesforce.com ID 서비스 URL (로그인 시 자동 설정)"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.aWRfc2VydmljZV91cmw.display_name": {
+          "source": "ID Service URL",
+          "message": "ID 서비스 URL"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.aWRfc2VydmljZV91cmw.short_desc": {
+          "source": "The Salesforce.com identity service URL",
+          "message": "Salesforce.com ID 서비스 URL"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "The OAuth2 client_id and also the Salesforce \"consumer key\" for the Connected App",
+          "message": "OAuth2 client_id이며, Connected App용 Salesforce \"소비자 키\"이기도 함"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "The OAuth2 client_secret and also the Salesforce \"consumer secret\" for the Connected App",
+          "message": "OAuth2 client_secret이며, Connected App용 Salesforce \"소비자 비밀번호\"이기도 함"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2xvZ291dF91cmw.desc": {
+          "source": "The OAuth logout / revoke token URL",
+          "message": "OAuth 로그아웃 / 토큰 취소 URL"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2xvZ291dF91cmw.display_name": {
+          "source": "OAuth2 Revocation URL",
+          "message": "OAuth2 토큰 취소 URL"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2xvZ291dF91cmw.short_desc": {
+          "source": "The OAuth logout / revoke token URL",
+          "message": "OAuth 로그아웃 / 토큰 취소 URL"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.cGFzc3dvcmQ.desc": {
+          "source": "the Salesforce.com password (will override any password in the URL)",
+          "message": "Salesforce.com 비밀번호 (URL에 있는 비밀번호를 무시하고 대체함)"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.dXNlcm5hbWU.desc": {
+          "source": "the Salesforce.com username (will override any username in the URL)",
+          "message": "Salesforce.com 사용자 이름 (URL에 있는 사용자 이름을 무시하고 대체함)"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a Salesforce instance with the REST API",
+          "message": "REST API를 사용하는 Salesforce 인스턴스에 대한 연결"
+        }
+      }
+    }
+  }
+}

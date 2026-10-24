@@ -36,7 +36,8 @@ public namespace DbDataProvider {
 public class DatasourceConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("DbDataProvider",
+            "DatasourceConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Database Connection",
             "short_desc": "Connection to a database server",
             "desc": "Connection to a database server using a datasource connection string",
@@ -48,7 +49,7 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
                 "tcp": "db",
             },
             "options": ConnectionOptions,
-        };
+        });
 
         #! Connection options
         const ConnectionOptions = {

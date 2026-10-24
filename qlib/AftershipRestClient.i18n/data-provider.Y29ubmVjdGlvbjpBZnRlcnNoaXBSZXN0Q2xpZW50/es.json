@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Aftership REST API for package tracking and returns management.\n\nRequires an API key (set as `apikey`) from the [Aftership Dashboard](https://admin.aftership.com/). The connection uses the `aftership://` URL scheme and automatically sets the required `as-api-key` header on all API requests",
+          "message": "Una conexión con la API REST de Aftership para el seguimiento de paquetes y gestión de devoluciones.\n\nRequiere una clave de API (configurada como `apikey`) desde el [Panel de Aftership](https://admin.aftership.com/). La conexión utiliza el esquema de URL `aftership://` y establece automáticamente el encabezado requerido `as-api-key` en todas las solicitudes de la API"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Aftership REST Connection",
+          "message": "Conexión REST de Aftership"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Aftership, you need an API key:\n\n1. Sign up or sign in at the [Aftership Dashboard](https://accounts.aftership.com)\n2. Go to **Settings** > **API Keys** (or visit [admin.aftership.com/settings/api-keys](https://admin.aftership.com/settings/api-keys) directly)\n3. Click **Create API key**\n4. Enter a descriptive name, select the `as-api-key` signature type, and set permissions\n5. Click **Save** and copy your new API key\n\nKeep your API key secure and rotate it periodically.",
+          "message": "Para conectarte con Aftership, necesitas una clave de API:\n\n1. Regístrate o inicia sesión en el [Panel de Aftership](https://accounts.aftership.com)\n2. Ve a **Configuración** > **Claves de API** (o visita directamente [admin.aftership.com/settings/api-keys](https://admin.aftership.com/settings/api-keys))\n3. Haz clic en **Crear clave de API**\n4. Introduce un nombre descriptivo, selecciona el tipo de firma `as-api-key` y configura los permisos\n5. Haz clic en **Guardar** y copia tu nueva clave de API\n\nMantén tu clave de API segura y rotála periódicamente."
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Aftership API Key",
+          "message": "Cómo obtener tu clave de API de Aftership"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Aftership API key used for authentication; sent as the `as-api-key` header.\n\nGet your API key from the [Aftership Dashboard](https://admin.aftership.com/)",
+          "message": "La clave de API de Aftership utilizada para la autenticación; se envía como el encabezado `as-api-key`.\n\nObtén tu clave de API desde el [Panel de Aftership](https://admin.aftership.com/)"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clave de API"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Aftership API key for authentication",
+          "message": "Clave de API de Aftership para autenticación"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Aftership REST API",
+          "message": "Una conexión con la API REST de Aftership"
+        }
+      }
+    }
+  }
+}

@@ -439,7 +439,8 @@ public class XeroRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "xero://api.xero.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("XeroRestClient",
+            "XeroRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Xero REST Connection",
             "short_desc": "A connection to the Xero REST API",
             "desc": "A connection to [Xero](https://www.xero.com) for contacts, invoices, payments, bank "
@@ -533,7 +534,7 @@ public class XeroRestConnection inherits RestClient::RestConnection {
                 },
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
-        };
+        });
     }
 
     #! Creates the XeroRestConnection object

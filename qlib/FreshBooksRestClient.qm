@@ -274,7 +274,8 @@ public class FreshBooksRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "freshbooks://api.freshbooks.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("FreshBooksRestClient",
+            "FreshBooksRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "FreshBooks REST Connection",
             "short_desc": "A connection to the FreshBooks REST API",
             "desc": "A connection to the FreshBooks REST API for accounting, invoicing, and time tracking",
@@ -336,7 +337,7 @@ public class FreshBooksRestConnection inherits RestClient::RestConnection {
                     }),
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
-        };
+        });
     }
 
     #! creates the FreshBooksRestConnection object

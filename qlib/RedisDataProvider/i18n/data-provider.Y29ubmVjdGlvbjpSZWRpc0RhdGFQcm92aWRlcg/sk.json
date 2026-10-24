@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.desc": {
+          "source": "A connection to a Redis server using the `redis` or `rediss` (TLS) protocols",
+          "message": "Spojenie s Redis serverom pomocou protokolu `redis` alebo `rediss` (TLS)"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.display_name": {
+          "source": "Redis Connection",
+          "message": "Spojenie s Redis"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connection timeout in seconds",
+          "message": "Časový limit pripojenia v sekundách"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Časový limit pripojenia"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connection timeout in seconds",
+          "message": "Časový limit pripojenia v sekundách"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.ZGI.desc": {
+          "source": "The Redis database number to select (0-15 by default, configurable per server)",
+          "message": "Číslo Redis databázy na výber (prednastavené 0–15, konfigurovateľné podľa servera)"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "Databáza"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.ZGI.short_desc": {
+          "source": "The Redis database number to select",
+          "message": "Číslo Redis databázy na výber"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; only used if no password is set in the URL",
+          "message": "Heslo pre overenie; používa sa len v prípade, že nie je heslo nastavené v URL"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Heslo"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.cGFzc3dvcmQ.short_desc": {
+          "source": "Sets the password for authentication",
+          "message": "Nastaví heslo pre overenie"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dGltZW91dA.desc": {
+          "source": "The I/O timeout for read and write operations in seconds",
+          "message": "Časový limit I/O pre čítanie a zápis v sekundách"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Časový limit I/O"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dGltZW91dA.short_desc": {
+          "source": "The I/O timeout in seconds",
+          "message": "Časový limit I/O v sekundách"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dXNlcm5hbWU.desc": {
+          "source": "The username for ACL authentication (Redis 6.0+); only used if no username is set in the URL",
+          "message": "Užívateľské meno pre overenie prístupu (Redis 6.0+); používa sa len, ak nie je uvedené v URL"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Používateľské meno"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for ACL authentication",
+          "message": "Nastaví užívateľské meno pre overenie prístupu"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a Redis server",
+          "message": "Pripojenie k serveru Redis"
+        }
+      }
+    }
+  }
+}

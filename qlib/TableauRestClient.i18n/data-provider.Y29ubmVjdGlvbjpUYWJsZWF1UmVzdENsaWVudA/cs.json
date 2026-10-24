@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Tableau REST API for analytics and data management",
+          "message": "Připojení k REST API Tableau pro analýzu a správu dat"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Tableau REST Connection",
+          "message": "Připojení k Tableau REST"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "Enter your Tableau Cloud pod name (subdomain) and Personal Access Token credentials.\n\n- **Subdomain**: The pod name from your Tableau Cloud URL (e.g., `us-east-23b` from https://us-east-23b.online.tableau.com)\n- **Token Name / Secret**: Create a Personal Access Token in your Tableau account settings",
+          "message": "Zadejte název svého podu Tableau Cloud (subdoménu) a přihlašovací údaje osobního přístupového tokenu.\n\n- **Subdoména**: Název podu z URL adresy Tableau Cloud (např. `us-east-23b` z https://us-east-23b.online.tableau.com)\n- **Název tokenu / tajný kód**: Vytvořte osobní přístupový token v nastavení svého účtu Tableau"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Tableau Cloud Connection",
+          "message": "Připojení k Tableau Cloud"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.Y29udGVudF91cmw.desc": {
+          "source": "The content URL (site name) for the Tableau site. Use an empty string for the default site.",
+          "message": "Adres URL obsahu (název webu) pro web Tableau. Použijte prázdný řetězec pro výchozí web."
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.Y29udGVudF91cmw.display_name": {
+          "source": "Site Name",
+          "message": "Název účtu"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.Y29udGVudF91cmw.short_desc": {
+          "source": "Tableau site content URL",
+          "message": "Adres URL webu Tableau"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The Tableau REST API version (e.g., `3.27`)",
+          "message": "Verze Tableau REST API (např. `3.27`"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verze API"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "Tableau REST API version",
+          "message": "Verze Tableau REST API"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.desc": {
+          "source": "The Tableau Cloud pod name (e.g., `us-east-23b`, `10ax`, `10ay`). For Tableau Cloud, the server address must contain the pod name.",
+          "message": "Název uzlu Tableau Cloud (např. `us-east-23b`, `10ax`, `10ay`). Pro Tableau Cloud musí být v adrese serveru obsažen název uzlu."
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.display_name": {
+          "source": "Subdomain",
+          "message": "Poddoména"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.short_desc": {
+          "source": "Tableau Cloud pod name",
+          "message": "Název uzlu Tableau Cloud"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fbmFtZQ.desc": {
+          "source": "The name of the Personal Access Token for authentication",
+          "message": "Název osobního přístupového tokenu pro ověření"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fbmFtZQ.display_name": {
+          "source": "Token Name",
+          "message": "Název tokenu"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fbmFtZQ.short_desc": {
+          "source": "Personal Access Token name",
+          "message": "Název osobního přístupového tokenu"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fc2VjcmV0.desc": {
+          "source": "The secret value of the Personal Access Token",
+          "message": "Tajná hodnota osobního přístupového tokenu"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fc2VjcmV0.display_name": {
+          "source": "Token Secret",
+          "message": "Tajný klíč tokenu"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fc2VjcmV0.short_desc": {
+          "source": "Personal Access Token secret",
+          "message": "Tajná hodnota osobního přístupového tokenu"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Tableau REST API",
+          "message": "Připojení k rozhraní Tableau REST API"
+        }
+      }
+    }
+  }
+}

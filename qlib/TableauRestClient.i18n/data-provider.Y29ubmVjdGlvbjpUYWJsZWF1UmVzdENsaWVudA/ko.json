@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Tableau REST API for analytics and data management",
+          "message": "분석 및 데이터 관리를 위한 Tableau REST API에 대한 연결"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Tableau REST Connection",
+          "message": "Tableau REST 연결"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "Enter your Tableau Cloud pod name (subdomain) and Personal Access Token credentials.\n\n- **Subdomain**: The pod name from your Tableau Cloud URL (e.g., `us-east-23b` from https://us-east-23b.online.tableau.com)\n- **Token Name / Secret**: Create a Personal Access Token in your Tableau account settings",
+          "message": "Tableau Cloud의 포드 이름(서브도메인)과 개인 액세스 토큰 자격 증명을 입력하세요.\n\n- **서브도메인**: Tableau Cloud URL에서 가져온 포드 이름 (예: `us-east-23b` from https://us-east-23b.online.tableau.com)\n- **토큰 이름 / 비밀번호**: Tableau 계정 설정에서 개인 액세스 토큰을 생성하세요"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Tableau Cloud Connection",
+          "message": "Tableau Cloud 연결"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.Y29udGVudF91cmw.desc": {
+          "source": "The content URL (site name) for the Tableau site. Use an empty string for the default site.",
+          "message": "Tableau 사이트의 콘텐츠 URL(사이트 이름). 기본 사이트를 사용하려면 빈 문자열을 사용하세요."
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.Y29udGVudF91cmw.display_name": {
+          "source": "Site Name",
+          "message": "사이트 이름"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.Y29udGVudF91cmw.short_desc": {
+          "source": "Tableau site content URL",
+          "message": "Tableau 사이트 콘텐츠 URL"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The Tableau REST API version (e.g., `3.27`)",
+          "message": "Tableau REST API 버전 (예: `3.27`)"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 버전"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "Tableau REST API version",
+          "message": "Tableau REST API 버전"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.desc": {
+          "source": "The Tableau Cloud pod name (e.g., `us-east-23b`, `10ax`, `10ay`). For Tableau Cloud, the server address must contain the pod name.",
+          "message": "Tableau Cloud의 포드 이름 (예: `us-east-23b`, `10ax`, `10ay`). Tableau Cloud의 경우 서버 주소에 포드 이름이 포함되어야 합니다."
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.display_name": {
+          "source": "Subdomain",
+          "message": "서브도메인"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.short_desc": {
+          "source": "Tableau Cloud pod name",
+          "message": "Tableau Cloud 포드 이름"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fbmFtZQ.desc": {
+          "source": "The name of the Personal Access Token for authentication",
+          "message": "인증을 위한 개인용 액세스 토큰의 이름"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fbmFtZQ.display_name": {
+          "source": "Token Name",
+          "message": "토큰 이름"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fbmFtZQ.short_desc": {
+          "source": "Personal Access Token name",
+          "message": "개인용 액세스 토큰 이름"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fc2VjcmV0.desc": {
+          "source": "The secret value of the Personal Access Token",
+          "message": "개인용 액세스 토큰의 비밀 값"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fc2VjcmV0.display_name": {
+          "source": "Token Secret",
+          "message": "토큰 비밀번호"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.option.dG9rZW5fc2VjcmV0.short_desc": {
+          "source": "Personal Access Token secret",
+          "message": "개인용 액세스 토큰 비밀번호"
+        },
+        "connection.VGFibGVhdVJlc3RDbGllbnQ.scheme.VGFibGVhdVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Tableau REST API",
+          "message": "Tableau REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

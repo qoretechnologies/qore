@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [GitLab](https://gitlab.com) for source code, issues, merge requests, CI/CD variables and wikis.\n\n**The instance is the connection.** `hostname` names the GitLab installation this connection works against - `https://gitlab.com` or a self-managed instance - and the target URL and both OAuth2 endpoints are derived from it. GitLab.com and a self-managed instance run the same API over entirely different data, so an integration pointed at the wrong one does not fail; it succeeds against the wrong repositories.\n\n**Authentication** is either an access token or the OAuth2 authorization code flow:\n- a personal, project or group access token with the `api` scope, created under **User Settings > Access Tokens**, sent as a bearer token; or\n- `oauth2_client_id` and `oauth2_client_secret` from an OAuth application registered in the instance itself. There is no shared application, so a self-managed instance needs its own.\n\nGitLab is a trademark of GitLab B.V.",
+          "message": "Připojení k [GitLab](https://gitlab.com) pro zdrojový kód, problémy, požadavky na slučování, proměnné CI/CD a wiki.\n\n**Instancí je připojení.** `hostname` určuje instalaci GitLab, proti které toto připojení pracuje – `https://gitlab.com` nebo vlastní instance – a cílová adresa a obě koncové body OAuth2 jsou z ní odvozeny. GitLab.com a vlastní instance provozují stejné API nad zcela odlišnými daty, takže integrace směřující na špatnou instanci se nezakládá; úspěšně pracuje s nesprávnými úložišti.\n\n**Autentizace** je buď přístupový token nebo tok autorizace OAuth2:\n- osobní, projektový nebo skupinový přístupový token s oprávněním `api`, vytvořený v **Nastavení uživatele > Přístupové tokeny**, odesílaný jako nosič tokenu; nebo\n- `oauth2_client_id` a `oauth2_client_secret` z aplikace zaregistrované přímo v instanci. Žádná sdílená aplikace neexistuje, takže vlastní instance potřebuje svou vlastní.\n\nGitLab je ochranná známka společnosti GitLab B.V."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "GitLab REST Connection",
+          "message": "REST připojení k GitLabu"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.aG9zdG5hbWU.desc": {
+          "source": "The base URL of the GitLab installation this connection works against, ex: `https://gitlab.com` or `https://gitlab.example.com`.\n\nThis is the connection's defining option: the target URL and both OAuth2 endpoints are derived from it, and a stored URL that disagrees with it is ignored rather than allowed to decide where requests go.\n\nA bare host is given `https`.",
+          "message": "Základní adresa GitLab instalace, proti které se tato připojení provádí, např. `https://gitlab.com` nebo `https://gitlab.example.com`.\n\nToto je rozhodující volba připojení: cílová adresa a obě koncová body OAuth2 jsou odvozeny z ní, a uložená adresa, která se od ní liší, je ignorována místo toho, aby určovala, kam jsou požadavky odesílány.\n\nPro základní hostitele je použita `https`."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.aG9zdG5hbWU.display_name": {
+          "source": "GitLab Hostname",
+          "message": "Hostitel GitLab"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.aG9zdG5hbWU.short_desc": {
+          "source": "The GitLab instance to work against",
+          "message": "Instanci GitLab, proti které se bude pracovat"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "The client ID of an OAuth application registered in this GitLab instance.\n\nOnly needed for the OAuth2 flow; an access token in `token` needs neither this nor `oauth2_client_secret`. Register the application under **Admin > Applications** (or **User Settings > Applications**) with `https://api.qoretechnologies.com/qorus-oauth2-redirect` as the redirect URI.",
+          "message": "ID klienta aplikace OAuth, registrované v této instanci GitLab.\n\nPotřebné pouze pro tok OAuth2; přístupový token v `token` nepotřebuje ani toto, ani `oauth2_client_secret`.\nZaregistrujte aplikaci v **Správa > Aplikace** (nebo **Nastavení uživatele > Aplikace**) s `https://api.qoretechnologies.com/qorus-oauth2-redirect` jako přesměrovací adresou URI."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "The client secret of an OAuth application registered in this GitLab instance.\n\nOnly needed for the OAuth2 flow; see `oauth2_client_id`.",
+          "message": "Tajný klíč klienta aplikace OAuth, registrované v této instanci GitLab.\n\nPotřebné pouze pro tok OAuth2; viz `oauth2_client_id`."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A GitLab access token, sent as a bearer token.\n\n**To obtain one:**\n1. Log in to the GitLab instance this connection targets\n2. Go to **User Settings > Access Tokens** (or a project's or group's **Settings > Access Tokens**)\n3. Create a token with the `api` scope, or `read_api` for read-only use\n\nLeave this unset to use the OAuth2 flow instead.",
+          "message": "Přístupový token GitLab, odesílaný jako nosný token.\n\n**Jak získat:**\n1. Přihlaste se k instanci GitLab, proti které se tato připojení provádí\n2. Přejděte na **Nastavení uživatele > Přístupové tokeny** (nebo k projektu nebo skupině **Nastavení > Přístupové tokeny**)\n3. Vytvořte token s rozsahem `api` nebo `read_api` pro jen čtení\n\nNechte prázdné, pokud chcete použít tok OAuth2."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "Přístupový token"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A GitLab personal, project or group access token",
+          "message": "Osobní, projektový nebo skupinový přístupový token GitLab"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a GitLab instance",
+          "message": "Připojení k instanci GitLab"
+        }
+      }
+    }
+  }
+}

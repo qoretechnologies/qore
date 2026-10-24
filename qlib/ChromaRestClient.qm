@@ -115,7 +115,8 @@ public class ChromaRestConnection inherits RestClient::RestConnection {
     public {
         const DefaultUrl = "chroma://localhost:8000";
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ChromaRestClient",
+            "ChromaRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Chroma Vector Store Connection",
             "short_desc": "A connection to a Chroma vector database",
             "desc": "A connection to a [Chroma](https://www.trychroma.com) vector database.\n\n"
@@ -158,7 +159,7 @@ public class ChromaRestConnection inherits RestClient::RestConnection {
                     "default_value": ChromaRestClientBase::DefaultDatabase,
                 },
             },
-        };
+        });
     }
 
     constructor(string name, string description, string url = DefaultUrl,

@@ -302,7 +302,8 @@ public class MewsRestConnection inherits RestClient::RestConnection {
         const DefaultMewsPingPath = "configuration/get";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("MewsRestClient",
+            "MewsRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Mews REST Connection",
             "short_desc": "A connection to the Mews REST API",
             "desc": "A connection to the Mews REST API",
@@ -352,7 +353,7 @@ public class MewsRestConnection inherits RestClient::RestConnection {
                 }),
             },
             "required_options": "client_token,access_token",
-        };
+        });
     }
 
     #! creates the MewsRestConnection object

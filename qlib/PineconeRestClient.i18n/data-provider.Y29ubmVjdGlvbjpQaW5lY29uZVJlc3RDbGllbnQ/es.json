@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.desc": {
+          "source": "Connect to [Pinecone Admin](https://docs.pinecone.io/guides/organizations/manage-service-accounts) to provision projects and manage access.\n\n- Uses the service account's **Client ID** and **Client Secret**\n- Acquires and renews OAuth2 bearer tokens automatically\n- Verifies credentials by listing accessible projects\n\nCreate the service account in your Pinecone organization and grant the roles its workflows need.",
+          "message": "Conéctese a [Pinecone Admin](https://docs.pinecone.io/guides/organizations/manage-service-accounts) para aprovisionar proyectos y gestionar accesos.\n\n- Usa el **ID de cliente** y el **secreto de cliente** de la cuenta de servicio\n- Adquiere y renueva tokens de portador OAuth2 automáticamente\n- Verifica las credenciales mediante la lista de proyectos accesibles\n\nCree la cuenta de servicio en su organización de Pinecone y otorgue los roles necesarios para sus flujos de trabajo."
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Pinecone Admin Connection",
+          "message": "Conexión a Admin de Pinecone"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "The OAuth2 client ID of a service account in your Pinecone organization. This differs from the service account's resource ID.",
+          "message": "El ID de cliente OAuth2 de una cuenta de servicio en su organización de Pinecone. Esto difiere del ID de recurso de la cuenta de servicio."
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9pZA.display_name": {
+          "source": "Client ID",
+          "message": "ID de cliente"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "The secret issued when the service account is created or rotated.",
+          "message": "El secreto emitido cuando se crea o se rota la cuenta de servicio."
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.display_name": {
+          "source": "Client Secret",
+          "message": "Secreto del cliente"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOmNsaWVudF9jcmVkZW50aWFscw.display_name": {
+          "source": "Client Credentials",
+          "message": "Credenciales de cliente"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "Manage Pinecone organizations with a service account",
+          "message": "Administre organizaciones de Pinecone con una cuenta de servicio"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [Pinecone](https://www.pinecone.io) — a managed vector database for semantic search, hybrid search and retrieval-augmented generation.\n\nRequires an API key, sent as the `Api-Key` header (NOT `Authorization: Bearer`).  Create one in the [Pinecone console](https://app.pinecone.io/); a key is scoped to a single project, so the connection reaches the indexes of that project only.\n\nPinecone has a **two-plane architecture**, and this connection addresses both.  The control plane at `https://api.pinecone.io` creates and describes indexes, backups and collections.  The data plane — searching, upserting and fetching, which is to say the operations that *are* Pinecone — lives on a **separate host per index**, which only the control plane knows.  Actions that reach it take the index as an option and the host is resolved and cached automatically, so nothing here has to be configured per index.\n\nThe dated API version is pinned by this module and sent on every call, so a change to the server-side default cannot alter the behaviour of a flow that is already running.",
+          "message": "Una conexión a [Pinecone](https://www.pinecone.io) — una base de datos vectorial gestionada para búsqueda semántica, búsqueda híbrida y generación aumentada por recuperación.\n\nRequiere una clave de API, enviada como el encabezado `Api-Key` (NO como `Authorization: Bearer`). Crea una en la [consola de Pinecone](https://app.pinecone.io/); una clave está limitada a un solo proyecto, por lo que la conexión solo accede a los índices de ese proyecto.\n\nPinecone tiene una **arquitectura de dos planos**, y esta conexión aborda ambos. El plano de control en `https://api.pinecone.io` crea y describe índices, copias de seguridad y colecciones. El plano de datos —búsqueda, inserción y recuperación, es decir, las operaciones que *son* Pinecone— reside en un **host separado por índice**, que solo conoce el plano de control. Las acciones que lo alcanzan toman el índice como opción y el host se resuelve y almacena en caché automáticamente, por lo que no se necesita configurar nada por índice.\n\nLa versión de API obsoleta está fijada por este módulo y se envía en cada llamada, por lo que un cambio en el valor predeterminado del servidor no puede alterar el comportamiento de un flujo ya en ejecución."
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Pinecone Vector Database Connection",
+          "message": "Conexión a la base de datos vectorial Pinecone"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Pinecone API key, sent as the `Api-Key` header (NOT `Authorization: Bearer`).\n\nCreate one in the [Pinecone console](https://app.pinecone.io/) under **API keys**.  A key belongs to one project and carries its own permissions, so a key that can read may not be able to create or delete an index.",
+          "message": "La clave de API de Pinecone, enviada como el encabezado `Api-Key` (NO como `Authorization: Bearer`).\n\nCrea una en la [consola de Pinecone](https://app.pinecone.io/) bajo **Claves de API**. Una clave pertenece a un solo proyecto y tiene sus propios permisos, por lo que una clave que puede leer puede no poder crear ni eliminar un índice."
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clave de API"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "The Pinecone API key",
+          "message": "La clave de API de Pinecone"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Pinecone managed vector database",
+          "message": "Una conexión a la base de datos vectorial gestionada Pinecone"
+        }
+      }
+    }
+  }
+}

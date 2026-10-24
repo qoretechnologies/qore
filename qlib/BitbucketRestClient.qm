@@ -233,7 +233,8 @@ public class BitbucketRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "bitbucket://api.bitbucket.org";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("BitbucketRestClient",
+            "BitbucketRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Bitbucket REST Connection",
             "short_desc": "A connection to the Bitbucket Cloud REST API",
             "desc": "A connection to [Bitbucket Cloud](https://bitbucket.org) for repositories, commits, "
@@ -314,7 +315,7 @@ public class BitbucketRestConnection inherits RestClient::RestConnection {
             # platform can supply a client; an access token or an app password is the fallback for a
             # credential that is not tied to a user's authorization
             "required_options": "oauth2_client_id,oauth2_client_secret|token|username,password",
-        };
+        });
     }
 
     #! Creates the BitbucketRestConnection object

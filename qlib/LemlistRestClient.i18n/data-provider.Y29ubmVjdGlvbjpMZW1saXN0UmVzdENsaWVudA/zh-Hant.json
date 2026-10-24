@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Lemlist REST API for sales outreach and email campaign management.\n\nLemlist is a sales engagement platform enabling personalized outreach campaigns, lead management, and email automation.\n\n**Rate Limits:**\n- 20 requests per 2 seconds per API key\n- Rate limit headers are included in all responses",
+          "message": "連接到 Lemlist REST API 的連接，用於銷售外展與電子郵件行銷活動管理。\n\nLemlist 是一個銷售參與平台，支援個人化外展活動、潛在客戶管理與電子郵件自動化。\n\n**速率限制：**\n- 每個 API 金鑰每 2 秒最多 20 個請求\n- 所有回應皆包含速率限制標頭"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Lemlist REST Connection",
+          "message": "Lemlist REST 連接"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to Lemlist\n2. Go to **Settings** (bottom left corner)\n3. Click **Integrations** → **API & Webhooks**\n4. Click **Generate Key** and copy the key",
+          "message": "1. 登入 Lemlist\n2. 前往 **設定**（左下角）\n3. 點選 **整合** → **API 與 Webhooks**\n4. 點選 **產生金鑰** 並複製金鑰"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Where to find your API key",
+          "message": "如何找到您的 API 金鑰"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Lemlist enforces a rate limit of **20 requests per 2 seconds** per API key.\n\nExceeding this limit will result in HTTP 429 (Too Many Requests) responses.\nWait briefly before retrying if you encounter rate limit errors.",
+          "message": "Lemlist 對每個 API 金鑰強制執行每 2 秒 20 次請求的速率限制。\n\n超過此限制將導致 HTTP 429（請求過多）回應。\n若遇到速率限制錯誤，請稍等片刻再重試。"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Rate Limits",
+          "message": "速率限制"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Lemlist API key used for authentication.\n\nTo find your API key, log in to Lemlist and go to **Settings** → **Integrations** → **API & Webhooks**, then click **Generate Key**.",
+          "message": "用於驗證的 Lemlist API 金鑰。\n\n要找到您的 API 金鑰，請登入 Lemlist，前往 **設定** → **整合** → **API 與 Webhooks**，然後點選 **產生金鑰**。"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Lemlist API key for authentication",
+          "message": "用於驗證的 Lemlist API 金鑰"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Lemlist REST API",
+          "message": "與 Lemlist REST API 的連接"
+        }
+      }
+    }
+  }
+}

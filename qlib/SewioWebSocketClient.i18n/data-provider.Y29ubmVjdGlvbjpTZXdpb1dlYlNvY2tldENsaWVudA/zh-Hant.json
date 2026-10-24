@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.desc": {
+          "source": "A connection to Sewio WebSocket services",
+          "message": "與 Sewio WebSocket 服務的連接"
+        },
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.display_name": {
+          "source": "Sewio WebSocket Connection",
+          "message": "Sewio WebSocket 連接"
+        },
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Sewio RTLS Studio API key",
+          "message": "Sewio RTLS Studio API 金鑰"
+        },
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "The Sewio RTLS Studio API key",
+          "message": "Sewio RTLS Studio API 金鑰"
+        },
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to Sewio WebSocket services",
+          "message": "與 Sewio WebSocket 服務的連接"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Tavily Connection",
+          "message": "Tavily Connection"
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Tavily search, extraction and research API",
+          "message": "A connection to the Tavily search, extraction and research API"
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Tavily](https://www.tavily.com) — a search API built for programs: semantic web search, page extraction, site crawling and mapping, and research agents that search, read and reason until they can answer.\n\nRequires an API key, sent as a Bearer token.  Get one from the [Tavily dashboard](https://app.tavily.com/).",
+          "message": "A connection to [Tavily](https://www.tavily.com) — a search API built for programs: semantic web search, page extraction, site crawling and mapping, and research agents that search, read and reason until they can answer.\n\nRequires an API key, sent as a Bearer token.  Get one from the [Tavily dashboard](https://app.tavily.com/)."
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API Key"
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "The Tavily API key",
+          "message": "The Tavily API key"
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Tavily API key, sent as a Bearer token.  Keys begin with `tvly-`; get one from the [Tavily dashboard](https://app.tavily.com/).\n\nThe connection ping reads the account's credit usage with this key, so a key Tavily does not accept makes the connection fail rather than appear healthy.",
+          "message": "The Tavily API key, sent as a Bearer token.  Keys begin with `tvly-`; get one from the [Tavily dashboard](https://app.tavily.com/).\n\nThe connection ping reads the account's credit usage with this key, so a key Tavily does not accept makes the connection fail rather than appear healthy."
+        }
+      }
+    }
+  }
+}

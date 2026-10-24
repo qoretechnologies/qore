@@ -402,7 +402,8 @@ public class BflRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "bfl://api.bfl.ai";
         const DefaultConnectionUrl = DefaultUrl;
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("BflRestClient",
+            "BflRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Black Forest Labs Connection",
             "short_desc": "A connection to Black Forest Labs (FLUX models)",
             "desc": "A connection to [Black Forest Labs](https://bfl.ai) — "
@@ -426,7 +427,7 @@ public class BflRestConnection inherits RestClient::RestConnection {
                 },
             },
             "required_options": "apikey",
-        };
+        });
     }
 
     constructor(string name, string description, string url = DefaultUrl,

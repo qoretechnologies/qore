@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Cin7Core REST API for inventory management, sales, and order processing.\n\nCin7Core (formerly DEAR Inventory) is a comprehensive inventory management and ERP platform that enables you to manage products, sales, purchases, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and suppliers\n- Create and track sales orders\n- Process payments and invoices\n- Monitor inventory and stock levels\n- Handle stock adjustments\n- Track shipments and fulfillment\n\n**Authentication:**\nCin7Core uses Account ID and API Key authentication. Both credentials are required.",
+          "message": "在庫管理、販売、注文処理用のCin7Core REST APIへの接続。\n\nCin7Core（旧DEAR Inventory）は、製品、販売、購入、顧客、仕入先、在庫レベルを管理できる包括的な在庫管理およびERPプラットフォームです。\n\n**機能：**\n- 顧客および仕入先の管理\n- 売上注文の作成と追跡\n- 支払いおよび請求書の処理\n- 在庫および在庫レベルの監視\n- 在庫調整の処理\n- 出荷および受領の追跡\n\n**認証：**\nCin7CoreはアカウントIDとAPIキーによる認証を使用します。両方の資格情報が必要です。"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Cin7Core REST Connection",
+          "message": "Cin7Core REST接続"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Cin7Core, you need both an Account ID and API Key:\n\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Open the **Setup** tab for the Application\n4. Copy both credentials:\n   - **Account ID** - Your unique account identifier\n   - **Application Key** - Your API authentication key\n\nKeep your credentials secure and never share them publicly.",
+          "message": "Cin7Coreに接続するには、アカウントIDとAPIキーの両方が必要です：\n\n1. https://inventory.dearsystems.com/ExternalApi へ移動\n2. 新規アプリケーションを作成するか、既存のものを選択\n3. アプリケーションの **設定** タブを開く\n4. 両方の資格情報をコピーする：\n   - **アカウントID** - あなたの固有のアカウント識別子\n   - **アプリケーションキー** - API認証用のキー\n\n資格情報を安全に保管し、公開しないでください。"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Credentials",
+          "message": "API資格情報の取得方法"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.desc": {
+          "source": "Your Cin7Core Account ID used for API authentication.\n\n**To obtain your Account ID:**\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Find your **Account ID** on the **Setup** tab\n\n**Note:** Both Account ID and API Key are required for authentication.",
+          "message": "API認証に使用するCin7CoreアカウントID。\n\n**アカウントIDの取得方法：**\n1. https://inventory.dearsystems.com/ExternalApi へ移動\n2. 新規アプリケーションを作成するか、既存のものを選択\n3. **設定** タブで **アカウントID** を探す\n\n**注意：** 認証にはアカウントIDとAPIキーの両方が必要です。"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Cin7Core Account ID for authentication",
+          "message": "認証用のCin7CoreアカウントID"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Your Cin7Core Application/API Key for authentication.\n\n**To obtain your API Key:**\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Find your **Application Key** on the **Setup** tab\n\n**Note:** Both Account ID and API Key are required for authentication.",
+          "message": "API認証に使用するCin7Coreアプリケーション/APIキー。\n\n**APIキーの取得方法：**\n1. https://inventory.dearsystems.com/ExternalApi へ移動\n2. 新規アプリケーションを作成するか、既存のものを選択\n3. **設定** タブで **アプリケーションキー** を探す\n\n**注意：** 認証にはアカウントIDとAPIキーの両方が必要です。"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Cin7Core Application/API Key",
+          "message": "Cin7Core アプリケーション/API キー"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Cin7Core (DEAR Inventory) API",
+          "message": "Cin7Core (DEAR Inventory) API への接続"
+        }
+      }
+    }
+  }
+}

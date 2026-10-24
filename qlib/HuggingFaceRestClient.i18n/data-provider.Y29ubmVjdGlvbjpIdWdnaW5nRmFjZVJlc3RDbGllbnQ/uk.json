@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Hugging Face REST API.\n\nRequires an API key (set as `apikey`) from [Hugging Face Settings](https://huggingface.co/settings/tokens). The connection uses the `huggingface://` URL scheme and provides access to the Hub API for models, datasets, and spaces",
+          "message": "Підключення до REST API Hugging Face.\n\nВимагає ключ API (встановлюється як `apikey`) з [Налаштувань Hugging Face](https://huggingface.co/settings/tokens). Підключення використовує схему URL `huggingface://` і надає доступ до Hub API для моделей, наборів даних і просторів"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Hugging Face REST Connection",
+          "message": "Підключення до REST API Hugging Face"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBp.desc": {
+          "source": "The API base path to use",
+          "message": "Базовий шлях API, що використовується"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBp.display_name": {
+          "source": "API Path",
+          "message": "Шлях API"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBp.short_desc": {
+          "source": "The API base path",
+          "message": "Базовий шлях API"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Hugging Face API token used for authentication; sent as the `Authorization: Bearer` header.\n\nGet your token from [Hugging Face Settings](https://huggingface.co/settings/tokens)",
+          "message": "Токен Hugging Face для автентифікації; надсилається як заголовок `Authorization: Bearer`.\n\nОтримайте свій токен у [Налаштуваннях Hugging Face](https://huggingface.co/settings/tokens)"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Hugging Face API token for authentication",
+          "message": "Токен Hugging Face для автентифікації"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Hugging Face REST API",
+          "message": "Підключення до REST API Hugging Face"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.desc": {
+          "source": "A connection to a WebSocket server service",
+          "message": "Spojenie s WebSocket serverom"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.display_name": {
+          "source": "WebSocket Connection",
+          "message": "WebSocket spojenie"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.Y29va2ll.desc": {
+          "source": "An optional cookie value (e.g., `name=value` or `n1=v1; n2=v2`) sent as a `Cookie` header with the initial HTTP WebSocket upgrade request",
+          "message": "Voliteľná hodnota cookie (napr. `name=value` alebo `n1=v1; n2=v2`) odoslaná ako hlavička `Cookie` pri prvom požiadavku na aktualizáciu WebSocket cez HTTP"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.Y29va2ll.display_name": {
+          "source": "Cookie",
+          "message": "Súbor cookie"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.Y29va2ll.short_desc": {
+          "source": "Set a cookie value to send with the WebSocket handshake",
+          "message": "Nastaviť hodnotu cookie na odoslanie pri handshake WebSocket"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.YXN5bmNfaW8.desc": {
+          "source": "Compatibility option; WebSocket socket I/O always uses the global AsyncSocketIoController, and False is ignored",
+          "message": "Možnosť kompatibility; I/O soketu WebSocket vždy používa globálny AsyncSocketIoController, a hodnota False sa ignoruje"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.YXN5bmNfaW8.display_name": {
+          "source": "Async I/O",
+          "message": "Asynchrónne I/O"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.YXN5bmNfaW8.short_desc": {
+          "source": "Compatibility option; WebSocket socket I/O is always async",
+          "message": "Možnosť kompatibility; I/O soketu WebSocket je vždy asynchrónne"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "no serialization is used",
+          "message": "není použitá žiadna serializácia"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "použiť serializáciu JSON"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.allowed_values.c3RyaW5nOnlhbWw.desc": {
+          "source": "use only YAML serialization",
+          "message": "použiť iba serializáciu YAML"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.desc": {
+          "source": "Sets the data serialization option",
+          "message": "Nastaví možnosť serializácie dát"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Serializácia dát"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.short_desc": {
+          "source": "Sets the data serialization option",
+          "message": "Nastaví možnosť serializácie dát"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmFpc2VfcGluZ19ldmVudHM.desc": {
+          "source": "Raise events for WebSocket pings?",
+          "message": "Vyvolávať udalosti pre pingy WebSocket?"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmFpc2VfcGluZ19ldmVudHM.display_name": {
+          "source": "Raise Ping Events?",
+          "message": "Vyvolávať udalosti pingov?"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmFpc2VfcGluZ19ldmVudHM.short_desc": {
+          "source": "Raise events for WebSocket pings?",
+          "message": "Vyvolávať udalosti pre pingy WebSocket?"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmVjb25uZWN0.desc": {
+          "source": "Try to reconnect when the connection is closed or lost",
+          "message": "Skúste znovu pripojiť, keď je spojenie uzatvorené alebo stratené"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmVjb25uZWN0.display_name": {
+          "source": "Reconnect?",
+          "message": "Znova pripojiť?"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmVjb25uZWN0.short_desc": {
+          "source": "Try to reconnect when the connection is closed or lost",
+          "message": "Skúste znovu pripojiť, keď je spojenie uzatvorené alebo stratené"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW4.desc": {
+          "source": "Any token to use for the initial HTTP request to authenticate with the server",
+          "message": "Akýkoľvek token na použitie pri prvom HTTP požiadavku na overenie so serverom"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Autorizačný token"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token",
+          "message": "Nastavte autorizačný token"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "Typ `token`, ktorý sa má použiť pre hlavičku `Authorization`; ignoruje sa, ak nie je nastavená možnosť `token`"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "Typ autorizačného tokenu"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "Typ autorizačného tokenu"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.allowed_values.aW50OjEz.desc": {
+          "source": "Version 13",
+          "message": "Verzia 13"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.allowed_values.aW50Ojg.desc": {
+          "source": "Version 8",
+          "message": "Verzia 8"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.desc": {
+          "source": "The WebSocket protocol version to use in the client",
+          "message": "Verzia protokolu WebSocket, ktorú použiť v klientovi"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.display_name": {
+          "source": "WebSocket Version",
+          "message": "Verzia WebSocket"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.short_desc": {
+          "source": "Sets the WebSocket protocol version",
+          "message": "Nastaví verziu protokolu WebSocket"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.short_desc": {
+          "source": "A connection to a WebSocket server service",
+          "message": "Spojenie s WebSocket serverom"
+        }
+      }
+    }
+  }
+}

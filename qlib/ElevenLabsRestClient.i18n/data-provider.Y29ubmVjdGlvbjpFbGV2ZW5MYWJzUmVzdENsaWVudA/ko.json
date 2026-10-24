@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [ElevenLabs](https://elevenlabs.io) REST API for AI voice synthesis, text-to-speech, and audio processing services.\n\nAn API key is required for authentication. To obtain one, sign in to your ElevenLabs account and navigate to **Profile + API Key** in the bottom-left menu at [elevenlabs.io](https://elevenlabs.io)",
+          "message": "AI 음성 합성, 텍스트-to-음성, 오디오 처리 서비스를 위한 [ElevenLabs](https://elevenlabs.io) REST API에 연결합니다.\n\n인증을 위해 API 키가 필요합니다. 키를 얻으려면 ElevenLabs 계정에 로그인하고, [elevenlabs.io](https://elevenlabs.io)의 왼쪽 하단 메뉴에서 **프로필 + API 키**로 이동하세요."
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "ElevenLabs REST Connection",
+          "message": "ElevenLabs REST 연결"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "To connect to ElevenLabs, you need an API key:\n\n1. Sign in to your account at [elevenlabs.io](https://elevenlabs.io)\n2. Click your **profile icon** in the bottom-left corner\n3. Select **Profile + API Key**\n4. Click the **eye icon** to reveal your API key, then copy it\n\nKeep your API key secure and never share it publicly.",
+          "message": "ElevenLabs에 연결하려면 API 키가 필요합니다:\n\n1. [elevenlabs.io](https://elevenlabs.io)에서 계정에 로그인합니다\n2. 왼쪽 하단 모서리의 **프로필 아이콘**을 클릭합니다\n3. **프로필 + API 키**를 선택합니다\n4. **눈 아이콘**을 클릭하여 API 키를 표시한 후 복사합니다\n\nAPI 키를 안전하게 보관하고 공개하지 마세요."
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your ElevenLabs API Key",
+          "message": "ElevenLabs API 키를 얻는 방법"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The ElevenLabs API key used for authentication; sent as the `xi-api-key` header. To obtain a key, sign in at [elevenlabs.io](https://elevenlabs.io) and navigate to **Profile + API Key** in the bottom-left menu",
+          "message": "인증에 사용되는 ElevenLabs API 키입니다; `xi-api-key` 헤더로 전송됩니다. 키를 얻으려면 [elevenlabs.io](https://elevenlabs.io)에 로그인하여 왼쪽 하단 메뉴의 **프로필 + API 키**로 이동하세요"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "ElevenLabs API key for authentication",
+          "message": "인증용 ElevenLabs API 키"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "Use the EU data residency endpoint (api.eu.residency.elevenlabs.io)",
+          "message": "유럽 데이터 거주지 엔드포인트(api.eu.residency.elevenlabs.io) 사용"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "EU",
+          "message": "유럽"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "Use the global API endpoint (api.elevenlabs.io)",
+          "message": "글로벌 API 엔드포인트(api.elevenlabs.io) 사용"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "US (Global)",
+          "message": "미국(글로벌)"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "The API region to use; `us` (default) uses the global endpoint, `eu` uses the EU data residency endpoint",
+          "message": "사용할 API 지역; `us` (기본값)은 글로벌 엔드포인트를 사용하고, `eu`은 유럽 데이터 거주지 엔드포인트를 사용합니다"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "리전"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "The API region to use",
+          "message": "사용할 API 지역"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the ElevenLabs REST API",
+          "message": "ElevenLabs REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

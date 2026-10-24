@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.desc": {
+          "source": "Connection to a memcached server for caching data using the memcached binary protocol",
+          "message": "Připojení k serveru memcached pro ukládání dat pomocí binárního protokolu memcached"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.display_name": {
+          "source": "Memcached Connection",
+          "message": "Připojení k memcached"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "Connection timeout in milliseconds (default: 30000)",
+          "message": "Časový limit připojení v milisekundách (výchozí: 30000)"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Časový limit připojení"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "Connection timeout in milliseconds",
+          "message": "Časový limit připojení v milisekundách"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.aW9fdGltZW91dA.desc": {
+          "source": "I/O timeout in milliseconds for read/write operations (default: 15000)",
+          "message": "Časový limit I/O v milisekundách pro operace čtení/zápisu (výchozí: 15000)"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.aW9fdGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Časový limit I/O"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.aW9fdGltZW91dA.short_desc": {
+          "source": "Read/write timeout in milliseconds",
+          "message": "Časový limit čtení/zápisu v milisekundách"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.short_desc": {
+          "source": "Connection to a memcached server",
+          "message": "Připojení k serveru memcached"
+        }
+      }
+    }
+  }
+}

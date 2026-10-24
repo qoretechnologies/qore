@@ -231,7 +231,8 @@ public class IntercomRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "intercom://api.intercom.io";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("IntercomRestClient",
+            "IntercomRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Intercom REST Connection",
             "short_desc": "A connection to the Intercom REST API",
             "desc": "A connection to [Intercom](https://www.intercom.com) for contacts, companies, "
@@ -291,7 +292,7 @@ public class IntercomRestConnection inherits RestClient::RestConnection {
             # tied to a user's authorization - Intercom issues one per app for its own workspace, which is
             # what a single-workspace integration actually has
             "required_options": "oauth2_client_id,oauth2_client_secret|token",
-        };
+        });
     }
 
     #! Creates the IntercomRestConnection object

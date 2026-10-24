@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the xAI Grok REST API.\n\nRequires an API key for Bearer authentication. Get your API key from the [xAI Console](https://console.x.ai/)",
+          "message": "連接到 xAI Grok REST API。\n\n需要 API 金鑰進行 Bearer 驗證。請從 [xAI 控制台](https://console.x.ai/) 取得您的 API 金鑰"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "xAI Grok REST Connection",
+          "message": "xAI Grok REST 連接"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The xAI Grok chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `grok-3` (the default)",
+          "message": "當此連接被選取用於對話時，LLM 客戶端所使用的 xAI Grok 對話模型。\n\n對話模型與嵌入模型屬於不同系列，不可互相替代。\n\n範例值：`grok-3`（預設）"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "對話模型"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "xAI Grok chat model name",
+          "message": "xAI Grok 對話模型名稱"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "The API version to use",
+          "message": "要使用的 API 版本"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "要使用的 API 版本"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The xAI Grok API key used for Bearer authentication.\n\nGet your API key from the [xAI Console](https://console.x.ai/)",
+          "message": "用於 Bearer 認證的 xAI Grok API 金鑰。\n\n請從 [xAI 控制台](https://console.x.ai/) 取得您的 API 金鑰"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "xAI Grok API key for authentication",
+          "message": "用於認證的 xAI Grok API 金鑰"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the xAI Grok REST API",
+          "message": "連接到 xAI Grok REST API 的連接"
+        }
+      }
+    }
+  }
+}

@@ -14,6 +14,114 @@
         "app.SDI.desc": {
           "source": "Create and manage connections to a H2 embedded Java SQL database",
           "message": "Create and manage connections to a H2 embedded Java SQL database"
+        },
+        "app.SDI.connection.option.aG9zdA.display_name": {
+          "source": "Host",
+          "message": "Host"
+        },
+        "app.SDI.connection.option.aG9zdA.short_desc": {
+          "source": "Database server hostname",
+          "message": "Database server hostname"
+        },
+        "app.SDI.connection.option.aG9zdA.desc": {
+          "source": "The hostname or IP address of the database server",
+          "message": "The hostname or IP address of the database server"
+        },
+        "app.SDI.connection.option.cG9ydA.display_name": {
+          "source": "Port",
+          "message": "Port"
+        },
+        "app.SDI.connection.option.cG9ydA.short_desc": {
+          "source": "Database server port",
+          "message": "Database server port"
+        },
+        "app.SDI.connection.option.cG9ydA.desc": {
+          "source": "The port number of the database server",
+          "message": "The port number of the database server"
+        },
+        "app.SDI.connection.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "Database"
+        },
+        "app.SDI.connection.option.ZGI.short_desc": {
+          "source": "Database name",
+          "message": "Database name"
+        },
+        "app.SDI.connection.option.ZGI.desc": {
+          "source": "The name of the database to connect to",
+          "message": "The name of the database to connect to"
+        },
+        "app.SDI.connection.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "User"
+        },
+        "app.SDI.connection.option.dXNlcg.short_desc": {
+          "source": "Database user",
+          "message": "Database user"
+        },
+        "app.SDI.connection.option.dXNlcg.desc": {
+          "source": "The database user name for authentication",
+          "message": "The database user name for authentication"
+        },
+        "app.SDI.connection.option.cGFzcw.display_name": {
+          "source": "Password",
+          "message": "Password"
+        },
+        "app.SDI.connection.option.cGFzcw.short_desc": {
+          "source": "Database password",
+          "message": "Database password"
+        },
+        "app.SDI.connection.option.cGFzcw.desc": {
+          "source": "The password for database authentication",
+          "message": "The password for database authentication"
+        },
+        "app.SDI.connection.option.Y2hhcnNldA.display_name": {
+          "source": "Character Set",
+          "message": "Character Set"
+        },
+        "app.SDI.connection.option.Y2hhcnNldA.short_desc": {
+          "source": "Connection character set",
+          "message": "Connection character set"
+        },
+        "app.SDI.connection.option.Y2hhcnNldA.desc": {
+          "source": "The character set to use for the connection (e.g. utf8)",
+          "message": "The character set to use for the connection (e.g. utf8)"
+        },
+        "app.SDI.connection.option.Y2xhc3NwYXRo.display_name": {
+          "source": "JDBC Classpath",
+          "message": "JDBC Classpath"
+        },
+        "app.SDI.connection.option.Y2xhc3NwYXRo.short_desc": {
+          "source": "JDBC driver classpath",
+          "message": "JDBC driver classpath"
+        },
+        "app.SDI.connection.option.Y2xhc3NwYXRo.desc": {
+          "source": "The path to the JDBC driver JAR file(s)",
+          "message": "The path to the JDBC driver JAR file(s)"
+        },
+        "app.SDI.connection.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Min Pool Size"
+        },
+        "app.SDI.connection.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Minimum pool connections"
+        },
+        "app.SDI.connection.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Minimum number of connections in the pool"
+        },
+        "app.SDI.connection.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Max Pool Size"
+        },
+        "app.SDI.connection.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Maximum pool connections"
+        },
+        "app.SDI.connection.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Maximum number of connections in the pool"
         }
       }
     }

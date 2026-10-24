@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a FHIR REST server using JSON resources",
+          "message": "Pripojenie k serveru FHIR REST s použitím JSON zdrojov"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "FHIR REST Connection",
+          "message": "Pripojenie FHIR REST"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.option.bm9fY2hhcnNldA.desc": {
+          "source": "If `True`, no charset parameter is appended to request Content-Type headers",
+          "message": "Ak `True`, k hlavičke Content-Type požiadavky sa nepripíše parameter charset"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.option.bm9fY2hhcnNldA.display_name": {
+          "source": "No Charset in Content-Type?",
+          "message": "Žiadny charset v Content-Type?"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.option.bm9fY2hhcnNldA.short_desc": {
+          "source": "Do not append a charset parameter to request Content-Type headers",
+          "message": "Nepripájajte parameter charset k hlavičke Content-Type požiadavky"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a FHIR REST server",
+          "message": "Spojenie s serverom FHIR REST"
+        }
+      }
+    }
+  }
+}

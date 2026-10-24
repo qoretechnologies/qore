@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Constant Contact REST API for email marketing, contacts, lists, campaigns, and segments",
+          "message": "З’єднання з REST API Constant Contact для електронної пошти, контактів, списків, кампаній та сегментів"
+        },
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Constant Contact REST Connection",
+          "message": "З’єднання REST Constant Contact"
+        },
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "A Constant Contact API key or access token used for Bearer token authentication as an alternative to OAuth2",
+          "message": "Ключ API Constant Contact або токен доступу, що використовується для автентифікації типу Bearer замість OAuth2"
+        },
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key / Access Token",
+          "message": "Ключ API / Токен доступу"
+        },
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "A Constant Contact API key or access token for Bearer auth",
+          "message": "Ключ API Constant Contact або токен доступу для автентифікації Bearer"
+        },
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Constant Contact REST API",
+          "message": "З’єднання з REST API Constant Contact"
+        }
+      }
+    }
+  }
+}

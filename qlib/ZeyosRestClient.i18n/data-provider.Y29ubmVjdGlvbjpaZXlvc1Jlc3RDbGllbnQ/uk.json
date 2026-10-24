@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to a ZeyOS instance with the REST API",
+          "message": "З’єднання з екземпляром ZeyOS через REST API"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "ZeyOS Connection",
+          "message": "З’єднання ZeyOS"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.YXBwc2VjcmV0.desc": {
+          "source": "Sets the Zeyos application secret",
+          "message": "Встановлює секрет додатку Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.YXBwc2VjcmV0.display_name": {
+          "source": "Zeyos App Secret",
+          "message": "Секрет додатку Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.YXBwc2VjcmV0.short_desc": {
+          "source": "Sets the Zeyos application secret",
+          "message": "Встановлює секрет додатку Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aW5zdGFuY2U.desc": {
+          "source": "Sets the Zeyos instance name (first segment of URI path)",
+          "message": "Встановлює назву екземпляра Zeyos (перший сегмент шляху URI)"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aW5zdGFuY2U.display_name": {
+          "source": "Zeyos Instance",
+          "message": "Екземпляр Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aW5zdGFuY2U.short_desc": {
+          "source": "Sets the Zeyos instance name",
+          "message": "Встановлює назву екземпляра Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aWRlbnRpZmllcg.desc": {
+          "source": "Sets the Zeyos identifier; if none is provided, a random identifier string is used",
+          "message": "Встановлює ідентифікатор Zeyos; якщо він не вказаний, використовується випадковий рядок ідентифікатора"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aWRlbnRpZmllcg.display_name": {
+          "source": "Zeyos Identifier",
+          "message": "Ідентифікатор Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aWRlbnRpZmllcg.short_desc": {
+          "source": "Sets the Zeyos identifier",
+          "message": "Встановлює ідентифікатор Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a ZeyOS instance with the REST API",
+          "message": "З’єднання з екземпляром ZeyOS через REST API"
+        }
+      }
+    }
+  }
+}

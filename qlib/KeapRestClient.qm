@@ -223,7 +223,8 @@ public class KeapRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "keaprest://api.infusionsoft.com/crm/rest/v2";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("KeapRestClient",
+            "KeapRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Keap REST Connection",
             "short_desc": "A connection to the Keap REST API",
             "desc": "A connection to the Keap REST API for CRM, contacts, companies, "
@@ -270,7 +271,7 @@ public class KeapRestConnection inherits RestClient::RestConnection {
                     }),
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
-        };
+        });
     }
 
     #! creates the KeapRestConnection object

@@ -1,0 +1,485 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.desc": {
+          "source": "A connection to the local filesystem",
+          "message": "Spojenie s lokálnym súborovým systémom"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.display_name": {
+          "source": "Filesystem Connection",
+          "message": "Spojenie s súborovým systémom"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.desc": {
+          "source": "Does not mark the connection as down if the filesystem location is read only; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
+          "message": "Nepoznačí spojenie ako neaktívne, ak je umiestnenie súborového systému iba na čítanie; použite napríklad, ak má spojenie ukazovať na adresár iba na čítanie; rozhrania by mali byť zvyčajne zapisovateľné"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.display_name": {
+          "source": "Read-Only",
+          "message": "Iba na čítanie"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.short_desc": {
+          "source": "Sets the read-only flag on the connection",
+          "message": "Nastaví príznak iba na čítanie na spojení"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the local filesystem",
+          "message": "Spojenie s lokálnym súborovým systémom"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to an FTP server with the `ftp` or `ftps` (secure, not to be confused with sftp) protocols",
+          "message": "Spojenie s FTP serverom pomocou protokolu `ftp` alebo `ftps` (zabezpečený, nesmie byť zmiešaný s sftp)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.display_name": {
+          "source": "FTP Connection",
+          "message": "Spojenie FTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; only used if no username or password is set in the URL and if the `username` option is also used",
+          "message": "Heslo pre overenie; používa sa len v prípade, že nie je heslo alebo užívateľské meno nastavené v URL a ak je použitá aj možnosť `username`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Heslo"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.cGFzc3dvcmQ.short_desc": {
+          "source": "Sets the password for authentication",
+          "message": "Nastaví heslo pre overenie"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL and if the `password` option is also used",
+          "message": "Užívateľské meno pre overenie; používa sa len v prípade, že nie je užívateľské meno alebo heslo nastavené v URL a ak je použitá aj možnosť `password`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Používateľské meno"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for authentication",
+          "message": "Nastavuje používateľské meno na autentifikáciu"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to an FTP server",
+          "message": "Spojenie s FTP serverom"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.desc": {
+          "source": "A connectioas to a HTTP server",
+          "message": "Spojenie s HTTP serverom"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.display_name": {
+          "source": "HTTP Connection",
+          "message": "Spojenie HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connection timeout to use in milliseconds (default: 45 seconds)",
+          "message": "Časový limit pripojenia v milisekundách (predvolené: 45 sekúnd)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Časový limit pripojenia"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "Časový limit pripojenia v milisekundách"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.YXNzdW1lX2VuY29kaW5n.desc": {
+          "source": "Assumes the given encoding if the server does not send a `charset` value",
+          "message": "Predpokladá dané kódovanie, ak server neodošle hodnotu `charset`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.YXNzdW1lX2VuY29kaW5n.display_name": {
+          "source": "Assume Character Encoding",
+          "message": "Predpokladať kódovanie znakov"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.YXNzdW1lX2VuY29kaW5n.short_desc": {
+          "source": "Sets the character encoding to assume if 'charset' is missing",
+          "message": "Nastavuje kódovanie znakov, ktoré sa má predpokladať, ak chýba 'charset'"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.desc": {
+          "source": "Disables automatic pings; useful for rate-limited or metered connections",
+          "message": "Zakáže automatické pingy; užitočné pre pripojenia s obmedzeným limitom požiadaviek alebo meraným objemom dát"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.display_name": {
+          "source": "Disable Automatic Pings?",
+          "message": "Zakázať automatické pingy?"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.short_desc": {
+          "source": "Disables automatic pings",
+          "message": "Zakáže automatické pingy"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZW5jb2RlX2NoYXJz.desc": {
+          "source": "A set of additional characters to subject to percent encoding in URLs",
+          "message": "Množina ďalších znakov, ktoré sa podrobia percentuálnej kódovaniu v URL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZW5jb2RlX2NoYXJz.display_name": {
+          "source": "Encode URL Characters",
+          "message": "Kódovať znaky URL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZW5jb2RlX2NoYXJz.short_desc": {
+          "source": "A set of additional characters to subject to percent encoding in URLs",
+          "message": "Množina ďalších znakov, ktoré sa podrobia percentuálnej kódovaniu v URL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True` then HTTP status codes indicating errors will not cause an `HTTP-CLIENT-RECEIVE-ERROR` exception to be raised, rather such responses will be passed through to the caller like any other response",
+          "message": "Ak je `True`, stavové kódy HTTP indikujúce chyby nespôsobia vyvolanie výnimky `HTTP-CLIENT-RECEIVE-ERROR`, ale takéto odpovede budú odovzdané volajúcemu ako akákoľvek iná odpoveď"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Error Passthrough",
+          "message": "Priame odovzdanie chýb"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "If errors should be returned like normal successful responses",
+          "message": "Či sa majú chyby vracať ako bežné úspešné odpovede"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aGVhZGVycw.desc": {
+          "source": "Sets HTTP headers to include in each outgoing request",
+          "message": "Nastaví HTTP hlavičky, ktoré sa majú zahrnúť do každého odoslaného požiadavku"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aGVhZGVycw.display_name": {
+          "source": "HTTP Headers",
+          "message": "Hlavičky HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aGVhZGVycw.short_desc": {
+          "source": "Sets HTTP headers to include in each request",
+          "message": "Nastaví HTTP hlavičky, ktoré sa majú zahrnúť do každého požiadavku"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOjEuMA.desc": {
+          "source": "HTTP/1.0 only",
+          "message": "Iba HTTP/1.0"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOjEuMQ.desc": {
+          "source": "HTTP/1.1 only",
+          "message": "Iba HTTP/1.1"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOjIuMA.desc": {
+          "source": "Require HTTP/2, fail if the server doesn't support it (TLS required)",
+          "message": "Vyžadovať HTTP/2, zlyhať, ak to server nepodporuje (vyžaduje sa TLS)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOjMuMA.desc": {
+          "source": "Require HTTP/3 (QUIC), fail if unavailable (TLS required)",
+          "message": "Vyžadovať HTTP/3 (QUIC), zlyhať, ak nie je k dispozícii (vyžaduje sa TLS)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOmF1dG8.desc": {
+          "source": "Use HTTP/3-first happy eyeballs for HTTPS; fall back to HTTP/2 if needed (default)",
+          "message": "Použiť HTTP/3-first happy eyeballs pre HTTPS; v prípade potreby prejsť na HTTP/2 (predvolené)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.desc": {
+          "source": "The HTTP version to use: `auto` (HTTP/3-first happy eyeballs for HTTPS, default), `1.0`, `1.1`, `2.0`, or `3.0`. HTTP/2 requires TLS and is negotiated via ALPN. HTTP/3 requires TLS and uses QUIC as the transport protocol",
+          "message": "Verzia HTTP, ktorá sa má použiť: `auto` (HTTP/3-first happy eyeballs pre HTTPS, predvolené), `1.0`, `1.1`, `2.0` alebo `3.0`. HTTP/2 vyžaduje TLS a vyjednáva sa cez ALPN. HTTP/3 vyžaduje TLS a ako transportný protokol používa QUIC"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.display_name": {
+          "source": "HTTP Version",
+          "message": "Verzia HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.short_desc": {
+          "source": "The HTTP version to use",
+          "message": "Verzia HTTP, ktorá sa má použiť"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3JlZGlyZWN0cw.desc": {
+          "source": "Sets the maximum HTTP redirects to support in a single request",
+          "message": "Nastavuje maximálny počet HTTP presmerovaní podporovaných v rámci jednej požiadavky"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3JlZGlyZWN0cw.display_name": {
+          "source": "Max Redirects",
+          "message": "Max. počet presmerovaní"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3JlZGlyZWN0cw.short_desc": {
+          "source": "Sets the maximum HTTP redirects to support",
+          "message": "Nastavuje maximálny počet podporovaných HTTP presmerovaní"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.desc": {
+          "source": "The maximum size in bytes of a response body that is received into memory, as received and after its content encoding (such as `gzip`) is decoded; `0` (the default) means no limit.\n\nA larger response fails the request, so a huge response, or a small compressed response that expands to a huge size, cannot exhaust memory.",
+          "message": "Maximálna veľkosť tela odpovede v bajtoch, ktoré sa prijíma do pamäte, tak ako bolo prijaté aj po dekódovaní jeho kódovania obsahu (napríklad `gzip`); `0` (predvolená hodnota) znamená bez obmedzenia.\n\nVäčšia odpoveď spôsobí zlyhanie požiadavky, takže obrovská odpoveď ani malá komprimovaná odpoveď, ktorá sa rozbalí na obrovskú veľkosť, nemôže vyčerpať pamäť."
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.display_name": {
+          "source": "Max Response Body Size",
+          "message": "Maximálna veľkosť tela odpovede"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.short_desc": {
+          "source": "The maximum size of a response body received into memory",
+          "message": "Maximálna veľkosť tela odpovede prijatého do pamäte"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2F1dGg.desc": {
+          "source": "Enables Kerberos/SPNEGO HTTP Negotiate authentication for REST clients that support it; raw HTTPClient paths reject this option with HTTP-NEGOTIATE-AUTH-ERROR",
+          "message": "Povolí overovanie Kerberos/SPNEGO HTTP Negotiate pre REST klientov, ktorí ho podporujú; priame cesty HTTPClient túto možnosť odmietnu s chybou HTTP-NEGOTIATE-AUTH-ERROR"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2F1dGg.display_name": {
+          "source": "Kerberos Negotiate Auth?",
+          "message": "Overenie Kerberos Negotiate?"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2F1dGg.short_desc": {
+          "source": "Enables Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Povolí overovanie Kerberos/SPNEGO HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.desc": {
+          "source": "Credential cache to use for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Vyrovnávacia pamäť poverení na použitie pri overovaní Kerberos/SPNEGO HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.display_name": {
+          "source": "Kerberos Credential Cache",
+          "message": "Vyrovnávacia pamäť poverení Kerberos"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.short_desc": {
+          "source": "Credential cache for Kerberos HTTP Negotiate authentication",
+          "message": "Vyrovnávacia pamäť poverení pre overovanie Kerberos HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "Do not delegate credentials",
+          "message": "Nedelegovať poverenia"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed_values.c3RyaW5nOmRpcmVjdA.desc": {
+          "source": "Delegate the initiator credential directly where supported",
+          "message": "Delegovať poverenie iniciátora priamo, kde je to podporované"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed_values.c3RyaW5nOnM0dQ.desc": {
+          "source": "Use constrained delegation with S4U where supported",
+          "message": "Použiť obmedzenú delegáciu s S4U, kde je to podporované"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.desc": {
+          "source": "Delegation mode for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Režim delegácie pre overovanie Kerberos/SPNEGO HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.display_name": {
+          "source": "Kerberos Delegation Mode",
+          "message": "Režim delegácie Kerberos"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.short_desc": {
+          "source": "Delegation mode for Kerberos HTTP Negotiate authentication",
+          "message": "Režim delegácie pre overovanie Kerberos HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2tleXRhYg.desc": {
+          "source": "Client keytab to use for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Klientsky keytab na použitie pri overovaní Kerberos/SPNEGO HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2tleXRhYg.display_name": {
+          "source": "Kerberos Client Keytab",
+          "message": "Klientsky keytab Kerberos"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2tleXRhYg.short_desc": {
+          "source": "Client keytab for Kerberos HTTP Negotiate authentication",
+          "message": "Klientsky keytab pre overovanie Kerberos HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.desc": {
+          "source": "If True, send the initial Negotiate token before receiving a 401 challenge",
+          "message": "Ak je nastavené na True, pošle počiatočný token Negotiate ešte pred prijatím výzvy 401"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.display_name": {
+          "source": "Preemptive Kerberos Negotiate?",
+          "message": "Preemptívne overovanie Kerberos Negotiate?"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.short_desc": {
+          "source": "Sends the initial Negotiate token without waiting for a 401 challenge",
+          "message": "Odošle počiatočný token Negotiate bez čakania na výzvu 401"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.desc": {
+          "source": "The Kerberos service principal to use for HTTP Negotiate authentication; if omitted, REST clients derive a host-based HTTP service name from the URL",
+          "message": "Hlavný názov služby Kerberos (service principal) na použitie pri overovaní HTTP Negotiate; ak sa vynechá, REST klienti odvodia hostiteľský názov služby HTTP z URL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.display_name": {
+          "source": "Kerberos Service Principal",
+          "message": "Kerberos Service Principal"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.short_desc": {
+          "source": "The Kerberos HTTP service principal",
+          "message": "Kerberos HTTP service principal"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfZGF0YQ.desc": {
+          "source": "The X.509 certificate data in PEM format (string) or in DER format (binary); if this option is set, then `ssl_cert_path` is ignored",
+          "message": "Dáta X.509 certifikátu v PEM formáte (reťazec) alebo v DER formáte (binárne); ak je táto voľba nastavená, potom `ssl_cert_path` sa ignoruje"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfZGF0YQ.display_name": {
+          "source": "SSL Certificate Data",
+          "message": "Dáta certifikátu SSL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfZGF0YQ.short_desc": {
+          "source": "X.509 certificate data",
+          "message": "Dáta certifikátu X.509"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfcGF0aA.desc": {
+          "source": "The location of a X.509 client certificate file in PEM format; processed with `FileLocationHandler`, so it may be a bare path or any registered scheme (`file://`, `http(s)://`, `sftp://`, ...)",
+          "message": "Umiestnenie súboru X.509 klientového certifikátu v PEM formáte; spracováva sa s `FileLocationHandler`, takže môže byť čistá cesta alebo akýkoľvek registrovaný schéma (`file://`, `http(s)://`, `sftp://`, ...)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfcGF0aA.display_name": {
+          "source": "SSL Certificate Location",
+          "message": "Umiestnenie certifikátu SSL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfcGF0aA.short_desc": {
+          "source": "The location of the X.509 client certificate to use",
+          "message": "Poloha X.509 klientového certifikátu, ktorý sa má použiť"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9kYXRh.desc": {
+          "source": "The X.509 private key data in PEM format (string) or in DER format (binary); if this option is set, then `ssl_key_path` is ignored",
+          "message": "Súkromný kľúč X.509 vo formáte PEM (reťazec) alebo vo formáte DER (binárne); ak je táto voľba nastavená, potom `ssl_key_path` sa ignoruje"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9kYXRh.display_name": {
+          "source": "SSL Key Data",
+          "message": "Dátová časť SSL kľúča"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9kYXRh.short_desc": {
+          "source": "X.509 private key data",
+          "message": "Súkromný kľúč X.509"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXNzd29yZA.desc": {
+          "source": "The password to the private key given with `ssl_key_path`",
+          "message": "Heslo k súkromnému kľúču uvedené v `ssl_key_path`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXNzd29yZA.display_name": {
+          "source": "SSL Key Password",
+          "message": "Heslo súkromného kľúča SSL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXNzd29yZA.short_desc": {
+          "source": "The password to the private key",
+          "message": "Heslo k súkromnému kľúču"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXRo.desc": {
+          "source": "The location of a private key file in PEM format for the X.509 client certificate; processed with `FileLocationHandler`, so it may be a bare path or any registered scheme (`file://`, `http(s)://`, `sftp://`, ...)",
+          "message": "Poloha súboru súkromného kľúča vo formáte PEM pre X.509 klientový certifikát; spracováva sa s `FileLocationHandler`, takže môže byť základná cesta alebo akýkoľvek zaregistrovaný schéma (`file://`, `http(s)://`, `sftp://`, ...)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXRo.display_name": {
+          "source": "SSL Key Location",
+          "message": "Umiestnenie SSL kľúča"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXRo.short_desc": {
+          "source": "The location of the private key file",
+          "message": "Poloha súboru s privátnym kľúčom"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX3ZlcmlmeV9jZXJ0.desc": {
+          "source": "if `True` then the server's certificate will only be accepted if it's verified",
+          "message": "ak `True` potom bude serverový certifikát prijatý iba v prípade jeho overenia"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX3ZlcmlmeV9jZXJ0.display_name": {
+          "source": "SSL Verify Certificate",
+          "message": "Overiť SSL certifikát"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX3ZlcmlmeV9jZXJ0.short_desc": {
+          "source": "If true then server certificates will be verified",
+          "message": "Ak je pravda, overia sa serverové certifikáty"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for HTTP basic authentication; only used if no username or password is set in the URL and if the `username` option is also used",
+          "message": "Heslo pre základné overenie HTTP; používa sa iba v prípade, ak v URL nie je nastavené používateľské meno ani heslo a ak sa použije aj možnosť `username`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Heslo"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for HTTP basic authentication",
+          "message": "Heslo pre základné overenie HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19ib2R5.desc": {
+          "source": "Any message body to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set or if `ping_method` is `GET`",
+          "message": "Ľubovoľné telo správy na odoslanie pri vykonávaní pokročilej operácie ping; ignoruje sa, ak niektorá z možností `ping_method` a `ping_path` nie je nastavená alebo ak je `ping_method` `GET`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19ib2R5.display_name": {
+          "source": "Ping Body",
+          "message": "Telo pingu"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19ib2R5.short_desc": {
+          "source": "The message body to send with pings",
+          "message": "Telo správy, ktoré sa má odoslať s pingmi"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.desc": {
+          "source": "Any HTTP headers to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set",
+          "message": "Akékoľvek hlavičky HTTP, ktoré sa majú odoslať pri vykonávaní pokročilej operácie ping; ignoruje sa, ak aspoň jedna z možností `ping_method` a `ping_path` nie je nastavená"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.display_name": {
+          "source": "Ping Headers",
+          "message": "Hlavičky pre ping"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.short_desc": {
+          "source": "Any HTTP headers to send with pings",
+          "message": "Akékoľvek hlavičky HTTP, ktoré sa majú odoslať s pingmi"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.desc": {
+          "source": "The HTTP method to use for an advanced ping; this and `ping_path` must be set to make an HTTP request as a part of the socket polling ping operation; must be a valid HTTP method name",
+          "message": "Metóda HTTP, ktorá sa má použiť pre pokročilý ping; táto možnosť a `ping_path` musia byť nastavené na vykonanie požiadavky HTTP v rámci operácie ping dotazovaním socketu; musí ísť o platný názov metódy HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.display_name": {
+          "source": "Ping Method",
+          "message": "Metóda pre ping"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.short_desc": {
+          "source": "The HTTP method to use for pings",
+          "message": "Metóda HTTP, ktorá sa má použiť pre pingy"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19wYXRo.desc": {
+          "source": "The URI path to use for an advanced ping; this and `ping_method` must be set to make an HTTP request as a part of the socket polling ping operation.  If the value for this option begins with a `/` character, then it replaces any connection path for the HTTP client, otherwise the value is appended to the connection path for the HTTP client.",
+          "message": "URI cesta na použitie pre pokročilé pingovanie; toto a `ping_method` musí byť nastavené, aby sa vykonal HTTP požiadavka ako súčasť operácie pingovania cez socket. Ak hodnota tejto možnosti začína znakom `/`, nahradí akúkoľvek cestu pre HTTP klienta, inak sa hodnota pridá k ceste pre HTTP klienta."
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19wYXRo.display_name": {
+          "source": "Ping Path",
+          "message": "Cesta pre ping"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19wYXRo.short_desc": {
+          "source": "The URI path to use for pings",
+          "message": "Cesta URI, ktorá sa má použiť pre pingy"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJlX2VuY29kZWRfdXJscw.desc": {
+          "source": "If `true` then all URI paths in URLs are assumed to be already [percent encoded](https://en.wikipedia.org/wiki/Percent-encoding); if this flag is set and any unencoded characters are sent in a URL with a new request, an exception is raised",
+          "message": "Ak je nastavené `true`, predpokladá sa, že všetky cesty URI v URL adresách sú už [percentuálne kódované](https://en.wikipedia.org/wiki/Percent-encoding); ak je tento príznak nastavený a v URL adrese s novou požiadavkou sa odošlú akékoľvek nekódované znaky, vyvolá sa výnimka"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJlX2VuY29kZWRfdXJscw.display_name": {
+          "source": "Pre-Encoded URLs",
+          "message": "Vopred zakódované URL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJlX2VuY29kZWRfdXJscw.short_desc": {
+          "source": "If true then URLs are assumed to be preencoded",
+          "message": "Ak má hodnotu true, predpokladá sa, že URL adresy sú vopred zakódované"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJveHk.desc": {
+          "source": "The HTTP proxy URL to use",
+          "message": "URL adresa HTTP proxy, ktorá sa má použiť"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJveHk.display_name": {
+          "source": "HTTP Proxy",
+          "message": "HTTP proxy"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJveHk.short_desc": {
+          "source": "The HTTP proxy to use",
+          "message": "HTTP proxy, ktorá sa má použiť"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cmVkaXJlY3RfcGFzc3RocnU.desc": {
+          "source": "If `True` then redirect responses will be passed to the caller instead of processed",
+          "message": "Ak je nastavené `True`, odpovede presmerovania sa namiesto spracovania odovzdajú volajúcemu"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cmVkaXJlY3RfcGFzc3RocnU.display_name": {
+          "source": "Redirect Passthrough",
+          "message": "Prepúšťanie presmerovania"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cmVkaXJlY3RfcGFzc3RocnU.short_desc": {
+          "source": "If true then redirect responses are returned to the caller",
+          "message": "Ak má hodnotu true, odpovede presmerovania sa vrátia volajúcemu"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dGltZW91dA.desc": {
+          "source": "The transfer timeout to use in milliseconds (default: 45 seconds)",
+          "message": "Časový limit prenosu v milisekundách (predvolené: 45 sekúnd)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Časový limit I/O"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dGltZW91dA.short_desc": {
+          "source": "The maximum time an individual I/O operation can take in milliseconds",
+          "message": "Maximálny čas v milisekundách, ktorý môže trvať jednotlivá I/O operácia"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL and if the `password` option is also used",
+          "message": "Užívateľské meno pre overenie; používa sa len v prípade, že nie je užívateľské meno alebo heslo nastavené v URL a ak je použitá aj možnosť `password`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Používateľské meno"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for HTTP basic authentication",
+          "message": "Nastavuje používateľské meno pre základné overenie HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a HTTP server",
+          "message": "Pripojenie k HTTP serveru"
+        }
+      }
+    }
+  }
+}

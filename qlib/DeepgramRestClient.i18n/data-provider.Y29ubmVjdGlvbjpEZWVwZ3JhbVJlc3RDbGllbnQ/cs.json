@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [Deepgram](https://deepgram.com) speech API.\n\nDeepgram provides automatic speech recognition (ASR) via `/v1/listen` and text-to-speech (TTS) via `/v1/speak`, plus realtime WebSocket streaming for both directions.\n\nRequires an API key for `Authorization: Token` authentication (note: Deepgram uses `Token`, NOT `Bearer`).  Get your API key from the [Deepgram console](https://console.deepgram.com).",
+          "message": "Připojení k rozhraní API pro zpracování řeči [Deepgram](https://deepgram.com).\n\nDeepgram poskytuje automatickou rozpoznávání řeči (ASR) prostřednictvím `/v1/listen` a převod textu na řeč (TTS) prostřednictvím `/v1/speak`, včetně streamování přes WebSocket v obou směrech.\n\nVyžaduje klíč API pro ověření `Authorization: Token` (poznámka: Deepgram používá `Token`, NE `Bearer`). Získejte svůj klíč API v [konzoli Deepgram](https://console.deepgram.com)."
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Deepgram REST Connection",
+          "message": "REST připojení Deepgram"
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Deepgram API key — sent as the `Authorization: Token <key>` header (NOT `Authorization: Bearer`).",
+          "message": "Klíč API Deepgram — odesílán jako hlavička `Authorization: Token <key>` (NE `Authorization: Bearer`)."
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klíč API"
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Deepgram API key (sent as Authorization: Token header)",
+          "message": "Klíč API Deepgram (odesílán jako hlavička Authorization: Token)"
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Deepgram speech (ASR + TTS) REST API",
+          "message": "Spojení s REST API Deepgram pro rozpoznání řeči (ASR + TTS)"
+        }
+      }
+    }
+  }
+}

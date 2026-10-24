@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Chargebee REST API for subscription billing and revenue management.\n\nChargebee is a subscription billing and revenue management platform that helps businesses manage their recurring revenue. This integration enables managing subscriptions, customers, invoices, coupons, and receiving event notifications.\n\n**Rate Limits:**\n- ~150 requests per minute for test sites\n- Plan-dependent limits for live sites\n- HTTP 429 with Retry-After header when exceeded",
+          "message": "Una connessione all'API REST di Chargebee per la gestione delle sottoscrizioni e del revenue.\n\nChargebee è una piattaforma per la gestione delle sottoscrizioni e del revenue che aiuta le aziende a gestire il loro ricavo ricorrente. Questa integrazione consente di gestire sottoscrizioni, clienti, fatture, coupon e ricevere notifiche di eventi.\n\n**Limiti di velocità:**\n- ~150 richieste al minuto per i siti di test\n- Limiti dipendenti dal piano per i siti live\n- HTTP 429 con intestazione Retry-After quando superati"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Chargebee REST Connection",
+          "message": "Connessione REST di Chargebee"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Chargebee site (e.g., https://your-site.chargebee.com)\n2. Go to **Settings** > **Configure Chargebee**\n3. Under **API & Webhooks**, click **API Keys**\n4. Copy an existing key or click **Add API Key** to create a new one\n\n**Important:**\n- Use **test site** keys during development\n- Use **live site** keys for production\n- Full-access keys can perform all API operations\n- Read-only keys can only read data",
+          "message": "1. Accedi al tuo sito Chargebee (ad esempio, https://your-site.chargebee.com)\n2. Vai su **Impostazioni** > **Configura Chargebee**\n3. In **API e Webhook**, clicca su **Chiavi API**\n4. Copia una chiave esistente o clicca su **Aggiungi chiave API** per crearne una nuova\n\n**Importante:**\n- Usa le chiavi del sito di test durante lo sviluppo\n- Usa le chiavi del sito live per la produzione\n- Le chiavi con accesso completo possono eseguire tutte le operazioni API\n- Le chiavi di sola lettura possono leggere solo i dati"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "Come ottenere la tua chiave API"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.desc": {
+          "source": "The Chargebee API key used as the username for HTTP Basic Auth.\n\n**To obtain your API key:**\n1. Log in to your Chargebee site\n2. Go to Settings > Configure Chargebee > API Keys (under API & Webhooks)\n3. Copy an existing API key or create a new one\n\n**Note:** Use test site keys for development and live site keys for production.",
+          "message": "La chiave API di Chargebee utilizzata come nome utente per l'autenticazione HTTP Basic.\n\n**Per ottenere la tua chiave API:**\n1. Accedi al tuo sito Chargebee\n2. Vai su Impostazioni > Configura Chargebee > Chiavi API (in API e Webhook)\n3. Copia una chiave API esistente o creane una nuova\n\n**Nota:** Usa le chiavi del sito di test per lo sviluppo e quelle live per la produzione."
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "Chiave API"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.short_desc": {
+          "source": "Chargebee API key for authentication",
+          "message": "Chiave API Chargebee per l'autenticazione"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.c2l0ZQ.desc": {
+          "source": "Your Chargebee site name. This is the subdomain of your Chargebee URL.\n\nFor example, if your Chargebee URL is https://acme-test.chargebee.com, your site name is 'acme-test'.",
+          "message": "Il nome del tuo sito Chargebee. Si tratta del sottodominio dell'URL di Chargebee.\n\nAd esempio, se l'URL di Chargebee è https://acme-test.chargebee.com, il nome del sito è 'acme-test'."
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.c2l0ZQ.display_name": {
+          "source": "Site Name",
+          "message": "Nome del sito"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.c2l0ZQ.short_desc": {
+          "source": "Chargebee site name",
+          "message": "Nome del sito Chargebee"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Chargebee REST API",
+          "message": "Una connessione all'API REST di Chargebee"
+        }
+      }
+    }
+  }
+}

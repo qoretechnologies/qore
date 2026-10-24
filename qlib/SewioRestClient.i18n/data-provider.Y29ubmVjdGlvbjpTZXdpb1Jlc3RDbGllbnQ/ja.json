@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Sewio REST API",
+          "message": "Sewio REST APIへの接続"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Sewio REST Connection",
+          "message": "Sewio REST接続"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Sewio RTLS Studio API key",
+          "message": "Sewio RTLS Studio APIキー"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "The Sewio RTLS Studio API key",
+          "message": "Sewio RTLS Studio APIキー"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "JSONシリアライズを使用"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.desc": {
+          "source": "Data serialization options are limited to `json` with this object",
+          "message": "このオブジェクトではデータシリアル化オプションは `json` に制限されています"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "データシリアライズ"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.short_desc": {
+          "source": "Data serialization can only be 'json'",
+          "message": "データシリアル化は'json'のみが許可されます"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "bzip2エンコーディングを使用"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "deflateアルゴリズムを使用 ([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "GNU zipエンコーディングを使用 ([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "コンテンツエンコーディングを使用しない"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "メッセージ送信時に使用する圧縮アルゴリズムを設定します"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.display_name": {
+          "source": "Send Compression",
+          "message": "送信圧縮"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.short_desc": {
+          "source": "The compression algorithm to use when sending messages",
+          "message": "メッセージ送信時に使用する圧縮アルゴリズム"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Sewio REST API",
+          "message": "Sewio REST APIへの接続"
+        }
+      }
+    }
+  }
+}

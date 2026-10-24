@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [Weaviate](https://weaviate.io) — an open-source vector database supporting hybrid search (vector + keyword), multi-tenancy, and a wide range of vectorizer modules.\n\nAuthentication: optional Bearer token (Weaviate Cloud Services / WCD) or anonymous (local deployments).\n\nThe connection uses the `weaviate://` URL scheme for plain HTTP and `weaviates://` for servers behind TLS.",
+          "message": "Připojení k [Weaviate](https://weaviate.io) — open-source databázi vektorů podporující hybridní vyhledávání (vektorové + klíčová slova), multi-tenancy a širokou škálu modulů pro vektorizaci.\n\nAutentizace: volitelný Bearer token (Weaviate Cloud Services / WCD) nebo anonymní (místní nasazení).\n\nPřipojení používá schéma `weaviate://` pro běžný HTTP a `weaviates://` pro servery za TLS."
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Weaviate Vector DB Connection",
+          "message": "Připojení k databázi Weaviate vektorů"
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Optional Bearer token.  Local Weaviate servers don't require authentication.",
+          "message": "Volitelný Bearer token. Místní servery Weaviate nemusí vyžadovat autentizaci."
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klíč API"
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Optional Bearer token (WCD / proxied)",
+          "message": "Volitelný Bearer token (WCD / překládaný)"
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a Weaviate vector database",
+          "message": "Připojení k databázi vektorů Weaviate"
+        }
+      }
+    }
+  }
+}

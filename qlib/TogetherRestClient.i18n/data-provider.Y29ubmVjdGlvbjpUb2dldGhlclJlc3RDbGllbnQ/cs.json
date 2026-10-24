@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [Together AI](https://www.together.ai) REST API.\n\nTogether serves OSS chat (Llama, Qwen, DeepSeek, Mixtral), embedding (`BAAI/bge-*`, `togethercomputer/m2-bert-*`), and image-generation (FLUX, Stable Diffusion XL) models via an OpenAI-compatible API.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Together AI Console](https://api.together.ai/settings/api-keys).",
+          "message": "Připojení k REST rozhraní API [Together AI](https://www.together.ai).\n\nTogether poskytuje modely pro otevřený zdrojový chat (Llama, Qwen, DeepSeek, Mixtral), vektorizaci (`BAAI/bge-*`, `togethercomputer/m2-bert-*`) a generování obrázků (FLUX, Stable Diffusion XL) prostřednictvím kompatibilního rozhraní API s OpenAI.\n\nVyžaduje klíč API pro ověření pomocí Bearer. Získejte svůj klíč API v [Konzoli Together AI](https://api.together.ai/settings/api-keys)."
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Together AI REST Connection",
+          "message": "Připojení k REST rozhraní API Together AI"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Together chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `meta-llama/Llama-3.3-70B-Instruct-Turbo` (the default)",
+          "message": "Společný chatový model používaný klienty LLM při výběru tohoto připojení pro chat.\n\nChatové modely tvoří samostatnou skupinu od modelů pro vektorizaci a nelze je navzájem zaměňovat.\n\nPříklady hodnot: `meta-llama/Llama-3.3-70B-Instruct-Turbo` (výchozí)"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Chatový model"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Together chat model name",
+          "message": "Název chatového modelu Together"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1",
+          "message": "V1"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBp.desc": {
+          "source": "The API version to use.",
+          "message": "Verze API, kterou chcete použít."
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Verze API"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Verze API k použití"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Together AI API key used for Bearer authentication.\n\nGet your API key from the [Together AI Console](https://api.together.ai/settings/api-keys).",
+          "message": "Klíč API Together AI používaný pro ověření pomocí Bearer.\n\nZískejte svůj klíč API v [Konzoli Together AI](https://api.together.ai/settings/api-keys)."
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klíč API"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Together AI API key for authentication",
+          "message": "Klíč API Together AI pro ověření"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Together AI REST API",
+          "message": "Připojení k REST API Together AI"
+        }
+      }
+    }
+  }
+}

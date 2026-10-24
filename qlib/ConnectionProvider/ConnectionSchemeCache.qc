@@ -26,6 +26,15 @@
 public namespace ConnectionProvider {
 #! Connection provider information
 public hashdecl ConnectionSchemeInfo inherits DataProvider::DisplayDescInfo {
+    #! Stable logical presentation identity shared by every alias of this scheme
+    *string presentation_id;
+    #! Exact module owning this scheme's presentation
+    *string presentation_owner;
+    #! Explicit BCP-47 locale of the scheme's producer text
+    *string presentation_source_locale;
+    #! Source-bound references for scheme fields and static messages
+    *hash<string, hash<DataProvider::ConnectionPresentationSource>> presentation_sources;
+
     #! Connection scheme set; scheme -> True
     /** The first scheme is the "default" scheme for display
     */
@@ -65,6 +74,24 @@ public hashdecl ConnectionSchemeInfo inherits DataProvider::DisplayDescInfo {
 
     #! Any image info for the connection
     *string image;
+}
+
+#! Prepares a source-owned scheme constant before other schemes reuse its options
+/** @param owner exact module name
+    @param identity stable logical scheme identity, independent of alias order
+    @param source_locale explicit producer BCP-47 locale
+    @param info static scheme metadata
+    @return typed scheme metadata carrying source references
+    @throw DATA-PROVIDER-PRESENTATION-ERROR for invalid identities or message IDs
+    @throw I18N-LOCALE-ERROR for an invalid locale
+    @par Example
+    Use owner ConnectionProvider and identity HttpConnection for the http/https scheme constant.
+    @since %ConnectionProvider 3.1
+*/
+public hash<ConnectionSchemeInfo> sub connection_scheme_presentation(string owner, string identity,
+        string source_locale, hash<ConnectionSchemeInfo> info) {
+    return cast<hash<ConnectionSchemeInfo>>(
+        DataProvider::ConnectionPresentation::prepareScheme(owner, identity, source_locale, info));
 }
 
 #! Connection provider type cache class

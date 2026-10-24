@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Kit REST API for email marketing including subscribers, tags, custom fields, broadcasts, forms, sequences, and purchases",
+          "message": "Підключення до REST API Kit для електронної маркетингової автоматизації, включаючи підписників, теги, користувацькі поля, розсилки, форми, послідовності та покупки"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Kit REST Connection",
+          "message": "Підключення до REST API Kit"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Kit API key used for API key authentication via the `X-Kit-Api-Key` header.\n\n**To obtain your API key:**\n1. Log in to your Kit account\n2. Go to **Settings** > **Developer**\n3. Create a new V4 API key\n\nRate limit: 120 requests per 60 seconds with API key authentication",
+          "message": "Ключ API Kit, що використовується для автентифікації через заголовок `X-Kit-Api-Key`.\n\n**Щоб отримати свій ключ API:**\n1. Увійдіть до свого облікового запису Kit\n2. Перейдіть до **Налаштувань** > **Розробник**\n3. Створіть новий ключ API версії 4\n\nЛіміт швидкості: 120 запитів за 60 секунд із автентифікацією за ключем API"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Kit API key for authentication",
+          "message": "Ключ API Kit для автентифікації"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Kit REST API",
+          "message": "Підключення до REST API Kit"
+        }
+      }
+    }
+  }
+}

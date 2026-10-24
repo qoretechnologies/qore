@@ -1940,7 +1940,8 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
 public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("SmtpClient",
+            "SmtpConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "SMTP Connection",
             "short_desc": "A connection to an SMTP server",
             "desc": "A connection to an SMTP server",
@@ -2036,7 +2037,7 @@ public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithI
                         "and if either the `password` or the `token` option is also used",
                 },
             },
-        };
+        });
     }
 
     #! creates the SmtpConnection connection object

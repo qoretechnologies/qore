@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Black Forest Labs](https://bfl.ai) — the company behind FLUX image and video generation models.\n\nRequires an API key sent via the `x-key` header.  Get your API key from the [BFL portal](https://api.bfl.ai).",
+          "message": "[Black Forest Labs](https://bfl.ai)에 연결합니다 — FLUX 이미지 및 비디오 생성 모델의 개발사입니다.\n\n`x-key` 헤더를 통해 API 키를 전송해야 합니다. BFL 포털에서 API 키를 획득하세요. [BFL 포털](https://api.bfl.ai)"
+        },
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Black Forest Labs Connection",
+          "message": "Black Forest Labs 연결"
+        },
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The BFL API key — sent as the `x-key` header.",
+          "message": "BFL API 키 — `x-key` 헤더로 전송됩니다."
+        },
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "BFL API key (sent as x-key header)",
+          "message": "BFL API 키 (x-key 헤더로 전송됨)"
+        },
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to Black Forest Labs (FLUX models)",
+          "message": "블랙 포레스트 랩스 (FLUX 모델)에 대한 연결"
+        }
+      }
+    }
+  }
+}

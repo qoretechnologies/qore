@@ -364,7 +364,8 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "zohoinvoice://www.zohoapis.com/invoice/v3";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ZohoInvoiceRestClient",
+            "ZohoInvoiceRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Zoho Invoice REST Connection",
             "short_desc": "A connection to the Zoho Invoice REST API",
             "desc": "A connection to the Zoho Invoice REST API for invoicing and billing",
@@ -489,6 +490,7 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
                 "oauth2_client_id,oauth2_client_secret",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "Select Your Zoho Region",
                     "intent": "info",
                     "content": "Select the subdomain and domain that match your Zoho account:\n"
@@ -497,7 +499,7 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
                         ".in for India, .com.au for Australia, .ca for Canada, .sa for Saudi Arabia, .jp for Japan)",
                 },
             ),
-        };
+        });
     }
 
     #! creates the ZohoInvoiceRestConnection object

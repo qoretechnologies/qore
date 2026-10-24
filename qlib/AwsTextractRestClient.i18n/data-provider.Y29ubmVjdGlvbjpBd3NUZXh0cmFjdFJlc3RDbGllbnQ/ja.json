@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [AWS Textract](https://aws.amazon.com/textract/) for document text and structure extraction via SigV4-signed REST calls.  Inherits all AWS credential modes from AwsRestConnection (static keys, env vars, ECS task-role, IMDSv2, STS AssumeRole). The ping authenticates with `ListAdapters` and requires `textract:ListAdapters`; an authorization denial is reported as a failure.",
+          "message": "[AWS Textract](https://aws.amazon.com/textract/) への接続。SigV4署名付きREST呼び出しでドキュメントのテキストおよび構造を抽出する。AwsRestConnectionが持つすべてのAWS認証モード（静的キー、環境変数、ECSタスクロール、IMDSv2、STS AssumeRole）を継承する。pingは `ListAdapters` で認証し、`textract:ListAdapters` を必要とする。認可拒否は失敗として報告される"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "AWS Textract Connection",
+          "message": "AWS Textract 接続"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2V4dGVybmFsX2lk.desc": {
+          "source": "External ID for an STS role requiring cross-account verification.",
+          "message": "クロスアカウント検証を必要とするSTSロールの外部ID"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2V4dGVybmFsX2lk.display_name": {
+          "source": "STS External ID",
+          "message": "STS 外部ID"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2V4dGVybmFsX2lk.short_desc": {
+          "source": "Optional external ID required by the role",
+          "message": "ロールで必要なオプションの外部ID"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2ltZHNfZGlzYWJsZWQ.desc": {
+          "source": "Set to `True` when credentials must come from explicit options or the environment.",
+          "message": "資格情報が明示的なオプションまたは環境から取得される場合、`True` に設定します。"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2ltZHNfZGlzYWJsZWQ.display_name": {
+          "source": "Disable Instance Credentials",
+          "message": "インスタンス資格情報の無効化"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2ltZHNfZGlzYWJsZWQ.short_desc": {
+          "source": "Disable ECS and instance metadata credential lookup",
+          "message": "ECSおよびインスタンスメタデータ資格情報の検索を無効化"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfYXJu.desc": {
+          "source": "Role ARN to assume after resolving the base credentials.",
+          "message": "基本資格情報を解決した後に仮想するロールのARN。"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfYXJu.display_name": {
+          "source": "STS Role ARN",
+          "message": "STSロールARN"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfYXJu.short_desc": {
+          "source": "Optional AWS role to assume",
+          "message": "オプションのAWSロールの仮想"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.desc": {
+          "source": "Session name sent with `aws_role_arn` to AWS STS.",
+          "message": "AWS STSに送信するセッション名。`aws_role_arn` と共に送信されます。"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.display_name": {
+          "source": "STS Role Session Name",
+          "message": "STS ロールセッション名"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.short_desc": {
+          "source": "Name of the assumed-role session",
+          "message": "仮想ロールセッションの名前"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to AWS Textract document-extraction services",
+          "message": "AWS Textract ドキュメント抽出サービスへの接続"
+        }
+      }
+    }
+  }
+}

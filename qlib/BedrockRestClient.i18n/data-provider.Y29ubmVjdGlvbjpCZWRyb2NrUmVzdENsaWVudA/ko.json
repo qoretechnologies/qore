@@ -1,0 +1,333 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [AWS Bedrock](https://aws.amazon.com/bedrock/) for chat, embeddings, and model-management actions through SigV4-signed REST calls.\n\nThe runtime endpoint is derived from `aws_region`. Authentication uses explicit access keys when supplied, otherwise the standard AWS environment, ECS task-role, or IMDSv2 credential chain. An optional role ARN applies STS AssumeRole after resolving the base credential. The connection ping makes an authenticated, inference-free `ListFoundationModels` request.",
+          "message": "SigV4 서명된 REST 호출을 통해 채팅, 임베딩 및 모델 관리 작업을 위한 [AWS Bedrock](https://aws.amazon.com/bedrock/) 연결.\n\n런타임 엔드포인트는 `aws_region`에서 유도됩니다. 제공된 경우 명시적 액세스 키를 사용하여 인증하지만, 그렇지 않으면 표준 AWS 환경, ECS 작업 역할 또는 IMDSv2 자격 증명 체인을 사용합니다. 선택적 역할 ARN은 기본 자격 증명을 해결한 후 STS AssumeRole를 적용합니다. 연결 핑은 인증된, 추론 없이 `ListFoundationModels` 요청을 수행합니다."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "AWS Bedrock Connection",
+          "message": "AWS Bedrock 연결"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2V4dGVybmFsX2lk.desc": {
+          "source": "External ID sent to AWS STS when the target role requires one.",
+          "message": "대상 역할이 필요로 하는 경우 AWS STS에 전송되는 외부 ID."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2V4dGVybmFsX2lk.display_name": {
+          "source": "STS External ID",
+          "message": "STS 외부 ID"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2V4dGVybmFsX2lk.short_desc": {
+          "source": "Optional external ID required by the role",
+          "message": "역할에 의해 필요할 수 있는 선택적 외부 ID"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2tleWlk.desc": {
+          "source": "AWS access key ID for explicit credentials. Leave this and `aws_secret` empty to use the AWS environment, ECS task-role, or IMDSv2 credential chain.",
+          "message": "명시적 자격 증명용 AWS 액세스 키 ID입니다. 이 항목과 `aws_secret`를 비워두면 AWS 환경, ECS 작업 역할 또는 IMDSv2 자격 증명 체인을 사용합니다."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2tleWlk.display_name": {
+          "source": "AWS Access Key ID",
+          "message": "AWS 액세스 키 ID"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2tleWlk.short_desc": {
+          "source": "Optional access key ID for SigV4 authentication",
+          "message": "SigV4 인증을 위한 선택적 액세스 키 ID"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLWNlbnRyYWwtMQ.desc": {
+          "source": "Middle East (UAE)",
+          "message": "중동 (아랍에미리트)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLWNlbnRyYWwtMQ.display_name": {
+          "source": "Middle East (UAE)",
+          "message": "중동 (아랍에미리트)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLXNvdXRoLTE.desc": {
+          "source": "Middle East (Bahrain)",
+          "message": "중동 (바레인)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLXNvdXRoLTE.display_name": {
+          "source": "Middle East (Bahrain)",
+          "message": "중동 (바레인)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFmLXNvdXRoLTE.desc": {
+          "source": "Africa (Cape Town)",
+          "message": "아프리카 (케이프타운)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFmLXNvdXRoLTE.display_name": {
+          "source": "Africa (Cape Town)",
+          "message": "아프리카 (케이프타운)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0x.desc": {
+          "source": "Asia Pacific (Tokyo)",
+          "message": "아시아 태평양 (도쿄)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0x.display_name": {
+          "source": "Asia Pacific (Tokyo)",
+          "message": "아시아 태평양 (도쿄)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0y.desc": {
+          "source": "Asia Pacific (Seoul)",
+          "message": "아시아 태평양 (서울)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0y.display_name": {
+          "source": "Asia Pacific (Seoul)",
+          "message": "아시아 태평양 (서울)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0z.desc": {
+          "source": "Asia Pacific (Osaka)",
+          "message": "아시아 태평양 (오사카)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0z.display_name": {
+          "source": "Asia Pacific (Osaka)",
+          "message": "아시아 태평양 (오사카)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLWVhc3QtMQ.desc": {
+          "source": "Asia Pacific (Hong Kong)",
+          "message": "아시아 태평양 (홍콩)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLWVhc3QtMQ.display_name": {
+          "source": "Asia Pacific (Hong Kong)",
+          "message": "아시아 태평양 (홍콩)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTE.desc": {
+          "source": "Asia Pacific (Mumbai)",
+          "message": "아시아 태평양 (뭄바이)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTE.display_name": {
+          "source": "Asia Pacific (Mumbai)",
+          "message": "아시아 태평양 (뭄바이)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTI.desc": {
+          "source": "Asia Pacific (Hyderabad)",
+          "message": "아시아 태평양 (하이데라바드)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTI.display_name": {
+          "source": "Asia Pacific (Hyderabad)",
+          "message": "아시아 태평양 (하이데라바드)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC00.desc": {
+          "source": "Asia Pacific (Melbourne)",
+          "message": "아시아 태평양 (멜버른)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC00.display_name": {
+          "source": "Asia Pacific (Melbourne)",
+          "message": "아시아 태평양 (멜버른)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.desc": {
+          "source": "Asia Pacific (Singapore)",
+          "message": "아시아 태평양 (싱가포르)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.display_name": {
+          "source": "Asia Pacific (Singapore)",
+          "message": "아시아 태평양 (싱가포르)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0y.desc": {
+          "source": "Asia Pacific (Sydney)",
+          "message": "아시아 태평양 (시드니)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0y.display_name": {
+          "source": "Asia Pacific (Sydney)",
+          "message": "아시아 태평양 (시드니)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0z.desc": {
+          "source": "Asia Pacific (Jakarta)",
+          "message": "아시아 태평양(자카르타)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0z.display_name": {
+          "source": "Asia Pacific (Jakarta)",
+          "message": "아시아 태평양(자카르타)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLWNlbnRyYWwtMQ.desc": {
+          "source": "Canada (Central)",
+          "message": "캐나다(중앙)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLWNlbnRyYWwtMQ.display_name": {
+          "source": "Canada (Central)",
+          "message": "캐나다(중앙)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLXdlc3QtMQ.desc": {
+          "source": "Canada West (Calgary)",
+          "message": "캐나다 서부(캘거리)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLXdlc3QtMQ.display_name": {
+          "source": "Canada West (Calgary)",
+          "message": "캐나다 서부(캘거리)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LW5vcnRoLTE.desc": {
+          "source": "Europe (Stockholm)",
+          "message": "유럽(스톡홀름)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LW5vcnRoLTE.display_name": {
+          "source": "Europe (Stockholm)",
+          "message": "유럽(스톡홀름)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMQ.desc": {
+          "source": "Europe (Frankfurt)",
+          "message": "유럽(프랑크푸르트)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMQ.display_name": {
+          "source": "Europe (Frankfurt)",
+          "message": "유럽(프랑크푸르트)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMg.desc": {
+          "source": "Europe (Zurich)",
+          "message": "유럽(취리히)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMg.display_name": {
+          "source": "Europe (Zurich)",
+          "message": "유럽(취리히)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTE.desc": {
+          "source": "Europe (Milan)",
+          "message": "유럽(밀라노)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTE.display_name": {
+          "source": "Europe (Milan)",
+          "message": "유럽(밀라노)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTI.desc": {
+          "source": "Europe (Spain)",
+          "message": "유럽(스페인)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTI.display_name": {
+          "source": "Europe (Spain)",
+          "message": "유럽(스페인)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMQ.desc": {
+          "source": "Europe (Ireland)",
+          "message": "유럽 (아일랜드)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMQ.display_name": {
+          "source": "Europe (Ireland)",
+          "message": "유럽 (아일랜드)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMg.desc": {
+          "source": "Europe (London)",
+          "message": "유럽 (런던)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMg.display_name": {
+          "source": "Europe (London)",
+          "message": "유럽 (런던)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMw.desc": {
+          "source": "Europe (Paris)",
+          "message": "유럽 (파리)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMw.display_name": {
+          "source": "Europe (Paris)",
+          "message": "유럽 (파리)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmlsLWNlbnRyYWwtMQ.desc": {
+          "source": "Israel (Tel Aviv)",
+          "message": "이스라엘 (텔 아비브)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmlsLWNlbnRyYWwtMQ.display_name": {
+          "source": "Israel (Tel Aviv)",
+          "message": "이스라엘 (텔 아비브)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnNhLWVhc3QtMQ.desc": {
+          "source": "South America (São Paulo)",
+          "message": "남미 (상파울루)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnNhLWVhc3QtMQ.display_name": {
+          "source": "South America (São Paulo)",
+          "message": "남미 (상파울루)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMQ.desc": {
+          "source": "US East (N. Virginia)",
+          "message": "미국 동부 (버지니아 북부)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMQ.display_name": {
+          "source": "US East (N. Virginia)",
+          "message": "미국 동부 (버지니아 북부)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMg.desc": {
+          "source": "US East (Ohio)",
+          "message": "미국 동부 (오하이오)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMg.display_name": {
+          "source": "US East (Ohio)",
+          "message": "미국 동부 (오하이오)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMQ.desc": {
+          "source": "US West (N. California)",
+          "message": "미국 서부 (캘리포니아 북부)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMQ.display_name": {
+          "source": "US West (N. California)",
+          "message": "미국 서부 (캘리포니아 북부)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMg.desc": {
+          "source": "US West (Oregon)",
+          "message": "미국 서부 (오레곤)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMg.display_name": {
+          "source": "US West (Oregon)",
+          "message": "미국 서부 (오레곤)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.desc": {
+          "source": "AWS region used for Bedrock runtime and control-plane requests. The connection derives both service endpoints from this value.",
+          "message": "Bedrock 런타임 및 제어 평면 요청에 사용되는 AWS 리전. 연결은 이 값에서 서비스 엔드포인트를 모두 파생합니다."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.short_desc": {
+          "source": "AWS region hosting the Bedrock resources",
+          "message": "Bedrock 리소스가 호스팅된 AWS 리전"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfYXJu.desc": {
+          "source": "AWS role ARN to assume after resolving the base credential. The resulting temporary credential signs Bedrock requests.",
+          "message": "기본 자격 증명을 해결한 후 가정할 AWS 역할 ARN. 생성된 임시 자격 증명이 Bedrock 요청에 서명합니다."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfYXJu.display_name": {
+          "source": "STS Role ARN",
+          "message": "STS 역할 ARN"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfYXJu.short_desc": {
+          "source": "Optional AWS role to assume",
+          "message": "선택적 AWS 역할 가정"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.desc": {
+          "source": "Session name sent to AWS STS when `aws_role_arn` is set.",
+          "message": "`aws_role_arn`이 설정된 경우 AWS STS에 전송되는 세션 이름."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.display_name": {
+          "source": "STS Role Session Name",
+          "message": "STS 역할 세션 이름"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.short_desc": {
+          "source": "Optional name for the assumed-role session",
+          "message": "가정된 역할 세션에 대한 선택적 이름"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3NlY3JldA.desc": {
+          "source": "AWS secret access key paired with `aws_keyid`. Leave both fields empty to use the standard AWS credential chain.",
+          "message": "`aws_keyid`과 짝지어지는 AWS 비밀 액세스 키. 두 필드를 모두 비워두면 표준 AWS 자격 증명 체인을 사용합니다."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3NlY3JldA.display_name": {
+          "source": "AWS Secret Access Key",
+          "message": "AWS 시크릿 액세스 키"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3NlY3JldA.short_desc": {
+          "source": "Optional secret key for SigV4 authentication",
+          "message": "SigV4 인증을 위한 선택적 비밀 키"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3Rva2Vu.desc": {
+          "source": "AWS session token supplied with temporary access-key credentials.",
+          "message": "임시 액세스 키 자격 증명과 함께 제공된 AWS 세션 토큰입니다."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3Rva2Vu.display_name": {
+          "source": "AWS Session Token",
+          "message": "AWS 세션 토큰"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3Rva2Vu.short_desc": {
+          "source": "Optional token for temporary AWS credentials",
+          "message": "임시 AWS 자격 증명용 선택적 토큰"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the AWS Bedrock runtime",
+          "message": "AWS Bedrock 런타임에 연결합니다."
+        }
+      }
+    }
+  }
+}

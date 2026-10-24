@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Systeme.io REST API for managing contacts, tags, courses, communities, and subscriptions.\n\nSysteme.io is an all-in-one online marketing platform for building sales funnels, running email campaigns, managing courses and communities, and handling affiliate programs.\n\n**To obtain your API key:**\n1. Log in to your Systeme.io account\n2. Go to **Profile Settings**\n3. Navigate to the **Public API keys** section\n4. Click **Create** to generate a new key\n5. Copy the key immediately (it cannot be retrieved later)\n\n**Note:** Maximum 3 API keys per account. Keys are shared across all API integrations.",
+          "message": "Spojenie s REST API Systeme.io na správu kontaktov, značiek, kurzov, komunít a odberov.\n\nSysteme.io je jednoznačný online marketingový nástroj na vytváranie predajných fúz, správu emailových kampaní, správu kurzov a komunít a správu afiliátnych programov.\n\n**Ako získať svoj API kľúč:**\n1. Prihláste sa do svojho účtu Systeme.io\n2. Prejdite na **Nastavenia profilu**\n3. Prejdite do sekcie **Verejné API kľúče**\n4. Kliknite na **Vytvoriť** pre vygenerovanie nového kľúča\n5. Okamžite skopírujte kľúč (nemôže byť neskôr získaný)\n\n**Poznámka:** Na účet je možné mať maximálne 3 API kľúče. Kľúče sú zdieľané medzi všetkými integráciami API."
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Systeme.io REST Connection",
+          "message": "Spojenie s API Systeme.io"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires a **Systeme.io API key**.\n\n**Steps to generate an API key:**\n1. Log in to your Systeme.io account\n2. Go to **Profile Settings**\n3. Navigate to the **Public API keys** section\n4. Click **Create** and give the key a name\n5. Copy the key immediately\n\n**Important:**\n- API keys are only shown once at creation time\n- Maximum 3 API keys per account\n- Rate limits are plan-based and shared across all keys",
+          "message": "Táto integrácia vyžaduje **API kľúč Systeme.io**.\n\n**Kroky na vytvorenie API kľúča:**\n1. Prihláste sa do svojho účtu Systeme.io\n2. Prejdite na **Nastavenia profilu**\n3. Prejdite do sekcie **Verejné API kľúče**\n4. Kliknite na **Vytvoriť** a pridajte názov kľúču\n5. Okamžite skopírujte kľúč\n\n**Dôležité:**\n- API kľúče sú zobrazené iba raz po vytvorení\n- Na účet je možné mať maximálne 3 API kľúče\n- Ohraničenia rýchlosti sú založené na pláne a zdieľané medzi všetkými kľúčmi"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "Ako získať váš kľúč API"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Systeme.io API key used for authentication via the `X-API-Key` header.\n\n**To obtain your API key:**\n1. Log in to your Systeme.io account\n2. Go to **Profile Settings**\n3. Navigate to the **Public API keys** section\n4. Click **Create** to generate a new key\n5. Copy the key immediately (it cannot be retrieved later)\n\n**Important:** API keys are only visible immediately after creation. If you lose a key, you must delete it and create a new one.",
+          "message": "API kľúč Systeme.io používaný na overenie prostredníctvom hlavičky `X-API-Key`.\n\n**Ako získať svoj API kľúč:**\n1. Prihláste sa do svojho účtu Systeme.io\n2. Prejdite na **Nastavenia profilu**\n3. Prejdite do sekcie **Verejné API kľúče**\n4. Kliknite na **Vytvoriť** pre vygenerovanie nového kľúča\n5. Okamžite skopírujte kľúč (nemôže byť neskôr získaný)\n\n**Dôležité:** API kľúče sú viditeľné iba pri vytváraní. Ak stratíte kľúč, musíte ho odstrániť a vytvoriť nový."
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Systeme.io API key for authentication",
+          "message": "Kľúč API pre Systeme.io na overenie"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Systeme.io REST API",
+          "message": "Pripojenie k REST API Systeme.io"
+        }
+      }
+    }
+  }
+}

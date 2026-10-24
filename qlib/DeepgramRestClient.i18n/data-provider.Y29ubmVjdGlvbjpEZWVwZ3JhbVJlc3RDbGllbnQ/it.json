@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [Deepgram](https://deepgram.com) speech API.\n\nDeepgram provides automatic speech recognition (ASR) via `/v1/listen` and text-to-speech (TTS) via `/v1/speak`, plus realtime WebSocket streaming for both directions.\n\nRequires an API key for `Authorization: Token` authentication (note: Deepgram uses `Token`, NOT `Bearer`).  Get your API key from the [Deepgram console](https://console.deepgram.com).",
+          "message": "Una connessione all'API vocale [Deepgram](https://deepgram.com).\n\nDeepgram offre riconoscimento automatico del parlato (ASR) tramite `/v1/listen` e sintesi vocale (TTS) tramite `/v1/speak`, oltre allo streaming in tempo reale tramite WebSocket in entrambe le direzioni.\n\nRichiede una chiave API per l'autenticazione `Authorization: Token` (nota: Deepgram utilizza `Token`, NON `Bearer`). Ottieni la tua chiave API dalla [console Deepgram](https://console.deepgram.com)."
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Deepgram REST Connection",
+          "message": "Connessione REST di Deepgram"
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Deepgram API key — sent as the `Authorization: Token <key>` header (NOT `Authorization: Bearer`).",
+          "message": "La chiave API di Deepgram — inviata come intestazione `Authorization: Token <key>` (NON `Authorization: Bearer`)."
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Chiave API"
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Deepgram API key (sent as Authorization: Token header)",
+          "message": "Chiave API Deepgram (inviata come intestazione Authorization: Token)"
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Deepgram speech (ASR + TTS) REST API",
+          "message": "Una connessione all'API REST vocale (ASR + TTS) di Deepgram"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,485 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.desc": {
+          "source": "A connection to the local filesystem",
+          "message": "З’єднання з локальною файловою системою"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.display_name": {
+          "source": "Filesystem Connection",
+          "message": "З’єднання з файловою системою"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.desc": {
+          "source": "Does not mark the connection as down if the filesystem location is read only; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
+          "message": "Не позначає з’єднання як недоступне, якщо розташування файлової системи тільки для читання; використовувати, наприклад, якщо з’єднання має вказувати на каталог тільки для читання; інтерфейсні каталоги зазвичай мають бути доступними для запису"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.display_name": {
+          "source": "Read-Only",
+          "message": "Тільки для читання"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.short_desc": {
+          "source": "Sets the read-only flag on the connection",
+          "message": "Встановлює прапор тільки для читання на з’єднанні"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the local filesystem",
+          "message": "З’єднання з локальною файловою системою"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to an FTP server with the `ftp` or `ftps` (secure, not to be confused with sftp) protocols",
+          "message": "З’єднання з FTP-сервером за допомогою протоколів `ftp` або `ftps` (безпечних, не плутати з sftp)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.display_name": {
+          "source": "FTP Connection",
+          "message": "З’єднання FTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; only used if no username or password is set in the URL and if the `username` option is also used",
+          "message": "Пароль для автентифікації; використовується лише, якщо в URL не встановлено ні ім’я користувача, ні пароль, і якщо також використовується параметр `username`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Пароль"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.cGFzc3dvcmQ.short_desc": {
+          "source": "Sets the password for authentication",
+          "message": "Встановлює пароль для автентифікації"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL and if the `password` option is also used",
+          "message": "Ім’я користувача для автентифікації; використовується лише, якщо в URL не встановлено ні ім’я користувача, ні пароль, і якщо також використовується параметр `password`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Ім'я користувача"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for authentication",
+          "message": "Встановлює ім'я користувача для автентифікації"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to an FTP server",
+          "message": "З’єднання з FTP-сервером"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.desc": {
+          "source": "A connectioas to a HTTP server",
+          "message": "З’єднання з HTTP-сервером"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.display_name": {
+          "source": "HTTP Connection",
+          "message": "HTTP-з’єднання"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connection timeout to use in milliseconds (default: 45 seconds)",
+          "message": "Тайм-аут з'єднання у мілісекундах (за замовчуванням: 45 секунд)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Тайм-аут з'єднання"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "Тайм-аут з'єднання у мілісекундах"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.YXNzdW1lX2VuY29kaW5n.desc": {
+          "source": "Assumes the given encoding if the server does not send a `charset` value",
+          "message": "Припускає вказане кодування, якщо сервер не надсилає значення `charset`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.YXNzdW1lX2VuY29kaW5n.display_name": {
+          "source": "Assume Character Encoding",
+          "message": "Припустиме кодування символів"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.YXNzdW1lX2VuY29kaW5n.short_desc": {
+          "source": "Sets the character encoding to assume if 'charset' is missing",
+          "message": "Встановлює кодування символів за замовчуванням, якщо 'charset' відсутній"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.desc": {
+          "source": "Disables automatic pings; useful for rate-limited or metered connections",
+          "message": "Вимикає автоматичні ping-запити; корисно для з'єднань із лімітом швидкості або обліком трафіку"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.display_name": {
+          "source": "Disable Automatic Pings?",
+          "message": "Вимкнути автоматичні ping-запити?"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.short_desc": {
+          "source": "Disables automatic pings",
+          "message": "Вимикає автоматичні ping-запити"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZW5jb2RlX2NoYXJz.desc": {
+          "source": "A set of additional characters to subject to percent encoding in URLs",
+          "message": "Набір додаткових символів, які підлягають відсотковому кодуванню в URL-адресах"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZW5jb2RlX2NoYXJz.display_name": {
+          "source": "Encode URL Characters",
+          "message": "Кодувати символи URL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZW5jb2RlX2NoYXJz.short_desc": {
+          "source": "A set of additional characters to subject to percent encoding in URLs",
+          "message": "Набір додаткових символів, які підлягають відсотковому кодуванню в URL-адресах"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True` then HTTP status codes indicating errors will not cause an `HTTP-CLIENT-RECEIVE-ERROR` exception to be raised, rather such responses will be passed through to the caller like any other response",
+          "message": "Якщо `True`, то коди стану HTTP, що вказують на помилки, не викликатимуть виняток `HTTP-CLIENT-RECEIVE-ERROR`, натомість такі відповіді передаватимуться стороні, що викликає, як будь-які інші відповіді"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Error Passthrough",
+          "message": "Наскрізна передача помилок"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "If errors should be returned like normal successful responses",
+          "message": "Чи повертати помилки як звичайні успішні відповіді"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aGVhZGVycw.desc": {
+          "source": "Sets HTTP headers to include in each outgoing request",
+          "message": "Встановлює HTTP-заголовки, які додаються до кожного вихідного запиту"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aGVhZGVycw.display_name": {
+          "source": "HTTP Headers",
+          "message": "Заголовки HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aGVhZGVycw.short_desc": {
+          "source": "Sets HTTP headers to include in each request",
+          "message": "Встановлює HTTP-заголовки, які додаються до кожного запиту"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOjEuMA.desc": {
+          "source": "HTTP/1.0 only",
+          "message": "Лише HTTP/1.0"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOjEuMQ.desc": {
+          "source": "HTTP/1.1 only",
+          "message": "Лише HTTP/1.1"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOjIuMA.desc": {
+          "source": "Require HTTP/2, fail if the server doesn't support it (TLS required)",
+          "message": "Вимагати HTTP/2, повертати помилку, якщо сервер його не підтримує (потрібен TLS)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOjMuMA.desc": {
+          "source": "Require HTTP/3 (QUIC), fail if unavailable (TLS required)",
+          "message": "Вимагати HTTP/3 (QUIC), повертати помилку, якщо недоступно (потрібен TLS)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOmF1dG8.desc": {
+          "source": "Use HTTP/3-first happy eyeballs for HTTPS; fall back to HTTP/2 if needed (default)",
+          "message": "Використовувати алгоритм Happy Eyeballs із пріоритетом HTTP/3 для HTTPS; повертатися до HTTP/2 за потреби (за замовчуванням)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.desc": {
+          "source": "The HTTP version to use: `auto` (HTTP/3-first happy eyeballs for HTTPS, default), `1.0`, `1.1`, `2.0`, or `3.0`. HTTP/2 requires TLS and is negotiated via ALPN. HTTP/3 requires TLS and uses QUIC as the transport protocol",
+          "message": "Версія HTTP для використання: `auto` (Happy Eyeballs із пріоритетом HTTP/3 для HTTPS, за замовчуванням), `1.0`, `1.1`, `2.0` або `3.0`. HTTP/2 вимагає TLS і узгоджується через ALPN. HTTP/3 вимагає TLS і використовує QUIC як транспортний протокол"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.display_name": {
+          "source": "HTTP Version",
+          "message": "Версія HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.short_desc": {
+          "source": "The HTTP version to use",
+          "message": "Версія HTTP для використання"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3JlZGlyZWN0cw.desc": {
+          "source": "Sets the maximum HTTP redirects to support in a single request",
+          "message": "Встановлює максимальну кількість HTTP-перенаправлень для підтримки в одному запиті"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3JlZGlyZWN0cw.display_name": {
+          "source": "Max Redirects",
+          "message": "Макс. перенаправлень"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3JlZGlyZWN0cw.short_desc": {
+          "source": "Sets the maximum HTTP redirects to support",
+          "message": "Встановлює максимальну кількість HTTP-перенаправлень для підтримки"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.desc": {
+          "source": "The maximum size in bytes of a response body that is received into memory, as received and after its content encoding (such as `gzip`) is decoded; `0` (the default) means no limit.\n\nA larger response fails the request, so a huge response, or a small compressed response that expands to a huge size, cannot exhaust memory.",
+          "message": "Максимальний розмір у байтах тіла відповіді, що отримується в пам'ять, як отримано та після декодування його кодування вмісту (наприклад, `gzip`); `0` (значення за замовчуванням) означає відсутність обмеження.\n\nБільша відповідь призводить до помилки запиту, тож величезна відповідь або невелика стиснена відповідь, що розпаковується до величезного розміру, не може вичерпати пам'ять."
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.display_name": {
+          "source": "Max Response Body Size",
+          "message": "Максимальний розмір тіла відповіді"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.short_desc": {
+          "source": "The maximum size of a response body received into memory",
+          "message": "Максимальний розмір тіла відповіді, що отримується в пам'ять"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2F1dGg.desc": {
+          "source": "Enables Kerberos/SPNEGO HTTP Negotiate authentication for REST clients that support it; raw HTTPClient paths reject this option with HTTP-NEGOTIATE-AUTH-ERROR",
+          "message": "Вмикає автентифікацію Kerberos/SPNEGO HTTP Negotiate для клієнтів REST, які її підтримують; прямі шляхи HTTPClient відхиляють цей параметр з помилкою HTTP-NEGOTIATE-AUTH-ERROR"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2F1dGg.display_name": {
+          "source": "Kerberos Negotiate Auth?",
+          "message": "Автентифікація Kerberos Negotiate?"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2F1dGg.short_desc": {
+          "source": "Enables Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Вмикає автентифікацію Kerberos/SPNEGO HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.desc": {
+          "source": "Credential cache to use for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Кеш облікових даних для використання в автентифікації Kerberos/SPNEGO HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.display_name": {
+          "source": "Kerberos Credential Cache",
+          "message": "Кеш облікових даних Kerberos"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.short_desc": {
+          "source": "Credential cache for Kerberos HTTP Negotiate authentication",
+          "message": "Кеш облікових даних для автентифікації Kerberos HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "Do not delegate credentials",
+          "message": "Не делегувати облікові дані"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed_values.c3RyaW5nOmRpcmVjdA.desc": {
+          "source": "Delegate the initiator credential directly where supported",
+          "message": "Делегувати облікові дані ініціатора безпосередньо, де це підтримується"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed_values.c3RyaW5nOnM0dQ.desc": {
+          "source": "Use constrained delegation with S4U where supported",
+          "message": "Використовувати обмежене делегування з S4U, де це підтримується"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.desc": {
+          "source": "Delegation mode for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Режим делегування для автентифікації Kerberos/SPNEGO HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.display_name": {
+          "source": "Kerberos Delegation Mode",
+          "message": "Режим делегування Kerberos"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.short_desc": {
+          "source": "Delegation mode for Kerberos HTTP Negotiate authentication",
+          "message": "Режим делегування для автентифікації Kerberos HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2tleXRhYg.desc": {
+          "source": "Client keytab to use for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Клієнтський keytab для автентифікації Kerberos/SPNEGO HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2tleXRhYg.display_name": {
+          "source": "Kerberos Client Keytab",
+          "message": "Клієнтський keytab Kerberos"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2tleXRhYg.short_desc": {
+          "source": "Client keytab for Kerberos HTTP Negotiate authentication",
+          "message": "Клієнтський keytab для автентифікації Kerberos HTTP Negotiate"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.desc": {
+          "source": "If True, send the initial Negotiate token before receiving a 401 challenge",
+          "message": "Якщо True, надсилати початковий токен Negotiate до отримання запиту 401"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.display_name": {
+          "source": "Preemptive Kerberos Negotiate?",
+          "message": "Випереджувальний Kerberos Negotiate?"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.short_desc": {
+          "source": "Sends the initial Negotiate token without waiting for a 401 challenge",
+          "message": "Надсилає початковий токен Negotiate без очікування запиту 401"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.desc": {
+          "source": "The Kerberos service principal to use for HTTP Negotiate authentication; if omitted, REST clients derive a host-based HTTP service name from the URL",
+          "message": "Сервісний принципал Kerberos для автентифікації HTTP Negotiate; якщо пропущено, REST-клієнти створюють ім'я сервісу HTTP на основі хоста з URL-адреси"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.display_name": {
+          "source": "Kerberos Service Principal",
+          "message": "Сервісний принципал Kerberos"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.short_desc": {
+          "source": "The Kerberos HTTP service principal",
+          "message": "Сервісний принципал HTTP Kerberos"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfZGF0YQ.desc": {
+          "source": "The X.509 certificate data in PEM format (string) or in DER format (binary); if this option is set, then `ssl_cert_path` is ignored",
+          "message": "Дані сертифіката X.509 у форматі PEM (рядок) або DER (бінарні дані); якщо цей параметр встановлено, то `ssl_cert_path` ігнорується"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfZGF0YQ.display_name": {
+          "source": "SSL Certificate Data",
+          "message": "Дані сертифіката SSL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfZGF0YQ.short_desc": {
+          "source": "X.509 certificate data",
+          "message": "Дані сертифіката X.509"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfcGF0aA.desc": {
+          "source": "The location of a X.509 client certificate file in PEM format; processed with `FileLocationHandler`, so it may be a bare path or any registered scheme (`file://`, `http(s)://`, `sftp://`, ...)",
+          "message": "Розташування файлу клієнтського сертифіката X.509 у форматі PEM; обробляється з використанням `FileLocationHandler`, тому може бути просто шляхом або будь-якою зареєстрованою схемою (`file://`, `http(s)://`, `sftp://`, ...)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfcGF0aA.display_name": {
+          "source": "SSL Certificate Location",
+          "message": "Розташування сертифіката SSL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfcGF0aA.short_desc": {
+          "source": "The location of the X.509 client certificate to use",
+          "message": "Розташування сертифіката клієнта X.509, який потрібно використовувати"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9kYXRh.desc": {
+          "source": "The X.509 private key data in PEM format (string) or in DER format (binary); if this option is set, then `ssl_key_path` is ignored",
+          "message": "Дані приватного ключа X.509 у форматі PEM (рядок) або у форматі DER (бінарні дані); якщо цей параметр встановлено, то `ssl_key_path` ігнорується"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9kYXRh.display_name": {
+          "source": "SSL Key Data",
+          "message": "Дані приватного ключа SSL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9kYXRh.short_desc": {
+          "source": "X.509 private key data",
+          "message": "Дані приватного ключа X.509"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXNzd29yZA.desc": {
+          "source": "The password to the private key given with `ssl_key_path`",
+          "message": "Пароль до приватного ключа, вказаного у `ssl_key_path`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXNzd29yZA.display_name": {
+          "source": "SSL Key Password",
+          "message": "Пароль ключа SSL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXNzd29yZA.short_desc": {
+          "source": "The password to the private key",
+          "message": "Пароль до приватного ключа"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXRo.desc": {
+          "source": "The location of a private key file in PEM format for the X.509 client certificate; processed with `FileLocationHandler`, so it may be a bare path or any registered scheme (`file://`, `http(s)://`, `sftp://`, ...)",
+          "message": "Шлях до файлу приватного ключа у форматі PEM для клієнтського сертифіката X.509; обробляється з використанням `FileLocationHandler`, тому може бути просто шляхом або будь-якою зареєстрованою схемою (`file://`, `http(s)://`, `sftp://`, ...)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXRo.display_name": {
+          "source": "SSL Key Location",
+          "message": "Розташування приватного ключа SSL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXRo.short_desc": {
+          "source": "The location of the private key file",
+          "message": "Розташування файлу приватного ключа"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX3ZlcmlmeV9jZXJ0.desc": {
+          "source": "if `True` then the server's certificate will only be accepted if it's verified",
+          "message": "якщо `True`, то сертифікат сервера буде прийнятий лише у разі його перевірки"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX3ZlcmlmeV9jZXJ0.display_name": {
+          "source": "SSL Verify Certificate",
+          "message": "Перевірка SSL-сертифіката"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX3ZlcmlmeV9jZXJ0.short_desc": {
+          "source": "If true then server certificates will be verified",
+          "message": "Якщо істинно, то сертифікати сервера будуть перевірені"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for HTTP basic authentication; only used if no username or password is set in the URL and if the `username` option is also used",
+          "message": "Пароль для базової автентифікації HTTP; використовується лише тоді, коли в URL-адресі не вказано ім'я користувача або пароль і також використовується параметр `username`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Пароль"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for HTTP basic authentication",
+          "message": "Пароль для базової автентифікації HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19ib2R5.desc": {
+          "source": "Any message body to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set or if `ping_method` is `GET`",
+          "message": "Тіло повідомлення для надсилання під час виконання розширеної операції ping; ігнорується, якщо один із параметрів `ping_method` або `ping_path` не встановлено, або якщо `ping_method` має значення `GET`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19ib2R5.display_name": {
+          "source": "Ping Body",
+          "message": "Тіло Ping"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19ib2R5.short_desc": {
+          "source": "The message body to send with pings",
+          "message": "Тіло повідомлення для надсилання з ping-запитами"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.desc": {
+          "source": "Any HTTP headers to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set",
+          "message": "Будь-які HTTP-заголовки для надсилання під час виконання розширеної операції ping; ігнорується, якщо один із параметрів `ping_method` або `ping_path` не встановлено"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.display_name": {
+          "source": "Ping Headers",
+          "message": "Заголовки Ping"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.short_desc": {
+          "source": "Any HTTP headers to send with pings",
+          "message": "Будь-які HTTP-заголовки для надсилання з ping-запитами"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.desc": {
+          "source": "The HTTP method to use for an advanced ping; this and `ping_path` must be set to make an HTTP request as a part of the socket polling ping operation; must be a valid HTTP method name",
+          "message": "HTTP-метод для використання під час розширеного ping; цей параметр та `ping_path` мають бути встановлені для виконання HTTP-запиту в рамках операції ping через опитування сокета; має бути дійсним ім'ям HTTP-методу"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.display_name": {
+          "source": "Ping Method",
+          "message": "Метод Ping"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.short_desc": {
+          "source": "The HTTP method to use for pings",
+          "message": "HTTP-метод для використання під час ping-запитів"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19wYXRo.desc": {
+          "source": "The URI path to use for an advanced ping; this and `ping_method` must be set to make an HTTP request as a part of the socket polling ping operation.  If the value for this option begins with a `/` character, then it replaces any connection path for the HTTP client, otherwise the value is appended to the connection path for the HTTP client.",
+          "message": "Шлях URI для розширеної перевірки зв’язку; це та `ping_method` мають бути встановлені, щоб здійснити HTTP-запит як частина операції перевірки зв’язку через сокет. Якщо значення цієї опції починається з символу `/`, то воно замінює будь-який шлях з’єднання для HTTP-клієнта, інакше значення додається до шляху з’єднання для HTTP-клієнта."
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19wYXRo.display_name": {
+          "source": "Ping Path",
+          "message": "Шлях Ping"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19wYXRo.short_desc": {
+          "source": "The URI path to use for pings",
+          "message": "Шлях URI для використання під час ping-запитів"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJlX2VuY29kZWRfdXJscw.desc": {
+          "source": "If `true` then all URI paths in URLs are assumed to be already [percent encoded](https://en.wikipedia.org/wiki/Percent-encoding); if this flag is set and any unencoded characters are sent in a URL with a new request, an exception is raised",
+          "message": "Якщо `true`, тоді вважається, що всі шляхи URI в URL-адресах уже [закодовані у відсотковому форматі](https://en.wikipedia.org/wiki/Percent-encoding); якщо цей прапорець встановлено і в URL-адресі з новим запитом надсилаються будь-які незакодовані символи, генерується виняток"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJlX2VuY29kZWRfdXJscw.display_name": {
+          "source": "Pre-Encoded URLs",
+          "message": "Попередньо закодовані URL-адреси"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJlX2VuY29kZWRfdXJscw.short_desc": {
+          "source": "If true then URLs are assumed to be preencoded",
+          "message": "Якщо true, вважається, що URL-адреси попередньо закодовані"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJveHk.desc": {
+          "source": "The HTTP proxy URL to use",
+          "message": "URL-адреса HTTP-проксі для використання"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJveHk.display_name": {
+          "source": "HTTP Proxy",
+          "message": "HTTP-проксі"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJveHk.short_desc": {
+          "source": "The HTTP proxy to use",
+          "message": "HTTP-проксі для використання"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cmVkaXJlY3RfcGFzc3RocnU.desc": {
+          "source": "If `True` then redirect responses will be passed to the caller instead of processed",
+          "message": "Якщо `True`, відповіді перенаправлення передаватимуться викликачу замість їхньої обробки"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cmVkaXJlY3RfcGFzc3RocnU.display_name": {
+          "source": "Redirect Passthrough",
+          "message": "Наскрізна передача перенаправлень"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cmVkaXJlY3RfcGFzc3RocnU.short_desc": {
+          "source": "If true then redirect responses are returned to the caller",
+          "message": "Якщо true, відповіді перенаправлення повертаються викликачу"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dGltZW91dA.desc": {
+          "source": "The transfer timeout to use in milliseconds (default: 45 seconds)",
+          "message": "Таймаут передачі в мілісекундах (за замовчуванням: 45 секунд)"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Таймаут вводу/виводу"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dGltZW91dA.short_desc": {
+          "source": "The maximum time an individual I/O operation can take in milliseconds",
+          "message": "Максимальний час виконання окремої операції вводу/виводу в мілісекундах"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL and if the `password` option is also used",
+          "message": "Ім’я користувача для автентифікації; використовується лише, якщо в URL не встановлено ні ім’я користувача, ні пароль, і якщо також використовується параметр `password`"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Ім'я користувача"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for HTTP basic authentication",
+          "message": "Встановлює ім'я користувача для базової автентифікації HTTP"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a HTTP server",
+          "message": "З’єднання з HTTP-сервером"
+        }
+      }
+    }
+  }
+}

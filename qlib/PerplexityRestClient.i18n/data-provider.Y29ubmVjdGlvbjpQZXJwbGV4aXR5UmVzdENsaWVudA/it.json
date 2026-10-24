@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Perplexity AI REST API",
+          "message": "Una connessione all'API REST di Perplexity AI"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Perplexity AI REST Connection",
+          "message": "Connessione REST di Perplexity AI"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Perplexity AI, you need an API key:\n\n1. Sign in to your account at [perplexity.ai](https://www.perplexity.ai)\n2. Navigate to **Settings** in the menu\n3. Select **API** from the settings options\n4. Generate or copy your API key\n\nKeep your API key secure and never share it publicly.",
+          "message": "Per connettersi a Perplexity AI, è necessario un API key:\n\n1. Accedi al tuo account su [perplexity.ai](https://www.perplexity.ai)\n2. Vai su **Impostazioni** nel menu\n3. Seleziona **API** tra le opzioni di impostazione\n4. Genera o copia il tuo API key\n\nMantieni il tuo API key sicuro e non condividerlo mai pubblicamente."
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Perplexity API Key",
+          "message": "Come ottenere il tuo API key di Perplexity"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Perplexity chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `sonar` (the default)",
+          "message": "Il modello di chat Perplexity utilizzato dai client LLM quando questa connessione è selezionata per la chat.\n\nI modelli di chat costituiscono una famiglia separata dai modelli di embedding e non possono essere usati in modo intercambiabile.\n\nEsempi di valori: `sonar` (il valore predefinito)"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Modello di chat"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Perplexity chat model name",
+          "message": "Nome del modello di chat Perplexity"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Perplexity API key used for authentication; sent as a Bearer token in the `Authorization` header. To obtain a key, sign in at [perplexity.ai](https://www.perplexity.ai) and navigate to **Settings** → **API**",
+          "message": "L'API key di Perplexity usata per l'autenticazione; inviata come token Bearer nell'intestazione `Authorization`. Per ottenere una chiave, accedi su [perplexity.ai](https://www.perplexity.ai) e vai su **Impostazioni** → **API**"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Chiave API"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Perplexity API key for authentication",
+          "message": "API key di Perplexity per l'autenticazione"
+        },
+        "connection.UGVycGxleGl0eVJlc3RDbGllbnQ.scheme.UGVycGxleGl0eVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Perplexity AI REST API",
+          "message": "Una connessione all'API REST di Perplexity AI"
+        }
+      }
+    }
+  }
+}

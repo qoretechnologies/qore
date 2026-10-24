@@ -519,7 +519,8 @@ public class EmpathicBuildingRestClientIo inherits RestClientIo::RestClientIo {
 public class EmpathicBuildingRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("EmpathicBuildingDataProvider",
+            "EmpathicBuildingRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Haltian Empathic Building REST Connection",
             "short_desc": "A connection to a Haltian Empathic Building REST server",
             "desc": "A connection to a Haltian Empathic Building REST server",
@@ -546,7 +547,7 @@ public class EmpathicBuildingRestConnection inherits RestClient::RestConnection 
                     "sensitive": True,
                 },
             },
-        };
+        });
     }
 
     #! creates the EmpathicBuildingRestConnection object

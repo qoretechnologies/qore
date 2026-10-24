@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Tavily](https://www.tavily.com) — a search API built for programs: semantic web search, page extraction, site crawling and mapping, and research agents that search, read and reason until they can answer.\n\nRequires an API key, sent as a Bearer token.  Get one from the [Tavily dashboard](https://app.tavily.com/).",
+          "message": "Připojení k [Tavily](https://www.tavily.com) — vyhledávací API navržené pro programy: smyslové vyhledávání na webu, extrakce stránek, procházení webů a mapování, a výzkumné agenty, které vyhledávají, čtou a uvažují, dokud nedokážou odpovědět.\n\nVyžaduje API klíč, odesílaný jako Bearer token. Získejte jej z [panelu Tavily](https://app.tavily.com/)."
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Tavily Connection",
+          "message": "Připojení k Tavily"
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Tavily API key, sent as a Bearer token.  Keys begin with `tvly-`; get one from the [Tavily dashboard](https://app.tavily.com/).\n\nThe connection ping reads the account's credit usage with this key, so a key Tavily does not accept makes the connection fail rather than appear healthy.",
+          "message": "Tavily API klíč, odesílaný jako Bearer token. Klíče začínají na `tvly-`; získejte jej z [panelu Tavily](https://app.tavily.com/).\n\nPřipojení testuje využití kreditů účtu pomocí tohoto klíče, takže klíč, který Tavily nepřijme, způsobí selhání připojení místo toho, aby vypadalo jako zdravé."
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klíč API"
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "The Tavily API key",
+          "message": "Tavily API klíč"
+        },
+        "connection.VGF2aWx5UmVzdENsaWVudA.scheme.VGF2aWx5UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Tavily search, extraction and research API",
+          "message": "Připojení k rozhraní API Tavily pro vyhledávání, extrakci a výzkum"
+        }
+      }
+    }
+  }
+}

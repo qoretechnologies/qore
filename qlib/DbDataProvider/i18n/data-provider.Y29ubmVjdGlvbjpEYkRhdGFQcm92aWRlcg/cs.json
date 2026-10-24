@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.desc": {
+          "source": "Connection to a database server using a datasource connection string",
+          "message": "Připojení k databázovému serveru pomocí řetězce připojení ke zdroji dat"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.display_name": {
+          "source": "Database Connection",
+          "message": "Připojení k databázi"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Maximální počet připojení v fondu"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Maximální velikost fondu"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Maximální počet spojení fondu"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Minimální počet připojení v fondu"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Minimální velikost fondu"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Minimální počet spojení fondu"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.short_desc": {
+          "source": "Connection to a database server",
+          "message": "Připojení k databázovému serveru"
+        }
+      }
+    }
+  }
+}

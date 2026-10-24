@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [ElevenLabs](https://elevenlabs.io) REST API for AI voice synthesis, text-to-speech, and audio processing services.\n\nAn API key is required for authentication. To obtain one, sign in to your ElevenLabs account and navigate to **Profile + API Key** in the bottom-left menu at [elevenlabs.io](https://elevenlabs.io)",
+          "message": "Připojení k REST API [ElevenLabs](https://elevenlabs.io) pro syntézu hlasu AI, text-to-speech a zpracování zvuku.\n\nPro autentizaci je vyžadován API klíč. Chcete-li si ho získat, přihlaste se do svého účtu ElevenLabs a přejděte do **Profil + API klíč** v levém dolním menu na [elevenlabs.io](https://elevenlabs.io)"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "ElevenLabs REST Connection",
+          "message": "Spojení ElevenLabs REST"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "To connect to ElevenLabs, you need an API key:\n\n1. Sign in to your account at [elevenlabs.io](https://elevenlabs.io)\n2. Click your **profile icon** in the bottom-left corner\n3. Select **Profile + API Key**\n4. Click the **eye icon** to reveal your API key, then copy it\n\nKeep your API key secure and never share it publicly.",
+          "message": "Pro připojení k ElevenLabs potřebujete klíč API:\n\n1. Přihlaste se do svého účtu na [elevenlabs.io](https://elevenlabs.io)\n2. Klikněte na svůj **ikona profilu** v levém dolním rohu\n3. Vyberte **Profil + API klíč**\n4. Klikněte na **ikona oka**, abyste zobrazili svůj API klíč, a zkopírujte jej\n\nUchovejte svůj API klíč v bezpečí a nikdy jej nezveřejňujte veřejně."
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your ElevenLabs API Key",
+          "message": "Jak získat svůj ElevenLabs API klíč"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The ElevenLabs API key used for authentication; sent as the `xi-api-key` header. To obtain a key, sign in at [elevenlabs.io](https://elevenlabs.io) and navigate to **Profile + API Key** in the bottom-left menu",
+          "message": "API klíč ElevenLabs používaný pro ověření; odesílán jako hlavička `xi-api-key`. Chcete-li získat klíč, přihlaste se na [elevenlabs.io](https://elevenlabs.io) a přejděte v levém dolním menu na **Profil + API klíč**"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klíč API"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "ElevenLabs API key for authentication",
+          "message": "ElevenLabs API klíč pro ověření"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "Use the EU data residency endpoint (api.eu.residency.elevenlabs.io)",
+          "message": "Použijte koncový bod pro úložiště dat v EU (api.eu.residency.elevenlabs.io)"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "EU",
+          "message": "Evropa"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "Use the global API endpoint (api.elevenlabs.io)",
+          "message": "Použijte globální koncový bod API (api.elevenlabs.io)"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "US (Global)",
+          "message": "US (Globální)"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "The API region to use; `us` (default) uses the global endpoint, `eu` uses the EU data residency endpoint",
+          "message": "Oblast API, kterou použít; `us` (výchozí) používá globální koncový bod, `eu` používá koncový bod pro úložiště dat v EU"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Region"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "The API region to use",
+          "message": "Oblast API, kterou použít"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the ElevenLabs REST API",
+          "message": "Připojení k REST API ElevenLabs"
+        }
+      }
+    }
+  }
+}

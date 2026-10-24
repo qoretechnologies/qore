@@ -1,0 +1,485 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.desc": {
+          "source": "A connection to the local filesystem",
+          "message": "連接到本機檔案系統"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.display_name": {
+          "source": "Filesystem Connection",
+          "message": "檔案系統連接"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.desc": {
+          "source": "Does not mark the connection as down if the filesystem location is read only; use for example if the connection should point to a read-only base directory; interface directories should normally be writable",
+          "message": "如果檔案系統位置為唯讀，不會將連接標記為失效；例如用於連接指向唯讀基目錄的情況；介面目錄通常應可寫入"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.display_name": {
+          "source": "Read-Only",
+          "message": "唯讀"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.option.cmVhZG9ubHk.short_desc": {
+          "source": "Sets the read-only flag on the connection",
+          "message": "在連接上設定唯讀旗標"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RmlsZXN5c3RlbUNvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the local filesystem",
+          "message": "連接到本機檔案系統"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to an FTP server with the `ftp` or `ftps` (secure, not to be confused with sftp) protocols",
+          "message": "使用 `ftp` 或 `ftps`（安全，與 sftp 不同）協定連接到 FTP 伺服器"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.display_name": {
+          "source": "FTP Connection",
+          "message": "FTP 連接"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; only used if no username or password is set in the URL and if the `username` option is also used",
+          "message": "用於驗證的密碼；僅當 URL 中未設定使用者名稱或密碼，且也使用了 `username` 選項時才會使用"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "密碼"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.cGFzc3dvcmQ.short_desc": {
+          "source": "Sets the password for authentication",
+          "message": "設定用於驗證的密碼"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL and if the `password` option is also used",
+          "message": "用於驗證的使用者名稱；僅當 URL 中未設定使用者名稱或密碼，且也使用了 `password` 選項時才會使用"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "使用者名稱"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for authentication",
+          "message": "設定用於驗證的使用者名稱"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.RnRwQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to an FTP server",
+          "message": "連線至 FTP 伺服器"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.desc": {
+          "source": "A connectioas to a HTTP server",
+          "message": "連線至 HTTP 伺服器"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.display_name": {
+          "source": "HTTP Connection",
+          "message": "HTTP 連線"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connection timeout to use in milliseconds (default: 45 seconds)",
+          "message": "要使用的連線逾時（毫秒，預設：45 秒）"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "連線逾時"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "連線逾時（毫秒）"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.YXNzdW1lX2VuY29kaW5n.desc": {
+          "source": "Assumes the given encoding if the server does not send a `charset` value",
+          "message": "若伺服器未傳送 `charset` 值，則假定為給定編碼"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.YXNzdW1lX2VuY29kaW5n.display_name": {
+          "source": "Assume Character Encoding",
+          "message": "假定字元編碼"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.YXNzdW1lX2VuY29kaW5n.short_desc": {
+          "source": "Sets the character encoding to assume if 'charset' is missing",
+          "message": "設定缺少 'charset' 時假定的字元編碼"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.desc": {
+          "source": "Disables automatic pings; useful for rate-limited or metered connections",
+          "message": "停用自動 Ping；適用於有速率限制或計量付費的連線"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.display_name": {
+          "source": "Disable Automatic Pings?",
+          "message": "停用自動 Ping？"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.short_desc": {
+          "source": "Disables automatic pings",
+          "message": "停用自動 Ping"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZW5jb2RlX2NoYXJz.desc": {
+          "source": "A set of additional characters to subject to percent encoding in URLs",
+          "message": "在 URL 中進行百分比編碼的一組額外字元"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZW5jb2RlX2NoYXJz.display_name": {
+          "source": "Encode URL Characters",
+          "message": "編碼 URL 字元"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZW5jb2RlX2NoYXJz.short_desc": {
+          "source": "A set of additional characters to subject to percent encoding in URLs",
+          "message": "在 URL 中進行百分比編碼的一組額外字元"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True` then HTTP status codes indicating errors will not cause an `HTTP-CLIENT-RECEIVE-ERROR` exception to be raised, rather such responses will be passed through to the caller like any other response",
+          "message": "若為 `True`，表示錯誤的 HTTP 狀態碼將不會引發 `HTTP-CLIENT-RECEIVE-ERROR` 例外狀況，而是像任何其他回應一樣直接傳遞給呼叫者"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Error Passthrough",
+          "message": "錯誤直通"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "If errors should be returned like normal successful responses",
+          "message": "是否應將錯誤像正常成功回應一樣傳回"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aGVhZGVycw.desc": {
+          "source": "Sets HTTP headers to include in each outgoing request",
+          "message": "設定每個出站請求中包含的 HTTP 標頭"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aGVhZGVycw.display_name": {
+          "source": "HTTP Headers",
+          "message": "HTTP 標頭"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aGVhZGVycw.short_desc": {
+          "source": "Sets HTTP headers to include in each request",
+          "message": "設定每個請求中包含的 HTTP 標頭"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOjEuMA.desc": {
+          "source": "HTTP/1.0 only",
+          "message": "僅限 HTTP/1.0"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOjEuMQ.desc": {
+          "source": "HTTP/1.1 only",
+          "message": "僅限 HTTP/1.1"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOjIuMA.desc": {
+          "source": "Require HTTP/2, fail if the server doesn't support it (TLS required)",
+          "message": "需要 HTTP/2，如果伺服器不支援則失敗（需要 TLS）"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOjMuMA.desc": {
+          "source": "Require HTTP/3 (QUIC), fail if unavailable (TLS required)",
+          "message": "需要 HTTP/3 (QUIC)，如果不可用則失敗（需要 TLS）"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.allowed_values.c3RyaW5nOmF1dG8.desc": {
+          "source": "Use HTTP/3-first happy eyeballs for HTTPS; fall back to HTTP/2 if needed (default)",
+          "message": "HTTPS 優先使用 HTTP/3 的 Happy Eyeballs 演算法；必要時退回 HTTP/2（預設）"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.desc": {
+          "source": "The HTTP version to use: `auto` (HTTP/3-first happy eyeballs for HTTPS, default), `1.0`, `1.1`, `2.0`, or `3.0`. HTTP/2 requires TLS and is negotiated via ALPN. HTTP/3 requires TLS and uses QUIC as the transport protocol",
+          "message": "要使用的 HTTP 版本：`auto`（HTTPS 優先使用 HTTP/3 Happy Eyeballs，預設）、`1.0`、`1.1`、`2.0` 或 `3.0`。HTTP/2 需要 TLS 並透過 ALPN 協商。HTTP/3 需要 TLS 並使用 QUIC 作為傳輸通訊協定"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.display_name": {
+          "source": "HTTP Version",
+          "message": "HTTP 版本"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.aHR0cF92ZXJzaW9u.short_desc": {
+          "source": "The HTTP version to use",
+          "message": "要使用的 HTTP 版本"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3JlZGlyZWN0cw.desc": {
+          "source": "Sets the maximum HTTP redirects to support in a single request",
+          "message": "設定單一請求中支援的 HTTP 重新導向次數上限"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3JlZGlyZWN0cw.display_name": {
+          "source": "Max Redirects",
+          "message": "最大重新導向次數"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3JlZGlyZWN0cw.short_desc": {
+          "source": "Sets the maximum HTTP redirects to support",
+          "message": "設定支援的 HTTP 重新導向次數上限"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.desc": {
+          "source": "The maximum size in bytes of a response body that is received into memory, as received and after its content encoding (such as `gzip`) is decoded; `0` (the default) means no limit.\n\nA larger response fails the request, so a huge response, or a small compressed response that expands to a huge size, cannot exhaust memory.",
+          "message": "接收至記憶體的回應本文大小上限（位元組），適用於接收時的大小以及解碼其內容編碼（例如 `gzip`）後的大小；`0`（預設值）表示沒有限制。\n\n較大的回應會使要求失敗，因此巨大的回應，或解壓縮後會膨脹成巨大大小的小型壓縮回應，都無法耗盡記憶體。"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.display_name": {
+          "source": "Max Response Body Size",
+          "message": "回應本文大小上限"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.short_desc": {
+          "source": "The maximum size of a response body received into memory",
+          "message": "接收至記憶體的回應本文大小上限"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2F1dGg.desc": {
+          "source": "Enables Kerberos/SPNEGO HTTP Negotiate authentication for REST clients that support it; raw HTTPClient paths reject this option with HTTP-NEGOTIATE-AUTH-ERROR",
+          "message": "為支援的 REST 用戶端啟用 Kerberos/SPNEGO HTTP Negotiate 驗證；原始 HTTPClient 路徑會以 HTTP-NEGOTIATE-AUTH-ERROR 拒絕此選項"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2F1dGg.display_name": {
+          "source": "Kerberos Negotiate Auth?",
+          "message": "Kerberos Negotiate 驗證？"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2F1dGg.short_desc": {
+          "source": "Enables Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "啟用 Kerberos/SPNEGO HTTP Negotiate 驗證"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.desc": {
+          "source": "Credential cache to use for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "用於 Kerberos/SPNEGO HTTP Negotiate 驗證的憑證快取"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.display_name": {
+          "source": "Kerberos Credential Cache",
+          "message": "Kerberos 憑證快取"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.short_desc": {
+          "source": "Credential cache for Kerberos HTTP Negotiate authentication",
+          "message": "用於 Kerberos HTTP Negotiate 驗證的憑證快取"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "Do not delegate credentials",
+          "message": "不委派憑證"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed_values.c3RyaW5nOmRpcmVjdA.desc": {
+          "source": "Delegate the initiator credential directly where supported",
+          "message": "在支援的情況下直接委派發起者憑證"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed_values.c3RyaW5nOnM0dQ.desc": {
+          "source": "Use constrained delegation with S4U where supported",
+          "message": "在支援的情況下使用包含 S4U 的受限委派"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.desc": {
+          "source": "Delegation mode for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Kerberos/SPNEGO HTTP Negotiate 驗證的委派模式"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.display_name": {
+          "source": "Kerberos Delegation Mode",
+          "message": "Kerberos 委派模式"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.short_desc": {
+          "source": "Delegation mode for Kerberos HTTP Negotiate authentication",
+          "message": "Kerberos HTTP Negotiate 驗證的委派模式"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2tleXRhYg.desc": {
+          "source": "Client keytab to use for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "用於 Kerberos/SPNEGO HTTP Negotiate 驗證的用戶端 Keytab"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2tleXRhYg.display_name": {
+          "source": "Kerberos Client Keytab",
+          "message": "Kerberos 用戶端 Keytab"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX2tleXRhYg.short_desc": {
+          "source": "Client keytab for Kerberos HTTP Negotiate authentication",
+          "message": "用於 Kerberos HTTP Negotiate 驗證的用戶端 Keytab"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.desc": {
+          "source": "If True, send the initial Negotiate token before receiving a 401 challenge",
+          "message": "若為 True，則在收到 401 提問前傳送初始 Negotiate 權杖"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.display_name": {
+          "source": "Preemptive Kerberos Negotiate?",
+          "message": "先發 Kerberos Negotiate？"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.short_desc": {
+          "source": "Sends the initial Negotiate token without waiting for a 401 challenge",
+          "message": "傳送初始 Negotiate 權杖而無需等待 401 提問"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.desc": {
+          "source": "The Kerberos service principal to use for HTTP Negotiate authentication; if omitted, REST clients derive a host-based HTTP service name from the URL",
+          "message": "用於 HTTP Negotiate 驗證的 Kerberos 服務主體；若省略，REST 用戶端會從 URL 衍生基於主機的 HTTP 服務名稱"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.display_name": {
+          "source": "Kerberos Service Principal",
+          "message": "Kerberos 服務主體"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.short_desc": {
+          "source": "The Kerberos HTTP service principal",
+          "message": "Kerberos HTTP 服務主體"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfZGF0YQ.desc": {
+          "source": "The X.509 certificate data in PEM format (string) or in DER format (binary); if this option is set, then `ssl_cert_path` is ignored",
+          "message": "X.509 憑證資料，格式為 PEM（字串）或 DER（二進位）；若設定此選項，則 `ssl_cert_path` 將被忽略"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfZGF0YQ.display_name": {
+          "source": "SSL Certificate Data",
+          "message": "SSL 憑證資料"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfZGF0YQ.short_desc": {
+          "source": "X.509 certificate data",
+          "message": "X.509 憑證資料"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfcGF0aA.desc": {
+          "source": "The location of a X.509 client certificate file in PEM format; processed with `FileLocationHandler`, so it may be a bare path or any registered scheme (`file://`, `http(s)://`, `sftp://`, ...)",
+          "message": "以 PEM 格式儲存的 X.509 客戶端憑證檔案位置；會使用 `FileLocationHandler` 處理，因此可以是純路徑，或任何註冊的方案（`file://`、`http(s)://`、`sftp://`、...）"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfcGF0aA.display_name": {
+          "source": "SSL Certificate Location",
+          "message": "SSL 憑證位置"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2NlcnRfcGF0aA.short_desc": {
+          "source": "The location of the X.509 client certificate to use",
+          "message": "要用的 X.509 客戶端憑證位置"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9kYXRh.desc": {
+          "source": "The X.509 private key data in PEM format (string) or in DER format (binary); if this option is set, then `ssl_key_path` is ignored",
+          "message": "以 PEM 格式（字串）或 DER 格式（二進位）儲存的 X.509 私密金鑰資料；若設定此選項，則 `ssl_key_path` 將被忽略"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9kYXRh.display_name": {
+          "source": "SSL Key Data",
+          "message": "SSL 私密金鑰資料"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9kYXRh.short_desc": {
+          "source": "X.509 private key data",
+          "message": "X.509 私密金鑰資料"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXNzd29yZA.desc": {
+          "source": "The password to the private key given with `ssl_key_path`",
+          "message": "與 `ssl_key_path` 一同提供的私密金鑰密碼"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXNzd29yZA.display_name": {
+          "source": "SSL Key Password",
+          "message": "SSL 金鑰密碼"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXNzd29yZA.short_desc": {
+          "source": "The password to the private key",
+          "message": "私鑰的密碼"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXRo.desc": {
+          "source": "The location of a private key file in PEM format for the X.509 client certificate; processed with `FileLocationHandler`, so it may be a bare path or any registered scheme (`file://`, `http(s)://`, `sftp://`, ...)",
+          "message": "X.509 客戶端憑證使用的 PEM 格式私鑰檔案位置；由 `FileLocationHandler` 處理，因此可以是裸路徑或任何註冊的方案（`file://`、`http(s)://`、`sftp://`、...）"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXRo.display_name": {
+          "source": "SSL Key Location",
+          "message": "SSL 私鑰位置"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX2tleV9wYXRo.short_desc": {
+          "source": "The location of the private key file",
+          "message": "私鑰檔案的位置"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX3ZlcmlmeV9jZXJ0.desc": {
+          "source": "if `True` then the server's certificate will only be accepted if it's verified",
+          "message": "若 `True` 則僅當伺服器憑證經過驗證時才接受"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX3ZlcmlmeV9jZXJ0.display_name": {
+          "source": "SSL Verify Certificate",
+          "message": "驗證 SSL 憑證"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.c3NsX3ZlcmlmeV9jZXJ0.short_desc": {
+          "source": "If true then server certificates will be verified",
+          "message": "若為真，則會驗證伺服器憑證"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for HTTP basic authentication; only used if no username or password is set in the URL and if the `username` option is also used",
+          "message": "HTTP 基本驗證的密碼；僅在 URL 中未設定使用者名稱或密碼且同時使用了 `username` 選項時使用"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "密碼"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for HTTP basic authentication",
+          "message": "HTTP 基本驗證的密碼"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19ib2R5.desc": {
+          "source": "Any message body to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set or if `ping_method` is `GET`",
+          "message": "執行進階 Ping 操作時要傳送的任何訊息本文；若 `ping_method` 和 `ping_path` 其中之一未設定，或 `ping_method` 為 `GET`，則會被忽略"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19ib2R5.display_name": {
+          "source": "Ping Body",
+          "message": "Ping 本文"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19ib2R5.short_desc": {
+          "source": "The message body to send with pings",
+          "message": "隨 ping 發送的訊息內文"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.desc": {
+          "source": "Any HTTP headers to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set",
+          "message": "執行進階 ping 操作時發送的任何 HTTP 標頭；如果 `ping_method` 和 `ping_path` 中有任一個未設定，則忽略此項目"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.display_name": {
+          "source": "Ping Headers",
+          "message": "Ping 標頭"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.short_desc": {
+          "source": "Any HTTP headers to send with pings",
+          "message": "隨 ping 發送的任何 HTTP 標頭"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.desc": {
+          "source": "The HTTP method to use for an advanced ping; this and `ping_path` must be set to make an HTTP request as a part of the socket polling ping operation; must be a valid HTTP method name",
+          "message": "用於進階 ping 的 HTTP 方法；必須設定此項與 `ping_path`，才能在通訊端輪詢 ping 操作中發出 HTTP 請求；必須是有效的 HTTP 方法名稱"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.display_name": {
+          "source": "Ping Method",
+          "message": "Ping 方法"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.short_desc": {
+          "source": "The HTTP method to use for pings",
+          "message": "用於 ping 的 HTTP 方法"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19wYXRo.desc": {
+          "source": "The URI path to use for an advanced ping; this and `ping_method` must be set to make an HTTP request as a part of the socket polling ping operation.  If the value for this option begins with a `/` character, then it replaces any connection path for the HTTP client, otherwise the value is appended to the connection path for the HTTP client.",
+          "message": "用於進階 ping 的 URI 路徑；此項與 `ping_method` 必須同時設定，才能在 socket 輪詢 ping 操作中發出 HTTP 請求。若此選項的值以 `/` 字元開頭，則會取代 HTTP 客戶端的連接路徑，否則該值會附加至 HTTP 客戶端的連接路徑。"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19wYXRo.display_name": {
+          "source": "Ping Path",
+          "message": "Ping 路徑"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cGluZ19wYXRo.short_desc": {
+          "source": "The URI path to use for pings",
+          "message": "用於 ping 的 URI 路徑"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJlX2VuY29kZWRfdXJscw.desc": {
+          "source": "If `true` then all URI paths in URLs are assumed to be already [percent encoded](https://en.wikipedia.org/wiki/Percent-encoding); if this flag is set and any unencoded characters are sent in a URL with a new request, an exception is raised",
+          "message": "若為 `true`，則 URL 中的所有 URI 路徑均會視為已進行[百分比編碼](https://en.wikipedia.org/wiki/Percent-encoding)；若設定此旗標且新請求的 URL 中含有任何未編碼字元，將引發例外狀況"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJlX2VuY29kZWRfdXJscw.display_name": {
+          "source": "Pre-Encoded URLs",
+          "message": "預先編碼的 URL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJlX2VuY29kZWRfdXJscw.short_desc": {
+          "source": "If true then URLs are assumed to be preencoded",
+          "message": "若為 true，則 URL 會被視為已預先編碼"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJveHk.desc": {
+          "source": "The HTTP proxy URL to use",
+          "message": "要使用的 HTTP 代理伺服器 URL"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJveHk.display_name": {
+          "source": "HTTP Proxy",
+          "message": "HTTP 代理"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cHJveHk.short_desc": {
+          "source": "The HTTP proxy to use",
+          "message": "要使用的 HTTP 代理伺服器"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cmVkaXJlY3RfcGFzc3RocnU.desc": {
+          "source": "If `True` then redirect responses will be passed to the caller instead of processed",
+          "message": "若為 `True`，則重定向回應將直接傳遞給呼叫方而非進行處理"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cmVkaXJlY3RfcGFzc3RocnU.display_name": {
+          "source": "Redirect Passthrough",
+          "message": "重定向直通"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.cmVkaXJlY3RfcGFzc3RocnU.short_desc": {
+          "source": "If true then redirect responses are returned to the caller",
+          "message": "若為 true，則重定向回應會傳回給呼叫方"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dGltZW91dA.desc": {
+          "source": "The transfer timeout to use in milliseconds (default: 45 seconds)",
+          "message": "傳輸逾時時間（毫秒，預設：45 秒）"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "I/O 逾時"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dGltZW91dA.short_desc": {
+          "source": "The maximum time an individual I/O operation can take in milliseconds",
+          "message": "單一 I/O 操作可花費的最長時間（毫秒）"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL and if the `password` option is also used",
+          "message": "用於驗證的使用者名稱；僅當 URL 中未設定使用者名稱或密碼，且也使用了 `password` 選項時才會使用"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "使用者名稱"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for HTTP basic authentication",
+          "message": "設定 HTTP 基本驗證的使用者名稱"
+        },
+        "connection.Q29ubmVjdGlvblByb3ZpZGVy.scheme.SHR0cENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a HTTP server",
+          "message": "連接到 HTTP 伺服器的連接"
+        }
+      }
+    }
+  }
+}

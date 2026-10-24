@@ -498,7 +498,8 @@ public class DropboxRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "dropbox://api.dropboxapi.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("DropboxRestClient",
+            "DropboxRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Dropbox",
             "short_desc": "A connection to the Dropbox REST API",
             "desc": "A connection to the [Dropbox](https://www.dropbox.com) REST API for cloud file storage "
@@ -554,7 +555,7 @@ public class DropboxRestConnection inherits RestClient::RestConnection {
                 }),
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
-        };
+        });
 
         #! Options required to support the OAuth2 authorization code grant flow
         const OAuth2AuthRequestOptions = (

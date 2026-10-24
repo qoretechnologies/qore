@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [DeepSeek](https://platform.deepseek.com) REST API.\n\nRequires an API key for Bearer authentication.  Get your API key from the [DeepSeek Platform](https://platform.deepseek.com/api_keys).",
+          "message": "Una connessione all'API REST di [DeepSeek](https://platform.deepseek.com)\n\nRichiede una chiave API per l'autenticazione Bearer. Ottieni la tua chiave API dalla [Piattaforma DeepSeek](https://platform.deepseek.com/api_keys)."
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "DeepSeek REST Connection",
+          "message": "Connessione REST di DeepSeek"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.allowed_values.c3RyaW5nOmRlZXBzZWVrLWZsYXNo.display_name": {
+          "source": "DeepSeek V4.1 Flash",
+          "message": "DeepSeek V4.1 Flash"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.allowed_values.c3RyaW5nOmRlZXBzZWVrLXY0LXBybw.display_name": {
+          "source": "DeepSeek V4 Pro",
+          "message": "DeepSeek V4 Pro"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "Model ID for chat through this connection. Use the app's `List Models` action to inspect available models. Custom model IDs are accepted.",
+          "message": "ID del modello per la chat tramite questa connessione. Usa l'azione `List Models` dell'app per ispezionare i modelli disponibili. Sono accettati ID di modelli personalizzati."
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Modello di chat"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "DeepSeek chat model name",
+          "message": "Nome del modello di chat di DeepSeek"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBp.allowed_values.c3RyaW5nOmJldGE.display_name": {
+          "source": "Beta API",
+          "message": "API Beta"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "Stable API",
+          "message": "API Stabile"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBp.desc": {
+          "source": "Select the stable API or the beta API for prefix completion and strict tools.",
+          "message": "Seleziona l'API stabile o l'API beta per il completamento in prefisso e gli strumenti rigorosi."
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Versione API"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Versione dell'API da utilizzare"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The DeepSeek API key used for Bearer authentication.\n\nGet your API key from the [DeepSeek Platform](https://platform.deepseek.com/api_keys).",
+          "message": "La chiave API di DeepSeek utilizzata per l'autenticazione Bearer.\n\nOttieni la tua chiave API dalla [piattaforma DeepSeek](https://platform.deepseek.com/api_keys)."
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Chiave API"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "DeepSeek API key for authentication",
+          "message": "Chiave API DeepSeek per l'autenticazione"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the DeepSeek REST API",
+          "message": "Una connessione all'API REST di DeepSeek"
+        }
+      }
+    }
+  }
+}

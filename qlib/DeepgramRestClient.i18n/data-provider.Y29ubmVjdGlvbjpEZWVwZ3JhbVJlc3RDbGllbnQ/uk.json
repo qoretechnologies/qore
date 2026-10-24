@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [Deepgram](https://deepgram.com) speech API.\n\nDeepgram provides automatic speech recognition (ASR) via `/v1/listen` and text-to-speech (TTS) via `/v1/speak`, plus realtime WebSocket streaming for both directions.\n\nRequires an API key for `Authorization: Token` authentication (note: Deepgram uses `Token`, NOT `Bearer`).  Get your API key from the [Deepgram console](https://console.deepgram.com).",
+          "message": "З’єднання з [Deepgram](https://deepgram.com) API розпізнавання мовлення.\n\nDeepgram надає автоматичне розпізнавання мовлення (ASR) через `/v1/listen` та перетворення тексту у мовлення (TTS) через `/v1/speak`, а також реальний час WebSocket-стрімінг у обох напрямках.\n\nПотрібен ключ API для автентифікації `Authorization: Token` (зауваження: Deepgram використовує `Token`, НЕ `Bearer`). Отримайте свій ключ API у [консолі Deepgram](https://console.deepgram.com)."
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Deepgram REST Connection",
+          "message": "З’єднання REST Deepgram"
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Deepgram API key — sent as the `Authorization: Token <key>` header (NOT `Authorization: Bearer`).",
+          "message": "Ключ API Deepgram — надсилається як заголовок `Authorization: Token <key>` (НЕ `Authorization: Bearer`)."
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Deepgram API key (sent as Authorization: Token header)",
+          "message": "Ключ API Deepgram (надсилається як заголовок Authorization: Token)"
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Deepgram speech (ASR + TTS) REST API",
+          "message": "З’єднання з REST API Deepgram (ASR + TTS)"
+        }
+      }
+    }
+  }
+}

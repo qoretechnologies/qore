@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.S2F0YW5hUmVzdENsaWVudA.scheme.S2F0YW5hUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the **Katana MRP** REST API for managing products, materials, stock, sales orders, purchase orders, manufacturing orders, and related manufacturing/inventory resources.\n\nKatana is a cloud-based manufacturing and inventory management (MRP) platform. The API uses Bearer token authentication; the API key is sent on every request in the `Authorization: Bearer <apikey>` header.\n\n**To obtain your API key:**\n1. Log in to your Katana account\n2. Open **Settings** > **API**\n3. Click **+ Add new API key** and copy the generated key\n\n**Important:** API access requires the **Professional plan** (or higher). The key has full access to your Katana data — keep it secure and never share it publicly.",
+          "message": "連線至 **Katana MRP** REST API，用於管理產品、材料、庫存、銷售訂單、採購訂單、製造訂單及相關製造/庫存資源。\n\nKatana 是一個基於雲端的製造與庫存管理（MRP）平台。API 使用 Bearer 權杖驗證；API 金鑰會在每個請求中以 `Authorization: Bearer <apikey>` 標頭傳送。\n\n**取得您的 API 金鑰：**\n1. 登入您的 Katana 帳戶\n2. 開啟 **設定** > **API**\n3. 點選 **+ 新增新 API 金鑰** 並複製產生的金鑰\n\n**重要：** API 存取需使用 **專業方案**（或更高方案）。此金鑰可完全存取您的 Katana 資料 — 請妥善保管，切勿公開分享。"
+        },
+        "connection.S2F0YW5hUmVzdENsaWVudA.scheme.S2F0YW5hUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Katana MRP REST Connection",
+          "message": "Katana MRP REST 連線"
+        },
+        "connection.S2F0YW5hUmVzdENsaWVudA.scheme.S2F0YW5hUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires a **Katana MRP API key**.\n\n**Steps to generate a key:**\n1. Log in to your Katana account\n2. Open **Settings** > **API**\n3. Click **+ Add new API key**\n4. Copy the generated key value\n\n**Plan requirement:** Katana API access is only available on the **Professional plan** (or higher). If you do not see the API section under Settings, please upgrade your subscription.\n\n**How it is used:**\n- The key is sent on every request as the `Authorization: Bearer <apikey>` HTTP header\n- The key provides full access to your Katana data; keep it secure and never share it publicly",
+          "message": "此整合需要一個 **Katana MRP API 金鑰**。\n\n**產生金鑰的步驟：**\n1. 登入您的 Katana 帳戶\n2. 開啟 **設定** > **API**\n3. 點選 **+ 新增新 API 金鑰**\n4. 複製產生的金鑰值\n\n**方案要求：** Katana API 存取僅提供於 **專業方案**（或更高方案）。若您在設定中看不到 API 選項，請升級您的訂閱方案。\n\n**使用方式：**\n- 金鑰會以 `Authorization: Bearer <apikey>` HTTP 標頭在每個請求中傳送\n- 金鑰可完全存取您的 Katana 資料；請妥善保管，切勿公開分享"
+        },
+        "connection.S2F0YW5hUmVzdENsaWVudA.scheme.S2F0YW5hUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "如何取得您的 API 金鑰"
+        },
+        "connection.S2F0YW5hUmVzdENsaWVudA.scheme.S2F0YW5hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Katana MRP API key. Sent on every request in the `Authorization: Bearer <apikey>` HTTP header.\n\n**To obtain your API key:**\n1. Log in to your Katana account\n2. Open **Settings** > **API**\n3. Click **+ Add new API key** and copy the generated value\n\n**Note:** Katana API access requires the **Professional plan** (or higher). The key has full access to your Katana data — **keep it secure** and never share it publicly.",
+          "message": "Katana MRP API 金鑰。每個請求都會在 `Authorization: Bearer <apikey>` HTTP 標頭中傳送。\n\n**取得您的 API 金鑰：**\n1. 登入您的 Katana 帳戶\n2. 開啟 **設定** > **API**\n3. 點選 **+ 新增新的 API 金鑰** 並複製產生的值\n\n**注意：** 使用 Katana API 需要 **專業方案**（或更高方案）。此金鑰可完全存取您的 Katana 資料 — **請妥善保管**，切勿公開分享。"
+        },
+        "connection.S2F0YW5hUmVzdENsaWVudA.scheme.S2F0YW5hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.S2F0YW5hUmVzdENsaWVudA.scheme.S2F0YW5hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Katana MRP API key for Bearer authentication",
+          "message": "用於 Bearer 驗證的 Katana MRP API 金鑰"
+        },
+        "connection.S2F0YW5hUmVzdENsaWVudA.scheme.S2F0YW5hUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Katana MRP REST API",
+          "message": "連線至 Katana MRP REST API"
+        }
+      }
+    }
+  }
+}

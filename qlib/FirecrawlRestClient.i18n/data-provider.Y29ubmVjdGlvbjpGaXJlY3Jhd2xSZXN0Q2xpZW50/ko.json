@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Firecrawl REST API for web scraping, crawling, and data extraction",
+          "message": "웹 크롤링, 크롤링 및 데이터 추출을 위한 Firecrawl REST API에 대한 연결"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Firecrawl REST Connection",
+          "message": "Firecrawl REST 연결"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Firecrawl, you need an API key:\n\n1. Sign in to your account at [firecrawl.dev](https://www.firecrawl.dev)\n2. Navigate to your **Dashboard**\n3. Find or generate your API key\n4. Copy the key (it starts with `fc-`)\n\nKeep your API key secure and never share it publicly.",
+          "message": "Firecrawl에 연결하려면 API 키가 필요합니다:\n\n1. [firecrawl.dev](https://www.firecrawl.dev)에서 계정에 로그인합니다\n2. **대시보드**로 이동합니다\n3. API 키를 찾거나 생성합니다\n4. 키를 복사합니다 (이 키는 `fc-`로 시작합니다)\n\nAPI 키를 안전하게 보관하고 공개하지 마세요."
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Firecrawl API Key",
+          "message": "Firecrawl API 키 받는 방법"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Firecrawl API key used for authentication; sent as a Bearer token in the `Authorization` header. To obtain a key, sign in at [firecrawl.dev](https://www.firecrawl.dev) and navigate to your dashboard",
+          "message": "인증에 사용되는 Firecrawl API 키; `Authorization` 헤더에 Bearer 토큰으로 전송됩니다. 키를 얻으려면 [firecrawl.dev](https://www.firecrawl.dev)에 로그인하고 대시보드로 이동하세요"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Firecrawl API key for authentication",
+          "message": "인증용 Firecrawl API 키"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Firecrawl REST API",
+          "message": "Firecrawl REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

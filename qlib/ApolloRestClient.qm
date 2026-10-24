@@ -244,7 +244,8 @@ public class ApolloRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "apollorest://api.apollo.io/api/v1";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ApolloRestClient",
+            "ApolloRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Apollo REST Connection",
             "short_desc": "A connection to the Apollo REST API",
             "desc": "A connection to the Apollo REST API for B2B sales intelligence, contacts, "
@@ -290,7 +291,7 @@ public class ApolloRestConnection inherits RestClient::RestConnection {
                         "default_value": ApolloRestClientBase::DefaultTokenUrl,
                     }),
             },
-        };
+        });
     }
 
     #! creates the ApolloRestConnection object

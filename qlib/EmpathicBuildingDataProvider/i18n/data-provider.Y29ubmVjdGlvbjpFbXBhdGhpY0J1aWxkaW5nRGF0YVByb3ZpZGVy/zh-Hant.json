@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a Haltian Empathic Building REST server",
+          "message": "連接到 Haltian Empathic Building REST 伺服器的連線"
+        },
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Haltian Empathic Building REST Connection",
+          "message": "Haltian Empathic Building REST 連線"
+        },
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.option.cmVmcmVzaF90b2tlbg.desc": {
+          "source": "Sets the Haltian refresh token, if any (complements option `token`)",
+          "message": "設定 Haltian 刷新金鑰（如適用；補充選項 `token`）"
+        },
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.option.cmVmcmVzaF90b2tlbg.display_name": {
+          "source": "Refresh Token",
+          "message": "重新整理權杖"
+        },
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.option.cmVmcmVzaF90b2tlbg.short_desc": {
+          "source": "Sets the Haltian refresh token",
+          "message": "設定 Haltian 刷新金鑰"
+        },
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a Haltian Empathic Building REST server",
+          "message": "連接到 Haltian Empathic Building REST 伺服器的連線"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the ClickFunnels REST API for managing contacts, orders, products, funnels, courses, forms, and fulfillments",
+          "message": "연락처, 주문, 제품, 퍼널, 코스, 양식 및 충족을 관리하기 위한 ClickFunnels REST API에 연결"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "ClickFunnels REST Connection",
+          "message": "ClickFunnels REST 연결"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "The **Team Subdomain** is required to connect to your ClickFunnels account.\n\n**How to find it:**\n1. Log in to your ClickFunnels 2.0 account\n2. Look at the URL in your browser: `https://**myteam**.myclickfunnels.com`\n3. The team subdomain is the part before `.myclickfunnels.com`",
+          "message": "ClickFunnels 계정에 연결하려면 **팀 하위 도메인**이 필요합니다.\n\n**찾는 방법:**\n1. ClickFunnels 2.0 계정에 로그인합니다\n2. 브라우저의 URL을 확인하세요: `https://**myteam**.myclickfunnels.com`\n3. `.myclickfunnels.com` 앞부분이 팀 하위 도메인입니다"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Find Your Team Subdomain",
+          "message": "팀 하위 도메인 찾는 방법"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
+          "source": "An **API Token** is required for authentication.\n\n**How to generate one:**\n1. Log in to your ClickFunnels 2.0 account\n2. Go to **Teams List > Your Team > Team Settings > Developer Portal**\n3. Click **Add new platform application** and fill in the required information\n4. Copy the **API access token** from the platform application details\n\n**Note:** Store this token securely; it provides full API access to your ClickFunnels account. API access requires a Scale, Optimize, or Dominate plan",
+          "message": "인증을 위해 **API 토큰**이 필요합니다.\n\n**생성 방법:**\n1. ClickFunnels 2.0 계정에 로그인합니다\n2. **팀 목록 > 내 팀 > 팀 설정 > 개발자 포털**으로 이동합니다\n3. **새 플랫폼 애플리케이션 추가**를 클릭하고 필수 정보를 입력합니다\n4. 플랫폼 애플리케이션 세부 정보에서 **API 액세스 토큰**을 복사합니다\n\n**참고:** 이 토큰을 안전하게 보관하세요. 이 토큰은 ClickFunnels 계정에 대한 전체 API 액세스 권한을 제공합니다. API 액세스는 Scale, Optimize, 또는 Dominate 플랜이 필요합니다"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
+          "source": "How to Generate an API Token",
+          "message": "API 토큰 생성 방법"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The ClickFunnels API Bearer token for authentication. Generate this token in ClickFunnels under **Teams List > Your Team > Team Settings > Developer Portal**",
+          "message": "인증을 위한 ClickFunnels API Bearer 토큰입니다. ClickFunnels에서 **팀 목록 > 내 팀 > 팀 설정 > 개발자 포털**에서 이 토큰을 생성하세요"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "ClickFunnels API Bearer token",
+          "message": "ClickFunnels API Bearer 토큰"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.dGVhbQ.desc": {
+          "source": "The ClickFunnels team subdomain used to build the API URL. For example, if your ClickFunnels URL is `https://myteam.myclickfunnels.com`, the team value is `myteam`",
+          "message": "ClickFunnels 팀 하위 도메인은 API URL을 구성하는 데 사용됩니다. 예를 들어, ClickFunnels URL이 `https://myteam.myclickfunnels.com`인 경우, 팀 값은 `myteam`입니다."
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.dGVhbQ.display_name": {
+          "source": "Team Subdomain",
+          "message": "팀 하위 도메인"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.dGVhbQ.short_desc": {
+          "source": "ClickFunnels team subdomain",
+          "message": "ClickFunnels 팀 하위 도메인"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the ClickFunnels REST API",
+          "message": "ClickFunnels REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

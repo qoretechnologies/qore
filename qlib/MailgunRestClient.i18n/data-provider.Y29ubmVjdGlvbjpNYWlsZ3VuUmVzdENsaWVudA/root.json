@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Mailgun REST Connection",
+          "message": "Mailgun REST Connection"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Mailgun REST API",
+          "message": "A connection to the Mailgun REST API"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Mailgun REST API for email sending and management.\n\n**To obtain your API key:**\n1. Log in to your Mailgun account at https://app.mailgun.com\n2. Go to API Security in the settings\n3. Create a new API key or copy your existing private key\n\n**Region Selection:**\n- **US**: For US-hosted accounts (api.mailgun.net)\n- **EU**: For EU-hosted accounts with EU data residency (api.eu.mailgun.net)",
+          "message": "A connection to the Mailgun REST API for email sending and management.\n\n**To obtain your API key:**\n1. Log in to your Mailgun account at https://app.mailgun.com\n2. Go to API Security in the settings\n3. Create a new API key or copy your existing private key\n\n**Region Selection:**\n- **US**: For US-hosted accounts (api.mailgun.net)\n- **EU**: For EU-hosted accounts with EU data residency (api.eu.mailgun.net)"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "How to Obtain Your API Key"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Mailgun account at https://app.mailgun.com\n2. Navigate to **Settings > API Security**\n3. Click **Add new key** or copy your existing private API key\n\n**Important:**\n- Use your **Private API key**, not a Domain Sending Key\n- Keep your API key secure and never share it publicly",
+          "message": "1. Log in to your Mailgun account at https://app.mailgun.com\n2. Navigate to **Settings > API Security**\n3. Click **Add new key** or copy your existing private API key\n\n**Important:**\n- Use your **Private API key**, not a Domain Sending Key\n- Keep your API key secure and never share it publicly"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Selecting the Right API Region",
+          "message": "Selecting the Right API Region"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Choose your API region based on where your Mailgun account is hosted:\n\n- **US (api.mailgun.net)**: Default for most accounts\n- **EU (api.eu.mailgun.net)**: For EU data residency requirements\n\nIf you're unsure, check your Mailgun dashboard URL:\n- US accounts: app.mailgun.com\n- EU accounts: app.eu.mailgun.com",
+          "message": "Choose your API region based on where your Mailgun account is hosted:\n\n- **US (api.mailgun.net)**: Default for most accounts\n- **EU (api.eu.mailgun.net)**: For EU data residency requirements\n\nIf you're unsure, check your Mailgun dashboard URL:\n- US accounts: app.mailgun.com\n- EU accounts: app.eu.mailgun.com"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMw.title": {
+          "source": "When is Sending Domain Required?",
+          "message": "When is Sending Domain Required?"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.message.c2V0dXAtMw.content": {
+          "source": "The **Sending Domain** is required for:\n- Sending emails\n- Registering webhooks for email events\n\nIt is **not required** for:\n- Listing domains\n- Managing mailing lists\n- Creating routes\n- Validating email addresses\n\nYou can find your verified domains in the Mailgun dashboard under **Sending > Domains**.",
+          "message": "The **Sending Domain** is required for:\n- Sending emails\n- Registering webhooks for email events\n\nIt is **not required** for:\n- Listing domains\n- Managing mailing lists\n- Creating routes\n- Validating email addresses\n\nYou can find your verified domains in the Mailgun dashboard under **Sending > Domains**."
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Sending Domain",
+          "message": "Sending Domain"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "Mailgun sending domain",
+          "message": "Mailgun sending domain"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.desc": {
+          "source": "The Mailgun sending domain to use for email operations.\n\nThis is typically a subdomain like mg.example.com that you have verified in your Mailgun account.",
+          "message": "The Mailgun sending domain to use for email operations.\n\nThis is typically a subdomain like mg.example.com that you have verified in your Mailgun account."
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.display_name": {
+          "source": "API Region",
+          "message": "API Region"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.short_desc": {
+          "source": "Mailgun API region",
+          "message": "Mailgun API region"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.desc": {
+          "source": "Select the Mailgun API region based on where your account is hosted:\n\n- **US**: For US-hosted accounts (default)\n- **EU**: For EU-hosted accounts with EU data residency",
+          "message": "Select the Mailgun API region based on where your account is hosted:\n\n- **US**: For US-hosted accounts (default)\n- **EU**: For EU-hosted accounts with EU data residency"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOlVT.display_name": {
+          "source": "United States",
+          "message": "United States"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOlVT.short_desc": {
+          "source": "US region API",
+          "message": "US region API"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOlVT.desc": {
+          "source": "US API endpoint - https://api.mailgun.net/v3",
+          "message": "US API endpoint - https://api.mailgun.net/v3"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOkVV.display_name": {
+          "source": "European Union",
+          "message": "European Union"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOkVV.short_desc": {
+          "source": "EU region API",
+          "message": "EU region API"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpX3JlZ2lvbg.allowed_values.c3RyaW5nOkVV.desc": {
+          "source": "EU API endpoint - https://api.eu.mailgun.net/v3",
+          "message": "EU API endpoint - https://api.eu.mailgun.net/v3"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API Key"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Mailgun API key for authentication",
+          "message": "Mailgun API key for authentication"
+        },
+        "connection.TWFpbGd1blJlc3RDbGllbnQ.scheme.TWFpbGd1blJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Mailgun API key for authentication.\n\n**To obtain your API key:**\n1. Log in to your Mailgun account at https://app.mailgun.com\n2. Go to Settings > API Security\n3. Create a new API key or copy your existing private key\n\n**Note:** Keep your API key secure and never share it publicly.",
+          "message": "The Mailgun API key for authentication.\n\n**To obtain your API key:**\n1. Log in to your Mailgun account at https://app.mailgun.com\n2. Go to Settings > API Security\n3. Create a new API key or copy your existing private key\n\n**Note:** Keep your API key secure and never share it publicly."
+        }
+      }
+    }
+  }
+}

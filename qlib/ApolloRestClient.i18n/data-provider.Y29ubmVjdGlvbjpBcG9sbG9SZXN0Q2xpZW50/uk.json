@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.QXBvbGxvUmVzdENsaWVudA.scheme.QXBvbGxvUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Apollo REST API for B2B sales intelligence, contacts, accounts, deals, and data enrichment",
+          "message": "Підключення до REST API Apollo для бізнес-інтелекту, контактів, компаній, угод та оновлення даних"
+        },
+        "connection.QXBvbGxvUmVzdENsaWVudA.scheme.QXBvbGxvUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Apollo REST Connection",
+          "message": "З’єднання REST для Apollo"
+        },
+        "connection.QXBvbGxvUmVzdENsaWVudA.scheme.QXBvbGxvUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Apollo REST API",
+          "message": "З’єднання з REST API Apollo"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.desc": {
+          "source": "Connection to a memcached server for caching data using the memcached binary protocol",
+          "message": "Connessione a un server memcached per la memorizzazione nella cache dei dati tramite il protocollo binario memcached"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.display_name": {
+          "source": "Memcached Connection",
+          "message": "Connessione Memcached"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "Connection timeout in milliseconds (default: 30000)",
+          "message": "Timeout di connessione in millisecondi (predefinito: 30000)"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Timeout connessione"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "Connection timeout in milliseconds",
+          "message": "Timeout di connessione in millisecondi"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.aW9fdGltZW91dA.desc": {
+          "source": "I/O timeout in milliseconds for read/write operations (default: 15000)",
+          "message": "Timeout I/O in millisecondi per operazioni di lettura/scrittura (predefinito: 15000)"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.aW9fdGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Timeout di I/O"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.aW9fdGltZW91dA.short_desc": {
+          "source": "Read/write timeout in milliseconds",
+          "message": "Timeout di lettura/scrittura in millisecondi"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.short_desc": {
+          "source": "Connection to a memcached server",
+          "message": "Connessione a un server memcached"
+        }
+      }
+    }
+  }
+}

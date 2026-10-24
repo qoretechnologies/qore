@@ -239,7 +239,8 @@ public class GitHubRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "github://api.github.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("GitHubRestClient",
+            "GitHubRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "GitHub REST Connection",
             "short_desc": "A connection to the GitHub REST API",
             "desc": "A connection to [GitHub](https://github.com) for repositories, issues, pull "
@@ -315,7 +316,7 @@ public class GitHubRestConnection inherits RestClient::RestConnection {
             # platform can supply a client; a personal access token is the fallback for a credential that
             # is not tied to a user's authorization
             "required_options": "oauth2_client_id,oauth2_client_secret|token",
-        };
+        });
     }
 
     #! Creates the GitHubRestConnection object

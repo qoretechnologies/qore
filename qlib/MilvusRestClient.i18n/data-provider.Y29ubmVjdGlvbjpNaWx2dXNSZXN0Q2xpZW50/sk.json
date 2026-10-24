@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a [Milvus](https://milvus.io) or [Zilliz Cloud](https://zilliz.com) (managed Milvus) vector database via the REST v2 API.\n\nAuthentication: Bearer token (Milvus / Zilliz token).\n\nThe connection uses the `milvus://` URL scheme for plain HTTP and `milvuss://` for servers behind TLS.",
+          "message": "Spojenie s [Milvus](https://milvus.io) alebo [Zilliz Cloud](https://zilliz.com) (spravovaný Milvus) databázou vektorov cez REST v2 API.\n\nOverenie identity: Bearer token (token Milvus / Zilliz).\n\nSpojenie používa schému `milvus://` pre bežný HTTP a `milvuss://` pre servery za TLS."
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Milvus Vector DB Connection",
+          "message": "Spojenie s databázou vektorových údajov Milvus"
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Bearer token.  For local Milvus this is the `<user>:<password>` auth combo; for Zilliz Cloud it's the cluster API key.",
+          "message": "Nosný token. Pre lokálny Milvus je to kombinácia `<user>:<password>` autentifikácie; pre Zilliz Cloud je to kľúč API pre cluster."
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Milvus / Zilliz token (Bearer)",
+          "message": "Token Milvus / Zilliz (Bearer)"
+        },
+        "connection.TWlsdnVzUmVzdENsaWVudA.scheme.TWlsdnVzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Milvus / Zilliz Cloud vector database",
+          "message": "Spojenie s databázou vektorových údajov Milvus / Zilliz Cloud"
+        }
+      }
+    }
+  }
+}

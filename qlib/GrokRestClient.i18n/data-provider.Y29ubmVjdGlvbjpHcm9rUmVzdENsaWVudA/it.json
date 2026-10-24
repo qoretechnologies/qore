@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the xAI Grok REST API.\n\nRequires an API key for Bearer authentication. Get your API key from the [xAI Console](https://console.x.ai/)",
+          "message": "Una connessione all'API REST xAI Grok.\n\nRichiede una chiave API per l'autenticazione Bearer. Ottieni la tua chiave API dalla [Console xAI](https://console.x.ai/"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "xAI Grok REST Connection",
+          "message": "Connessione REST xAI Grok"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The xAI Grok chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `grok-3` (the default)",
+          "message": "Il modello di chat xAI Grok utilizzato dai client LLM quando questa connessione è selezionata per la chat.\n\nI modelli di chat costituiscono una famiglia separata rispetto ai modelli di embedding e non possono essere utilizzati in modo intercambiabile.\n\nValori di esempio: `grok-3` (predefinito)"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Modello di chat"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "xAI Grok chat model name",
+          "message": "Nome del modello di chat xAI Grok"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "The API version to use",
+          "message": "Versione dell'API da utilizzare"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Versione API"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Versione dell'API da utilizzare"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The xAI Grok API key used for Bearer authentication.\n\nGet your API key from the [xAI Console](https://console.x.ai/)",
+          "message": "La chiave API xAI Grok utilizzata per l'autenticazione Bearer.\n\nOttieni la tua chiave API dal [console xAI](https://console.x.ai/)"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Chiave API"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "xAI Grok API key for authentication",
+          "message": "Chiave API xAI Grok per l'autenticazione"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the xAI Grok REST API",
+          "message": "Una connessione all'API REST xAI Grok"
+        }
+      }
+    }
+  }
+}

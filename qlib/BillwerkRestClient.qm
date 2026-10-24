@@ -271,7 +271,8 @@ BillwerkRestClient billwerk(
 public class BillwerkRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("BillwerkRestClient",
+            "BillwerkRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Billwerk Connection",
             "short_desc": "A connection to Billwerk with the REST API",
             "desc": "A connection to Billwerk with the REST API",
@@ -295,7 +296,7 @@ public class BillwerkRestConnection inherits RestClient::RestConnection {
                     }),
             },
             "required_options": foldl $1 + "," + $2, BillwerkRestClientBase::RequiredOptions,
-        };
+        });
 
         #! options required to support the OAuth2 authorization code grant flow
         const OAuth2AuthRequestOptions = (

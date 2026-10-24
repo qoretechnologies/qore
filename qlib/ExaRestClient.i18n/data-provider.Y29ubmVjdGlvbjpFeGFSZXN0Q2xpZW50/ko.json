@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Exa](https://exa.ai) (formerly Metaphor) — a neural web-search API providing embedding-based semantic retrieval alongside keyword search, plus answers with citations, an autonomous research agent, and websets: structured, verified lists of things found on the web.\n\nRequires an API key sent as the `x-api-key` header (NOT `Authorization: Bearer`).  Get your API key from the [Exa dashboard](https://dashboard.exa.ai/).",
+          "message": "[Exa](https://exa.ai) (이전에 Metaphor라고 함)에 연결 — 임베딩 기반 의미 검색과 키워드 검색을 함께 제공하는 신경망 웹 검색 API이며, 인용된 답변, 자율 연구 에이전트, 웹셋(웹에서 발견된 사물의 구조화되고 검증된 목록)도 제공합니다.\n\n`x-api-key` 헤더로 API 키를 전송해야 합니다 (NOT `Authorization: Bearer`). API 키는 [Exa 대시보드](https://dashboard.exa.ai/)에서 획득할 수 있습니다."
+        },
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Exa Connection",
+          "message": "Exa 연결"
+        },
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Exa API key — sent as the `x-api-key` header.",
+          "message": "Exa API 키 — `x-api-key` 헤더로 전송됩니다."
+        },
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Exa API key (x-api-key header)",
+          "message": "Exa API 키 (x-api-key 헤더)"
+        },
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Exa web search and research API",
+          "message": "Exa 웹 검색 및 연구 API에 대한 연결"
+        }
+      }
+    }
+  }
+}

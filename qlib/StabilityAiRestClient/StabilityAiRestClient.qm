@@ -336,7 +336,8 @@ public class StabilityAiRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "stability-ai://api.stability.ai";
         const DefaultConnectionUrl = DefaultUrl;
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("StabilityAiRestClient",
+            "StabilityAiRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Stability AI Connection",
             "short_desc": "Authenticated access to Stability AI media services",
             "desc": "A connection to the [Stability AI](https://stability.ai) "
@@ -365,7 +366,7 @@ public class StabilityAiRestConnection inherits RestClient::RestConnection {
                 },
             },
             "required_options": "apikey|token",
-        };
+        });
     }
 
     constructor(string name, string description, string url = DefaultUrl,

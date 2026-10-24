@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Fireworks AI](https://fireworks.ai) REST API.\n\nFireworks serves OSS chat models (Llama 3.1/3.3, Qwen, DeepSeek, Mixtral) and embedding models via an OpenAI-compatible API.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Fireworks Dashboard](https://fireworks.ai/account/api-keys).\n\nPings verify authentication by listing accounts without generating tokens.",
+          "message": "Eine Verbindung zur [Fireworks AI](https://fireworks.ai) REST-API.\n\nFireworks stellt OSS-Chatmodelle (Llama 3.1/3.3, Qwen, DeepSeek, Mixtral) und Embedding-Modelle über eine OpenAI-kompatible API bereit.\n\nBenötigt einen API-Schlüssel für die Bearer-Authentifizierung. Holen Sie sich Ihren API-Schlüssel im [Fireworks-Dashboard](https://fireworks.ai/account/api-keys).\n\nPings überprüfen die Authentifizierung, indem sie Konten auflisten, ohne Tokens zu generieren."
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Fireworks AI REST Connection",
+          "message": "Fireworks AI REST-Verbindung"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Fireworks chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `accounts/fireworks/models/gpt-oss-120b` (the default)",
+          "message": "Das von LLM-Clients verwendete Fireworks-Chatmodell, wenn diese Verbindung für Chats ausgewählt wird.\n\nChatmodelle bilden eine separate Familie ab, die nicht mit Embedding-Modellen austauschbar ist.\n\nBeispielwerte: `accounts/fireworks/models/gpt-oss-120b` (der Standard)"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Chatmodell"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Fireworks chat model name",
+          "message": "Name des Fireworks-Chatmodells"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1",
+          "message": "V1"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The API version to use.",
+          "message": "Die zu verwendende API-Version."
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API-Version"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Die zu verwendende API-Version"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Fireworks AI API key used for Bearer authentication.\n\nGet your API key from the [Fireworks Dashboard](https://fireworks.ai/account/api-keys).",
+          "message": "Der Fireworks AI-API-Schlüssel für die Bearer-Authentifizierung.\n\nHolen Sie sich Ihren API-Schlüssel im [Fireworks-Dashboard](https://fireworks.ai/account/api-keys)."
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API-Schlüssel"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Fireworks AI API key for authentication",
+          "message": "API-Schlüssel für Fireworks AI zur Authentifizierung"
+        },
+        "connection.RmlyZXdvcmtzUmVzdENsaWVudA.scheme.RmlyZXdvcmtzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Fireworks AI REST API",
+          "message": "Eine Verbindung zur Fireworks AI REST-API"
+        }
+      }
+    }
+  }
+}

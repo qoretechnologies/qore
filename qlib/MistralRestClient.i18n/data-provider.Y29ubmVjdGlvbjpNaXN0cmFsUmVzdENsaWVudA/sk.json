@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [Mistral AI](https://mistral.ai) REST API for chat (Mistral Large/Small/Nemo), embeddings (mistral-embed), and document OCR (`mistral-ocr`).\n\nRequires an API key for Bearer authentication.  Get your API key from the [Mistral Console](https://console.mistral.ai/api-keys/).",
+          "message": "Spojenie s REST API [Mistral AI](https://mistral.ai) pre chat (Mistral Large/Small/Nemo), vektorizáciu (mistral-embed) a OCR dokumentov (`mistral-ocr`).\n\nVyžaduje kľúč API pre autentifikáciu Bearer. Získajte svoj kľúč API z [Mistral Console](https://console.mistral.ai/api-keys/)."
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Mistral AI REST Connection",
+          "message": "Spojenie s REST API Mistral AI"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Mistral chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `mistral-large-latest` (the default)",
+          "message": "Chatový model Mistral používaný klientmi LLM pri výbere tohto spojenia pre chat.\n\nChatové modely tvoria samostatnú skupinu od modelov vektorizácie a nie sú navzájom navzájom nahrádzateľné.\n\nPríklad hodnôt: `mistral-large-latest` (predvolené)"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Chatovací model"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Mistral chat model name",
+          "message": "Názov chatového modelu Mistral"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1",
+          "message": "V1"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.allowed_values.c3RyaW5nOnYy.display_name": {
+          "source": "V2",
+          "message": "V2"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "The default API version for direct REST calls. App actions select their documented version; connection pings always use `v1`.",
+          "message": "Predvolená verzia API pre priame volania REST. Akcie aplikácie vyberajú svoju dokumentovanú verziu; pings spojenia vždy použijú `v1`."
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Verzia API na použitie"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Mistral AI API key used for Bearer authentication.",
+          "message": "Kľúč API Mistral AI používaný pre overenie typu Bearer."
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Mistral AI API key for authentication",
+          "message": "Kľúč API Mistral AI pre overenie"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Mistral AI REST API",
+          "message": "Spojenie s REST API Mistral AI"
+        }
+      }
+    }
+  }
+}

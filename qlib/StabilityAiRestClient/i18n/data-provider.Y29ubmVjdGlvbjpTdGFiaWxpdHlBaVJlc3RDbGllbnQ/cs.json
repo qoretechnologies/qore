@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [Stability AI](https://stability.ai) REST API for image generation and editing, audio, and 3D assets.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Stability AI dashboard](https://platform.stability.ai).",
+          "message": "Připojení k REST API [Stability AI](https://stability.ai) pro generování a úpravu obrázků, zvuk a 3D modelů.\n\nVyžaduje klíč API pro ověření pomocí Bearer. Získejte svůj klíč API na [panelu Stability AI](https://platform.stability.ai)."
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Stability AI Connection",
+          "message": "Připojení k Stability AI"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Stability AI API key used for Bearer authentication.",
+          "message": "Klíč API Stability AI používaný pro ověření typu Bearer."
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klíč API"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Stability AI API key (Bearer token)",
+          "message": "Klíč API Stability AI (token Bearer)"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Optional organization ID from the authenticated account's organizations. Omit it to use the API key's default organization.",
+          "message": "Volitelné ID organizace z organizací přihlášeného účtu. Při vynechání se použije výchozí organizace přidělená klíči API."
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Organization whose credits and resources are used",
+          "message": "Organizace, jejíž kredity a prostředky jsou používány"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "Authenticated access to Stability AI media services",
+          "message": "Přihlášený přístup ke službám médií Stability AI"
+        }
+      }
+    }
+  }
+}

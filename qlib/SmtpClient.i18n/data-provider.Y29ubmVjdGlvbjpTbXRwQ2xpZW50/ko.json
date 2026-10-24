@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.desc": {
+          "source": "A connection to an SMTP server",
+          "message": "SMTP 서버에 대한 연결"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.display_name": {
+          "source": "SMTP Connection",
+          "message": "SMTP 연결"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOk9BVVRIQkVBUkVS.desc": {
+          "source": "OAuth2 bearer-token authentication with SASL `OAUTHBEARER` ([RFC 7628](https://datatracker.ietf.org/doc/html/rfc7628)); requires the `token` option",
+          "message": "SASL `OAUTHBEARER`를 통한 OAuth2 베어러 토큰 인증 ([RFC 7628](https://datatracker.ietf.org/doc/html/rfc7628)); `token` 옵션이 필요합니다"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOk9BVVRIQkVBUkVS.display_name": {
+          "source": "SASL OAUTHBEARER",
+          "message": "SASL OAUTHBEARER"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOlBMQUlO.desc": {
+          "source": "Username and password authentication with SASL `PLAIN`",
+          "message": "SASL `PLAIN`을 사용한 사용자 이름 및 비밀번호 인증"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOlBMQUlO.display_name": {
+          "source": "SASL PLAIN",
+          "message": "SASL PLAIN"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOlhPQVVUSDI.desc": {
+          "source": "OAuth2 bearer-token authentication with SASL `XOAUTH2`; requires the `token` option",
+          "message": "SASL `XOAUTH2`를 사용한 OAuth2 베어러 토큰 인증; `token` 옵션이 필요함"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOlhPQVVUSDI.display_name": {
+          "source": "SASL XOAUTH2",
+          "message": "SASL XOAUTH2"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOmF1dG8.desc": {
+          "source": "Select the mechanism from the server's `EHLO` capability list",
+          "message": "서버의 `EHLO` 기능 목록에서 메커니즘을 선택하세요"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Automatic",
+          "message": "자동"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.desc": {
+          "source": "Forces a specific SASL authentication mechanism instead of selecting one from the mechanisms the server advertises in its `EHLO` reply.\n\nLeave this at `auto` unless a server advertises a mechanism it cannot actually complete; the automatic selection always uses the capability list read after `STARTTLS`, which is the list that reflects what the secure connection really supports",
+          "message": "서버가 광고하는 메커니즘 중에서 자동으로 선택하는 대신, 특정 SASL 인증 메커니즘을 강제로 사용합니다. `EHLO` 응답에서 서버가 광고하는 메커니즘 목록을 사용합니다.\n\n서버가 실제로 완료할 수 없는 메커니즘을 광고하는 경우를 제외하고는 `auto`로 유지하세요. 자동 선택은 `STARTTLS` 이후에 읽은 기능 목록을 사용하며, 이 목록은 보안 연결이 실제로 지원하는 내용을 반영합니다."
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.display_name": {
+          "source": "Auth Mechanism",
+          "message": "인증 메커니즘"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.short_desc": {
+          "source": "Forces a specific SASL authentication mechanism",
+          "message": "특정 SASL 인증 메커니즘을 강제로 사용합니다"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.allowed_values.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Security implied only by the protocol scheme",
+          "message": "프로토콜 스킴에 의해만 보안이 암시됨"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.allowed_values.c3RyaW5nOnNzbA.desc": {
+          "source": "Immediately negotiate an SSL session; fo not use `STARTTLS`",
+          "message": "즉시 SSL 세션을 협상하세요; `STARTTLS`를 사용하지 마세요"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.allowed_values.c3RyaW5nOnRscw.desc": {
+          "source": "Make a standard socket connection and immediately issue a `STARTTLS` command for a secure connection",
+          "message": "표준 소켓 연결을 만들고 즉시 보안 연결을 위한 `STARTTLS` 명령을 발행합니다"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.desc": {
+          "source": "Sets the security option for the object; note that this option, if set to any value other than `default` will override any security implied by the URL scheme",
+          "message": "객체에 대한 보안 옵션을 설정합니다; URL 스킴에 의해 암시되는 보안을 재정의하기 위해 `default` 이외의 값으로 설정된 경우가 있습니다"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.display_name": {
+          "source": "Security Type",
+          "message": "보안 유형"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.short_desc": {
+          "source": "Sets the type of security to use",
+          "message": "사용할 보안 유형을 설정합니다"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; only used if no username or password is set in the URL and if the `username` option is also used; conflicts with the `token` option",
+          "message": "인증용 비밀번호입니다. URL에 사용자 이름이나 비밀번호가 설정되어 있지 않고 `username` 옵션도 함께 사용되는 경우에만 사용됩니다. `token` 옵션과 충돌합니다"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "비밀번호"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password to use for authentication",
+          "message": "인증에 사용할 비밀번호"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "An OAuth2 bearer token to use for authentication.\n\nWhen set, the connection authenticates with a bearer-token SASL mechanism (`XOAUTH2` or `OAUTHBEARER`) instead of a password, which is what providers that have retired password logins require.\n\n**Requires the `username` option** and conflicts with the `password` option and with credentials given in the URL. Access tokens expire; refresh them on the connection rather than relying on a token captured once",
+          "message": "OAuth2 베어러 토큰을 인증에 사용합니다.\n\n설정된 경우, 연결은 비밀번호가 아닌 베어러 토큰 SASL 메커니즘(`XOAUTH2` 또는 `OAUTHBEARER`)을 통해 인증하며, 이는 비밀번호 로그인을 중단한 제공자가 요구하는 방식입니다.\n\n**`username` 옵션이 필요하며, `password` 옵션과 충돌하며 URL에 제공된 자격 증명과도 충돌합니다. 액세스 토큰은 만료되므로, 한 번 캡처한 토큰에 의존하기보다 연결 시 새로 고쳐야 합니다"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "인증 토큰"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "An OAuth2 bearer token for SASL XOAUTH2 / OAUTHBEARER logins",
+          "message": "SASL XOAUTH2 / OAUTHBEARER 로그인용 OAuth2 베어러 토큰"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL and if either the `password` or the `token` option is also used",
+          "message": "인증을 위한 사용자 이름; URL에 사용자 이름 또는 비밀번호가 설정되지 않았고, `password` 또는 `token` 옵션이 사용된 경우에만 사용됨"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "사용자 이름"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "The username to use for authentication",
+          "message": "인증에 사용할 사용자 이름"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to an SMTP server",
+          "message": "SMTP 서버에 대한 연결"
+        }
+      }
+    }
+  }
+}

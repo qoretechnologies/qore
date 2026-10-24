@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Deel REST API for global workforce management.\n\nDeel is a global HR platform for hiring, managing, and paying contractors and full-time employees worldwide. This integration supports contracts, timesheets, invoice adjustments, workers, time-off, legal entities, invoices, and event triggers.",
+          "message": "Připojení k REST API Deel pro správu globálního pracovního síťového prostředí.\n\nDeel je globální HR platforma pro najímání, správu a platby kontraktů a plných zaměstnanců po celém světě. Tato integrace podporuje smlouvy, pracovní doby, úpravy faktur, pracovníky, dovolenou, právní subjekty, faktury a události."
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Deel REST Connection",
+          "message": "Připojení k Deel REST"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to Deel at https://app.deel.com\n2. Go to the **Developer Center**: https://app.deel.com/developer-center\n3. Click **Create Token** and choose the token type:\n   - **Personal Token**: Linked to your user account and inherits your permissions\n   - **Organization Token**: Service-level access not tied to a specific user\n4. Copy the token value and paste it into the **API Token** field\n\n**Important:**\n- Only Org Admins or IT Developer Admins can create tokens\n- Store your token securely; treat it like a password",
+          "message": "1. Přihlaste se do Deel na https://app.deel.com\n2. Přejděte do **Centra pro vývojáře**: https://app.deel.com/developer-center\n3. Klikněte na **Vytvořit token** a zvolte typ tokenu:\n   - **Osobní token**: Propojený s vaším uživatelským účtem a dědí vaše oprávnění\n   - **Organizační token**: Přístup úrovně služby nezávislý na konkrétním uživateli\n4. Zkopírujte hodnotu tokenu a vložte ji do pole **API token**\n\n**Důležité:**\n- Tokeny mohou vytvářet pouze správci organizace nebo správci IT pro vývojáře\n- Uchovávejte token bezpečně; zacházejte s ním jako s heslem"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Generate Your API Token",
+          "message": "Jak vytvořit svůj API token"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "**Sandbox environment** is available for safe testing without affecting real data.\n\n- Enable **Use Sandbox** to connect to `https://api-sandbox.demo.deel.com/rest/v2`\n- Sandbox tokens are separate from production tokens — generate one at https://app.deel.com/developer-center\n- Leave **Use Sandbox** disabled for production use",
+          "message": "**Sandboxové prostředí** je k dispozici pro bezpečné testování bez ovlivnění skutečných dat.\n\n- Povolte **Použít sandbox**, abyste se připojili k `https://api-sandbox.demo.deel.com/rest/v2`\n- Sandbox tokeny jsou odlišné od produkčních tokenů — vytvořte jeden na https://app.deel.com/developer-center\n- **Použít sandbox** nechte vypnuté pro produkční použití"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Sandbox vs Production",
+          "message": "Sandbox proti produkci"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Deel API access token used for authentication.\n\nGenerate a token in the **Developer Center** at https://app.deel.com/developer-center\n\nBoth **personal tokens** (linked to a user account) and **organization tokens** (service-level access) are supported.",
+          "message": "Token přístupu k Deel API používaný pro ověření.\n\nToken vytvořte v **Centru pro vývojáře** na https://app.deel.com/developer-center\n\nJsou podporovány jak **osobní tokeny** (připojené k uživatelskému účtu), tak **organizační tokeny** (přístup na úrovni služby)."
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "Token API"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Deel API access token",
+          "message": "Token přístupu k Deel API"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.desc": {
+          "source": "If `True`, API calls target the Deel sandbox environment (`https://api-sandbox.demo.deel.com/rest/v2`) for safe testing.\n\nIf `False` (default), API calls target the production environment (`https://api.letsdeel.com/rest/v2`).\n\n**Note:** Sandbox and production use separate API tokens. Generate a sandbox token from the Developer Center when using this option.",
+          "message": "Pokud `True`, volání API směřují do sandboxového prostředí Deel (`https://api-sandbox.demo.deel.com/rest/v2`) pro bezpečné testování.\n\nPokud `False` (výchozí), volání API směřují do produkčního prostředí (`https://api.letsdeel.com/rest/v2`).\n\n**Poznámka:** Sandbox a produkce používají samostatné API tokeny. Při použití této volby vytvořte sandbox token v Centru pro vývojáře."
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.display_name": {
+          "source": "Use Sandbox",
+          "message": "Použít sandbox"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.short_desc": {
+          "source": "Use Deel sandbox environment for testing",
+          "message": "Použijte sandboxové prostředí Deel pro testování"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Deel REST API",
+          "message": "Připojení k REST API Deel"
+        }
+      }
+    }
+  }
+}

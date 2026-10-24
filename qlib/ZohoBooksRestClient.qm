@@ -374,7 +374,8 @@ public class ZohoBooksRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "zohobooks://www.zohoapis.com/books/v3";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ZohoBooksRestClient",
+            "ZohoBooksRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Zoho Books REST Connection",
             "short_desc": "A connection to the Zoho Books REST API",
             "desc": "A connection to the Zoho Books REST API for accounting and invoicing",
@@ -499,6 +500,7 @@ public class ZohoBooksRestConnection inherits RestClient::RestConnection {
                 "oauth2_client_id,oauth2_client_secret",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "Select Your Zoho Region",
                     "intent": "info",
                     "content": "Select the subdomain and domain that match your Zoho account:\n"
@@ -507,7 +509,7 @@ public class ZohoBooksRestConnection inherits RestClient::RestConnection {
                         ".in for India, .com.au for Australia, .ca for Canada, .sa for Saudi Arabia, .jp for Japan)",
                 },
             ),
-        };
+        });
     }
 
     #! creates the ZohoBooksRestConnection object

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Gorgias REST API for customer support ticket management, customer data, and helpdesk operations",
+          "message": "Eine Verbindung zur Gorgias REST-API für die Verwaltung von Kundentickets, Kundendaten und Helpdesk-Operationen"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Gorgias REST Connection",
+          "message": "Gorgias REST-Verbindung"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "Your **subdomain** is the first part of your Gorgias URL.\n\nFor example, if you access Gorgias at `https://mycompany.gorgias.com`, your subdomain is `mycompany`.\n\n**How to find it:**\n1. Log in to your Gorgias helpdesk\n2. Look at the URL in your browser's address bar\n3. Copy the part before `.gorgias.com`",
+          "message": "Ihr **Subdomain** ist der erste Teil Ihrer Gorgias-URL.\n\nZum Beispiel, wenn Sie Gorgias unter `https://mycompany.gorgias.com` aufrufen, lautet Ihre Subdomain `mycompany`.\n\n**So finden Sie sie:**\n1. Melden Sie sich bei Ihrem Gorgias-Hilfesystem an\n2. Suchen Sie in der Adressleiste Ihres Browsers nach der URL\n3. Kopieren Sie den Teil vor `.gorgias.com`"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Finding Your Gorgias Subdomain",
+          "message": "Ihre Gorgias-Subdomain finden"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.desc": {
+          "source": "The subdomain for your Gorgias account.\n\nFor example, if your Gorgias URL is `https://mycompany.gorgias.com`, enter `mycompany` as the subdomain.\n\nThis is used to build the API base URL and OAuth2 endpoints.",
+          "message": "Die Subdomain Ihres Gorgias-Kontos.\n\nZum Beispiel, wenn Ihre Gorgias-URL `https://mycompany.gorgias.com` lautet, geben Sie `mycompany` als Subdomain ein.\n\nDies wird verwendet, um die API-Basis-URL und OAuth2-Endpunkte zu erstellen."
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.display_name": {
+          "source": "Gorgias Subdomain",
+          "message": "Gorgias-Subdomain"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.short_desc": {
+          "source": "Your Gorgias account subdomain",
+          "message": "Ihre Gorgias-Kontosubdomain"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Gorgias REST API",
+          "message": "Eine Verbindung zur Gorgias REST-API"
+        }
+      }
+    }
+  }
+}

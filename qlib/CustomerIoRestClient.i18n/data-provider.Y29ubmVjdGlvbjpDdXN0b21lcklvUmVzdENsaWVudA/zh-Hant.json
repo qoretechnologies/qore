@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Customer.io REST API for marketing automation, messaging, and customer engagement.\n\nCustomer.io helps you send targeted emails, push notifications, SMS messages, and more based on customer behavior and attributes.\n\n**APIs:**\n- App API (Bearer token): Read data, trigger broadcasts and transactional messages\n- Track API (Basic auth): Create/update customers, track events\n\n**Rate Limits:**\n- App API: 10 requests/second (standard)\n- Track API: 100 requests/second",
+          "message": "與 Customer.io REST API 的連接，用於行銷自動化、訊息傳遞和客戶參與。\n\nCustomer.io 可根據客戶行為和屬性，協助您發送精準的電子郵件、推播通知、簡訊等。\n\n**API：**\n- App API（Bearer token）：讀取資料、觸發廣播與交易訊息\n- Track API（Basic auth）：建立/更新客戶、追蹤事件\n\n**速率限制：**\n- App API：每秒 10 筆請求（標準）\n- Track API：每秒 100 筆請求"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Customer.io REST Connection",
+          "message": "Customer.io REST 連接"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "Customer.io requires three credentials:\n1. **App API Key**: For reading data and triggering messages (Bearer token auth)\n2. **Site ID**: For tracking customer data (Basic auth username)\n3. **Tracking API Key**: For tracking customer data (Basic auth password)\n\nFind all credentials at: **[Settings > API Credentials](https://fly.customer.io/settings/api_credentials)**",
+          "message": "Customer.io 需要三個憑證：\n1. **App API 金鑰**：用於讀取資料和觸發訊息（Bearer token 驗證）\n2. **Site ID**：用於追蹤客戶資料（Basic auth 使用者名稱）\n3. **追蹤 API 金鑰**：用於追蹤客戶資料（Basic auth 密碼）\n\n所有憑證請至：**[設定 > API 憑證](https://fly.customer.io/settings/api_credentials)** 查詢"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Customer.io API Credentials",
+          "message": "Customer.io API 憑證"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Choose the region that matches your Customer.io account:\n- **US**: United States data center (default)\n- **EU**: European Union data center\n\nYour region was set when you created your account and cannot be changed.",
+          "message": "選擇與您的 Customer.io 帳戶相符的區域：\n- **US**：美國資料中心（預設）\n- **EU**：歐盟資料中心\n\n您的區域是在建立帳戶時設定，無法變更"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Select Your Region",
+          "message": "選擇您的區域"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.YXBwX2FwaV9rZXk.desc": {
+          "source": "The Customer.io App API key used for Bearer token authentication with the App API.\n\n**To obtain your App API key:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials?keyType=app)\n3. Create or copy your App API Key\n\n**Note:** App API keys are used for reading data and triggering messages.",
+          "message": "用於與 App API 進行 Bearer token 驗證的 Customer.io App API 金鑰。\n\n**取得 App API 金鑰的方法：**\n1. 登入 [Customer.io](https://fly.customer.io)\n2. 前往 [設定 > API 憑證](https://fly.customer.io/settings/api_credentials?keyType=app)\n3. 建立或複製您的 App API 金鑰\n\n**注意：** App API 金鑰用於讀取資料和觸發訊息"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.YXBwX2FwaV9rZXk.display_name": {
+          "source": "App API Key",
+          "message": "App API 金鑰"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.YXBwX2FwaV9rZXk.short_desc": {
+          "source": "Customer.io App API key for Bearer token authentication",
+          "message": "Customer.io 應用程式 API 金鑰，用於 Bearer 權杖驗證"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.c2l0ZV9pZA.desc": {
+          "source": "The Customer.io Site ID used as the username for Track API Basic authentication.\n\n**To find your Site ID:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials)\n3. Your Site ID is listed under Tracking API Keys",
+          "message": "Customer.io 站點 ID，用作 Track API 基本驗證的使用者名稱。\n\n**尋找您的站點 ID：**\n1. 登入 [Customer.io](https://fly.customer.io)\n2. 前往 [設定 > API 憑證](https://fly.customer.io/settings/api_credentials)\n3. 您的站點 ID 會列在追蹤 API 金鑰底下"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.c2l0ZV9pZA.display_name": {
+          "source": "Site ID",
+          "message": "站點 ID"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.c2l0ZV9pZA.short_desc": {
+          "source": "Customer.io Site ID for Track API authentication",
+          "message": "Customer.io 站點 ID，用於 Track API 驗證"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "EU data center (api-eu.customer.io / track-eu.customer.io)",
+          "message": "歐洲資料中心（api-eu.customer.io / track-eu.customer.io）"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "EU",
+          "message": "歐洲"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.short_desc": {
+          "source": "European Union",
+          "message": "歐盟"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "US data center (api.customer.io / track.customer.io)",
+          "message": "美國資料中心（api.customer.io / track.customer.io）"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "US",
+          "message": "US"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.short_desc": {
+          "source": "United States",
+          "message": "美國"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "Select the Customer.io data center region for your account.\n\nYour region is determined when you create your Customer.io account and cannot be changed.",
+          "message": "選擇您帳戶的 Customer.io 資料中心區域。\n\n您的區域是在建立 Customer.io 帳戶時決定的，無法變更。"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "區域"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "Customer.io data center region",
+          "message": "Customer.io 數據中心區域"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.dHJhY2tpbmdfYXBpX2tleQ.desc": {
+          "source": "The Customer.io Tracking API key used as the password for Track API Basic authentication.\n\n**To find your Tracking API key:**\n1. Log in to [Customer.io](https://fly.customer.io)\n2. Go to [Settings > API Credentials](https://fly.customer.io/settings/api_credentials)\n3. Your API Key is listed under Tracking API Keys",
+          "message": "用於 Track API 基本驗證的 Customer.io 追蹤 API 金鑰。\n\n**尋找您的追蹤 API 金鑰：**\n1. 登入 [Customer.io](https://fly.customer.io)\n2. 前往 [設定 > API 憑證](https://fly.customer.io/settings/api_credentials)\n3. 您的 API 金鑰會列在追蹤 API 金鑰下"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.dHJhY2tpbmdfYXBpX2tleQ.display_name": {
+          "source": "Tracking API Key",
+          "message": "追蹤 API 金鑰"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.option.dHJhY2tpbmdfYXBpX2tleQ.short_desc": {
+          "source": "Customer.io Tracking API key for Track API authentication",
+          "message": "用於 Track API 驗證的 Customer.io 追蹤 API 金鑰"
+        },
+        "connection.Q3VzdG9tZXJJb1Jlc3RDbGllbnQ.scheme.Q3VzdG9tZXJJb1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Customer.io REST API",
+          "message": "連線至 Customer.io REST API"
+        }
+      }
+    }
+  }
+}

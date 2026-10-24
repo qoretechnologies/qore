@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to a ZeyOS instance with the REST API",
+          "message": "Spojenie s inštanciou ZeyOS cez REST rozhranie"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "ZeyOS Connection",
+          "message": "Spojenie ZeyOS"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.YXBwc2VjcmV0.desc": {
+          "source": "Sets the Zeyos application secret",
+          "message": "Nastaví tajný kľúč aplikácie Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.YXBwc2VjcmV0.display_name": {
+          "source": "Zeyos App Secret",
+          "message": "Tajný kľúč aplikácie Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.YXBwc2VjcmV0.short_desc": {
+          "source": "Sets the Zeyos application secret",
+          "message": "Nastaví tajný kľúč aplikácie Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aW5zdGFuY2U.desc": {
+          "source": "Sets the Zeyos instance name (first segment of URI path)",
+          "message": "Nastaví názov inštancie Zeyos (prvý segment cesty URI)"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aW5zdGFuY2U.display_name": {
+          "source": "Zeyos Instance",
+          "message": "Inštancia Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aW5zdGFuY2U.short_desc": {
+          "source": "Sets the Zeyos instance name",
+          "message": "Nastaví názov inštancie Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aWRlbnRpZmllcg.desc": {
+          "source": "Sets the Zeyos identifier; if none is provided, a random identifier string is used",
+          "message": "Nastaví identifikátor Zeyos; ak nie je poskytnutý, použije sa náhodný reťazec identifikátora"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aWRlbnRpZmllcg.display_name": {
+          "source": "Zeyos Identifier",
+          "message": "Identifikátor Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aWRlbnRpZmllcg.short_desc": {
+          "source": "Sets the Zeyos identifier",
+          "message": "Nastaví identifikátor Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a ZeyOS instance with the REST API",
+          "message": "Spojenie s inštanciou ZeyOS cez REST rozhranie"
+        }
+      }
+    }
+  }
+}

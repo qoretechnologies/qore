@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the BaseLinker REST API for managing orders, products, inventories, couriers, and external storage integrations.\n\nBaseLinker exposes an RPC-over-HTTP API: every operation is a POST to a single endpoint (`https://api.baselinker.com/connector.php`) with a form-encoded body of the form `method=<name>&parameters=<URL-encoded JSON>`.\n\nAuthentication is performed by sending the raw API token in the `X-BLToken` HTTP header (no `Bearer` prefix).\n\n**To obtain your API token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Generate a new token and copy its value\n\n**Note:** The token is sent on every request as the `X-BLToken` header.",
+          "message": "與 BaseLinker REST API 的連接，用於管理訂單、產品、庫存、運送商及外部儲存整合。\n\nBaseLinker 提供 RPC-over-HTTP API：所有操作皆為對單一端點 (`https://api.baselinker.com/connector.php`) 的 POST 請求，並以表單編碼格式傳遞資料 (`method=<name>&parameters=<URL-encoded JSON>`)。\n\n驗證方式為將原始 API 金鑰以 `X-BLToken` HTTP 標頭傳送（不加 `Bearer` 前綴）。\n\n**取得您的 API 金鑰：**\n1. 登入您的 BaseLinker 面板\n2. 開啟 **帳戶與其他** → **我的帳戶**\n3. 開啟 **API** 标籤\n4. 產生新金鑰並複製其值\n\n**注意：** 金鑰會以 `X-BLToken` 標頭傳送至每次請求。"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "BaseLinker REST Connection",
+          "message": "BaseLinker REST 連接"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires a **BaseLinker API token**.\n\n**Steps to generate a token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Click to generate a new token and copy its value\n\n**How it is used:**\n- The token is sent on every request as the `X-BLToken` HTTP header\n- No `Bearer` prefix is used — the token is sent raw\n- Every BaseLinker call is a POST to a single RPC endpoint (`/connector.php`) with a form-encoded body",
+          "message": "此整合需要 **BaseLinker API 金鑰**。\n\n**產生金鑰步驟：**\n1. 登入您的 BaseLinker 面板\n2. 開啟 **帳戶與其他** → **我的帳戶**\n3. 開啟 **API** 標籤\n4. 點擊產生新金鑰並複製其值\n\n**使用方式：**\n- 金鑰會以 `X-BLToken` HTTP 標頭傳送至每次請求\n- 不使用 `Bearer` 前綴 — 金鑰以原始形式傳送\n- 所有 BaseLinker 請求皆為對單一 RPC 端點 (`/connector.php`) 的 POST 請求，並以表單編碼格式傳遞資料"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Token",
+          "message": "如何取得您的 API 金鑰"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The BaseLinker API token used for authentication. It is sent on every request as the `X-BLToken` HTTP header (raw token, no `Bearer` prefix).\n\n**To obtain your API token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Generate a new token and copy its value",
+          "message": "用於驗證的 BaseLinker API 金鑰。它會以 `X-BLToken` HTTP 標頭傳送至每次請求（原始金鑰，不加 `Bearer` 前綴）。\n\n**取得您的 API 金鑰：**\n1. 登入您的 BaseLinker 面板\n2. 開啟 **帳戶與其他** → **我的帳戶**\n3. 開啟 **API** 標籤\n4. 產生新金鑰並複製其值"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API 金鑰"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "BaseLinker API token for authentication",
+          "message": "用於驗證的 BaseLinker API 金鑰"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the BaseLinker REST API",
+          "message": "與 BaseLinker REST API 的連接"
+        }
+      }
+    }
+  }
+}

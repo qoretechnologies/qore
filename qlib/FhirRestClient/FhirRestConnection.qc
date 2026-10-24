@@ -33,7 +33,8 @@ public namespace FhirRestClient {
 public class FhirRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("FhirRestClient",
+            "FhirRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "FHIR REST Connection",
             "short_desc": "A connection to a FHIR REST server",
             "desc": "A connection to a FHIR REST server using JSON resources",
@@ -79,7 +80,7 @@ public class FhirRestConnection inherits RestClient::RestConnection {
                 "resource_format": FhirRestClientBase::MimeTypeFhirJson,
                 "initial_version": "R4",
             },
-        };
+        });
     }
 
     #! Creates the FhirRestConnection object

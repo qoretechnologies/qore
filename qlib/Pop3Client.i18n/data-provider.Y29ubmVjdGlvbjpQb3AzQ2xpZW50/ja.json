@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.desc": {
+          "source": "A connection to a POP3 server for receiving emails",
+          "message": "メール受信用のPOP3サーバーへの接続"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.display_name": {
+          "source": "POP3 Connection",
+          "message": "POP3接続"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "ミリ秒単位の接続タイムアウト"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "接続タイムアウト"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "ミリ秒単位の接続タイムアウト"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.aW9fdGltZW91dA.desc": {
+          "source": "The I/O timeout in milliseconds",
+          "message": "I/Oタイムアウト（ミリ秒）"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.aW9fdGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "I/Oタイムアウト"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.aW9fdGltZW91dA.short_desc": {
+          "source": "The I/O timeout in milliseconds",
+          "message": "I/Oタイムアウト（ミリ秒）"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; conflicts with the `token` option",
+          "message": "認証用のパスワード；`token`オプションと競合します"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "パスワード"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for authentication",
+          "message": "認証用パスワード"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "Any authorization token to use for the connection; will be used for SASL XOAUTH2 logins; conflicts with the `password` option",
+          "message": "接続に使用する認証トークン。SASL XOAUTH2ログインに使用。`password` オプションと競合します"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "認証トークン"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token for an SASL XOAUTH2 login",
+          "message": "SASL XOAUTH2ログイン用の認証トークンを設定"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dGxz.desc": {
+          "source": "Use the `STLS` command after connecting with insecure connections",
+          "message": "不安全な接続後に `STLS` コマンドを使用してください"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dGxz.display_name": {
+          "source": "Secure?",
+          "message": "セキュア？"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dGxz.short_desc": {
+          "source": "Use the STLS command after connecting with insecure connections",
+          "message": "不正な接続後に STLS コマンドを使用する"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; always required",
+          "message": "認証用のユーザー名。常に必須です"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "ユーザー名"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for authentication",
+          "message": "認証用のユーザー名を設定します"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a POP3 server",
+          "message": "POP3 サーバーへの接続"
+        }
+      }
+    }
+  }
+}

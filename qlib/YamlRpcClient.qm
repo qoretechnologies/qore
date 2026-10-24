@@ -358,7 +358,8 @@ public class YamlRpcConnection inherits ConnectionProvider::HttpBasedConnection 
         hash<auto> real_opts;
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("YamlRpcClient",
+            "YamlRpcConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "YAML-RPC Connection",
             "short_desc": "A connection to an YAML-RPC server",
             "desc": "A connection to an YAML-RPC server",
@@ -372,7 +373,7 @@ public class YamlRpcConnection inherits ConnectionProvider::HttpBasedConnection 
                 "http": "yamlrpc",
             },
             "options": HttpConnection::ConnectionScheme.options,
-        };
+        });
     }
 
     #! creates the YamlRpcConnection object

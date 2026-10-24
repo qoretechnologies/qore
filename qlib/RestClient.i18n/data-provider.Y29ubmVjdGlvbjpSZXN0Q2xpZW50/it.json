@@ -1,0 +1,717 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a REST server",
+          "message": "Una connessione a un server REST"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "REST Connection",
+          "message": "Connessione REST"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.allowed_values.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "usa la codifica bzip2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.allowed_values.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "usa l'algoritmo deflate ([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.allowed_values.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "usa la codifica GNU zip ([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.allowed_values.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "non usa alcuna codifica dei contenuti"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.desc": {
+          "source": "Sets the data compression / send encoding (if the `send_encoding` option is not set) and the response encoding used",
+          "message": "Imposta la compressione dati / codifica di invio (se l'opzione `send_encoding` non è impostata) e la codifica della risposta utilizzata"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.display_name": {
+          "source": "Compression",
+          "message": "Compressione"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.short_desc": {
+          "source": "Sets data compression / encoding",
+          "message": "Imposta compressione / codifica dati"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET` method",
+          "message": "Metodo HTTP `GET`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET method",
+          "message": "Metodo HTTP GET"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH` method",
+          "message": "Metodo HTTP `PATCH`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH method",
+          "message": "Metodo HTTP PATCH"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST` method",
+          "message": "Metodo HTTP `POST`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST method",
+          "message": "Metodo HTTP POST"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT` method",
+          "message": "Metodo HTTP `PUT`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT method",
+          "message": "Metodo HTTP PUT"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.desc": {
+          "source": "Sets the HTTP method for custom token refresh actions",
+          "message": "Imposta il metodo HTTP per le azioni personalizzate di aggiornamento del token"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.display_name": {
+          "source": "Custom Token Refresh Method",
+          "message": "Metodo aggiornamento token personalizzato"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.short_desc": {
+          "source": "Sets the HTTP method for custom token refresh actions",
+          "message": "Imposta il metodo HTTP per le azioni personalizzate di aggiornamento del token"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2F1dGg.allowed_values.c3RyaW5nOmJvZHktdXNlci1wYXNz.desc": {
+          "source": "Include the username and password in the message body; cannot be used with `custom_token_method` = `GET`",
+          "message": "Includi il nome utente e la password nel corpo del messaggio; non può essere utilizzato con `custom_token_method` = `GET`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2F1dGg.desc": {
+          "source": "Sets the auth method for custom token refresh actions",
+          "message": "Imposta il metodo di autenticazione per il refresh del token"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2F1dGg.display_name": {
+          "source": "Custom Token Refresh Auth Method",
+          "message": "Metodo autenticazione aggiornamento token personalizzato"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2F1dGg.short_desc": {
+          "source": "Sets the auth method for custom token refresh actions",
+          "message": "Imposta il metodo di autenticazione per il refresh del token"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.allowed_values.c3RyaW5nOmJvZHktZGlyZWN0.desc": {
+          "source": "Take the token from the response body directly",
+          "message": "Prendi il token direttamente dal corpo della risposta"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.allowed_values.c3RyaW5nOmJvZHktcGxhaW4.desc": {
+          "source": "Take the token from the response body without any deserialization",
+          "message": "Prendi il token dal corpo della risposta senza alcuna deserializzazione"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.desc": {
+          "source": "Provides the location of the new token in the response",
+          "message": "Fornisce la posizione del nuovo token nella risposta"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.display_name": {
+          "source": "Custom Token Refresh Location",
+          "message": "Posizione aggiornamento token personalizzato"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.short_desc": {
+          "source": "Provides the location of the new token in the response",
+          "message": "Fornisce la posizione del nuovo token nella risposta"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX3BhdGg.desc": {
+          "source": "Sets the URI path for the request for custom token refresh actions",
+          "message": "Imposta il percorso URI per il refresh del token"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX3BhdGg.display_name": {
+          "source": "Custom Token Refresh URI Path",
+          "message": "Percorso URI aggiornamento token personalizzato"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX3BhdGg.short_desc": {
+          "source": "Sets the URI path for the request for custom token refresh actions",
+          "message": "Imposta il percorso URI per il refresh del token"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.YWxsb3dfYW55X3Jlc3BvbnNl.desc": {
+          "source": "If set, undeserializable responses will be returned as-is; this is useful when making REST-like requests that return HTML or file data",
+          "message": "Se impostato, le risposte non deserializzabili verranno restituite così come sono; questo è utile quando si effettuano richieste di tipo REST che restituiscono HTML o dati di file"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.YWxsb3dfYW55X3Jlc3BvbnNl.display_name": {
+          "source": "Allow Any Response?",
+          "message": "Consenti qualsiasi risposta?"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.YWxsb3dfYW55X3Jlc3BvbnNl.short_desc": {
+          "source": "If set, undeserializable responses will be returned as-is",
+          "message": "Se impostato, restituisce così come sono le risposte non deserializzabili"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOmF1dG8.desc": {
+          "source": "prefers in this order: `json`, `yaml`, `rawxml`, `xml`, `url`, and `text`",
+          "message": "preferisce in questo ordine: `json`, `yaml`, `rawxml`, `xml`, `url` e `text`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOmJpbg.desc": {
+          "source": "for binary message bodies without data serialization",
+          "message": "per corpi di messaggi binari senza serializzazione dei dati"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "usa la serializzazione JSON"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnJhd3htbA.desc": {
+          "source": "use raw XML serialization",
+          "message": "usa la serializzazione raw XML"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnRleHQ.desc": {
+          "source": "use only plain text; no serialization is used",
+          "message": "usa solo testo normale; non viene utilizzata alcuna serializzazione"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnVybA.desc": {
+          "source": "for URL-encoded message bodies",
+          "message": "per corpi di messaggi con codifica URL"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnhtbA.desc": {
+          "source": "use only XML-RPC serialization",
+          "message": "usa solo la serializzazione XML-RPC"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnlhbWw.desc": {
+          "source": "use only YAML serialization",
+          "message": "usa solo la serializzazione YAML"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.desc": {
+          "source": "Sets how data is serialized in requests",
+          "message": "Imposta la modalità di serializzazione dei dati nelle richieste"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Serializzazione dati"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.short_desc": {
+          "source": "Sets how data is serialized",
+          "message": "Imposta la modalità di serializzazione dei dati"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.aGVhZGVycw.desc": {
+          "source": "Sets an optional hash of headers to send with every request, these can also be overridden in request method calls",
+          "message": "Imposta un hash opzionale di intestazioni da inviare con ogni richiesta, che possono anche essere sovrascritte nelle chiamate ai metodi di richiesta"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.aGVhZGVycw.display_name": {
+          "source": "HTTP Headers",
+          "message": "Intestazioni HTTP"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.aGVhZGVycw.short_desc": {
+          "source": "Sets headers to send in each request",
+          "message": "Imposta le intestazioni da inviare in ogni richiesta"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.desc": {
+          "source": "If OAuth2 tokens should be automatically refreshed",
+          "message": "Indica se i token OAuth2 devono essere rinnovati automaticamente"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.display_name": {
+          "source": "OAuth2 Auto Refresh",
+          "message": "Rinnovo automatico OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.short_desc": {
+          "source": "Whether tokens are refreshed automatically",
+          "message": "Indica se i token vengono aggiornati automaticamente"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfYXJncw.desc": {
+          "source": "Optional arguments for authentication requests for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token. Supply unencoded keys and values; consent URL generation URL-encodes keys and values exactly once, including scope lists",
+          "message": "Argomenti opzionali per le richieste di autenticazione per il grant type `authorization_code`; ignorato se l'opzione `token` è impostata. Nota che il grant type `authorization_code` richiede l'autorizzazione dell'utente esterno per acquisire un token di accesso. Fornire chiavi e valori non codificati; durante la generazione dell’URL di consenso, le chiavi e i valori vengono codificati per l’URL una sola volta, inclusi gli elenchi di autorizzazioni"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfYXJncw.display_name": {
+          "source": "OAuth2 Authorization Args",
+          "message": "Argomenti autorizzazione OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfYXJncw.short_desc": {
+          "source": "Extra arguments for authorization_code token requests",
+          "message": "Argomenti aggiuntivi per richieste di token authorization_code"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfdXJs.desc": {
+          "source": "The OAuth2 authorization URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
+          "message": "L'URL di autorizzazione OAuth2 per il grant type `authorization_code`; ignorato se l'opzione `token` è impostata. Nota che il grant type `authorization_code` richiede l'autorizzazione dell'utente esterno per acquisire un token di accesso"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfdXJs.display_name": {
+          "source": "OAuth2 Auth URL",
+          "message": "URL autorizzazione OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfdXJs.short_desc": {
+          "source": "Sets the OAuth2 authorization URL for the authorization_code grant type",
+          "message": "Imposta l'URL di autorizzazione OAuth2 per il grant type authorization_code"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF90b2tlbl91cmw.desc": {
+          "source": "An alternate token URL which will be used to wrap the call to get the token; if this is set, then it takes precedence over `oauth2_token_url`",
+          "message": "Un URL alternativo per il token che verrà utilizzato per incapsulare la chiamata per ottenere il token; se impostato, ha la precedenza su `oauth2_token_url`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF90b2tlbl91cmw.display_name": {
+          "source": "OAuth2 Alternate Token URL",
+          "message": "URL token alternativo OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF90b2tlbl91cmw.short_desc": {
+          "source": "An alternate token URL which will be used to wrap the call to get the token",
+          "message": "URL di token alternativo usato per incapsulare la chiamata di recupero token"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.desc": {
+          "source": "Optional URL substitution info for token requests to the alternate server",
+          "message": "Sostituzione URL opzionale per richieste token al server alternativo"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.display_name": {
+          "source": "OAuth2 Alternate URL Substitution Info",
+          "message": "Info sostituzione URL alternativo OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.short_desc": {
+          "source": "Optional URL substitution info for token requests to the alternate server",
+          "message": "Sostituzione URL opzionale per richieste token al server alternativo"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FwcA.desc": {
+          "source": "This is a hint to external programs processing OAuth2 requests to external configuration for the OAuth2 configuration",
+          "message": "Questo è un suggerimento per i programmi esterni che elaborano richieste OAuth2 verso la configurazione esterna per la configurazione OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FwcA.display_name": {
+          "source": "OAuth2 Application",
+          "message": "Applicazione OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FwcA.short_desc": {
+          "source": "Sets a hint to external programs for the OAuth2 config",
+          "message": "Imposta un suggerimento per i programmi esterni per la configurazione OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "The OAuth2 client ID; ignored for logins if the `token` option is set (but possibly used when refreshing tokens)",
+          "message": "L'ID client OAuth2; ignorato per gli accessi se l'opzione `token` è impostata (ma eventualmente utilizzato durante il rinnovo dei token)"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9pZA.display_name": {
+          "source": "OAuth2 Client ID",
+          "message": "ID client OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9pZA.short_desc": {
+          "source": "Sets the OAuth2 client ID",
+          "message": "Imposta l'ID client OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "Sets the OAuth2 client secret; ignored for logins if the `token` option is set (but possibly used when refreshing tokens)",
+          "message": "Imposta il segreto client OAuth2; ignorato per gli accessi se l'opzione `token` è impostata (ma eventualmente utilizzato durante il rinnovo dei token)"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.display_name": {
+          "source": "OAuth2 Client Secret",
+          "message": "Segreto client OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.short_desc": {
+          "source": "Sets the OAuth2 client secret",
+          "message": "Imposta il segreto client OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "No OAuth2 grant flow will be used",
+          "message": "Nessun flusso di grant OAuth2 verrà utilizzato"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOmF1dGhvcml6YXRpb25fY29kZQ.desc": {
+          "source": "OAuth2 2.0 authorization code grant ([RFC 6749 authorization code grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1)); this grant type requires external user authorization to acquire an access token; the `oauth2_auth_url` must be set to inform external code where to request authorization from the external authorization server",
+          "message": "Grant authorization code di OAuth 2.0 ([RFC 6749 authorization code grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1)); questo grant type richiede l'autorizzazione dell'utente esterno per acquisire un token di accesso; `oauth2_auth_url` deve essere impostato per informare il codice esterno su dove richiedere l'autorizzazione dal server di autorizzazione esterno"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOmNsaWVudF9jcmVkZW50aWFscw.desc": {
+          "source": "OAuth2 2.0 client credentials grant ([RFC 6749 client credentials grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.4))",
+          "message": "Grant client credentials di OAuth 2.0 ([RFC 6749 client credentials grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.4))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOmltcGxpY2l0.desc": {
+          "source": "OAuth2 2.0 implicit grant ([RFC 6749 implicit grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.2)); this grant type returns the access token directly in the redirect URL fragment without a code exchange step; requires external user authorization; the `oauth2_auth_url` must be set; no `oauth2_token_url` is required",
+          "message": "Grant implicit di OAuth 2.0 ([RFC 6749 implicit grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.2)); questo grant type restituisce il token di accesso direttamente nel frammento dell'URL di reindirizzamento senza un passaggio di scambio del codice; richiede l'autorizzazione dell'utente esterno; `oauth2_auth_url` deve essere impostato; nessun `oauth2_token_url` è richiesto"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOnBhc3N3b3Jk.desc": {
+          "source": "OAuth2 2.0 legacy password grant ([RFC 6749 password grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.3))",
+          "message": "Grant password legacy di OAuth 2.0 ([RFC 6749 password grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.3))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.desc": {
+          "source": "The OAuth2 grant type; ignored for logins if the `token` option is set",
+          "message": "Il grant type OAuth2; ignorato per gli accessi se l'opzione `token` è impostata"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.display_name": {
+          "source": "OAuth2 Grant Type",
+          "message": "Grant type OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.short_desc": {
+          "source": "Sets the OAuth2 grant type",
+          "message": "Imposta il grant type OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.allowed_values.c3RyaW5nOlMyNTY.desc": {
+          "source": "The code challenge will be sent as a URL-encoded SHA-256 digest when PKCE is used",
+          "message": "Il code challenge verrà inviato come digest SHA-256 con codifica URL quando viene utilizzato PKCE"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "PKCE will not be used",
+          "message": "PKCE non verrà utilizzato"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.allowed_values.c3RyaW5nOnBsYWlu.desc": {
+          "source": "No encoding will be made with the code challenge when PKCE is used",
+          "message": "Nessuna codifica verrà applicata al code challenge quando viene utilizzato PKCE"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.desc": {
+          "source": "The code challenge method for PKCE (Proof Key Code Exchange) with the `authorization_code` flow",
+          "message": "Il metodo code challenge per PKCE (Proof Key Code Exchange) con il flusso `authorization_code`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.display_name": {
+          "source": "OAuth2 PKCE",
+          "message": "PKCE OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.short_desc": {
+          "source": "Hint to use PKCE with the authorization code flow",
+          "message": "Suggerimento per l'uso di PKCE con il flusso authorization code"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.desc": {
+          "source": "Per OAuth2 spec (RFC 6749), the state parameter should be returned by the authorization server. Some providers (like Trello) do not pass through the state parameter. Set this to False to embed the state in the redirect_uri as a workaround for non-compliant providers. Default: True (spec-compliant behavior).",
+          "message": "In base alle specifiche OAuth2 (RFC 6749), il parametro state deve essere restituito dal server di autorizzazione. Alcuni provider (come Trello) non inoltrano il parametro state. Impostare su False per incorporare lo state in redirect_uri come soluzione alternativa per i provider non conformi. Valore predefinito: True (comportamento conforme alle specifiche)."
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.display_name": {
+          "source": "OAuth2 Redirect Passthrough State?",
+          "message": "Inoltro state di reindirizzamento OAuth2?"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.short_desc": {
+          "source": "If False, embed state in redirect_uri for non-compliant OAuth2 providers",
+          "message": "Se False, incorpora lo state in redirect_uri per i provider OAuth2 non conformi"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3VybA.desc": {
+          "source": "The OAuth2 redirect URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token; the special value `auto` (the default) is meant to be interpreted by servers that implement OAuth2 authorization code client handling",
+          "message": "L'URL di reindirizzamento OAuth2 per il grant type `authorization_code`; ignorato se l'opzione `token` è impostata. Nota che il grant type `authorization_code` richiede l'autorizzazione dell'utente esterno per acquisire un token di accesso; il valore speciale `auto` (predefinito) è destinato a essere interpretato dai server che implementano la gestione del client authorization code OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3VybA.display_name": {
+          "source": "OAuth2 Redirect URL",
+          "message": "URL di reindirizzamento OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3VybA.short_desc": {
+          "source": "The OAuth2 redirect URL for the authorization code grant type",
+          "message": "L'URL di reindirizzamento OAuth2 per il grant type authorization code"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.desc": {
+          "source": "Sets the OAuth2 refresh token, if any (complements option `token`)",
+          "message": "Imposta il refresh token OAuth2, se presente (integra l'opzione `token`)"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.display_name": {
+          "source": "OAuth2 Refresh Token",
+          "message": "Refresh token OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.short_desc": {
+          "source": "Sets the OAuth2 refresh token",
+          "message": "Imposta il refresh token OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.desc": {
+          "source": "A separator character for OAuth2 scopes in URI arguments",
+          "message": "Un carattere separatore per gli scope OAuth2 negli argomenti dell'URI"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.display_name": {
+          "source": "OAuth2 Scope Separator",
+          "message": "Separatore degli ambiti OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.short_desc": {
+          "source": "A separator character for OAuth2 scopes in URI arguments",
+          "message": "Un carattere separatore per gli scope OAuth2 negli argomenti dell'URI"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3Blcw.desc": {
+          "source": "List of OAuth2 scope strings to request; ignored if the `token` option is set",
+          "message": "Elenco di stringhe di ambito OAuth2 da richiedere; ignorato se l'opzione `token` è impostata"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3Blcw.display_name": {
+          "source": "OAuth2 Scopes",
+          "message": "Ambiti OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3Blcw.short_desc": {
+          "source": "List of OAuth2 scopes to request",
+          "message": "Elenco di ambiti OAuth2 da richiedere"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.desc": {
+          "source": "Use basic authorization with the client secret only when making token requests",
+          "message": "Autenticazione base con segreto client solo per richieste token"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.display_name": {
+          "source": "OAuth2 Token Auth Client Secret Only?",
+          "message": "Autenticazione token OAuth2 solo con segreto client?"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.short_desc": {
+          "source": "Use basic authorization with the client secret only when making token requests",
+          "message": "Autenticazione base con segreto client solo per richieste token"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2FyZ3M.desc": {
+          "source": "Optional extra arguments for token refresh requests; if this option is set as well as `oauth2_alt_token_url`, then the `oauth2_token_url` value will be added to this as well when the request is made to the `oauth2_alt_token_url`",
+          "message": "Argomenti aggiuntivi opzionali per le richieste di rinnovo del token; se questa opzione è impostata insieme a `oauth2_alt_token_url`, il valore `oauth2_token_url` verrà aggiunto anche a questa quando la richiesta viene effettuata all'`oauth2_alt_token_url`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2FyZ3M.display_name": {
+          "source": "OAuth2 Token Refresh Args",
+          "message": "Argomenti di rinnovo token OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2FyZ3M.short_desc": {
+          "source": "Optional extra arguments for token requests",
+          "message": "Argomenti aggiuntivi opzionali per le richieste di token"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.desc": {
+          "source": "The expiry date for the token",
+          "message": "La data di scadenza del token"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.display_name": {
+          "source": "OAuth2 Token Expiry Date",
+          "message": "Data di scadenza token OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.short_desc": {
+          "source": "The expiry date for the token",
+          "message": "La data di scadenza del token"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.desc": {
+          "source": "The expected number of minutes that a token will remain valid before it must be refreshed. This option is only used when the connection has a refresh token and the server does not indicate the lifetime of the token in token responses",
+          "message": "Il numero previsto di minuti per cui un token rimarrà valido prima di dover essere rinnovato. Questa opzione viene utilizzata solo quando la connessione dispone di un token di rinnovo e il server non indica la durata del token nelle risposte del token"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.display_name": {
+          "source": "OAuth2 Token Lifetime Hint in Minutes",
+          "message": "Suggerimento durata token OAuth2 in minuti"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.short_desc": {
+          "source": "How many minutes a token stays valid",
+          "message": "Quanti minuti un token rimane valido"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VybA.desc": {
+          "source": "The token URL for OAuth2 flows; ignored for logins if the `token` option is set",
+          "message": "L'URL del token per i flussi OAuth2; ignorato per i login se l'opzione `token` è impostata"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VybA.display_name": {
+          "source": "OAuth2 Token URL",
+          "message": "URL token OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VybA.short_desc": {
+          "source": "The token URL for OAuth2 flows",
+          "message": "L'URL del token per i flussi OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.desc": {
+          "source": "Use basic authorization with the client ID and client secret when making token requests",
+          "message": "Usa l'autorizzazione di base con ID client e segreto client quando si effettuano richieste di token"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.display_name": {
+          "source": "OAuth2 Token Use Basic Auth?",
+          "message": "Usa autorizzazione di base per token OAuth2?"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.short_desc": {
+          "source": "Send the client ID and secret as basic authorization",
+          "message": "Invia ID client e secret come autenticazione di base"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b3BlbmFwaTM.desc": {
+          "source": "Sets the location of an OpenApi 3 schema to use for message validation; processed with `FileLocationHandler::getTextFileFromLocation()` (ex: `file:///path/to/swagger-schema.json`); conflicts with `swagger` and `validator`",
+          "message": "Imposta la posizione di uno schema OpenApi 3 da utilizzare per la validazione dei messaggi; elaborato con `FileLocationHandler::getTextFileFromLocation()` (es: `file:///path/to/swagger-schema.json`); in conflitto con `swagger` e `validator`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b3BlbmFwaTM.display_name": {
+          "source": "OpenApi 3 Schema",
+          "message": "Schema OpenAPI 3"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b3BlbmFwaTM.short_desc": {
+          "source": "Sets the location of an OpenApi 3 schema to use for the connection",
+          "message": "Imposta la posizione di uno schema OpenAPI 3 da utilizzare per la connessione"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "usa la codifica bzip2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "usa l'algoritmo deflate ([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "usa la codifica GNU zip ([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "non usa alcuna codifica dei contenuti"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "Imposta l'algoritmo di compressione da utilizzare durante l'invio dei messaggi"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.display_name": {
+          "source": "Send Compression",
+          "message": "Compressione invio"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.short_desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "Imposta l'algoritmo di compressione da utilizzare durante l'invio dei messaggi"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcg.desc": {
+          "source": "Sets the location of a Swagger schema to use for message validation; processed with `FileLocationHandler::getTextFileFromLocation()` (ex: `file:///path/to/swagger-schema.json`); conflicts with `openapi3` and `validator`",
+          "message": "Imposta la posizione di uno schema Swagger da utilizzare per la validazione dei messaggi; elaborato con `FileLocationHandler::getTextFileFromLocation()` (es: `file:///path/to/swagger-schema.json`); in conflitto con `openapi3` e `validator`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcg.display_name": {
+          "source": "Swagger Schema",
+          "message": "Schema Swagger"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcg.short_desc": {
+          "source": "Sets the location of a Swagger schema to use for the connection",
+          "message": "Imposta la posizione di uno schema Swagger da utilizzare per la connessione"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9iYXNlX3BhdGg.desc": {
+          "source": "In case a REST validator is used, the base path in the schema can be overridden with this option (applies to any REST validator; not just Swagger validators)",
+          "message": "Se viene utilizzato un validatore REST, è possibile eseguire l'override del percorso di base nello schema con questa opzione (applica a qualsiasi validatore REST; non solo a quelli Swagger)"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9iYXNlX3BhdGg.display_name": {
+          "source": "Override Schema Base Path",
+          "message": "Sovrascrivi il percorso di base dello schema"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9iYXNlX3BhdGg.short_desc": {
+          "source": "Overrides the base path for REST / Swagger schemas",
+          "message": "Sovrascrive il percorso di base per gli schemi REST / Swagger"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9sYXhfcGFyc2luZw.desc": {
+          "source": "Try to parse invalid Swagger schemas; this option is not recommended; it will not parse all bad Swagger schemas; schemas should be corrected instead of setting this option",
+          "message": "Prova a analizzare schemi Swagger non validi; questa opzione non è raccomandata; non analizzerà tutti gli schemi Swagger non validi; gli schemi dovrebbero essere corretti invece di impostare questa opzione"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9sYXhfcGFyc2luZw.display_name": {
+          "source": "Swagger Lax Parsing",
+          "message": "Analisi Lax di Swagger"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9sYXhfcGFyc2luZw.short_desc": {
+          "source": "Sets lax parsing for Swagger schemas",
+          "message": "Imposta l'analisi lassa per gli schemi Swagger"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; only used if no username or password is set in the URL and if the `username` option is also used; conflicts with the `token` option",
+          "message": "La password per l'autenticazione; utilizzata solo se nell'URL non è impostato alcun nome utente o password e se viene utilizzata anche l'opzione `username`; è in conflitto con l'opzione `token`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Password"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for authentication",
+          "message": "La password per l'autenticazione"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19ib2R5.desc": {
+          "source": "Any message body to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set or if `ping_method` is `GET`",
+          "message": "Qualsiasi corpo del messaggio da inviare durante l'esecuzione di un'operazione di ping avanzata; ignorato se `ping_method` o `ping_path` non sono impostati o se `ping_method` è `GET`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19ib2R5.display_name": {
+          "source": "Ping Body",
+          "message": "Corpo ping"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19ib2R5.short_desc": {
+          "source": "The message body to send with pings",
+          "message": "Il corpo del messaggio da inviare con i ping"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.desc": {
+          "source": "Any HTTP headers to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set",
+          "message": "Eventuali intestazioni HTTP da inviare durante l'esecuzione di un'operazione di ping avanzata; ignorato se uno tra `ping_method` e `ping_path` non è impostato"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.display_name": {
+          "source": "Ping Headers",
+          "message": "Intestazioni ping"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.short_desc": {
+          "source": "Any HTTP headers to send with pings",
+          "message": "Eventuali intestazioni HTTP da inviare con i ping"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.desc": {
+          "source": "The HTTP method to use for an advanced ping; this and `ping_path` must be set to make an HTTP request as a part of the socket polling ping operation; must be a valid HTTP method name",
+          "message": "Il metodo HTTP da utilizzare per un ping avanzato; questo e `ping_path` devono essere impostati per effettuare una richiesta HTTP come parte dell'operazione di ping con polling dei socket; deve essere un nome di metodo HTTP valido"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.display_name": {
+          "source": "Ping Method",
+          "message": "Metodo ping"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.short_desc": {
+          "source": "The HTTP method to use for pings",
+          "message": "Il metodo HTTP da utilizzare per i ping"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19wYXRo.desc": {
+          "source": "The URI path to use for an advanced ping; this and `ping_method` must be set to make an HTTP request as a part of the socket polling ping operation.  If the value for this option begins with a `/` character, then it replaces any connection path for the REST client, otherwise the value is appended to the connection path for the REST client.",
+          "message": "Il percorso URI da utilizzare per un ping avanzato; questo e `ping_method` devono essere impostati per effettuare una richiesta HTTP come parte dell'operazione di ping con polling dei socket. Se il valore per questa opzione inizia con un carattere `/`, sostituisce qualsiasi percorso di connessione per il client REST, altrimenti il valore viene aggiunto al percorso di connessione per il client REST."
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19wYXRo.display_name": {
+          "source": "Ping Path",
+          "message": "Percorso ping"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19wYXRo.short_desc": {
+          "source": "The URI path to use for pings",
+          "message": "Il percorso URI da utilizzare per i ping"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.desc": {
+          "source": "A hash to check all deserialized bodies from the server to check for authentication errors",
+          "message": "Un hash per verificare tutti i corpi deserializzati dal server per il controllo di errori di autenticazione"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.display_name": {
+          "source": "REST Body Auth Error Check",
+          "message": "Controllo errori autenticazione corpo REST"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.short_desc": {
+          "source": "Values marking a 200 OK body as an authentication error",
+          "message": "Valori che indicano che un corpo 200 OK è un errore di autenticazione"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "Any authorization token to use for the connection; will be passed as `Authorization: Bearer ...` (assuming that `token_type` is `Bearer`) in request headers; this option cannot be used with username and password options or authentication information in the URL; if this option is set then most OAuth2 options are ignored for logins",
+          "message": "Eventuale token di autorizzazione da utilizzare per la connessione; verrà passato come `Authorization: Bearer ...` (supponendo che `token_type` sia `Bearer`) nelle intestazioni di richiesta; questa opzione non può essere utilizzata con le opzioni di nome utente e password o informazioni di autenticazione nell'URL; se questa opzione è impostata, la maggior parte delle opzioni OAuth2 viene ignorata per i login"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Token di autorizzazione"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token to be included in requests",
+          "message": "Imposta un token di autorizzazione da includere nelle richieste"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.desc": {
+          "source": "The name of the HTTP header where `token` will be sent as an API key; this option is incompatible with OAuth2 options",
+          "message": "Il nome dell'intestazione HTTP in cui `token` verrà inviato come chiave API; questa opzione non è compatibile con le opzioni OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.display_name": {
+          "source": "API Key Header",
+          "message": "Intestazione chiave API"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.short_desc": {
+          "source": "The name of the HTTP header where the token will be sent as an API key",
+          "message": "Il nome dell'intestazione HTTP in cui il token verrà inviato come chiave API"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "Il tipo di `token` da utilizzare per l'intestazione `Authorization`; ignorato se non è impostata alcuna opzione `token`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "Tipo di token di autorizzazione"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "Il tipo di token di autorizzazione"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL; conflicts with the `token` option",
+          "message": "Il nome utente per l'autenticazione; utilizzato solo se non è impostato alcun nome utente o password nell'URL; è in conflitto con l'opzione `token`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Nome utente"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for authentication",
+          "message": "Imposta il nome utente per l'autenticazione"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dmFsaWRhdG9y.desc": {
+          "source": "Sets an `AbstractRestSchemaValidator` object for REST message validation; conflicts with `openapi3` and `swagger`",
+          "message": "Imposta un oggetto `AbstractRestSchemaValidator` per la validazione dei messaggi REST; in conflitto con `openapi3` e `swagger`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dmFsaWRhdG9y.display_name": {
+          "source": "Schema Validator",
+          "message": "Validatore di Schema"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dmFsaWRhdG9y.short_desc": {
+          "source": "Sets a schema validator object",
+          "message": "Imposta un oggetto validatore di schema"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a REST server",
+          "message": "Una connessione a un server REST"
+        }
+      }
+    }
+  }
+}

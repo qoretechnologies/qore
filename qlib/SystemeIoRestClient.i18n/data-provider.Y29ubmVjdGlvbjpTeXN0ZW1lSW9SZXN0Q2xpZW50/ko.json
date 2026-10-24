@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Systeme.io REST API for managing contacts, tags, courses, communities, and subscriptions.\n\nSysteme.io is an all-in-one online marketing platform for building sales funnels, running email campaigns, managing courses and communities, and handling affiliate programs.\n\n**To obtain your API key:**\n1. Log in to your Systeme.io account\n2. Go to **Profile Settings**\n3. Navigate to the **Public API keys** section\n4. Click **Create** to generate a new key\n5. Copy the key immediately (it cannot be retrieved later)\n\n**Note:** Maximum 3 API keys per account. Keys are shared across all API integrations.",
+          "message": "연락처, 태그, 코스, 커뮤니티, 구독을 관리하기 위한 Systeme.io REST API에 대한 연결입니다.\n\nSysteme.io는 판매 파이프라인 구축, 이메일 캠페인 운영, 코스 및 커뮤니티 관리, 애드버티지 프로그램 처리를 위한 종합적인 온라인 마케팅 플랫폼입니다.\n\n**API 키를 얻는 방법:**\n1. Systeme.io 계정에 로그인합니다\n2. **프로필 설정**으로 이동합니다\n3. **공개 API 키** 섹션으로 이동합니다\n4. **생성**을 클릭하여 새 키를 생성합니다\n5. 키를 즉시 복사합니다 (나중에 다시 조회할 수 없습니다)\n\n**참고:** 계정당 최대 3개의 API 키까지 허용됩니다. 키는 모든 API 통합에서 공유됩니다."
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Systeme.io REST Connection",
+          "message": "Systeme.io REST 연결"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires a **Systeme.io API key**.\n\n**Steps to generate an API key:**\n1. Log in to your Systeme.io account\n2. Go to **Profile Settings**\n3. Navigate to the **Public API keys** section\n4. Click **Create** and give the key a name\n5. Copy the key immediately\n\n**Important:**\n- API keys are only shown once at creation time\n- Maximum 3 API keys per account\n- Rate limits are plan-based and shared across all keys",
+          "message": "이 통합은 **Systeme.io API 키**가 필요합니다.\n\n**API 키 생성 단계:**\n1. Systeme.io 계정에 로그인합니다\n2. **프로필 설정**으로 이동합니다\n3. **공개 API 키** 섹션으로 이동합니다\n4. **생성**을 클릭하고 키에 이름을 지정합니다\n5. 키를 즉시 복사합니다\n\n**중요:**\n- API 키는 생성 시 한 번만 표시됩니다\n- 계정당 최대 3개의 API 키까지 허용됩니다\n- 요청 제한은 플랜 기반이며 모든 키 간에 공유됩니다"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "API 키를 얻는 방법"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Systeme.io API key used for authentication via the `X-API-Key` header.\n\n**To obtain your API key:**\n1. Log in to your Systeme.io account\n2. Go to **Profile Settings**\n3. Navigate to the **Public API keys** section\n4. Click **Create** to generate a new key\n5. Copy the key immediately (it cannot be retrieved later)\n\n**Important:** API keys are only visible immediately after creation. If you lose a key, you must delete it and create a new one.",
+          "message": "`X-API-Key` 헤더를 통한 인증에 사용되는 Systeme.io API 키입니다.\n\n**API 키를 얻는 방법:**\n1. Systeme.io 계정에 로그인합니다\n2. **프로필 설정**으로 이동합니다\n3. **공개 API 키** 섹션으로 이동합니다\n4. **생성**을 클릭하여 새 키를 생성합니다\n5. 키를 즉시 복사합니다 (나중에 다시 조회할 수 없습니다)\n\n**중요:** API 키는 생성 직후에만 표시됩니다. 키를 분실한 경우, 기존 키를 삭제하고 새 키를 생성해야 합니다."
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Systeme.io API key for authentication",
+          "message": "인증용 Systeme.io API 키"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Systeme.io REST API",
+          "message": "Systeme.io REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

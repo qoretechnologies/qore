@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.desc": {
+          "source": "A connection to a POP3 server for receiving emails",
+          "message": "Połączenie z serwerem POP3 do odbierania e-maili"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.display_name": {
+          "source": "POP3 Connection",
+          "message": "Połączenie POP3"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "Limit czasu połączenia w milisekundach"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Limit czasu połączenia"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "Limit czasu połączenia w milisekundach"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.aW9fdGltZW91dA.desc": {
+          "source": "The I/O timeout in milliseconds",
+          "message": "Czas oczekiwania I/O w milisekundach"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.aW9fdGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Limit czasu we/wy"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.aW9fdGltZW91dA.short_desc": {
+          "source": "The I/O timeout in milliseconds",
+          "message": "Czas oczekiwania I/O w milisekundach"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; conflicts with the `token` option",
+          "message": "Hasło do uwierzytelniania; konfliktuje z opcją `token`"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Hasło"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for authentication",
+          "message": "Hasło do uwierzytelniania"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "Any authorization token to use for the connection; will be used for SASL XOAUTH2 logins; conflicts with the `password` option",
+          "message": "Dowolny token autoryzacyjny do użycia w połączeniu; będzie używany do logowania SASL XOAUTH2; konfliktuje z opcją `password`"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Token autoryzacji"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token for an SASL XOAUTH2 login",
+          "message": "Ustaw token autoryzacyjny dla logowania SASL XOAUTH2"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dGxz.desc": {
+          "source": "Use the `STLS` command after connecting with insecure connections",
+          "message": "Użyj polecenia `STLS` po nawiązaniu połączenia niezabezpieczonego"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dGxz.display_name": {
+          "source": "Secure?",
+          "message": "Zabezpieczone?"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dGxz.short_desc": {
+          "source": "Use the STLS command after connecting with insecure connections",
+          "message": "Użyj polecenia STLS po nawiązaniu połączenia niezabezpieczonego"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; always required",
+          "message": "Nazwa użytkownika do uwierzytelniania; zawsze wymagana"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Nazwa użytkownika"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for authentication",
+          "message": "Ustawia nazwę użytkownika do uwierzytelniania"
+        },
+        "connection.UG9wM0NsaWVudA.scheme.UG9wM0Nvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a POP3 server",
+          "message": "Połączenie z serwerem POP3"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [Deepgram](https://deepgram.com) speech API.\n\nDeepgram provides automatic speech recognition (ASR) via `/v1/listen` and text-to-speech (TTS) via `/v1/speak`, plus realtime WebSocket streaming for both directions.\n\nRequires an API key for `Authorization: Token` authentication (note: Deepgram uses `Token`, NOT `Bearer`).  Get your API key from the [Deepgram console](https://console.deepgram.com).",
+          "message": "連接到 [Deepgram](https://deepgram.com) 語音 API 的連線。\n\nDeepgram 提供透過 `/v1/listen` 的自動語音辨識 (ASR) 與透過 `/v1/speak` 的語音合成 (TTS)，並支援雙向即時 WebSocket 流式傳輸。\n\n需要 API 金鑰進行 `Authorization: Token` 認證（注意：Deepgram 使用 `Token`，而非 `Bearer`）。請從 [Deepgram 控制台](https://console.deepgram.com) 取得您的 API 金鑰。"
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Deepgram REST Connection",
+          "message": "Deepgram REST 連線"
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Deepgram API key — sent as the `Authorization: Token <key>` header (NOT `Authorization: Bearer`).",
+          "message": "Deepgram API 金鑰 — 以 `Authorization: Token <key>` 標頭傳送（非 `Authorization: Bearer`）。"
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Deepgram API key (sent as Authorization: Token header)",
+          "message": "Deepgram API 金鑰（以 Authorization: Token 標頭傳送）"
+        },
+        "connection.RGVlcGdyYW1SZXN0Q2xpZW50.scheme.RGVlcGdyYW1SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Deepgram speech (ASR + TTS) REST API",
+          "message": "連線至 Deepgram 語音（ASR + TTS）REST API"
+        }
+      }
+    }
+  }
+}

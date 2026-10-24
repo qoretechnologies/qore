@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Zoho Invoice REST API for invoicing and billing",
+          "message": "청구 및 청구서 발행용 Zoho Invoice REST API에 대한 연결"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Zoho Invoice REST Connection",
+          "message": "Zoho Invoice REST 연결"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "Select the subdomain and domain that match your Zoho account:\n- **Sub Domain**: 'zoho' (standard) or 'zohocloud' (cloud accounts)\n- **Domain**: Based on your data center region (.com for US/Global, .eu for Europe, .in for India, .com.au for Australia, .ca for Canada, .sa for Saudi Arabia, .jp for Japan)",
+          "message": "Zoho 계정에 해당하는 하위 도메인과 도메인을 선택하세요:\n- **하위 도메인**: 'zoho' (표준) 또는 'zohocloud' (클라우드 계정)\n- **도메인**: 데이터 센터 지역에 따라 다릅니다 (.com은 미국/글로벌, .eu는 유럽, .in은 인도, .com.au는 호주, .ca는 캐나다, .sa는 사우디아라비아, .jp는 일본)"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "Select Your Zoho Region",
+          "message": "Zoho 지역 선택"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jYQ.desc": {
+          "source": "Canada data center",
+          "message": "캐나다 데이터 센터"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jYQ.display_name": {
+          "source": ".ca",
+          "message": ".ca"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jYQ.short_desc": {
+          "source": "Canada",
+          "message": "캐나다"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.desc": {
+          "source": "United States / Global data center",
+          "message": "미국 / 글로벌 데이터 센터"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.display_name": {
+          "source": ".com",
+          "message": ".com"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.short_desc": {
+          "source": "US/Global",
+          "message": "미국/글로벌"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20uYXU.desc": {
+          "source": "Australia data center",
+          "message": "오스트레일리아 데이터 센터"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20uYXU.display_name": {
+          "source": ".com.au",
+          "message": ".com.au"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20uYXU.short_desc": {
+          "source": "Australia",
+          "message": "오스트레일리아"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.desc": {
+          "source": "European Union data center",
+          "message": "유럽 연합 데이터 센터"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.display_name": {
+          "source": ".eu",
+          "message": ".eu"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.short_desc": {
+          "source": "Europe",
+          "message": "유럽"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5pbg.desc": {
+          "source": "India data center",
+          "message": "인도 데이터 센터"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5pbg.display_name": {
+          "source": ".in",
+          "message": ".in"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5pbg.short_desc": {
+          "source": "India",
+          "message": "인도"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5qcA.desc": {
+          "source": "Japan data center",
+          "message": "일본 데이터 센터"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5qcA.display_name": {
+          "source": ".jp",
+          "message": ".jp"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5qcA.short_desc": {
+          "source": "Japan",
+          "message": "일본"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5zYQ.desc": {
+          "source": "Saudi Arabia data center",
+          "message": "사우디아라비아 데이터 센터"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5zYQ.display_name": {
+          "source": ".sa",
+          "message": ".sa"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5zYQ.short_desc": {
+          "source": "Saudi Arabia",
+          "message": "사우디아라비아"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.desc": {
+          "source": "Select the Zoho domain for your account based on your data center region.",
+          "message": "계정의 데이터 센터 지역에 따라 Zoho 도메인을 선택하세요."
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "도메인"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.ZG9tYWlu.short_desc": {
+          "source": "Zoho domain",
+          "message": "Zoho 도메인"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG8.desc": {
+          "source": "Standard Zoho subdomain (accounts.zoho.{domain})",
+          "message": "표준 Zoho 서브도메인 (accounts.zoho.{domain})"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG8.display_name": {
+          "source": "zoho",
+          "message": "zoho"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG8.short_desc": {
+          "source": "Standard Zoho",
+          "message": "표준 Zoho"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG9jbG91ZA.desc": {
+          "source": "Zoho Cloud subdomain (accounts.zohocloud.{domain})",
+          "message": "Zoho 클라우드 하위 도메인 (accounts.zohocloud.{domain})"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG9jbG91ZA.display_name": {
+          "source": "zohocloud",
+          "message": "zohocloud"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG9jbG91ZA.short_desc": {
+          "source": "Zoho Cloud",
+          "message": "Zoho 클라우드"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.c3ViZG9tYWlu.desc": {
+          "source": "Select the Zoho subdomain for your account.",
+          "message": "계정용 Zoho 하위 도메인을 선택하세요."
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.c3ViZG9tYWlu.display_name": {
+          "source": "Sub Domain",
+          "message": "하위 도메인"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.option.c3ViZG9tYWlu.short_desc": {
+          "source": "Zoho subdomain",
+          "message": "Zoho 하위 도메인"
+        },
+        "connection.Wm9ob0ludm9pY2VSZXN0Q2xpZW50.scheme.Wm9ob0ludm9pY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Zoho Invoice REST API",
+          "message": "Zoho Invoice REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

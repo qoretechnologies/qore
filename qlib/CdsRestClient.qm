@@ -895,7 +895,8 @@ CdsRestClient rest({
 public class CdsRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("CdsRestClient",
+            "CdsRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Microsoft CDS REST Server",
             "short_desc": "A connection to a Microsoft CDS (Common Data Services) REST server",
             "desc": "A connection to a Microsoft CDS (Common Data Services) REST server",
@@ -982,7 +983,7 @@ public class CdsRestConnection inherits RestClient::RestConnection {
                     }),
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
-        };
+        });
 
         #! options required to support the OAuth2 authorization code grant flow
         const OAuth2AuthRequestOptions = (
@@ -1261,7 +1262,8 @@ public class CdsRestConnection inherits RestClient::RestConnection {
 public class DynamicsRestConnection inherits CdsRestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("CdsRestClient",
+            "DynamicsRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Microsoft Dynamics REST Server",
             "short_desc": "A connection to a Microsoft Dynamics REST server",
             "cls": Class::forName("DynamicsRestConnection"),
@@ -1296,7 +1298,7 @@ public class DynamicsRestConnection inherits CdsRestConnection {
             },
             # the environment's URL is discovered from the credential, so the user does not supply one
             "auto_url": True,
-        };
+        });
 
         #! The URL a connection created without one targets until its environment is discovered
         /** Declared on the connection class because that is where the platform looks for it when it
@@ -1419,7 +1421,8 @@ public class DynamicsRestConnection inherits CdsRestConnection {
 public class BusinessCentralRestConnection inherits CdsRestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("CdsRestClient",
+            "BusinessCentralRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Microsoft Business Central REST Server",
             "short_desc": "A connection to a Microsoft Dynamics 365 Business Central REST server",
             "desc": "A connection to a Microsoft Dynamics 365 Business Central REST server for ERP data access",
@@ -1475,7 +1478,7 @@ public class BusinessCentralRestConnection inherits CdsRestConnection {
                 }),
             },
             "required_options": "oauth2_client_id,oauth2_client_secret,instance_type",
-        };
+        });
     }
 
     #! Creates the BusinessCentralRestConnection object

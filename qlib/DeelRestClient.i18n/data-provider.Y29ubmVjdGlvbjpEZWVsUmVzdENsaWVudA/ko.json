@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Deel REST API for global workforce management.\n\nDeel is a global HR platform for hiring, managing, and paying contractors and full-time employees worldwide. This integration supports contracts, timesheets, invoice adjustments, workers, time-off, legal entities, invoices, and event triggers.",
+          "message": "글로벌 인력 관리용 Deel REST API에 대한 연결.\n\nDeel은 전 세계 계약자 및 정규직 직원 고용, 관리, 지급을 위한 글로벌 HR 플랫폼입니다. 이 통합은 계약, 근무 시간표, 청구 조정, 근로자, 휴가, 법적 실체, 청구서, 이벤트 트리거를 지원합니다."
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Deel REST Connection",
+          "message": "Deel REST 연결"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to Deel at https://app.deel.com\n2. Go to the **Developer Center**: https://app.deel.com/developer-center\n3. Click **Create Token** and choose the token type:\n   - **Personal Token**: Linked to your user account and inherits your permissions\n   - **Organization Token**: Service-level access not tied to a specific user\n4. Copy the token value and paste it into the **API Token** field\n\n**Important:**\n- Only Org Admins or IT Developer Admins can create tokens\n- Store your token securely; treat it like a password",
+          "message": "1. https://app.deel.com 에서 Deel에 로그인하세요\n2. **개발자 센터**: https://app.deel.com/developer-center 로 이동하세요\n3. **토큰 생성**을 클릭하고 토큰 유형을 선택하세요:\n   - **개인 토큰**: 사용자 계정과 연결되며, 사용자의 권한을 상속합니다\n   - **조직 토큰**: 특정 사용자와 연결되지 않은 서비스 수준 접근 권한\n4. 토큰 값을 복사하여 **API 토큰** 필드에 붙여넣기하세요\n\n**중요:**\n- 토큰 생성은 조직 관리자 또는 IT 개발자 관리자만 가능합니다\n- 토큰을 안전하게 보관하세요; 비밀번호처럼 취급하세요"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Generate Your API Token",
+          "message": "API 토큰 생성 방법"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "**Sandbox environment** is available for safe testing without affecting real data.\n\n- Enable **Use Sandbox** to connect to `https://api-sandbox.demo.deel.com/rest/v2`\n- Sandbox tokens are separate from production tokens — generate one at https://app.deel.com/developer-center\n- Leave **Use Sandbox** disabled for production use",
+          "message": "**샌드박스 환경**은 실제 데이터에 영향을 주지 않고 안전하게 테스트할 수 있습니다.\n\n- **샌드박스 사용**을 활성화하여 `https://api-sandbox.demo.deel.com/rest/v2`에 연결하세요\n- 샌드박스 토큰은 프로덕션 토큰과 별도입니다. https://app.deel.com/developer-center 에서 생성하세요\n- 프로덕션 사용 시 **샌드박스 사용**은 비활성화하세요"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Sandbox vs Production",
+          "message": "샌드박스 vs 프로덕션"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Deel API access token used for authentication.\n\nGenerate a token in the **Developer Center** at https://app.deel.com/developer-center\n\nBoth **personal tokens** (linked to a user account) and **organization tokens** (service-level access) are supported.",
+          "message": "인증을 위한 Deel API 액세스 토큰입니다.\n\n**개발자 센터**에서 https://app.deel.com/developer-center 에서 토큰을 생성하세요\n\n**개인 토큰**(사용자 계정과 연결됨)과 **조직 토큰**(서비스 수준 접근 권한) 모두 지원됩니다."
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API 토큰"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Deel API access token",
+          "message": "Deel API 액세스 토큰"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.desc": {
+          "source": "If `True`, API calls target the Deel sandbox environment (`https://api-sandbox.demo.deel.com/rest/v2`) for safe testing.\n\nIf `False` (default), API calls target the production environment (`https://api.letsdeel.com/rest/v2`).\n\n**Note:** Sandbox and production use separate API tokens. Generate a sandbox token from the Developer Center when using this option.",
+          "message": "`True`인 경우, API 호출은 안전한 테스트를 위해 Deel 샌드박스 환경 (`https://api-sandbox.demo.deel.com/rest/v2`)을 대상으로 합니다.\n\n`False`인 경우(기본값), API 호출은 프로덕션 환경 (`https://api.letsdeel.com/rest/v2`)을 대상으로 합니다.\n\n**참고:** 샌드박스와 프로덕션은 별도의 API 토큰을 사용합니다. 이 옵션을 사용할 때는 개발자 센터에서 샌드박스 토큰을 생성하세요."
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.display_name": {
+          "source": "Use Sandbox",
+          "message": "샌드박스 사용"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.short_desc": {
+          "source": "Use Deel sandbox environment for testing",
+          "message": "테스트를 위해 Deel 샌드박스 환경 사용"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Deel REST API",
+          "message": "Deel REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,296 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestClient
+%requires SGLangRestClient
+%requires json
+%requires i18n
+
+%exec-class ConnectionPresentationTest
+
+class ConnectionPresentationTest inherits QUnit::Test {
+    constructor() : Test("Connection presentation", "1.0") {
+        addTestCase("source ownership survives copies and overrides", \ownership());
+        addTestCase("projection follows shared catalogs and validates source", \projection());
+        addTestCase("aliases, messages, and app overrides have stable identities", \identities());
+        addTestCase("real HTTP, REST and SGLang metadata reuse source ownership", \realSchemes());
+        addTestCase("the CLI extracts fixture schemes and messages", \fixtureExtraction());
+        addTestCase("source-tree updates reject empty owner discovery", \emptyDiscovery());
+        addTestCase("source-tree discovery rejects unidentified schemes in separated classes", \unpreparedDiscovery());
+        addTestCase("new source-tree catalogs validate their domain before creating directories", \unsafeDomain());
+        set_return_value(main());
+    }
+
+    hash<auto> base() {
+        return ConnectionPresentation::prepareScheme("FixtureBase", "transport", "en", {
+            "display_name": "Transport", "short_desc": "Connect to a server", "desc": "Transport connection",
+            "options": {
+                "timeout": <ConnectionOptionInfo>{
+                    "display_name": "Timeout", "short_desc": "Wait for a response", "desc": "Maximum wait",
+                    "type": "timeout", "default_value": 1000,
+                },
+                "mode": <ConnectionOptionInfo>{
+                    "display_name": "Mode", "desc": "Delivery mode", "type": "string",
+                    "allowed_values": (<AllowedValueInfo>{"value": "fast", "display_name": "Fast"},),
+                    "element_allowed_values": (<AllowedValueInfo>{"value": 42, "display_name": "Forty-two"},),
+                },
+            },
+            "messages": (<UiMessageInfo>{"presentation_id": "setup", "title": "Setup", "intent": "info",
+                "content": "Configure the connection"},),
+        });
+    }
+
+    hash<auto> derived(hash<auto> source) {
+        source.options.timeout = connection_option_override(source.options.timeout, {"default_value": 2000,
+            "desc": "Maximum wait for this service"});
+        source.display_name = "Service";
+        return ConnectionPresentation::prepareScheme("FixtureService", "service", "en", source);
+    }
+
+    ownership() {
+        hash<auto> original = base();
+        hash<auto> child = derived(original);
+        assertEq(1000, original.options.timeout.default_value);
+        assertEq(2000, child.options.timeout.default_value);
+        assertEq(original.options.timeout.presentation_sources.display_name,
+            child.options.timeout.presentation_sources.display_name);
+        assertEq(original.options.timeout.presentation_sources.short_desc,
+            child.options.timeout.presentation_sources.short_desc);
+        assertNeq(original.options.timeout.presentation_sources.desc.message_id,
+            child.options.timeout.presentation_sources.desc.message_id);
+        assertEq(ConnectionPresentation::domain("FixtureService"),
+            child.options.timeout.presentation_sources.desc.domain);
+        assertEq(original.options.mode.presentation_sources, child.options.mode.presentation_sources);
+        hash<auto> catalogs = ConnectionPresentation::buildSchemeCatalogs({"base": original, "child": child});
+        assertEq(2, catalogs.size());
+        hash<auto> own = catalogs{ConnectionPresentation::domain("FixtureService")}.locales.root.messages;
+        assertEq(2, own.size());
+        assertTrue(exists own{child.options.timeout.presentation_sources.desc.message_id});
+        assertFalse(exists own{child.options.timeout.presentation_sources.display_name.message_id});
+        assertEq(1, ConnectionPresentation::buildSchemeCatalogs({"base": original, "child": child},
+            "FixtureService").size());
+        assertThrows("DATA-PROVIDER-PRESENTATION-ERROR", sub() {
+            ConnectionPresentation::prepareScheme("Owner", "scheme", "und", original);
+        });
+    }
+
+    projection() {
+        hash<auto> original = base();
+        hash<auto> child = derived(original);
+        string root = make_tmp_dir("connection-presentation-");
+        on_exit remove_tree(root);
+        hash<auto> all = ConnectionPresentation::buildSchemeCatalogs({"base": original, "child": child});
+        foreach hash<auto> pair in (all.pairIterator()) {
+            mkdir(root + DirSep + pair.key);
+            hash<auto> messages;
+            foreach hash<auto> message in (pair.value.locales.root.messages.pairIterator()) {
+                messages{message.key} = {"source": message.value.source, "message": "de:" + message.value.source};
+            }
+            File file();
+            file.open2(root + DirSep + pair.key + DirSep + "de.json", O_WRONLY | O_CREAT | O_TRUNC, 0600);
+            file.write(make_json({"schema_version": I18n::get_catalog_schema_version(),
+                "locales": {"de": {"messages": messages}}}));
+            file.close();
+        }
+        ConnectionPresentationCatalog german("de", {"search_path": (root,)});
+        hash<auto> projected = german.projectScheme(child);
+        assertEq("de:Service", projected.display_name);
+        assertEq("de:Timeout", projected.options.timeout.display_name);
+        assertEq("de:Maximum wait for this service", projected.options.timeout.desc);
+        assertEq(2000, projected.options.timeout.default_value);
+        assertEq("de:Fast", projected.options.mode.allowed_values[0].display_name);
+        assertEq("fast", projected.options.mode.allowed_values[0].value);
+        assertEq("de:Forty-two", projected.options.mode.element_allowed_values[0].display_name);
+        assertEq(42, projected.options.mode.element_allowed_values[0].value);
+        assertEq("de:Setup", projected.messages[0].title);
+        assertEq("info", projected.messages[0].intent);
+        assertEq("Timeout", projected.options.timeout.producer_presentation.display_name);
+        assertEq("en", projected.options.timeout.producer_presentation.field_languages.display_name);
+        assertFalse(exists projected.options.timeout.presentation_incomplete);
+        assertEq("en", projected.options.timeout.producer_presentation.language);
+        hash<auto> app = {"name": "FixtureApp", "presentation_source_locale": "en",
+            "connection_options": child.options};
+        DataProviderPresentationCatalog app_view(DataProviderPresentation::appCatalogDomain(app), "de",
+            {"search_path": (root,)});
+        assertEq("de:Timeout", app_view.projectApp(app).connection_options.timeout.display_name);
+        hash<auto> with_message = child;
+        with_message.options.timeout.messages = (<UiMessageInfo>{"intent": "warning", "content": "Unidentified"},);
+        hash<auto> unidentified = german.projectScheme(with_message);
+        assertEq("", unidentified.options.timeout.messages[0].content);
+        assertEq("Unidentified", unidentified.options.timeout.messages[0].producer_presentation.content);
+        assertTrue(unidentified.options.timeout.presentation_incomplete);
+        ConnectionPresentationCatalog missing("ja", {"search_path": (root,)});
+        hash<auto> untranslated = missing.projectScheme(child);
+        assertEq("", untranslated.display_name);
+        assertEq("", untranslated.options.timeout.desc);
+        assertTrue(untranslated.options.timeout.presentation_incomplete);
+        assertTrue(untranslated.messages[0].presentation_incomplete);
+        assertEq("Service", untranslated.producer_presentation.display_name);
+        ConnectionPresentationCatalog english("en", {"search_path": (root,)});
+        assertEq("Timeout", english.projectScheme(child).options.timeout.display_name);
+        ConnectionPresentationCatalog producer("root", {"search_path": (root,)});
+        assertEq("Timeout", producer.projectScheme(child).options.timeout.display_name);
+        child.options.timeout.desc = "Changed after catalog extraction";
+        assertEq("", german.projectScheme(child).options.timeout.desc);
+        assertTrue(german.projectScheme(child).options.timeout.presentation_incomplete);
+        assertEq("Timeout", original.options.timeout.display_name);
+    }
+
+    identities() {
+        assertEq({}, ConnectionPresentation::prepareOptions("test", "empty", "en", NOTHING));
+        assertEq({}, ConnectionPresentation::buildSchemeCatalogs({}));
+        ConnectionPresentationCatalog empty_view("de");
+        assertEq({}, empty_view.projectOptions(NOTHING));
+        hash<auto> original = base();
+        assertEq(ConnectionPresentation::buildSchemeCatalogs({"one": original}),
+            ConnectionPresentation::buildSchemeCatalogs({"two": original, "one": original}));
+        hash<auto> changed = original;
+        changed.display_name = "Conflicting text";
+        changed = ConnectionPresentation::prepareScheme("FixtureBase", "transport", "en", changed);
+        assertThrows("DATA-PROVIDER-PRESENTATION-CATALOG-ERROR", sub() {
+            ConnectionPresentation::buildSchemeCatalogs({"one": original, "two": changed});
+        });
+        hash<auto> app = {"name": "FixtureApp", "presentation_source_locale": "en", "connection_options": {
+            "timeout": original.options.timeout,
+            "account": <ConnectionOptionInfo>{"display_name": "Account", "desc": "Account identifier", "type": "string"},
+        }};
+        hash<auto> options = ConnectionPresentation::appOptions(app);
+        assertEq(original.options.timeout.presentation_sources, options.timeout.presentation_sources);
+        assertEq(DataProviderPresentation::appCatalogDomain(app), options.account.presentation_sources.desc.domain);
+        hash<auto> catalogs = DataProviderPresentation::buildSourceCatalogs(app, ());
+        assertEq(2, catalogs{DataProviderPresentation::appCatalogDomain(app)}.locales.root.messages.size());
+        ConnectionPresentationCatalog view("root");
+        hash<auto> projected = view.projectAppOptions(app, original);
+        assertEq(("account", "timeout"), sort(keys projected));
+        assertEq("Account", projected.account.display_name);
+        hash<auto> invalid = original;
+        invalid.messages += invalid.messages[0];
+        assertThrows("DATA-PROVIDER-PRESENTATION-ERROR", sub() {
+            ConnectionPresentation::prepareScheme("FixtureBase", "transport", "en", invalid);
+        });
+    }
+
+    fixtureExtraction() {
+        string output = make_tmp_dir("connection-presentation-cli-");
+        on_exit remove_tree(output);
+        string root = get_script_dir() + "/../../../..";
+        string module_path = get_script_dir() + PathSep + root + "/qlib" + PathSep
+            + (ENV.QORE_MODULE_DIR ?? "");
+        string command = "QORE_MODULE_DIR=" + shellQuote(module_path) + " " + shellQuote(QORE_ARGV[0])
+            + " " + shellQuote(root + "/bin/qore-data-provider-i18n")
+            + " -C -m ConnectionPresentationFixture --owner ConnectionPresentationFixture -o " + shellQuote(output);
+        assertEq(0, system(command));
+        string domain = ConnectionPresentation::domain("ConnectionPresentationFixture");
+        hash<auto> catalog = I18n::load_native_catalog(output + DirSep + domain + DirSep + "root.json");
+        hash<auto> messages = catalog.locales.root.messages;
+        assertEq(7, messages.size());
+        assertTrue(inlist("Configure your account", map $1.source, messages.values()));
+        assertFalse(is_dir(output + DirSep + ConnectionPresentation::domain("ConnectionProvider")));
+    }
+
+    private string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+
+    emptyDiscovery() {
+        string output = make_tmp_dir("connection-presentation-empty-");
+        on_exit remove_tree(output);
+        string root = get_script_dir() + "/../../../..";
+        string command = shellQuote(QORE_ARGV[0]) + " " + shellQuote(root + "/bin/qore-data-provider-i18n")
+            + " -C --update-source-tree -o " + shellQuote(output) + " > " + shellQuote(output + "/result.log") + " 2>&1";
+        assertEq(1, system(command));
+        assertTrue(ReadOnlyFile::readTextFile(output + "/result.log").find("no provider owner modules were discovered") >= 0);
+    }
+
+    unpreparedDiscovery() {
+        string output = make_tmp_dir("connection-presentation-unprepared-");
+        on_exit remove_tree(output);
+        string owner = "UnpreparedConnectionFixture";
+        string dir = output + "/qlib/" + owner;
+        mkdir_ex(dir, 0755, True);
+        File entry();
+        entry.open2(dir + "/" + owner + ".qm", O_WRONLY | O_CREAT | O_EXCL, 0600);
+        entry.write("%modern\n%requires ConnectionProvider\nmodule " + owner
+            + " { version = \"1.0\"; desc = \"fixture\"; author = \"Qore\"; license = \"MIT\"; "
+              "init = sub() { UnpreparedConnection::register(); }; }\n");
+        entry.close();
+        File impl();
+        impl.open2(dir + "/UnpreparedConnection.qc", O_WRONLY | O_CREAT | O_EXCL, 0600);
+        impl.write("public namespace " + owner + " { public class UnpreparedConnection inherits HttpConnection { "
+            "static register() { ConnectionSchemeCache::registerScheme(\"unprepared-fixture\", "
+            "<ConnectionSchemeInfo>{\"cls\": Class::forName(\"UnpreparedConnection\"), "
+            "\"schemes\": {\"unprepared-fixture\": True}, \"display_name\": \"Unprepared\"}); } } }\n");
+        impl.close();
+        string root = get_script_dir() + "/../../../..";
+        string module_path = output + "/qlib" + PathSep + root + "/qlib" + PathSep + (ENV.QORE_MODULE_DIR ?? "");
+        string command = "QORE_MODULE_DIR=" + shellQuote(module_path) + " " + shellQuote(QORE_ARGV[0])
+            + " " + shellQuote(root + "/bin/qore-data-provider-i18n")
+            + " -C --update-source-tree -o " + shellQuote(output) + " > " + shellQuote(output + "/result.log") + " 2>&1";
+        assertEq(1, system(command));
+        assertTrue(ReadOnlyFile::readTextFile(output + "/result.log").find("no source presentation identity") >= 0);
+        assertFalse(is_dir(dir + "/i18n"));
+    }
+
+    unsafeDomain() {
+        string output = make_tmp_dir("connection-presentation-domain-");
+        on_exit remove_tree(output);
+        string owner = "PresentationUncatalogedOwner";
+        string dir = output + "/qlib/" + owner;
+        mkdir_ex(dir, 0755, True);
+        string source = ReadOnlyFile::readTextFile(get_script_dir() + DirSep + owner + ".qm");
+        source = replace(source, "\"presentation_source_locale\": \"en\",",
+            "\"presentation_source_locale\": \"en\", \"presentation_catalog_domain\": \"../escape\",");
+        File entry();
+        entry.open2(dir + DirSep + owner + ".qm", O_WRONLY | O_CREAT | O_EXCL, 0600);
+        entry.write(source);
+        entry.close();
+        string root = get_script_dir() + "/../../../..";
+        string module_path = output + "/qlib" + PathSep + root + "/qlib" + PathSep + (ENV.QORE_MODULE_DIR ?? "");
+        string command = "QORE_MODULE_DIR=" + shellQuote(module_path) + " " + shellQuote(QORE_ARGV[0])
+            + " " + shellQuote(root + "/bin/qore-data-provider-i18n")
+            + " -C --update-source-tree -o " + shellQuote(output) + " > " + shellQuote(output + "/result.log") + " 2>&1";
+        assertEq(1, system(command));
+        assertTrue(ReadOnlyFile::readTextFile(output + "/result.log").find("I18N-CATALOG-ERROR") >= 0);
+        assertFalse(is_dir(dir + "/i18n"));
+        assertFalse(is_dir(dir + "/escape"));
+    }
+
+    realSchemes() {
+        hash<ConnectionSchemeInfo> http = HttpConnection::ConnectionScheme;
+        hash<ConnectionSchemeInfo> rest = RestConnection::ConnectionScheme;
+        hash<ConnectionSchemeInfo> sg = SGLangRestClient::SGLangRestConnection::ConnectionScheme;
+        assertEq(http.options.connect_timeout.presentation_sources, rest.options.connect_timeout.presentation_sources);
+        assertEq(rest.options.connect_timeout.presentation_sources, sg.options.connect_timeout.presentation_sources);
+        assertEq(rest.options.ping_method.presentation_sources, sg.options.ping_method.presentation_sources);
+        assertNeq(http.options.password.presentation_sources.desc.message_id, rest.options.password.presentation_sources.desc.message_id);
+        assertEq("ConnectionProvider", http.presentation_owner);
+        assertEq("RestClient", rest.presentation_owner);
+        assertEq("SGLangRestClient", sg.presentation_owner);
+        assertEq(ConnectionSchemeCache::getSchemeEx("http").presentation_sources,
+            ConnectionSchemeCache::getSchemeEx("https").presentation_sources);
+    }
+}

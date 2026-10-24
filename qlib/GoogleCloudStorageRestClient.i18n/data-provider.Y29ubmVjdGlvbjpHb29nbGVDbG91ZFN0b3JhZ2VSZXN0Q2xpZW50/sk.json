@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Google Cloud Storage](https://cloud.google.com/storage) — Google's object storage service.  Authentication is via @ref gcpauthintro \"GcpAuth\" using an explicit service-account JSON key or Application Default Credentials.",
+          "message": "Spojenie s [Google Cloud Storage](https://cloud.google.com/storage) — službou úložiska objektov od Googlu. Overenie je prostredníctvom @ref gcpauthintro \"GcpAuth\" pomocou explicitného JSON kľúča službového účtu alebo predvolených prihlasovacích údajov aplikácie."
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Google Cloud Storage Connection",
+          "message": "Spojenie Google Cloud Storage"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX2FjY2Vzc190b2tlbg.desc": {
+          "source": "A GCP bearer access token to use verbatim instead of obtaining one from a credential, for callers that mint tokens themselves (workload identity federation, service-account impersonation, or a platform that already holds a token).  It is **not** refreshed, so it stops working when it expires; leave it unset to let GcpAuth obtain and refresh tokens.  It must carry the scopes for everything it is used for, including `cloud-platform` if signed URLs are generated.",
+          "message": "Nosný prístupový token GCP, ktorý sa použije bez zmeny namiesto získania z kredenciálov, pre volajúce, ktoré si vytvárajú tokeny samy (federácia identít pracovných zaťažení, impersonácia službového účtu alebo platforma, ktorá už má token. Nie je obnovovaný, takže prestane fungovať po vypršaní platnosti; nechajte ho nezadané, aby GcpAuth získal a obnovil tokeny. Musí obsahovať oprávnenia pre všetko, čo sa používa, vrátane `cloud-platform` v prípade generovania podpísaných URL."
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX2FjY2Vzc190b2tlbg.display_name": {
+          "source": "Bearer Access Token",
+          "message": "Nosný prístupový token"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX2FjY2Vzc190b2tlbg.short_desc": {
+          "source": "An externally-minted bearer token to use directly",
+          "message": "Externý prístupový token, ktorý sa použije priamo"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3BpbmdfYnVja2V0.desc": {
+          "source": "The bucket whose metadata is fetched to verify the connection.  When unset the project's bucket list is requested instead, which needs the `storage.buckets.list` permission at project level; set this to a single bucket for a service account granted access to that bucket only.",
+          "message": "Kontajner, ktorého metadáta sa načítajú na overenie pripojenia. Ak nie je nastavený, bude požadovaný zoznam kontajnerov projektu, čo vyžaduje oprávnenie `storage.buckets.list` na úrovni projektu; nastavte ho na jeden kontajner pre službový účet, ktorý má prístup len k tomuto kontajneru."
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3BpbmdfYnVja2V0.display_name": {
+          "source": "Ping Bucket",
+          "message": "Kontajner pre testovanie pripojenia"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3BpbmdfYnVja2V0.short_desc": {
+          "source": "A bucket to read metadata from when pinging",
+          "message": "Kontajner, z ktorého sa čítajú metadáta pri testovaní pripojenia"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3Byb2plY3RfaWQ.desc": {
+          "source": "GCP project ID; required to list or create buckets, and used as the default billing project for requester-pays buckets.",
+          "message": "ID GCP projektu; vyžadované na zoznam alebo vytvorenie kontajnerov a používané ako predvolený účet účtovania pre kontajnery s poplatkom za použitie."
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3Byb2plY3RfaWQ.display_name": {
+          "source": "GCP Project ID",
+          "message": "ID GCP projektu"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3Byb2plY3RfaWQ.short_desc": {
+          "source": "GCP project that owns the buckets",
+          "message": "GCP projekt, ktorý vlastní kontajnery"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.desc": {
+          "source": "Optional GCP billing/quota project; when set it is sent as the `x-goog-user-project` header so quota and billing are attributed to that project.  Required to read a requester-pays bucket owned by another project.",
+          "message": "Voliteľný projekt GCP na účtovanie/limit; ak je nastavený, posielaný ako hlavička `x-goog-user-project` tak, aby sa účtovanie a limit prepočítali na tento projekt. Vyžadované na čítanie úložiska s poplatkom za požiadavku vlastneného iným projektom."
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.display_name": {
+          "source": "GCP Quota Project ID",
+          "message": "ID projektu GCP na účtovanie"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.short_desc": {
+          "source": "Billing/quota project for the x-goog-user-project header",
+          "message": "Projekt na účtovanie/poplatok pre hlavičku x-goog-user-project"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOmZ1bGxfY29udHJvbA.desc": {
+          "source": "Read and write buckets and objects and change their ACLs (`devstorage.full_control`)",
+          "message": "Čítať a zapisovať kontajnery a objekty a meniť ich oprávnenia (`devstorage.full_control`)"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOmZ1bGxfY29udHJvbA.display_name": {
+          "source": "Full Control",
+          "message": "Plný prístup"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOnJlYWRfb25seQ.desc": {
+          "source": "Read buckets and objects; no writes (`devstorage.read_only`)",
+          "message": "Čítať kontajnery a objekty; žiadne zápisy (`devstorage.read_only`)"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOnJlYWRfb25seQ.display_name": {
+          "source": "Read Only",
+          "message": "Iba na čítanie"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOnJlYWRfd3JpdGU.desc": {
+          "source": "Read and write buckets and objects (`devstorage.read_write`); this covers the entire object surface of this application",
+          "message": "Čítať a zapisovať kontajnery a objekty (`devstorage.read_write`); to pokrýva celú plochu objektov tejto aplikácie"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.allowed_values.c3RyaW5nOnJlYWRfd3JpdGU.display_name": {
+          "source": "Read/Write",
+          "message": "Čítať/Zapisovať"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.desc": {
+          "source": "The access level to request; only the scope this level names is requested, so a read-only connection cannot write even if the service account is otherwise permitted to.",
+          "message": "Úroveň prístupu, ktorú požadovať; požaduje sa len rozsah, ktorý tento úroveň mení, takže spojenie so zápisom nemôže zapisovať, aj keď je službový účet inak oprávnený."
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.display_name": {
+          "source": "Storage Access Level",
+          "message": "Úroveň prístupu k úložisku"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3N0b3JhZ2VfYWNjZXNz.short_desc": {
+          "source": "The OAuth2 scope requested for storage access",
+          "message": "OAuth2 rozsah požadovaný pre prístup k úložisku"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3NhX2pzb25fcGF0aA.desc": {
+          "source": "Location of a GCP service-account JSON file for JWT-bearer auth; processed with `FileLocationHandler::getTextFileFromLocation()`, so it may be a bare path or any registered scheme (ex: `file:///etc/gcp/sa.json`, `http(s)://`, `sftp://`).  When omitted, Application Default Credentials are used.",
+          "message": "Umiestnenie súboru JSON službového účtu GCP pre overenie typu JWT-bearer; spracováva sa s `FileLocationHandler::getTextFileFromLocation()`, takže môže byť jednoduchou cestou alebo akýmkoľvek registrovaným schémou (napr. `file:///etc/gcp/sa.json`, `http(s)://`, `sftp://`). Ak nie je uvedené, použijú sa predvolené prihlasovacie údaje aplikácie."
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3NhX2pzb25fcGF0aA.display_name": {
+          "source": "Service-Account JSON Location",
+          "message": "Umiestnenie súboru JSON službového účtu"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.option.Z2NwX3NhX2pzb25fcGF0aA.short_desc": {
+          "source": "Location of a service-account JSON key file",
+          "message": "Umiestnenie súboru s kľúčom službového účtu"
+        },
+        "connection.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENsaWVudA.scheme.R29vZ2xlQ2xvdWRTdG9yYWdlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to Google Cloud Storage",
+          "message": "Spojenie s Google Cloud Storage"
+        }
+      }
+    }
+  }
+}

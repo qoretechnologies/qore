@@ -334,7 +334,8 @@ public class OneDriveRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "onedrive://graph.microsoft.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("OneDriveRestClient",
+            "OneDriveRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Microsoft OneDrive",
             "short_desc": "A connection to the Microsoft OneDrive REST API via Microsoft Graph",
             "desc": "A connection to the Microsoft OneDrive REST API via Microsoft Graph for cloud file "
@@ -407,7 +408,7 @@ public class OneDriveRestConnection inherits RestClient::RestConnection {
                 },
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
-        };
+        });
 
         #! options required to support the OAuth2 authorization code grant flow
         const OAuth2AuthRequestOptions = (
@@ -635,7 +636,8 @@ public class SharePointRestConnection inherits OneDriveRestConnection {
         const DefaultConnectionUrl = DefaultUrl;
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("OneDriveRestClient",
+            "SharePointRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Microsoft SharePoint",
             "short_desc": "A connection to Microsoft SharePoint via the Microsoft Graph API",
             "desc": "A connection to Microsoft SharePoint via the Microsoft Graph API, for document "
@@ -661,7 +663,7 @@ public class SharePointRestConnection inherits OneDriveRestConnection {
                 }),
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
-        };
+        });
     }
 
     #! creates the SharePointRestConnection object

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.S2VhcFJlc3RDbGllbnQ.scheme.S2VhcFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Keap REST API for CRM, contacts, companies, opportunities, orders, tags, tasks, and marketing automation",
+          "message": "Připojení k REST API Keap pro CRM, kontakty, firmy, příležitosti, objednávky, štítky, úkoly a automatizaci marketingu"
+        },
+        "connection.S2VhcFJlc3RDbGllbnQ.scheme.S2VhcFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Keap REST Connection",
+          "message": "Připojení ke Keap REST"
+        },
+        "connection.S2VhcFJlc3RDbGllbnQ.scheme.S2VhcFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Keap REST API",
+          "message": "Připojení k REST API Keap"
+        }
+      }
+    }
+  }
+}

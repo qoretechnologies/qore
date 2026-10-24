@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.U3F1YXJlUmVzdENsaWVudA.scheme.U3F1YXJlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Square REST API for payments, orders, invoices, customers, inventory, and bookings",
+          "message": "Eine Verbindung zur Square REST-API für Zahlungen, Bestellungen, Rechnungen, Kunden, Bestände und Buchungen"
+        },
+        "connection.U3F1YXJlUmVzdENsaWVudA.scheme.U3F1YXJlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Square REST Connection",
+          "message": "Square REST-Verbindung"
+        },
+        "connection.U3F1YXJlUmVzdENsaWVudA.scheme.U3F1YXJlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Square REST API",
+          "message": "Eine Verbindung zur Square REST-API"
+        }
+      }
+    }
+  }
+}

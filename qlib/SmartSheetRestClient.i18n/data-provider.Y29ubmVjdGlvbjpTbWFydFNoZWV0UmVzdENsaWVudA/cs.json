@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Smartsheet REST API for spreadsheet and work management, including sheets, rows, columns, workspaces, folders, reports, users, and groups",
+          "message": "Připojení k REST API Smartsheet pro správu tabulek a pracovních procesů, včetně listů, řádků, sloupců, pracovních prostorů, složek, sestav, uživatelů a skupin"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Smartsheet REST Connection",
+          "message": "Spojení REST API Smartsheet"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5hdQ.desc": {
+          "source": "Australia (api.smartsheet.au)",
+          "message": "Austrálie (api.smartsheet.au)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5hdQ.display_name": {
+          "source": "AU",
+          "message": "AU"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.desc": {
+          "source": "United States (api.smartsheet.com)",
+          "message": "Spojené státy (api.smartsheet.com)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.display_name": {
+          "source": "US",
+          "message": "US"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.desc": {
+          "source": "European Union (api.smartsheet.eu)",
+          "message": "Evropská unie (api.smartsheet.eu)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.display_name": {
+          "source": "EU",
+          "message": "Evropa"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5nb3Y.desc": {
+          "source": "US Government (api.smartsheetgov.com)",
+          "message": "Vládní úřady USA (api.smartsheetgov.com)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5nb3Y.display_name": {
+          "source": "Gov",
+          "message": "Vláda"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.desc": {
+          "source": "Select the Smartsheet data center region for your account.\n\n**Available regions:**\n- `.com` — United States\n- `.eu` — European Union\n- `.au` — Australia\n- `.gov` — US Government\n\n**Note:** Tokens are region-specific. A token from one region cannot be used with another region's API endpoint",
+          "message": "Vyberte datové centrum Smartsheet pro váš účet.\n\n**Dostupná území:**\n- `.com` — Spojené státy\n- `.eu` — Evropská unie\n- `.au` — Austrálie\n- `.gov` — Vládní úřady USA\n\n**Poznámka:** Tokeny jsou specifické pro území. Token z jednoho území nelze použít s koncovým bodem API jiného území"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.display_name": {
+          "source": "Region",
+          "message": "Region"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.short_desc": {
+          "source": "Smartsheet data center region",
+          "message": "Datové centrum Smartsheet"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Smartsheet REST API",
+          "message": "Připojení k REST API Smartsheet"
+        }
+      }
+    }
+  }
+}

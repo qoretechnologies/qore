@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the JotForm REST API for form and submission management.\n\n**To obtain your API key:**\n1. Log in to your JotForm account\n2. Go to Settings > API\n3. Click 'Create New Key' or copy your existing key\n\n**Domain Selection:**\n- **Standard**: For global users (api.jotform.com)\n- **EU**: For European Union data residency/GDPR compliance (eu-api.jotform.com)\n- **HIPAA**: For HIPAA-compliant healthcare data (hipaa-api.jotform.com)",
+          "message": "Une connexion à l'API REST de JotForm pour la gestion des formulaires et des soumissions.\n\n**Pour obtenir votre clé API :**\n1. Connectez-vous à votre compte JotForm\n2. Allez dans Paramètres > API\n3. Cliquez sur « Créer une nouvelle clé » ou copiez votre clé existante\n\n**Sélection du domaine :**\n- **Standard** : Pour les utilisateurs mondiaux (api.jotform.com)\n- **UE** : Pour le respect de la réglementation européenne sur les données/GDPR (eu-api.jotform.com)\n- **HIPAA** : Pour les données de santé conformes à HIPAA (hipaa-api.jotform.com)"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "JotForm REST Connection",
+          "message": "Connexion REST JotForm"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your JotForm account\n2. Go to [Account > API](https://www.jotform.com/myaccount/api)\n3. Click **Create New Key**\n4. Label your key for easy identification\n5. Set **Full Access** permission for read/write operations, or **Read Access** for read-only\n\n**Note:** Keep your API key secure and never share it publicly.",
+          "message": "1. Connectez-vous à votre compte JotForm\n2. Allez dans [Compte > API](https://www.jotform.com/myaccount/api)\n3. Cliquez sur **Créer une nouvelle clé**\n4. Donnez un libellé à votre clé pour faciliter son identification\n5. Attribuez les autorisations **Accès complet** pour les opérations de lecture/écriture, ou **Accès en lecture seule** pour les opérations de lecture uniquement\n\n**Remarque :** Gardez votre clé API sécurisée et ne la partagez jamais publiquement."
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "Comment obtenir votre clé d'API"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Choose your API domain based on your data residency requirements:\n\n- **Standard (api.jotform.com)**: Default for most users worldwide\n- **EU (eu-api.jotform.com)**: For European Union data residency and GDPR compliance\n- **HIPAA (hipaa-api.jotform.com)**: For HIPAA-compliant healthcare data in the US\n\nSelect the domain that matches where your JotForm account data is stored.",
+          "message": "Choisissez votre domaine API en fonction de vos exigences de localisation des données :\n\n- **Standard (api.jotform.com)** : Par défaut pour la plupart des utilisateurs dans le monde entier\n- **UE (eu-api.jotform.com)** : Pour la localisation des données dans l'Union européenne et la conformité au RGPD\n- **HIPAA (hipaa-api.jotform.com)** : Pour les données de santé conformes à la loi HIPAA aux États-Unis\n\nSélectionnez le domaine correspondant à l'emplacement de vos données de compte JotForm."
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Selecting the Right API Domain",
+          "message": "Sélection du bon domaine API"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmFwaS5qb3Rmb3JtLmNvbQ.desc": {
+          "source": "Standard JotForm API for global users - api.jotform.com",
+          "message": "API JotForm standard pour les utilisateurs mondiaux - api.jotform.com"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmFwaS5qb3Rmb3JtLmNvbQ.display_name": {
+          "source": "Standard (Global)",
+          "message": "Standard (Monde)"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmFwaS5qb3Rmb3JtLmNvbQ.short_desc": {
+          "source": "Standard JotForm API",
+          "message": "API JotForm standard"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmV1LWFwaS5qb3Rmb3JtLmNvbQ.desc": {
+          "source": "EU-based API for GDPR compliance - eu-api.jotform.com",
+          "message": "API basée en UE pour la conformité au RGPD - eu-api.jotform.com"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmV1LWFwaS5qb3Rmb3JtLmNvbQ.display_name": {
+          "source": "European Union (EU)",
+          "message": "Union européenne (UE)"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmV1LWFwaS5qb3Rmb3JtLmNvbQ.short_desc": {
+          "source": "EU-based API for GDPR",
+          "message": "API basé en Europe pour le RGPD"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmhpcGFhLWFwaS5qb3Rmb3JtLmNvbQ.desc": {
+          "source": "HIPAA-compliant API for healthcare data - hipaa-api.jotform.com",
+          "message": "API conforme à la HIPAA pour les données de santé - hipaa-api.jotform.com"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmhpcGFhLWFwaS5qb3Rmb3JtLmNvbQ.display_name": {
+          "source": "HIPAA Compliant",
+          "message": "Conforme à la HIPAA"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmhpcGFhLWFwaS5qb3Rmb3JtLmNvbQ.short_desc": {
+          "source": "HIPAA-compliant API",
+          "message": "API conforme à la HIPAA"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the JotForm API domain based on your account location or compliance requirements:\n\n- **Standard**: For global users (default)\n- **EU**: For European Union data residency (GDPR compliance)\n- **HIPAA**: For HIPAA-compliant healthcare data",
+          "message": "Sélectionnez le domaine de l’API JotForm selon votre emplacement ou vos exigences de conformité :\n\n- **Standard** : pour les utilisateurs mondiaux (par défaut)\n- **UE** : pour le stockage des données en Union européenne (conformité au RGPD)\n- **HIPAA** : pour les données de santé conformes à la HIPAA"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "API Domain",
+          "message": "Domaine de l’API"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "JotForm API domain/region",
+          "message": "Domaine/région de l’API JotForm"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The JotForm API key for authentication.\n\n**To obtain your API key:**\n1. Log in to your JotForm account at https://www.jotform.com\n2. Go to Settings (gear icon) > API\n3. Click 'Create New Key' or copy your existing key\n\n**Note:** Keep your API key secure and never share it publicly.",
+          "message": "La clé d’API JotForm utilisée pour l’authentification.\n\n**Pour obtenir votre clé d’API :**\n1. Connectez-vous à votre compte JotForm sur https://www.jotform.com\n2. Allez dans Paramètres (icône engrenage) > API\n3. Cliquez sur « Créer une nouvelle clé » ou copiez votre clé existante\n\n**Remarque :** Gardez votre clé d’API sécurisée et ne la partagez jamais publiquement."
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clé d'API"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "JotForm API key for authentication",
+          "message": "Clé d'authentification pour l'API JotForm"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the JotForm REST API",
+          "message": "Une connexion à l'API REST de JotForm"
+        }
+      }
+    }
+  }
+}

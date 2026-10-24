@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [AWS Textract](https://aws.amazon.com/textract/) for document text and structure extraction via SigV4-signed REST calls.  Inherits all AWS credential modes from AwsRestConnection (static keys, env vars, ECS task-role, IMDSv2, STS AssumeRole). The ping authenticates with `ListAdapters` and requires `textract:ListAdapters`; an authorization denial is reported as a failure.",
+          "message": "[AWS Textract](https://aws.amazon.com/textract/)에 대한 SigV4 서명된 REST 호출을 통해 문서 텍스트 및 구조 추출을 위한 연결입니다. AwsRestConnection에서 제공하는 모든 AWS 자격 증명 모드(정적 키, 환경 변수, ECS 태스크 역할, IMDSv2, STS AssumeRole)를 상속합니다. 핑은 `ListAdapters`로 인증하며 `textract:ListAdapters`이 필요합니다. 인가 거부는 실패로 보고됩니다."
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "AWS Textract Connection",
+          "message": "AWS Textract 연결"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2V4dGVybmFsX2lk.desc": {
+          "source": "External ID for an STS role requiring cross-account verification.",
+          "message": "크로스 계정 검증이 필요한 STS 역할에 대한 외부 ID입니다."
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2V4dGVybmFsX2lk.display_name": {
+          "source": "STS External ID",
+          "message": "STS 외부 ID"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2V4dGVybmFsX2lk.short_desc": {
+          "source": "Optional external ID required by the role",
+          "message": "역할에 의해 필요할 수 있는 선택적 외부 ID"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2ltZHNfZGlzYWJsZWQ.desc": {
+          "source": "Set to `True` when credentials must come from explicit options or the environment.",
+          "message": "명시적 옵션 또는 환경에서 자격 증명을 가져와야 할 때 `True`로 설정합니다."
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2ltZHNfZGlzYWJsZWQ.display_name": {
+          "source": "Disable Instance Credentials",
+          "message": "인스턴스 자격 증명 사용 비활성화"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2ltZHNfZGlzYWJsZWQ.short_desc": {
+          "source": "Disable ECS and instance metadata credential lookup",
+          "message": "ECS 및 인스턴스 메타데이터 자격 증명 검색 비활성화"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfYXJu.desc": {
+          "source": "Role ARN to assume after resolving the base credentials.",
+          "message": "기본 자격 증명을 해결한 후 가정할 역할 ARN입니다."
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfYXJu.display_name": {
+          "source": "STS Role ARN",
+          "message": "STS 역할 ARN"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfYXJu.short_desc": {
+          "source": "Optional AWS role to assume",
+          "message": "선택적 AWS 역할 가정"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.desc": {
+          "source": "Session name sent with `aws_role_arn` to AWS STS.",
+          "message": "AWS STS에 전송되는 세션 이름입니다. `aws_role_arn`과 함께 사용됩니다."
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.display_name": {
+          "source": "STS Role Session Name",
+          "message": "STS 역할 세션 이름"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.short_desc": {
+          "source": "Name of the assumed-role session",
+          "message": "가정된 역할 세션의 이름"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to AWS Textract document-extraction services",
+          "message": "AWS Textract 문서 추출 서비스에 연결"
+        }
+      }
+    }
+  }
+}

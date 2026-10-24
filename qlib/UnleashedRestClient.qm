@@ -276,7 +276,8 @@ public class UnleashedRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "unleashed://api.unleashedsoftware.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("UnleashedRestClient",
+            "UnleashedRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Unleashed REST Connection",
             "short_desc": "A connection to the Unleashed Software API",
             "desc": "A connection to the Unleashed Software REST API for inventory management.\n\n"
@@ -341,6 +342,7 @@ public class UnleashedRestConnection inherits RestClient::RestConnection {
             },
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Get Your API Credentials",
                     "intent": "info",
                     "content": "To connect to Unleashed Software, you need your API ID and API Key:\n\n"
@@ -354,7 +356,7 @@ public class UnleashedRestConnection inherits RestClient::RestConnection {
                 },
             ),
             "required_options": "api_id,apikey",
-        };
+        });
     }
 
     #! creates the UnleashedRestConnection object

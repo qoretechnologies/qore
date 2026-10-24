@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [Weaviate](https://weaviate.io) — an open-source vector database supporting hybrid search (vector + keyword), multi-tenancy, and a wide range of vectorizer modules.\n\nAuthentication: optional Bearer token (Weaviate Cloud Services / WCD) or anonymous (local deployments).\n\nThe connection uses the `weaviate://` URL scheme for plain HTTP and `weaviates://` for servers behind TLS.",
+          "message": "Połączenie z [Weaviate](https://weaviate.io) — otwartoźródłową bazą danych wektorową obsługującą wyszukiwanie hybrydowe (wektorowe + słowa kluczowe), wielodostępność i szeroki zakres modułów do generowania wektorów.\n\nUwierzytelnianie: opcjonalny token typu Bearer (Weaviate Cloud Services / WCD) lub anonimowe (wdrożenia lokalne).\n\nPołączenie używa schematu `weaviate://` dla zwykłego HTTP i `weaviates://` dla serwerów zabezpieczonych przez TLS."
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Weaviate Vector DB Connection",
+          "message": "Połączenie z bazą danych Weaviate Vector DB"
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Optional Bearer token.  Local Weaviate servers don't require authentication.",
+          "message": "Opcjonalny token typu Bearer. Lokalne serwery Weaviate nie wymagają uwierzytelniania."
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klucz API"
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Optional Bearer token (WCD / proxied)",
+          "message": "Opcjonalny token typu Bearer (WCD / przekazywany)"
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a Weaviate vector database",
+          "message": "Połączenie z bazą danych wektorową Weaviate"
+        }
+      }
+    }
+  }
+}

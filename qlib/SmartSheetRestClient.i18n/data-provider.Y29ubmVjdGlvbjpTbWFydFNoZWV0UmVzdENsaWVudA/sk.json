@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Smartsheet REST API for spreadsheet and work management, including sheets, rows, columns, workspaces, folders, reports, users, and groups",
+          "message": "Pripojenie k REST API Smartsheet pre správu tabuliek a pracovných úloh, vrátane listov, riadkov, stĺpcov, pracovných priestorov, zložiek, správ, používateľov a skupín"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Smartsheet REST Connection",
+          "message": "Pripojenie k Smartsheet REST"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5hdQ.desc": {
+          "source": "Australia (api.smartsheet.au)",
+          "message": "Austrália (api.smartsheet.au)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5hdQ.display_name": {
+          "source": "AU",
+          "message": "AU"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.desc": {
+          "source": "United States (api.smartsheet.com)",
+          "message": "Spojenie s centrom dát Smartsheet (api.smartsheet.com)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.display_name": {
+          "source": "US",
+          "message": "US"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.desc": {
+          "source": "European Union (api.smartsheet.eu)",
+          "message": "Spojenie s centrom dát Európskej únie (api.smartsheet.eu)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.display_name": {
+          "source": "EU",
+          "message": "EÚ"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5nb3Y.desc": {
+          "source": "US Government (api.smartsheetgov.com)",
+          "message": "Spojenie s centrom dát Spojených štátov amerických (api.smartsheetgov.com)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5nb3Y.display_name": {
+          "source": "Gov",
+          "message": "Vláda"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.desc": {
+          "source": "Select the Smartsheet data center region for your account.\n\n**Available regions:**\n- `.com` — United States\n- `.eu` — European Union\n- `.au` — Australia\n- `.gov` — US Government\n\n**Note:** Tokens are region-specific. A token from one region cannot be used with another region's API endpoint",
+          "message": "Vyberte región centra dát Smartsheet pre váš účet.\n\n**Dostupné regióny:**\n- `.com` — Spojené štáty americké\n- `.eu` — Európska únia\n- `.au` — Austrália\n- `.gov` — Spojené štáty americké\n\n**Poznámka:** Prístupové tokeny sú špecifické pre región. Token z jedného regiónu nemôže byť použitý s koncovým bodom API iného regiónu"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.display_name": {
+          "source": "Region",
+          "message": "Región"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.short_desc": {
+          "source": "Smartsheet data center region",
+          "message": "Región centra dát Smartsheet"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Smartsheet REST API",
+          "message": "Spojenie s REST rozhraním Smartsheet"
+        }
+      }
+    }
+  }
+}

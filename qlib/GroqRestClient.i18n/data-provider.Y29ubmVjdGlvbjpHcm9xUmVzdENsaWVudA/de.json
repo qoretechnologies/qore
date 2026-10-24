@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.R3JvcVJlc3RDbGllbnQ.scheme.R3JvcVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [Groq](https://groq.com) LPU inference REST API.\n\nGroq serves open-weight models at exceptionally high throughput on its custom LPU hardware via an OpenAI-compatible API surface; see the [Groq models documentation](https://console.groq.com/docs/models) for the currently-available models.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Groq Console](https://console.groq.com/keys).",
+          "message": "Eine Verbindung zur [Groq](https://groq.com) LPU-Inferenz-REST-API.\n\nGroq bietet Open-Weight-Modelle mit außergewöhnlich hoher Durchsatzleistung auf seiner speziellen LPU-Hardware über eine OpenAI-kompatible API-Oberfläche an; siehe die [Groq-Modell-Dokumentation](https://console.groq.com/docs/models) für die derzeit verfügbaren Modelle.\n\nBenötigt einen API-Schlüssel für die Bearer-Authentifizierung. Holen Sie sich Ihren API-Schlüssel im [Groq Console](https://console.groq.com/keys)."
+        },
+        "connection.R3JvcVJlc3RDbGllbnQ.scheme.R3JvcVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Groq REST Connection",
+          "message": "Groq REST-Verbindung"
+        },
+        "connection.R3JvcVJlc3RDbGllbnQ.scheme.R3JvcVJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "Model ID for chat through this connection. Select an active chat model using the app's `List Models` action or the [model catalog](https://console.groq.com/docs/models). Speech models cannot serve chat requests.",
+          "message": "Modell-ID für Chat über diese Verbindung. Wählen Sie ein aktives Chat-Modell mit der Aktion `List Models` in der App oder im [Modellkatalog](https://console.groq.com/docs/models). Sprachmodelle können keine Chat-Anfragen bearbeiten."
+        },
+        "connection.R3JvcVJlc3RDbGllbnQ.scheme.R3JvcVJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Chatmodell"
+        },
+        "connection.R3JvcVJlc3RDbGllbnQ.scheme.R3JvcVJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Groq chat model name",
+          "message": "Name des Groq-Chat-Modells"
+        },
+        "connection.R3JvcVJlc3RDbGllbnQ.scheme.R3JvcVJlc3RDb25uZWN0aW9u.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1",
+          "message": "V1"
+        },
+        "connection.R3JvcVJlc3RDbGllbnQ.scheme.R3JvcVJlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "The supported Groq API version.",
+          "message": "Die unterstützte Groq-API-Version."
+        },
+        "connection.R3JvcVJlc3RDbGllbnQ.scheme.R3JvcVJlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API-Version"
+        },
+        "connection.R3JvcVJlc3RDbGllbnQ.scheme.R3JvcVJlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Die zu verwendende API-Version"
+        },
+        "connection.R3JvcVJlc3RDbGllbnQ.scheme.R3JvcVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Groq API key used for Bearer authentication.\n\nGet your API key from the [Groq Console](https://console.groq.com/keys).",
+          "message": "Der Groq-API-Schlüssel für die Bearer-Authentifizierung.\n\nHolen Sie sich Ihren API-Schlüssel im [Groq Console](https://console.groq.com/keys)."
+        },
+        "connection.R3JvcVJlc3RDbGllbnQ.scheme.R3JvcVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API-Schlüssel"
+        },
+        "connection.R3JvcVJlc3RDbGllbnQ.scheme.R3JvcVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Groq API key for authentication",
+          "message": "Groq-API-Schlüssel zur Authentifizierung"
+        },
+        "connection.R3JvcVJlc3RDbGllbnQ.scheme.R3JvcVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Groq LPU inference REST API",
+          "message": "Eine Verbindung zur Groq-LPU-Inferenz-REST-API"
+        }
+      }
+    }
+  }
+}

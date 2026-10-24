@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the FreshBooks REST API for accounting, invoicing, and time tracking",
+          "message": "Spojenie s REST API FreshBooks pre účtovníctvo, faktúry a sledovanie času"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "FreshBooks REST Connection",
+          "message": "Spojenie FreshBooks REST"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID, used for accounting API endpoints (clients, invoices, expenses, estimates, items). Find this by calling GET /auth/api/v1/users/me after authentication - it appears as 'account_id' in the business_memberships array, or in your FreshBooks URL (e.g. https://my.freshbooks.com/service/ACCOUNT_ID/...).",
+          "message": "ID účtu FreshBooks, používané pre koncové body rozhrania API účtovníctva (zákazníci, faktúry, výdavky, odhady, položky). Nájdite ho volaním GET /auth/api/v1/users/me po overení - vyskytuje sa ako 'account_id' v poli business_memberships alebo v URL FreshBooks (napr. https://my.freshbooks.com/service/ACCOUNT_ID/...)."
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID účtu"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "ID účtu FreshBooks"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID, used for time tracking API endpoints (services, time entries, projects). Find this by calling GET /auth/api/v1/users/me after authentication - it appears as 'business.id' in the business_memberships array.",
+          "message": "ID podniku FreshBooks, používané pre koncové body rozhrania API sledovania času (služby, časové záznamy, projekty). Nájdite ho volaním GET /auth/api/v1/users/me po overení - vyskytuje sa ako 'business.id' v poli business_memberships."
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "ID podniku"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "ID firmy FreshBooks"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the FreshBooks REST API",
+          "message": "Spojenie s REST API FreshBooks"
+        }
+      }
+    }
+  }
+}

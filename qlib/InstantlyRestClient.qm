@@ -284,7 +284,8 @@ public class InstantlyRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "instantly://api.instantly.ai/api/v2";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("InstantlyRestClient",
+            "InstantlyRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Instantly REST Connection",
             "short_desc": "A connection to the Instantly REST API",
             "desc": "A connection to the Instantly REST API for email outreach and sales automation.\n\n"
@@ -330,6 +331,7 @@ public class InstantlyRestConnection inherits RestClient::RestConnection {
             "required_options": "apikey",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Obtain Your API Key",
                     "intent": "info",
                     "content": "1. Log in to Instantly at https://app.instantly.ai\n"
@@ -343,7 +345,7 @@ public class InstantlyRestConnection inherits RestClient::RestConnection {
                         "- You can create multiple keys with different scopes",
                 },
             ),
-        };
+        });
     }
 
     #! creates the InstantlyRestConnection object

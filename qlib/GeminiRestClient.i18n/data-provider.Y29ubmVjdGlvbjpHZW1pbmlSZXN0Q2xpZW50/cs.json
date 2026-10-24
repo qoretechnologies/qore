@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Google Gemini](https://ai.google.dev) REST API for generative AI services including text generation, embeddings, and multimodal content.\n\nAn API key is required for authentication. To obtain one, visit the [Google AI Studio](https://aistudio.google.com/apikey) and create a new API key",
+          "message": "Připojení k REST rozhraní [Google Gemini](https://ai.google.dev) pro služby generativního AI, včetně generování textu, vektorizace a multimodálního obsahu.\n\nPro ověření je vyžadován klíč API. Chcete-li si ho získat, navštivte [Google AI Studio](https://aistudio.google.com/apikey) a vytvořte nový klíč API"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Google Gemini REST Connection",
+          "message": "Připojení k REST rozhraní Google Gemini"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Google Gemini, you need an API key:\n\n1. Go to [Google AI Studio](https://aistudio.google.com/apikey)\n2. Sign in with your Google account\n3. Click **Create API Key**\n4. Copy the generated key\n\nKeep your API key secure and never share it publicly.",
+          "message": "Pro připojení k Google Gemini potřebujete klíč API:\n\n1. Přejděte na [Google AI Studio](https://aistudio.google.com/apikey)\n2. Přihlaste se pomocí svého účtu Google\n3. Klikněte na **Vytvořit klíč API**\n4. Zkopírujte vygenerovaný klíč\n\nUchovávejte svůj klíč API v bezpečí a nikdy jej nezveřejňujte."
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Google Gemini API Key",
+          "message": "Jak získat svůj klíč API pro Google Gemini"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Google Gemini chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `gemini-2.5-flash` (the default), `gemini-2.5-pro`",
+          "message": "Chatovací model Google Gemini používaný klienty LLM, když je toto připojení vybráno pro chat.\n\nChatovací modely tvoří samostatnou skupinu oproti modelům pro vektorizaci a nelze je navzájem zaměňovat.\n\nPříklady hodnot: `gemini-2.5-flash` (výchozí), `gemini-2.5-pro`"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Chatový model"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Google Gemini chat model name",
+          "message": "Název chatovacího modelu Google Gemini"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Google Gemini API key used for authentication; sent as the `x-goog-api-key` header. To obtain a key, visit [Google AI Studio](https://aistudio.google.com/apikey)",
+          "message": "Klíč API Google Gemini používaný pro ověření; odesílán jako hlavička `x-goog-api-key`. Klíč získáte na [Google AI Studio](https://aistudio.google.com/apikey)"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klíč API"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Google Gemini API key for authentication",
+          "message": "Klíč API Google Gemini pro ověření"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Google Gemini REST API",
+          "message": "Připojení k REST rozhraní Google Gemini"
+        }
+      }
+    }
+  }
+}

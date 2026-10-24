@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Cin7Core REST API for inventory management, sales, and order processing.\n\nCin7Core (formerly DEAR Inventory) is a comprehensive inventory management and ERP platform that enables you to manage products, sales, purchases, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and suppliers\n- Create and track sales orders\n- Process payments and invoices\n- Monitor inventory and stock levels\n- Handle stock adjustments\n- Track shipments and fulfillment\n\n**Authentication:**\nCin7Core uses Account ID and API Key authentication. Both credentials are required.",
+          "message": "Підключення до REST API Cin7Core для управління запасами, продажами та обробки замовлень.\n\nCin7Core (раніше DEAR Inventory) — комплексна платформа управління запасами та ERP, яка дозволяє керувати товарами, продажами, закупівлями, клієнтами, постачальниками та рівнем запасів.\n\n**Функції:**\n- Управління клієнтами та постачальниками\n- Створення та відстеження замовлень\n- Обробка платежів та рахунків-фактур\n- Моніторинг запасів та рівня запасів\n- Обробка корекцій запасів\n- Відстеження відправок та виконання замовлень\n\n**Автентифікація:**\nCin7Core використовує автентифікацію за Account ID та API Key. Обидва обов’язкові."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Cin7Core REST Connection",
+          "message": "Підключення до Cin7Core REST"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Cin7Core, you need both an Account ID and API Key:\n\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Open the **Setup** tab for the Application\n4. Copy both credentials:\n   - **Account ID** - Your unique account identifier\n   - **Application Key** - Your API authentication key\n\nKeep your credentials secure and never share them publicly.",
+          "message": "Щоб підключитися до Cin7Core, вам потрібно мати як ідентифікатор облікового запису, так і ключ API:\n\n1. Перейдіть до https://inventory.dearsystems.com/ExternalApi\n2. Створіть новий додаток або виберіть існуючий\n3. Відкрийте вкладку **Налаштування** для додатку\n4. Скопіюйте обидва облікові дані:\n   - **Ідентифікатор облікового запису** — ваш унікальний ідентифікатор облікового запису\n   - **Ключ додатку** — ваш ключ автентифікації API\n\nЗберігайте свої облікові дані в безпеці та не поширюйте їх публічно."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Credentials",
+          "message": "Як отримати ваші ключі API"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.desc": {
+          "source": "Your Cin7Core Account ID used for API authentication.\n\n**To obtain your Account ID:**\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Find your **Account ID** on the **Setup** tab\n\n**Note:** Both Account ID and API Key are required for authentication.",
+          "message": "Ваш ідентифікатор облікового запису Cin7Core для автентифікації API.\n\n**Щоб отримати ідентифікатор облікового запису:**\n1. Перейдіть до https://inventory.dearsystems.com/ExternalApi\n2. Створіть новий додаток або виберіть існуючий\n3. Знайдіть свій **ідентифікатор облікового запису** на вкладці **Налаштування**\n\n**Примітка:** Для автентифікації потрібні як ідентифікатор облікового запису, так і ключ API."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID облікового запису"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Cin7Core Account ID for authentication",
+          "message": "Ідентифікатор облікового запису Cin7Core для автентифікації"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Your Cin7Core Application/API Key for authentication.\n\n**To obtain your API Key:**\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Find your **Application Key** on the **Setup** tab\n\n**Note:** Both Account ID and API Key are required for authentication.",
+          "message": "Ваш ключ додатку/ключа API Cin7Core для автентифікації.\n\n**Щоб отримати ключ API:**\n1. Перейдіть до https://inventory.dearsystems.com/ExternalApi\n2. Створіть новий додаток або виберіть існуючий\n3. Знайдіть свій **ключ додатку** на вкладці **Налаштування**\n\n**Примітка:** Для автентифікації потрібні як ідентифікатор облікового запису, так і ключ API."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Cin7Core Application/API Key",
+          "message": "Ключ додатку/ключа API Cin7Core"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Cin7Core (DEAR Inventory) API",
+          "message": "Підключення до API Cin7Core (DEAR Inventory)"
+        }
+      }
+    }
+  }
+}

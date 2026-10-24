@@ -1121,7 +1121,8 @@ telnet.setEventQueue();
 public class TelnetConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("TelnetClient",
+            "TelnetConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Telnet Connection",
             "short_desc": "A connection to a telnet server",
             "desc": "A connection to a telnet server",
@@ -1129,7 +1130,7 @@ public class TelnetConnection inherits ConnectionProvider::AbstractConnectionWit
             "schemes": {
                 "telnet": True,
             },
-        };
+        });
     }
 
     #! creates the TelnetConnection connection object
