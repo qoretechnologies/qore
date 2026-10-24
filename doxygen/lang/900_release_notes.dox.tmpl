@@ -5821,8 +5821,8 @@ while (*binary chunk = input.read(65536)) {
         bounded yield back to the poll loop
       - fixed synchronous @ref Qore::ReadOnlyFile "ReadOnlyFile" and @ref Qore::FileInputStream
         "FileInputStream" reads on descriptors opened with \c O_NONBLOCK: transient \c EAGAIN / \c EWOULDBLOCK
-        results now return to a cancellation-aware readiness wait with a bounded backoff and one monotonic timeout
-        deadline, without changing the descriptor's file-status flags
+        results now return to a cancellation-aware readiness wait with one monotonic timeout deadline, without
+        changing the descriptor's file-status flags
       - fixed scheduling of closure values created in object scope with the @ref background "background operator" so
         stale captured objects are rejected before thread creation and valid captured objects stay alive until the
         background expression finishes

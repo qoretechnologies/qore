@@ -45,13 +45,24 @@
 
 #ifdef DEBUG
 std::atomic<qore_dbg_fd_wait_hook_t> qore_dbg_fd_wait_hook{nullptr};
+std::atomic<qore_dbg_file_read_ready_hook_t> qore_dbg_file_read_ready_hook{nullptr};
+
+void qore_dbg_fd_wait(int fd) {
+    if (qore_dbg_fd_wait_hook_t hook = qore_dbg_fd_wait_hook.load()) {
+        hook(fd);
+    }
+}
+
+void qore_dbg_file_read_ready(int fd) {
+    if (qore_dbg_file_read_ready_hook_t hook = qore_dbg_file_read_ready_hook.load()) {
+        hook(fd);
+    }
+}
 #endif
 
 int qore_fd_wait_ready(int fd, bool read, ExceptionSink* xsink, const char* operation) {
 #ifdef DEBUG
-    if (qore_dbg_fd_wait_hook_t hook = qore_dbg_fd_wait_hook.load()) {
-        hook(fd);
-    }
+    qore_dbg_fd_wait(fd);
 #endif
 #ifdef HAVE_POLL
     // on Linux and macOS, readiness means that a read returns data or the end of the input, and that a write of up

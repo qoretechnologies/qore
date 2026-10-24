@@ -1184,6 +1184,15 @@ DLLLOCAL void print_node(FILE* fp, const QoreValue qv, ExceptionSink* xsink);
 */
 DLLLOCAL int qore_fd_wait_ready(int fd, bool read, ExceptionSink* xsink, const char* operation);
 
+#ifdef DEBUG
+//! Debug-only: reports that a read or write of the descriptor starts waiting for it (see dbg_fd_wait_notify())
+DLLLOCAL void qore_dbg_fd_wait(int fd);
+
+//! Debug-only: called by a read of a File that found its descriptor readable, right before the read (see
+//! dbg_hold_file_read_ready())
+DLLLOCAL void qore_dbg_file_read_ready(int fd);
+#endif
+
 //! Writes all of the data to the descriptor, waiting for room after EAGAIN (see qore_fd_wait_ready())
 /** @return 0 if all of the data was written, -1 with \c errno set for an error, or @ref QORE_POLL_CANCELLED if an
     exception has been raised in @p xsink

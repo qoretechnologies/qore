@@ -68,6 +68,7 @@ class NonblockingIoTest inherits QUnit::Test {
         addTestCase("binary integer writes wait for room", \testIntegerWrites());
         addTestCase("File reads wait for data", \testReads());
         addTestCase("binary integer reads wait for the rest of the value", \testIntegerReads());
+        addTestCase("a read whose data another reader took waits again", \testDataTaken());
         addTestCase("a write waiting for room is cancelled", \testCancelWrite());
         addTestCase("a read waiting for data is cancelled", \testCancelRead());
         addTestCase("a write waiting for room in a Program is interrupted", \testInterruptWrite());
@@ -213,6 +214,51 @@ class NonblockingIoTest inherits QUnit::Test {
         w.write(<0a0b>);
         w.close();
         assertEq(NOTHING, r.readi4(), "readi4(): a value cut short by the end of the file is not read");
+    }
+
+    testDataTaken() {
+        if (!exists_function("dbg_hold_file_read_ready")) {
+            testSkip("the read is held with dbg_hold_file_read_ready(), which only a debug build of the library has");
+        }
+        hash<auto> p = openPipe();
+        File r = p.r;
+        File w = p.w;
+        # another reader of the pipe
+        File r2();
+        r2.open2(p.path, O_RDONLY | O_NONBLOCK);
+        # the descriptor of the held read: the held read keeps the File locked
+        int fd = r.getPollableDescriptor();
+
+        Queue q();
+        Counter held(1);
+        Counter release(1);
+        on_exit {
+            if (release.getCount()) {
+                release.dec();
+            }
+            call_function("dbg_fd_wait_notify_clear");
+        }
+        call_function("dbg_hold_file_read_ready", fd, held, release);
+        call_function("dbg_fd_wait_notify", fd, q, Waiting);
+        background sub () {
+            try {
+                q.push(<NonblockingCallResult>{"value": r.readShortBinary(16, -1)});
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(<NonblockingCallResult>{"err": ex.err, "desc": ex.desc});
+            }
+        }();
+        assertEq(Waiting, q.get(), "the read waits for data");
+        w.write("a");
+        # the read has found the pipe readable; the other reader takes the data before the read is made
+        held.waitForZero();
+        assertEq(binary("a"), r2.readShortBinary(16, 0), "the other reader takes the data");
+        call_function("dbg_fd_wait_notify", fd, q, Waiting);
+        release.dec();
+        assertEq(Waiting, q.get(), "the read that found no data waits again");
+        w.write("b");
+        hash<NonblockingCallResult> res = q.get();
+        assertEq(NOTHING, res.err, "no error");
+        assertEq(binary("b"), res.value, "the read returns the data written once it waited again");
     }
 
     testCancelWrite() {

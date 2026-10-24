@@ -68,7 +68,7 @@
 #define DEFAULT_FILE_BUFSIZE 16384
 #endif
 
-//! Tracks a synchronous file read timeout and bounded backoff using the monotonic clock.
+//! Tracks the timeout of a synchronous file read with the monotonic clock
 class qore_file_read_deadline {
 public:
     DLLLOCAL qore_file_read_deadline(int timeout_ms)
@@ -116,62 +116,14 @@ public:
         return q_get_monotonic_us() >= deadline_us;
     }
 
-    //! Sleeps after stale readiness followed by EAGAIN; returns 1 to retry, 0 on timeout, and -1 on error.
-    DLLLOCAL int backoff(ExceptionSink* xsink) {
-        if (expired()) {
-            return 0;
-        }
-        if (qore_check_cancel(xsink, "file read")) {
-            return -1;
-        }
-
-        int64 delay_us = backoff_us;
-        if (timeout_ms > 0) {
-            int64 remaining_us = deadline_us - q_get_monotonic_us();
-            if (remaining_us <= 0) {
-                return 0;
-            }
-            delay_us = std::min(delay_us, remaining_us);
-        }
-
-        // the backoff ends at once when the thread is cancelled or its Program is interrupted
-        int sleep_rc = qore_cancellable_sleep(delay_us, xsink, "file read");
-        if (*xsink) {
-            return -1;
-        }
-        if (sleep_rc) {
-            xsink->raiseErrnoException("FILE-READ-ERROR", errno,
-                "error applying backoff after stale file-read readiness");
-            return -1;
-        }
-
-        if (qore_check_cancel(xsink, "file read")) {
-            return -1;
-        }
-        if (expired()) {
-            return 0;
-        }
-
-        backoff_us = std::min<int64>(backoff_us * 2, MaxBackoffUs);
-        return 1;
-    }
-
-    DLLLOCAL void resetBackoff() {
-        backoff_us = InitialBackoffUs;
-    }
-
     DLLLOCAL int getTimeout() const {
         return timeout_ms;
     }
 
 private:
-    static constexpr int64 InitialBackoffUs = 1000;
-    static constexpr int64 MaxBackoffUs = 16000;
-
     int timeout_ms;
     int64 deadline_us;
     bool zero_poll_pending = true;
-    int64 backoff_us = InitialBackoffUs;
 };
 
 struct qore_qf_private {
@@ -402,6 +354,11 @@ struct qore_qf_private {
         // the end again at once (see fifo_end_read)
         if (read && fifo_end_read) {
             return 1;
+        }
+#endif
+#ifdef DEBUG
+        if (timeout_ms) {
+            qore_dbg_fd_wait(fd);
         }
 #endif
         // the wait ends at once when the thread is cancelled or its Program is interrupted; EINTR is handled by
@@ -757,7 +714,6 @@ struct qore_qf_private {
                 int read_errno = errno;
                 if (rc >= 0) {
                     noteReadResult(rc, limit);
-                    read_deadline.resetBackoff();
                     return rc;
                 }
                 if (read_errno == EINTR) {
@@ -834,30 +790,27 @@ struct qore_qf_private {
                 return -1;
             }
 
+#ifdef DEBUG
+            qore_dbg_file_read_ready(fd);
+#endif
             qore_offset_t rc = ::read(fd, dest, limit);
             int read_errno = errno;
             if (rc >= 0) {
                 noteReadResult(rc, limit);
-                read_deadline.resetBackoff();
                 return rc;
             }
 
             if (read_errno == EINTR) {
                 continue;
             }
-            if (read_errno == EAGAIN
-#ifdef EWOULDBLOCK
-                    || read_errno == EWOULDBLOCK
-#endif
-            ) {
-                int backoff_rc = read_deadline.backoff(xsink);
-                if (backoff_rc > 0) {
-                    continue;
-                }
-                if (!backoff_rc) {
-                    raiseReadTimeout(read_deadline, mname, timeout_error, readonly_context, xsink);
-                }
-                return -1;
+            if (wouldBlock(read_errno)) {
+                // the descriptor was reported readable, but another holder of the pipe took the data first, or the
+                // descriptor was made nonblocking by another holder after the check above: the read waits again, for
+                // the rest of the timeout.  A nonblocking read without data means that a named pipe has a writer, so
+                // the end of the pipe that a read returned before is not reported at once any more (see
+                // fifo_end_read), and the wait waits for data or for the end of the pipe
+                clearFifoEndRead();
+                continue;
             }
 
             if (readonly_context) {

@@ -12749,6 +12749,81 @@ static QoreValue f_dbg_fd_wait_notify_clear(const QoreListNode* params, RuntimeC
 }
 
 namespace {
+//! the armed hold of dbg_hold_file_read_ready(); one at a time
+struct FileReadReadyHold {
+    std::mutex m;
+    int fd = -1;
+    //! the Counters, with a reference each, or nullptr if no hold is armed
+    Counter* held = nullptr;
+    Counter* release = nullptr;
+};
+
+FileReadReadyHold file_read_ready_hold;
+
+//! runs in the reading thread with the File's lock held; disarms itself, so it holds one read
+void dbg_hold_file_read_ready_hook(int fd) {
+    FileReadReadyHold& h = file_read_ready_hold;
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> held(&xsink);
+    ReferenceHolder<Counter> release(&xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.held || h.fd != fd) {
+            return;
+        }
+        held = h.held;
+        release = h.release;
+        h.held = nullptr;
+        h.release = nullptr;
+        h.fd = -1;
+        qore_dbg_file_read_ready_hook.store(nullptr);
+    }
+    held->dec(&xsink);
+    if (!xsink) {
+        release->waitForZero(&xsink);
+    }
+    if (xsink) {
+        printd(0, "dbg_hold_file_read_ready(): %s\n", xsink.getExceptionErr().getTypeName());
+        xsink.clear();
+    }
+}
+}
+
+//! holds the next read of a File on the descriptor after it found the descriptor readable, before it reads
+/** The reading thread decrements \a held, and then waits for \a release to reach zero before it reads; tests use
+    this to take the data with another reader of the pipe in between, so that the read finds no data after the
+    descriptor was reported readable.  The hold is made once; a hold armed before is replaced.
+
+    @param fd the descriptor
+    @param held decremented once the read is held
+    @param release the read continues when this Counter reaches zero
+*/
+static QoreValue f_dbg_hold_file_read_ready(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int fd = static_cast<int>(get_param_value(params, 0).getAsBigInt());
+    ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> old_held(xsink);
+    ReferenceHolder<Counter> old_release(xsink);
+    {
+        FileReadReadyHold& h = file_read_ready_hold;
+        std::lock_guard<std::mutex> l(h.m);
+        old_held = h.held;
+        old_release = h.release;
+        h.fd = fd;
+        h.held = held.release();
+        h.release = release.release();
+        qore_dbg_file_read_ready_hook.store(dbg_hold_file_read_ready_hook);
+    }
+    return QoreValue();
+}
+
+namespace {
 //! the armed hold of dbg_hold_closure_var_deref(); one at a time
 struct ClosureVarDerefHold {
     std::mutex m;
@@ -13197,6 +13272,9 @@ void init_debug_functions(QoreNamespace& qns) {
         autoTypeInfo, QORE_PARAM_NO_ARG, "value");
     qns.addBuiltinVariant("dbg_fd_wait_notify_clear", f_dbg_fd_wait_notify_clear, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_hold_file_read_ready", f_dbg_hold_file_read_ready, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
     qns.addBuiltinVariant("dbg_hold_closure_var_deref", f_dbg_hold_closure_var_deref,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
