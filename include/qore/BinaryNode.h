@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -125,6 +125,12 @@ public:
     DLLEXPORT BinaryNode* copy() const;
 
     //! returns the pointer to the data
+    /** @return the pointer to the data; never nullptr: an empty value returns a valid address with no bytes after it,
+        so that it is not taken for a missing value (a database driver binds a null data pointer as SQL NULL)
+
+        @since %Qore 3.0 never returns nullptr; an empty value made with no buffer returned nullptr, while one made
+        from empty data could return a valid address
+    */
     DLLEXPORT const void* getPtr() const;
 
     //! resizes the object and appends a copy of the data passed to the object

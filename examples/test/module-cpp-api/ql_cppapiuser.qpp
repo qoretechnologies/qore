@@ -712,6 +712,18 @@ int cpp_api_file_read_unbacked(string path, int size) {
     return static_cast<int64>(rc);
 }
 
+//! returns the data pointer of a binary value as the C++ API gives it to a module (BinaryNode::getPtr())
+/** @param b the binary value
+
+    @return a hash with \c null: @ref True if the data pointer is a null pointer, and \c size: the size of the value
+*/
+hash<auto> cpp_api_binary_data(binary b) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("null", b->getPtr() ? false : true, xsink);
+    rv->setKeyValue("size", static_cast<int64>(b->size()), xsink);
+    return rv.release();
+}
+
 //! writes data of the given size, which is never touched, with OutputStream::write() of the stream (see above)
 /** @param output_stream the stream to write to
     @param size the number of bytes to write

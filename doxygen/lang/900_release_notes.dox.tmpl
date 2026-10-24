@@ -4977,6 +4977,9 @@ while (*binary chunk = input.read(65536)) {
       it had written all of the data, and on macOS, which refuses a read or write of more than 2 GiB at once, such
       writes and reads failed with \c EINVAL; reads and writes of files and of the standard streams are now made in
       parts of at most 1 GiB
+    - Fixed empty binary values, such as \c binary() and <tt>binary("")</tt>, which the \c pgsql and \c sqlite3
+      drivers stored as SQL \c NULL: the data pointer of an empty value is never a null pointer in the C++ API
+      (\c BinaryNode::getPtr()), which the database APIs take for a missing value
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module, not those the \c .qm file sets, so a warning that the \c .qm file
       enables, for example with @ref enable-all-warnings "%enable-all-warnings", was not raised in the other files.

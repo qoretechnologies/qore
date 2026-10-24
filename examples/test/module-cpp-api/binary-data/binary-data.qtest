@@ -1,0 +1,45 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class BinaryDataTest
+
+#! Tests the data pointer of empty binary values in the C++ API
+/** The database drivers bind a binary value with its data pointer, and their C APIs take a null pointer for a
+    missing value (SQL NULL): an empty value with no buffer was stored as NULL by the pgsql and sqlite3 drivers.  An
+    empty value made from empty data had no buffer once appending nothing no longer allocated one.
+*/
+class BinaryDataTest inherits QUnit::Test {
+    constructor() : QUnit::Test("BinaryDataTest", "1.0", \ARGV) {
+        addTestCase("empty binary values have data", \testEmpty());
+        set_return_value(main());
+    }
+
+    testEmpty() {
+        binary b = binary("abc");
+        hash<string, binary> values = {
+            "binary(\"\")": binary(""),
+            "binary()": binary(),
+            "binary(\"\") + binary(\"\")": binary("") + binary(""),
+            "an empty substr()": b.substr(1, 0),
+            "an empty split part": binary("ab").split(binary("ab"), True)[0],
+            "an emptied value": binary("a").substr(1),
+        };
+        foreach hash<auto> i in (values.pairIterator()) {
+            hash<auto> h = cpp_api_binary_data(i.value);
+            assertEq(0, h.size, i.key + ": the size");
+            assertFalse(h.null, i.key + ": the data pointer is not a null pointer");
+        }
+        hash<auto> h = cpp_api_binary_data(b);
+        assertEq(3, h.size, "a value with data: the size");
+        assertFalse(h.null, "a value with data: the data pointer");
+    }
+}

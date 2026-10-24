@@ -91,8 +91,14 @@ BinaryNode* BinaryNode::copy() const {
     return new BinaryNode(np, len);
 }
 
+//! the data of an empty binary value: a valid address with no bytes after it
+/** An empty value has no buffer, and a null data pointer is taken for a missing value by the C APIs of the database
+    drivers, which bind it as SQL NULL (PostgreSQL's PQexecParams(), sqlite3_bind_blob())
+*/
+static const char qore_empty_binary_data[1] = {0};
+
 const void* BinaryNode::getPtr() const {
-    return ptr;
+    return ptr ? ptr : static_cast<const void*>(qore_empty_binary_data);
 }
 
 int BinaryNode::writeTo(size_t pos, const void* nptr, size_t size) {
