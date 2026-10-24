@@ -5,6 +5,8 @@
 %enable-all-warnings
 %exec-class SandboxPolicyBarrierTest
 
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+
 %requires QUnit
 %requires Util
 
@@ -87,8 +89,10 @@ class SandboxPolicyBarrierTest inherits QUnit::Test {
             \p.callFunction(), ("run", plain, tmp_path),
             "trusted code called from a sandbox inherits the caller's policy");
 
+        # The resource callback is created by trusted code before entering the sandbox.
+        code read_file = \ReadOnlyFile::readTextFile();
         code barriered = auto sub (string path) {
-            return SandboxManager::callWithSystemPolicy(\ReadOnlyFile::readTextFile(),
+            return SandboxManager::callWithSystemPolicy(read_file,
                 path);
         };
         assertEq("barrier probe\n", p.callFunction("run", barriered, tmp_path),
@@ -154,8 +158,10 @@ class SandboxPolicyBarrierTest inherits QUnit::Test {
         p.setSandboxManager(sm);
         p.parse("auto sub run(code c, string path) { return c(path); }", "barrier-nested");
 
+        # The resource callback is created by trusted code before entering the sandbox.
+        code read_file = \ReadOnlyFile::readTextFile();
         code barriered = auto sub (string path) {
-            return SandboxManager::callWithSystemPolicy(\ReadOnlyFile::readTextFile(), path);
+            return SandboxManager::callWithSystemPolicy(read_file, path);
         };
         assertEq("barrier probe\n",
             SandboxManager::callWithSystemPolicy(\p.callFunction(), ("run", barriered, tmp_path)),
@@ -166,7 +172,7 @@ class SandboxPolicyBarrierTest inherits QUnit::Test {
             return ReadOnlyFile::readTextFile(path);
         };
         code both = auto sub (string path) {
-            SandboxManager::callWithSystemPolicy(\ReadOnlyFile::readTextFile(), path);
+            SandboxManager::callWithSystemPolicy(read_file, path);
             return module_read(path);
         };
         assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING,
@@ -225,8 +231,10 @@ class SandboxPolicyBarrierTest inherits QUnit::Test {
         code plain = string sub (string path) {
             return ReadOnlyFile::readTextFile(path);
         };
+        # The resource callback is created by trusted code before entering the sandbox.
+        code read_file = \ReadOnlyFile::readTextFile();
         code barriered = auto sub (string path) {
-            return SandboxManager::callWithSystemPolicy(\ReadOnlyFile::readTextFile(),
+            return SandboxManager::callWithSystemPolicy(read_file,
                 path);
         };
         # a barriered call first, then an unbarriered one through the same sandboxed

@@ -3936,6 +3936,7 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         QoreObject* self, const QoreTypeInfo* receiver_type_info, int8_t inline_state,
         uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
         bool* may_invalidate_external_caches = nullptr) {
+    QoreSandboxProvenanceHelper provenance(self);
     const UserVariantBase* uvb = inst->cached_uvb;
     if (uvb->hasCachedFunction()) {
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
@@ -4262,6 +4263,7 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     }
 
     auto* cb = static_cast<const QoreClosureBase*>(node);
+    QoreSandboxProvenanceHelper provenance(cb);
     auto* uf = static_cast<UserClosureFunction*>(cb->getFunction());
     if (!uf || !uf->numVariants()) {
         return false;

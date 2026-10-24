@@ -1519,16 +1519,16 @@ QoreAOTContext* qore_rt_get_aot_call_target_context(QoreAOTContext* ctx, int32_t
 //! Returns nullptr without raising when the target does not have cached AOT.
 QoreAOTContext* qore_rt_try_get_aot_call_target_context(QoreAOTContext* ctx, int32_t slot);
 
-//! Returns true when an assigned object receiver is still valid.
-//! Used to guard receiver-independent AOT method fast entries.
+//! Returns true when an assigned object is valid and needs no provenance guard.
+//! Used only to guard receiver-independent AOT fast entries; tagged receivers use guarded dispatch.
 int qore_rt_object_is_valid(uint64_t value);
 //! Raises OBJECT-ALREADY-DELETED unless the method-call receiver is valid.
 void qore_rt_check_valid_object_call_receiver(uint64_t value,
         ExceptionSink* xsink);
-//! Returns true when a valid object receiver has the exact class stored in an AOT call-target slot.
+//! Returns true when a valid, untagged object has the exact class stored in an AOT call-target slot.
 int qore_rt_object_has_exact_aot_target_class(QoreAOTContext* ctx, int32_t slot,
         uint64_t value);
-//! Returns true when an object receiver has the exact class stored in an AOT call-target slot.
+//! Returns true when an untagged object has the exact class stored in an AOT call-target slot.
 //! Unlike qore_rt_object_has_exact_aot_target_class(), this does not check object validity.
 int qore_rt_object_has_exact_aot_target_class_only(QoreAOTContext* ctx, int32_t slot,
         uint64_t value);

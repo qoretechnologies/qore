@@ -412,7 +412,7 @@ int SqlMutationContext::dispatch(const SqlMutationEvent& ev, const Datasource& d
 
     // the observer is always called with a clean ExceptionSink so that it never runs with an
     // exception already active, and so that a driver exception is always reported first
-    ValueHolder rv(cb->execValue(*args, &cb_xsink), &cb_xsink);
+    ValueHolder rv(cb->invoke(*args, &cb_xsink), &cb_xsink);
 
     if (cb_xsink) {
         xsink->assimilate(cb_xsink);

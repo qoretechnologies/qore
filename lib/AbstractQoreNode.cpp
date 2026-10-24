@@ -32,6 +32,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreClosureNode.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/AbstractStatement.h"
@@ -957,6 +958,10 @@ bool needs_scan(const AbstractQoreNode* n) {
         case NT_HASH: return qore_hash_private::getScanCount(*static_cast<const QoreHashNode*>(n)) ? true : false;
         case NT_OBJECT: return true;
         case NT_RUNTIME_CLOSURE: return static_cast<const QoreClosureBase*>(n)->needsScan();
+        case NT_FUNCREF: {
+            const auto* callback = qore_get_sandbox_bound_callback(n);
+            return callback && needs_scan(callback);
+        }
         case NT_REFERENCE: return lvalue_ref::get(static_cast<const ReferenceNode*>(n))->needsScan();
     }
 

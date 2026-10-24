@@ -13226,7 +13226,7 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
     }
     bool has_ref_args = callArgsMayPassReferences(call->getParseArgs(), call->getArgs());
     // Use CallClosureDirect for fast closure/callref invocation
-    // This calls qore_rt_call_closure_fast() which directly calls callref->execValue()
+    // This calls qore_rt_call_closure_fast() which directly calls callref->invoke()
     // instead of going through AST node copy and dynamic_cast chain
     QoreIRValue result = lowerExprOpOrInvoke(
         QoreIROpcode::CallClosureDirect, expr, operands, call->loc, error,

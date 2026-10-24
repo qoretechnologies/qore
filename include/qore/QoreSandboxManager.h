@@ -50,6 +50,8 @@
 class ExceptionSink;
 class QoreString;
 class QoreHashNode;
+class QoreProgram;
+class ResolvedCallReferenceNode;
 
 //! @defgroup sandbox_fs_access_modes Filesystem Access Mode Constants
 //! Constants for specifying filesystem access modes in sandboxing
@@ -233,6 +235,9 @@ public:
 private:
     //! Private implementation
     struct qore_fs_security_private* priv;
+
+    friend class QoreSandboxComposition;
+    friend class QoreSandboxManager;
 
     //! Disallow copying via assignment
     QoreFilesystemSecurityManager& operator=(const QoreFilesystemSecurityManager&) = delete;
@@ -455,6 +460,8 @@ public:
 private:
     //! Private implementation
     struct qore_net_security_private* priv;
+
+    friend class QoreSandboxComposition;
 
     //! Disallow copying via assignment
     QoreNetworkSecurityManager& operator=(const QoreNetworkSecurityManager&) = delete;
@@ -725,6 +732,8 @@ private:
     //! Filesystem security manager
     QoreFilesystemSecurityManager fs_mgr;
 
+    friend class QoreSandboxComposition;
+
     //! Network security manager
     QoreNetworkSecurityManager net_mgr;
 
@@ -861,6 +870,9 @@ private:
     - it applies to filesystem/network POLICY only.  Interrupt and force-terminate checks
       resolve unchanged, so a barriered call stays cancellable
 
+    Object and callback provenance remains active through this barrier. Privileged operations that must mask
+    provenance register a fixed capability during trusted startup with SandboxManager::createSystemPolicyCall().
+
     Scope it as tightly as possible: it is a sanctioned exception to sandbox inheritance, and
     everything executed inside it runs without the caller's policy.
 
@@ -901,6 +913,50 @@ private:
 
 class QoreSandboxContext;
 
+//! Applies the creation sandbox of an object or callback for the duration of a native invocation
+/** Use this guard when a native bridge calls its implementation directly instead of
+    ResolvedCallReferenceNode::invoke(). The object or callback must remain alive for construction of the guard.
+    The context itself is retained until the guard is destroyed. No guard is needed around invoke().
+
+    @par Example:
+    @code{.cpp}
+    QoreSandboxProvenanceHelper provenance(callback);
+    return execute_native_callback(args, xsink);
+    @endcode
+
+    @since %Qore 3.0
+*/
+class DLLEXPORT QoreSandboxProvenanceHelper {
+public:
+    //! Creates an inactive guard
+    QoreSandboxProvenanceHelper() = default;
+    //! Applies an object's creation context; nullptr leaves the guard inactive
+    /** @param object the receiver, or nullptr for no context */
+    explicit QoreSandboxProvenanceHelper(const QoreObject* object);
+    //! Applies a runtime call reference's creation context; nullptr leaves the guard inactive
+    /** @param callback the runtime call reference, or nullptr for no context */
+    explicit QoreSandboxProvenanceHelper(const ResolvedCallReferenceNode* callback);
+    //! Restores the previous context and releases the retained creation context
+    ~QoreSandboxProvenanceHelper();
+    //! Applies an object's creation context to an inactive guard
+    /** @param object the receiver, or nullptr for no context */
+    void set(const QoreObject* object);
+
+    QoreSandboxProvenanceHelper(const QoreSandboxProvenanceHelper&) = delete;
+    QoreSandboxProvenanceHelper& operator=(const QoreSandboxProvenanceHelper&) = delete;
+
+    //! Internal access to the immutable active context
+    /** @return the retained context, or nullptr if inactive */
+    const QoreSandboxContext* getContext() const { return context; }
+    //! Internal access to the preceding active guard
+    /** @return the preceding guard, or nullptr */
+    const QoreSandboxProvenanceHelper* getPrevious() const { return previous; }
+private:
+    QoreSandboxContext* context = nullptr;
+    const QoreSandboxProvenanceHelper* previous = nullptr;
+    void apply(QoreSandboxContext* captured);
+};
+
 //! The sandbox that governs the current thread, captured so that it can govern work run on another thread
 /** A thread started with q_start_thread() or the \c background operator inherits the sandbox of the code that
     starts it.  A thread that runs work for many callers - a module's worker pool, or a thread that a native library
@@ -919,7 +975,7 @@ class QoreSandboxContext;
     task->sandbox.reset(new QoreSandboxCapture);
     // on the worker thread
     QoreSandboxCaptureHelper sch(*task->sandbox);
-    task->callback->execValue(args, xsink);
+    task->callback->invoke(args, xsink);
     @endcode
 
     @see @ref QTF_NO_SANDBOX_INHERIT

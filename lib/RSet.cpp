@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreClosureNode.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/lvalue_ref.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
@@ -1311,6 +1312,9 @@ void qore_dgc_node_weak_ref(AbstractQoreNode* n) {
         case NT_RUNTIME_CLOSURE:
             static_cast<QoreClosureBase*>(n)->weakRef();
             break;
+        case NT_FUNCREF:
+            static_cast<ResolvedCallReferenceNode*>(n)->weakRef();
+            break;
         case NT_REFERENCE:
             lvalue_ref::weakRef(static_cast<ReferenceNode*>(n));
             break;
@@ -1329,6 +1333,9 @@ void qore_dgc_node_weak_deref(AbstractQoreNode* n) {
             break;
         case NT_RUNTIME_CLOSURE:
             static_cast<QoreClosureBase*>(n)->weakDeref();
+            break;
+        case NT_FUNCREF:
+            static_cast<ResolvedCallReferenceNode*>(n)->weakDeref();
             break;
         case NT_REFERENCE:
             lvalue_ref::weakDeref(static_cast<ReferenceNode*>(n));
@@ -1690,6 +1697,9 @@ bool RSetHelper::checkNode(AbstractQoreNode* n) {
         case NT_RUNTIME_CLOSURE:
             kind = NodeKind::Closure;
             break;
+        case NT_FUNCREF:
+            kind = NodeKind::BoundCallback;
+            break;
         case NT_REFERENCE:
             kind = NodeKind::Reference;
             break;
@@ -1885,6 +1895,13 @@ void RSetHelper::startNode(int id) {
         case NodeKind::Reference:
             lvalue_ref::get(static_cast<ReferenceNode*>(n.ptr))->scanReference(*this);
             break;
+        case NodeKind::BoundCallback: {
+            const auto* callback = qore_get_sandbox_bound_callback(static_cast<ResolvedCallReferenceNode*>(n.ptr));
+            if (callback) {
+                checkNode(const_cast<ResolvedCallReferenceNode*>(callback));
+            }
+            break;
+        }
     }
     current = -1;
 
@@ -2854,6 +2871,14 @@ void qore_dgc_value_stored(RObject& holder, const QoreValue& v) {
                 const cvar_map_t& cmap = static_cast<const QoreClosureBase*>(n)->getMap();
                 for (cvar_map_t::const_iterator i = cmap.begin(), e = cmap.end(); i != e; ++i) {
                     i->second->edgesAdded();
+                }
+                break;
+            }
+
+            case NT_FUNCREF: {
+                const auto* callback = qore_get_sandbox_bound_callback(n);
+                if (callback && needs_scan(callback)) {
+                    todo.push_back(callback);
                 }
                 break;
             }

@@ -424,12 +424,15 @@ DLLLOCAL int qore_push_sandbox_policy_barrier();
 
     The object is immutable after construction.
 */
-class QoreSandboxContext {
+class QoreSandboxContext : public QoreReferenceCounter {
 public:
     //! Captures the sandbox managers that govern the current thread
     DLLLOCAL QoreSandboxContext();
 
     DLLLOCAL ~QoreSandboxContext();
+
+    DLLLOCAL void ref() const { ROreference(); }
+    DLLLOCAL void deref() const { if (ROdereference()) { delete this; } }
 
     DLLLOCAL QoreSandboxContext(const QoreSandboxContext&) = delete;
     DLLLOCAL QoreSandboxContext& operator=(const QoreSandboxContext&) = delete;
@@ -440,6 +443,11 @@ public:
     QoreSandboxManager* policy_manager = nullptr;
     //! The ID of the Program that @ref manager was found on, or 0
     unsigned pgm_id = 0;
+    //! All contributing Program IDs, without retaining their Programs
+    std::vector<unsigned> program_ids;
+    //! Provenance is additive even when an ordinary inherited sandbox is shadowed by a nearer Program.
+    QoreSandboxManager* provenance_manager = nullptr;
+    QoreSandboxManager* provenance_policy_manager = nullptr;
 };
 
 //! Makes the sandbox manager lookups of the current thread return a captured context while the object exists

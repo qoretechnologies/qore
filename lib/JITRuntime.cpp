@@ -6716,6 +6716,7 @@ static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
         cache.descriptor.native_leaf_state.store(0, std::memory_order_release);
     }
 
+    QoreSandboxProvenanceHelper provenance(node ? static_cast<const QoreClosureBase*>(node) : nullptr);
     QoreValue result;
     if (!qore_ir_try_execute_native_leaf(&cache.descriptor, args, nargs, result,
             node ? static_cast<const QoreClosureBase*>(node) : nullptr)) {
@@ -6761,7 +6762,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
             return toBits(QoreValue());
         }
         // Fall through to execValue for closures without cached IR/JIT
-        QoreValue result = const_cast<QoreClosureBase*>(cb)->execValue(nullptr, xsink);
+        QoreValue result = const_cast<QoreClosureBase*>(cb)->invoke(nullptr, xsink);
         return toBits(result);
     }
 
@@ -6769,7 +6770,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
     if (ntype == NT_FUNCREF) {
         ResolvedCallReferenceNode* callref = static_cast<ResolvedCallReferenceNode*>(
             const_cast<AbstractQoreNode*>(node));
-        QoreValue result = callref->execValue(nullptr, xsink);
+        QoreValue result = callref->invoke(nullptr, xsink);
         return toBits(result);
     }
 
@@ -6832,7 +6833,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
     qore_list_private::get(**arg_list)->pushIntern(arg0);
 
     // Call directly with the single-element list (execValue borrows it)
-    QoreValue result = callref->execValue(*arg_list, xsink);
+    QoreValue result = callref->invoke(*arg_list, xsink);
     return toBits(result);
 }
 
@@ -6900,7 +6901,7 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
         return toBits(QoreValue());
     }
 
-    QoreValue result = callref->execValue(*arg_list, xsink);
+    QoreValue result = callref->invoke(*arg_list, xsink);
     return toBits(result);
 }
 
@@ -10556,6 +10557,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
 */
 static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBase* uvb,
         int nargs, const uint64_t* args, ExceptionSink* xsink, uint64_t** arg_cleanups) {
+    QoreSandboxProvenanceHelper provenance(cb);
     const UserSignature* sig = uvb->getUserSignature();
     unsigned num_params = sig->numParams();
 
@@ -11063,6 +11065,7 @@ static uint64_t qore_rt_call_method_direct_impl(const QoreMethod* method,
 
     // Get the current self object from the runtime stack
     QoreObject* self = runtime_get_stack_object();
+    QoreSandboxProvenanceHelper provenance(self);
     if (!self) {
         xsink->raiseException("JIT-ERROR", "no self object in direct method call");
         return toBits(QoreValue());
@@ -11223,6 +11226,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
 
     // Get the current self object from the runtime stack
     QoreObject* self = runtime_get_stack_object();
+    QoreSandboxProvenanceHelper provenance(self);
     if (!self) {
         xsink->raiseException("JIT-ERROR", "no self object in fast method call");
         return toBits(QoreValue());
@@ -11444,7 +11448,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_ref_fast(uint64_t ref_bits, uint64_t*
 
     // Call execValue() directly — avoids the dynamic_cast chain and AST node copy
     // that qore_rt_call_with_args() performs
-    QoreValue result = ref_node->execValue(*arg_list, xsink);
+    QoreValue result = ref_node->invoke(*arg_list, xsink);
     return toBits(result);
 }
 
@@ -14947,7 +14951,8 @@ extern "C" DLLEXPORT QoreAOTContext* qore_rt_try_get_aot_call_target_context(
 
 extern "C" DLLEXPORT int qore_rt_object_is_valid(uint64_t value) {
     QoreValue receiver = fromBits(value);
-    return receiver.getType() == NT_OBJECT && receiver.get<QoreObject>()->isValid();
+    return receiver.getType() == NT_OBJECT && receiver.get<QoreObject>()->isValid()
+        && !qore_object_private::get(*receiver.get<QoreObject>())->sandbox_provenance;
 }
 
 extern "C" DLLEXPORT void qore_rt_check_valid_object_call_receiver(
@@ -14974,7 +14979,8 @@ extern "C" DLLEXPORT int qore_rt_object_has_exact_aot_target_class(
     }
     const QoreClass* target_class = ctx->call_targets[slot].qc;
     const QoreObject* object = receiver.get<QoreObject>();
-    return target_class && object->isValid() && object->getClass() == target_class;
+    return target_class && object->isValid() && object->getClass() == target_class
+        && !qore_object_private::get(*object)->sandbox_provenance;
 }
 
 extern "C" DLLEXPORT int qore_rt_object_has_exact_aot_target_class_only(
@@ -14987,7 +14993,8 @@ extern "C" DLLEXPORT int qore_rt_object_has_exact_aot_target_class_only(
         return 0;
     }
     const QoreClass* target_class = ctx->call_targets[slot].qc;
-    return target_class && receiver.get<QoreObject>()->getClass() == target_class;
+    return target_class && receiver.get<QoreObject>()->getClass() == target_class
+        && !qore_object_private::get(*receiver.get<QoreObject>())->sandbox_provenance;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx,
@@ -16395,6 +16402,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
         uint64_t& result) {
+    QoreSandboxProvenanceHelper provenance(o);
     if (!variant) {
         return false;
     }
@@ -16714,7 +16722,7 @@ static uint64_t qore_rt_dot_eval_method_direct_impl(uint64_t base_bits, const Qo
                 if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
                     return toBits(QoreValue());
                 }
-                return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->execValue(*arg_list, xsink));
+                return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(*arg_list, xsink));
             }
             break;
         }
@@ -16726,7 +16734,7 @@ static uint64_t qore_rt_dot_eval_method_direct_impl(uint64_t base_bits, const Qo
                 if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
                     return toBits(QoreValue());
                 }
-                return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->execValue(*arg_list, xsink));
+                return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(*arg_list, xsink));
             }
             break;
         }
@@ -16927,12 +16935,12 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
     if (base.getType() == NT_HASH) {
         const AbstractQoreNode* ref = check_call_ref(base.getInternalNode(), method_name);
         if (ref) {
-            return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->execValue(*arg_list, xsink));
+            return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(*arg_list, xsink));
         }
     } else if (base.getType() == NT_WEAKREF_HASH) {
         const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), method_name);
         if (ref) {
-            return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->execValue(*arg_list, xsink));
+            return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(*arg_list, xsink));
         }
     }
 
@@ -18904,6 +18912,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
 
     // Get current self + class context
     QoreObject* self = runtime_get_stack_object();
+    QoreSandboxProvenanceHelper provenance(self);
     if (!self) {
         xsink->raiseException("BACKGROUND-ERROR", "no current object for background method call to '%s'",
             method_name);

@@ -4,6 +4,16 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Objects and runtime call references retain the sandbox under which they were created. Their methods and
+    callbacks remain restricted when trusted code invokes them later, including inherited module methods and
+    asynchronous callbacks. Access must satisfy both the caller's policy and the retained policies; interruption
+    and thread limits also apply. @ref Qore::SandboxManager::callWithSystemPolicy() cannot remove provenance.
+    Trusted infrastructure registers fixed privileged operations before entering a sandbox with
+    @ref Qore::SandboxManager::createSystemPolicyCall(); @ref Qore::SandboxManager::bindCall() binds pre-existing
+    callbacks at an interface's registration boundary. Native callback callers use ResolvedCallReferenceNode::invoke()
+    or QoreSandboxProvenanceHelper; existing public object and callback layouts are unchanged
+    (<a href="https://github.com/qoretechnologies/qore/issues/5516">issue 5516</a>).
+
     The C++ API adds TypedHashDecl::getProgram() and QoreEnumDecl::getProgram(), matching
     QoreClass::getProgram(). Modules can associate cached declarations with their owning %Program and
     invalidate handles in qore_register_program_cleanup_callback() before namespace data is freed.

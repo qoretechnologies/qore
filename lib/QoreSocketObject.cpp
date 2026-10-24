@@ -3864,7 +3864,7 @@ static int qore_socket_object_exec_run_http_recv_data_callback(
         return -1;
     }
 
-    ValueHolder rv(recv_callback->execValue(*args, xsink), xsink);
+    ValueHolder rv(recv_callback->invoke(*args, xsink), xsink);
     return *xsink ? -1 : 0;
 }
 
@@ -3884,7 +3884,7 @@ static int qore_socket_object_exec_run_http_recv_header_callback(QoreObject* obj
         return -1;
     }
 
-    ValueHolder rv(recv_callback->execValue(*args, xsink), xsink);
+    ValueHolder rv(recv_callback->invoke(*args, xsink), xsink);
     return *xsink ? -1 : 0;
 }
 
@@ -4222,7 +4222,7 @@ static int qore_socket_object_exec_run_http_trailer_callback(
         return 0;
     }
 
-    ValueHolder rv(trailer_callback->execValue(nullptr, xsink), xsink);
+    ValueHolder rv(trailer_callback->invoke(nullptr, xsink), xsink);
     if (*xsink) {
         return -1;
     }
@@ -4332,7 +4332,7 @@ static int qore_socket_object_exec_send_http_chunked_body_callback(QoreSocketObj
             return *xsink ? -1 : 0;
         }
 
-        ValueHolder res(send_callback->execValue(nullptr, xsink), xsink);
+        ValueHolder res(send_callback->invoke(nullptr, xsink), xsink);
         if (*xsink) {
             return -1;
         }

@@ -211,7 +211,7 @@ QoreObject* ConnectionPool::acquire(ExceptionSink* xsink) {
                 ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
                 args->push(stats.release(), xsink);
                 args->push(cb_arg, xsink);
-                (*cb)->execValue(*args, xsink).discard(xsink);
+                (*cb)->invoke(*args, xsink).discard(xsink);
 
                 if (*xsink) {
                     // Ignore callback errors

@@ -234,7 +234,7 @@ bool JsonSaxParser::emitEvent(ParseState& state, int type, const QoreStringNode*
     // Call the callback
     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), state.xsink);
     args->push(event.release(), state.xsink);
-    ValueHolder rv(state.callback->execValue(*args, state.xsink), state.xsink);
+    ValueHolder rv(state.callback->invoke(*args, state.xsink), state.xsink);
 
     return !*state.xsink;
 }

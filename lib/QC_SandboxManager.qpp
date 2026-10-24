@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreSandboxManager.h>
+#include "qore/intern/QoreSandboxProvenance.h"
 
 //! Port range configuration for network security
 /** @since %Qore 3.0
@@ -664,6 +665,10 @@ hash<NetworkSecurityConfigInfo> SandboxManager::getNetworkConfiguration() {
     - only filesystem/network policy is affected; interrupt and force-terminate checks
       resolve unchanged, so a barriered call remains cancellable
 
+    @note Object and callback provenance remains enforced through this barrier. A reference created while
+    serving a sandboxed caller retains that caller's policy. Trusted infrastructure needing access beyond that
+    provenance must register a fixed operation with createSystemPolicyCall() during trusted initialization.
+
     @param call the code to call with the barrier established
     @param call_args optional arguments to @p call
 
@@ -671,8 +676,10 @@ hash<NetworkSecurityConfigInfo> SandboxManager::getNetworkConfiguration() {
 
     @par Example:
     @code{.py}
-# read a system credential on a sandboxed caller's behalf
-auto rv = SandboxManager::callWithSystemPolicy(\read_credential(), path);
+# Register the reference during trusted startup.
+code read_credential = \read_system_credential();
+# Later, mask inherited caller policy; any active provenance still applies.
+auto rv = SandboxManager::callWithSystemPolicy(read_credential);
     @endcode
 
     @note Restricted to @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS": this
@@ -692,5 +699,46 @@ static auto SandboxManager::callWithSystemPolicy(code call, *softlist<auto> call
     }
     ReferenceHolder<QoreListNode> arglist(call_args ? call_args->listRefSelf() : nullptr,
         xsink);
-    return call->execValue(*arglist, xsink);
+    return call->invoke(*arglist, xsink);
+}
+
+//! Binds a callback to the sandbox that governs its registration
+/** Use this when accepting a pre-existing callback from a sandboxed interface. A method reference can bind a
+    pre-existing object's selected method without modifying a shared object. Invoke this method in the registering
+    interface's Program context. Existing provenance on @p call remains in force as well.
+
+    @param call the fixed callback to bind
+    @return a new callback retaining the current sandbox and @p call
+    @par Example:
+    @code{.py}
+code handler = SandboxManager::bindCall(\configured_handler.handleRequest());
+    @endcode
+    @since %Qore 3.0
+*/
+static code SandboxManager::bindCall(code call) [flags=RET_VALUE_ONLY] {
+    return qore_bind_sandbox_call(call, false, xsink);
+}
+
+//! Registers a fixed privileged resource operation before entering sandbox execution
+/** The returned callback masks pre-existing filesystem/network policy, including provenance, for its fixed
+    operation. It preserves interruption and thread limits. A sandboxed callback invoked by the operation retains
+    its own provenance and Program policy. The operation must validate its arguments; registering an arbitrary
+    file reader or callback executor would grant that unrestricted operation to anyone holding the result.
+
+    @param call a callback created outside sandbox execution
+    @return a capability for the fixed callback
+    @throw SANDBOX-CAPABILITY-ERROR a sandbox governs registration, or @p call has sandbox provenance
+    @note Register capabilities during trusted initialization, before loading or invoking tenant code. An ordinary
+    callWithSystemPolicy() barrier does not remove object or callback provenance.
+    @par Example:
+    @code{.py}
+# During trusted startup; the callback uses a fixed, system-owned credential path.
+code authenticate = SandboxManager::createSystemPolicyCall(\authenticate_provider());
+# Later, while serving a sandboxed caller:
+authenticate();
+    @endcode
+    @since %Qore 3.0
+*/
+static code SandboxManager::createSystemPolicyCall(code call) [dom=UNCONTROLLED_API; flags=RET_VALUE_ONLY] {
+    return qore_bind_sandbox_call(call, true, xsink);
 }

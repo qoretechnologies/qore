@@ -38,6 +38,72 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/qore_aot_deps.h"
+#include "qore/intern/QoreSandboxProvenance.h"
+
+#include <shared_mutex>
+#include <unordered_map>
+
+namespace {
+struct CallReferenceProvenanceRegistry {
+    std::shared_mutex mutex;
+    std::unordered_map<const ResolvedCallReferenceNode*, QoreSandboxContext*> contexts;
+};
+
+// Process lifetime: call references can be released by other static destructors. Entries own only contexts,
+// never call references, and are removed when their call reference loses its last strong reference.
+CallReferenceProvenanceRegistry& call_reference_provenance_registry() {
+    static auto* registry = new CallReferenceProvenanceRegistry;
+    return *registry;
+}
+
+std::atomic<size_t> call_reference_provenance_count{0};
+}
+
+void qore_capture_call_reference_provenance(const ResolvedCallReferenceNode* ref) {
+    std::unique_ptr<QoreSandboxContext> context(qore_capture_sandbox_provenance());
+    if (!context) {
+        return;
+    }
+    auto& registry = call_reference_provenance_registry();
+    std::unique_lock<std::shared_mutex> lock(registry.mutex);
+    registry.contexts.emplace(ref, context.get());
+    context.release();
+    call_reference_provenance_count.fetch_add(1, std::memory_order_relaxed);
+}
+
+void qore_release_call_reference_provenance(const ResolvedCallReferenceNode* ref) {
+    if (!call_reference_provenance_count.load(std::memory_order_relaxed)) {
+        return;
+    }
+    QoreSandboxContext* context = nullptr;
+    auto& registry = call_reference_provenance_registry();
+    {
+        std::unique_lock<std::shared_mutex> lock(registry.mutex);
+        auto i = registry.contexts.find(ref);
+        if (i != registry.contexts.end()) {
+            context = i->second;
+            registry.contexts.erase(i);
+            call_reference_provenance_count.fetch_sub(1, std::memory_order_relaxed);
+        }
+    }
+    if (context) {
+        context->deref();
+    }
+}
+
+QoreSandboxContext* qore_get_call_reference_provenance(const ResolvedCallReferenceNode* ref) {
+    if (!call_reference_provenance_count.load(std::memory_order_relaxed)) {
+        return nullptr;
+    }
+    auto& registry = call_reference_provenance_registry();
+    std::shared_lock<std::shared_mutex> lock(registry.mutex);
+    auto i = registry.contexts.find(ref);
+    if (i == registry.contexts.end()) {
+        return nullptr;
+    }
+    i->second->ref();
+    return i->second;
+}
 
 #include <cstdlib>
 #include <cstring>
@@ -153,7 +219,7 @@ QoreValue CallReferenceCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, 
             "reference (evaluated to type '%s')", lv->getTypeName());
         return QoreValue();
     }
-    return r->execValue(args, xsink);
+    return r->invoke(args, xsink);
 }
 
 int CallReferenceCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -279,6 +345,7 @@ bool AbstractCallReferenceNode::getAsBoolImpl() const {
 }
 
 bool ResolvedCallReferenceNode::derefImpl(ExceptionSink* xsink) {
+    qore_release_call_reference_provenance(this);
     weakDeref();
     return false;
 }
@@ -504,6 +571,7 @@ RunTimeResolvedMethodReferenceNode::~RunTimeResolvedMethodReferenceNode() {
 }
 
 QoreValue RunTimeResolvedMethodReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
     //printd(5, "RunTimeResolvedMethodReferenceNode::execValue() cpgm: %p opgm: %p\n", getProgram(), obj->getProgram());
     // issue #2145: do not set the call reference class context before arguments are evaluted
     // run the reference in the Program where it was originally created
@@ -545,6 +613,7 @@ RunTimeObjectMethodReferenceNode::~RunTimeObjectMethodReferenceNode() {
 }
 
 QoreValue RunTimeObjectMethodReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
     if (obj && !obj->isValid()) {
         xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call a method on an object that has already been "
             "deleted");
@@ -631,6 +700,7 @@ QoreValue LocalStaticMethodCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& 
 }
 
 QoreValue LocalStaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     return qore_method_private::eval(*method, xsink, rc, nullptr, args);
 }
@@ -660,6 +730,7 @@ QoreValue LocalMethodCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_
 }
 
 QoreValue LocalMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     return qore_method_private::eval(*method, xsink, rc, runtime_get_stack_object(), args, nullptr);
 }
@@ -695,6 +766,7 @@ bool StaticMethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue StaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
     // issue #4964: do not set object or class context until arguments are evaluated
     // do not set pgm context here before evaluating args
     RuntimeConfig& rc = rc_get_current_ref();
@@ -782,12 +854,13 @@ QoreValue DeferredStaticMethodCallReferenceNode::evalImpl(RuntimeConfig& rc, boo
 }
 
 QoreValue DeferredStaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     ResolvedCallReferenceNode* ref = resolve(rc, xsink);
     if (!ref) {
         return QoreValue();
     }
-    QoreValue rv = ref->execValue(args, xsink);
+    QoreValue rv = ref->invoke(args, xsink);
     ref->deref(xsink);
     return rv;
 }
@@ -811,6 +884,7 @@ bool MethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue MethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     return qore_method_private::eval(*method, xsink, rc, obj, args);
 }
@@ -1003,6 +1077,7 @@ QoreValue LocalFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& need
 }
 
 QoreValue LocalFunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     return uf->evalFunction(0, args, nullptr, rc, xsink);
 }
@@ -1022,6 +1097,7 @@ bool FunctionCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue FunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     return uf->evalFunction(0, args, pgm, rc, xsink);
 }
@@ -1075,24 +1151,129 @@ QoreValue DeferredFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& n
 }
 
 QoreValue DeferredFunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     FunctionCallReferenceNode* ref = resolve(rc, xsink);
     if (!ref) {
         return QoreValue();
     }
-    QoreValue rv = ref->execValue(args, xsink);
+    QoreValue rv = ref->invoke(args, xsink);
     ref->deref(xsink);
     return rv;
 }
 
 ResolvedCallReferenceNode::ResolvedCallReferenceNode() : AbstractCallReferenceNode(false, NT_FUNCREF) {
+    qore_capture_call_reference_provenance(this);
 }
 
 ResolvedCallReferenceNode::ResolvedCallReferenceNode(bool n_needs_eval, qore_type_t n_type)
         : AbstractCallReferenceNode(n_needs_eval, n_type) {
+    if (!n_needs_eval) {
+        qore_capture_call_reference_provenance(this);
+    }
 }
 
 ResolvedCallReferenceNode::~ResolvedCallReferenceNode() {
+    qore_release_call_reference_provenance(this);
+}
+
+QoreValue ResolvedCallReferenceNode::invoke(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    return execValue(args, xsink);
+}
+
+namespace {
+//! A fixed callback, bound at registration time; the public callback subclass ABI remains unchanged.
+class SandboxBoundCallReference : public ResolvedCallReferenceNode {
+public:
+    SandboxBoundCallReference(const ResolvedCallReferenceNode* callback, bool trusted)
+            : callback(const_cast<ResolvedCallReferenceNode*>(callback)), trusted(trusted),
+                trusted_program(trusted ? ::getProgram() : nullptr) {
+        callback->ref();
+        if (trusted_program) {
+            trusted_program->depRef();
+        }
+    }
+
+    QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const override {
+        QoreSandboxProvenanceHelper provenance(this);
+        if (check_stack(xsink)) {
+            return QoreValue();
+        }
+        if (trusted) {
+            ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
+            if (*xsink) {
+                return QoreValue();
+            }
+            QoreSandboxTrustedPolicyHelper privilege;
+            return callback->invoke(args, xsink);
+        }
+        return callback->invoke(args, xsink);
+    }
+
+    QoreFunction* getFunction() const override { return callback->getFunction(); }
+    QoreProgram* getProgram() const override { return callback->getProgram(); }
+    const ResolvedCallReferenceNode* getCallback() const { return callback; }
+    bool isTrusted() const { return trusted; }
+
+protected:
+    bool derefImpl(ExceptionSink* xsink) override {
+        QoreSandboxProvenanceHelper provenance(this);
+        callback->deref(xsink);
+        if (trusted_program) {
+            trusted_program->depDeref();
+        }
+        return ResolvedCallReferenceNode::derefImpl(xsink);
+    }
+
+private:
+    ResolvedCallReferenceNode* const callback;
+    const bool trusted;
+    QoreProgram* const trusted_program;
+};
+}
+
+const ResolvedCallReferenceNode* qore_get_sandbox_bound_callback(const AbstractQoreNode* callback) {
+    const auto* bound = dynamic_cast<const SandboxBoundCallReference*>(callback);
+    return bound ? bound->getCallback() : nullptr;
+}
+
+ResolvedCallReferenceNode* qore_bind_sandbox_call(const ResolvedCallReferenceNode* callback, bool trusted,
+        ExceptionSink* xsink) {
+    if (trusted) {
+        QoreSandboxManagerHelper governing;
+        if (governing) {
+            xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system-policy callback must be registered "
+                "outside sandbox execution and must not have sandbox provenance");
+            return nullptr;
+        }
+        // Do not accumulate forwarding chains when an already bound callback is registered again.
+        // Every binding's provenance must be checked before unwrapping it.
+        while (true) {
+            auto* creation = qore_get_call_reference_provenance(callback);
+            if (creation) {
+                creation->deref();
+                xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system-policy callback must not have "
+                    "sandbox provenance");
+                return nullptr;
+            }
+            const auto* bound = dynamic_cast<const SandboxBoundCallReference*>(callback);
+            if (!bound) {
+                break;
+            }
+            if (bound->isTrusted()) {
+                return bound->refRefSelf();
+            }
+            callback = bound->getCallback();
+        }
+    } else if (const auto* bound = dynamic_cast<const SandboxBoundCallReference*>(callback)) {
+        if (!bound->isTrusted()) {
+            // Bind repeatedly without building a recursive forwarding chain; retain all prior provenance.
+            QoreSandboxProvenanceHelper previous(callback);
+            return new SandboxBoundCallReference(bound->getCallback(), false);
+        }
+    }
+    return new SandboxBoundCallReference(callback, trusted);
 }
 
 QoreProgram* ResolvedCallReferenceNode::getProgram() const {

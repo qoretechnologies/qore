@@ -44,6 +44,7 @@
 #include <vector>
 
 #include "qore/intern/QoreJITException.h"
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
 #include "qore/intern/QoreParseTypeInfo.h"
 
@@ -596,6 +597,7 @@ public:
     }
 
 protected:
+    QoreSandboxProvenanceHelper sandbox_provenance;
     qore_call_t ct;
     const char* name;
     ExceptionSink* xsink;

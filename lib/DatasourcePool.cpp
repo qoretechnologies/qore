@@ -489,7 +489,7 @@ int DatasourcePool::checkWait(int64 wait_total, ExceptionSink* xsink) {
     args->push(wait_total, xsink);
     args->push(tl_warning_ms, xsink);
     args->push(callback_arg.refSelf(), xsink);
-    wc->execValue(*args, xsink).discard(xsink);
+    wc->invoke(*args, xsink).discard(xsink);
     return *xsink ? -1 : 0;
 }
 

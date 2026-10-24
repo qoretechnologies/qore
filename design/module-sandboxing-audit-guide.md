@@ -94,10 +94,13 @@ is what makes the rule above hold for both source and compiled modules: when san
 application code calls a module function that performs I/O, the helper finds the
 application's sandbox even though the I/O executes in the module's program.
 
-- Resolution order is **nearest-enclosing wins**: with nested sandboxes
+- The Program-stack rule is **nearest-enclosing wins**: with nested sandboxes
   (`p1` sandbox → `p2` sandbox → module), the helper returns `p2`'s manager — matching how
   other per-program policies (e.g. `%no-debugging`) are resolved by the same context walk.
-- The fast path is unchanged: if no program on the stack has a manager, the helper resolves
+- Object and callback creation provenance is intersected with that Program-stack result. A tagged module object
+  or callback cannot escape its creating sandbox when a trusted caller invokes it later; every policy must allow
+  the access. Interrupt checks and thread-slot reservations include all contributing managers.
+- If neither the Program stack nor active or inherited provenance contributes a manager, the helper resolves
   to false and the operation runs unrestricted.
 - The explicit `QoreSandboxManagerHelper(QoreProgram* pgm)` constructor still means "this
   specific program" and does **not** walk the stack; use the no-arg form for I/O on behalf
@@ -153,11 +156,18 @@ becoming a general bypass, and all three are asserted in
   setup, for example) is **not** a policy site and must keep the no-arg form.
 - It is restricted to `PO_NO_UNCONTROLLED_APIS`, so sandboxed code cannot establish one.
 
-Scope it as tightly as possible: everything executed inside the barrier runs without the
-caller's policy. Code supplied by the sandboxed caller (a callback, an object it configured)
-must be invoked through a program that carries the caller's sandbox, never directly by the
-trusted code inside the barrier: a module function or method the caller passed in runs in
-the module's program and is not governed unless such a program is on the stack.
+The barrier cannot lift object or callback provenance. Trusted resource operations register a fixed callback with
+`SandboxManager::createSystemPolicyCall()` during trusted startup, before any sandbox governs execution. The
+capability enters that registration Program, masks pre-existing filesystem/network policy for its operation, and
+preserves interruption and thread accounting. A tenant callback invoked inside it reactivates its own provenance.
+The callback must validate its arguments and avoid granting arbitrary file, network, or callback execution access.
+
+Creation does not track later tenant configuration of a pre-existing object. Registration must retain the
+interface-Program wrapper or use `SandboxManager::bindCall()` in the interface context. Do not retag a shared object.
+Native callback callers use `ResolvedCallReferenceNode::invoke()`; a native subclass called directly applies
+`QoreSandboxProvenanceHelper`, including during cleanup that can execute Qore code. Ordinary foreign-runtime I/O
+without Qore policy checks remains outside this mechanism. See `design/sandbox-provenance.md` and the
+`sandbox-provenance.qtest` regression suite for composition, revocation, capabilities, hooks and asynchronous work.
 
 ### Key Principle: Sandbox Manager May Be Absent
 

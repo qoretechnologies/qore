@@ -1046,7 +1046,7 @@ int QoreModuleDefContext::init(QoreProgram& pgm, ExceptionSink& xsink) {
         ValueHolder cn(init_c.eval(&xsink), &xsink);
         assert(!xsink);
         assert(cn->getType() == NT_RUNTIME_CLOSURE || cn->getType() == NT_FUNCREF);
-        cn->get<ResolvedCallReferenceNode>()->execValue(0, &xsink).discard(&xsink);
+        cn->get<ResolvedCallReferenceNode>()->invoke(0, &xsink).discard(&xsink);
     }
 
     return xsink ? -1 : 0;
@@ -1249,7 +1249,7 @@ void QoreUserModule::runDelCallback(ExceptionSink& xsink) {
         assert(!xsink);
         if (!xsink) {
             assert(cn->getType() == NT_RUNTIME_CLOSURE || cn->getType() == NT_FUNCREF);
-            cn->get<ResolvedCallReferenceNode>()->execValue(0, &xsink).discard(&xsink);
+            cn->get<ResolvedCallReferenceNode>()->invoke(0, &xsink).discard(&xsink);
         }
     }
     d->deref(&xsink);

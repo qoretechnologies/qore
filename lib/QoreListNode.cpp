@@ -765,7 +765,7 @@ int qore_list_private::mergesort(const ResolvedCallReferenceNode* fr, bool ascen
         int rc;
         if (fr) {
             safe_qorelist_t args(do_args(lv, rv), xsink);
-            ValueHolder result(fr->execValue(*args, xsink), xsink);
+            ValueHolder result(fr->invoke(*args, xsink), xsink);
             if (*xsink) {
                 return -1;
             }
@@ -818,7 +818,7 @@ int qore_list_private::qsort(const ResolvedCallReferenceNode* fr, size_t left, s
             int rc;
             if (fr) {
                 safe_qorelist_t args(do_args(entry[right], pivot), xsink);
-                ValueHolder rv(fr->execValue(*args, xsink), xsink);
+                ValueHolder rv(fr->invoke(*args, xsink), xsink);
                 if (*xsink) {
                     return -1;
                 }
@@ -847,7 +847,7 @@ int qore_list_private::qsort(const ResolvedCallReferenceNode* fr, size_t left, s
             int rc;
             if (fr) {
                 safe_qorelist_t args(do_args(entry[left], pivot), xsink);
-                ValueHolder rv(fr->execValue(*args, xsink), xsink);
+                ValueHolder rv(fr->invoke(*args, xsink), xsink);
                 if (*xsink) {
                     return -1;
                 }
@@ -1114,7 +1114,7 @@ QoreValue QoreListNode::min(const ResolvedCallReferenceNode* fr, ExceptionSink* 
         QoreValue v = priv->entry[i];
 
         safe_qorelist_t args(do_args(v, rv), xsink);
-        ValueHolder result(fr->execValue(*args, xsink), xsink);
+        ValueHolder result(fr->invoke(*args, xsink), xsink);
         if (*xsink) {
             return QoreValue();
         }
@@ -1135,7 +1135,7 @@ QoreValue QoreListNode::max(const ResolvedCallReferenceNode* fr, ExceptionSink* 
         QoreValue v = priv->entry[i];
 
         safe_qorelist_t args(do_args(v, rv), xsink);
-        ValueHolder result(fr->execValue(*args, xsink), xsink);
+        ValueHolder result(fr->invoke(*args, xsink), xsink);
         if (*xsink) {
             return QoreValue();
         }

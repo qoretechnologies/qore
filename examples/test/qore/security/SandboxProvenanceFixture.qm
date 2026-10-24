@@ -1,0 +1,79 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+
+#! Test-only module for sandbox execution provenance
+/** @section sandboxprovenancefixtureintro Introduction
+    Shared module code whose callbacks and objects can be created by different sandboxed Programs.
+*/
+module SandboxProvenanceFixture {
+    version = "1.0";
+    desc = "Sandbox provenance regression fixture";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace SandboxProvenanceFixture {
+    public class Reader {
+        private { string path; }
+        constructor(string path) { self.path = path; }
+        setPath(string path) { self.path = path; }
+        string read() { return Reader::load(path); }
+        static string load(string path) { return ReadOnlyFile::readTextFile(path); }
+        static string readDirect(Reader reader) { return reader.read(); }
+        string barrierRead() { return SandboxManager::callWithSystemPolicy(\Reader::load(), path); }
+        code reader() { return auto sub () { return read(); }; }
+        code functionRef() { return \Reader::load(); }
+        auto call(code callback) { return callback(); }
+        string readAsync() {
+            return call_async(auto sub () { return read(); }).get(10s);
+        }
+        string connect() {
+            Socket socket();
+            socket.connect("127.0.0.1:1", 100);
+            return "connected";
+        }
+        string bind() {
+            Socket socket();
+            socket.bindINET("0.0.0.0", 0);
+            return "bound";
+        }
+        list<auto> startWaiter(Queue gate, Queue result) {
+            int tid = background (sub () {
+                try { result.push(gate.get(10s)); }
+                catch (hash<ExceptionInfo> ex) { result.push(ex.err); }
+            })();
+            return (tid, result);
+        }
+    }
+
+    public class DerivedReader inherits Reader {
+        constructor(string path) : Reader(path) {}
+    }
+
+    public class Cycle {
+        public { *code callback; }
+        private { Queue result; }
+        constructor(Queue result) { self.result = result; }
+        destructor() { result.push("collected"); }
+        static make(Queue result) {
+            Cycle cycle(result);
+            cycle.callback = SandboxManager::bindCall(sub () { cycle.result.size(); });
+        }
+    }
+
+    public class Hooks {
+        private { string path; Queue result; }
+        constructor(string path, Queue result) { self.path = path; self.result = result; }
+        static code retained(string path, Queue result) {
+            Hooks holder(path, result);
+            return sub () { holder.result.size(); };
+        }
+        string methodGate(string name) { return Reader::load(path); }
+        string memberGate(string name) { return Reader::load(path); }
+        destructor() {
+            try { result.push(Reader::load(path)); }
+            catch (hash<ExceptionInfo> ex) { result.push(ex.err); }
+        }
+    }
+}

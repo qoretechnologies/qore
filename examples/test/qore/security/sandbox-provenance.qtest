@@ -1,0 +1,249 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}"
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires SandboxProvenanceFixture
+%exec-class SandboxProvenanceTest
+
+class SandboxProvenanceTest inherits QUnit::Test {
+    private { string path; }
+
+    const Source = "
+        object sub make(string path) { return new SandboxProvenanceFixture::Reader(path); }
+        object sub derived(string path) { return new SandboxProvenanceFixture::DerivedReader(path); }
+        code sub function_ref() { return \\SandboxProvenanceFixture::Reader::load(); }
+        code sub closure(string path) { return auto sub () {
+            return SandboxProvenanceFixture::Reader::load(path);
+        }; }
+        auto sub call(code callback, *list<auto> args) { return call_function_args(callback, args); }
+        string sub read(object reader) { return reader.read(); }
+        code sub bind(code callback) { return SandboxManager::bindCall(callback); }
+        code sub capability(code callback) { return SandboxManager::createSystemPolicyCall(callback); }
+        sub configure(object reader, string path) { reader.setPath(path); }
+        list<auto> sub wait(object reader, Queue gate, Queue result) { return reader.startWaiter(gate, result); }
+        object sub hooks(string path, Queue result) { return new SandboxProvenanceFixture::Hooks(path, result); }
+    ";
+
+    constructor() : QUnit::Test("sandbox provenance", "1.0", \ARGV) {
+        addTestCase("module objects, inherited methods, copies and references", \objects());
+        addTestCase("caller and creation policies intersect", \intersection());
+        addTestCase("barriers and trusted resource capabilities", \capabilities());
+        addTestCase("pre-existing callbacks bind at registration", \registration());
+        addTestCase("async work and worker reuse", \workers());
+        addTestCase("live policies and manager replacement", \lifetime());
+        addTestCase("network policy", \network());
+        addTestCase("interrupts and composed thread budgets", \interrupts());
+        addTestCase("bound closures participate in cycle collection", \cycles());
+        addTestCase("implicit hooks and destructors", \hooks());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        path = tmp_location() + DirSep + "qore-provenance-" + get_random_string(12);
+        File file();
+        file.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        file.write("provenance fixture\n");
+    }
+    globalTearDown() { unlink(path); }
+
+    private Program sandbox(SandboxManager manager) {
+        Program program(PO_MODERN);
+        program.setSandboxManager(manager);
+        program.parse(Source, "sandbox-provenance-interface");
+        return program;
+    }
+
+    private objects() {
+        SandboxManager manager();
+        Program program = sandbox(manager);
+        foreach string factory in ("make", "derived") {
+            object reader = program.callFunction(factory, path);
+            assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \reader.read());
+            assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING,
+                \SandboxProvenanceFixture::Reader::readDirect(), reader);
+            object copied = reader.copy();
+            assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \copied.read());
+            code closure = reader.reader();
+            assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, closure);
+            code ref = reader.functionRef();
+            assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, ref, path);
+        }
+        code ref = program.callFunction("function_ref");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, ref, path);
+        code closure = program.callFunction("closure", path);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, closure);
+        assertEq("provenance fixture\n", SandboxProvenanceFixture::Reader::load(path));
+    }
+
+    private intersection() {
+        SandboxManager deny();
+        SandboxManager allow();
+        allow.setFilesystemDefaultPolicy(True);
+        Program restricted = sandbox(deny);
+        Program permitted = sandbox(allow);
+        object first = restricted.callFunction("make", path);
+        object second = permitted.callFunction("make", path);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \permitted.callFunction(), ("read", first));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \restricted.callFunction(), ("read", second));
+        assertEq("provenance fixture\n", permitted.callFunction("read", second));
+        code callback = \second.read();
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \first.call(), callback);
+    }
+
+    private capabilities() {
+        code trusted_read = auto sub () { return SandboxProvenanceFixture::Reader::load(path); };
+        code capability = SandboxManager::createSystemPolicyCall(trusted_read);
+        code run_callback = SandboxManager::createSystemPolicyCall(auto sub (code c) { return c(); });
+        SandboxManager manager();
+        Program program = sandbox(manager);
+        object reader = program.callFunction("make", path);
+        code tenant = \reader.read();
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \reader.barrierRead());
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING,
+            \SandboxManager::callWithSystemPolicy(), tenant);
+        assertEq("provenance fixture\n", program.callFunction("call", capability));
+        assertEq("provenance fixture\n", reader.call(capability));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, run_callback, tenant);
+        assertThrows("SANDBOX-CAPABILITY-ERROR", NOTHING, \program.callFunction(),
+            ("capability", trusted_read));
+        code tagged = program.callFunction("function_ref");
+        assertThrows("SANDBOX-CAPABILITY-ERROR", NOTHING,
+            \SandboxManager::createSystemPolicyCall(), tagged);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \reader.read());
+    }
+
+    private registration() {
+        SandboxManager manager();
+        Program program = sandbox(manager);
+        SandboxProvenanceFixture::Reader reader("unused");
+        program.callFunction("configure", reader, path);
+        assertEq("provenance fixture\n", reader.read(), "configuration does not mutate shared provenance");
+        code bound = program.callFunction("bind", \reader.read());
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, bound);
+        assertEq("provenance fixture\n", reader.read());
+        assertThrows("SANDBOX-CAPABILITY-ERROR", NOTHING, \SandboxManager::createSystemPolicyCall(), bound);
+        SandboxManager second();
+        second.setFilesystemDefaultPolicy(True);
+        Program p2 = sandbox(second);
+        code rebound = p2.callFunction("bind", bound);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, rebound);
+    }
+
+    private workers() {
+        SandboxManager manager();
+        Program program = sandbox(manager);
+        object reader = program.callFunction("make", path);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \reader.readAsync());
+        ThreadPool pool(1);
+        Queue results();
+        code tagged = program.callFunction("bind", auto sub () {
+            try { results.push(SandboxProvenanceFixture::Reader::load(path)); }
+            catch (hash<ExceptionInfo> ex) { results.push(ex.err); }
+        });
+        on_exit { pool.stopWait(); }
+        pool.submit(tagged);
+        assertEq("FILESYSTEM-ACCESS-DENIED", results.get(10s));
+        pool.submit(sub () { results.push(SandboxProvenanceFixture::Reader::load(path)); });
+        assertEq("provenance fixture\n", results.get(10s));
+        AsyncIoController::addTimer(now_us(), tagged);
+        assertEq("FILESYSTEM-ACCESS-DENIED", results.get(10s));
+    }
+
+    private lifetime() {
+        SandboxManager manager();
+        Program program = sandbox(manager);
+        object reader = program.callFunction("make", path);
+        manager.setFilesystemDefaultPolicy(True);
+        assertEq("provenance fixture\n", reader.read());
+        manager.setFilesystemDefaultPolicy(False);
+        SandboxManager replacement();
+        replacement.setFilesystemDefaultPolicy(True);
+        program.setSandboxManager(replacement);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \reader.read());
+        delete program;
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \reader.read());
+    }
+
+    private network() {
+        SandboxManager manager();
+        Program program = sandbox(manager);
+        object reader = program.callFunction("make", path);
+        assertThrows("NETWORK-ACCESS-DENIED", NOTHING, \reader.connect());
+        assertThrows("NETWORK-ACCESS-DENIED", NOTHING, \reader.bind());
+    }
+
+    private waitForTermination(int tid) {
+        for (int i = 0; i < 1000; ++i) {
+            bool running = False;
+            foreach int active in (thread_list()) {
+                if (active == tid) { running = True; break; }
+            }
+            if (!running) { return; }
+            usleep(10000);
+        }
+        throw "TEST-THREAD-TIMEOUT", sprintf("thread %d did not finish", tid);
+    }
+
+    private cycles() {
+        Queue results();
+        SandboxProvenanceFixture::Cycle::make(results);
+        assertEq("collected", results.get(1s));
+        code bound = auto sub () { return "bound"; };
+        for (int i = 0; i < 1000; ++i) {
+            bound = SandboxManager::bindCall(bound);
+        }
+        assertEq("bound", bound());
+    }
+
+    private hooks() {
+        SandboxManager manager();
+        Program program = sandbox(manager);
+        Queue result();
+        object hooks = program.callFunction("hooks", path, result);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, sub () { hooks.unknown(); });
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, sub () { auto value = hooks.unknown; });
+        delete hooks;
+        assertEq("FILESYSTEM-ACCESS-DENIED", result.get(1s));
+        code retained = SandboxProvenanceFixture::Hooks::retained(path, result);
+        code bound = program.callFunction("bind", retained);
+        remove retained;
+        remove bound;
+        assertEq("FILESYSTEM-ACCESS-DENIED", result.get(1s), "bound closure cleanup retains registration policy");
+    }
+
+    private interrupts() {
+        SandboxManager first();
+        SandboxManager second();
+        first.setMaxThreads(1);
+        second.setMaxThreads(1);
+        Program p1 = sandbox(first);
+        Program p2 = sandbox(second);
+        object reader = p1.callFunction("make", path);
+        Queue gate();
+        Queue result();
+        list<auto> waiter = p2.callFunction("wait", reader, gate, result);
+        on_exit {
+            first.clearInterrupt();
+            second.clearInterrupt();
+            gate.push("done");
+            waitForTermination(waiter[0]);
+        }
+        assertThrows("THREAD-CREATION-FAILURE", NOTHING, \reader.startWaiter(), (gate, result));
+        second.requestInterrupt();
+        assertEq("PROGRAM-INTERRUPTED", waiter[1].get(10s));
+        waitForTermination(waiter[0]);
+        second.clearInterrupt();
+        list<auto> next = reader.startWaiter(gate, result);
+        on_exit {
+            gate.push("done");
+            waitForTermination(next[0]);
+        }
+        gate.push("done");
+        assertEq("done", next[1].get(10s));
+        waitForTermination(next[0]);
+    }
+}

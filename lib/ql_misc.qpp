@@ -850,7 +850,7 @@ auto call_function(code callable, ...) {
     }
 
     ProgramCallContextHelper pch(callable->getProgram());
-    return callable->execValue(*vargs, xsink);
+    return callable->invoke(*vargs, xsink);
 }
 
 //! Calls a function and returns the return value, using the optional second argument as a list of arguments for the function
@@ -906,7 +906,7 @@ auto result = call_function_args(call_ref, (arg1, arg2));
 */
 auto call_function_args(code callable, *softlist<auto> arguments) [flags=NAMED_ARGS] {
     ProgramCallContextHelper pch(callable->getProgram());
-    return callable->execValue(arguments, xsink);
+    return callable->invoke(arguments, xsink);
 }
 
 //! Calls a function and returns the return value, passing the remaining arguments after the function name to the builtin function
@@ -3138,7 +3138,7 @@ auto call_with_module_load_lock(code callable, ...) [dom=MODULES] {
     }
     // the process-global module-load lock has been retired (see QoreModuleLoadLockHelper); this is
     // now a direct pass-through call retained for backwards compatibility
-    return callable->execValue(*vargs, xsink);
+    return callable->invoke(*vargs, xsink);
 }
 
 //! Loads in a %Qore user module at run-time with using the given @ref Qore::Program "Program" object as the container for the user module code

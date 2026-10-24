@@ -11443,7 +11443,7 @@ static QoreValue f_dbg_file_stream_io_flags(const QoreListNode* params, RuntimeC
         dbg_fsio_second = -1;
         ::close(second);
     });
-    ValueHolder rv(call->execValue(nullptr, xsink), xsink);
+    ValueHolder rv(call->invoke(nullptr, xsink), xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -11482,7 +11482,7 @@ static QoreValue f_dbg_jobserver_admit(const QoreListNode* params, RuntimeConfig
     unsigned wakeups = 0, waits = 0, started = 0;
     bool closed = false;
     int rv = qore_aot_dbg_jobserver_admit(makeflags->c_str(), requested_jobs, work_items, [code, xsink]() -> size_t {
-        ValueHolder claims(code->execValue(nullptr, xsink), xsink);
+        ValueHolder claims(code->invoke(nullptr, xsink), xsink);
         if (*xsink) {
             return 0;
         }
@@ -11557,7 +11557,7 @@ static QoreValue f_dbg_fork_while_handler_held(const QoreListNode* params, Runti
         int status = 0;
         if (child_code) {
             ExceptionSink child_xsink;
-            ValueHolder rv(child_code->execValue(nullptr, &child_xsink), &child_xsink);
+            ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
             status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
             child_xsink.clear();
         }

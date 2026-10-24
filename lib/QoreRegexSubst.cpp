@@ -500,7 +500,7 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
         // call the callback
         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
         args->push(match_info.release(), xsink);
-        ValueHolder rv(const_cast<ResolvedCallReferenceNode*>(callback)->execValue(*args, xsink), xsink);
+        ValueHolder rv(const_cast<ResolvedCallReferenceNode*>(callback)->invoke(*args, xsink), xsink);
         if (*xsink) {
             return nullptr;
         }

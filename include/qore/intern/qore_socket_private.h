@@ -3851,7 +3851,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         // unlock and execute callback
         {
             AutoUnlocker al(l);
-            res = callback.execValue(args, xsink);
+            res = callback.invoke(args, xsink);
         }
 
         // check exception and socket status

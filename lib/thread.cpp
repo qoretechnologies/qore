@@ -53,6 +53,7 @@
 #include "qore/intern/QoreOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Variable.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 
 // to register object types
 #include "qore/intern/QC_Queue.h"
@@ -484,6 +485,9 @@ public:
     // runs, so it is only used when no Program on the thread's program-context stack has a sandbox manager (see
     // QoreInheritedSandboxHelper and design/thread-sandbox-inheritance.md)
     const QoreSandboxContext* inherited_sandbox_context = nullptr;
+    const QoreSandboxProvenanceHelper* sandbox_provenance = nullptr;
+    const QoreSandboxProvenanceHelper* trusted_policy_boundary = nullptr;
+    unsigned trusted_policy_depth = 0;
 
     // current namespace context for parsing
     qore_ns_private* current_ns = nullptr;
@@ -3379,7 +3383,7 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
 
     @return the referenced manager (the caller owns the reference), or nullptr if there is none
 */
-static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(unsigned* pgm_id = nullptr,
+static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(unsigned* pgm_id = nullptr,
         bool policy = false) {
     if (pgm_id) {
         *pgm_id = 0;
@@ -3390,7 +3394,7 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(unsigned* pgm_
     }
     // an operation continued for another thread is governed by the sandbox of the thread that started it; the
     // Program of such a manager is only known by its ID (see get_cancel_scope_pgm_id())
-    if (const QoreSandboxContext* ctx = td->sandbox_context) {
+    if (const QoreSandboxContext* ctx = (policy && td->trusted_policy_depth) ? nullptr : td->sandbox_context) {
         QoreSandboxManager* sm = policy ? ctx->policy_manager : ctx->manager;
         if (sm) {
             sm->ref();
@@ -3455,6 +3459,49 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(unsigned* pgm_
         return sm;
     }
     return nullptr;
+}
+
+static QoreSandboxManager* find_thread_provenance_ref(bool policy) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return nullptr;
+    }
+    std::vector<QoreSandboxManager*> managers;
+    for (const auto* frame = td->sandbox_provenance; frame; frame = frame->getPrevious()) {
+        if (policy && td->trusted_policy_depth && frame == td->trusted_policy_boundary) {
+            break;
+        }
+        const QoreSandboxContext* ctx = frame->getContext();
+        managers.push_back(policy ? ctx->policy_manager : ctx->manager);
+    }
+    if (!policy || !td->trusted_policy_depth) {
+        const QoreSandboxContext* ctx = td->sandbox_context ? td->sandbox_context : td->inherited_sandbox_context;
+        if (ctx) {
+            managers.push_back(policy ? ctx->provenance_policy_manager : ctx->provenance_manager);
+        }
+    }
+    return QoreSandboxComposition::combine(managers);
+}
+
+static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(unsigned* pgm_id = nullptr,
+        bool policy = false) {
+    ReferenceHolder<QoreSandboxManager> base(find_thread_sandbox_stack_ref_intern(pgm_id, policy), nullptr);
+    ReferenceHolder<QoreSandboxManager> provenance(find_thread_provenance_ref(policy), nullptr);
+    if (!provenance) {
+        return base.release();
+    }
+    if (pgm_id && !*pgm_id) {
+        ThreadData* td = thread_data.get();
+        if (td->sandbox_provenance) {
+            *pgm_id = td->sandbox_provenance->getContext()->pgm_id;
+        } else {
+            const auto* ctx = td->sandbox_context ? td->sandbox_context : td->inherited_sandbox_context;
+            if (ctx) {
+                *pgm_id = ctx->pgm_id;
+            }
+        }
+    }
+    return QoreSandboxComposition::combine({base.operator->(), provenance.operator->()});
 }
 
 QoreSandboxManager* qore_find_thread_sandbox_manager_ref() {
@@ -3527,24 +3574,30 @@ int qore_push_sandbox_policy_barrier() {
 
 QoreSandboxContext::QoreSandboxContext() {
     ThreadData* td = thread_data.get();
-    if (td && td->sandbox_context) {
-        // a nested capture keeps the context that is applied
-        const QoreSandboxContext* ctx = td->sandbox_context;
-        manager = ctx->manager;
-        policy_manager = ctx->policy_manager;
-        pgm_id = ctx->pgm_id;
-        if (manager) {
-            manager->ref();
-        }
-        if (policy_manager) {
-            policy_manager->ref();
-        }
-        return;
+    ReferenceHolder<QoreSandboxManager> current(find_thread_sandbox_manager_ref_intern(&pgm_id), nullptr);
+    assert(!current || pgm_id);
+    ReferenceHolder<QoreSandboxManager> policy(find_thread_sandbox_manager_ref_intern(nullptr, true), nullptr);
+    ReferenceHolder<QoreSandboxManager> provenance(find_thread_provenance_ref(false), nullptr);
+    ReferenceHolder<QoreSandboxManager> provenance_policy(find_thread_provenance_ref(true), nullptr);
+    if (pgm_id) {
+        program_ids.push_back(pgm_id);
     }
-    manager = find_thread_sandbox_manager_ref_intern(&pgm_id);
-    // the manager is owned by the Program it was found on
-    assert(!manager || pgm_id);
-    policy_manager = find_thread_sandbox_manager_ref_intern(nullptr, true);
+    if (td) {
+        for (const auto* frame = td->sandbox_provenance; frame; frame = frame->getPrevious()) {
+            const auto& ids = frame->getContext()->program_ids;
+            program_ids.insert(program_ids.end(), ids.begin(), ids.end());
+        }
+        const auto* ctx = td->sandbox_context ? td->sandbox_context : td->inherited_sandbox_context;
+        if (ctx) {
+            program_ids.insert(program_ids.end(), ctx->program_ids.begin(), ctx->program_ids.end());
+        }
+    }
+    std::sort(program_ids.begin(), program_ids.end());
+    program_ids.erase(std::unique(program_ids.begin(), program_ids.end()), program_ids.end());
+    manager = current.release();
+    policy_manager = policy.release();
+    provenance_manager = provenance.release();
+    provenance_policy_manager = provenance_policy.release();
 }
 
 QoreSandboxContext::~QoreSandboxContext() {
@@ -3554,6 +3607,83 @@ QoreSandboxContext::~QoreSandboxContext() {
     if (policy_manager) {
         policy_manager->deref(nullptr);
     }
+    if (provenance_manager) {
+        provenance_manager->deref(nullptr);
+    }
+    if (provenance_policy_manager) {
+        provenance_policy_manager->deref(nullptr);
+    }
+}
+
+QoreSandboxContext* qore_capture_sandbox_provenance() {
+    // Check before allocating: the common unsandboxed object/callback needs no context storage.
+    ReferenceHolder<QoreSandboxManager> manager(qore_find_thread_sandbox_manager_ref(), nullptr);
+    return manager ? new QoreSandboxContext : nullptr;
+}
+
+void QoreSandboxProvenanceHelper::apply(QoreSandboxContext* captured) {
+    assert(!context);
+    if (!captured) {
+        return;
+    }
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        captured->deref();
+        return;
+    }
+    context = captured;
+    previous = td->sandbox_provenance;
+    if (previous && previous->getContext() == captured
+            && !(td->trusted_policy_depth && previous == td->trusted_policy_boundary)) {
+        context = nullptr;
+        captured->deref();
+        return;
+    }
+    td->sandbox_provenance = this;
+}
+
+QoreSandboxProvenanceHelper::QoreSandboxProvenanceHelper(const QoreObject* object) {
+    set(object);
+}
+
+void QoreSandboxProvenanceHelper::set(const QoreObject* object) {
+    if (object) {
+        auto* captured = qore_object_private::get(*object)->sandbox_provenance;
+        if (captured) {
+            captured->ref();
+            apply(captured);
+        }
+    }
+}
+
+QoreSandboxProvenanceHelper::QoreSandboxProvenanceHelper(const ResolvedCallReferenceNode* callback) {
+    if (callback) {
+        apply(qore_get_call_reference_provenance(callback));
+    }
+}
+
+QoreSandboxProvenanceHelper::~QoreSandboxProvenanceHelper() {
+    if (context) {
+        ThreadData* td = thread_data.get();
+        assert(td && td->sandbox_provenance == this);
+        td->sandbox_provenance = previous;
+        context->deref();
+    }
+}
+
+QoreSandboxTrustedPolicyHelper::QoreSandboxTrustedPolicyHelper() {
+    ThreadData* td = thread_data.get();
+    assert(td);
+    old_boundary = td->trusted_policy_boundary;
+    old_depth = td->trusted_policy_depth;
+    td->trusted_policy_boundary = td->sandbox_provenance;
+    ++td->trusted_policy_depth;
+}
+
+QoreSandboxTrustedPolicyHelper::~QoreSandboxTrustedPolicyHelper() {
+    ThreadData* td = thread_data.get();
+    td->trusted_policy_boundary = old_boundary;
+    td->trusted_policy_depth = old_depth;
 }
 
 QoreSandboxContextHelper::QoreSandboxContextHelper(const QoreSandboxContext& ctx) {
@@ -3630,7 +3760,7 @@ QoreSandboxCapture::QoreSandboxCapture() : ctx(new QoreSandboxContext) {
 }
 
 QoreSandboxCapture::~QoreSandboxCapture() {
-    delete ctx;
+    ctx->deref();
 }
 
 bool QoreSandboxCapture::isSandboxed() const {
@@ -3638,8 +3768,11 @@ bool QoreSandboxCapture::isSandboxed() const {
 }
 
 bool QoreSandboxCapture::sameSandbox(const QoreSandboxCapture& other) const {
-    return ctx->manager == other.ctx->manager && ctx->policy_manager == other.ctx->policy_manager
-        && ctx->pgm_id == other.ctx->pgm_id;
+    return QoreSandboxComposition::same(ctx->manager, other.ctx->manager)
+        && QoreSandboxComposition::same(ctx->policy_manager, other.ctx->policy_manager)
+        && QoreSandboxComposition::same(ctx->provenance_manager, other.ctx->provenance_manager)
+        && QoreSandboxComposition::same(ctx->provenance_policy_manager, other.ctx->provenance_policy_manager)
+        && ctx->program_ids == other.ctx->program_ids;
 }
 
 QoreSandboxCaptureHelper::QoreSandboxCaptureHelper(const QoreSandboxCapture& capture) {
@@ -5981,10 +6114,6 @@ void QoreThreadList::dropCancelRequest(int tid, unsigned scope_pgm_id) {
     shared) module Program, including threads that never entered the sandboxed Program.
 */
 static unsigned get_cancel_scope_pgm_id() {
-    ThreadData* td = thread_data.get();
-    if (td && td->sandbox_context) {
-        return td->sandbox_context->manager ? td->sandbox_context->pgm_id : 0;
-    }
     unsigned pgm_id = 0;
     QoreSandboxManager* sm = find_thread_sandbox_manager_ref_intern(&pgm_id);
     if (!sm) {
@@ -6031,8 +6160,16 @@ static bool check_cancel_in_scope(int tid) {
         }
         // 4) a thread that inherited the requesting Program's sandbox from the code that started it runs on that
         // Program's behalf wherever it currently is
-        if (td->inherited_sandbox_context && td->inherited_sandbox_context->pgm_id == scope) {
-            return true;
+        for (const auto* frame = td->sandbox_provenance; frame; frame = frame->getPrevious()) {
+            const auto& ids = frame->getContext()->program_ids;
+            if (std::binary_search(ids.begin(), ids.end(), scope)) {
+                return true;
+            }
+        }
+        for (const auto* context : {td->sandbox_context, td->inherited_sandbox_context}) {
+            if (context && std::binary_search(context->program_ids.begin(), context->program_ids.end(), scope)) {
+                return true;
+            }
         }
     }
     thread_list.dropCancelRequest(tid, scope);

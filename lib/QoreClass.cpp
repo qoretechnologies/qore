@@ -4537,7 +4537,7 @@ QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, cons
                 const ResolvedCallReferenceNode* ref =
                     dynamic_cast<const ResolvedCallReferenceNode*>(mv.getInternalNode());
                 if (ref) {
-                    return ref->execValue(args, xsink);
+                    return ref->invoke(args, xsink);
                 }
             }
         }
@@ -4581,6 +4581,7 @@ QoreObject* QoreClass::execSystemConstructor(int code, ...) const {
 }
 
 void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(self);
     //printd(5, "qore_class_private::execDestructor() %s::destructor() o: %p scl: %p sml: %p, self: %p, "
     //  destructor: %p, isSystemObject: %d\n", name.c_str(), self, scl, scl ? &scl->sml : 0, self, destructor,
     //  self->isSystemObject());
@@ -4662,6 +4663,7 @@ QoreObject* QoreClass::execCopy(QoreObject* old, ExceptionSink* xsink) const {
 }
 
 QoreObject* qore_class_private::execCopy(QoreObject* old, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(old);
     // Compiled calls can enter here directly, bypassing normal method dispatch.  Reject a deleted source
     // before allocating the copy; otherwise a failed copy can run a destructor on an uninitialized object.
     if (!old->isValid()) {

@@ -57,7 +57,7 @@ void QoreSignalHandler::runHandler(const ResolvedCallReferenceNode& callback, in
     // create signal number argument
     ReferenceHolder<QoreListNode> args(new QoreListNode(bigIntTypeInfo), xsink);
     args->push(sig, nullptr);
-    callback.execValue(*args, xsink).discard(xsink);
+    callback.invoke(*args, xsink).discard(xsink);
 }
 
 QoreSignalManager::QoreSignalManager() : is_enabled(false), tid(-1), block(false), waiting(0), num_handlers(0),

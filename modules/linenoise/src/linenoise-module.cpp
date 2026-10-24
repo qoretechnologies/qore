@@ -162,7 +162,7 @@ static int qore_linenoise_user_key_cb(const char* line, int pos, char** new_line
     {
         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
         args->push(arg.release(), nullptr);
-        ret = cb->execValue(*args, &xsink);
+        ret = cb->invoke(*args, &xsink);
     }
 
     if (xsink.isException()) {
@@ -201,7 +201,7 @@ static void qore_linenoise_completion_cb(const char *input, linenoiseCompletions
     {
         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
         args->push(new QoreStringNode(input, QCS_UTF8), nullptr);
-        ret = callbackNode->execValue(*args, &xsink);
+        ret = callbackNode->invoke(*args, &xsink);
     }
 
     // Check for exceptions from callback execution
@@ -236,7 +236,7 @@ static char* qore_linenoise_hints_cb(const char* input, int* color, int* bold) {
     {
         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
         args->push(new QoreStringNode(input, QCS_UTF8), nullptr);
-        ret = hintsCallbackNode->execValue(*args, &xsink);
+        ret = hintsCallbackNode->invoke(*args, &xsink);
     }
 
     if (xsink.isException()) {
@@ -287,7 +287,7 @@ static char* qore_linenoise_syntax_cb(const char* buf) {
     {
         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
         args->push(new QoreStringNode(buf, QCS_UTF8), nullptr);
-        ret = syntaxCallbackNode->execValue(*args, &xsink);
+        ret = syntaxCallbackNode->invoke(*args, &xsink);
     }
 
     if (xsink.isException()) {
