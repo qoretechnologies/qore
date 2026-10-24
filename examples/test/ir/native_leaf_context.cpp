@@ -231,7 +231,7 @@ private:
 template <typename Call, typename Arg, typename Result>
 static void checkPreparedMisses(QoreProgram* program, const char* other_factory, Call call,
         uint64_t valid_bits, QorePreparedFunctionRefV3& cache, RuntimeConfig* rc,
-        Arg arg, Result expected, uint32_t signature, ExceptionSink* xsink) {
+        Arg arg, Result expected, uint32_t signature, ExceptionSink* xsink, bool invariant = false) {
     ValueHolder other(program->callFunction(other_factory, nullptr, xsink), xsink);
     assert(!*xsink && other->getType() == NT_FUNCREF);
     const auto* node = static_cast<const FunctionCallReferenceNode*>(other->get<const ResolvedCallReferenceNode>());
@@ -241,15 +241,19 @@ static void checkPreparedMisses(QoreProgram* program, const char* other_factory,
     QoreValue empty;
     uint64_t empty_bits;
     std::memcpy(&empty_bits, &empty, sizeof(empty_bits));
-    QorePreparedFunctionRefV3 cold{};
-    cold.owner = empty_bits;
     const auto* saved_ref = cache.ref;
     for (uint64_t invalid : {other_bits, empty_bits}) {
+        QorePreparedFunctionRefV3 cold{};
+        cold.owner = empty_bits;
         Result result = 123;
         assert(call(invalid, arg, &result, xsink, rc, &cold) == 0);
         assert(!*xsink && result == 123 && cold.owner == empty_bits);
-        assert(call(invalid, arg, &result, xsink, rc, &cache) == 0);
-        assert(!*xsink && result == 123 && cache.owner == valid_bits && cache.ref == saved_ref);
+        // V9's compiler contract excludes changing a live descriptor's reference.
+        // Its invalid-reference cases use a fresh, empty descriptor above.
+        if (!invariant) {
+            assert(call(invalid, arg, &result, xsink, rc, &cache) == 0);
+            assert(!*xsink && result == 123 && cache.owner == valid_bits && cache.ref == saved_ref);
+        }
         assert(call(valid_bits, arg, &result, xsink, rc, &cache) == 1);
         assert(!*xsink && result == expected && cache.owner == valid_bits && cache.ref == saved_ref);
     }
@@ -1965,10 +1969,14 @@ static void checkFloat(QoreProgram* program, bool inline_entry) {
     std::memcpy(&cache.owner, &empty, sizeof(cache.owner));
     RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
     double result = 0;
-    for (bool reuse : {false, true}) {
+    for (unsigned version : {3, 4, 9}) {
+        bool reuse = version != 3;
         ReusableCallbackFrame reusable;
-        auto call = [&reusable, reuse](uint64_t bits, double arg, double* result, ExceptionSink* sink,
+        auto call = [&reusable, reuse, version](uint64_t bits, double arg, double* result, ExceptionSink* sink,
                 RuntimeConfig* config, QorePreparedFunctionRefV3* prepared) {
+            if (version == 9) {
+                return qore_rt_try_funcref_float_float_v9(bits, arg, result, sink, config, prepared, &reusable.slot);
+            }
             return reuse ? qore_rt_try_funcref_float_float_v4(bits, arg, result, sink, config, prepared,
                     &reusable.slot)
                 : qore_rt_try_funcref_float_float_v3(bits, arg, result, sink, config, prepared);
@@ -2003,7 +2011,7 @@ static void checkFloat(QoreProgram* program, bool inline_entry) {
         leaf_ctx->pc_loc_map_attached.store(was_ready, std::memory_order_release);
         assert(!xsink && result == 1.75 && reusable.slot.frame == original_frame);
         checkPreparedMisses(program, "makeProbe", call,
-            bits, cache, rc, 1.25, 1.75, 10, &xsink);
+            bits, cache, rc, 1.25, 1.75, 10, &xsink, version == 9);
         QoreProgram* caller = qore_get_call_program_context();
         size_t* limit = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
 #if defined(__aarch64__) || defined(__x86_64__)
@@ -2054,6 +2062,21 @@ static void checkFloat(QoreProgram* program, bool inline_entry) {
         assert(!xsink && identity->getType() == NT_FUNCREF);
         uint64_t identity_bits;
         std::memcpy(&identity_bits, &*identity, sizeof(identity_bits));
+        // A new reference starts a new v9 descriptor lifetime. Legacy helpers
+        // continue to exercise replacement of an existing positive owner/frame.
+        auto retire_invariant = [&]() {
+            qore_rt_release_funcref_frame_v1(&reusable.slot);
+            QoreValue owner;
+            std::memcpy(&owner, &cache.owner, sizeof(owner));
+            owner.discard(&xsink);
+            assert(!xsink);
+            std::memcpy(&cache.owner, &empty, sizeof(cache.owner));
+        };
+        if (version == 9) {
+            retire_invariant();
+            assert(call(identity_bits, 1.25, &result, &xsink, rc, &cache) == 1);
+            assert(!xsink && result == 1.25 && !reusable.slot.frame);
+        }
         for (double value : {0.0, -0.0, 1.25, -3.0e307, 1.0e308,
                 std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity(),
                 std::numeric_limits<double>::quiet_NaN(), -std::numeric_limits<double>::quiet_NaN()}) {
@@ -2063,6 +2086,11 @@ static void checkFloat(QoreProgram* program, bool inline_entry) {
                 assert(std::signbit(result) == std::signbit(value));
             }
             assert(reusable.slot.frame == original_frame);
+        }
+        if (version == 9) {
+            retire_invariant();
+            assert(call(bits, 1.25, &result, &xsink, rc, &cache) == 1);
+            assert(!xsink && result == 1.75 && !reusable.slot.frame);
         }
         assert(call(bits, 1.25, &result, &xsink, rc, &cache) == 1);
         assert(!xsink && result == 1.75 && reusable.slot.frame == original_frame);
@@ -2118,10 +2146,10 @@ static void check(bool inline_entry, bool inline_method) {
     QoreValue empty;
     std::memcpy(&cache.owner, &empty, sizeof(cache.owner));
     int64_t result = 0;
-    for (unsigned version : {3, 4, 5}) {
+    for (unsigned version : {3, 4, 5, 9}) {
         bool reuse = version != 3;
-        if (version == 5) {
-            // Start v5 from the same cold descriptor as v3/v4. The preceding
+        if (version >= 5) {
+            // Start v5/v9 from the same cold descriptor as v3/v4. The preceding
             // v4 iteration deliberately leaves its retained owner warm.
             QoreValue owner;
             std::memcpy(&owner, &cache.owner, sizeof(owner));
@@ -2132,6 +2160,9 @@ static void check(bool inline_entry, bool inline_method) {
         ReusableCallbackFrame reusable;
         auto call = [&reusable, version](uint64_t bits, int64_t arg, int64_t* result, ExceptionSink* sink,
                 RuntimeConfig* config, QorePreparedFunctionRefV3* prepared) {
+            if (version == 9) {
+                return qore_rt_try_funcref_int_int_v9(bits, arg, result, sink, config, prepared, &reusable.slot);
+            }
             if (version == 5) {
                 return qore_rt_try_funcref_int_int_v5(bits, arg, result, sink, config, prepared, &reusable.slot);
             }
@@ -2147,7 +2178,7 @@ static void check(bool inline_entry, bool inline_method) {
         assert(bool(reusable.slot.frame) == (reuse && inline_entry));
         void* original_frame = reusable.slot.frame;
         checkPreparedMisses(*program, "makeFloatProbe", call,
-            bits, cache, rc, int64_t{7}, int64_t{24}, 5, &xsink);
+            bits, cache, rc, int64_t{7}, int64_t{24}, 5, &xsink, version == 9);
         xsink.raiseException("CALLBACK-PENDING", "pending sink must prevent entry");
         result = 123;
         assert(call(bits, 7, &result, &xsink, rc, &cache) == 1);

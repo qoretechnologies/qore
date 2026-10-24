@@ -20544,3 +20544,159 @@ to omit the wrapper identity comparison too. Ordinary/reloaded locals and
 conflicting cache producers must stay on existing helpers. The native-result
 findings could motivate a separately scoped candidate with a new prospective
 campaign; they do not change this experiment's acceptance criteria.
+
+## Compiler-proven invariant callback identity (2026-10-24)
+
+Retained on baseline `8ff7a4d7ad`, including develop `28a6bbcb14`. A late AOT
+pass proves that every producer of an invocation-local callback descriptor
+uses the identical immutable LLVM argument and helper signature, and that
+empty initialization dominates all producers. The private v9 wrapper can then
+test only nonempty ownership. Unknown aliases, changing/reloaded values,
+conflicting producers and invalid layouts retain the original helpers.
+
+The runtime keeps live Program/debugger/body/readiness/sink/physical-stack
+checks, closure fallback, reader synchronization and ownership. It inlines the
+complete physical guard in the prepared helper and marks one-time frame setup
+unlikely. The descriptor and 208-byte scratch/release ABIs do not change; old
+helpers remain available. Existing artifacts use old helpers; recompile AOT
+artifacts to select v9. This selector is AOT-only, including eligible compiled
+modules; it does not change IR/JIT selection.
+
+All measurements use optimized `-O3 -DNDEBUG` runtimes with allocation tracking
+off, LLVM 22.1.8 and `qcc -O3`. Default/reverse/shuffle-487 layouts, 4096 items,
+seed 7, three warmup and three measured 300 ms windows, and three screening/five
+confirmation forks are fixed prospectively. Reported ns/item is the median
+of three layout medians of per-fork means, including loop/computation/checksum
+work. Negative percentage means faster. No owned build, test or profile work
+overlaps timing; the interactive host is not frequency/thermally controlled.
+
+The fixed target gate requires at least 3% improvement in the four-target
+geometric mean versus both before and same-runtime disabled selection, plus
+at least 5% on ordinary integer or floating callbacks versus both. Both targeted
+phases pass. No identical workload/layout/comparison repeats a greater-than-3%
+slowdown with disjoint fork-mean ranges in screening and confirmation across
+all 55 workloads; none repeats across any pair of the four cohorts either.
+
+|!Cohort|!Runs|!Measured windows|!Four-target change vs before|!Vs disabled
+|target-screen|432|1296|-3.489%|-4.010%
+|target-confirmation|720|2160|-3.541%|-3.850%
+|broad-screen|1485|4455|-2.578%|-4.503%
+|broad-confirmation|2475|7425|-3.466%|-4.426%
+
+The broad screen's average versus before is 2.578%, below the separate 3%
+target threshold; it is reported as consistency evidence, not substituted for
+the prospectively designated target cohorts. Broad confirmation is 3.466%
+faster versus before and 4.426% versus disabled. Five broad-screen flags
+(boxed integer fallback/effect, effect_short and string-result loop/short in
+specific layouts) do not repeat; neither targeted-screen flag repeats.
+
+The floating-result case is slower versus before in all four cohorts:
++2.644%, +3.695%, +6.511%, +2.743%, respectively. In broad confirmation it is 1.083%
+faster versus disabled. Keep this limitation visible: the optimization does
+not improve every consumption shape. Mixed-workload confirmation changes
+are within 1% versus before and disabled; no general application gain is
+claimed for this narrow change. The entire branch's older matched optimized
+Java/develop checkpoint remains separate. No fresh Java ratio or parity claim.
+
+Broad confirmation values for all 55 workloads:
+
+|!Workload|!Before ns/item|!Candidate|!Disabled|!Vs before|!Vs disabled
+|arithmetic|1.494160|1.500820|1.498695|+0.446%|+0.142%
+|direct_call|1.504846|1.506848|1.499079|+0.133%|+0.518%
+|method_call|1.567827|1.569006|1.574808|+0.075%|-0.368%
+|indirect_call|6.640513|6.192756|6.615083|-6.743%|-6.384%
+|polymorphic_call|21.612395|21.214350|21.342537|-1.842%|-0.601%
+|polymorphic_expression_call|10.473819|10.312572|10.456660|-1.540%|-1.378%
+|monomorphic_call|3.448195|3.389391|3.415967|-1.705%|-0.778%
+|optional_method_call|10.553231|10.506953|10.521337|-0.439%|-0.137%
+|polymorphic_float_call|22.716888|22.495006|22.620824|-0.977%|-0.556%
+|polymorphic_float_expression_call|10.515111|10.581254|10.497007|+0.629%|+0.803%
+|monomorphic_float_call|3.395871|3.404909|3.410097|+0.266%|-0.152%
+|optional_float_method_call|10.541601|10.618719|10.614742|+0.732%|+0.037%
+|boxed_float_method_call|19.925292|19.684255|19.517704|-1.210%|+0.853%
+|dynamic_int_result_call|10.357732|10.327934|10.397449|-0.288%|-0.669%
+|dynamic_int_result_fallback|21.484548|21.533496|21.480027|+0.228%|+0.249%
+|boxed_int_method_call|16.097105|16.131742|16.200955|+0.215%|-0.427%
+|boxed_int_method_fallback|30.620813|30.857365|30.946800|+0.773%|-0.289%
+|boxed_float_method_fallback|32.471106|32.168376|32.000295|-0.932%|+0.525%
+|boxed_int_method_effect|87.599953|89.930565|88.787073|+2.661%|+1.288%
+|dynamic_float_result_call|11.702740|11.497737|11.515508|-1.752%|-0.154%
+|indirect_wide|6.739266|6.283513|6.718618|-6.763%|-6.476%
+|indirect_float|6.509309|6.254480|6.500157|-3.915%|-3.780%
+|indirect_int_result|6.146706|5.797999|6.191672|-5.673%|-6.358%
+|indirect_float_result|7.100466|7.295208|7.375103|+2.743%|-1.083%
+|indirect_tagged_float|6.645114|6.395966|6.647435|-3.749%|-3.783%
+|indirect_branch_float|6.569863|6.379764|6.629890|-2.894%|-3.773%
+|indirect_affine|6.681614|6.277834|6.848029|-6.043%|-8.326%
+|indirect_affine_wide|6.770064|6.346814|6.773825|-6.252%|-6.304%
+|indirect_branch_int|6.666531|6.258201|6.684381|-6.125%|-6.376%
+|dispatch_control|1.585687|1.588520|1.590834|+0.179%|-0.145%
+|list_read|2.683475|2.714485|2.665682|+1.156%|+1.831%
+|list_build|25.477624|25.514287|25.498800|+0.144%|+0.061%
+|list_mutate|179.963315|179.592978|176.858926|-0.206%|+1.546%
+|temporary_list|1.525790|1.538240|1.533501|+0.816%|+0.309%
+|temporary_hash|322.656247|319.592552|320.342999|-0.950%|-0.234%
+|closure_call|15.453763|15.438589|15.255076|-0.098%|+1.203%
+|closure_capture|21.070861|21.092748|21.157097|+0.104%|-0.304%
+|object_loop|166.463944|166.622975|166.999863|+0.096%|-0.226%
+|object_short|1064.635279|1076.134879|1056.081427|+1.080%|+1.899%
+|float_loop|169.365676|169.886150|169.715190|+0.307%|+0.101%
+|float_short|1059.126688|1060.976513|1064.440775|+0.175%|-0.325%
+|string_loop|351.616634|354.995281|357.204505|+0.961%|-0.618%
+|string_short|1198.745617|1198.795861|1188.934064|+0.004%|+0.829%
+|effect_loop|327.158873|328.592510|330.648420|+0.438%|-0.622%
+|effect_short|1250.314486|1255.426566|1249.809653|+0.409%|+0.449%
+|two_read_loop|357.603088|360.950850|362.339848|+0.936%|-0.383%
+|two_read_short|1285.997425|1271.957222|1283.778800|-1.092%|-0.921%
+|default_loop|656.653351|647.108116|649.593743|-1.454%|-0.383%
+|default_short|1586.637193|1599.515536|1592.719422|+0.812%|+0.427%
+|string_result_loop|390.620229|392.575050|389.560331|+0.500%|+0.774%
+|string_result_short|1339.568907|1344.122157|1316.862032|+0.340%|+2.070%
+|csv_report|918.565134|915.718236|921.237331|-0.310%|-0.599%
+|object_orders|1718.932976|1715.273362|1705.271511|-0.213%|+0.587%
+|callback_pipeline|81.191910|80.493386|79.965835|-0.860%|+0.660%
+|text_index|1279.266228|1276.373612|1272.243994|-0.226%|+0.325%
+
+Code review confirms 149 non-startup microbenchmark LLVM functions differ
+only at six eligible helper names. Probe/mixed bodies are unchanged; startup
+metadata lengths alone differ. Four timed caller instruction counts, frames
+and saves match. The legacy four helpers/five wrappers match normalized
+baseline code; the new wrapper is four instructions and the private helpers
+match the reviewed full-stack/cold-init probe. Unary frames remain 80 bytes;
+zero-argument frames are 64 instead of 80 bytes. Owned sampling observes all
+four timed fast entries and invariant helpers; no profiler runs during timing.
+
+Release qualification: 56 fixtures, 55 successful exits, 892 registered cases, 874 executed, 36328/36329 assertions, 18 named skips.
+Debug qualification: 56 fixtures, 55 successful exits, 892 registered cases, 876 executed, 36332/36333 assertions, 16 named skips.
+
+The known SocketSpecificBind otherProgramTest failure remains explicit in
+both builds; all other selected fixtures pass. Fourteen exact Release fixtures
+(6943 assertions) are reused after raw/source/binary verification.
+All 252 compiled modules per build and 253 restored Release aliases are checked.
+Native Debug tests pass 11768 assertions across AST/IR. Final reference
+checks add 1665 IR/AOT comparisons to 7047 checks across 27 benchmark artifacts
+and 555 older-artifact checks on the candidate runtime, without source fallback.
+
+Audit found an existing different-argument native fixture omitted from its
+test loop. The loop now executes it: 30 native proof cases and 102 QUnit
+assertions pass separately on each build. Those 204 assertions supplement
+the earlier qualification, which correctly remains 29 native cases. Only two
+test files change; production and all measured binaries remain byte-identical.
+The earlier incorrect literal-reference selection expectation and all raw
+development attempts are preserved, not counted as passing attempts.
+
+Full evidence, drivers, all 5112 runs / 15336 measured windows, code reviews,
+qualification, corrections and the 62-item audit (21 Pass /
+41 N/A / zero Fail) are in
+[results-aot-invariant-callback-macos-arm64.json](results-aot-invariant-callback-macos-arm64.json).
+Large LLVM/compiler dumps and binaries are fingerprinted local artifacts;
+every raw timing stream is embedded in the report. No full-suite, sanitizer
+or cross-platform result is implied.
+
+Next investigate a narrow callable-input subset proof for literal references
+passed to internal calls. Ordinary binding accepts these callable kinds unchanged,
+while fast-entry admission currently requires identical accepted type sets.
+Preserve binding semantics without inferring stronger callable signatures, and
+reuse existing exact-callref specialization where applicable. A new optimization
+requires its own prospective measurements; these benchmarks already use typed
+locals, so no gain is assumed.

@@ -143,6 +143,12 @@ public:
     DLLLOCAL static LocalVarValue* getAOTBodyLocalSlot(const RuntimeConfig& rc, const LocalVar* local);
     //! Preserve the normal stack guard without looking up TLS again.
     DLLLOCAL static int checkStack(const RuntimeConfig& rc, ExceptionSink* xsink);
+    //! Keep the complete physical guard inline in the prepared callback dispatch frame.
+    //! @param rc same-thread live invocation context
+    //! @param xsink sink receiving the normal stack overflow exception
+    //! @return 0 if within the stack limit, -1 on overflow
+    //! @note Preserves deferred context materialization and all platform stack predicates.
+    DLLLOCAL static int checkStackForPreparedCallback(const RuntimeConfig& rc, ExceptionSink* xsink);
     //! Perform the normal cancellation check using the live thread view, not TLS snapshots.
     //! @param rc same-thread invocation view from tryGetCurrent()
     //! @param xsink optional sink receiving a cancellation or interruption exception

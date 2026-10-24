@@ -86,6 +86,13 @@ public:
     //! @note Pointer and opaque representations retain the original helper and evaluation order.
     static bool guardScalarReferenceLoads(llvm::Module& module, std::string& error);
 
+    //! Select invariant-reference helpers after LLVM promotion and inlining.
+    //! @param module optimized AOT module with invocation-local prepared descriptors
+    //! @param error receives cancellation or LLVM-verification diagnostics
+    //! @return false on cancellation or invalid IR; no object may be emitted on failure
+    //! @note Every cache address use and producer is checked. Unknown aliases or changing operands retain v4/v5.
+    static bool selectInvariantFunctionRefs(llvm::Module& module, std::string& error);
+
     //! Complete scalar-publication effect tracking before any LLVM optimization or inlining.
     //! @param module lowered AOT module with invocation-local publication tokens
     //! @param error receives cancellation or LLVM-verification diagnostics

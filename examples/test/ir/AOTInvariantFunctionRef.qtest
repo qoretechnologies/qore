@@ -1,0 +1,116 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class InvariantFunctionRefTest
+
+class InvariantFunctionRefTest inherits QUnit::Test {
+    private {
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+    }
+
+    constructor() : Test("AOT invariant callback proof", "1.0", \ARGV) {
+        addTestCase("cache proof rejects changing or escaping descriptors", \native());
+        addTestCase("late AOT selection and disabled controls", \aot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private string llvmConfig() {
+        if (ENV.LLVM_CONFIG) {
+            return ENV.LLVM_CONFIG;
+        }
+        # Prefer the exact tool selected by this build over a different LLVM
+        # installed on PATH. File access is test setup, outside a sandbox.
+        string cache = libdir + "/CMakeCache.txt";
+        if (is_file(cache)) {
+            string contents = File::readTextFile(cache);
+            *list<*string> match = regex_extract(contents,
+                "(?m)^LLVM_CONFIG_EXECUTABLE:FILEPATH=([^\r\n]+)");
+            if (match && is_executable(match[0])) {
+                return match[0];
+            }
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/llvm-config";
+            if (is_executable(path)) {
+                return path;
+            }
+        }
+        throw "TEST-SETUP-ERROR", "set LLVM_CONFIG to the llvm-config matching this Qore build";
+    }
+
+    private native() {
+        TmpDir dir("qore-invariant-callback-");
+        string executable = dir.path + "/proof-test";
+        string llvm_config = llvmConfig();
+        string llvm_include = trim(run((llvm_config, "--includedir")));
+        string llvm_lib = trim(run((llvm_config, "--libdir")));
+        list<string> llvm_link = split(" ", trim(run((llvm_config, "--libs", "--system-libs"))));
+        # Internal headers also need the build's dependency paths (CPATH for
+        # nonstandard prefixes, as in NativeLeafContext). -O2 folds the null
+        # return-type argument in the inline private fast-entry setter; its
+        # general type-query implementation is intentionally not exported.
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-O2", "-g", "-DHAVE_UNIX_CONFIG_H",
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir,
+            "-I" + llvm_include, get_script_dir() + "/aot_invariant_function_ref.cpp",
+            "-L" + libdir, "-L" + llvm_lib, "-Wl,-rpath," + libdir,
+            "-Wl,-rpath," + llvm_lib, "-lqore") + llvm_link + ("-o", executable);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) {
+            push args, target[0];
+        }
+        run(args);
+        string expected = "invariant-callback-proof: 30 cases passed\n";
+        assertEq(expected, run((executable,)));
+
+    }
+    private aot() {
+        TmpDir dir("qore-invariant-callback-aot-");
+        string source = get_script_dir() + "/AOTInvariantFunctionRef.qr";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq("invariant-callback: ok\n", run((libdir + "/qore", "--exec-mode=" + mode, source)), mode);
+        }
+        foreach string prefix in (("", "QORE_DISABLE_AOT_INVARIANT_FUNCREF=1 ",
+                "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string generated = run((ENV.QCC ?? libdir + "/qcc", level, "--strip-source",
+                    "-o", executable, source), prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
+                bool selected = level == "-O3" && !prefix.startsWith("QORE_DISABLE_");
+                foreach string signature in (("int_0", "int_int", "float_0", "float_float")) {
+                    assertEq(selected, generated.contains("call i32 @qore_rt_try_funcref_" + signature + "_v9("),
+                        "invariant helper selection " + signature + " " + prefix + level);
+                }
+                foreach string definition in (generated.split("\ndefine ")) {
+                    string body = definition.split("\n}")[0];
+                    if (body.split("\n")[0].contains("@changing_")) {
+                        assertFalse(regex(body, "call i32 @qore_rt_try_funcref_[^\n]*_v9"),
+                            "changing callback retains identity checks " + prefix + level);
+                    }
+                }
+                assertEq("invariant-callback: ok\n", run((executable,)), prefix + level);
+                assertEq("invariant-callback: ok\n", run((executable,), "QORE_DISABLE_FUNCREF_FAST_CALL=1 "),
+                    "fallback " + prefix + level);
+            }
+        }
+    }
+
+}

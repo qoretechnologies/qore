@@ -2412,6 +2412,19 @@ int RuntimeConfigNativeAccess::checkStack(const RuntimeConfig& rc, ExceptionSink
 #endif
 }
 
+// Scope forced inlining to the prepared callback helper; ordinary guard users are unchanged.
+__attribute__((always_inline)) int RuntimeConfigNativeAccess::checkStackForPreparedCallback(
+        const RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef QORE_MANAGE_STACK
+#if defined(__clang__)
+    [[clang::always_inline]]
+#endif
+    return check_stack_intern(xsink, getThreadData(rc));
+#else
+    return 0;
+#endif
+}
+
 extern "C" DLLEXPORT __attribute__((always_inline)) const size_t* qore_rt_get_stack_limit_v1(RuntimeConfig* rc) {
 #if defined(QORE_MANAGE_STACK) && defined(STACK_DIRECTION_DOWN) \
         && (defined(__aarch64__) || defined(__x86_64__))

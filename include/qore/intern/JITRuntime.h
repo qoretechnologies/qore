@@ -1268,6 +1268,65 @@ int qore_rt_try_funcref_int_0_v4(uint64_t ref, int64_t* result, ExceptionSink* x
 int qore_rt_try_funcref_int_int_v4(uint64_t ref, int64_t arg, int64_t* result, ExceptionSink* xsink,
     RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
 
+//! V9 consumes a compiler-proven invariant reference in a private reusable helper.
+/** Every producer of this invocation-local v3 descriptor must receive the same
+    reference bits for its entire lifetime. The descriptor starts at NOTHING;
+    cleanup may clear it, but no producer may install a different nonempty owner.
+    The compiler verifies every address use before selecting this private ABI.
+    The wrapper checks only nonempty ownership; identity is asserted in debug.
+    The v4 cache, scratch, ownership, exception and cleanup contracts are unchanged.
+    Integer unary misses retain v5 closure routing. Live Program, debugger, body,
+    readiness and stack checks, and per-call reader synchronization remain active.
+    @param ref invariant NaN-boxed reference, borrowed for this call
+    @param result receives a native integer result when handled; unchanged on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's live runtime context
+    @param cache zero-initialized, invocation-owned zero-argument integer descriptor
+    @param frame null-initialized scratch paired with this descriptor; release before its owner
+    @return 1 if handled (including exceptions), 0 for generic evaluation
+    @note Runtime-private ABI. Old v4/v5 helpers remain available for existing artifacts and changing references.
+*/
+int qore_rt_try_funcref_int_0_v9(uint64_t ref, int64_t* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+//! Integer unary counterpart with the invariant-reference contract above.
+/** @param ref invariant NaN-boxed reference, borrowed for this call
+    @param arg native integer argument
+    @param result receives a native integer result when handled; unspecified on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's live runtime context
+    @param cache invocation-owned descriptor for this exact signature and invariant reference
+    @param frame null-initialized scratch paired with this descriptor; release before its owner
+    @return 1 if handled (including exceptions), 0 for generic evaluation
+    @note All producer arguments must have identical reference bits throughout the descriptor lifetime.
+*/
+int qore_rt_try_funcref_int_int_v9(uint64_t ref, int64_t arg, int64_t* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+//! Floating zero-argument counterpart with the invariant-reference contract above.
+/** @param ref invariant NaN-boxed reference, borrowed for this call
+    @param result receives a native floating result when handled; unspecified on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's live runtime context
+    @param cache invocation-owned descriptor for this exact signature and invariant reference
+    @param frame null-initialized scratch paired with this descriptor; release before its owner
+    @return 1 if handled (including exceptions), 0 for generic evaluation
+    @note All producer arguments must have identical reference bits throughout the descriptor lifetime.
+*/
+int qore_rt_try_funcref_float_0_v9(uint64_t ref, double* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+//! Floating unary counterpart with the invariant-reference contract above.
+/** @param ref invariant NaN-boxed reference, borrowed for this call
+    @param arg native floating argument
+    @param result receives a native floating result when handled; unspecified on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's live runtime context
+    @param cache invocation-owned descriptor for this exact signature and invariant reference
+    @param frame null-initialized scratch paired with this descriptor; release before its owner
+    @return 1 if handled (including exceptions), 0 for generic evaluation
+    @note All producer arguments must have identical reference bits throughout the descriptor lifetime.
+*/
+int qore_rt_try_funcref_float_float_v9(uint64_t ref, double arg, double* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+
 //! V5 checks a live closure tag once on a reusable integer callback miss.
 /** @param ref the original NaN-boxed callback, borrowed for this call
     @param arg native integer argument

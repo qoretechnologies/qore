@@ -151,6 +151,10 @@ struct Invocation {
     QorePreparedFunctionRefFrameV4 frame{};
 
     int call(int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc) {
+        if (helper_version == 9) {
+            assert(!cache.owner); // borrowed closures never populate this descriptor
+            return qore_rt_try_funcref_int_int_v9(bits, 7, result, xsink, rc, &cache, &frame);
+        }
         if (helper_version == 5) {
             return qore_rt_try_funcref_int_int_v5(bits, 7, result, xsink, rc, &cache, &frame);
         }
@@ -345,7 +349,7 @@ static void check(unsigned helper_version) {
 
 int main() {
     qore_init(QL_MIT, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
-    for (unsigned version : {3, 4, 5}) {
+    for (unsigned version : {3, 4, 5, 9}) {
         check(version);
         std::thread worker([version]() {
             for (unsigned i = 0; i < 3; ++i) {

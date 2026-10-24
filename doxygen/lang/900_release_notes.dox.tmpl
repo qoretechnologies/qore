@@ -5513,6 +5513,10 @@ while (*binary chunk = input.read(65536)) {
       guards, concurrent stack inspection, and cancellation remain active; partial marker allocation is rolled back
     - Reused validated immutable scalar signatures when selecting entries from prepared callback caches;
       generic signature checks and live Program, debugger, compiled-body, and readiness guards remain
+    - Reduced eligible same-program AOT callback overhead by proving that an invocation-local prepared descriptor
+      always receives the same function reference; repeated calls omit redundant identity comparisons while
+      preserving live Program, debugger, compiled-body, readiness and stack checks, diagnostic readers,
+      ownership and fallback. Recompile AOT artifacts to use this optimization
     - Reused compile-time context requirements in same-program AOT method dispatch to omit unused
       synthetic self and argv setup, while preserving object/class context, debugger behavior,
       diagnostic frames, and excess-argument ownership and cleanup

@@ -563,6 +563,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_try_funcref_int_int_v5", reinterpret_cast<void*>(&qore_rt_try_funcref_int_int_v5) },
     { "qore_rt_try_funcref_float_0_v4", reinterpret_cast<void*>(&qore_rt_try_funcref_float_0_v4) },
     { "qore_rt_try_funcref_float_float_v4", reinterpret_cast<void*>(&qore_rt_try_funcref_float_float_v4) },
+    { "qore_rt_try_funcref_int_0_v9", reinterpret_cast<void*>(&qore_rt_try_funcref_int_0_v9) },
+    { "qore_rt_try_funcref_int_int_v9", reinterpret_cast<void*>(&qore_rt_try_funcref_int_int_v9) },
+    { "qore_rt_try_funcref_float_0_v9", reinterpret_cast<void*>(&qore_rt_try_funcref_float_0_v9) },
+    { "qore_rt_try_funcref_float_float_v9", reinterpret_cast<void*>(&qore_rt_try_funcref_float_float_v9) },
     { "qore_rt_release_funcref_frame_v1", reinterpret_cast<void*>(&qore_rt_release_funcref_frame_v1) },
     { "qore_rt_create_self_method_ref_aot", reinterpret_cast<void*>(&qore_rt_create_self_method_ref_aot) },
     { "qore_rt_create_self_method_ref_aot_throwing",
@@ -11206,6 +11210,53 @@ __attribute__((always_inline)) static int tryReusableFunctionRef(RuntimeConfig& 
     }
     auto* reusable = static_cast<QoreReusableFunctionRefFrame*>(frame_slot->frame);
     if (!reusable) {
+        reusable = initReusableFunctionRefFrame(rc, cache, *frame_slot);
+    }
+    QoreReusableFunctionRefFrame::Scope frame(*reusable);
+    // enter() only stores/publishes live state; it cannot allocate, reenter
+    // Qore or raise an exception after the pending-sink/physical-stack checks.
+    using Entry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*);
+    try {
+        *result = reinterpret_cast<Entry>(inline_entry)(args..., ctx, xsink, &rc,
+            qore_rt_get_stack_limit_v1(&rc));
+    } catch (const QoreJITException&) {
+        // Overflow materialized this context; Scope restores it before reuse.
+    }
+    return 1;
+}
+
+template <auto Legacy, uint32_t Signature, typename Result, typename... Args>
+__attribute__((always_inline)) static int tryInvariantFunctionRef(RuntimeConfig& rc,
+        QorePreparedFunctionRefV3& cache, uint64_t ref_bits, Result* result, ExceptionSink* xsink,
+        QorePreparedFunctionRefFrameV4* frame_slot, Args... args) {
+    // The frame owns no scalar payload. Integer and floating callee-v3 entries
+    // share the same complete non-throwing, non-reentrant body proof; both the
+    // dispatch guard below and the callee's physical stack guard remain live.
+    // The late AOT pass proves identity; the wrapper checks nonempty ownership;
+    // no call or reentry separates that check from this private static helper.
+    assert(cache.owner && cache.owner == ref_bits);
+    if (cache.pgm != RuntimeConfigNativeAccess::getProgram(rc)
+            || qore_program_private::get(*cache.pgm)->hasDebuggerAttached()
+            || cache.ref->getNormalEntry() != cache.uvb->getCachedAOTFunction()) {
+        return Legacy(ref_bits, args..., result, xsink, &rc, &cache);
+    }
+    // Readiness and binding are still live. The cold entry preserves the order
+    // of stack checking, lazy materialization and fallback when either is absent.
+    QoreAOTContext* ctx = cache.uvb->getCachedAOTContext();
+    auto inline_entry = cache.ref->getPreparedTypedInlineStackEntry(Signature);
+    if (!ctx || !ctx->pc_loc_map_attached.load(std::memory_order_acquire) || !inline_entry) {
+        return Legacy(ref_bits, args..., result, xsink, &rc, &cache);
+    }
+    *result = Result{};
+#if defined(__clang__)
+    [[clang::always_inline]]
+#endif
+    if (*xsink || RuntimeConfigNativeAccess::checkStackForPreparedCallback(rc, xsink)) {
+        return 1;
+    }
+    auto* reusable = static_cast<QoreReusableFunctionRefFrame*>(frame_slot->frame);
+    // One initialization per lifetime; keep its argument spills off repeated hits.
+    if (!reusable) [[unlikely]] {
         reusable = initReusableFunctionRefFrame(rc, cache, *frame_slot);
     }
     QoreReusableFunctionRefFrame::Scope frame(*reusable);
@@ -22933,4 +22984,69 @@ extern "C" DLLEXPORT __attribute__((aligned(64))) int qore_rt_try_funcref_int_in
         return tryKnownClosureIntUnaryMiss(ref, arg, result, xsink, rc, cache);
     }
     return tryReusableIntUnary(ref, arg, result, xsink, rc, cache, frame);
+}
+
+// V9 requires a compiler-proven invariant reference; the v4 frame/release ABI is unchanged.
+__attribute__((noinline)) static int tryReusableIntResultInvariant(
+        uint64_t ref, int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    return tryInvariantFunctionRef<qore_rt_try_funcref_int_0_v3, 1>(
+        *rc, *cache, ref, result, xsink, frame);
+}
+
+__attribute__((noinline)) static int tryReusableIntUnaryInvariant(
+        uint64_t ref, int64_t arg, int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    return tryInvariantFunctionRef<qore_rt_try_funcref_int_int_v3, 1 | (1 << 2)>(
+        *rc, *cache, ref, result, xsink, frame, arg);
+}
+
+__attribute__((noinline)) static int tryReusableFloatResultInvariant(
+        uint64_t ref, double* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    return tryInvariantFunctionRef<qore_rt_try_funcref_float_0_v3, 2>(
+        *rc, *cache, ref, result, xsink, frame);
+}
+
+__attribute__((noinline)) static int tryReusableFloatUnaryInvariant(
+        uint64_t ref, double arg, double* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    return tryInvariantFunctionRef<qore_rt_try_funcref_float_float_v3, 2 | (2 << 2)>(
+        *rc, *cache, ref, result, xsink, frame, arg);
+}
+
+extern "C" DLLEXPORT __attribute__((aligned(64))) int qore_rt_try_funcref_int_0_v9(
+        uint64_t ref, int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    if (!cache->owner) {
+        return qore_rt_try_funcref_int_0_v3(ref, result, xsink, rc, cache);
+    }
+    return tryReusableIntResultInvariant(ref, result, xsink, rc, cache, frame);
+}
+
+extern "C" DLLEXPORT __attribute__((aligned(64))) int qore_rt_try_funcref_int_int_v9(
+        uint64_t ref, int64_t arg, int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    if (!cache->owner) {
+        return tryKnownClosureIntUnaryMiss(ref, arg, result, xsink, rc, cache);
+    }
+    return tryReusableIntUnaryInvariant(ref, arg, result, xsink, rc, cache, frame);
+}
+
+extern "C" DLLEXPORT __attribute__((aligned(64))) int qore_rt_try_funcref_float_0_v9(
+        uint64_t ref, double* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    if (!cache->owner) {
+        return qore_rt_try_funcref_float_0_v3(ref, result, xsink, rc, cache);
+    }
+    return tryReusableFloatResultInvariant(ref, result, xsink, rc, cache, frame);
+}
+
+extern "C" DLLEXPORT __attribute__((aligned(64))) int qore_rt_try_funcref_float_float_v9(
+        uint64_t ref, double arg, double* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    if (!cache->owner) {
+        return qore_rt_try_funcref_float_float_v3(ref, arg, result, xsink, rc, cache);
+    }
+    return tryReusableFloatUnaryInvariant(ref, arg, result, xsink, rc, cache, frame);
 }

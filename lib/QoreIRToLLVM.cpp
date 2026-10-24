@@ -49,6 +49,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/CFG.h>
+#include <llvm/IR/Dominators.h>
 
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
@@ -1196,6 +1197,7 @@ static bool isFastMethodCallEligible(
 #include <qore/QoreStringNode.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/CFG.h>
+#include <llvm/IR/Dominators.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
@@ -1720,6 +1722,170 @@ bool QoreIRToLLVM::prepareScalarBoundaryReuse(llvm::Module& module, std::string&
     if (q_env_is_set("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT-LLVM: scalar-boundary-functions=%zu cleanup-guards=%zu barriers=%zu"
             " dead-cleanup-candidates=%zu\n", functions, guards, barriers, dead_cleanup);
+    }
+    llvm::raw_string_ostream diagnostic(error);
+    return !llvm::verifyModule(module, &diagnostic);
+}
+
+bool QoreIRToLLVM::selectInvariantFunctionRefs(llvm::Module& module, std::string& error) {
+    if (q_env_is_set("QORE_DISABLE_AOT_INVARIANT_FUNCREF")) {
+        return true;
+    }
+    auto* pointer_type = llvm::PointerType::getUnqual(module.getContext());
+    size_t checked = 0;
+    auto cancelled = [&]() {
+        if (++checked % 100 == 0 && qore_check_cancel(nullptr, "LLVM invariant callback proof")) {
+            error = "cancelled during LLVM invariant callback proof";
+            return true;
+        }
+        return false;
+    };
+    std::vector<std::pair<llvm::CallInst*, std::string>> selected;
+    for (llvm::Function& function : module) {
+        if (cancelled()) {
+            return false;
+        }
+        if (function.isDeclaration()) {
+            continue;
+        }
+        std::unique_ptr<llvm::DominatorTree> dominators;
+        for (llvm::Instruction& inst : function.getEntryBlock()) {
+            if (cancelled()) {
+                return false;
+            }
+            auto* cache = llvm::dyn_cast<llvm::AllocaInst>(&inst);
+            if (!cache || !cache->isStaticAlloca() || cache->getAddressSpace() != 0) {
+                continue;
+            }
+            auto* count = llvm::dyn_cast<llvm::ConstantInt>(cache->getArraySize());
+            auto* layout = llvm::dyn_cast<llvm::StructType>(cache->getAllocatedType());
+            if (!count || !count->isOne() || !layout || layout->isPacked()
+                    || layout->getNumElements() != 8 || !layout->getElementType(0)->isIntegerTy(64)) {
+                continue;
+            }
+            bool valid = true;
+            for (unsigned i = 1; i < 8; ++i) {
+                valid &= layout->getElementType(i) == pointer_type;
+            }
+            if (!valid) {
+                continue;
+            }
+            llvm::Argument* reference = nullptr;
+            llvm::Function* producer = nullptr;
+            std::string replacement;
+            std::vector<llvm::CallInst*> calls;
+            llvm::StoreInst* initializer = nullptr;
+            // Deliberately accept only direct address uses. Even zero-offset GEPs,
+            // pointer casts, PHIs, and unknown intrinsics lose this optional proof.
+            for (llvm::Use& use : cache->uses()) {
+                if (cancelled()) {
+                    return false;
+                }
+                llvm::User* user = use.getUser();
+                if (auto* store = llvm::dyn_cast<llvm::StoreInst>(user)) {
+                    auto* value = llvm::dyn_cast<llvm::ConstantInt>(store->getValueOperand());
+                    if (store->getPointerOperand() != cache || !store->isSimple()
+                            || !value || !value->getType()->isIntegerTy(64) || !value->isZero()) {
+                        valid = false;
+                        break;
+                    }
+                    if (store->getParent() == &function.getEntryBlock()
+                            && (!initializer || store->comesBefore(initializer))) {
+                        initializer = store;
+                    }
+                    continue;
+                }
+                if (auto* load = llvm::dyn_cast<llvm::LoadInst>(user)) {
+                    if (load->getPointerOperand() != cache || !load->isSimple()
+                            || !load->getType()->isIntegerTy(64)) {
+                        valid = false;
+                        break;
+                    }
+                    continue;
+                }
+                auto* call = llvm::dyn_cast<llvm::CallInst>(user);
+                if (!call || call->hasOperandBundles() || call->isMustTailCall()) {
+                    valid = false;
+                    break;
+                }
+                auto* callee = call->getCalledFunction();
+                if (!callee || !callee->isDeclaration()) {
+                    valid = false;
+                    break;
+                }
+                if (callee->getIntrinsicID() == llvm::Intrinsic::lifetime_start
+                        || callee->getIntrinsicID() == llvm::Intrinsic::lifetime_end) {
+                    continue;
+                }
+                llvm::StringRef name = callee->getName();
+                bool unary = name == "qore_rt_try_funcref_int_int_v5"
+                    || name == "qore_rt_try_funcref_float_float_v4";
+                bool zero = name == "qore_rt_try_funcref_int_0_v4"
+                    || name == "qore_rt_try_funcref_float_0_v4";
+                unsigned argc = unary ? 7 : 6;
+                auto* type = call->getFunctionType();
+                if ((!unary && !zero) || type->isVarArg() || type->getNumParams() != argc
+                        || call->arg_size() != argc || !type->getReturnType()->isIntegerTy(32)
+                        || !type->getParamType(0)->isIntegerTy(64)
+                        || call->getCallingConv() != llvm::CallingConv::C
+                        || callee->getCallingConv() != llvm::CallingConv::C
+                        || callee->getFunctionType() != type
+                        || !call->isArgOperand(&use) || call->getArgOperandNo(&use) != argc - 2) {
+                    valid = false;
+                    break;
+                }
+                if (unary && (name.contains("float") ? !type->getParamType(1)->isDoubleTy()
+                        : !type->getParamType(1)->isIntegerTy(64))) {
+                    valid = false;
+                    break;
+                }
+                for (unsigned i = unary ? 2 : 1; i < argc; ++i) {
+                    valid &= type->getParamType(i) == pointer_type;
+                }
+                auto* argument = llvm::dyn_cast<llvm::Argument>(call->getArgOperand(0));
+                if (!valid || !argument || argument->getParent() != &function
+                        || (reference && reference != argument) || (producer && producer != callee)) {
+                    valid = false;
+                    break;
+                }
+                reference = argument;
+                producer = callee;
+                replacement = name.drop_back(1).str() + "9";
+                calls.push_back(call);
+            }
+            if (!valid || calls.empty() || !initializer) {
+                continue;
+            }
+            if (!dominators) {
+                dominators = std::make_unique<llvm::DominatorTree>(function);
+            }
+            // The cache starts empty on every native invocation. Runtime admission
+            // is its only nonzero writer, and every producer has the identical SSA
+            // argument. Cleanup can clear the owner but cannot replace its identity.
+            for (auto* call : calls) {
+                if (cancelled()) {
+                    return false;
+                }
+                valid &= dominators->dominates(initializer, call);
+            }
+            if (valid) {
+                for (auto* call : calls) {
+                    if (cancelled()) {
+                        return false;
+                    }
+                    selected.emplace_back(call, replacement);
+                }
+            }
+        }
+    }
+    for (const auto& item : selected) {
+        if (cancelled()) {
+            return false;
+        }
+        item.first->setCalledFunction(module.getOrInsertFunction(item.second, item.first->getFunctionType()));
+    }
+    if (q_env_is_set("QORE_IR_OPT_STATS")) {
+        fprintf(stderr, "IR-OPT-AOT-LLVM: invariant-funcref-calls=%zu\n", selected.size());
     }
     llvm::raw_string_ostream diagnostic(error);
     return !llvm::verifyModule(module, &diagnostic);

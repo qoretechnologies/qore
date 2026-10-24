@@ -4068,3 +4068,33 @@ Next prove invocation-invariant compiler operands and cache ownership before
 removing the wrapper check. Mutable guards and reader synchronization remain.
 A native-result-only candidate needs its own prospective validation; no parity
 or global ceiling is established.
+
+## Compiler-proven invariant callback identity (2026-10-24)
+
+A late AOT pass selects additive v9 prepared callbacks only after checking
+every descriptor address use, identical producer Argument/signature, and
+dominating empty initialization. The wrapper tests only nonempty ownership.
+All live mutable guards, physical stack checks, reader synchronization,
+fallback and ownership remain; old helper and scratch/release ABIs remain.
+The full physical guard is inlined inside the new private helper, with cold
+frame initialization. Recompile AOT artifacts to use the proof; IR/JIT
+selection is unchanged.
+
+Fixed targeted screening and confirmation gates pass; the 55-workload broad
+confirmation has no repeated regression flags. Integer callbacks improve
+6.7%, floating callbacks 3.9% and native integer results 5.7% versus before
+in broad confirmation. Native floating results are 2.7% slower versus before
+(1.1% faster versus disabled); mixed workloads are essentially unchanged.
+No universal improvement, fresh Java/develop ratio, parity or ceiling claim.
+
+Selected Release/Debug validation and the full 62-item audit are recorded in
+RESULTS and `bench/runtime-comparison/results-aot-invariant-callback-macos-arm64.json`,
+including known platform failure/skips and the repaired native fixture list.
+The correction expands 29 to 30 native cases on both unchanged runtimes.
+
+Next investigate callable-input subset acceptance for literal references
+passed to internal calls. Typed locals match the destination accepted type
+set; literals already belong to a subset accepted unchanged by ordinary
+binding. Preserve binding semantics without inferring stronger callable
+signatures, and reuse existing exact-callref specialization where applicable.
+Treat this as a new hypothesis with separate before/disabled measurements.
