@@ -622,12 +622,15 @@ public class AbstractDataField inherits Qore::Serializable {
         not call @ref getType(), @ref getDefaultValue(), @ref getExampleValue(), or the inherited
         \c uniqueHash() method.
 
-        @return static name, descriptive fields, and declared allowed-value metadata
+        @return static name, descriptive fields, declared allowed-value metadata, and the description in plain words
+        of the values that the field's validation pattern accepts if its \c validation_regex_desc attribute has one
+        (see @ref DataProvider::ActionOptionBaseInfo::validation_regex_desc "validation_regex_desc")
 
         @since DataProvider 3.8
+        @since DataProvider 3.11 the description of the field's validation pattern is included
     */
     hash<auto> getPresentationInfo() {
-        return {
+        hash<auto> rv = {
             "name": getName(),
             "display_name": getDisplayName(),
             "short_desc": getShortDescription(),
@@ -635,6 +638,12 @@ public class AbstractDataField inherits Qore::Serializable {
             "allowed_values": allowed_values,
             "element_allowed_values": element_allowed_values,
         };
+        # attributes are free-form; only a non-empty string is a description
+        auto validation_regex_desc = getAttributes().validation_regex_desc;
+        if (validation_regex_desc.typeCode() == NT_STRING && validation_regex_desc.val()) {
+            rv.validation_regex_desc = validation_regex_desc;
+        }
+        return rv;
     }
 
     #! Returns the statically declared type without resolving a context-dependent dynamic type

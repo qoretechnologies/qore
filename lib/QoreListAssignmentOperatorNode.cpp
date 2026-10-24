@@ -142,7 +142,7 @@ QoreValue QoreListAssignmentOperatorNode::evalImpl(bool& needs_deref, ExceptionS
         QoreValue lv = llv->get(i);
 
         // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-        LValueHelper v(lv, xsink);
+        LValueHelper v(lv, xsink, false, true);
         if (!v)
             return QoreValue();
 

@@ -834,7 +834,13 @@ QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) co
     return h;
 }
 
-QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key, bool check_access) {
+QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key, bool check_access,
+        bool for_delete) {
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    if (cls->member_write_gate && !cls->members.find(key)) {
+        return cls->evalMemberWriteGate(obj, key, QoreValue(),
+            for_delete ? QoreMemberWriteOp::Delete : QoreMemberWriteOp::Remove, xsink);
+    }
     const QoreTypeInfo* mti = nullptr;
 
     // get the current class context for possible internal data
@@ -863,7 +869,20 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
     return rv;
 }
 
-QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key) {
+QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bool for_delete, bool* exists) {
+    lvh.disableMemberWriteBack();
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    if (cls->member_write_gate && !cls->members.find(key)) {
+        ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
+        lvh.vl.del();
+        QoreValue value = cls->evalMemberWriteGate(obj, key, QoreValue(),
+            for_delete ? QoreMemberWriteOp::Delete : QoreMemberWriteOp::Remove, lvh.vl.xsink);
+        if (exists) {
+            // External gates use NOTHING for a missing member.
+            *exists = !value.isNothing();
+        }
+        return value;
+    }
     // get the current class context for possible internal data
     const qore_class_private* class_ctx = runtime_get_class();
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
@@ -884,7 +903,8 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key) {
 
     QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
-    QoreValue rv = odata->priv->swapKeyValue(key, QoreValue(), this);
+    QoreValue rv = exists ? odata->priv->swapKeyValueIfExists(key, QoreValue(), this, *exists)
+        : odata->priv->swapKeyValue(key, QoreValue(), this);
 
     bool scan_value_removed = needs_scan(rv);
     if (scan_value_removed) {
@@ -899,7 +919,39 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key) {
     return rv;
 }
 
-void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, const QoreListNode* l) {
+void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, const QoreListNode* l,
+        bool for_delete) {
+    lvh.disableMemberWriteBack();
+    if (theclass->hasMemberWriteGate()) {
+        ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
+        lvh.vl.del();
+        ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), lvh.vl.xsink);
+        ConstListIterator li(l);
+        size_t count = 0;
+        while (li.next()) {
+            if (++count % 10 == 0 && qore_check_cancel(lvh.vl.xsink, "external member removal")) {
+                return;
+            }
+            QoreHashKeyHelper key(li.getValue(), lvh.vl.xsink);
+            if (*lvh.vl.xsink) {
+                return;
+            }
+            bool exists = false;
+            ValueHolder value(takeMember(lvh, key.c_str(), for_delete, &exists), lvh.vl.xsink);
+            if (*lvh.vl.xsink) {
+                return;
+            }
+            if (!exists) {
+                continue;
+            }
+            result->setKeyValue(key.c_str(), value.release(), lvh.vl.xsink);
+            if (*lvh.vl.xsink) {
+                return;
+            }
+        }
+        rv.assignInitial(result.release());
+        return;
+    }
     // get the current class context for possible internal data
     const qore_class_private* class_ctx = runtime_get_class();
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
@@ -1012,6 +1064,11 @@ QoreValue& qore_object_private::getMemberValueRefForInitialization(const char* m
 }
 
 int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx, bool for_remove, ExceptionSink* xsink) {
+    lvh.disableMemberWriteBack();
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    if (cls->member_write_gate && !cls->members.find(key)) {
+        return lvh.setMemberWriteGateLValue(obj, key);
+    }
     const QoreTypeInfo* mti = nullptr;
     const qore_class_private* member_class_ctx = nullptr;
     if (checkMemberAccessGetTypeInfo(xsink, key, class_ctx, member_class_ctx, mti)) {
@@ -1057,6 +1114,7 @@ int qore_object_private::getLValueResolvedPrehashed(const char* key,
         size_t hash, const QoreMemberInfo& info,
         const qore_class_private* class_ctx, LValueHelper& lvh,
         bool for_remove, ExceptionSink* xsink) {
+    lvh.disableMemberWriteBack();
     const qore_class_private* member_class_ctx =
         info.getClassContext(class_ctx);
     const QoreTypeInfo* mti = qore_substitute_type_params_if_needed(
@@ -1133,6 +1191,11 @@ int qore_object_private::getLValueOrUpdateIntMember(const char* key,
         const qore_class_private* class_ctx, LValueHelper& lvh, int64_t delta,
         int64_t& previous, ExceptionSink* xsink) {
     assert(delta == 1 || delta == -1);
+    lvh.disableMemberWriteBack();
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    if (cls->member_write_gate && !cls->members.find(key)) {
+        return lvh.setMemberWriteGateLValue(obj, key);
+    }
     const QoreTypeInfo* member_type = nullptr;
     const qore_class_private* member_class_ctx = nullptr;
     if (checkMemberAccessGetTypeInfo(xsink, key, class_ctx, member_class_ctx, member_type)) {
@@ -1179,6 +1242,10 @@ template <bool Prehashed>
 bool qore_object_private::tryUpdateInlineIntMemberImpl(const char* key, size_t hash,
         const qore_class_private* class_ctx, int64_t delta) {
     assert(delta == 1 || delta == -1);
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    if (cls->member_write_gate && !cls->members.find(key)) {
+        return false;
+    }
     const qore_class_private* member_class_ctx = nullptr;
     // The non-throwing access check selects exactly the ordinary storage context.
     // No member or internal hash may be created by an admission probe.
@@ -1225,6 +1292,13 @@ template <bool Prehashed, bool Internal>
 bool qore_object_private::tryReadScalarMemberImpl(const char* mem, size_t hash,
         const qore_class_private* class_ctx, int64_t* integer, double* floating) const {
     assert(mem && (bool(integer) != bool(floating)));
+    if constexpr (!Internal) {
+        const qore_class_private* cls = qore_class_private::get(*theclass);
+        if (cls->memberGate && (cls->member_write_gate || cls->memberGate->isBuiltin())
+                && !cls->members.find(mem)) {
+            return false;
+        }
+    }
     const qore_class_private* member_class_ctx = class_ctx;
     if constexpr (Internal) {
         assert(class_ctx);
@@ -1275,6 +1349,14 @@ bool qore_object_private::tryReadScalarMemberPrehashed(const char* mem, size_t h
 bool qore_object_private::tryReadScalarMemberInternalPrehashed(const char* mem, size_t hash,
         const qore_class_private* class_ctx, int64_t* integer, double* floating) const {
     return tryReadScalarMemberImpl<true, true>(mem, hash, class_ctx, integer, floating);
+}
+
+QoreValue qore_object_private::getReferencedMemberForSelf(const char* mem, ExceptionSink* xsink) const {
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    if (cls->memberGate && (cls->member_write_gate || cls->memberGate->isBuiltin()) && !cls->members.find(mem)) {
+        return cls->evalMemberGate(obj, mem, xsink);
+    }
+    return getReferencedMemberNoMethod(mem, xsink);
 }
 
 QoreValue qore_object_private::getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const {
@@ -2302,13 +2384,15 @@ int QoreObject::setMemberValue(const char* key, const QoreClass* cls, QoreValue 
         setValue(key, val, xsink);
         return *xsink ? -1 : 0;
     }
-    LValueHelper lvh(xsink);
-    if (priv->getLValue(key, lvh, qore_class_private::get(*cls), false, xsink)) {
-        val.discard(xsink);
-        return -1;
+    {
+        LValueHelper lvh(xsink, true);
+        if (priv->getLValue(key, lvh, qore_class_private::get(*cls), false, xsink)) {
+            val.discard(xsink);
+            return -1;
+        }
+        // consuming semantics: caller transfers the reference in val
+        lvh.assign(val, "<set normal class member value>");
     }
-    // consuming semantics: caller transfers the reference in val
-    lvh.assign(val, "<set normal class member value>");
     return *xsink ? -1 : 0;
 }
 

@@ -1732,9 +1732,12 @@ static void assignObjectMemberValue(QoreObject* obj, const char* key, const Qore
         class_ctx = nullptr;
     }
 
-    LValueHelper helper(xsink);
+    LValueHelper helper(xsink, true);
     if (qore_object_private::getLValue(*obj, key, helper, class_ctx, false, xsink)) {
         return;
+    }
+    if (!class_ctx) {
+        helper.vl.addMemberNotification(obj, key);
     }
 
     QoreValue stored = value.hasNode() ? value.refSelf() : value;
@@ -9817,7 +9820,8 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                ValueHolder val(obj->getReferencedMemberNoMethod(sm_inst->member_name.c_str(), xsink), xsink);
+                ValueHolder val(qore_object_private::get(*obj)->getReferencedMemberForSelf(
+                    sm_inst->member_name.c_str(), xsink), xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
@@ -13095,7 +13099,7 @@ load_local_done:
                 QoreValue res;
                 if (!assignment_failed) {
                     invalidateLValuePathLocalCaches(path_inst);
-                    LValueHelper lvh(xsink);
+                    LValueHelper lvh(xsink, true);
                     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
                         assignment_failed = true;
                     } else if (lvh.assign(consume
@@ -13110,6 +13114,7 @@ load_local_done:
                 }
                 // lvh is now destructed — object lock released
                 if (assignment_failed || (xsink && *xsink)) {
+                    res.discard(xsink);
                     if (xsink && *xsink && inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
@@ -13361,7 +13366,7 @@ load_local_done:
                             return -1;
                         }
                         res = qore_object_private::takeMember(*obj, xsink,
-                            path_copy[0].name.c_str(), false);
+                            path_copy[0].name.c_str(), false, path_inst->unary_op == LVUnaryOp::Delete);
                         if ((xsink && *xsink) || !finish_delete_result(res)) {
                             return -1;
                         }
@@ -13406,7 +13411,8 @@ load_local_done:
                                         ? lvh.getValue().get<QoreObject>()
                                         : lvh.getValue().get<const WeakReferenceNode>()->get();
                                     if (o) {
-                                        res = qore_object_private::takeMember(*o, lvh, last_step.name.c_str());
+                                        res = qore_object_private::takeMember(*o, lvh, last_step.name.c_str(),
+                                            path_inst->unary_op == LVUnaryOp::Delete);
                                         lvh.removedValue(res);
                                         pending_delete_finish = true;
                                     }
@@ -13945,6 +13951,7 @@ load_local_done:
                     }
                 }
                 if (navigation_failed || (xsink && *xsink)) {
+                    res.discard(xsink);
                     if (xsink && *xsink && inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;

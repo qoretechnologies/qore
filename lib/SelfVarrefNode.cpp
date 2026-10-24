@@ -69,7 +69,7 @@ QoreValue SelfVarrefNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Excepti
     }
 
     // issue 3523: evaluate in case the value is a reference
-    ValueHolder val(obj->getReferencedMemberNoMethod(str, xsink), xsink);
+    ValueHolder val(qore_object_private::get(*obj)->getReferencedMemberForSelf(str, xsink), xsink);
     // the value here must always require a dereference
     return val->needsEval() ? val->eval(xsink) : val.release();
 }
@@ -96,7 +96,8 @@ int SelfVarrefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_contex
             err = -1;
         }
     } else {
-        if (qore_class_private::parseCheckInternalMemberAccess(parse_get_class(), str, parse_context.typeInfo, loc)
+        if (qore_class_private::parseCheckInternalMemberAccess(parse_get_class(), str, parse_context.typeInfo, loc,
+                parse_context.pflag)
             && !err) {
             err = -1;
         }

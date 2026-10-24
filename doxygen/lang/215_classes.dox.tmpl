@@ -450,7 +450,7 @@ int id = d.getId();          # OK
     |<tt>constructor(</tt><em>[params...]</em><tt>) {}</tt>|Called when objects are created when instantiated by a variable declaration with a class type and constructor arguments or explicitly with the new operator. User code may not explicitly call \c constructor() methods directly. In a class tree, \c constructor() methods are called for base classes first in left-to-right, depth-first declaration order.\n\n\c constructor() methods may be @ref overloaded_methods "overloaded" and also private constructors may be defined.  Constructors declared <tt><b>private</b></tt> can only be called from within the class hierarchy, and those declared <tt><b>private:internal</b></tt> can only be called within the class itself.
     |<tt>copy() {}</tt>|When a user explicitly calls a copy method, %Qore will generate a new object with references to the same members as the source object. Then, if there are any base classes, base class \c copy() methods are called in the same order as the \c constructor() methods. If a \c copy() method is defined, it will be run in the new object with a reference to the old object passed as the first argument. Any other arguments passed to the \c copy() method are ignored.\n\n\c copy() methods cannot be @ref overloaded_methods "overloaded" and cannot be private.
     |<tt>destructor() {}</tt>|Called when objects are implicitly collected (see @ref garbage_collection) or are explicitly deleted. User code may not explicitly call \c destructor() methods. In a class tree, \c destructor() methods are called for base classes in the opposite order in which the constructors are called.\n\n\c destructor() methods cannot be @ref overloaded_methods "overloaded" and cannot be private.
-    |@ref any_type "any" <tt>@ref memberGate_methods "memberGate"(</tt>@ref string_type "string" <tt>$</tt><em>member_param_name</em><tt>) {}</tt>|If this method is implemented in the class, it is called when read access is attempted to private member or members that do not exist in the current object; the return value of this method is returned as the value of the member.\n\n\c memberGate() methods cannot be @ref overloaded_methods "overloaded" and are not inherited by subclasses.
+    |@ref any_type "any" <tt>@ref memberGate_methods "memberGate"(</tt>@ref string_type "string" <tt>$</tt><em>member_param_name</em><tt>) {}</tt>|If this method is implemented in the class, it is called when read access is attempted to private member or members that do not exist in the current object; the return value of this method is returned as the value of the member.\n\n\c memberGate() methods cannot be @ref overloaded_methods "overloaded". User-defined gates are not inherited; builtin gates are inherited by subclasses.
     |@ref any_type "any" <tt>@ref methodGate_methods "methodGate"(</tt>@ref string_type "string" <tt>$</tt><em>method_param_name</em><tt>, ...) {}</tt>|If this method is implemented in the class, it is called when methods are called on the object that do not exist in the current object and the return value of this method is returned as the value of the method call.\n\n\c methodGate() methods cannot be @ref overloaded_methods "overloaded" and are not inherited by subclasses.
     |<tt>@ref memberNotification_methods "memberNotification"(</tt>@ref string_type "string" <tt>$</tt><em>member_param_name</em><tt>) {}</tt>|If this method is implemented in the class, it is called when an object member is updated outside the class with the member name as the argument. Note that this method is called after the member has been updated and without locking; the call is not atomic respective to other threads that also may update the same member simultaneously.\n\n\c memberNotification() methods cannot be @ref overloaded_methods "overloaded" and are not inherited by subclasses.
 
@@ -460,7 +460,7 @@ int id = d.getId();          # OK
 	- constructor(): declare the class @ref final_classes "final" instead
 	- destructor(): declare the class @ref final_classes "final" instead
 	- copy(): declare the class @ref final_classes "final" instead
-	- @ref memberGate_methods "memberGate()": these methods are not inherited so they may not be declared <b><tt>final</tt></b>
+	- @ref memberGate_methods "memberGate()": user-defined gates are not inherited and may not be declared <b><tt>final</tt></b>
 	- @ref memberNotification_methods "memberNotification()": these methods are not inherited so they may not be declared <b><tt>final</tt></b>
 	- methodGate(): these methods are not inherited so they may not be declared <b><tt>final</tt></b>
 
@@ -540,7 +540,23 @@ class Test {
     @subsection memberGate_methods memberGate() Method
     If the class implements a \c memberGate() method, then whenever a non-existent member of the class is accessed (read), this method will be called with the name of the member as the sole argument, so that the class can create the member (or react in some other way) on demand. This method is also called when methods of the same class try to access (read) non-existent methods, but is not called from within the \c memberGate() method itself.
 
-    @note \c memberGate() methods are not inherited; they must be explicitly implemented in each class
+    @note User-defined \c memberGate() methods must be explicitly implemented in each class. Since %Qore 3.0,
+    builtin member gates are inherited, including by Qore subclasses, unless the subclass defines its own gate.
+    Inherited builtin gates also handle reads of undeclared members through \c self inside the subclass.
+
+    @subsection member_write_gate Builtin External Member Writes
+    A builtin class can register a C++ callback with QoreClass::setMemberWriteGate() to store undeclared members
+    outside the Qore object. The callback is inherited by Qore subclasses. Declared members keep their ordinary
+    storage, types and access checks. Plain assignment calls the write gate directly; compound assignments and
+    nested writes first read through \c memberGate(), modify a copy, and write it back. For example,
+    <tt>record.quantity += 1</tt> reads and updates an external quantity, and <tt>record.tags[0] = "priority"</tt>
+    writes back the changed list. The read/modify/write sequence is not atomic.
+
+    <tt>remove record.quantity</tt> removes the external member and returns its previous value.
+    <tt>delete record.quantity</tt> removes the external member and deletes the returned value using normal
+    Qore deletion semantics. Callback exceptions propagate to the operation. Gates run without Qore object
+    or lvalue locks; the module is responsible for synchronization and permission checks on external storage.
+    Unknown members of these classes have type \c auto under <tt>%require-types</tt>.
 
     @subsection memberNotification_methods memberNotification() Methods
     To monitor writes to the object, the class can implement a \c memberNotification() method, which is called whenever an object member is modified from outside class member code. In this case, the \c memberNotification() method is called with the name of the member that was updated so that an object can automatically react to changes to its members (writes to members) from outside the class. This method is not called when members are updated from within class member code.

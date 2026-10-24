@@ -614,7 +614,7 @@ QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& nee
     }
 
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper v(left, xsink);
+    LValueHelper v(left, xsink, false, true);
     if (!v)
         return QoreValue();
 

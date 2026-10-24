@@ -2,7 +2,7 @@
 .\"
 .\" Copyright (C) 2026 Qore Technologies, s.r.o.
 .\"
-.TH QORE-DATA-PROVIDER-I18N 1 "2026 August 7" "Qore 3.0" "Qore Programming Language"
+.TH QORE-DATA-PROVIDER-I18N 1 "2026 October 24" "Qore 3.0" "Qore Programming Language"
 .SH NAME
 qore\-data\-provider\-i18n \- extract source-owned data-provider presentation catalogs
 .SH SYNOPSIS
@@ -11,7 +11,11 @@ qore\-data\-provider\-i18n \- extract source-owned data-provider presentation ca
 [\fIoptions\fP]
 .SH DESCRIPTION
 \fBqore\-data\-provider\-i18n\fR extracts application, action, option, and
-allowed-value presentation metadata registered by data-provider modules.  It
+allowed-value presentation metadata registered by data-provider modules,
+including the fields reachable through option types.  The extracted texts are
+labels, short and long descriptions, and the plain-words descriptions of the
+values that option and field validation patterns accept; validation patterns,
+example values, and other technical values are not extracted.  It
 writes Qore native root catalogs whose message identifiers derive only from
 exact technical identities.  The generated catalogs can therefore be
 translated without changing provider application, action, option, or value

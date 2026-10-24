@@ -2174,6 +2174,12 @@ public:
         * memberGate = nullptr,
         * memberNotification = nullptr;
 
+    q_member_write_gate_t member_write_gate = nullptr;
+    qore_classid_t member_write_gate_classid = 0;
+
+    DLLLOCAL QoreValue evalMemberWriteGate(QoreObject* self, const char* member, QoreValue value,
+        QoreMemberWriteOp operation, ExceptionSink* xsink) const;
+
     q_serializer_t serializer = nullptr;
     q_deserializer_t deserializer = nullptr;
 
@@ -2712,8 +2718,11 @@ public:
         const QoreMemberInfo* omi = parseFindMember(mem, qc, access);
 
         if (!omi) {
+            if (member_write_gate || parseHasMemberGate()) {
+                memberTypeInfo = autoTypeInfo;
+            }
             int rc = 0;
-            if (!parseHasMemberGate() || (pflag & PF_FOR_ASSIGNMENT)) {
+            if ((pflag & PF_FOR_ASSIGNMENT) ? !member_write_gate : !parseHasMemberGate()) {
                 if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
                     parse_error(*loc, "member '%s' of class '%s' referenced has no type information because it was " \
                         "not declared in a public or private member list, but parse options require type " \
@@ -2757,7 +2766,7 @@ public:
     }
 
     DLLLOCAL int parseCheckInternalMemberAccess(const char* mem, const QoreTypeInfo*& memberTypeInfo,
-            const QoreProgramLocation* loc) const {
+            const QoreProgramLocation* loc, int pflag = 0) const {
         const_cast<qore_class_private*>(this)->parseInitPartial();
 
         // throws a parse exception if there are public members and the name is not valid
@@ -2773,6 +2782,11 @@ public:
             memberTypeInfo = omi->parseGetTypeInfo();
         }
 
+        if (!omi && (member_write_gate || (!(pflag & PF_FOR_ASSIGNMENT)
+                && memberGate && memberGate->isBuiltin()))) {
+            memberTypeInfo = autoTypeInfo;
+            return rc;
+        }
         if (!omi) {
             if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
                 parse_error(*loc, "member '%s' of class '%s' referenced has no type information because it was not " \
@@ -3958,8 +3972,8 @@ public:
     }
 
     DLLLOCAL static int parseCheckInternalMemberAccess(const QoreClass* qc, const char* mem,
-            const QoreTypeInfo*& memberTypeInfo, const QoreProgramLocation* loc) {
-        return qc->priv->parseCheckInternalMemberAccess(mem, memberTypeInfo, loc);
+            const QoreTypeInfo*& memberTypeInfo, const QoreProgramLocation* loc, int pflag = 0) {
+        return qc->priv->parseCheckInternalMemberAccess(mem, memberTypeInfo, loc, pflag);
     }
 
     DLLLOCAL static int parseResolveInternalMemberAccess(const QoreClass* qc, const char* mem,

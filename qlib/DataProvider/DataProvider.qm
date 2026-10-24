@@ -1578,7 +1578,11 @@ fetch
       format types (\c email, \c uri, \c uuid, \c hostname, \c ipv4, \c ipv6 and \c phone) give one for their
       patterns in the new \c qore.validation_regex_desc tag and
       @ref DataProvider::QoreStringFormatDataType::getValidationRegexDesc()
-      "QoreStringFormatDataType::getValidationRegexDesc()"
+      "QoreStringFormatDataType::getValidationRegexDesc()"; it is translated with the other texts of an option or of
+      a field of an option's type: \c qore-data-provider-i18n extracts it to the provider's catalogs, and
+      @ref DataProvider::DataProviderPresentationCatalog "DataProviderPresentationCatalog" presents its translation
+      in the requested locale; the translated texts are listed in the new
+      @ref DataProvider::DataProviderPresentation::PresentationFields "DataProviderPresentation::PresentationFields"
     - fixed every error raised while evaluating an expression being described as an error in the return value type
       of each expression that it passed through (<tt>error in return value type "bool" for ">" expression: error in
       return value type "auto" for "/" expression: division by zero found in integer expression</tt>); an error

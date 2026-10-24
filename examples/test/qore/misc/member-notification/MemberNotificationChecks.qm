@@ -1,0 +1,106 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file MemberNotificationChecks.qm checks notifications for writes through different receiver types
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module MemberNotificationChecks {
+    version = "1.0";
+    desc = "checks member notification dispatch across execution modes";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace MemberNotificationChecks {
+    class Target {
+        public { int d = 1; }
+        private { list<string> events = (); }
+
+        memberNotification(string member) {
+            if (d == 13) {
+                throw "NOTIFY-ERROR", "notification rejected the stored value";
+            }
+            push events, sprintf("%s=%d", member, self{member});
+        }
+
+        list<string> getEvents() { return events; }
+        setInternally() { d = 99; }
+    }
+
+    #! checks that a notification observes the stored value and internal writes do not notify
+    int sub check_typed() {
+        Target g();
+        g.d = 2;
+        g.d += 3;
+        g{"d"} = 7;
+        string key = "d";
+        g{key} = 11;
+        g.d *= 2;
+        ++g.d;
+        g.setInternally();
+        return g.d == 99 && g.getEvents() == ("d=2", "d=5", "d=7", "d=11", "d=22", "d=23") ? 1 : 0;
+    }
+
+    int sub check_object() {
+        object g = new Target();
+        g.d = 2;
+        g.d += 3;
+        g{"d"} = 7;
+        string key = "d";
+        g{key} = 11;
+        g.d *= 2;
+        ++g.d;
+        g.setInternally();
+        return g.d == 99 && g.getEvents() == ("d=2", "d=5", "d=7", "d=11", "d=22", "d=23") ? 1 : 0;
+    }
+
+    int sub check_auto(auto g) {
+        g.d = 2;
+        g.d += 3;
+        g{"d"} = 7;
+        string key = "d";
+        g{key} = 11;
+        g.d *= 2;
+        ++g.d;
+        g.setInternally();
+        return g.d == 99 && g.getEvents() == ("d=2", "d=5", "d=7", "d=11", "d=22", "d=23") ? 1 : 0;
+    }
+
+    #! the exception reaches the assignment, after the new member value has been stored
+    int sub check_exception() {
+        object g = new Target();
+        try {
+            g.d = 13;
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err == "NOTIFY-ERROR" && g.d == 13 ? 1 : 0;
+        }
+        return 0;
+    }
+
+    #! returns the outcome of each check
+    public hash<string, int> sub get_results() {
+        return {"typed": check_typed(), "object": check_object(), "auto": check_auto(new Target()),
+            "exception": check_exception()};
+    }
+}

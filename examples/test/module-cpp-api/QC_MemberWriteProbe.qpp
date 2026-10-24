@@ -1,0 +1,200 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_MemberWriteProbe.qpp a builtin proxy for testing external member writes */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "cppapiuser-module.h"
+#include "QC_MemberWriteProbe.h"
+#include <mutex>
+#include <cstring>
+
+class MemberWriteProbeData : public AbstractScannablePrivateData {
+public:
+    std::mutex mutex;
+    QoreHashNode* values = new QoreHashNode(autoTypeInfo);
+    int64 reads = 0;
+    int64 writes = 0;
+    int64 removes = 0;
+    int64 deletes = 0;
+    size_t scan_values = 0;
+
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            // Constructor failure uses obliterate(), which releases private data without the Qore destructor.
+            if (values) {
+                values->deref(xsink);
+            }
+            delete this;
+        }
+    }
+
+    DLLLOCAL void deref() override {
+        deref(nullptr);
+    }
+
+    DLLLOCAL bool scanValues(QorePrivateDataScanner& scanner) override {
+        std::unique_lock<std::mutex> lock(mutex, std::try_to_lock);
+        if (!lock.owns_lock()) {
+            scanner.contended();
+            return false;
+        }
+        if (values) {
+            // This hash is a private mutable backing store, not a Qore value exposed to callers.
+            // Report its entries under the container lock, as for a C++ map of QoreValue objects.
+            ConstHashIterator i(values);
+            while (i.next()) {
+                if (scanner.scan(i.get())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    DLLLOCAL void clear(QoreObject* self, ExceptionSink* xsink) {
+        QoreHashNode* old;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            old = values;
+            values = nullptr;
+            if (old) {
+                self->privateDataValuesRemoved();
+                while (scan_values) {
+                    self->removePrivateDataScan(CID_MEMBERWRITEPROBE);
+                    --scan_values;
+                }
+            }
+        }
+        if (old) {
+            old->deref(xsink);
+        }
+    }
+};
+
+QoreValue member_write_probe(QoreObject* self, AbstractPrivateData* data, const char* member,
+        QoreValue value, QoreMemberWriteOp operation, ExceptionSink* xsink) {
+    auto* probe = static_cast<MemberWriteProbeData*>(data);
+    // Acquires the Qore object's lock: this would deadlock if the runtime called the hook under that lock.
+    ValueHolder declared(self->evalMember("declared", xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // A Qore subclass can override this method; the callback must also permit re-entering Qore code.
+    ValueHolder reentered(self->evalMethod("reenter", nullptr, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!strcmp(member, "reject")) {
+        xsink->raiseException("WRITE-GATE-ERROR", "rejected external member write");
+        return QoreValue();
+    }
+    ValueHolder old(xsink);
+    {
+        std::lock_guard<std::mutex> lock(probe->mutex);
+        if (!probe->values) {
+            xsink->raiseException("OBJECT-ALREADY-DELETED", "external storage has been deleted");
+            return QoreValue();
+        }
+        old = probe->values->takeKeyValue(member);
+        if (AbstractScannablePrivateData::needsScan(*old)) {
+            self->privateDataValuesRemoved();
+            self->removePrivateDataScan(CID_MEMBERWRITEPROBE);
+            --probe->scan_values;
+        }
+        if (operation == QoreMemberWriteOp::Assign) {
+            ++probe->writes;
+            probe->values->setKeyValue(member, value.refSelf(), xsink);
+            if (!*xsink && AbstractScannablePrivateData::needsScan(value)) {
+                self->addPrivateDataScan(CID_MEMBERWRITEPROBE);
+                ++probe->scan_values;
+                self->privateDataValueStored(value);
+            }
+        } else if (operation == QoreMemberWriteOp::Remove) {
+            ++probe->removes;
+        } else {
+            ++probe->deletes;
+        }
+    }
+    return operation == QoreMemberWriteOp::Assign ? QoreValue() : old.release();
+}
+
+//! builtin test class whose dynamic fields are held by its private data
+/** Its public and private declared members remain ordinary Qore members. */
+qclass MemberWriteProbe [arg=MemberWriteProbeData* probe; ns=Qore::CppApiTest];
+
+//! creates empty external storage
+/** @throw OUT-OF-MEMORY memory allocation failed */
+MemberWriteProbe::constructor() {
+    self->setPrivate(CID_MEMBERWRITEPROBE, new MemberWriteProbeData);
+    self->setValue("declared", QoreValue(7ll), xsink);
+    if (!*xsink) {
+        self->setValue("secret", QoreValue(9ll), xsink);
+    }
+}
+
+//! releases external storage
+/** @throw any exception raised by destruction of a stored object */
+MemberWriteProbe::destructor() {
+    probe->clear(self, xsink);
+    probe->deref(xsink);
+}
+
+//! reads a dynamic member
+/** @param member external field name
+    @return the stored value, or NOTHING if it does not exist
+    @throw READ-GATE-ERROR the write-only test member was read
+*/
+auto MemberWriteProbe::memberGate(string member) {
+    if (!strcmp(member->c_str(), "write_only")) {
+        xsink->raiseException("READ-GATE-ERROR", "a plain assignment must not read the old value");
+        return QoreValue();
+    }
+    ValueHolder declared(self->evalMember("declared", xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> lock(probe->mutex);
+    ++probe->reads;
+    return probe->values ? probe->values->getKeyValue(member->c_str()).refSelf() : QoreValue();
+}
+
+//! returns callback counts in read, assign, remove, delete order
+/** @return counts of external operations
+    @throw none */
+list<int> MemberWriteProbe::counts() [flags=CONSTANT] {
+    ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+    std::lock_guard<std::mutex> lock(probe->mutex);
+    result->push(probe->reads, xsink);
+    result->push(probe->writes, xsink);
+    result->push(probe->removes, xsink);
+    result->push(probe->deletes, xsink);
+    return result.release();
+}
+
+//! overridable callback target used to verify re-entry into Qore code
+/** @return zero in the builtin implementation
+    @throw none */
+int MemberWriteProbe::reenter() [flags=CONSTANT] {
+    return QoreValue(0ll);
+}

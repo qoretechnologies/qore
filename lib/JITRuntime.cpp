@@ -2602,7 +2602,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_self_member(const char* member_name, 
         return toBits(QoreValue());
     }
     // issue 3523: evaluate in case the value is a reference
-    ValueHolder val(obj->getReferencedMemberNoMethod(member_name, xsink), xsink);
+    ValueHolder val(qore_object_private::get(*obj)->getReferencedMemberForSelf(member_name, xsink), xsink);
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -2627,7 +2627,7 @@ static T qore_rt_load_self_getter_native(const char* member_name,
         return T();
     }
     ValueHolder member(
-        obj->getReferencedMemberNoMethod(member_name, xsink), xsink);
+        qore_object_private::get(*obj)->getReferencedMemberForSelf(member_name, xsink), xsink);
     if (*xsink) {
         return T();
     }
@@ -2673,7 +2673,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_self_member_for_call(const char* memb
     if (qore_rt_check_closure_self_valid(obj, xsink)) {
         return toBits(QoreValue());
     }
-    ValueHolder val(obj->getReferencedMemberNoMethod(member_name, xsink), xsink);
+    ValueHolder val(qore_object_private::get(*obj)->getReferencedMemberForSelf(member_name, xsink), xsink);
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -6035,9 +6035,12 @@ static void qore_rt_assign_object_member_lvalue(QoreObject* obj, const char* key
         class_ctx = nullptr;
     }
 
-    LValueHelper helper(xsink);
+    LValueHelper helper(xsink, true);
     if (qore_object_private::getLValue(*obj, key, helper, class_ctx, false, xsink)) {
         return;
+    }
+    if (!class_ctx) {
+        helper.vl.addMemberNotification(obj, key);
     }
 
     QoreValue stored = val.hasNode() ? val.refSelf() : val;
@@ -14662,7 +14665,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
         assign_val = *eval_holder;
     }
 
-    LValueHelper lvh(xsink);
+    LValueHelper lvh(xsink, true);
     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
         return toBits(QoreValue());
     }
@@ -14728,7 +14731,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_consume(QoreIRLValuePathIns
         return toBits(QoreValue());
     }
 
-    LValueHelper lvh(xsink);
+    LValueHelper lvh(xsink, true);
     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
         // released after the lvalue's locks, as the helper releases them in its destructor first
         lvh.saveTemp(val_holder.release());
@@ -14745,7 +14748,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign_consume(const char* mem
     if (*xsink) {
         return toBits(QoreValue());
     }
-    LValueHelper lvh(xsink);
+    LValueHelper lvh(xsink, true);
     if (qore_rt_get_self_member_lvalue(member_name, lvh, xsink)) {
         lvh.saveTemp(val_holder.release());
         return toBits(QoreValue());
@@ -14779,7 +14782,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
         assign_val = *eval_holder;
     }
 
-    LValueHelper lvh(xsink);
+    LValueHelper lvh(xsink, true);
     if (qore_rt_get_self_member_lvalue(member_name, lvh, xsink)
             || lvh.assign(assign_val.refSelf(), "<self member assign>", true, mode)) {
         return toBits(QoreValue());
@@ -15106,7 +15109,7 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
             return QoreValue();
         }
         QoreLValueGeneric rv;
-        qore_object_private::takeMembers(*o, rv, lvh, *key_list);
+        qore_object_private::takeMembers(*o, rv, lvh, *key_list, is_delete);
         if (*xsink) {
             lvh.saveTemp(rv.removeValue(true));
             return QoreValue();
@@ -15510,7 +15513,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             return toBits(QoreValue());
         }
         res = qore_object_private::takeMember(*obj, xsink,
-            path_copy[0].name.c_str(), false);
+            path_copy[0].name.c_str(), false, inst->unary_op == LVUnaryOp::Delete);
         if (*xsink || !finish_delete_result(res)) {
             return toBits(QoreValue());
         }
@@ -15577,7 +15580,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     ? lvh.getValue().get<QoreObject>()
                     : lvh.getValue().get<const WeakReferenceNode>()->get();
                 if (o) {
-                    res = qore_object_private::takeMember(*o, lvh, last_step.name.c_str());
+                    res = qore_object_private::takeMember(*o, lvh, last_step.name.c_str(),
+                        inst->unary_op == LVUnaryOp::Delete);
                     lvh.removedValue(res);
                     pending_delete_finish = true;
                 }
@@ -16260,6 +16264,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary_aot(
 }
 
 // --- Phase 2B Step 5: Lvalue ops category throwing wrappers ---
+// Lvalue operations return owned results. An external write gate can fail during LValueHelper destruction,
+// after the result was referenced; release that result before unwinding past its caller.
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_assign_throwing(
         const char* member_name, uint64_t rhs_bits, int32_t mode_raw,
@@ -16267,6 +16273,7 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_assi
     uint64_t result = qore_rt_self_member_assign(
         member_name, rhs_bits, mode_raw, xsink);
     if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
         throw QoreJITException();
     }
     return result;
@@ -16277,6 +16284,7 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_assi
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_self_member_assign_consume(member_name, rhs_bits, mode_raw, flags, xsink);
     if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
         throw QoreJITException();
     }
     return result;
@@ -16288,6 +16296,7 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_comp
     uint64_t result = qore_rt_self_member_compound(
         member_name, compound_op, rhs_bits, xsink);
     if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
         throw QoreJITException();
     }
     return result;
@@ -16298,6 +16307,7 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_upda
     uint64_t result = qore_rt_self_member_update(
         member_name, unary_op, xsink);
     if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
         throw QoreJITException();
     }
     return result;
@@ -16365,6 +16375,7 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_ternary_
     uint64_t result = qore_rt_lv_path_ternary(inst, dyn_vals, a_bits, b_bits,
             c_bits, xsink);
     if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
         throw QoreJITException();
     }
     return result;
@@ -16375,6 +16386,7 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_assign_t
         uint64_t rhs_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_assign(inst, dyn_vals, rhs_bits, xsink);
     if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
         throw QoreJITException();
     }
     return result;
@@ -16385,6 +16397,7 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_assign_c
         uint64_t rhs_bits, int32_t flags, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_assign_consume(inst, dyn_vals, rhs_bits, flags, xsink);
     if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
         throw QoreJITException();
     }
     return result;
@@ -16395,6 +16408,7 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_compound
         uint64_t rhs_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_compound(inst, dyn_vals, rhs_bits, xsink);
     if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
         throw QoreJITException();
     }
     return result;
@@ -16404,6 +16418,7 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_unary_th
         QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_unary(inst, dyn_vals, xsink);
     if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
         throw QoreJITException();
     }
     return result;
@@ -16414,6 +16429,7 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_binary_m
         uint64_t rhs_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_binary_mut(inst, dyn_vals, rhs_bits, xsink);
     if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
         throw QoreJITException();
     }
     return result;
@@ -16481,6 +16497,7 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_ternary_
     uint64_t result = qore_rt_lv_path_ternary_aot(ctx, slot, dyn_vals, a_bits,
             b_bits, c_bits, xsink);
     if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
         throw QoreJITException();
     }
     return result;
@@ -16491,6 +16508,7 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_assign_a
         uint64_t rhs_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_assign_aot(ctx, slot, dyn_vals, rhs_bits, xsink);
     if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
         throw QoreJITException();
     }
     return result;
@@ -16501,6 +16519,7 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_assign_c
         uint64_t rhs_bits, int32_t flags, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_assign_consume_aot(ctx, slot, dyn_vals, rhs_bits, flags, xsink);
     if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
         throw QoreJITException();
     }
     return result;
@@ -16511,6 +16530,7 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_compound
         uint64_t rhs_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_compound_aot(ctx, slot, dyn_vals, rhs_bits, xsink);
     if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
         throw QoreJITException();
     }
     return result;
@@ -16520,6 +16540,7 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_unary_ao
         QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_unary_aot(ctx, slot, dyn_vals, xsink);
     if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
         throw QoreJITException();
     }
     return result;
@@ -16530,6 +16551,7 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_binary_m
         uint64_t rhs_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_binary_mut_aot(ctx, slot, dyn_vals, rhs_bits, xsink);
     if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
         throw QoreJITException();
     }
     return result;
@@ -20466,8 +20488,8 @@ static QoreValue qore_rt_get_aot_object_member(
         const QoreAOTObjectMemberDescriptor* descriptor,
         ExceptionSink* xsink) {
     if (!descriptor || !descriptor->info) {
-        return object->getReferencedMemberNoMethod(
-            member_name, target_class, xsink);
+        ObjectSubstitutionHelper osh(object, qore_class_private::get(*target_class));
+        return object_priv->getReferencedMemberForSelf(member_name, xsink);
     }
     static constinit QoreEnvFlag use_prehash_env("QORE_DISABLE_AOT_OBJECT_MEMBER_PREHASH");
     const bool use_prehash = !use_prehash_env.get();
@@ -20631,7 +20653,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
     const bool single_lvalue = !single_lvalue_env.get();
     ValueHolder value(xsink);
     {
-        LValueHelper helper(xsink);
+        LValueHelper helper(xsink, true);
         static constinit QoreEnvFlag use_lvalue_prehash_env("QORE_DISABLE_AOT_OBJECT_MEMBER_LVALUE_PREHASH");
         const bool use_lvalue_prehash = !use_lvalue_prehash_env.get();
         int rc = member_info && use_lvalue_prehash
@@ -20718,7 +20740,7 @@ static T qore_rt_object_member_set_get_native_aot(QoreAOTContext* ctx,
                 }
             }
 
-            LValueHelper helper(xsink);
+            LValueHelper helper(xsink, true);
             static constinit QoreEnvFlag use_lvalue_prehash_env("QORE_DISABLE_AOT_OBJECT_MEMBER_LVALUE_PREHASH");
             const bool use_lvalue_prehash = !use_lvalue_prehash_env.get();
             int rc = member_info && use_lvalue_prehash
