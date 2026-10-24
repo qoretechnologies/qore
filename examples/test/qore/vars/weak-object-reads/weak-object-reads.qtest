@@ -105,9 +105,9 @@ class WeakObjectReadsTest inherits QUnit::Test {
             "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
         assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
 
-        # the directory holds only the compiled module, so the worker cannot load the source instead; see
-        # WeakObjectReadChecks::get_call_reference_results() for the checks of call references
-        checkWorkerOutput("aot", runWorker("weak-object-reads-module-worker.q", tmp.path), Checks);
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot", runWorker("weak-object-reads-module-worker.q", tmp.path, "", "call-references"),
+            Checks + CallReferenceChecks);
     }
 
     #! runs the given worker with the given module directory and returns its output

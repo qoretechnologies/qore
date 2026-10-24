@@ -38,14 +38,16 @@ public namespace WeakObjectReadChecks {
     }
 
     #! returns the results of the checks of call references created through weak references: check name -> 1 for pass
-    /** Compiled code creates a call reference from the value that it reads through a weak reference, which is no
-        value for a destroyed object, so it raises \c OBJECT-METHOD-REFERENCE-ERROR where the other execution modes
-        create a call reference that raises \c OBJECT-ALREADY-DELETED when it is called; these checks are therefore
-        not run from a compiled module.
+    /** A weak reference read from a hash, a list or an object member reads as its target, also when the target is
+        an object that has been destroyed, so a call reference created from it raises \c OBJECT-ALREADY-DELETED when
+        it is called; compiled code raised \c OBJECT-METHOD-REFERENCE-ERROR instead when it created the call
+        reference, as it read no value.
     */
     public hash<string, int> sub get_call_reference_results() {
         return {
             "destroyed-hash-value-call-reference": check_destroyed_hash_value_call_reference(),
+            "destroyed-dynamic-key-call-reference": check_destroyed_dynamic_key_call_reference(),
+            "destroyed-list-element-call-reference": check_destroyed_list_element_call_reference(),
             "destroyed-member-call-reference": check_destroyed_member_call_reference(),
             "live-call-reference": check_live_call_reference(),
         };
@@ -76,6 +78,16 @@ public namespace WeakObjectReadChecks {
         return h;
     }
 
+    #! returns a list whose element is a weak reference to a destroyed object
+    list<auto> sub destroyed_list() {
+        list<auto!> l = (1,);
+        {
+            Target t();
+            l[0] := t;
+        }
+        return l;
+    }
+
     #! returns an object whose member is a weak reference to a destroyed object
     Holder sub destroyed_holder() {
         Holder holder();
@@ -102,10 +114,6 @@ public namespace WeakObjectReadChecks {
         return exists holder.member && o == t && has_value(holder.member) && holder.member.ping() == 7 ? 1 : 0;
     }
 
-
-
-
-
     int sub check_destroyed_hash_value_call() {
         hash<auto> h = destroyed_hash();
         return rejects_deleted(auto sub () { return h.target.ping(); })
@@ -119,9 +127,20 @@ public namespace WeakObjectReadChecks {
         return rejects_deleted(c) ? 1 : 0;
     }
 
+    #! as check_destroyed_hash_value_call_reference() with a key that is not a constant
+    int sub check_destroyed_dynamic_key_call_reference() {
+        hash<auto> h = destroyed_hash();
+        string k = "target";
+        code c = \h{k}.ping();
+        return rejects_deleted(c) ? 1 : 0;
+    }
 
-
-
+    #! as check_destroyed_hash_value_call_reference() with a list element
+    int sub check_destroyed_list_element_call_reference() {
+        list<auto> l = destroyed_list();
+        code c = \l[0].ping();
+        return rejects_deleted(c) ? 1 : 0;
+    }
 
     int sub check_destroyed_member_call() {
         Holder holder = destroyed_holder();
