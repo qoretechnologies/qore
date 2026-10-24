@@ -460,18 +460,24 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_self_member_assign", reinterpret_cast<void*>(&qore_rt_self_member_assign) },
     { "qore_rt_self_member_assign_consume", reinterpret_cast<void*>(&qore_rt_self_member_assign_consume) },
     { "qore_rt_self_member_compound", reinterpret_cast<void*>(&qore_rt_self_member_compound) },
+    { "qore_rt_self_member_compound_consume", reinterpret_cast<void*>(&qore_rt_self_member_compound_consume) },
     { "qore_rt_self_member_update", reinterpret_cast<void*>(&qore_rt_self_member_update) },
     { "qore_rt_lv_path_assign", reinterpret_cast<void*>(&qore_rt_lv_path_assign) },
     { "qore_rt_lv_path_assign_consume", reinterpret_cast<void*>(&qore_rt_lv_path_assign_consume) },
     { "qore_rt_lv_path_compound", reinterpret_cast<void*>(&qore_rt_lv_path_compound) },
+    { "qore_rt_lv_path_compound_consume", reinterpret_cast<void*>(&qore_rt_lv_path_compound_consume) },
     { "qore_rt_lv_path_unary", reinterpret_cast<void*>(&qore_rt_lv_path_unary) },
     { "qore_rt_lv_path_binary_mut", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut) },
+    { "qore_rt_lv_path_binary_mut_consume", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut_consume) },
     { "qore_rt_lv_path_ternary", reinterpret_cast<void*>(&qore_rt_lv_path_ternary) },
     { "qore_rt_lv_path_assign_aot", reinterpret_cast<void*>(&qore_rt_lv_path_assign_aot) },
     { "qore_rt_lv_path_assign_consume_aot", reinterpret_cast<void*>(&qore_rt_lv_path_assign_consume_aot) },
     { "qore_rt_lv_path_compound_aot", reinterpret_cast<void*>(&qore_rt_lv_path_compound_aot) },
+    { "qore_rt_lv_path_compound_consume_aot", reinterpret_cast<void*>(&qore_rt_lv_path_compound_consume_aot) },
     { "qore_rt_lv_path_unary_aot", reinterpret_cast<void*>(&qore_rt_lv_path_unary_aot) },
     { "qore_rt_lv_path_binary_mut_aot", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut_aot) },
+    { "qore_rt_lv_path_binary_mut_consume_aot",
+        reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut_consume_aot) },
     { "qore_rt_lv_path_ternary_aot", reinterpret_cast<void*>(&qore_rt_lv_path_ternary_aot) },
     { "qore_rt_push_compiled_handler_aot", reinterpret_cast<void*>(&qore_rt_push_compiled_handler_aot) },
     { "qore_rt_get_native_entry_slots", reinterpret_cast<void*>(&qore_rt_get_native_entry_slots) },
@@ -12954,13 +12960,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
     return toBits(lvh.getReferencedValue());
 }
 
+//! Applies a compound assignment to an lvalue
+/** The value holds a reference in \a rhs_holder, which += takes when it stores the value (see
+    doPlusEqualsOnLValue()); the holder must be declared before the LValueHelper.
+*/
 static QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
-        LVCompoundOp compound_op, const QoreValue& rhs,
+        LVCompoundOp compound_op, ValueHolder& rhs_holder,
         ExceptionSink* xsink) {
+    const QoreValue rhs = *rhs_holder;
     QoreValue res;
     switch (compound_op) {
         case LVCompoundOp::AddAssign:
-            res = doPlusEqualsOnLValue(lvh, rhs, xsink);
+            res = doPlusEqualsOnLValue(lvh, rhs_holder, xsink);
             break;
         case LVCompoundOp::SubAssign:
             res = doMinusEqualsOnLValue(lvh, rhs, xsink);
@@ -13036,48 +13047,87 @@ static QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
     return res;
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound(
-        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
-        uint64_t rhs_bits, ExceptionSink* xsink) {
-    if (*xsink) {
-        return toBits(QoreValue());
-    }
+//! Applies a compound assignment to an lvalue path; the value's reference is held by \a rhs_holder
+static uint64_t qore_rt_lv_path_compound_impl(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        ValueHolder& rhs_holder, ExceptionSink* xsink) {
     std::vector<LVPathStep> path_copy;
     if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
         return toBits(QoreValue());
     }
-
-    QoreValue rhs = fromBits(rhs_bits);
-    ValueHolder rhs_holder(rhs.refSelf(), xsink);
 
     LValueHelper lvh(xsink);
     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
         return toBits(QoreValue());
     }
     QoreValue res = qore_rt_apply_lvalue_compound(
-        lvh, inst->compound_op, rhs, xsink);
+        lvh, inst->compound_op, rhs_holder, xsink);
     if (*xsink) {
         return toBits(QoreValue());
     }
     return toBits(res);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_self_member_compound(
-        const char* member_name, int32_t compound_op, uint64_t rhs_bits,
-        ExceptionSink* xsink) {
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    ValueHolder rhs_holder(fromBits(rhs_bits).refSelf(), xsink);
+    return qore_rt_lv_path_compound_impl(inst, dyn_vals, rhs_holder, xsink);
+}
+
+//! Applies a compound assignment to an lvalue path, taking over the caller's reference to the value
+/** As qore_rt_lv_path_compound(), except that the value's reference passes to this function in every case, as with
+    qore_rt_lv_path_assign_consume(): += hands it over to the list it appends the value to, as the AST interpreter
+    does, so that the value is not dereferenced once it is linked into the graph, which would make a scan that its
+    constructor deferred (design/dgc.md, "The rrefs deferral").
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound_consume(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    // owns the value from here on, whatever happens
+    ValueHolder rhs_holder(fromBits(rhs_bits), xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_lv_path_compound_impl(inst, dyn_vals, rhs_holder, xsink);
+}
+
+//! Applies a compound assignment to a member of self; the value's reference is held by \a rhs_holder
+static uint64_t qore_rt_self_member_compound_impl(const char* member_name, int32_t compound_op,
+        ValueHolder& rhs_holder, ExceptionSink* xsink) {
     if (*xsink || compound_op < static_cast<int32_t>(LVCompoundOp::AddAssign)
             || compound_op > static_cast<int32_t>(LVCompoundOp::ShrAssign)) {
         return toBits(QoreValue());
     }
-    QoreValue rhs = fromBits(rhs_bits);
-    ValueHolder rhs_holder(rhs.refSelf(), xsink);
     LValueHelper lvh(xsink);
     if (qore_rt_get_self_member_lvalue(member_name, lvh, xsink)) {
         return toBits(QoreValue());
     }
     QoreValue res = qore_rt_apply_lvalue_compound(
-        lvh, static_cast<LVCompoundOp>(compound_op), rhs, xsink);
+        lvh, static_cast<LVCompoundOp>(compound_op), rhs_holder, xsink);
     return toBits(*xsink ? QoreValue() : res);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_self_member_compound(
+        const char* member_name, int32_t compound_op, uint64_t rhs_bits,
+        ExceptionSink* xsink) {
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    ValueHolder rhs_holder(fromBits(rhs_bits).refSelf(), xsink);
+    return qore_rt_self_member_compound_impl(member_name, compound_op, rhs_holder, xsink);
+}
+
+//! As qore_rt_self_member_compound(), taking over the caller's reference to the value; see
+//! qore_rt_lv_path_compound_consume()
+extern "C" DLLEXPORT uint64_t qore_rt_self_member_compound_consume(
+        const char* member_name, int32_t compound_op, uint64_t rhs_bits,
+        ExceptionSink* xsink) {
+    // owns the value from here on, whatever happens
+    ValueHolder rhs_holder(fromBits(rhs_bits), xsink);
+    return qore_rt_self_member_compound_impl(member_name, compound_op, rhs_holder, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_self_member_update(
@@ -14061,18 +14111,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
     return toBits(res);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_lv_path_binary_mut(
-        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
-        uint64_t rhs_bits, ExceptionSink* xsink) {
-    if (*xsink) {
-        return toBits(QoreValue());
-    }
+//! Applies push, unshift, a regex substitution or a transliteration to an lvalue path
+/** \a rhs_holder holds a reference for the value pushed or unshifted, which the list takes; it must be declared
+    before the LValueHelper, so that a reference not taken is released after the lvalue's locks.
+*/
+static uint64_t qore_rt_lv_path_binary_mut_impl(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        ValueHolder& rhs_holder, ExceptionSink* xsink) {
     std::vector<LVPathStep> path_copy;
     if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
         return toBits(QoreValue());
     }
-
-    QoreValue rhs = fromBits(rhs_bits);
 
     LValueHelper lvh(xsink);
     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
@@ -14110,10 +14158,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_binary_mut(
             }
             lvh.ensureUnique();
             QoreListNode* l = lvh.getValue().get<QoreListNode>();
+            // the list takes the reference held for the value, as the AST interpreter hands the value over
             if (inst->binary_mut_op == LVBinaryMutOp::Push) {
-                l->push(rhs.refSelf(), xsink);
+                l->push(rhs_holder.release(), xsink);
             } else {
-                l->insert(rhs.refSelf(), xsink);
+                l->insert(rhs_holder.release(), xsink);
             }
             break;
         }
@@ -14162,6 +14211,29 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_binary_mut(
         return toBits(QoreValue());
     }
     return toBits(res);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_binary_mut(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    ValueHolder rhs_holder(fromBits(rhs_bits).refSelf(), xsink);
+    return qore_rt_lv_path_binary_mut_impl(inst, dyn_vals, rhs_holder, xsink);
+}
+
+//! As qore_rt_lv_path_binary_mut() for push and unshift, taking over the caller's reference to the value; see
+//! qore_rt_lv_path_compound_consume()
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_binary_mut_consume(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    // owns the value from here on, whatever happens
+    ValueHolder rhs_holder(fromBits(rhs_bits), xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_lv_path_binary_mut_impl(inst, dyn_vals, rhs_holder, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
@@ -14361,6 +14433,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound_aot(
     return qore_rt_lv_path_compound(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, xsink);
 }
 
+//! The AOT counterpart of qore_rt_lv_path_compound_consume()
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound_consume_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    if (!ctx || slot < 0 || slot >= ctx->num_lv_path_insts) {
+        // the value belongs to this function in every case
+        fromBits(rhs_bits).discard(xsink);
+        xsink->raiseException("AOT-INTERNAL-ERROR",
+            "LValuePath op: slot %d out of range (num_lv_path_insts=%d)",
+            slot, ctx ? ctx->num_lv_path_insts : -1);
+        return toBits(QoreValue());
+    }
+    return qore_rt_lv_path_compound_consume(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
         ExceptionSink* xsink) {
@@ -14383,6 +14470,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_binary_mut_aot(
         return toBits(QoreValue());
     }
     return qore_rt_lv_path_binary_mut(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, xsink);
+}
+
+//! The AOT counterpart of qore_rt_lv_path_binary_mut_consume()
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_binary_mut_consume_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    if (!ctx || slot < 0 || slot >= ctx->num_lv_path_insts) {
+        // the value belongs to this function in every case
+        fromBits(rhs_bits).discard(xsink);
+        xsink->raiseException("AOT-INTERNAL-ERROR",
+            "LValuePath op: slot %d out of range (num_lv_path_insts=%d)",
+            slot, ctx ? ctx->num_lv_path_insts : -1);
+        return toBits(QoreValue());
+    }
+    return qore_rt_lv_path_binary_mut_consume(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary_aot(
@@ -14429,6 +14531,18 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_comp
         const char* member_name, int32_t compound_op, uint64_t rhs_bits,
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_self_member_compound(
+        member_name, compound_op, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_compound_consume_throwing(
+        const char* member_name, int32_t compound_op, uint64_t rhs_bits,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_self_member_compound_consume(
         member_name, compound_op, rhs_bits, xsink);
     if (xsink && *xsink) {
         fromBits(result).discard(xsink);
@@ -14549,6 +14663,17 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_compound
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_compound_consume_throwing(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_compound_consume(inst, dyn_vals, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_unary_throwing(
         QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_unary(inst, dyn_vals, xsink);
@@ -14563,6 +14688,17 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_binary_m
         QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
         uint64_t rhs_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_binary_mut(inst, dyn_vals, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_binary_mut_consume_throwing(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_binary_mut_consume(inst, dyn_vals, rhs_bits, xsink);
     if (xsink && *xsink) {
         fromBits(result).discard(xsink);
         throw QoreJITException();
@@ -14671,6 +14807,17 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_compound
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_compound_consume_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_compound_consume_aot(ctx, slot, dyn_vals, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_unary_aot_throwing(
         QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_unary_aot(ctx, slot, dyn_vals, xsink);
@@ -14685,6 +14832,17 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_binary_m
         QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
         uint64_t rhs_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_binary_mut_aot(ctx, slot, dyn_vals, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_binary_mut_consume_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_binary_mut_consume_aot(ctx, slot, dyn_vals, rhs_bits, xsink);
     if (xsink && *xsink) {
         fromBits(result).discard(xsink);
         throw QoreJITException();
@@ -17807,6 +17965,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_compound_get_aot(
     qore_object_private* object_priv = qore_object_private::get(*object);
 
     ValueHolder value(xsink);
+    // the reference held for the value, which += takes when it stores the value; released after the lvalue's lock
+    ValueHolder rhs_holder(fromBits(args[value_param]).refSelf(), xsink);
     {
         LValueHelper helper(xsink);
         static constinit QoreEnvFlag use_lvalue_prehash_env("QORE_DISABLE_AOT_OBJECT_MEMBER_LVALUE_PREHASH");
@@ -17823,9 +17983,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_compound_get_aot(
         if (rc) {
             return toBits(QoreValue());
         }
-        QoreValue rhs = fromBits(args[value_param]);
         value = qore_rt_apply_lvalue_compound(helper,
-            static_cast<LVCompoundOp>(compound_op), rhs, xsink);
+            static_cast<LVCompoundOp>(compound_op), rhs_holder, xsink);
         if (*xsink) {
             return toBits(QoreValue());
         }

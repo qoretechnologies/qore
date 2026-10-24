@@ -54,6 +54,42 @@ public class Tracked {
     setChild(int i) {
         peer = new Tracked(i);
     }
+
+    #! appends a new object to a list in a member of self, with += or push
+    addChild(int i, bool use_push) {
+        if (use_push) {
+            push peer, new Tracked(i);
+        } else {
+            peer += new Tracked(i);
+        }
+    }
+}
+
+#! the root of a graph whose nodes refer to it
+public class GraphRoot {
+    public {
+        list<auto> nodes = ();
+    }
+
+    #! appends a new node that refers to this root to the list of nodes of this root, with += or push
+    addNode(bool use_push) {
+        if (use_push) {
+            push nodes, new GraphNode(self);
+        } else {
+            nodes += new GraphNode(self);
+        }
+    }
+}
+
+#! a node of a graph that refers to its root
+public class GraphNode {
+    public {
+        auto root;
+    }
+
+    constructor(auto root) {
+        self.root = root;
+    }
 }
 
 #! returns an object from a call, so that the value assigned is a call result
@@ -248,6 +284,123 @@ string sub container_write() {
     return sprintf("%y", h);
 }
 
+#! objects appended to lists in a hash with +=, push and unshift: each is held by its list only
+int sub list_appends() {
+    int d0 = Tracked::destroyed;
+    int during;
+    {
+        hash<auto> h = {"a": (), "b": (), "c": ()};
+        for (int i = 0; i < 5; ++i) {
+            h.a += new Tracked(i);
+            push h.b, new Tracked(i);
+            unshift h.c, new Tracked(i);
+        }
+        if (h.a[4].v != 4 || h.b[4].v != 4 || h.c[0].v != 4) {
+            return -1;
+        }
+        during = Tracked::destroyed - d0;
+    }
+    return during * 100 + (Tracked::destroyed - d0);
+}
+
+#! a value computed once before a loop and appended in every iteration: it is never handed over
+string sub append_loop_invariant(string a, string b) {
+    hash<auto> h = {"l": ()};
+    for (int i = 0; i < 3; ++i) {
+        h.l += a + b;
+        push h.l, a + b;
+    }
+    return h.l.join("|");
+}
+
+#! pushes a new object to a list that refuses its type; the push is not in a try block, so compiled code hands the
+#! value over to the push, which must release it when the list refuses it
+sub push_refused(hash<auto> h) {
+    push h.l, make_untyped();
+}
+
+#! a value pushed to a list that refuses its type is released once, before the handler runs
+int sub append_type_error() {
+    int d0 = Tracked::destroyed;
+    hash<auto> h = {"l": cast<list<int>>((1,))};
+    try {
+        push_refused(h);
+    } catch (hash<ExceptionInfo> ex) {
+        return (Tracked::destroyed - d0) * 10 + (ex.err ? 1 : 0);
+    }
+    return -1;
+}
+
+#! the result of += is used: the list holds the value, and so does the result
+int sub append_result_used() {
+    int d0 = Tracked::destroyed;
+    int rv;
+    {
+        hash<auto> h = {"l": ()};
+        list<auto> r = (h.l += new Tracked(1));
+        remove h.l;
+        rv = (r[0].v == 1 && Tracked::destroyed == d0) ? 1 : 0;
+    }
+    return rv * 10 + (Tracked::destroyed - d0);
+}
+
+#! a method appending new objects to a member of self with += and push
+int sub self_member_appends() {
+    int d0 = Tracked::destroyed;
+    {
+        Tracked t(0);
+        t.peer = ();
+        for (int i = 0; i < 4; ++i) {
+            t.addChild(i, (i % 2) == 1);
+        }
+        if (t.peer.size() != 4) {
+            return -1;
+        }
+    }
+    return Tracked::destroyed - d0;
+}
+
+#! new nodes that refer to their root appended to the root's list: cycles collected when the root is released
+int sub append_cycles() {
+    int d0 = Tracked::destroyed;
+    {
+        Tracked root(0);
+        root.peer = ();
+        for (int i = 0; i < 4; ++i) {
+            Tracked child(root);
+            root.peer += child;
+            push root.peer, new Tracked(root);
+        }
+    }
+    return Tracked::destroyed - d0;
+}
+
+#! the objects that the recursive-reference scans enter while new nodes are appended to a graph held by a local
+/** The constructor of a node defers the scan of the new node, as its self holds a real reference; a dereference
+    after the node has been linked into the graph would make the scan, which walks the whole graph.  The AST
+    interpreter hands the node over to the list, so the scans enter no object; the scans are only counted in debug
+    builds.
+*/
+int sub append_scans() {
+    if (!Option::HAVE_LIBRARY_DEBUGGING) {
+        return 0;
+    }
+    GraphRoot root();
+    int start = call_function("dbg_get_scan_object_count");
+    for (int i = 0; i < 64; ++i) {
+        root.nodes += new GraphNode(root);
+        push root.nodes, new GraphNode(root);
+        unshift root.nodes, new GraphNode(root);
+        root.addNode((i % 2) == 1);
+    }
+    int rv = call_function("dbg_get_scan_object_count") - start;
+    # the graph is collected when the root is released
+    foreach GraphNode node in (root.nodes) {
+        node.root = NOTHING;
+    }
+    return rv;
+}
+
 #! Returns the result of every check
 public hash<string, auto> sub get_results() {
     return {
@@ -263,6 +416,13 @@ public hash<string, auto> sub get_results() {
         "self-member": self_member(),
         "cycle-write": cycle_write(),
         "container-write": container_write(),
+        "list-appends": list_appends(),
+        "append-loop-invariant": append_loop_invariant("x", "y"),
+        "append-type-error": append_type_error(),
+        "append-result-used": append_result_used(),
+        "self-member-appends": self_member_appends(),
+        "append-cycles": append_cycles(),
+        "append-scans": append_scans(),
     };
 }
 }

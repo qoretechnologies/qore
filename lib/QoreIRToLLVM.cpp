@@ -31539,39 +31539,41 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             // Emit the call based on opcode
             llvm::Value* result_val;
+            // The value of the operand is handed over to the lvalue instead of borrowed when this function owns it
+            // (it has a cleanup slot), this is its last use, it is not a weak-reference load, and it is defined in
+            // this block - the use counts are static, so a value defined before a loop and used once in it would
+            // otherwise be handed over on the first iteration.  The helper then owns the value in every case,
+            // including when the operation fails, so the cleanup slot is cleared before the call.  See
+            // qore_rt_lv_path_assign_consume().
+            auto consume_rhs = [&](uint32_t rhs_id) -> bool {
+                auto alloca_it = invoke_alloca_map.find(rhs_id);
+                auto uses_it = operand_remaining_uses.find(rhs_id);
+                auto def_it = value_def_block.find(rhs_id);
+                if (alloca_it == invoke_alloca_map.end()
+                        || !nanboxed_values.count(rhs_id)
+                        || (uses_it != operand_remaining_uses.end() && uses_it->second > 1)
+                        || weak_load_result_ids.count(rhs_id)
+                        || def_it == value_def_block.end()
+                        || def_it->second != current_lowering_block_) {
+                    return false;
+                }
+                llvm::Value* ca = alloca_it->second;
+                if (!ca) {
+                    ca = promoteSsaEntryToAlloca(rhs_id, module, llvm_func);
+                }
+                if (!ca) {
+                    return false;
+                }
+                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), ca);
+                return true;
+            };
             switch (inst->opcode) {
                 case QoreIROpcode::LValuePathAssign: {
                     uint32_t rhs_id = inst->operands[0].id;
                     auto* rhs_val = getVal(rhs_id, error);
                     if (!rhs_val) { return false; }
                     llvm::Value* rhs_boxed = boxValue(rhs_val, rhs_id);
-                    // The value is handed over to the lvalue instead of borrowed when this function owns it
-                    // (it has a cleanup slot), this is its last use, it is not a weak-reference load, and it is
-                    // defined in this block - the use counts are static, so a value defined before a loop and used
-                    // once in it would otherwise be handed over on the first iteration.  The helper then owns the
-                    // value in every case, including when the assignment fails, so the cleanup slot is cleared
-                    // before the call.  See qore_rt_lv_path_assign_consume().
-                    bool consume = false;
-                    {
-                        auto alloca_it = invoke_alloca_map.find(rhs_id);
-                        auto uses_it = operand_remaining_uses.find(rhs_id);
-                        auto def_it = value_def_block.find(rhs_id);
-                        if (alloca_it != invoke_alloca_map.end()
-                                && nanboxed_values.count(rhs_id)
-                                && (uses_it == operand_remaining_uses.end() || uses_it->second <= 1)
-                                && !weak_load_result_ids.count(rhs_id)
-                                && def_it != value_def_block.end()
-                                && def_it->second == current_lowering_block_) {
-                            llvm::Value* ca = alloca_it->second;
-                            if (!ca) {
-                                ca = promoteSsaEntryToAlloca(rhs_id, module, llvm_func);
-                            }
-                            if (ca) {
-                                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), ca);
-                                consume = true;
-                            }
-                        }
-                    }
+                    bool consume = consume_rhs(rhs_id);
                     // the result of a statement-form assignment is invalid: the helper returns no reference
                     int32_t flags = inst->result.isValid() ? 0 : QORE_RT_ASSIGN_RESULT_UNUSED;
                     if (direct_self_mutation) {
@@ -31651,13 +31653,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     auto* rhs_val = getVal(inst->operands[0].id, error);
                     if (!rhs_val) { return false; }
                     llvm::Value* rhs_boxed = boxValue(rhs_val, inst->operands[0].id);
+                    // += appends a value it is handed over to a list, as the AST interpreter does; see
+                    // qore_rt_lv_path_compound_consume()
+                    bool consume = path_inst->compound_op == LVCompoundOp::AddAssign
+                        && consume_rhs(inst->operands[0].id);
                     if (direct_self_mutation) {
                         auto ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, i64_type, ptr_type}, false);
-                        auto fn = module.getOrInsertFunction(
-                            "qore_rt_self_member_compound", ft);
-                        auto fn_throwing = module.getOrInsertFunction(
-                            "qore_rt_self_member_compound_throwing", ft);
+                        auto fn = module.getOrInsertFunction(consume
+                            ? "qore_rt_self_member_compound_consume" : "qore_rt_self_member_compound", ft);
+                        auto fn_throwing = module.getOrInsertFunction(consume
+                            ? "qore_rt_self_member_compound_consume_throwing"
+                            : "qore_rt_self_member_compound_throwing", ft);
                         result_val = emitMaybeInvoke(fn, fn_throwing,
                             {direct_member_ptr,
                              llvm::ConstantInt::get(i32_type,
@@ -31667,9 +31674,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     } else if (aot_slots) {
                         auto ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false);
-                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_compound_aot", ft);
-                        auto fn_throwing = module.getOrInsertFunction(
-                            "qore_rt_lv_path_compound_aot_throwing", ft);
+                        auto fn = module.getOrInsertFunction(consume
+                            ? "qore_rt_lv_path_compound_consume_aot" : "qore_rt_lv_path_compound_aot", ft);
+                        auto fn_throwing = module.getOrInsertFunction(consume
+                            ? "qore_rt_lv_path_compound_consume_aot_throwing"
+                            : "qore_rt_lv_path_compound_aot_throwing", ft);
                         result_val = emitMaybeInvoke(fn, fn_throwing,
                             {aot_ctx_arg, llvm::ConstantInt::get(i32_type, aot_slot),
                              dyn_array, rhs_boxed, xsink_arg},
@@ -31677,9 +31686,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     } else {
                         auto ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, ptr_type, i64_type, ptr_type}, false);
-                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_compound", ft);
-                        auto fn_throwing = module.getOrInsertFunction(
-                            "qore_rt_lv_path_compound_throwing", ft);
+                        auto fn = module.getOrInsertFunction(consume
+                            ? "qore_rt_lv_path_compound_consume" : "qore_rt_lv_path_compound", ft);
+                        auto fn_throwing = module.getOrInsertFunction(consume
+                            ? "qore_rt_lv_path_compound_consume_throwing"
+                            : "qore_rt_lv_path_compound_throwing", ft);
                         result_val = emitMaybeInvoke(fn, fn_throwing,
                             {inst_ptr_val, dyn_array, rhs_boxed, xsink_arg},
                             module, llvm_func, inst);
@@ -31724,19 +31735,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 case QoreIROpcode::LValuePathBinaryMut: {
                     // operands[0] = RHS for push/unshift; empty for regex subst/transliterate
                     llvm::Value* rhs_boxed;
+                    bool consume = false;
                     if (!inst->operands.empty()) {
                         auto* rhs_val = getVal(inst->operands[0].id, error);
                         if (!rhs_val) { return false; }
                         rhs_boxed = boxValue(rhs_val, inst->operands[0].id);
+                        // a pushed value is handed over to the list, as the AST interpreter does; see
+                        // qore_rt_lv_path_compound_consume()
+                        consume = (path_inst->binary_mut_op == LVBinaryMutOp::Push
+                                || path_inst->binary_mut_op == LVBinaryMutOp::Unshift)
+                            && consume_rhs(inst->operands[0].id);
                     } else {
                         rhs_boxed = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
                     }
                     if (aot_slots) {
                         auto ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false);
-                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_binary_mut_aot", ft);
-                        auto fn_throwing = module.getOrInsertFunction(
-                            "qore_rt_lv_path_binary_mut_aot_throwing", ft);
+                        auto fn = module.getOrInsertFunction(consume
+                            ? "qore_rt_lv_path_binary_mut_consume_aot" : "qore_rt_lv_path_binary_mut_aot", ft);
+                        auto fn_throwing = module.getOrInsertFunction(consume
+                            ? "qore_rt_lv_path_binary_mut_consume_aot_throwing"
+                            : "qore_rt_lv_path_binary_mut_aot_throwing", ft);
                         result_val = emitMaybeInvoke(fn, fn_throwing,
                             {aot_ctx_arg, llvm::ConstantInt::get(i32_type, aot_slot),
                              dyn_array, rhs_boxed, xsink_arg},
@@ -31744,9 +31763,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     } else {
                         auto ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, ptr_type, i64_type, ptr_type}, false);
-                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_binary_mut", ft);
-                        auto fn_throwing = module.getOrInsertFunction(
-                            "qore_rt_lv_path_binary_mut_throwing", ft);
+                        auto fn = module.getOrInsertFunction(consume
+                            ? "qore_rt_lv_path_binary_mut_consume" : "qore_rt_lv_path_binary_mut", ft);
+                        auto fn_throwing = module.getOrInsertFunction(consume
+                            ? "qore_rt_lv_path_binary_mut_consume_throwing"
+                            : "qore_rt_lv_path_binary_mut_throwing", ft);
                         result_val = emitMaybeInvoke(fn, fn_throwing,
                             {inst_ptr_val, dyn_array, rhs_boxed, xsink_arg},
                             module, llvm_func, inst);

@@ -1461,9 +1461,15 @@ uint64_t qore_rt_self_member_assign_consume(const char* member_name, uint64_t rh
     int32_t mode_raw, int32_t flags, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_compound(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);
+uint64_t qore_rt_lv_path_compound_consume(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+    uint64_t rhs_bits, ExceptionSink* xsink);
+uint64_t qore_rt_self_member_compound_consume(const char* member_name, int32_t compound_op,
+    uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_unary(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
     ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_binary_mut(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+    uint64_t rhs_bits, ExceptionSink* xsink);
+uint64_t qore_rt_lv_path_binary_mut_consume(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_ternary(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
     uint64_t a_bits, uint64_t b_bits, uint64_t c_bits, ExceptionSink* xsink);
@@ -1473,9 +1479,13 @@ uint64_t qore_rt_lv_path_assign_consume_aot(QoreAOTContext* ctx, int32_t slot, u
     uint64_t rhs_bits, int32_t flags, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_compound_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);
+uint64_t qore_rt_lv_path_compound_consume_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+    uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_unary_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
     ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_binary_mut_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+    uint64_t rhs_bits, ExceptionSink* xsink);
+uint64_t qore_rt_lv_path_binary_mut_consume_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_ternary_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
     uint64_t a_bits, uint64_t b_bits, uint64_t c_bits, ExceptionSink* xsink);

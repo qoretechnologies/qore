@@ -1595,7 +1595,7 @@ static void cleanupInstantiatedLocals(const std::vector<const LocalVar*>& locals
 
 // Forward declarations — defined after execute() with other evalXxxEquals helpers
 static QoreValue evalPlusEquals(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink);
-QoreValue doPlusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
+QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right, ExceptionSink* xsink);
 QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
 
 static void assignLocalVarValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
@@ -6963,6 +6963,24 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     const std::vector<uint32_t>& return_value_slot_ids = func.interpreter_return_value_slot_ids;
     const std::vector<uint32_t>& return_preserve_slot_ids = func.interpreter_return_preserve_slot_ids;
     const std::vector<int32_t>& operand_use_counts = func.interpreter_operand_use_counts;
+
+    // Takes over the reference of the value of an operand that an lvalue operation stores (an assignment, += or a
+    // push) when its slot owns it (it has a cleanup entry), this is its only use, in the block defining it, and it is
+    // not a borrowed weak-reference temporary, as compiled code does (see qore_rt_lv_path_assign_consume()); the
+    // slot no longer holds the value afterwards.  Handing the value over keeps a dereference with no real reference
+    // from happening once the value is linked into the graph, which would make a scan that its constructor deferred.
+    auto consumeLValueOperand = [&](QoreIRValue operand, const QoreValue& val) -> bool {
+        uint32_t id = operand.id;
+        if (!val.hasNode() || id >= value_use_counts.size() || value_use_counts[id] != 1
+                || (id < cross_block_slots.size() && cross_block_slots[id])
+                || (id < return_protected_slots.size() && return_protected_slots[id])
+                || weak_load_temp_slots.find(id) != weak_load_temp_slots.end()
+                || !removeAllCleanupEntries(cleanup, id)) {
+            return false;
+        }
+        values[id] = QoreValue();
+        return true;
+    };
 
     auto valueUsedLaterInCurrentBlock = [&block, &ip, xsink, &return_protected_slots,
             &cross_block_slots](uint32_t id) -> bool {
@@ -13114,18 +13132,9 @@ load_local_done:
                 // weak-reference temporary - as compiled code does; see qore_rt_lv_path_assign_consume().
                 // Handing it over keeps a dereference with no real reference from happening once the value is
                 // linked into the graph, which would make a scan that its constructor deferred.
-                uint32_t rhs_id = path_inst->operands[0].id;
                 QoreValue val = getIRValue(values, path_inst->operands[0]);
-                bool consume = val.hasNode()
-                    && rhs_id < value_use_counts.size() && value_use_counts[rhs_id] == 1
-                    && !(rhs_id < cross_block_slots.size() && cross_block_slots[rhs_id])
-                    && !(rhs_id < return_protected_slots.size() && return_protected_slots[rhs_id])
-                    && weak_load_temp_slots.find(rhs_id) == weak_load_temp_slots.end()
-                    && removeAllCleanupEntries(cleanup, rhs_id);
-                if (consume) {
-                    // the value's reference now belongs to val_holder below
-                    values[rhs_id] = QoreValue();
-                }
+                // the value's reference belongs to val_holder below if it is consumed
+                bool consume = consumeLValueOperand(path_inst->operands[0], val);
                 ValueHolder val_holder(consume ? val : val.refSelf(), xsink);
                 QoreValue assign_val = val;
                 ValueHolder eval_holder(xsink);
@@ -13216,7 +13225,10 @@ load_local_done:
                 }
                 ensureLValuePathRootLocal(path_inst);
                 QoreValue rhs = getIRValue(values, path_inst->operands[0]);
-                ValueHolder rhs_holder(rhs.refSelf(), xsink);
+                // the value is handed over to += under the rule of LValuePathAssign, so that a value appended to a
+                // list is not dereferenced once it is linked into the graph, as with the AST interpreter
+                bool consume = consumeLValueOperand(path_inst->operands[0], rhs);
+                ValueHolder rhs_holder(consume ? rhs : rhs.refSelf(), xsink);
                 QoreValue res;
                 // Scope the LValueHelper so it releases the object lock
                 // BEFORE cache invalidation (which may deref objects and
@@ -13229,7 +13241,7 @@ load_local_done:
                     if (!navigation_failed) {
                         switch (path_inst->compound_op) {
                             case LVCompoundOp::AddAssign:
-                                res = doPlusEqualsOnLValue(lvh, rhs, xsink);
+                                res = doPlusEqualsOnLValue(lvh, rhs_holder, xsink);
                                 break;
                             case LVCompoundOp::SubAssign:
                                 res = doMinusEqualsOnLValue(lvh, rhs, xsink);
@@ -13894,10 +13906,16 @@ load_local_done:
                 // Get RHS value (operands[0] for push/unshift); the holder keeps it while the caches of the root
                 // local, which can hold it, are released
                 QoreValue rhs;
+                bool consume = false;
                 if (!path_inst->operands.empty()) {
                     rhs = getIRValue(values, path_inst->operands[0]);
+                    // a pushed value is handed over under the rule of LValuePathAssign, as the AST interpreter
+                    // hands it over to the list
+                    consume = (path_inst->binary_mut_op == LVBinaryMutOp::Push
+                            || path_inst->binary_mut_op == LVBinaryMutOp::Unshift)
+                        && consumeLValueOperand(path_inst->operands[0], rhs);
                 }
-                ValueHolder rhs_holder(rhs.refSelf(), xsink);
+                ValueHolder rhs_holder(consume ? rhs : rhs.refSelf(), xsink);
                 QoreValue res;
                 bool navigation_failed = false;
                 // Release the lvalue lock before cleaning up values or transferring
@@ -13937,10 +13955,11 @@ load_local_done:
                                 }
                                 lvh.ensureUnique();
                                 QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                                // the list takes the reference held for the value
                                 if (path_inst->binary_mut_op == LVBinaryMutOp::Push) {
-                                    l->push(rhs.refSelf(), xsink);
+                                    l->push(rhs_holder.release(), xsink);
                                 } else {
-                                    l->insert(rhs.refSelf(), xsink);
+                                    l->insert(rhs_holder.release(), xsink);
                                 }
                                 if (!*xsink) {
                                     res = l->refSelf();
@@ -17789,7 +17808,9 @@ QoreValue QoreIRInterpreter::evalLValueUnary(QoreIROpcode op, const QoreValue& l
 // Direct compound assignment helpers — avoid allocating temporary AST operator nodes
 // Inner function: perform += on an already-navigated LValueHelper.
 // Used by both evalPlusEquals (AST path) and LValuePathCompound (path-based).
-QoreValue doPlusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink) {
+// documented in QoreIRInterpreter.h
+QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, ExceptionSink* xsink) {
+    const QoreValue right = *right_holder;
     // values requiring dereferencing must be dereferenced outside the lock
     SafeDerefHelper sdh(xsink);
 
@@ -17818,7 +17839,8 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Exceptio
             vtype = v.getType();
         } else {
             // assign rhs to lhs
-            if (v.assign(right.refSelf(), "<lvalue for += operator>")) {
+            // the reference held for the value is handed over to the lvalue, as the AST interpreter does
+            if (v.assign(right_holder.release(), "<lvalue for += operator>")) {
                 return QoreValue();
             }
             return v.getReferencedValue();
@@ -17831,7 +17853,8 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Exceptio
         if (right.getType() == NT_LIST) {
             l->merge(right.get<const QoreListNode>(), xsink);
         } else {
-            l->push(right.refSelf(), xsink);
+            // the reference held for the value is handed over to the list, as the AST interpreter does
+            l->push(right_holder.release(), xsink);
         }
     } else if (vtype == NT_HASH) {
         if (right.getType() == NT_HASH) {
@@ -17898,7 +17921,7 @@ static QoreValue evalPlusEquals(const QoreValue& lvalue, const QoreValue& right,
     if (!v) {
         return QoreValue();
     }
-    return doPlusEqualsOnLValue(v, right, xsink);
+    return doPlusEqualsOnLValue(v, right_holder, xsink);
 }
 
 // Inner function: perform -= on an already-navigated LValueHelper.
