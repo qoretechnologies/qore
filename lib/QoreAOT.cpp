@@ -12264,6 +12264,21 @@ static bool qore_aot_collect_float_expression_summaries(
             return false;
         }
         AOTFloatExpressionInfo expression;
+        // Local promotion can leave a return snapshot and cleanup after removing
+        // every store/load of a private float. Both are inert in a complete scalar
+        // body; do not infer anything about unresolved local accesses or branches.
+        const bool allow_local_snapshots = func->blocks.size() == 1
+            && func->all_body_locals.size() <= QORE_AOT_FLOAT_EXPRESSION_MAX_NODES + 16
+            && !q_env_is_set("QORE_DISABLE_AOT_FLOAT_LOCAL_EXPRESSION");
+        std::unordered_set<const LocalVar*> float_cleanup_locals;
+        if (allow_local_snapshots) {
+            for (const LocalVar* local : func->all_body_locals) {
+                if (local && local->getTypeInfo() == floatTypeInfo && !local->closureUse()
+                        && !params.count(local) && func->local_var_slots.count(local)) {
+                    float_cleanup_locals.insert(local);
+                }
+            }
+        }
         auto is_ignored = [](QoreIROpcode opcode) {
             return opcode == QoreIROpcode::DebugBlock
                 || opcode == QoreIROpcode::PushTempMark
@@ -12293,6 +12308,19 @@ static bool qore_aot_collect_float_expression_summaries(
                 result = param->second.kind == BatchCalleeParamKind::NativeBool
                     ? append_bool_param(expression, param->second.index)
                     : append_param(expression, param->second.index);
+            } else if (allow_local_snapshots && inst->opcode == QoreIROpcode::RefSelf) {
+                if (inst->operands.size() != 1) {
+                    return false;
+                }
+                auto source = values.find(inst->operands[0].id);
+                if (source == values.end() || is_bool_node(expression.nodes[source->second].kind)) {
+                    return false;
+                }
+                result = source->second;
+            } else if (allow_local_snapshots && inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                const auto* cleanup = static_cast<const QoreIRLocalInstruction*>(inst);
+                return !cleanup->is_closure && !cleanup->is_ref
+                    && float_cleanup_locals.count(cleanup->local);
             } else if (inst->opcode == QoreIROpcode::ConstFloat) {
                 const auto* constant = static_cast<const QoreIRConstInstruction*>(inst);
                 result = append_constant(expression, constant->constant.float_value);

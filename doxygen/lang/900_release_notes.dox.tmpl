@@ -219,6 +219,8 @@
 
     AOT compilation preserves native floating-point and boolean return snapshots across cleanup, avoiding
     redundant boxing and reference-count operations while retaining boxed-value ownership.
+    AOT and JIT compilation can also summarize side-effect-free floating-point expressions returned through
+    private locals after local promotion, enabling native direct and typed callback paths for eligible functions.
 
     AOT-compiled modules record the AOT runtime identity of the %Qore library that compiled them, and a module
     compiled by a library with a different generated-code contract is refused when it is loaded, with an error that

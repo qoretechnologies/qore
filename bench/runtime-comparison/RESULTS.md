@@ -21453,3 +21453,183 @@ scalar-body proofs for local-return callbacks and their remaining frame overhead
 Further candidates include native integer snapshots after auditing boxed-i64
 consumers, conversion-call frames and loop diagnostics/cancellation. No global ceiling or
 general Java parity is claimed.
+
+
+## Float expressions through private locals (2026-10-25)
+
+Baseline feature/performance 99683d3d48 includes develop d6d1ef3caf and fixes
+5517/5518. The bounded float-expression collector now recognizes a native float
+snapshot and inert cleanup left after local promotion removes every store and load of the private local. Eligibility requires a single block, at most 80 body locals, exact
+noncaptured nonparameter float cleanup locals with slots, and a complete existing
+scalar-body proof. It does not admit unresolved local loads/stores, loops,
+reference cleanup or observable effects. Existing return-root, size, cancellation,
+exception, type and call-admission checks remain. No fast-math or ABI change.
+QORE_DISABLE_AOT_FLOAT_LOCAL_EXPRESSION disables this compile-time extension.
+The collector is shared by AOT/JIT; this campaign measures AOT. No IR interpreter
+optimization or measured JIT gain is claimed.
+
+Four positive semantic fixtures receive native typed-v3 callback entries only
+when enabled; eight negative callback cases retain their fallbacks. Separate
+native sampling observes the new callbacks in actual execution. Generated-code
+inspection verifies their normal branch has no boxing or runtime helper call,
+while the live stack-limit guard and full v2 fallback remain. Before/disabled
+bodies match after recorded normalization. 45 control bodies and six additional
+loop-control bodies match across the target artifacts. Code equivalence does
+not establish the cause of small timing differences.
+
+Target/control confirmation, median of three layout medians of five fork means:
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate vs before
+|direct_local_float_return|7.456700|0.782129|7.376419|-89.51%
+|callback_local_float_return|134.673536|7.585561|134.250862|-94.37%
+|direct_local_float_result|7.312646|0.737612|7.271863|-89.91%
+|callback_local_float_result|102.595637|6.574055|102.441653|-93.59%
+|direct_loop_float_return|13.158997|13.236646|13.165981|+0.59%
+|callback_loop_float_return|148.435982|148.029718|147.884902|-0.27%
+|direct_float_add|0.790414|0.793257|0.802396|+0.36%
+|static_float_add|0.793649|0.795697|0.783096|+0.26%
+|typed_local_int_unary|7.195436|7.154778|7.251085|-0.57%
+|typed_local_float_unary|7.966882|7.858033|7.817416|-1.37%
+|result_float_add|6.791902|6.402257|6.765416|-5.74%
+|csv_report|929.976400|936.115232|929.890951|+0.66%
+|object_orders|1773.181029|1755.776586|1764.939081|-0.98%
+|callback_pipeline|82.748991|83.502293|83.532326|+0.91%
+|text_index|1303.141276|1316.600981|1313.845680|+1.03%
+
+Retain under the user-authorized broader tradeoff. The four target workloads
+improve 9.5–17.8x in confirmation, with a 92.14% reduction in their geometric-mean
+time versus before and 92.10% versus compile-disabled. All 55 broad aggregates
+stay within 3% of both comparisons; the three flagged broad workloads have no
+repeated >3% disjoint-range flag in their independent follow-up. This is not a
+claim that every workload or layout improves.
+
+The target integer callback has a repeated reverse-layout cost: confirmation
+flags +5.90% versus before and +5.94% versus disabled; a separate five-fork
+follow-up measures 7.607662 ns/item versus 7.271440/7.184455, a +4.62%/+5.89%
+loss (0.336222/0.423207 ns/item). Its all-layout aggregate improves 1.61%/1.90%
+in that follow-up; the initial screen had no such flag. All adverse results are
+retained. Unchanged control LLVM does not establish the cause of timing changes.
+This result is accepted as an overall tradeoff, not a passed no-regression gate.
+
+The fresh matched optimized Java comparison puts direct local-float return
+and result loops at 1.34x/1.60x Java time; callbacks remain 15.70x/14.58x Java time.
+HotSpot inlines the callback targets while Qore still dispatches typed callbacks.
+These are whole-loop observations, not isolated call latency, a production-wide
+speedup or a global performance ceiling.
+
+Fresh 55-workload screening, with three forks per layout:
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate vs before
+|arithmetic|1.490480|1.498773|1.494267|+0.56%
+|direct_call|1.503906|1.507650|1.506671|+0.25%
+|method_call|1.559589|1.566172|1.564578|+0.42%
+|indirect_call|7.795223|7.753932|7.827695|-0.53%
+|polymorphic_call|23.508956|23.294933|23.549598|-0.91%
+|polymorphic_expression_call|10.651302|10.660616|10.769668|+0.09%
+|monomorphic_call|3.793430|3.769111|3.712499|-0.64%
+|optional_method_call|11.096201|11.173364|10.894463|+0.70%
+|polymorphic_float_call|23.910696|23.669214|23.478866|-1.01%
+|polymorphic_float_expression_call|11.190373|11.177579|11.310272|-0.11%
+|monomorphic_float_call|4.064964|3.967507|4.049732|-2.40%
+|optional_float_method_call|11.006761|10.993108|10.949444|-0.12%
+|boxed_float_method_call|20.152393|20.036012|20.018231|-0.58%
+|dynamic_int_result_call|10.695099|10.589299|10.544691|-0.99%
+|dynamic_int_result_fallback|21.107281|21.173404|21.140077|+0.31%
+|boxed_int_method_call|16.814761|16.805846|16.898445|-0.05%
+|boxed_int_method_fallback|34.098226|33.286545|32.614024|-2.38%
+|boxed_float_method_fallback|33.751569|34.273975|34.533603|+1.55%
+|boxed_int_method_effect|92.085801|90.277821|91.256025|-1.96%
+|dynamic_float_result_call|11.603218|11.816857|11.700633|+1.84%
+|indirect_wide|7.334895|7.317709|7.391116|-0.23%
+|indirect_float|8.191861|8.239849|8.256989|+0.59%
+|indirect_int_result|7.554502|7.525124|7.535283|-0.39%
+|indirect_float_result|7.789044|7.891556|7.783127|+1.32%
+|indirect_tagged_float|7.899406|7.810577|7.880946|-1.12%
+|indirect_branch_float|8.625944|8.776784|8.740695|+1.75%
+|indirect_affine|7.761466|7.735029|7.644130|-0.34%
+|indirect_affine_wide|7.278138|7.262556|7.434128|-0.21%
+|indirect_branch_int|7.532528|7.534643|7.494884|+0.03%
+|dispatch_control|1.830715|1.836547|1.832079|+0.32%
+|list_read|2.813165|2.809095|2.828493|-0.14%
+|list_build|27.102323|27.326632|27.379199|+0.83%
+|list_mutate|183.208255|183.580907|183.887677|+0.20%
+|temporary_list|1.584236|1.593327|1.588396|+0.57%
+|temporary_hash|326.615921|318.537771|326.547223|-2.47%
+|closure_call|17.074887|17.213208|17.205115|+0.81%
+|closure_capture|22.799049|22.738651|22.610437|-0.26%
+|object_loop|167.648541|166.471904|167.846740|-0.70%
+|object_short|1053.294736|1065.506417|1070.622292|+1.16%
+|float_loop|171.479702|171.063683|171.888468|-0.24%
+|float_short|1059.398251|1075.104427|1066.915458|+1.48%
+|string_loop|356.452102|355.641002|357.596447|-0.23%
+|string_short|1185.023728|1207.899393|1218.533599|+1.93%
+|effect_loop|332.235800|336.557666|332.381693|+1.30%
+|effect_short|1234.711722|1248.228624|1238.612196|+1.09%
+|two_read_loop|364.302988|364.161702|366.347082|-0.04%
+|two_read_short|1265.224647|1286.834366|1292.174591|+1.71%
+|default_loop|652.349461|656.761227|651.286301|+0.68%
+|default_short|1578.413222|1598.998434|1566.609701|+1.30%
+|string_result_loop|403.753712|396.476793|394.522422|-1.80%
+|string_result_short|1308.449831|1316.024805|1318.609328|+0.58%
+|csv_report|919.519043|931.925456|925.783830|+1.35%
+|object_orders|1739.917133|1780.598958|1747.106599|+2.34%
+|callback_pipeline|84.046357|83.204516|82.788029|-1.00%
+|text_index|1301.962867|1309.050662|1309.555480|+0.54%
+
+Exact integer callback control follow-up:
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate vs before
+|typed_local_int_unary|7.271440|7.154453|7.292668|-1.61%
+
+Independent follow-up of the selected broad losses and controls:
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate vs before
+|arithmetic|1.506960|1.507442|1.507931|+0.03%
+|float_loop|171.987766|171.600038|172.327822|-0.23%
+|string_short|1207.052076|1206.563795|1206.311954|-0.04%
+|default_loop|652.018357|662.898019|653.287959|+1.67%
+|callback_pipeline|83.281188|83.677196|84.056957|+0.48%
+
+Fresh optimized Java checkpoint (five forks per paired layout):
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Java ns/item|!Candidate / Java time
+|direct_local_float_return|7.471732|0.783256|0.582978|1.344x
+|callback_local_float_return|134.218060|7.576398|0.482715|15.695x
+|direct_local_float_result|7.246338|0.724532|0.451429|1.605x
+|callback_local_float_result|102.601749|6.574099|0.450782|14.584x
+
+Both languages use binary64 arithmetic, long induction/masking, changing seeds
+and consumed checksums. Ordinary inlining is allowed, including callback
+inlining; separate untimed diagnostics verify HotSpot C2 and hot helper inlining.
+JMH 1.37 on Temurin 25 uses three warmups and three 300 ms samples, one thread,
+256 MiB heap, count 4096 and seed 7. The Java layout label identifies its paired
+Qore layout, not an imposed Java symbol layout. The Qore side uses the same
+longer window schedule for this comparison; these aggregates are not pooled
+with the shorter native-only campaign.
+
+All Qore runtimes use -O3 -DNDEBUG, allocation tracking OFF; qcc uses -O3
+--strip-source. Native-only timing has one warmup and three 150 ms samples, 4096
+items, seed 7, three fixed layouts and randomized paired ordering. Target screen
+has three forks, confirmation five, broad screen three. All runs, losses and
+per-layout flags are retained. The five-workload broad follow-up has five forks,
+as does the exact integer callback control follow-up. In total, 3,075 timed
+processes and 9,225 measured windows are independently replayed. No other owned
+work overlaps timing; external host load, frequency and thermals are
+uncontrolled. These are whole-kernel
+ns/item, not isolated call latency or a production-throughput score. Timed
+checksums are parsed; separate reference checks cover varying seeds and counts.
+
+Release/Debug each pass 41 selected fixtures, 19,533 QUnit assertions and 391 qmod
+builds. Eight Linux-only RSS cases per build are skipped. Separate native Debug
+suites pass 11,756 assertions; 2,220 IR/AOT, 2,250 target artifact, 7,047 broad artifact
+and 60 Java reference checks pass. Source modes plus stripped AOT O0/O3/EH/split
+and compile-disabled controls pass. All 391 Release qmod aliases are restored.
+This is not a full-suite, sanitizer or cross-platform qualification.
+
+[results-aot-float-local-expression-macos-arm64.json](results-aot-float-local-expression-macos-arm64.json) preserves plans, sources, raw timings, process exits,
+dependencies, all reviewer failures/corrections, qualification and the 62-item
+audit. Before is the merged performance branch, not pure develop. No new
+pure-develop ratio, general Java parity or global performance ceiling is
+established. Next inspect the remaining typed-callback dispatch and loop
+bookkeeping costs, preserving live cancellation, stack bounds and observable
+call contexts; separately investigate loop-containing float return bodies.

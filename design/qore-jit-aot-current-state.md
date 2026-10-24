@@ -4342,3 +4342,48 @@ or captured locals, parameter mutation, handlers and unknown effects remain
 outside this first extension. Freeze the merged optimized baseline and compare
 fresh before/candidate/compile-disabled artifacts. General Java parity and a
 global performance ceiling remain unestablished.
+
+
+## Float expressions through private locals (2026-10-25)
+
+The shared AOT/JIT bounded float-expression collector now accepts native float
+return snapshots and inert cleanup after all stores/loads of private locals
+are promoted away. The new admission is restricted to one block and at most 80 locals; cleanup
+requires an exact, noncaptured, nonparameter float local with a slot. Existing
+whole-body validation and all stack/cancellation/call-admission checks remain.
+Unresolved local accesses, reference cleanup, loops and observable effects keep
+their fallback paths. QORE_DISABLE_AOT_FLOAT_LOCAL_EXPRESSION is the compile
+control. No runtime ABI or fast-math change is introduced.
+
+Retain under the user-authorized broader tradeoff. The four target workloads
+improve 9.5–17.8x in confirmation, with a 92.14% reduction in their geometric-mean
+time versus before and 92.10% versus compile-disabled. All 55 broad aggregates
+stay within 3% of both comparisons; the three flagged broad workloads have no
+repeated >3% disjoint-range flag in their independent follow-up. This is not a
+claim that every workload or layout improves.
+
+The target integer callback has a repeated reverse-layout cost: confirmation
+flags +5.90% versus before and +5.94% versus disabled; a separate five-fork
+follow-up measures 7.607662 ns/item versus 7.271440/7.184455, a +4.62%/+5.89%
+loss (0.336222/0.423207 ns/item). Its all-layout aggregate improves 1.61%/1.90%
+in that follow-up; the initial screen had no such flag. All adverse results are
+retained. Unchanged control LLVM does not establish the cause of timing changes.
+This result is accepted as an overall tradeoff, not a passed no-regression gate.
+
+The fresh matched optimized Java comparison puts direct local-float return
+and result loops at 1.34x/1.60x Java time; callbacks remain 15.70x/14.58x Java time.
+HotSpot inlines the callback targets while Qore still dispatches typed callbacks.
+These are whole-loop observations, not isolated call latency, a production-wide
+speedup or a global performance ceiling.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Java ns/item|!Candidate / Java time
+|direct_local_float_return|7.471732|0.783256|0.582978|1.344x
+|callback_local_float_return|134.218060|7.576398|0.482715|15.695x
+|direct_local_float_result|7.246338|0.724532|0.451429|1.605x
+|callback_local_float_result|102.601749|6.574099|0.450782|14.584x
+
+RESULTS and `results-aot-float-local-expression-macos-arm64.json` contain the matched optimized AOT/Java
+checkpoint, target screen/confirmation, all 55 broad workloads and every adverse
+result. Only AOT performance was measured. Release/Debug each pass 41 selected
+fixtures and 19,533 QUnit assertions, with eight Linux-only RSS skips per build.
+No pure-develop ratio, general Java parity or performance ceiling is claimed.
