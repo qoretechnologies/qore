@@ -198,19 +198,26 @@ class DgcGraphComponentsTest inherits QUnit::Test {
         });
     }
 
+    #! A scan of a graph whose nodes share a list follows each reference once
+    /** The scans of a write into the graph are counted by the references they follow, which is the work they do,
+        independent of the speed and load of the machine; it grew with the square of the nodes when each node walked
+        the shared list again.
+    */
     sharedContainerScans() {
-        float small = scanTime(32);
-        float large = scanTime(256);
-        float ratio = large / small;
-        if (m_options.verbose) {
-            printf("scan time: 32 nodes: %.1f us; 256 nodes: %.1f us; ratio %.2f\n", small, large, ratio);
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("scan counts require a debug build");
         }
-        # scans take linear time, so the ratio is about 8; it was over 60 when each node walked the shared list
-        assertLt(32.0, ratio);
+        int small = scanEdges(32);
+        int large = scanEdges(256);
+        if (m_options.verbose) {
+            printf("references followed: 32 nodes: %d; 256 nodes: %d\n", small, large);
+        }
+        assertGe(3 * 32, small, "the scans follow the references of every node");
+        assertLe(8 * small, large, "the work of the scans grows linearly with the number of nodes");
     }
 
-    #! Returns the average time of a scan of a dense graph in microseconds
-    private static float scanTime(int nodes) {
+    #! Returns the number of references that the scans of a write into a dense graph of the given nodes follow
+    private static int scanEdges(int nodes) {
         DenseRoot root();
         for (int i = 0; i < nodes; ++i) {
             root.nodes += new DenseNode(root);
@@ -220,20 +227,24 @@ class DgcGraphComponentsTest inherits QUnit::Test {
         }
         # an object held by a local variable defers the scans that start at it, so the holder is in a hash
         hash<string, ValueHolder> c = {"h": new ValueHolder()};
-        int scans = 0;
-        date start = now_us();
-        do {
-            # each assignment of an object scans the graph reachable from the holder
-            c.h.value = root;
-            ++scans;
-        } while ((now_us() - start).durationMicroseconds() < 200000);
-        float rv = (now_us() - start).durationMicroseconds().toFloat() / scans;
+        c.h.value = root;
+        int edges = DgcGraphComponentsTest::scanEdgeCount();
+        # a write into the graph makes the next assignment of the root scan all of it again; an assignment of the
+        # unchanged graph does not scan it
+        cast<DenseNode>(root.nodes[0]).owner = root;
+        c.h.value = root;
+        edges = DgcGraphComponentsTest::scanEdgeCount() - edges;
         # the graph is collected when the root is released
         foreach DenseNode node in (root.nodes) {
             node.owner = NOTHING;
             node.neighbors = NOTHING;
         }
-        return rv;
+        return edges;
+    }
+
+    #! Returns the number of references that scans have followed in this thread
+    private static int scanEdgeCount() {
+        return call_function("dbg_get_scan_edge_count");
     }
 
     #! Returns a list that refers to a cycle of two objects, one of which refers to the list

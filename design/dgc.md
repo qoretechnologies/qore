@@ -466,7 +466,9 @@ found.
 Debug builds count the objects that scans have entered in the current thread
 (`dbg_get_scan_object_count()`), which measures what a scan actually walked;
 `examples/test/qore/misc/dgc-closed-sets.qtest` uses it along with collection checks for each of the rules
-above.
+above. They also count the references that scans have followed (`dbg_get_scan_edge_count()`), which is the work of
+the scans and grows with the size of the graphs they walk; `examples/test/qore/misc/dgc-graph-components.qtest` and
+`examples/test/qore/misc/reference-arg-binding.qtest` use it to check that work without timing it.
 
 ### Closed regions: already-scanned subgraphs a scan does not enter
 

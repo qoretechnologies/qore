@@ -12094,6 +12094,14 @@ static QoreValue f_dbg_get_scan_object_count(const QoreListNode* params, Runtime
     return q_get_scan_object_count();
 }
 
+//! returns the number of references that recursive-reference scans have followed in the current thread
+/** A scan follows each reference of the graph it walks once, so tests use this to verify that the work of a scan
+    grows linearly with the size of the graph it walks.
+*/
+static QoreValue f_dbg_get_scan_edge_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return q_get_scan_edge_count();
+}
+
 //! returns the number of subject bytes that the regular expression matches of the current thread had checked for UTF-8
 /** A match that does not skip the check checks the subject from its start offset to its end, so tests use this to
     verify that a global match or substitution checks its subject once instead of once per match.
@@ -13631,6 +13639,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_scan_object_count", f_dbg_get_scan_object_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_scan_edge_count", f_dbg_get_scan_edge_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_regex_utf_check_bytes", f_dbg_get_regex_utf_check_bytes, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);

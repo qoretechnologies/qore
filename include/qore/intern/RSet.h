@@ -60,6 +60,12 @@ DLLLOCAL int64 q_get_rset_create_count();
 */
 DLLLOCAL int64 q_get_scan_object_count();
 
+//! Returns the number of references that recursive-reference scans have followed in the current thread
+/** A scan follows each reference of the graph it walks once, so this is the work of the scans a thread has made,
+    which grows with the size of the graphs they walk; see dbg_get_scan_edge_count().
+*/
+DLLLOCAL int64 q_get_scan_edge_count();
+
 //! Returns the number of regions whose dependencies scans in the current thread have walked
 /** RSetHelper::regionCurrent() walks the regions a region depends on unless the region was found current since the
     last event that could have changed that; see RRegion::invalidations and dbg_get_region_walk_count().
