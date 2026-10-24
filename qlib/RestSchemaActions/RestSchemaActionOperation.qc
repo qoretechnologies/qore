@@ -888,7 +888,7 @@ public class RestSchemaActionOperation {
                 }
                 *hash<auto> node;
                 AbstractDataField field = applyFieldOverlay(entry.field, ov, name,
-                    sprintf("%s value %y", loc, derived_name), \node);
+                    sprintf("%s value %y", loc, derived_name), \node, loc + "/" + derived_name);
                 if (ov.lift) {
                     liftFieldOptions(field, loc, entry, node, sprintf("%s value %y", loc, derived_name),
                         \fields, \origin);
@@ -1414,7 +1414,7 @@ public class RestSchemaActionOperation {
         *hash<auto> conv;
         if (info.response_fields) {
             *hash<auto> node;
-            type = applyTypeOverlay(type, info.response_fields, "response body", \node);
+            type = applyTypeOverlay(type, info.response_fields, "response body", \node, "response");
             conv = node;
         }
         response_type = info.response_envelope ? makeResponseEnvelopeType(type) : type;
@@ -1451,13 +1451,15 @@ public class RestSchemaActionOperation {
         @param ovl the nested field overrides
         @param ctx a description of the value for error messages
         @param node the common conversion applied to the assembled value, if any
+        @param location the technical location of the value in the action; see applyTypeOverlay()
 
         @return the union rebuilt over the overlaid branches
 
         @throw REST-SCHEMA-ACTION-ERROR an entry names no branch's field, or conversions differ across branches
     */
     private AbstractDataProviderType applyUnionOverlay(DataProvider::QoreUnionDataType type,
-            hash<string, hash<RestSchemaFieldOverlayInfo>> ovl, string ctx, reference<*hash<auto>> node) {
+            hash<string, hash<RestSchemaFieldOverlayInfo>> ovl, string ctx, reference<*hash<auto>> node,
+            string location) {
         hash<string, bool> matched = {};
         list<AbstractDataProviderType> branches = ();
         list<*hash<auto>> conversions = ();
@@ -1472,7 +1474,7 @@ public class RestSchemaActionOperation {
             map matched{$1} = True, keys bovl;
             *hash<auto> bnode;
             branches += applyTypeOverlay(branch, bovl,
-                sprintf("%s alternative %y", ctx, branch.getName()), \bnode);
+                sprintf("%s alternative %y", ctx, branch.getName()), \bnode, location + "|" + branch.getName());
             push conversions, bnode;
         }
         foreach *hash<auto> conversion in (conversions) {
@@ -1589,8 +1591,17 @@ public class RestSchemaActionOperation {
     }
 
     #! Applies a field overlay to a derived field and returns the field to publish
+    /** @param field the field the schema derives
+        @param ov the overlay
+        @param name the name of the published field
+        @param ctx a description of the field for error messages
+        @param node the conversion of the field's value, if any
+        @param location the technical location of the field in the action; see applyTypeOverlay()
+
+        @return the field to publish
+    */
     private AbstractDataField applyFieldOverlay(AbstractDataField field, hash<RestSchemaFieldOverlayInfo> ov,
-            string name, string ctx, reference<*hash<auto>> node) {
+            string name, string ctx, reference<*hash<auto>> node, string location) {
         on_error rethrow $1.err, sprintf("%s (while applying the overlay for %s)", $1.desc, ctx);
 
         bool required = fieldIsRequired(field);
@@ -1632,7 +1643,7 @@ public class RestSchemaActionOperation {
         }
         if (ov.fields) {
             *hash<auto> nested;
-            type = applyTypeOverlay(type, ov.fields, ctx, \nested);
+            type = applyTypeOverlay(type, ov.fields, ctx, \nested, location);
             if (nested.fields) {
                 node.fields = nested.fields;
             }
@@ -1694,8 +1705,25 @@ public class RestSchemaActionOperation {
     }
 
     #! Applies nested field overrides to a derived type without replacing the type
+    /** The type the overlay gives is a copy of the schema-derived type with the overlaid fields.  An overlay is
+        written for one location in an action, so its copy can describe its fields differently from the
+        schema-derived type that the action reaches elsewhere, and from the copy of another overlay of the same
+        type: the copy's @ref DataProvider::AbstractDataProviderType::getSchemaIdentity() "schema identity" is the
+        schema-derived type's with the location of the overlay added, so that each has its own catalog messages.
+
+        @param type the schema-derived type
+        @param ovl the overrides of its fields
+        @param ctx a description of the value for error messages
+        @param node the conversion of the value, if any
+        @param location the technical location of the value in the action: the location and name of the option
+        that publishes it (ex: \c "body/Invoices") or \c "response", followed by the names of the fields below it
+        (\c "/Contact"), \c "/items" for a list element, and \c "|" and the type name for a union alternative
+
+        @return the overlaid type
+    */
     private AbstractDataProviderType applyTypeOverlay(AbstractDataProviderType type,
-            hash<string, hash<RestSchemaFieldOverlayInfo>> ovl, string ctx, reference<*hash<auto>> node) {
+            hash<string, hash<RestSchemaFieldOverlayInfo>> ovl, string ctx, reference<*hash<auto>> node,
+            string location) {
         # a list type carries its shape in its element type
         if (type.getBaseTypeCode() == NT_LIST) {
             *AbstractDataProviderType etype = type.getElementType();
@@ -1704,7 +1732,8 @@ public class RestSchemaActionOperation {
                     "element type", ctx);
             }
             *hash<auto> enode;
-            AbstractDataProviderType new_etype = applyTypeOverlay(etype, ovl, ctx + " element", \enode);
+            AbstractDataProviderType new_etype = applyTypeOverlay(etype, ovl, ctx + " element", \enode,
+                location + "/items");
             node = enode;
             return new ListDataType(type.getName(), new_etype, !type.isMandatory());
         }
@@ -1713,7 +1742,7 @@ public class RestSchemaActionOperation {
         # whichever branches declare it: a webhook channel's signing secret is a field of the webhook branch
         # and of no other
         if (type instanceof DataProvider::QoreUnionDataType) {
-            return applyUnionOverlay(cast<DataProvider::QoreUnionDataType>(type), ovl, ctx, \node);
+            return applyUnionOverlay(cast<DataProvider::QoreUnionDataType>(type), ovl, ctx, \node, location);
         }
 
         *hash<string, AbstractDataField> tfields = type.getFields();
@@ -1739,7 +1768,7 @@ public class RestSchemaActionOperation {
                 continue;
             }
             if (ov.merge) {
-                mergeFieldUp(i.value, ov, i.key, ctx, \new_fields, \conv, \merged);
+                mergeFieldUp(i.value, ov, i.key, ctx, \new_fields, \conv, \merged, location);
                 continue;
             }
             string name = ov.name ?? i.key;
@@ -1748,7 +1777,8 @@ public class RestSchemaActionOperation {
                     "collides with another field of the same type", ctx, i.key, name);
             }
             *hash<auto> fnode;
-            new_fields{name} = applyFieldOverlay(i.value, ov, name, sprintf("%s field %y", ctx, i.key), \fnode);
+            new_fields{name} = applyFieldOverlay(i.value, ov, name, sprintf("%s field %y", ctx, i.key), \fnode,
+                location + "/" + i.key);
             if (fnode) {
                 conv{name} = fnode;
             }
@@ -1772,7 +1802,9 @@ public class RestSchemaActionOperation {
         if (merged) {
             node.merge = merged;
         }
-        return cast<HashDataType>(type).copyWithFields(new_fields);
+        HashDataType rv = cast<HashDataType>(type).copyWithFields(new_fields);
+        rv.setSchemaIdentity((type.getSchemaIdentity() ?? "") + "#overlay:" + location);
+        return rv;
     }
 
     #! Publishes an object-valued field's properties beside it rather than inside it
@@ -1783,6 +1815,7 @@ public class RestSchemaActionOperation {
         @param new_fields the enclosing type's fields, added to here
         @param conv the enclosing type's conversion tree, added to here
         @param merged the merges recorded on the enclosing type, added to here
+        @param location the technical location of the enclosing type in the action; see applyTypeOverlay()
 
         @throw REST-SCHEMA-ACTION-ERROR the field is not an object, declares no properties, or one of them
         collides with a property the enclosing object already has
@@ -1791,10 +1824,10 @@ public class RestSchemaActionOperation {
     */
     private mergeFieldUp(AbstractDataField field, hash<RestSchemaFieldOverlayInfo> ov, string key, string ctx,
             reference<hash<string, AbstractDataField>> new_fields, reference<hash<string, hash<auto>>> conv,
-            reference<list<hash<auto>>> merged) {
+            reference<list<hash<auto>>> merged, string location) {
         *hash<auto> fnode;
         AbstractDataField applied = applyFieldOverlay(field, ov - "merge", key,
-            sprintf("%s field %y", ctx, key), \fnode);
+            sprintf("%s field %y", ctx, key), \fnode, location + "/" + key);
         AbstractDataProviderType type = applied.getType();
         if (type.getBaseTypeCode() != NT_HASH) {
             throw "REST-SCHEMA-ACTION-ERROR", sprintf("cannot merge %s field %y into the object that "

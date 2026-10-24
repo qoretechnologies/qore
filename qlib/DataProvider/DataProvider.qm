@@ -1956,8 +1956,8 @@ fetch
       error that names them in clear text (@ref DataProvider::DataProviderPresentation::describeMessageId()
       "DataProviderPresentation::describeMessageId()"); the identity includes the identity of the schema a type was
       built from (@ref DataProvider::AbstractDataProviderType::getSchemaIdentity()
-      "AbstractDataProviderType::getSchemaIdentity()"), which REST schema types have, so that schemas with the same
-      name and fields have their own messages. New
+      "AbstractDataProviderType::getSchemaIdentity()"), which REST schema types and the types REST schema action
+      overlays change have, so that schemas with the same name and fields have their own messages. New
       static @ref DataProvider::AbstractDataField::getPresentationInfo() "presentation metadata" and
       @ref DataProvider::AbstractDataField::getDeclaredType() "declared types" keep extraction deterministic without
       invoking context-dependent dynamic type, default, or example callbacks

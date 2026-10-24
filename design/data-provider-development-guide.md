@@ -381,7 +381,8 @@ of the type, its explicit producer schema path and schema identity when availabl
 technical field/type shape, scoped to the action. A REST schema producer gives each object type it builds the
 location of its schema in the document as its schema identity (`AbstractDataProviderType::getSchemaIdentity()`):
 an OpenAPI component or Swagger definition by its name, a property that only adds a description to a referenced
-schema (`allOf` of one `$ref`) by the schema it refers to, and a schema declared in place by its location. A type has one identity in an action, whichever option or path reaches it, so each of
+schema (`allOf` of one `$ref`) by the schema it refers to, and a schema declared in place by its location; a type
+that a REST schema action overlay changes has the schema's identity and the overlay's location. A type has one identity in an action, whichever option or path reaches it, so each of
 its texts has one message and one translation per action, and each concrete type object is visited once per
 action, which avoids expanding a shared schema DAG once per path. This distinguishes anonymous schemas without
 making IDs depend on labels.

@@ -143,7 +143,7 @@ See [Action Path Resolution](data-provider-development-guide.md#action-path-reso
       same texts: they have one message per text in the action, and extraction refuses conflicting texts
       (`DATA-PROVIDER-PRESENTATION-CATALOG-ERROR`, `conflicting source strings`). Give types that need different
       texts different names, schema paths or schema identities (`AbstractDataProviderType::setSchemaIdentity()`);
-      REST schema types get one automatically.
+      REST schema types and overlay copies get one automatically.
 - [ ] Every shipped locale has exact root message-ID/source parity after regeneration; a fallback to producer text
       does not qualify as a completed translation.
 
