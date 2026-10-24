@@ -70,6 +70,10 @@ class AsyncIoExitStoppedIoThreadTest inherits QUnit::Test {
         }
         list<int> running = map $1.index, AsyncIoController::getInfo().threads;
         assertEq((0, 1), running, "both I/O threads run");
+        # an I/O thread releases the references of a finished operation on a callback worker, and releasing a socket
+        # can start a stopped I/O thread again: the command round trip of getInfo() above follows the hand-over of
+        # every such release, and the workers finish them now, before the first I/O thread stops
+        AsyncIoController::flushCallbacks();
 
         # the first I/O thread stops, as an idle thread stops on its own before another one
         call_function("dbg_async_io_quit_io_thread", 0);
