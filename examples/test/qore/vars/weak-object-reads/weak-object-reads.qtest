@@ -7,11 +7,11 @@
 %allow-weak-references
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%prepend-module-path "${SCRIPT_DIR}"
 %requires QUnit
 %requires FsUtil
-%requires WeakObjectReadChecks
 %requires ../../../ExecModeHarness.qm
+
+%include weak-object-read-checks.qi
 
 %exec-class WeakObjectReadsTest
 
@@ -31,8 +31,8 @@ class Holder {
 
 #! Tests reading weak references to objects held by hashes and object members
 /** A weak reference to an object that has been destroyed reads as no value, and a method call through it, directly
-    or through a call reference, raises \c OBJECT-ALREADY-DELETED.  The checks are in WeakObjectReadChecks.qm and run
-    in this program, in each execution mode and from a compiled module.
+    or through a call reference, raises \c OBJECT-ALREADY-DELETED.  The checks are in weak-object-read-checks.qi and
+    run in this program, in a worker in each execution mode and from a compiled module.
 */
 class WeakObjectReadsTest inherits QUnit::Test {
     public {
@@ -102,8 +102,8 @@ class WeakObjectReadsTest inherits QUnit::Test {
 
     testExecModes() {
         foreach string mode in (ExecModes) {
-            checkWorkerOutput(mode, runWorker(get_script_dir(), "--exec-mode=" + mode, "call-references"),
-                Checks + CallReferenceChecks);
+            checkWorkerOutput(mode, runWorker("weak-object-reads-worker.q", get_script_dir(), "--exec-mode=" + mode,
+                "call-references"), Checks + CallReferenceChecks);
         }
     }
 
@@ -117,12 +117,12 @@ class WeakObjectReadsTest inherits QUnit::Test {
 
         # the directory holds only the compiled module, so the worker cannot load the source instead; see
         # WeakObjectReadChecks::get_call_reference_results() for the checks of call references
-        checkWorkerOutput("aot", runWorker(tmp.path), Checks);
+        checkWorkerOutput("aot", runWorker("weak-object-reads-module-worker.q", tmp.path), Checks);
     }
 
-    #! runs the worker with the checks module loaded from the given directory and returns its output
-    private string runWorker(string module_dir, string opts = "", string args = "") {
-        string worker = get_script_dir() + DirSep + "weak-object-reads-worker.q";
+    #! runs the given worker with the given module directory and returns its output
+    private string runWorker(string worker_name, string module_dir, string opts = "", string args = "") {
+        string worker = get_script_dir() + DirSep + worker_name;
         return ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s %s %s",
             libqore_dir, module_dir, qore_bin, opts, worker, args));
     }

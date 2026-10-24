@@ -1,13 +1,14 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
-# runs the WeakObjectReadChecks checks and prints each result as "name=value"; the module is found in the module
-# path given by the caller, so that the same checks run from source or from a compiled module; with the argument
-# "call-references", the checks of call references are run as well
+# runs the checks in the execution mode given on the command line and prints each result as "name=value"; the
+# checks are included in this program, since code in a module loaded from source does not take the execution mode;
+# with the argument "call-references", the checks of call references are run as well
 
 %modern
+%allow-weak-references
 
-%requires WeakObjectReadChecks
+%include weak-object-read-checks.qi
 
 bool call_references = ARGV[0] == "call-references";
 
