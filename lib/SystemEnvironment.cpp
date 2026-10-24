@@ -137,7 +137,24 @@ void qore_env_acquire_exclusive() {
     }
     // the change lock is acquired before the environment lock: a thread copying a variable takes no other lock
     assert(qore_env_change_depth || !qore_env_lock_depth);
-    qore_env_rwlock_exclusive(qore_env_change_lock, qore_env_change_depth);
+    bool acquired = false;
+#ifdef DEBUG
+    // a test that changes the environment while another thread reads it learns whether the change waits for the
+    // reader (see dbg_env_read_race_arm())
+    if (!qore_env_change_depth && qore_dbg_env_change_probe_writer()) {
+        int rc = pthread_rwlock_trywrlock(&qore_env_change_lock);
+        if (!rc) {
+            qore_env_change_depth = -1;
+            acquired = true;
+        } else {
+            assert(rc == EBUSY);
+            qore_dbg_env_change_waits();
+        }
+    }
+#endif
+    if (!acquired) {
+        qore_env_rwlock_exclusive(qore_env_change_lock, qore_env_change_depth);
+    }
     qore_env_rwlock_exclusive(qore_env_lock, qore_env_lock_depth);
 }
 
@@ -148,6 +165,11 @@ void qore_env_release_exclusive() {
     }
     qore_env_rwlock_release(qore_env_lock, qore_env_lock_depth);
     qore_env_rwlock_release(qore_env_change_lock, qore_env_change_depth);
+#ifdef DEBUG
+    if (!qore_env_change_depth) {
+        qore_dbg_env_change_done();
+    }
+#endif
 }
 
 bool qore_env_held_exclusively() {

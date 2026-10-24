@@ -7230,6 +7230,9 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
     hints.ai_protocol = protocol;
 
     started = true;
+#ifdef DEBUG
+    qore_dbg_cares_lookup_env_read();
+#endif
     ares_getaddrinfo(channel, has_host ? host.c_str() : nullptr, has_service ? service.c_str() : nullptr,
         &hints, callback, this);
     if (done) {

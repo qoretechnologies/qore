@@ -13392,6 +13392,163 @@ static QoreValue f_dbg_fork_lock_cycle_result(const QoreListNode* params, Runtim
     }
     return h.release();
 }
+
+namespace {
+//! the state of dbg_env_read_race_arm(): a c-ares lookup that reads the environment and a thread that changes it
+/** The next c-ares lookup stops right before c-ares starts it (where c-ares reads HOSTALIASES for a name without a
+    dot) until the writer, the thread that armed the probe, has either changed the environment or found that its
+    change must wait for the lookup: the writer tries to acquire the environment change lock without waiting first.
+    Both outcomes are reported without waiting for time to pass: a change that completes while the lookup is stopped
+    there could have changed the environment while c-ares read it.
+*/
+struct EnvReadRaceProbe {
+    std::mutex m;
+    std::condition_variable cv;
+    //! a copy of \c armed that the hooks read without the lock (see ForkLockCycleProbe::active)
+    std::atomic<bool> active{false};
+    //! the thread that armed the probe, which changes the environment
+    pthread_t writer;
+    bool armed = false;
+    //! a lookup stopped before c-ares started it
+    bool captured = false;
+    //! the lookup continued
+    bool section_done = false;
+    //! the writer found that its change must wait
+    bool writer_waits = false;
+    //! the writer changed the environment
+    bool writer_done = false;
+    //! the writer's change waited while the lookup was stopped
+    bool change_waited = false;
+    //! the writer's change completed while the lookup was stopped
+    bool change_during_read = false;
+    //! decremented once the lookup has stopped
+    Counter* at_read = nullptr;
+};
+
+//! never destroyed (see fork_lock_cycle_probe)
+EnvReadRaceProbe& env_read_race_probe = *new EnvReadRaceProbe;
+}
+
+bool qore_dbg_env_change_probe_writer() {
+    EnvReadRaceProbe& p = env_read_race_probe;
+    if (!p.active.load()) {
+        return false;
+    }
+    std::lock_guard<std::mutex> l(p.m);
+    return p.armed && p.captured && !p.section_done && pthread_equal(p.writer, pthread_self());
+}
+
+void qore_dbg_env_change_waits() {
+    EnvReadRaceProbe& p = env_read_race_probe;
+    std::lock_guard<std::mutex> l(p.m);
+    p.writer_waits = true;
+    p.cv.notify_all();
+}
+
+void qore_dbg_env_change_done() {
+    EnvReadRaceProbe& p = env_read_race_probe;
+    if (!p.active.load()) {
+        return;
+    }
+    std::lock_guard<std::mutex> l(p.m);
+    if (p.armed && p.captured && pthread_equal(p.writer, pthread_self())) {
+        p.writer_done = true;
+        p.cv.notify_all();
+    }
+}
+
+void qore_dbg_cares_lookup_env_read() {
+    EnvReadRaceProbe& p = env_read_race_probe;
+    if (!p.active.load()) {
+        return;
+    }
+    Counter* at_read;
+    {
+        std::lock_guard<std::mutex> l(p.m);
+        if (!p.armed || p.captured) {
+            return;
+        }
+        p.captured = true;
+        at_read = p.at_read;
+        p.at_read = nullptr;
+    }
+    // tells the test that the lookup has stopped, so that it can change the environment
+    ExceptionSink xsink;
+    at_read->dec(&xsink);
+    at_read->deref(&xsink);
+    if (xsink) {
+        printd(0, "qore_dbg_cares_lookup_env_read(): %s\n", xsink.getExceptionErr().getTypeName());
+        xsink.clear();
+    }
+
+    std::unique_lock<std::mutex> l(p.m);
+    while (p.armed && !p.writer_waits && !p.writer_done) {
+        p.cv.wait(l);
+    }
+    p.change_during_read = p.writer_done;
+    p.change_waited = p.writer_waits && !p.writer_done;
+    p.section_done = true;
+    p.cv.notify_all();
+}
+
+//! makes the next c-ares lookup stop until the calling thread changes the environment or finds that it must wait
+/** The next c-ares lookup stops right before c-ares starts it, where c-ares reads the HOSTALIASES environment
+    variable for a name without a dot, decrements \a at_read, and continues once the calling thread, changing the
+    environment, has either found that its change must wait for the lookup or completed the change.
+
+    @param at_read decremented once the lookup has stopped
+
+    @throw DBG-ARGUMENT-ERROR the probe is already armed
+*/
+static QoreValue f_dbg_env_read_race_arm(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<Counter> at_read(get_counter_arg(params, 0, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    EnvReadRaceProbe& p = env_read_race_probe;
+    std::lock_guard<std::mutex> l(p.m);
+    if (p.armed) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the environment read probe is already armed");
+        return QoreValue();
+    }
+    p.captured = p.section_done = p.writer_waits = p.writer_done = p.change_waited = p.change_during_read = false;
+    p.writer = pthread_self();
+    p.at_read = at_read.release();
+    p.armed = true;
+    p.active.store(true);
+    return QoreValue();
+}
+
+//! disarms the probe of dbg_env_read_race_arm() and returns what it saw
+/** Waits until a stopped lookup has continued; a lookup still stopped is released.
+
+    @return a hash with the following keys:
+    - \c captured: a lookup stopped while the probe was armed
+    - \c change_waited: the change of the environment waited for the stopped lookup
+    - \c change_during_read: the change of the environment completed while the lookup was stopped, where c-ares
+      reads the environment
+*/
+static QoreValue f_dbg_env_read_race_result(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    EnvReadRaceProbe& p = env_read_race_probe;
+    ReferenceHolder<Counter> at_read(xsink);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    {
+        std::unique_lock<std::mutex> l(p.m);
+        bool was_armed = p.armed;
+        p.armed = false;
+        p.cv.notify_all();
+        while (was_armed && p.captured && !p.section_done) {
+            p.cv.wait(l);
+        }
+        p.active.store(false);
+        at_read = p.at_read;
+        p.at_read = nullptr;
+        h->setKeyValue("captured", p.captured, xsink);
+        h->setKeyValue("change_waited", p.change_waited, xsink);
+        h->setKeyValue("change_during_read", p.change_during_read, xsink);
+    }
+    return h.release();
+}
 #endif
 
 //! functional domain for debug and unit-test hooks
@@ -13525,6 +13682,10 @@ void init_debug_functions(QoreNamespace& qns) {
         nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "entered");
     qns.addBuiltinVariant("dbg_fork_lock_cycle_result", f_dbg_fork_lock_cycle_result, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 0);
+    qns.addBuiltinVariant("dbg_env_read_race_arm", f_dbg_env_read_race_arm, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "at_read");
+    qns.addBuiltinVariant("dbg_env_read_race_result", f_dbg_env_read_race_result, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 0);
     qns.addBuiltinVariant("dbg_register_user_module_from_source", f_dbg_register_user_module_from_source,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         stringTypeInfo, QORE_PARAM_NO_ARG, "src");
