@@ -377,8 +377,11 @@ Fields reachable through its structured type, list elements, union alternatives,
 values are also user-visible. The catalog generator walks this graph with cycle detection. First-layer
 fields retain action/option context; the fields of deeper reusable structures use stable app/action/type/field
 identities (`DataProviderPresentation::actionTypePresentationIdentity()`): the type segment is the class and name
-of the type, its explicit producer schema path when available, and a digest of its immediate technical field/type
-shape, scoped to the action. A type has one identity in an action, whichever option or path reaches it, so each of
+of the type, its explicit producer schema path and schema identity when available, and a digest of its immediate
+technical field/type shape, scoped to the action. A REST schema producer gives each object type it builds the
+location of its schema in the document as its schema identity (`AbstractDataProviderType::getSchemaIdentity()`):
+an OpenAPI component or Swagger definition by its name, a property that only adds a description to a referenced
+schema (`allOf` of one `$ref`) by the schema it refers to, and a schema declared in place by its location. A type has one identity in an action, whichever option or path reaches it, so each of
 its texts has one message and one translation per action, and each concrete type object is visited once per
 action, which avoids expanding a shared schema DAG once per path. This distinguishes anonymous schemas without
 making IDs depend on labels.
@@ -386,7 +389,7 @@ making IDs depend on labels.
 Two distinct type objects with the same name, shape and schema path in one action share that identity, so they must
 give their fields the same texts: extraction refuses conflicting texts with `DATA-PROVIDER-PRESENTATION-CATALOG-ERROR`
 (`... has conflicting source strings ...`), naming the type, field and member. Give types that need different texts
-different names or schema paths.
+different names, schema paths or schema identities.
 
 Regenerate every root and complete locale after changing either a field label or the type graph that makes it
 reachable. After a change of the message identities themselves, re-key the catalogs with

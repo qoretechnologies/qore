@@ -349,10 +349,12 @@ public class DataProviderPresentation {
     #! Returns the stable presentation identity for a provider type
     /** Provider type names can intentionally expose only their underlying Qore type (for example several generated
         schema types can all be named \c hash<auto> or \c *data). The identity therefore combines class and type
-        name with a deterministic digest of the producer's stable technical schema path, when available, and the
-        immediate technical field/type shape. Presentation text is deliberately excluded, so changing a label does
-        not change its message ID. Distinct objects with the same complete technical identity are still compared for
-        conflicting source text during extraction.
+        name with a deterministic digest of the type's path in the type cache and the identity of the schema it was
+        built from (@ref DataProvider::AbstractDataProviderType::getSchemaIdentity()
+        "AbstractDataProviderType::getSchemaIdentity()"), when available, and the immediate technical field/type
+        shape. Presentation text is deliberately excluded, so changing a label does not change its message ID.
+        Distinct objects with the same complete technical identity are still compared for conflicting source text
+        during extraction.
 
         @param type provider type to identify
         @return stable class, type-name, and technical-shape identity
@@ -364,6 +366,9 @@ public class DataProviderPresentation {
         list<string> technical_shape = (base_identity,);
         if (*string type_path = type.getPath()) {
             technical_shape += "path:" + identitySegment(type_path);
+        }
+        if (*string schema_identity = type.getSchemaIdentity()) {
+            technical_shape += "schema:" + identitySegment(schema_identity);
         }
         if (*hash<string, AbstractDataField> fields = type.getFields()) {
             foreach string field_name in (sort(keys fields)) {
@@ -388,7 +393,7 @@ public class DataProviderPresentation {
         sharing translations, while within one action a type's presentation is identified once, whichever option or
         path reaches it, so that the catalog holds each text of a schema component once per action.  Distinct type
         objects with the same identity in one action must carry the same presentation: conflicting source text is a
-        hard extraction error (give such types distinct names or technical paths).
+        hard extraction error (give such types distinct names, technical paths or schema identities).
 
         @param action exact technical action identifier
         @param type provider type to identify
@@ -1109,7 +1114,7 @@ string desc = DataProviderPresentation::describeMessageId(
                             id.split(".")[2] == "type"
                                 ? "; the types with this name and shape reached below the options of the action "
                                     "have one text for each field: give types that need different texts different "
-                                    "names or paths"
+                                    "names, paths or schema identities"
                                 : "");
                 }
                 continue;

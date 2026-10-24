@@ -141,6 +141,10 @@ RestHandler handler(NOTHING, swagger);
     @section swagger_relnotes Swagger Module Release Notes
 
     @subsection swagger_2_6 Swagger v2.6
+    - schema objects record their location in the document
+      (@ref RestSchemaValidator::AbstractRestSchemaObject::getSchemaIdentity() "getSchemaIdentity()"): a definition
+      by its name, a schema that only adds to one schema it refers to by that schema, and a schema declared in place
+      by its location below the schema or parameter that declares it
     - fixed data types and fields depending on the order in which they were first requested: the mandatory and
       optional variants of a type or field are each built from the schema instead of one being copied from the
       other, so their names, null handling and required attributes are always what the schema specifies; a
@@ -1030,7 +1034,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     SchemaObject resolveSchemaObject(string name, string refstr, hash<auto> oh) {
         # resolve external reference
         if (refstr !~ /^#\//)
-            return SchemaObject::newSchemaObject(name, getExternalReference(refstr), self);
+            return SchemaObject::newSchemaObject(name, getExternalReference(refstr), self, NOTHING, refstr);
         if (refstr !~ /^#\/definitions\//)
             throw "INVALID-REFERENCE", sprintf("cannot resolve SchemaObject %y reference %y", name, refstr);
         string rstr = (refstr =~ x/^#\/definitions\/(.*)$/)[0];
@@ -2069,7 +2073,8 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         if (value.typeCode() != NT_HASH)
             throw "INVALID-FIELD-TYPE", sprintf("Swagger Object: invalid definition datatype %y (val %y) for key %y",
                 value.type(), value, key);
-        return definitions{key} = SchemaObject::newSchemaObject(key, value, self);
+        return definitions{key} = SchemaObject::newSchemaObject(key, value, self, NOTHING,
+            AbstractRestSchemaObject::childSchemaIdentity("#/definitions", key));
     }
 }
 
@@ -3318,7 +3323,8 @@ public class BodyParameter inherits AbstractSwaggerParameterObject {
             : AbstractSwaggerParameterObject(oh, swagger.getParseFlags()) {
         hash schemaObj;
         required_field("Body Parameter", oh, "schema", NT_HASH, \schemaObj);
-        schema = SchemaObject::newSchemaObject("body", schemaObj, swagger, True);
+        schema = SchemaObject::newSchemaObject("body", schemaObj, swagger, True, "#parameter/body/"
+            + AbstractRestSchemaObject::schemaIdentityToken(name));
     }
 
     #! verifies the parameter in an actual REST API call
@@ -3679,7 +3685,8 @@ public class ResponseObject inherits ObjectBase, RestSchemaValidator::AbstractRe
 
         *hash<auto> schemaObj;
         if (optional_field(objType, oh, "schema", NT_HASH, \schemaObj))
-            schema = SchemaObject::newSchemaObject("response_" + key, schemaObj, swagger);
+            schema = SchemaObject::newSchemaObject("response_" + key, schemaObj, swagger, NOTHING,
+                AbstractRestSchemaObject::childSchemaIdentity("#response", key));
 
         *hash<auto> headersObj;
         if (optional_field(objType, oh, "headers", NT_HASH, \headersObj))
@@ -3902,6 +3909,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @param swagger the REST schema for resolving references
         @param hash_str the unique hash for the value being parsed
         @param require_items require items for arrays
+        @param location the location of the schema in its document, if known; see
+        @ref RestSchemaValidator::AbstractRestSchemaObject::getSchemaIdentity() "getSchemaIdentity()"
 
         @throws INVALID-FIELD-FORMAT field has invalid format
         @throws INVALID-FIELD-TYPE field has invalid type
@@ -3909,10 +3918,13 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @throws INVALID-REFERENCE cannot resolve reference; unknown attributes in description
         @throws REQUIRED-FIELD-MISSING required field is missing
     */
-    private constructor(string name, hash<auto> oh, SwaggerSchema swagger, *string hash_str, *bool require_items)
+    private constructor(string name, hash<auto> oh, SwaggerSchema swagger, *string hash_str, *bool require_items,
+            *string location)
             : ObjectBase(oh), SchemaBase("Schema", oh) {
         self.name = name;
         self.swagger := swagger;
+        # set before any schema it declares is parsed, which can refer back to it
+        schema_identity = location;
         # add static map reference
         if (!hash_str.val()) {
             hash_str = sprintf("%y", oh).toSHA256();
@@ -3929,7 +3941,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             }
             on_error rethrow $1.err, sprintf("%s (while processing schema %s)", $1.desc, name);
             if (type == "array" && (require_items || exists oh.items)) {
-                items = newSchemaObject("items", oh.items ?? {"type": "object"}, swagger);
+                items = newSchemaObject("items", oh.items ?? {"type": "object"}, swagger, NOTHING,
+                    AbstractRestSchemaObject::childSchemaIdentity(location, "items"));
             }
 
             if (oh.hasKey("default")) {
@@ -3997,10 +4010,16 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                     SchemaObject so;
                     if (val.size() == 1 && val.hasKey("$ref")) {
                         so = swagger.resolveSchemaObject(an, val."$ref", val);
+                        # a schema that only adds to one schema it refers to is identified by that schema: its
+                        # properties are the referenced schema's
+                        if (allOfList.size() == 1) {
+                            schema_identity = so.getSchemaIdentity() ?? schema_identity;
+                        }
                     } else if (val.type == "object" && val.properties) {
                         addProperties(val.properties, opt_flags);
                     } else {
-                        so = SchemaObject::newSchemaObject(an, val, swagger);
+                        so = SchemaObject::newSchemaObject(an, val, swagger, NOTHING,
+                            AbstractRestSchemaObject::childSchemaIdentity(location, "allOf/" + $#));
                     }
                     if (so) {
                         allOf[allOf.size()] = so;
@@ -4019,7 +4038,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             checkObjectProperty(name, "additionalProperties");
             if (additionalProperties.typeCode() == NT_HASH)
                 additionalProperties = SchemaObject::newSchemaObject("additionalProperties", additionalProperties,
-                    swagger);
+                    swagger, NOTHING, AbstractRestSchemaObject::childSchemaIdentity(location,
+                        "additionalProperties"));
         }
         if (opt_flags & LM_ACCEPT_ALL_PROPERTIES) {
             additionalProperties = True;
@@ -4067,7 +4087,9 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             if (val.typeCode() != NT_HASH)
                 throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: 'properties' field is not a hash of "
                     "Schema Objects (got type %y; expecting \"hash\": %y)", name, val.fullType(), val);
-            properties{k} = SchemaObject::newSchemaObject(k, val, swagger);
+            properties{k} = SchemaObject::newSchemaObject(k, val, swagger, NOTHING,
+                AbstractRestSchemaObject::childSchemaIdentity(
+                    AbstractRestSchemaObject::childSchemaIdentity(schema_identity, "properties"), k));
             if (!properties{k}.nullable && (val."x-nullable" || (opt_flags & LM_OPTIONAL_REF_PROPERTIES))) {
                 nullable_properties{k} = True;
             }
@@ -4270,7 +4292,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @throws INVALID-REFERENCE cannot resolve reference; unknown attributes in description
         @throws REQUIRED-FIELD-MISSING required field is missing
     */
-    static SchemaObject newSchemaObject(string name, hash<auto> oh, SwaggerSchema swagger, *bool require_items) {
+    static SchemaObject newSchemaObject(string name, hash<auto> oh, SwaggerSchema swagger, *bool require_items,
+            *string location) {
         string refstr;
         if (optional_field("Schema", oh, "$ref", NT_STRING, \refstr))
             return swagger.resolveSchemaObject(name, refstr, oh);
@@ -4280,13 +4303,14 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         if (rv) {
             return rv;
         }
-        return new SchemaObject(name, oh, swagger, hash_str, require_items);
+        return new SchemaObject(name, oh, swagger, hash_str, require_items, location);
     }
 
     #! throws an \c "INVALID-FIELD-TYPE" exception
     /** @throws INVALID-FIELD-TYPE due to a type error in the call
     */
-    static SchemaObject newSchemaObject(string name, auto error, SwaggerSchema swagger) {
+    static SchemaObject newSchemaObject(string name, auto error, SwaggerSchema swagger, *bool require_items,
+            *string location) {
         throw "INVALID-FIELD-TYPE", sprintf("invalid field type %y for key %y; expecting \"hash\"", error.type(),
             name);
     }

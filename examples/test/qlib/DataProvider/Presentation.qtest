@@ -126,6 +126,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \actionScopedTypeConflictTest());
         addTestCase("message ids are described in clear text",
             \describeMessageIdTest());
+        addTestCase("a type's schema identity is part of its presentation identity",
+            \schemaIdentityTest());
         addTestCase("validation pattern descriptions are extracted and delivered translated",
             \validationPatternPresentationTest());
         addTestCase("qore-data-provider-i18n extracts validation pattern descriptions",
@@ -1665,8 +1667,47 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 "field \"city\", display_name\\)", desc ?? "",
             "the conflict names the action, the type, the field, and the member in clear text");
         assertRegex("\"Město\" and \"Obec\"", desc ?? "", "the conflict names both texts");
-        assertRegex("give types that need different texts different names or paths$", desc ?? "",
+        assertRegex("give types that need different texts different names, paths or schema identities$", desc ?? "",
             "the conflict says how to resolve it");
+    }
+
+    schemaIdentityTest() {
+        HashDataType chunk_span = addressType("Město");
+        HashDataType block_span = addressType("Obec");
+        assertEq(DataProviderPresentation::typePresentationIdentity(chunk_span),
+            DataProviderPresentation::typePresentationIdentity(block_span),
+            "types with the same name and fields and no schema identity have one presentation identity");
+        chunk_span.setSchemaIdentity("#/components/schemas/ChunkSpan");
+        block_span.setSchemaIdentity("#/components/schemas/BlockSpan");
+        assertEq("#/components/schemas/ChunkSpan", chunk_span.getSchemaIdentity());
+        assertNeq(DataProviderPresentation::typePresentationIdentity(chunk_span),
+            DataProviderPresentation::typePresentationIdentity(block_span),
+            "types built from different schemas have different presentation identities");
+        assertEq("#/components/schemas/ChunkSpan", chunk_span.getOrNothingType().getSchemaIdentity(),
+            "the \"or nothing\" type of a type has its schema identity");
+        HashDataType same_schema = addressType("Jiné město");
+        same_schema.setSchemaIdentity("#/components/schemas/ChunkSpan");
+        assertEq(DataProviderPresentation::typePresentationIdentity(chunk_span),
+            DataProviderPresentation::typePresentationIdentity(same_schema),
+            "the presentation identity does not depend on the texts of the type");
+        same_schema.setSchemaIdentity();
+        assertNeq(DataProviderPresentation::typePresentationIdentity(chunk_span),
+            DataProviderPresentation::typePresentationIdentity(same_schema),
+            "a cleared schema identity is no longer part of the presentation identity");
+        assertEq(DataProviderPresentation::typePresentationIdentity(block_span.copyWithConstraints()),
+            DataProviderPresentation::typePresentationIdentity(block_span),
+            "a type and the type itself returned for no constraints have one identity");
+
+        # two options reach the two types: each has its own messages, and no conflict is reported
+        hash<string, hash<auto>> catalogs = DataProviderPresentation::buildSourceCatalogs(app(),
+            (addressAction(chunk_span, block_span),));
+        hash<auto> messages = catalogs{Domain}.locales.root.messages;
+        assertEq("Město", messages{DataProviderPresentation::typeFieldMessageId(App,
+            DataProviderPresentation::actionTypePresentationIdentity(Action, chunk_span), "city",
+            "display_name")}.source);
+        assertEq("Obec", messages{DataProviderPresentation::typeFieldMessageId(App,
+            DataProviderPresentation::actionTypePresentationIdentity(Action, block_span), "city",
+            "display_name")}.source);
     }
 
     describeMessageIdTest() {

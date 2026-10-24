@@ -1,0 +1,150 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires Swagger
+%requires json
+%exec-class SwaggerSchemaIdentityTest
+
+class SwaggerSchemaIdentityTest inherits QUnit::Test {
+    public {
+        const App = "QoreTestSwaggerSchemaIdentity";
+        const Action = "store";
+    }
+
+    constructor() : Test("Swagger schema identity", "1.0", \ARGV) {
+        addTestCase("a type built from a definition is identified by the definition", \definitionTest());
+        addTestCase("a schema that only adds to a referenced schema is identified by it", \referenceTest());
+        addTestCase("a schema declared in place is identified by its location", \inlineTest());
+        addTestCase("the identity does not depend on descriptions", \descriptionIndependenceTest());
+        addTestCase("schemas with the same name and properties have their own catalog messages",
+            \catalogTest());
+        set_return_value(main());
+    }
+
+    definitionTest() {
+        SwaggerSchema doc = document();
+        assertEq("#/definitions/Chunk", type(doc, "Chunk").getSchemaIdentity());
+        assertEq("#/definitions/Chunk", type(doc, "Chunk").getOrNothingType().getSchemaIdentity(),
+            "the \"or nothing\" type has the identity of its type");
+        assertEq("#/definitions/a~1b~0c", type(doc, "a/b~c").getSchemaIdentity(),
+            "a name with '/' or '~' is escaped as in a JSON Pointer");
+    }
+
+    referenceTest() {
+        SwaggerSchema doc = document();
+        assertEq("#/definitions/ChunkSpan", fieldType(type(doc, "Chunk"), "pageSpan").getSchemaIdentity());
+        assertEq("#/definitions/BlockSpan", fieldType(type(doc, "Block"), "pageSpan").getSchemaIdentity(),
+            "a reference to another schema with the same name and properties has its own identity");
+        assertEq(fieldType(type(doc, "Chunk"), "pageSpan").getSchemaIdentity(),
+            fieldType(fieldType(type(doc, "Chunk"), "header"), "pageSpan").getSchemaIdentity(),
+            "two references to one schema have one identity");
+    }
+
+    inlineTest() {
+        SwaggerSchema doc = document();
+        assertEq("#/definitions/Chunk/properties/note", fieldType(type(doc, "Chunk"), "note").getSchemaIdentity());
+        assertEq("#/definitions/Block/properties/note", fieldType(type(doc, "Block"), "note").getSchemaIdentity());
+    }
+
+    descriptionIndependenceTest() {
+        SwaggerSchema doc = document();
+        SwaggerSchema redescribed = document("Seite");
+        foreach list<string> path in ((("Chunk", "pageSpan"), ("Block", "pageSpan"), ("Chunk", "note"))) {
+            AbstractDataProviderType t = fieldType(type(doc, path[0]), path[1]);
+            AbstractDataProviderType rt = fieldType(type(redescribed, path[0]), path[1]);
+            assertNeq(t.getFields().firstValue().getDescription(), rt.getFields().firstValue().getDescription(),
+                "the documents describe " + path.join(".") + " differently");
+            assertEq(DataProviderPresentation::typePresentationIdentity(t),
+                DataProviderPresentation::typePresentationIdentity(rt),
+                path.join(".") + " has the same presentation identity however it is described");
+        }
+    }
+
+    catalogTest() {
+        SwaggerSchema doc = document();
+        hash<auto> app = {
+            "name": App,
+            "display_name": "Schema Identity",
+            "short_desc": "Schema identity test",
+            "desc": "Schema identity test",
+            "presentation_source_locale": "en",
+        };
+        hash<auto> action = {
+            "app": App,
+            "action": Action,
+            "display_name": "Store",
+            "short_desc": "Stores a document",
+            "desc": "Stores a document",
+            "presentation_source_locale": "en",
+            "options": {
+                "document": {
+                    "display_name": "Document",
+                    "short_desc": "The document to store",
+                    "type": type(doc, "Document"),
+                },
+            },
+        };
+        hash<auto> messages = DataProviderPresentation::buildSourceCatalogs(app, (action,))
+            {DataProviderPresentation::defaultCatalogDomain(App)}.locales.root.messages;
+        list<string> sources = map $1.value.source, messages.pairIterator(), $1.key =~ /\.short_desc$/;
+        foreach string source in (("Page where chunk starts", "Page where block starts", "The note of the chunk",
+                "The note of the block")) {
+            assertEq(1, (select sources, $1 == source).size(),
+                sprintf("%y has one message in the catalog", source));
+        }
+    }
+
+    #! Returns a document whose two definitions with the same name and properties are described differently
+    /** @param prefix a prefix for the descriptions of the fields, to describe the same schemas differently
+    */
+    private static SwaggerSchema document(string prefix = "Page") {
+        hash<auto> span = {"type": "integer"};
+        string note_suffix = prefix == "Page" ? "" : " (" + prefix + ")";
+        return SwaggerLoader::fromString(make_json({
+            "swagger": "2.0", "info": {"title": "Schema identity", "version": "1"}, "paths": {},
+            "definitions": {
+                "ChunkSpan": {"type": "object", "properties": {
+                    "pageStart": span + {"description": prefix + " where chunk starts"},
+                }},
+                "BlockSpan": {"type": "object", "properties": {
+                    "pageStart": span + {"description": prefix + " where block starts"},
+                }},
+                "Chunk": {"type": "object", "properties": {
+                    "pageSpan": {"allOf": ({"$ref": "#/definitions/ChunkSpan"},)},
+                    "header": {"type": "object", "properties": {
+                        "pageSpan": {"allOf": ({"$ref": "#/definitions/ChunkSpan"},)},
+                    }},
+                    "note": {"type": "object", "properties": {
+                        "text": {"type": "string", "description": "The note of the chunk" + note_suffix},
+                    }},
+                }},
+                "Block": {"type": "object", "properties": {
+                    "pageSpan": {"allOf": ({"$ref": "#/definitions/BlockSpan"},)},
+                    "note": {"type": "object", "properties": {
+                        "text": {"type": "string", "description": "The note of the block" + note_suffix},
+                    }},
+                }},
+                "Document": {"type": "object", "properties": {
+                    "chunk": {"$ref": "#/definitions/Chunk"},
+                    "block": {"$ref": "#/definitions/Block"},
+                }},
+                "a/b~c": {"type": "object", "properties": {"x": {"type": "string"}}},
+            },
+        }), True);
+    }
+
+    #! Returns the type of a definition
+    private static AbstractDataProviderType type(SwaggerSchema doc, string definition) {
+        return doc.definitions{definition}.getDataType();
+    }
+
+    #! Returns the declared type of a field of a type
+    private static AbstractDataProviderType fieldType(AbstractDataProviderType type, string field) {
+        return type.getFields(){field}.getDeclaredType();
+    }
+}

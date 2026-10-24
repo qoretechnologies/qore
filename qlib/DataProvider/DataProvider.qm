@@ -1954,7 +1954,10 @@ fetch
       nested type has one identity in an action, whichever option or path reaches it, so each of its texts has one
       message per action, and equal-shaped types that give a field different texts in one action are refused with an
       error that names them in clear text (@ref DataProvider::DataProviderPresentation::describeMessageId()
-      "DataProviderPresentation::describeMessageId()"). New
+      "DataProviderPresentation::describeMessageId()"); the identity includes the identity of the schema a type was
+      built from (@ref DataProvider::AbstractDataProviderType::getSchemaIdentity()
+      "AbstractDataProviderType::getSchemaIdentity()"), which REST schema types have, so that schemas with the same
+      name and fields have their own messages. New
       static @ref DataProvider::AbstractDataField::getPresentationInfo() "presentation metadata" and
       @ref DataProvider::AbstractDataField::getDeclaredType() "declared types" keep extraction deterministic without
       invoking context-dependent dynamic type, default, or example callbacks

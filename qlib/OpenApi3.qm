@@ -1242,7 +1242,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
     SchemaObject resolveSchemaObject(string name, string refstr, hash<auto> oh) {
         # resolve external reference
         if (refstr !~ /^#\//)
-            return SchemaObject::newSchemaObject(name, getExternalReference(refstr), self);
+            return SchemaObject::newSchemaObject(name, getExternalReference(refstr), self, NOTHING, NOTHING, refstr);
         if (refstr !~ /^#\/components\/schemas\//)
             throw "INVALID-REFERENCE", sprintf("cannot resolve SchemaObject %y reference %y", name, refstr);
         string rstr = (refstr =~ x/^#\/components\/schemas\/(.*)$/)[0];
@@ -2332,7 +2332,8 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         if (value.typeCode() != NT_HASH)
             throw "INVALID-FIELD-TYPE", sprintf("OpenApi3 Object: invalid definition datatype %y (val %y) for key %y",
                 value.type(), value, key);
-        return components.schemas{key} = SchemaObject::newSchemaObject(key, value, self);
+        return components.schemas{key} = SchemaObject::newSchemaObject(key, value, self, NOTHING, NOTHING,
+            AbstractRestSchemaObject::childSchemaIdentity("#/components/schemas", key));
     }
 
     #! Returns the x-logo extension value if set.
@@ -4037,6 +4038,24 @@ public class ParameterBase inherits ObjectBase, RestSchemaValidator::AbstractPar
     copy(ParameterObject old) {
     }
 
+    #! Returns the location of the schema of a parameter
+    /** A parameter's name is unique for its location in an operation, so this identifies the parameter's schema,
+        and the schemas it declares in place, in the operation; see
+        @ref RestSchemaValidator::AbstractRestSchemaObject::getSchemaIdentity() "getSchemaIdentity()"
+
+        @param in_loc the location of the parameter (\c "query", \c "header", \c "path", \c "cookie", or
+        \c "body" for a request body)
+        @param name the name of the parameter
+
+        @return the location of the parameter's schema
+
+        @since OpenApi3 1.0
+    */
+    static string schemaIdentity(string in_loc, string name) {
+        return "#parameter/" + AbstractRestSchemaObject::schemaIdentityToken(in_loc) + "/"
+            + AbstractRestSchemaObject::schemaIdentityToken(name);
+    }
+
     #! Parse the parameter data
     private parseData(hash<auto> oh, OpenApi3Schema openapi3) {
         string obj_type = sprintf("%s parameter", inLoc);
@@ -4056,7 +4075,8 @@ public class ParameterBase inherits ObjectBase, RestSchemaValidator::AbstractPar
 
         hash<auto> schemaObj;
         if (optional_field(obj_type, oh, "schema", NT_HASH, \schemaObj)) {
-            schema = SchemaObject::newSchemaObject(name, schemaObj, openapi3, True);
+            schema = SchemaObject::newSchemaObject(name, schemaObj, openapi3, True, NOTHING,
+                ParameterBase::schemaIdentity(inLoc, name));
         }
 
         if (optional_field(obj_type, oh, "style", NT_STRING, \style)) {
@@ -4093,7 +4113,8 @@ public class ParameterBase inherits ObjectBase, RestSchemaValidator::AbstractPar
             required_field(obj_type, content, self.content, NT_HASH, \media);
             hash<auto> content_schema;
             optional_field(obj_type, media, "schema", NT_HASH, \content_schema);
-            schema = SchemaObject::newSchemaObject(name, content_schema ?? {}, openapi3, True);
+            schema = SchemaObject::newSchemaObject(name, content_schema ?? {}, openapi3, True, NOTHING,
+                ParameterBase::schemaIdentity(inLoc, name));
         }
         if (!exists oh.schema && !content) {
             throw "INVALID-PARAMETER", sprintf("%s parameter is missing both \"schema\" and \"content\"; at least "
@@ -4372,7 +4393,8 @@ public class ResponseObject inherits ObjectBase, RestSchemaValidator::AbstractRe
         *hash<auto> schemaObj;
         if (optional_field(obj_type, oh, "schema", NT_HASH, \schemaObj)) {
             # Swagger 2.0 style: schema directly in response
-            schema = SchemaObject::newSchemaObject("response_" + key, schemaObj, openapi3);
+            schema = SchemaObject::newSchemaObject("response_" + key, schemaObj, openapi3, NOTHING, NOTHING,
+                AbstractRestSchemaObject::childSchemaIdentity("#response", key));
         }
         if (oh.content) {
             list<hash<auto>> alternatives = ();
@@ -4384,7 +4406,9 @@ public class ResponseObject inherits ObjectBase, RestSchemaValidator::AbstractRe
                     continue;
                 }
                 hash<auto> raw = item.value.schema;
-                content_schemas{item.key} = SchemaObject::newSchemaObject("response_" + key, raw, openapi3);
+                content_schemas{item.key} = SchemaObject::newSchemaObject("response_" + key, raw, openapi3,
+                    NOTHING, NOTHING, AbstractRestSchemaObject::childSchemaIdentity(
+                        AbstractRestSchemaObject::childSchemaIdentity("#response", key), item.key));
                 if (!(map True, alternatives, $1 == raw)) {
                     push alternatives, raw;
                 }
@@ -4392,7 +4416,8 @@ public class ResponseObject inherits ObjectBase, RestSchemaValidator::AbstractRe
             # Content alternatives are selected by media type, so overlapping schemas are valid.
             if (alternatives) {
                 schema = SchemaObject::newSchemaObject("response_" + key,
-                    alternatives.size() == 1 ? alternatives[0] : {"anyOf": alternatives}, openapi3);
+                    alternatives.size() == 1 ? alternatives[0] : {"anyOf": alternatives}, openapi3, NOTHING,
+                    NOTHING, AbstractRestSchemaObject::childSchemaIdentity("#response", key));
             }
         }
 
@@ -5442,6 +5467,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @param composed this object is a member of an \c "allOf", \c "oneOf", \c "anyOf" or \c "not"
         composition, so the schema composing it supplies the property declarations its \c "required" list
         names
+        @param location the location of the schema in its document, if known; see
+        @ref RestSchemaValidator::AbstractRestSchemaObject::getSchemaIdentity() "getSchemaIdentity()"
 
         @throws INVALID-FIELD-FORMAT field has invalid format
         @throws INVALID-FIELD-TYPE field has invalid type
@@ -5450,10 +5477,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @throws REQUIRED-FIELD-MISSING required field is missing
     */
     private constructor(string name, hash<auto> oh, OpenApi3Schema openapi3, *string hash_str, *bool require_items,
-            *bool composed)
+            *bool composed, *string location)
             : ObjectBase(oh), SchemaBase("Schema", oh) {
         self.name = name;
         self.openapi3 := openapi3;
+        # set before any schema it declares is parsed, which can refer back to it
+        schema_identity = location;
         has_const = oh.hasKey("const");
         if (has_const) {
             const_value = oh."const";
@@ -5518,12 +5547,15 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                     if (!openapi3.is31OrLater() || oh.prefixItems.typeCode() != NT_LIST) {
                         throw "INVALID-FIELD-FORMAT", "prefixItems requires an OpenAPI 3.1 schema array";
                     }
-                    prefix_items = map newSchemaObject("prefixItems", $1, openapi3), oh.prefixItems;
+                    prefix_items = map newSchemaObject("prefixItems", $1, openapi3, NOTHING, NOTHING,
+                        AbstractRestSchemaObject::childSchemaIdentity(location, "prefixItems/" + $#)),
+                        oh.prefixItems;
                 }
                 if (oh.items.typeCode() == NT_BOOLEAN && openapi3.is31OrLater()) {
                     additional_items = oh.items;
                 } else if (require_items || exists oh.items) {
-                    items = newSchemaObject("items", oh.items ?? {}, openapi3);
+                    items = newSchemaObject("items", oh.items ?? {}, openapi3, NOTHING, NOTHING,
+                        AbstractRestSchemaObject::childSchemaIdentity(location, "items"));
                 }
             }
 
@@ -5575,7 +5607,9 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                     if (val.typeCode() != NT_HASH)
                         throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: 'properties' field is not a hash of "
                             "Schema Objects (got type %y; expecting \"hash\": %y)", name, val.fullType(), val);
-                    properties{k} = SchemaObject::newSchemaObject(k, val, openapi3);
+                    properties{k} = SchemaObject::newSchemaObject(k, val, openapi3, NOTHING, NOTHING,
+                        AbstractRestSchemaObject::childSchemaIdentity(
+                            AbstractRestSchemaObject::childSchemaIdentity(location, "properties"), k));
                     if (!properties{k}.nullable && val."x-nullable") {
                         nullable_properties{k} = True;
                     }
@@ -5590,7 +5624,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             checkObjectProperty(name, "additionalProperties");
             if (additionalProperties.typeCode() == NT_HASH)
                 additionalProperties = SchemaObject::newSchemaObject("additionalProperties", additionalProperties,
-                    openapi3);
+                    openapi3, NOTHING, NOTHING,
+                    AbstractRestSchemaObject::childSchemaIdentity(location, "additionalProperties"));
         }
 
         # process "required"
@@ -5670,7 +5705,14 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                         throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'allOf' list value "
                             "datatype: %y", name, val.type());
                     allOf[allOf.size()] = SchemaObject::newSchemaObject(name + "AllOf", val, openapi3,
-                        NOTHING, True);
+                        NOTHING, True, AbstractRestSchemaObject::childSchemaIdentity(location,
+                            "allOf/" + allOf.size()));
+                }
+                # a schema that only adds to one schema it refers to, which is how OpenAPI 3.0 gives a property
+                # of a reusable type a description of its own, is identified by that schema: its properties are
+                # the referenced schema's
+                if (allOfList.size() == 1 && allOfList[0]."$ref".typeCode() == NT_STRING) {
+                    schema_identity = allOf[0].getSchemaIdentity() ?? schema_identity;
                 }
                 # Merge allOf member schemas into this schema so that getDataType()
                 # exposes the union of their properties and required sets. Local
@@ -5717,7 +5759,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                         throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'oneOf' list value "
                             "datatype: %y", name, val.type());
                     SchemaObject member = SchemaObject::newSchemaObject(name + "OneOf", val, openapi3,
-                        NOTHING, True);
+                        NOTHING, True, AbstractRestSchemaObject::childSchemaIdentity(location,
+                            "oneOf/" + oneOf.size()));
                     oneOf[oneOf.size()] = member;
                     # a "null"-typed member expresses nullability of the composition itself
                     if (member.nullType) {
@@ -5737,7 +5780,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                         throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'anyOf' list value "
                             "datatype: %y", name, val.type());
                     SchemaObject member = SchemaObject::newSchemaObject(name + "AnyOf", val, openapi3,
-                        NOTHING, True);
+                        NOTHING, True, AbstractRestSchemaObject::childSchemaIdentity(location,
+                            "anyOf/" + anyOf.size()));
                     anyOf[anyOf.size()] = member;
                     # a "null"-typed member expresses nullability of the composition itself
                     if (member.nullType) {
@@ -5750,7 +5794,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         {
             *hash notObj;
             if (optional_field(obj_type, oh, "not", NT_HASH, \notObj)) {
-                notSchema = SchemaObject::newSchemaObject(name + "Not", notObj, openapi3, NOTHING, True);
+                notSchema = SchemaObject::newSchemaObject(name + "Not", notObj, openapi3, NOTHING, True,
+                    AbstractRestSchemaObject::childSchemaIdentity(location, "not"));
             }
         }
 
@@ -6090,6 +6135,9 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                     # validation still requires the exact discriminator, including after copying.
                     HashDataType branch = cast<HashDataType>((map $1, alternatives.iterator())[0]);
                     OpenApi3HashDataType single(AutoHashType, name, self);
+                    if (schema_identity) {
+                        single.setSchemaIdentity(schema_identity);
+                    }
                     foreach AbstractDataField field in (branch.getFields().iterator()) {
                         single.addField(field);
                     }
@@ -6850,6 +6898,10 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @param composed the object is a member of an \c "allOf", \c "oneOf", \c "anyOf" or \c "not"
         composition, so the schema composing it supplies the property declarations its \c "required"
         list names
+        @param location the location of the schema in its document, if known; a reference is identified by the
+        schema it refers to, and a schema with the same name and content as one parsed before is that schema,
+        with its location; see @ref RestSchemaValidator::AbstractRestSchemaObject::getSchemaIdentity()
+        "getSchemaIdentity()"
 
         @throws INVALID-FIELD-FORMAT field has invalid format
         @throws INVALID-FIELD-TYPE field has invalid type
@@ -6858,7 +6910,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @throws REQUIRED-FIELD-MISSING required field is missing
     */
     static SchemaObject newSchemaObject(string name, hash<auto> oh, OpenApi3Schema openapi3, *bool require_items,
-            *bool composed) {
+            *bool composed, *string location) {
         string refstr;
         if (optional_field("Schema", oh, "$ref", NT_STRING, \refstr))
             return openapi3.resolveSchemaObject(name, refstr, oh);
@@ -6868,13 +6920,14 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         if (rv) {
             return rv;
         }
-        return new SchemaObject(name, oh, openapi3, hash_str, require_items, composed);
+        return new SchemaObject(name, oh, openapi3, hash_str, require_items, composed, location);
     }
 
     #! throws an \c "INVALID-FIELD-TYPE" exception
     /** @throws INVALID-FIELD-TYPE due to a type error in the call
     */
-    static SchemaObject newSchemaObject(string name, auto error, OpenApi3Schema openapi3) {
+    static SchemaObject newSchemaObject(string name, auto error, OpenApi3Schema openapi3, *bool require_items,
+            *bool composed, *string location) {
         throw "INVALID-FIELD-TYPE", sprintf("invalid field type %y for key %y; expecting \"hash\"", error.type(),
             name);
     }

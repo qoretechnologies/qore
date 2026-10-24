@@ -1,0 +1,208 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires OpenApi3
+%requires json
+%exec-class OpenApi3SchemaIdentityTest
+
+class OpenApi3SchemaIdentityTest inherits QUnit::Test {
+    public {
+        const App = "QoreTestSchemaIdentity";
+        const Action = "store";
+    }
+
+    constructor() : Test("OpenAPI schema identity", "1.0", \ARGV) {
+        addTestCase("a type built from a component is identified by the component", \componentTest());
+        addTestCase("a schema that only adds a description to a referenced schema is identified by it",
+            \describedReferenceTest());
+        addTestCase("a schema declared in place is identified by its location", \inlineTest());
+        addTestCase("a parameter's schema is identified by the parameter", \parameterTest());
+        addTestCase("the identity does not depend on descriptions", \descriptionIndependenceTest());
+        addTestCase("schemas with the same name and properties have their own catalog messages",
+            \catalogTest());
+        set_return_value(main());
+    }
+
+    componentTest() {
+        OpenApi3Schema doc = document();
+        assertEq("#/components/schemas/Chunk", type(doc, "Chunk").getSchemaIdentity());
+        assertEq("#/components/schemas/Chunk", doc.components.schemas.Chunk.getSchemaIdentity(),
+            "the schema has the identity its type has");
+        assertEq("#/components/schemas/Chunk", type(doc, "Chunk").getOrNothingType().getSchemaIdentity(),
+            "the \"or nothing\" type has the identity of its type");
+        # RFC 6901 section 3
+        assertEq("#/components/schemas/a~1b~0c", type(doc, "a/b~c").getSchemaIdentity(),
+            "a name with '/' or '~' is escaped as in a JSON Pointer");
+    }
+
+    describedReferenceTest() {
+        OpenApi3Schema doc = document();
+        AbstractDataProviderType chunk_span = fieldType(type(doc, "Chunk"), "pageSpan");
+        AbstractDataProviderType block_span = fieldType(type(doc, "Block"), "pageSpan");
+        AbstractDataProviderType header_span = fieldType(fieldType(type(doc, "Chunk"), "header"), "pageSpan");
+        assertEq("pageSpan", chunk_span.getName().substr(-8),
+            "the type of a described reference is built for the property");
+        assertEq("#/components/schemas/ChunkSpan", chunk_span.getSchemaIdentity());
+        assertEq("#/components/schemas/BlockSpan", block_span.getSchemaIdentity(),
+            "a described reference to another schema with the same name and properties has its own identity");
+        assertEq(chunk_span.getSchemaIdentity(), header_span.getSchemaIdentity(),
+            "two described references to one schema have one identity");
+        assertEq(DataProviderPresentation::typePresentationIdentity(chunk_span),
+            DataProviderPresentation::typePresentationIdentity(header_span),
+            "two described references to one schema have one presentation identity");
+        assertNeq(DataProviderPresentation::typePresentationIdentity(chunk_span),
+            DataProviderPresentation::typePresentationIdentity(block_span),
+            "described references to two schemas have two presentation identities");
+    }
+
+    inlineTest() {
+        OpenApi3Schema doc = document();
+        assertEq("#/components/schemas/Chunk/properties/note",
+            fieldType(type(doc, "Chunk"), "note").getSchemaIdentity());
+        assertEq("#/components/schemas/Block/properties/note",
+            fieldType(type(doc, "Block"), "note").getSchemaIdentity());
+        assertEq("#/components/schemas/Chunk/properties/header",
+            fieldType(type(doc, "Chunk"), "header").getSchemaIdentity());
+        assertEq("#/components/schemas/List/items", doc.components.schemas.List.items.getSchemaIdentity(),
+            "an element schema declared in place is identified by its location");
+    }
+
+    parameterTest() {
+        OpenApi3Schema doc = document();
+        ParameterObject param = ParameterObject::newParameter("filter", {
+            "name": "filter",
+            "in": "query",
+            "schema": {
+                "type": "object",
+                "properties": {"text": {"type": "string", "description": "The text to look for"}},
+            },
+        }, doc);
+        assertEq("#parameter/query/filter", param.schema.getSchemaIdentity());
+        assertEq("#parameter/query/filter/properties/text",
+            cast<SchemaObject>(param.schema.properties.text).getSchemaIdentity());
+        assertEq("#parameter/body/a~1b", ParameterBase::schemaIdentity("body", "a/b"),
+            "a parameter name is escaped as in a JSON Pointer");
+    }
+
+    descriptionIndependenceTest() {
+        OpenApi3Schema doc = document();
+        OpenApi3Schema redescribed = document("Seite");
+        foreach list<string> path in ((("Chunk", "pageSpan"), ("Block", "pageSpan"), ("Chunk", "note"))) {
+            AbstractDataProviderType t = fieldType(type(doc, path[0]), path[1]);
+            AbstractDataProviderType rt = fieldType(type(redescribed, path[0]), path[1]);
+            assertNeq(t.getFields().firstValue().getDescription(), rt.getFields().firstValue().getDescription(),
+                "the documents describe " + path.join(".") + " differently");
+            assertEq(t.getSchemaIdentity(), rt.getSchemaIdentity(),
+                path.join(".") + " has the same identity however it is described");
+            assertEq(DataProviderPresentation::typePresentationIdentity(t),
+                DataProviderPresentation::typePresentationIdentity(rt),
+                path.join(".") + " has the same presentation identity however it is described");
+        }
+    }
+
+    catalogTest() {
+        OpenApi3Schema doc = document();
+        hash<auto> app = {
+            "name": App,
+            "display_name": "Schema Identity",
+            "short_desc": "Schema identity test",
+            "desc": "Schema identity test",
+            "presentation_source_locale": "en",
+        };
+        hash<auto> action = {
+            "app": App,
+            "action": Action,
+            "display_name": "Store",
+            "short_desc": "Stores a document",
+            "desc": "Stores a document",
+            "presentation_source_locale": "en",
+            "options": {
+                "document": {
+                    "display_name": "Document",
+                    "short_desc": "The document to store",
+                    "type": type(doc, "Document"),
+                },
+            },
+        };
+        hash<auto> messages = DataProviderPresentation::buildSourceCatalogs(app, (action,))
+            {DataProviderPresentation::defaultCatalogDomain(App)}.locales.root.messages;
+        # the short description of each field, which is the first sentence of its description
+        list<string> sources = map $1.value.source, messages.pairIterator(), $1.key =~ /\.short_desc$/;
+        foreach string source in (("Page where chunk starts", "Page where block starts", "The note of the chunk",
+                "The note of the block")) {
+            assertEq(1, (select sources, $1 == source).size(),
+                sprintf("%y has one message in the catalog", source));
+        }
+        string chunk_span = DataProviderPresentation::actionTypePresentationIdentity(Action,
+            fieldType(type(doc, "Chunk"), "pageSpan"));
+        assertEq("Page where chunk starts", messages{DataProviderPresentation::typeFieldMessageId(App, chunk_span,
+            "pageStart", "short_desc")}.source,
+            "the field of the type built from one schema has that schema's text");
+        string block_span = DataProviderPresentation::actionTypePresentationIdentity(Action,
+            fieldType(type(doc, "Block"), "pageSpan"));
+        assertEq("Page where block starts", messages{DataProviderPresentation::typeFieldMessageId(App, block_span,
+            "pageStart", "short_desc")}.source,
+            "the field of the type built from the other schema has the other schema's text");
+    }
+
+    #! Returns a document whose two components with the same name and properties are described differently
+    /** @param prefix a prefix for the descriptions of the fields, to describe the same schemas differently
+    */
+    private static OpenApi3Schema document(string prefix = "Page") {
+        hash<auto> span = {"type": "integer"};
+        return OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3", "info": {"title": "Schema identity", "version": "1"}, "paths": {},
+            "components": {"schemas": {
+                "ChunkSpan": {"type": "object", "properties": {
+                    "pageStart": span + {"description": prefix + " where chunk starts"},
+                }},
+                "BlockSpan": {"type": "object", "properties": {
+                    "pageStart": span + {"description": prefix + " where block starts"},
+                }},
+                "Chunk": {"type": "object", "properties": {
+                    "pageSpan": {"allOf": ({"$ref": "#/components/schemas/ChunkSpan"},),
+                        "description": "Page span of the chunk."},
+                    "header": {"type": "object", "properties": {
+                        "pageSpan": {"allOf": ({"$ref": "#/components/schemas/ChunkSpan"},),
+                            "description": "Page span of the header."},
+                    }},
+                    "note": {"type": "object", "properties": {
+                        "text": {"type": "string", "description": "The note of the chunk" + (prefix == "Page"
+                            ? "" : " (" + prefix + ")")},
+                    }},
+                }},
+                "Block": {"type": "object", "properties": {
+                    "pageSpan": {"allOf": ({"$ref": "#/components/schemas/BlockSpan"},),
+                        "description": "Page span of the block."},
+                    "note": {"type": "object", "properties": {
+                        "text": {"type": "string", "description": "The note of the block" + (prefix == "Page"
+                            ? "" : " (" + prefix + ")")},
+                    }},
+                }},
+                "Document": {"type": "object", "properties": {
+                    "chunk": {"$ref": "#/components/schemas/Chunk"},
+                    "block": {"$ref": "#/components/schemas/Block"},
+                }},
+                "List": {"type": "array", "items": {"type": "object", "properties": {
+                    "name": {"type": "string"},
+                }}},
+                "a/b~c": {"type": "object", "properties": {"x": {"type": "string"}}},
+            }},
+        }), True);
+    }
+
+    #! Returns the type of a component
+    private static AbstractDataProviderType type(OpenApi3Schema doc, string component) {
+        return doc.components.schemas{component}.getDataType();
+    }
+
+    #! Returns the declared type of a field of a type
+    private static AbstractDataProviderType fieldType(AbstractDataProviderType type, string field) {
+        return type.getFields(){field}.getDeclaredType();
+    }
+}

@@ -82,6 +82,11 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - added @ref RestSchemaValidator::AbstractRestSchemaObject::getSchemaIdentity() "getSchemaIdentity()", the
+      location of a schema in its document; an object type built from the schema has it as its
+      @ref DataProvider::AbstractDataProviderType::getSchemaIdentity() "schema identity", so that two schemas with
+      the same name and properties that describe their properties differently have their own presentation catalog
+      messages
     - the data types of a large schema whose types refer back to each other are built faster: the first output type
       of a Stripe action is built in about half the time it took before.  The schema objects of a parsed
       OpenAPI 3 document hold the types they build through references that the garbage collector does not follow
@@ -1376,6 +1381,9 @@ public namespace RestSchemaValidator {
                 "AbstractRestSchemaValidator::holdTypeCacheOpaquely()"
             */
             bool holds_opaque_type_caches;
+
+            #! The location of the schema in its document, if known; see getSchemaIdentity()
+            *string schema_identity;
         }
 
         #! Returns the data provider type for a given type/format/items path
@@ -1409,6 +1417,51 @@ public namespace RestSchemaValidator {
         */
         HashDataType createHashDataType(Type base_type, string typename) {
             return new HashDataType(base_type, typename);
+        }
+
+        #! Returns the location of the schema in its document, if known
+        /** The location identifies the schema among the schemas of its document: a schema declared under a name
+            of its own, such as an OpenAPI component, is identified by that name, a schema that only refers to one
+            by the schema it refers to, and a schema declared in place by its location below the schema or
+            parameter that declares it.  An object type built from the schema has it as its
+            @ref DataProvider::AbstractDataProviderType::getSchemaIdentity() "schema identity", so that two schemas
+            with the same name and properties, which can describe their properties differently, give types with
+            their own catalog messages.  It never depends on a description.
+
+            @return the location of the schema in its document, or @ref nothing if the module that parsed the
+            schema does not track it
+
+            @since RestSchemaValidator 2.5
+        */
+        *string getSchemaIdentity() {
+            return schema_identity;
+        }
+
+        #! Appends a JSON Pointer reference token to a schema location
+        /** @param location the location of the schema that declares the child, or @ref nothing if unknown
+            @param token the reference token of the child, unescaped
+
+            @return the location of the child, or @ref nothing if \a location is unknown
+
+            @since RestSchemaValidator 2.5
+        */
+        static *string childSchemaIdentity(*string location, string token) {
+            if (!location.val()) {
+                return;
+            }
+            return location + "/" + AbstractRestSchemaObject::schemaIdentityToken(token);
+        }
+
+        #! Escapes a JSON Pointer reference token
+        /** @param token the reference token, unescaped
+
+            @return the token as written in a JSON Pointer: \c "~" as \c "~0" and \c "/" as \c "~1"
+            (<a href="https://www.rfc-editor.org/rfc/rfc6901#section-3">RFC 6901 section 3</a>)
+
+            @since RestSchemaValidator 2.5
+        */
+        static string schemaIdentityToken(string token) {
+            return replace(replace(token, "~", "~0"), "/", "~1");
         }
 
         #! Returns the schema whose type builds this schema object takes part in, if it serializes them
@@ -1721,6 +1774,9 @@ public namespace RestSchemaValidator {
                 : "*" + name;
 
             HashDataType t = createHashDataType(required ? AutoHashType : AutoHashOrNothingType, typename);
+            if (schema_identity) {
+                t.setSchemaIdentity(schema_identity);
+            }
             # set before the type is referenced by any field, which a recursive schema does
             if (*hash<DataTypeConstraintInfo> constraints = getConstraintInfo()) {
                 t = cast<HashDataType>(t.copyWithConstraints(constraints));
