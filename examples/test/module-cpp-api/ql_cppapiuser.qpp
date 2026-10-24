@@ -991,6 +991,21 @@ hash<auto> cpp_api_env_snapshot(string prefix) [dom=EXTERNAL_INFO] {
     return rv.release();
 }
 
+//! calls the code while the thread holds an AtomicEnvironmentSetter or a QoreEnvironmentReadLock, and returns its value
+/** @param c the code to call; it must not change the environment
+    @param exclusive true to hold an AtomicEnvironmentSetter, false to hold a QoreEnvironmentReadLock
+
+    @return the value that the code returns
+*/
+auto cpp_api_env_call_holding(code c, bool exclusive) [dom=PROCESS] {
+    if (exclusive) {
+        AtomicEnvironmentSetter env_lock;
+        return c->execValue(nullptr, xsink);
+    }
+    QoreEnvironmentReadLock env_lock;
+    return c->execValue(nullptr, xsink);
+}
+
 //! sets two environment variables to the same value atomically with an AtomicEnvironmentSetter
 /** @param name1 the name of the first variable
     @param name2 the name of the second variable

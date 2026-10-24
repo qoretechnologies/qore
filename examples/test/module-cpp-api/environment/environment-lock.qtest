@@ -55,6 +55,7 @@ class EnvironmentLockTest inherits QUnit::Test {
         addTestCase("negative: a thread holding the lock shared cannot change the environment", \testReadLocked());
         addTestCase("the lock nests in an exclusive hold", \testNestedExclusive());
         addTestCase("fork() while another thread holds the lock", \testForkWhileHeld());
+        addTestCase("only an AtomicEnvironmentSetter holds the lock that fork() waits for", \testForkLockHolders());
         addTestCase("fork() and exec() while other threads change the environment", \testForkExec());
         set_return_value(main());
     }
@@ -141,6 +142,17 @@ class EnvironmentLockTest inherits QUnit::Test {
         background q.push(setenv(name, "other"));
         assertEq(0, q.get());
         assertEq("other", getenv(name));
+    }
+
+    testForkLockHolders() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_env_lock_held() is only in debug builds");
+        }
+        code held = bool sub () { return call_function("dbg_env_lock_held"); };
+        assertFalse(held(), "no lock is held");
+        assertTrue(cpp_api_env_call_holding(held, True), "an AtomicEnvironmentSetter holds it");
+        assertFalse(cpp_api_env_call_holding(held, False), "a QoreEnvironmentReadLock does not hold it");
+        assertFalse(held(), "the lock has been released");
     }
 
     testForkWhileHeld() {

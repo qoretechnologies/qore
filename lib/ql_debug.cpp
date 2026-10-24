@@ -13491,6 +13491,15 @@ void qore_dbg_cares_lookup_env_read() {
     p.cv.notify_all();
 }
 
+//! returns True if the current thread holds the environment lock, which fork() waits for
+/** A thread holds it while it copies a variable or changes the environment, and while it holds an
+    AtomicEnvironmentSetter; a QoreEnvironmentReadLock holds the environment change lock instead, which fork() does
+    not wait for.  Tests use this to check that code calling a library does not hold the lock that fork() waits for.
+*/
+static QoreValue f_dbg_env_lock_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_dbg_env_lock_held_by_current_thread();
+}
+
 //! makes the next c-ares lookup stop until the calling thread changes the environment or finds that it must wait
 /** The next c-ares lookup stops right before c-ares starts it, where c-ares reads the HOSTALIASES environment
     variable for a name without a dot, decrements \a at_read, and continues once the calling thread, changing the
@@ -13682,6 +13691,7 @@ void init_debug_functions(QoreNamespace& qns) {
         nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "entered");
     qns.addBuiltinVariant("dbg_fork_lock_cycle_result", f_dbg_fork_lock_cycle_result, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 0);
+    qns.addBuiltinVariant("dbg_env_lock_held", f_dbg_env_lock_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 0);
     qns.addBuiltinVariant("dbg_env_read_race_arm", f_dbg_env_read_race_arm, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "at_read");
     qns.addBuiltinVariant("dbg_env_read_race_result", f_dbg_env_read_race_result, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
