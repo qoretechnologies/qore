@@ -13251,6 +13251,12 @@ load_local_done:
                     return false;
                 }
                 ensureLValuePathRootLocal(path_inst);
+                // Release the interpreter's own references to the root local (its slot cache entry and the slots
+                // of earlier loads) before the path is navigated, as for an assignment: a statement that only
+                // read the variable, such as "if (!h{a}{b})", leaves them behind, and they make the variable's
+                // containers shared, so that copy-on-write copied them (the whole outer hash of
+                // "++h{a}{b}[0]") on every update, where the AST changes them in place.
+                invalidateLValuePathLocalCaches(path_inst);
                 QoreValue res;
                 bool is_remove = (path_inst->unary_op == LVUnaryOp::Remove
                                 || path_inst->unary_op == LVUnaryOp::Delete);
@@ -13942,6 +13948,13 @@ load_local_done:
                     ? getIRValue(values, path_inst->operands[1]) : QoreValue();
                 QoreValue replacement_val = (path_inst->operands.size() > 2)
                     ? getIRValue(values, path_inst->operands[2]) : QoreValue();
+                // the holders keep the operands while the caches of the root local, which can hold them, are
+                // released before the path is navigated, as in LValuePathUnary: the references the interpreter
+                // keeps to the variable would make its containers shared, so that the splice or extract copied them
+                ValueHolder offset_holder(offset_val.refSelf(), xsink);
+                ValueHolder length_holder(length_val.refSelf(), xsink);
+                ValueHolder replacement_holder(replacement_val.refSelf(), xsink);
+                invalidateLValuePathLocalCaches(path_inst);
                 QoreValue res;
                 // the operation runs in a function so that the lvalue lock is released before values are cleaned
                 // up or the exception is dispatched to an enclosing catch block; returns -1 for an error, 0 for OK

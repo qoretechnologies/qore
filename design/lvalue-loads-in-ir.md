@@ -69,8 +69,7 @@ is kept, and the initializer of a `for` statement, whose value is not used, gets
 to `index.top` copied `index.top` in its first iteration (ProviderIndexUtil::mergeIndexedActions()).
 
 The interpreter also releases its own cached references to the root local (slot cache and earlier load
-slots) before it navigates an assignment, compound assignment, `push`, or `unshift` path, not only
-afterwards (see *Cache Invalidation Rule*).
+slots) before it navigates any lvalue path, not only afterwards (see *Cache Invalidation Rule*).
 
 Regression coverage: `examples/test/ir/lvalue-operand-temps/` checks container identity (with library
 debugging) and values in every execution mode and in a compiled module.
@@ -134,6 +133,33 @@ interpreter must invalidate cached local values for the affected variable:
 
 Invalidating after mutation is too late: the cache may already have inflated
 the refcount and forced COW to mutate a temporary copy.
+
+A statement that only reads the variable leaves such references behind.  In
+
+```qore
+if (!h{id}{msg}) {
+    h{id}{msg} = (0, pos);
+}
+++h{id}{msg}[0];
+```
+
+the condition loads `h`, and the slot cache keeps a reference to its value after the condition's temps
+have been released.  The interpreter's handlers for the unary path updates (increment, decrement, `pop`,
+`shift`, `trim`, `chomp`, `remove`, `delete`) and the ternary ones (`splice`, `extract`) released the
+cache only after the update, so every update of an existing element copied the outer hash, and a loop over
+n keys took time quadratic in n, where the AST changes the containers in place.  Every lvalue path handler
+(`LValuePathAssign`, `LValuePathCompound`, `LValuePathUnary`, `LValuePathBinaryMut`,
+`LValuePathTernary`) now calls `invalidateLValuePathLocalCaches()` before it navigates the path; the
+handlers whose operands are values (assignment, compound assignment, binary and ternary mutations) hold a
+reference to them first, since an operand can be one of the values released.  Native code clears its own
+cached references to the root local before every lvalue path helper (`clearLocalCachedValue()` and
+`clearLocalReloadTracker()` in `QoreIRToLLVM.cpp`).
+
+Regression coverage: `examples/test/ir/lvalue-update-in-place/` counts the hashes and lists copied
+(`dbg_get_container_copy_count()`, with library debugging) by each of these updates after a statement that
+reads the variable, at depths 2 to 4, for local, reference, closure-bound, list, object member, static and
+top-level roots, and checks that a container that another variable holds is still copied; every execution
+mode and a compiled module must report the AST's counts and values.
 
 ## Current Mutation Families
 

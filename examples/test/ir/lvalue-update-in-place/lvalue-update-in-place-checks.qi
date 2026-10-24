@@ -1,0 +1,704 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file lvalue-update-in-place-checks.qi checks that an update of a nested element copies a container only when it is shared
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+/** An operation that changes an element of a nested container in place, such as <tt>++h{a}{b}[0]</tt>,
+    <tt>push h{a}{b}, v</tt> or <tt>splice h{a}{b}, 0, 1</tt>, copies a container on its path only when something
+    else holds that container too (copy-on-write).  A statement that only reads the variable before the update, as
+    in <tt>if (!h{a}{b}) { ... } ++h{a}{b}[0];</tt>, holds nothing once it has run, so the update must still change
+    the variable's containers in place: the AST interpreter does, and a tier that copies the outer hash on every
+    such update makes a loop over it quadratic.
+
+    Each check updates existing elements of a container that only one variable (or member) holds several times,
+    reading the container in a statement of its own before each update, and reports how many hashes and lists were
+    copied (with library debugging, from dbg_get_container_copy_count(); "n/a" without it) and the values it
+    produced; the checks of a shared container report the copies, the changed value, and the value the other holder
+    still sees.  The test requires every execution tier and a compiled module to report what the AST interpreter
+    reports.  Every check runs in its own function.
+*/
+public namespace LValueUpdateInPlace {
+#! the keys of the outer hash of a container
+const Keys = ("k0", "k1", "k2", "k3");
+
+#! the number of updates of each element
+const Rounds = 3;
+
+#! the number of hashes and lists copied in this thread so far, or -1 without library debugging
+int sub copies() {
+    if (!Option::HAVE_LIBRARY_DEBUGGING) {
+        return -1;
+    }
+    return call_function("dbg_get_container_copy_count");
+}
+
+#! the hashes and lists copied since \a before, or "n/a" without library debugging
+string sub copied(int before) {
+    if (before < 0) {
+        return "n/a";
+    }
+    return sprintf("%d", copies() - before);
+}
+
+#! a new list of the integers from 0 to \a n - 1
+/** The list is built element by element: a list literal of constants is a constant that every value made from it
+    shares, so the first update of each such value would copy it.
+*/
+list<int> sub make_list(int n) {
+    list<int> l = ();
+    for (int i = 0; i < n; ++i) {
+        push l, i;
+    }
+    return l;
+}
+
+#! a container that only the variable it is assigned to holds; no element is shared with another value either
+hash<string, hash<string, auto>> sub make_hash() {
+    hash<string, hash<string, auto>> h = {};
+    foreach string key in (Keys) {
+        hash<string, auto> x = {};
+        x.x = make_list(2);
+        hash<string, auto> e = {};
+        e.l = make_list(5);
+        e.n = 0;
+        e.s = " ab \n";
+        e.h = x;
+        e.t0 = 0;
+        e.t1 = 1;
+        e.t2 = 2;
+        h{key} = e;
+    }
+    return h;
+}
+
+#! the value of \a field of each element of \a h, in key order, on one line
+string sub field(hash<string, hash<string, auto>> h, string field) {
+    list<auto> rv = ();
+    foreach string key in (keys h) {
+        push rv, h{key}{field};
+    }
+    return replace(sprintf("%y", rv), "\n", "\\n");
+}
+
+#! the keys of each element of \a h, in key order
+string sub element_keys(hash<string, hash<string, auto>> h) {
+    list<auto> rv = ();
+    foreach string key in (keys h) {
+        push rv, keys h{key};
+    }
+    return sprintf("%y", rv);
+}
+
+#! the original repro: a read in a condition, then an increment of a list element in a hash of hashes
+string sub pre_inc() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"l"}) {
+                c{id}{"l"} = (0, 0, 0, 0, 0);
+            }
+            ++c{id}{"l"}[0];
+        }
+    }
+    return copied(before) + ":" + field(c, "l");
+}
+
+#! a post-increment
+string sub post_inc() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            int v = c{id}{"l"}[1];
+            c{id}{"l"}[1]++;
+            remove v;
+        }
+    }
+    return copied(before) + ":" + field(c, "l");
+}
+
+#! a pre-decrement
+string sub pre_dec() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"l"}) {
+                break;
+            }
+            --c{id}{"l"}[2];
+        }
+    }
+    return copied(before) + ":" + field(c, "l");
+}
+
+#! a post-decrement whose value is used
+string sub post_dec() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    int sum = 0;
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"l"}) {
+                break;
+            }
+            sum += c{id}{"l"}[3]--;
+        }
+    }
+    return copied(before) + ":" + sum + ":" + field(c, "l");
+}
+
+#! an increment of a value at depth 2
+string sub pre_inc_depth2() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}) {
+                break;
+            }
+            ++c{id}{"n"};
+        }
+    }
+    return copied(before) + ":" + field(c, "n");
+}
+
+#! an increment of a list element at depth 4
+string sub pre_inc_depth4() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"h"}{"x"}) {
+                break;
+            }
+            ++c{id}{"h"}{"x"}[1];
+        }
+    }
+    return copied(before) + ":" + field(c, "h");
+}
+
+#! a compound assignment
+string sub plus_equals() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"l"}) {
+                break;
+            }
+            c{id}{"l"}[0] += 2;
+        }
+    }
+    return copied(before) + ":" + field(c, "l");
+}
+
+#! another compound assignment
+string sub multiply_equals() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"l"}) {
+                break;
+            }
+            c{id}{"l"}[4] *= 2;
+        }
+    }
+    return copied(before) + ":" + field(c, "l");
+}
+
+#! an assignment
+string sub assign_element() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    int pos = 0;
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"l"}) {
+                break;
+            }
+            c{id}{"l"}[0] = ++pos;
+        }
+    }
+    return copied(before) + ":" + field(c, "l");
+}
+
+#! a push
+string sub push_list() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"l"}) {
+                break;
+            }
+            push c{id}{"l"}, r;
+        }
+    }
+    return copied(before) + ":" + field(c, "l");
+}
+
+#! an unshift
+string sub unshift_list() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"l"}) {
+                break;
+            }
+            unshift c{id}{"l"}, r;
+        }
+    }
+    return copied(before) + ":" + field(c, "l");
+}
+
+#! a pop whose value is used
+string sub pop_list() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    int sum = 0;
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"l"}) {
+                break;
+            }
+            sum += pop c{id}{"l"};
+        }
+    }
+    return copied(before) + ":" + sum + ":" + field(c, "l");
+}
+
+#! a shift
+string sub shift_list() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"l"}) {
+                break;
+            }
+            shift c{id}{"l"};
+        }
+    }
+    return copied(before) + ":" + field(c, "l");
+}
+
+#! a splice
+string sub splice_list() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"l"}) {
+                break;
+            }
+            splice c{id}{"l"}, 0, 1;
+        }
+    }
+    return copied(before) + ":" + field(c, "l");
+}
+
+#! an extract whose value is used
+string sub extract_list() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    int sum = 0;
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"l"}) {
+                break;
+            }
+            sum += (extract c{id}{"l"}, 1, 1)[0];
+        }
+    }
+    return copied(before) + ":" + sum + ":" + field(c, "l");
+}
+
+#! a remove of a hash key
+string sub remove_key() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}) {
+                break;
+            }
+            remove c{id}{"t" + r};
+        }
+    }
+    return copied(before) + ":" + element_keys(c);
+}
+
+#! a delete of a hash key
+string sub delete_key() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}) {
+                break;
+            }
+            delete c{id}{"t" + r};
+        }
+    }
+    return copied(before) + ":" + element_keys(c);
+}
+
+#! a remove of a list element
+string sub remove_element() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"l"}) {
+                break;
+            }
+            remove c{id}{"l"}[r];
+        }
+    }
+    return copied(before) + ":" + field(c, "l");
+}
+
+#! a trim of a string
+string sub trim_string() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"s"}) {
+                break;
+            }
+            trim c{id}{"s"};
+        }
+    }
+    return copied(before) + ":" + field(c, "s");
+}
+
+#! a chomp of a string
+string sub chomp_string() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"s"}) {
+                break;
+            }
+            chomp c{id}{"s"};
+        }
+    }
+    return copied(before) + ":" + field(c, "s");
+}
+
+#! a regular expression substitution
+string sub subst_string() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"s"}) {
+                break;
+            }
+            c{id}{"s"} =~ s/ /_/;
+        }
+    }
+    return copied(before) + ":" + field(c, "s");
+}
+
+#! a transliteration
+string sub transliterate_string() {
+    hash<string, hash<string, auto>> c = make_hash();
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"s"}) {
+                break;
+            }
+            c{id}{"s"} =~ tr/a-b/b-c/;
+        }
+    }
+    return copied(before) + ":" + field(c, "s");
+}
+
+#! an increment in a list of hashes
+string sub list_root() {
+    list<hash<auto>> l = ();
+    foreach string id in (Keys) {
+        hash<auto> e = {};
+        e.id = id;
+        e.l = make_list(2);
+        push l, e;
+    }
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        for (int i = 0; i < l.size(); ++i) {
+            if (!l[i]{"l"}) {
+                break;
+            }
+            ++l[i]{"l"}[1];
+            push l[i]{"l"}, r;
+        }
+    }
+    string rv = copied(before);
+    return sprintf("%s:%y", rv, (map $1.l, l));
+}
+
+#! an update through a reference to the variable
+string sub reference_root() {
+    hash<string, hash<string, auto>> c = make_hash();
+    reference<hash<string, hash<string, auto>>> ref = \c;
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!ref{id}{"l"}) {
+                break;
+            }
+            ++ref{id}{"l"}[0];
+            splice ref{id}{"l"}, 4, 1;
+        }
+    }
+    return copied(before) + ":" + field(c, "l");
+}
+
+#! an update of a variable that a closure captures
+string sub closure_bound() {
+    hash<string, hash<string, auto>> c = make_hash();
+    code<int()> size = int sub () { return c.size(); };
+    int before = copies();
+    for (int r = 0; r < Rounds; ++r) {
+        foreach string id in (Keys) {
+            if (!c{id}{"l"} || !size()) {
+                break;
+            }
+            ++c{id}{"l"}[0];
+            pop c{id}{"l"};
+        }
+    }
+    return copied(before) + ":" + field(c, "l");
+}
+
+#! a container that another variable also holds is copied, and the other variable does not see the change
+string sub alias_root() {
+    hash<string, hash<string, auto>> c = make_hash();
+    if (!c{"k0"}{"l"}) {
+        return "unexpected";
+    }
+    hash<string, hash<string, auto>> other = c;
+    int before = copies();
+    ++c{"k0"}{"l"}[0];
+    # the outer hash, the element hash, and the list were copied once; the next update changes them in place
+    if (!c{"k0"}{"l"}) {
+        return "unexpected";
+    }
+    ++c{"k0"}{"l"}[0];
+    string rv = copied(before);
+    return sprintf("%s:%y:%y", rv, c{"k0"}{"l"}, other{"k0"}{"l"});
+}
+
+#! a list that another variable also holds is copied, and the other variable does not see the change
+string sub alias_element() {
+    hash<string, hash<string, auto>> c = make_hash();
+    list<auto> kept = c{"k1"}{"l"};
+    int before = copies();
+    if (!c{"k1"}{"l"}) {
+        return "unexpected";
+    }
+    ++c{"k1"}{"l"}[0];
+    splice c{"k1"}{"l"}, 1, 1;
+    string rv = copied(before);
+    return sprintf("%s:%y:%y", rv, c{"k1"}{"l"}, kept);
+}
+
+#! the unary and splice updates copy a shared container too
+string sub alias_unary() {
+    hash<string, hash<string, auto>> c = make_hash();
+    hash<string, hash<string, auto>> other = c;
+    int before = copies();
+    if (!c{"k2"}{"l"}) {
+        return "unexpected";
+    }
+    pop c{"k2"}{"l"};
+    string rv = copied(before);
+    hash<string, hash<string, auto>> other2 = c;
+    before = copies();
+    if (!c{"k2"}{"l"}) {
+        return "unexpected";
+    }
+    splice c{"k2"}{"l"}, 0, 1;
+    rv += "," + copied(before);
+    return sprintf("%s:%y:%y:%y", rv, c{"k2"}{"l"}, other2{"k2"}{"l"}, other{"k2"}{"l"});
+}
+
+#! an object with a container member
+public class Holder {
+    public {
+        hash<string, hash<string, auto>> m;
+        static hash<string, hash<string, auto>> sv;
+    }
+
+    constructor() {
+        m = make_hash();
+    }
+
+    #! updates elements of a member
+    string member() {
+        int before = copies();
+        for (int r = 0; r < Rounds; ++r) {
+            foreach string id in (Keys) {
+                if (!m{id}{"l"}) {
+                    break;
+                }
+                ++m{id}{"l"}[0];
+                if (!m{id}{"l"}) {
+                    break;
+                }
+                push m{id}{"l"}, r;
+                if (!m{id}{"l"}) {
+                    break;
+                }
+                splice m{id}{"l"}, 1, 1;
+                if (!m{id}{"l"}) {
+                    break;
+                }
+                pop m{id}{"l"};
+            }
+        }
+        return copied(before) + ":" + field(m, "l");
+    }
+
+    #! updates elements of a member given with self
+    string selfMember() {
+        int before = copies();
+        for (int r = 0; r < Rounds; ++r) {
+            foreach string id in (Keys) {
+                if (!self.m{id}{"l"}) {
+                    break;
+                }
+                ++self.m{id}{"l"}[0];
+                if (!self.m{id}{"l"}) {
+                    break;
+                }
+                self.m{id}{"l"}[1] += 3;
+                if (!self.m{id}) {
+                    break;
+                }
+                remove self.m{id}{"t" + r};
+            }
+        }
+        return copied(before) + ":" + field(m, "l") + ":" + element_keys(m);
+    }
+
+    #! a member that a local variable also holds is copied, and the local variable does not see the change
+    string aliasMember() {
+        hash<string, hash<string, auto>> other = m;
+        int before = copies();
+        if (!m{"k0"}{"l"}) {
+            return "unexpected";
+        }
+        ++m{"k0"}{"l"}[0];
+        string rv = copied(before);
+        return sprintf("%s:%y:%y", rv, m{"k0"}{"l"}, other{"k0"}{"l"});
+    }
+
+    #! updates elements of a static class variable
+    static string staticVar() {
+        sv = make_hash();
+        int before = copies();
+        for (int r = 0; r < Rounds; ++r) {
+            foreach string id in (Keys) {
+                if (!sv{id}{"l"}) {
+                    break;
+                }
+                ++sv{id}{"l"}[0];
+                if (!sv{id}{"l"}) {
+                    break;
+                }
+                extract sv{id}{"l"}, 1, 1;
+            }
+        }
+        return copied(before) + ":" + field(sv, "l");
+    }
+}
+
+#! updates elements of an object member
+string sub member() {
+    Holder h();
+    return h.member();
+}
+
+#! updates elements of an object member given with self
+string sub self_member() {
+    Holder h();
+    return h.selfMember();
+}
+
+#! a member that a local variable also holds
+string sub alias_member() {
+    Holder h();
+    return h.aliasMember();
+}
+
+#! updates elements of a static class variable
+string sub static_var() {
+    return Holder::staticVar();
+}
+
+#! runs all checks and returns their results
+public hash<string, auto> sub get_results() {
+    return {
+        "pre-inc": pre_inc(),
+        "post-inc": post_inc(),
+        "pre-dec": pre_dec(),
+        "post-dec": post_dec(),
+        "pre-inc-depth2": pre_inc_depth2(),
+        "pre-inc-depth4": pre_inc_depth4(),
+        "plus-equals": plus_equals(),
+        "multiply-equals": multiply_equals(),
+        "assign": assign_element(),
+        "push": push_list(),
+        "unshift": unshift_list(),
+        "pop": pop_list(),
+        "shift": shift_list(),
+        "splice": splice_list(),
+        "extract": extract_list(),
+        "remove-key": remove_key(),
+        "delete-key": delete_key(),
+        "remove-element": remove_element(),
+        "trim": trim_string(),
+        "chomp": chomp_string(),
+        "regex-subst": subst_string(),
+        "transliterate": transliterate_string(),
+        "list-root": list_root(),
+        "reference-root": reference_root(),
+        "closure-bound": closure_bound(),
+        "alias-root": alias_root(),
+        "alias-element": alias_element(),
+        "alias-unary": alias_unary(),
+        "member": member(),
+        "self-member": self_member(),
+        "alias-member": alias_member(),
+        "static-var": static_var(),
+    };
+}
+}
