@@ -5235,6 +5235,15 @@ while (*binary chunk = input.read(65536)) {
       nesting, and the stack was only checked by statements and calls; parse initialization now marks every 16th
       level of nesting, whose evaluation checks the stack and raises \c STACK-LIMIT-EXCEEDED
 
+    - Fixed deep recursion on the primary thread overflowing the stack instead of raising \c STACK-LIMIT-EXCEEDED
+      once a runtime that enforces the primary thread's stack size, such as the JVM started by the \c jni module, had
+      set its limit with \c q_enforce_thread_size_on_primary_thread(): the limit was set for the default thread
+      stack size even where the primary thread's stack is smaller, from the position of the stack when %Qore started
+      instead of the real start of the stack, and without the extra stack guard of the primary thread.  The limit is
+      now derived from the real start and size of the stack, keeps that guard, and with the new
+      \c q_enforce_stack_size_on_primary_thread() C++ API, also accounts for the stack that the runtime protects at
+      the end of the stack (<a href="https://github.com/qoretechnologies/qore/issues/5518">issue 5518</a>)
+
     - Fixed @ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()" accepting a stack size no
       larger than the stack reserved at the end of each thread's stack for the stack guard (80KB on x86_64 and
       aarch64): every thread then raised \c STACK-LIMIT-EXCEEDED as soon as it ran any code, reporting a limit of

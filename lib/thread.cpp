@@ -148,6 +148,8 @@ DLLLOCAL pthread_mutexattr_t ma_recursive;
 QoreThreadLock stack_lck;
 // 8MB default thread stack size
 #define STACK_SIZE (8 * 1024 * 1024)
+// issue #4392: the additional stack guard of the primary thread
+#define QORE_PRIMARY_THREAD_EXTRA_STACK_GUARD (64 * 1024)
 
 // default size and limit for qore threads; to be set in init_qore_threads()
 size_t qore_thread_stack_size = 0;
@@ -508,6 +510,10 @@ public:
     size_t stack_limit;
     // this thread's stack size for error reporting
     size_t stack_size;
+    // the primary thread only: where its stack starts (the highest address of a stack that grows down) and its full
+    // size, as determined when its ThreadData was created; see enforcePrimaryStackSize()
+    size_t primary_stack_top = 0;
+    size_t primary_stack_size = 0;
 
 #ifdef QORE_CHECKPOINT_STACK
     size_t last_stack_pos = 0;
@@ -626,7 +632,7 @@ public:
                 }
 #endif
                 // issue #4392: add 64K of additional stack in the primary thread
-                stack_guard += 64 * 1024;
+                stack_guard += QORE_PRIMARY_THREAD_EXTRA_STACK_GUARD;
             } else {
                 stack_size = get_stack_size();
             }
@@ -674,6 +680,25 @@ public:
                 }
             }
 #endif // #ifdef QORE_HAVE_GET_STACK_SIZE
+
+            if (tid == initial_thread) {
+                // the limit above is left as it is; the real bounds are only used when the stack size is enforced
+                // later by enforcePrimaryStackSize()
+                primary_stack_top = stack_start;
+                primary_stack_size = stack_size;
+#ifdef QORE_HAVE_GET_STACK_SIZE
+                size_t real_base = 0;
+                size_t real_size = 0;
+                if (!QorePThreadAttr::getCurrentThreadStackBounds(real_base, real_size) && real_base && real_size) {
+#ifdef STACK_DIRECTION_DOWN
+                    primary_stack_top = real_base + real_size;
+#else
+                    primary_stack_top = real_base;
+#endif
+                    primary_stack_size = real_size;
+                }
+#endif // #ifdef QORE_HAVE_GET_STACK_SIZE
+            }
 
 #ifdef IA64_64
             // RSE stack grows up
@@ -792,18 +817,31 @@ public:
     }
 
 #ifdef QORE_MANAGE_STACK
-    DLLLOCAL void setStackSize(size_t new_stack_size) {
-        if (stack_size != new_stack_size) {
-            stack_size = new_stack_size;
-            // a stack no larger than the guard leaves no usable stack; see the constructor
-            size_t usable = getUsableStackSize();
-#ifdef STACK_DIRECTION_DOWN
-            stack_limit = stack_start - usable;
-#else
-            stack_limit = stack_start + usable;
-#endif
-            printd(5, "ThreadData::setStackSize() set stack size to: %lld\n", new_stack_size);
+    //! Sets the stack limit of the primary thread when another runtime enforces a maximum stack size on it
+    /** The limit is derived from the real start of the stack where it could be determined, and keeps the stack guard
+        of the primary thread above the end of the stack that the thread can use.
+
+        @param max_size the maximum stack size enforced on the thread; 0 for no maximum
+        @param protected_size the number of bytes at the end of the stack that the thread cannot use
+    */
+    DLLLOCAL void enforcePrimaryStackSize(size_t max_size, size_t protected_size) {
+        assert(tid == initial_thread);
+        if (!primary_stack_size) {
+            // the thread has no stack limit
+            return;
         }
+        size_t size = (max_size && max_size < primary_stack_size) ? max_size : primary_stack_size;
+        stack_size = size > protected_size ? size - protected_size : 0;
+        size_t stack_guard = QORE_STACK_GUARD + QORE_PRIMARY_THREAD_EXTRA_STACK_GUARD;
+        // a stack no larger than the guard leaves no usable stack; see the constructor
+        size_t usable = stack_size > stack_guard ? stack_size - stack_guard : 0;
+#ifdef STACK_DIRECTION_DOWN
+        stack_limit = primary_stack_top - usable;
+#else
+        stack_limit = primary_stack_top + usable;
+#endif
+        printd(5, "ThreadData::enforcePrimaryStackSize() max: %lld protected: %lld size: %lld usable: %lld\n",
+            max_size, protected_size, size, usable);
     }
 #endif
 };
@@ -4891,6 +4929,17 @@ size_t q_thread_set_stack_size(size_t size, ExceptionSink* xsink) {
 
 void q_enforce_thread_size_on_primary_thread() {
 #ifdef QORE_MANAGE_STACK
+    size_t size;
+    {
+        AutoLocker al(stack_lck);
+        size = qore_thread_stack_size;
+    }
+    q_enforce_stack_size_on_primary_thread(size, 0);
+#endif
+}
+
+void q_enforce_stack_size_on_primary_thread(size_t max_size, size_t protected_size) {
+#ifdef QORE_MANAGE_STACK
     if (initial_thread == -1) {
         return;
     }
@@ -4900,7 +4949,7 @@ void q_enforce_thread_size_on_primary_thread() {
         // make sure accesses to stack info are made locked; the stack lock is a leaf below the thread list (see
         // QoreForkHandlers.h)
         AutoLocker al(stack_lck);
-        td->setStackSize(qore_thread_stack_size);
+        td->enforcePrimaryStackSize(max_size, protected_size);
     }
 #endif
 }

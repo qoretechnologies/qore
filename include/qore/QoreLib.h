@@ -131,6 +131,9 @@ typedef std::vector<int> sig_vec_t;
 //! defined for q_enforce_thread_size_on_primary_thread()
 #define _QORE_HAS_ENFORCE_THREAD_SIZE_ON_PRIMARY_THREAD 1
 
+//! defined for q_enforce_stack_size_on_primary_thread()
+#define _QORE_HAS_ENFORCE_STACK_SIZE_ON_PRIMARY_THREAD 1
+
 //! defined for qore_cancellable_poll() and the cancellation wakeup descriptor API (qore_cancel_wakeup_register())
 #define _QORE_HAS_CANCELLABLE_POLL 1
 
@@ -1225,9 +1228,28 @@ DLLEXPORT size_t q_thread_stack_used();
 DLLEXPORT int q_check_stack(ExceptionSink* xsink);
 
 //! Sets the thread stack limit on the primary thread
-/** @since %Qore 1.19
+/** Enforces the default stack size for new threads as the maximum stack size of the primary thread; equivalent to
+    q_enforce_stack_size_on_primary_thread() with the default thread stack size and no protected stack
+
+    @since %Qore 1.19
 */
 DLLEXPORT void q_enforce_thread_size_on_primary_thread();
+
+//! Sets the stack limit of the primary thread when another runtime, such as a JVM, enforces a maximum stack size on it
+/** The stack limit of the primary thread is derived from the real start of its stack where it can be determined, so
+    that the primary thread's stack guard lies above the end of the stack that the thread can use: the smaller of
+    the real stack size and  max_size, less  protected_size.
+
+    @param max_size the maximum stack size that the runtime enforces on the primary thread; 0 for no maximum, in
+    which case the real stack size is used
+    @param protected_size the number of bytes at the end of the primary thread's stack that the thread cannot use,
+    such as stack zones that the runtime protects
+
+    @note this function does nothing if the Qore library was not compiled with stack management support
+
+    @since %Qore 3.0
+*/
+DLLEXPORT void q_enforce_stack_size_on_primary_thread(size_t max_size, size_t protected_size);
 
 //! Returns true if there is an active %Qore exception in the current thread
 /** @since %Qore 2.0
