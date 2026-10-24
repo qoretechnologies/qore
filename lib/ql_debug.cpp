@@ -12129,6 +12129,16 @@ static QoreValue f_dbg_get_live_bigint_count(const QoreListNode* params, Runtime
     return q_get_live_bigint_count();
 }
 
+//! returns the number of hashes and lists copied in the current thread
+/** Copy-on-write in an lvalue operation copies a container that is not unique, so tests compare the count before
+    and after an update to verify that a container that only one variable holds is changed in place in every
+    execution mode, as in the AST interpreter, and that a container that another variable also holds is copied.
+*/
+static QoreValue f_dbg_get_container_copy_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_container_copy_count();
+}
+
 //! returns the size of the innermost running IR-interpreter frame's temp cleanup vector on the current thread
 /** A break or continue that leaves a temp scope without draining it used to leave a sentinel on this vector every
     time it executed, so the vector grew without bound in a long-running loop and every later cleanup scan got
@@ -13647,6 +13657,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_region_walk_count", f_dbg_get_region_walk_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_live_bigint_count", f_dbg_get_live_bigint_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_container_copy_count", f_dbg_get_container_copy_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ir_cleanup_entries", f_dbg_get_ir_cleanup_entries, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);

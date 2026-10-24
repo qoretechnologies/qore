@@ -403,6 +403,16 @@ DLLLOCAL bool needs_scan(const QoreValue& v);
     leaks it; tests compare the count before and after the code under test; see dbg_get_live_bigint_count().
 */
 DLLLOCAL int64 q_get_live_bigint_count();
+
+//! Returns the number of hashes and lists that QoreHashNode::copy() and QoreListNode::copy() made in the current thread
+/** Copy-on-write in an lvalue operation copies a container that is not unique with these functions, so tests use
+    the count to verify that a container that only one variable holds is changed in place and that a shared one is
+    copied; see dbg_get_container_copy_count().
+*/
+DLLLOCAL int64 q_get_container_copy_count();
+
+//! Counts a hash or list copy made in the current thread; see q_get_container_copy_count()
+DLLLOCAL void q_inc_container_copy_count();
 #endif
 // increments or decrements the object count depending on the sign of the argument (cannot be 0)
 DLLLOCAL void inc_container_obj(const AbstractQoreNode* n, int dt);
