@@ -62,7 +62,8 @@ access (below), because the value belongs to that object.
 `QoreReflectionCaller::Access` distinguishes structural navigation, value access and member-default evaluation.
 Every checked operation first permits access from the target itself or from its creator chain (including independent
 Programs). Other callers must restrict no functional domain the target allows and must have no governing sandbox
-manager other than the target's own. `PO_IN_MODULE` is an execution-context marker, not a restricting capability.
+manager other than the target's own (see [Sandbox managers](#sandbox-managers)). `PO_IN_MODULE` is an
+execution-context marker, not a restricting capability.
 
 |!Operation|!Explicitly-allowed domains|!Execution and values
 |Structural navigation (`Structural`)|Not compared|Only declarations and handles; no initializers or target state
@@ -87,7 +88,7 @@ The first non-module Program may be the target, but the walk never crosses it. A
 therefore cannot borrow a more privileged outer caller's authority. An unrelated target, including a Program
 created by that outer caller, is not authorized by this rule.
 
-Restricting domains, sandbox-manager identity, callable domains, and the runtime restriction override remain in
+Restricting domains, the sandbox-manager rule, callable domains, and the runtime restriction override remain in
 force. This rule grants no general module exemption and does not expose inactive Programs to module callbacks.
 The context walk checks cooperative cancellation every 100 entries.
 
@@ -104,7 +105,7 @@ non-builtin and module-public, its source Program must be the reflection handle'
 the application must resolve the class's path to the same class ID and source Program. A same-named unrelated
 class does not qualify. The walk stops at the first application even if an outer application imported the class.
 That application's restricting domains must also be compatible with the target. The captured caller's domain
-checks, sandbox-manager identity and runtime restriction override remain enforced. Normal methods, copy and
+checks, the sandbox-manager rule and runtime restriction override remain enforced. Normal methods, copy and
 destruction still check the object's Program separately.
 
 This does not grant access to globals, static members, constants, functions, private module classes or builtin
@@ -116,7 +117,7 @@ This implements option (a) in issue #5483: retain the trusted-module exception *
 `AbstractMember::getDefaultValue()` and `TypedHash::doCast*()` may evaluate arbitrary member-initializer expressions.
 A non-module caller without the target's explicitly-allowed domains is refused before evaluation. A user module (`PO_IN_MODULE`, which user code cannot set)
 can continue evaluating defaults handed to it by a Program using injection or debugging. Restricting domains and
-sandbox-manager identity are still checked. This preserves `DataProvider::HashDeclDataType` with both source and AOT
+the sandbox-manager rule are still checked. This preserves `DataProvider::HashDeclDataType` with both source and AOT
 modules, whose module Programs need not inherit their loader's explicitly-allowed domains. The general module
 exception for navigation and all value access has been removed; the default-specific exception is intentional.
 
@@ -149,6 +150,27 @@ the same path in **P's own** tree (`qore_program_find_namespace()`), or raises `
 navigation never leaves the reflection object's own Program by following an inherited symbol's declaring namespace —
 which was the namespace-navigation exposure.
 
+### Sandbox managers
+
+A `QoreSandboxManager` is not bound to code statically: the manager that governs filesystem and network access,
+interrupts and thread limits is resolved for each operation by walking the call stack — the current Program, then the
+calling Programs, then the sandbox inherited by the thread
+([thread-sandbox-inheritance.md](thread-sandbox-inheritance.md)). The caller captures its governing manager in
+`QoreReflectionCaller`, and `checkProgramAccess()` compares it with the target Program's own manager:
+
+|!Target Program|!Caller without a governing manager|!Caller with a governing manager
+|Has its own manager|Allowed (subject to the other checks)|Allowed only if it is the same manager
+|User module Program (`PO_IN_MODULE`) without a manager|Allowed|Allowed: the module's code runs under the caller's manager
+|Any other Program without a manager|Allowed|Refused
+
+A user module Program never has a manager of its own: whichever Program loaded it, sandbox resolution walks out of
+it to the code that calls it, so module code is governed by its caller's sandbox — reached through reflection exactly
+as when the caller calls the module directly. A sandboxed application can therefore use a factory in one module
+(`DataProvider`) that constructs a provider class of another (`CsvUtil`) through reflection; the provider's
+filesystem and network access in its constructor and methods is still checked against the application's sandbox.
+User code cannot set `PO_IN_MODULE`, so an application Program cannot claim this. An application Program without a
+manager is not governed by a sandboxed caller's manager for its own state, so a sandboxed caller is refused.
+
 ### Sibling caveat
 
 The "at least as privileged" rule lets **two sibling Programs with identical parse options and no sandbox manager**
@@ -159,7 +181,9 @@ handle.
 
 **Qorus tenants are not affected.** A sandboxed Qorus interface Program forbids reflection outright (`PO_NO_REFLECTION`
 is part of `PO_LOCKDOWN`) and has its own `QoreSandboxManager`, so it is never "equally privileged and unmanaged"
-with respect to another tenant or to qorus-core, and it cannot use reflection at all.
+with respect to another tenant or to qorus-core, and it cannot use reflection at all. Module code that an interface
+calls does use reflection on its behalf — a `DataProvider` factory constructing a provider class of another module —
+under the [sandbox-manager rule](#sandbox-managers): the provider module's code runs under the interface's sandbox.
 
 ## Entry points
 
@@ -273,9 +297,9 @@ in an interface Program whose restrictions allow the class — are unaffected.
 `reflection-operation-access.qtest` checks each operation class with independent sibling Programs using injection,
 debugging and both capabilities. It asserts that structural inspection has no initializer side effects, full access
 is required at execution/value boundaries, denied writes and calls leave state unchanged, and restricting domains
-and distinct sandbox managers still deny structural access. It covers fixed and selected call variants, all four
-typed-hash casts, builtin Program construction and object factories, object members/copy/destruction, enum scalar
-values and the constant-handle Program identity.
+and a caller governed by a different sandbox manager than an application target still deny structural access. It
+covers fixed and selected call variants, all four typed-hash casts, builtin Program construction and object
+factories, object members/copy/destruction, enum scalar values and the constant-handle Program identity.
 `HashDeclDataTypeCallerPrivilege.qtest` uses an expression initializer to exercise the retained module-default
 exception and record conversion; the ordinary non-module reader remains denied. The `ReflectionAccessProbe` test
 module proves the exception does not grant module callers global reads, writes or arbitrary function calls. Existing
@@ -285,6 +309,9 @@ caller-domain and namespace-navigation tests cover builtin calls, creators, tran
 `FactoryCallerPrivilege.qtest` exercises a provider module with injection and debugger capabilities that the
 DataProvider caller lacks: both factory creation paths, the single-constructor fallback, all seven reflection
 constructor entry points and a static method variant. It rejects an intervening application without the import,
-a same-named unrelated class, restricting-domain and sandbox mismatches, private classes, builtin constructors,
-global reads and a handle bound to an unrelated Program that imported the same class. The fixtures are tested
+a same-named unrelated class, restricting-domain mismatches, private classes, builtin constructors, global reads and
+a handle bound to an unrelated Program that imported the same class. A sandboxed importer constructs the class
+through every entry point, and the provider's file and loopback-network access in its constructor is allowed or
+denied by the importer's own sandbox. A caller governed by another manager is refused for a Program with a manager
+of its own and for an application Program without one, and allowed with the target's own manager. The fixtures are tested
 from source and compiled modules across AST, IR, JIT and tiered execution.

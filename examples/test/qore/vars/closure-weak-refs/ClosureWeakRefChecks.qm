@@ -38,11 +38,35 @@ module ClosureWeakRefChecks {
     heap-allocated variable instead of in the frame, and each execution engine reads and writes it through that
     variable.  These checks give such variables weak references (\c ":=") to a hash or a list, and verify that
     the value the weak reference points to is neither released early nor rejected by the variable's type.
+    Object checks also verify that calls through a weak reference raise OBJECT-ALREADY-DELETED after destruction,
+    whether read directly, through a reference, or inside a closure (issue 5509).
 
     The checks are in a module so that the same code can be run from source in each execution mode and as a
     compiled (AOT) module.  Each check returns 1 if it passed and 0 if it did not.
 */
 public namespace ClosureWeakRefChecks {
+    #! records destruction independently of the object reached through a weak reference
+    class Target {
+        public {
+            int value = 7;
+        }
+        private {
+            reference<int> destroyed;
+        }
+
+        constructor(reference<int> counter) {
+            destroyed = \counter;
+        }
+
+        destructor() {
+            ++destroyed;
+        }
+
+        int ping() {
+            return value;
+        }
+    }
+
     #! takes a reference, which makes the variable it is given closure-bound
     sub touch(reference<auto> r) {
     }
@@ -60,6 +84,12 @@ public namespace ClosureWeakRefChecks {
             "weak-softlist": check_weak_softlist(),
             "weak-typed-list": check_weak_typed_list(),
             "weak-list-type-error": check_weak_list_type_error(),
+            "weak-object-local": check_weak_object_local(),
+            "weak-object-captured-direct": check_weak_object_captured_direct(),
+            "weak-object-closure": check_weak_object_closure(),
+            "weak-object-typed-closure": check_weak_object_typed_closure(),
+            "weak-object-escaped-closure": check_weak_object_escaped_closure(),
+            "weak-object-reference": check_weak_object_reference(),
         };
     }
 
@@ -163,4 +193,142 @@ public namespace ClosureWeakRefChecks {
         }
         return 0;
     }
+
+    #! an uncaptured local must reject a pseudo-method call after the last strong reference is released
+    int sub check_weak_object_local() {
+        int destroyed = 0;
+        auto weak;
+        {
+            Target o(\destroyed);
+            weak := o;
+            if (!weak.val() || weak.ping() != 7) {
+                return 0;
+            }
+        }
+        if (destroyed != 1) {
+            return 0;
+        }
+        try {
+            weak.val();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err == "OBJECT-ALREADY-DELETED" ? 1 : 0;
+        }
+        return 0;
+    }
+
+    #! capturing the weak variable must not change the result of a direct read in its declaring function
+    int sub check_weak_object_captured_direct() {
+        int destroyed = 0;
+        auto weak;
+        code<auto()> read = auto sub () { return weak.val(); };
+        {
+            Target o(\destroyed);
+            weak := o;
+            if (!read()) {
+                return 0;
+            }
+        }
+        if (destroyed != 1) {
+            return 0;
+        }
+        try {
+            weak.val();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err == "OBJECT-ALREADY-DELETED" ? 1 : 0;
+        }
+        return 0;
+    }
+
+    #! returns whether a call rejected its destroyed receiver with the required exception
+    bool sub rejects_deleted(code<auto()> read) {
+        try {
+            read();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err == "OBJECT-ALREADY-DELETED";
+        }
+        return False;
+    }
+
+    #! pseudo-methods, ordinary methods, missing methods and copy all reject a destroyed captured receiver
+    int sub check_weak_object_closure() {
+        int destroyed = 0;
+        auto weak;
+        code<auto()> val = auto sub () { return weak.val(); };
+        code<auto()> name = auto sub () { return weak.className(); };
+        code<auto()> ping = auto sub () { return weak.ping(); };
+        code<auto()> missing = auto sub () { return weak.missing(); };
+        code<auto()> copy = auto sub () { return weak.copy(); };
+        {
+            Target o(\destroyed);
+            weak := o;
+            if (!val() || name() != "Target" || ping() != 7) {
+                return 0;
+            }
+        }
+        if (destroyed != 1) {
+            return 0;
+        }
+        return rejects_deleted(val) && rejects_deleted(name) && rejects_deleted(ping)
+            && rejects_deleted(missing) && rejects_deleted(copy) ? 1 : 0;
+    }
+
+    #! a statically typed captured receiver follows the same rules as an auto receiver
+    int sub check_weak_object_typed_closure() {
+        int destroyed = 0;
+        *Target weak;
+        code<auto()> val = auto sub () { return weak.val(); };
+        code<auto()> ping = auto sub () { return weak.ping(); };
+        {
+            Target o(\destroyed);
+            weak := o;
+            if (!val() || ping() != 7) {
+                return 0;
+            }
+        }
+        return destroyed == 1 && rejects_deleted(val) && rejects_deleted(ping) ? 1 : 0;
+    }
+
+    #! returns a closure whose weak reference survives both the target and its creating frame
+    code<auto()> sub make_deleted_reader(reference<int> destroyed) {
+        Target o(\destroyed);
+        auto weak := o;
+        return auto sub () { return weak.val(); };
+    }
+
+    #! repeated calls must keep raising the exception without reviving or destroying the target again
+    int sub check_weak_object_escaped_closure() {
+        int destroyed = 0;
+        code<auto()> read = make_deleted_reader(\destroyed);
+        if (destroyed != 1) {
+            return 0;
+        }
+        for (int i = 0; i < 3; ++i) {
+            if (!rejects_deleted(read)) {
+                return 0;
+            }
+        }
+        return destroyed == 1 ? 1 : 0;
+    }
+
+    #! reference parameters must retain the receiver's deleted state
+    int sub read_deleted_reference(reference<auto> weak) {
+        try {
+            weak.val();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err == "OBJECT-ALREADY-DELETED" ? 1 : 0;
+        }
+        return 0;
+    }
+
+    #! passing a weak variable by reference must not turn a destroyed receiver into NOTHING
+    int sub check_weak_object_reference() {
+        int destroyed = 0;
+        auto weak;
+        {
+            Target o(\destroyed);
+            weak := o;
+        }
+        return destroyed == 1 ? read_deleted_reference(\weak) : 0;
+    }
+
 }

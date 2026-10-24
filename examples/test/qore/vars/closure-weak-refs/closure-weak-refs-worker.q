@@ -8,6 +8,13 @@
 
 %requires ClosureWeakRefChecks
 
-foreach hash<auto> i in (ClosureWeakRefChecks::get_results().pairIterator()) {
+# Repeat so ExecModeHarness's thresholds exercise the AST, IR and native tiers in tiered mode.
+hash<string, int> results = {};
+for (int run = 0; run < 3; ++run) {
+    foreach hash<auto> i in (ClosureWeakRefChecks::get_results().pairIterator()) {
+        results{i.key} = (results{i.key} ?? 1) & i.value;
+    }
+}
+foreach hash<auto> i in (results.pairIterator()) {
     printf("%s=%d\n", i.key, i.value);
 }

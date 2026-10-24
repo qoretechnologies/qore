@@ -41,6 +41,25 @@ public namespace ReflectionFactoryProvider {
         }
     }
 
+    #! does file or network I/O in its constructor, so the sandbox that governs its construction can be tested
+    public class IoProvider inherits AbstractDataProvider {
+        private { string result = "none"; }
+        constructor(*hash<auto> options) {
+            if (options.path) {
+                result = ReadOnlyFile::readTextFile(options.path);
+            } else if (options.port) {
+                Socket sock();
+                sock.connect(sprintf("127.0.0.1:%d", options.port), 5s);
+                sock.close();
+                result = "connected";
+            }
+        }
+        string getName() { return result; }
+        private hash<DataProviderInfo> getStaticInfoImpl() {
+            return <DataProviderInfo>{"type": "reflection-factory-probe"};
+        }
+    }
+
     class PrivateProvider inherits FallbackProvider {
         constructor(*hash<auto> options) : FallbackProvider(options) {}
     }
@@ -49,6 +68,7 @@ public namespace ReflectionFactoryProvider {
         private {
             static Class provider_class = Class::forName("ReflectionFactoryProvider::Provider");
             static Class fallback_class = Class::forName("ReflectionFactoryProvider::FallbackProvider");
+            static Class io_class = Class::forName("ReflectionFactoryProvider::IoProvider");
             static Class private_class = Class::forName("ReflectionFactoryProvider::PrivateProvider");
             static Class builtin_class = Class::forName("Program");
             static GlobalVar secret_var = GlobalVar::forName("ReflectionFactoryProvider::secret");
@@ -62,6 +82,7 @@ public namespace ReflectionFactoryProvider {
         private hash<DataProviderInfo> getProviderInfoImpl() {
             return <DataProviderInfo>{"type": "reflection-factory-probe"};
         }
+        static Class ioClass() { return io_class; }
         static Class privateClass() { return private_class; }
         static Class builtinClass() { return builtin_class; }
         static GlobalVar secretVar() { return secret_var; }

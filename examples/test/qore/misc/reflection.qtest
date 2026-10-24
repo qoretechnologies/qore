@@ -2911,7 +2911,21 @@ class ReflectionTest inherits QUnit::Test {
             DestructorMethodVariant destrv = c1.getDestructorVariant();
             assertThrows("METHOD-ERROR", \destrv.call(), cond);
             destrv.call(q);
-            assertFalse(q.val());
+            # the object is destroyed: a method call on it raises OBJECT-ALREADY-DELETED, also for a pseudo-method
+            *string method_err;
+            try {
+                q.size();
+            } catch (hash<ExceptionInfo> ex) {
+                method_err = ex.err;
+            }
+            assertEq("OBJECT-ALREADY-DELETED", method_err);
+            *string pseudo_method_err;
+            try {
+                q.val();
+            } catch (hash<ExceptionInfo> ex) {
+                pseudo_method_err = ex.err;
+            }
+            assertEq("OBJECT-ALREADY-DELETED", pseudo_method_err);
             assertTrue(c1.isEqual(destrv.getClass()));
             assertTrue(c1.getDestructorMethod().isEqual(destrv.getMethod()));
         }

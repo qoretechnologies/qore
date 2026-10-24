@@ -2260,7 +2260,9 @@ if (x || y)
     performance with such graphs, however the programmer must ensure that the value has a valid
     strong reference elsewhere or the value will go out of scope.  Once the last strong reference to a hash or a
     list is released, a weak reference to it reads it as empty, and any attempt to change it through a new
-    reference raises \c HASH-ERROR or \c LIST-ERROR.\n<br>
+    reference raises \c HASH-ERROR or \c LIST-ERROR. Calling a method through a local weak reference to a destroyed
+    object raises \c OBJECT-ALREADY-DELETED, including pseudo-methods such as <tt>val()</tt> and calls from
+    closures that capture the weak reference.\n<br>
     This operator should only be used in very special circumstances by
     expert users and is only allowed when the @ref allow-weak-references "%allow-weak-references" sandbox
     permission is set.

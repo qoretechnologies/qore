@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../qore/misc/reflection-operation-access"
 %prepend-module-path "${SCRIPT_DIR}/FactoryCallerPrivilege"
 %requires QUnit
+%requires FsUtil
 %requires DataProvider
 %requires reflection
 %requires ReflectionAccessProbe
@@ -24,7 +25,9 @@ class FactoryCallerPrivilegeTest inherits QUnit::Test {
         addTestCase("public class method variants retain their class identity", \methods());
         addTestCase("an intervening application cannot borrow an outer import", \intervening());
         addTestCase("a same-named class is not the imported class", \sameName());
-        addTestCase("restricting domains and sandbox identity remain enforced", \restrictions());
+        addTestCase("restricting domains remain enforced", \restrictions());
+        addTestCase("a sandboxed importer constructs the class under its own sandbox", \sandboxedImporter());
+        addTestCase("another Program's own sandbox manager is enforced", \sandboxIdentity());
         addTestCase("class import does not authorize private classes, builtins, or globals", \otherSymbols());
         addTestCase("an imported class does not authorize its unrelated reflection Program", \foreignProgram());
         set_return_value(main());
@@ -89,10 +92,74 @@ class FactoryCallerPrivilegeTest inherits QUnit::Test {
 
     restrictions() {
         ReflectionFactoryProvider::Factory factory(True);
-        foreach Program pgm in ((reader(True, PO_NO_NETWORK), reader(True, 0, new SandboxManager()))) {
-            assertThrows("REFLECTION-ACCESS-ERROR", NOTHING, \pgm.callFunction(),
-                ("construct", factory.getClass(), "variant", {}));
+        Program pgm = reader(True, PO_NO_NETWORK);
+        assertThrows("REFLECTION-ACCESS-ERROR", NOTHING, \pgm.callFunction(),
+            ("construct", factory.getClass(), "variant", {}));
+    }
+
+    #! A user module Program has no sandbox manager of its own, so the provider module's code runs under the sandbox of
+    #! the application that calls the factory, as when the application constructs the class directly.
+    sandboxedImporter() {
+        ReflectionFactoryProvider::Factory factory(True);
+        TmpFile file("factory-caller-privilege-");
+        file.file.write("file data");
+        file.file.close();
+
+        # a listener on the loopback interface, which a sandbox that blocks private networks must not reach
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+        int port = listener.getSocketInfo().port;
+
+        SandboxManager allowed();
+        allowed.setFilesystemDefaultPolicy(True);
+        allowed.setNetworkDefaultPolicy(True);
+        SandboxManager denied();
+        denied.setFilesystemDefaultPolicy(False);
+        denied.setNetworkDefaultPolicy(True);
+        denied.blockPrivateNetworks();
+
+        Class io_class = ReflectionFactoryProvider::Factory::ioClass();
+        Program allowed_pgm = reader(True, 0, allowed);
+        Program denied_pgm = reader(True, 0, denied);
+        foreach string operation in (Operations) {
+            object obj = allowed_pgm.callFunction("construct", factory.getClass(), operation, {"name": operation});
+            assertEq(operation, obj.getName(), operation);
+            assertEq("none", denied_pgm.callFunction("construct", io_class, operation, {}).getName(), operation);
+
+            assertEq("file data", allowed_pgm.callFunction("construct", io_class, operation,
+                {"path": file.path}).getName(), operation);
+            assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \denied_pgm.callFunction(),
+                ("construct", io_class, operation, {"path": file.path}), operation);
+
+            assertEq("connected", allowed_pgm.callFunction("construct", io_class, operation,
+                {"port": port}).getName(), operation);
+            assertThrows("NETWORK-ACCESS-DENIED", NOTHING, \denied_pgm.callFunction(),
+                ("construct", io_class, operation, {"port": port}), operation);
         }
+    }
+
+    #! A Program with a sandbox manager of its own can be reached only by code governed by that manager; an
+    #! application Program without one is not governed by the caller's sandbox.
+    sandboxIdentity() {
+        string source = "%modern\npublic class Local { constructor(*hash<auto> options) {} string getName() { "
+            "return \"local\"; } }\n";
+        SandboxManager target_sm();
+        Program managed(BaseOptions, True);
+        managed.parse(source, "reflection-factory-managed");
+        managed.setSandboxManager(target_sm);
+        Program unmanaged(BaseOptions, True);
+        unmanaged.parse(source, "reflection-factory-unmanaged");
+
+        Program other = reader(False, 0, new SandboxManager());
+        foreach Program target in (managed, unmanaged) {
+            assertThrows("REFLECTION-ACCESS-ERROR", NOTHING, \other.callFunction(),
+                ("construct", Class::forName(target, "Local"), "newObject", {}));
+        }
+        Program same = reader(False, 0, target_sm);
+        assertEq("local", same.callFunction("construct", Class::forName(managed, "Local"), "newObject",
+            {}).getName());
     }
 
     otherSymbols() {
