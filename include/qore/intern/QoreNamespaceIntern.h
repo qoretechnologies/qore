@@ -368,13 +368,14 @@ public:
     DLLLOCAL void purge() {
         constant.reset();
 
-        // Invalidate the parent-namespace back-pointers first: classes and hashdecls are reference
+        // Invalidate the parent-namespace back-pointers first: classes, hashdecls, and enums are reference
         // counted independently of the namespace that declares them and routinely outlive it (an
         // object holds only a dependency reference to its Program, so the class survives
         // qore_program_private::del() destroying the namespace tree).  Leaving the back-pointer set
         // makes every later use — QoreClass::getProgram(), getMethodForEval() — read freed memory.
         classList.namespaceDeleted(this);
         hashDeclList.namespaceDeleted(this);
+        enumList.namespaceDeleted(this);
 
         classList.reset();
 

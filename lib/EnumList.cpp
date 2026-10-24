@@ -152,6 +152,13 @@ void EnumList::reset() {
     deleteAll();
 }
 
+void EnumList::namespaceDeleted(const qore_ns_private* ns) {
+    // Teardown must invalidate every back-pointer even when cancellation has been requested.
+    for (auto& i : hm) {
+        qore_enum_decl_private::get(*i.second)->namespaceDeleted(ns);
+    }
+}
+
 void EnumList::assimilate(EnumList& n, qore_ns_private& ns,
         std::vector<std::string>* pending_names) {
     hm_qen_t::iterator i = n.hm.begin();

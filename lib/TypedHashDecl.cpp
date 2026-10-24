@@ -1036,6 +1036,10 @@ const QoreExternalProgramLocation* TypedHashDecl::getSourceLocation() const {
     return reinterpret_cast<const QoreExternalProgramLocation*>(priv->getParseLocation());
 }
 
+QoreProgram* TypedHashDecl::getProgram() const {
+    return priv->ns ? priv->ns->getProgram() : nullptr;
+}
+
 std::string TypedHashDecl::getNamespacePath(bool anchored) const {
     std::string path;
     // when called during construction, this is nullptr

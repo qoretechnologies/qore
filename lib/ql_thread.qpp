@@ -932,7 +932,8 @@ int size = get_stack_size();
 
     @note on Linux, this always returns 8MB for TID 1 (the initial thread) even if the actual stack
     size is smaller, as Linux automatically extends the initial thread's stack when there is a stack
-    overflow
+    overflow; once a runtime that enforces the initial thread's stack size, such as a JVM, has been started, this
+    returns the stack size that the runtime lets the thread use
 
     @since %Qore 0.9.0
  */

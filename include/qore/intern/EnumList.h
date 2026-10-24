@@ -78,6 +78,7 @@ public:
     DLLLOCAL int parseInit();
 
     DLLLOCAL void reset();
+    DLLLOCAL void namespaceDeleted(const qore_ns_private* ns);
     //! Removes a specific enum by name (for selective rollback support)
     DLLLOCAL void parseRemove(const char* name);
 
