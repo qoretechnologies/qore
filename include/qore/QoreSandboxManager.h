@@ -851,12 +851,13 @@ private:
     authenticate an outbound API call, for example.  There the caller must not be able to
     reach the resource, but the infrastructure must.
 
-    Establishing this barrier around such a call stops policy resolution at the current
-    Program, so the caller's policy is not inherited.  Two properties make it narrow:
+    Establishing this barrier around such a call stops policy resolution at the Program
+    context that is current when the barrier is established, so the caller's policy is not
+    inherited.  Two properties make it narrow:
 
-    - it does not override the CURRENT Program's own manager, so if the barriered code calls
-      back into sandboxed code (a callback), that code is still checked against its own
-      sandbox
+    - it does not lift the managers of Programs entered inside the barrier, so if the barriered
+      code calls back into sandboxed code (a callback), that code, and any module code it
+      calls, is still checked against its sandbox
     - it applies to filesystem/network POLICY only.  Interrupt and force-terminate checks
       resolve unchanged, so a barriered call stays cancellable
 

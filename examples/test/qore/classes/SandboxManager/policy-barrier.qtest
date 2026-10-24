@@ -35,6 +35,12 @@ class SandboxPolicyBarrierTest inherits QUnit::Test {
         addTestCase("inherited policy is barriered off", \testInheritedPolicyLifted());
         addTestCase("the current program's policy still applies",
             \testCurrentProgramPolicyNotLifted());
+        addTestCase("module code called by a callback into a sandbox is governed",
+            \testCallbackModuleCodeGoverned());
+        addTestCase("a nested barrier inside a callback lifts the callback's policy",
+            \testNestedBarrierInCallback());
+        addTestCase("a thread started by a callback inherits its sandbox",
+            \testCallbackThreadInheritsSandbox());
         addTestCase("sandboxed code cannot establish a barrier",
             \testBarrierIsRestricted());
         addTestCase("the barrier does not leak past the call", \testNoLeak());
@@ -110,6 +116,90 @@ class SandboxPolicyBarrierTest inherits QUnit::Test {
                     ("sandboxed_read", tmp_path));
             }, NOTHING,
             "a callback into sandboxed code is still checked against its own sandbox");
+    }
+
+    #! Module code that a callback into a sandboxed program calls is governed by that sandbox
+    /** Issue #5514: the barrier stopped resolution at the current program, so when a callback
+        re-entered a sandboxed program and that program called module code -- code in a program
+        with no manager of its own -- the module code ran with no policy at all.  Trusted code
+        that invokes a sandboxed caller's callback through the caller's program depends on this.
+    */
+    private testCallbackModuleCodeGoverned() {
+        Program p(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        p.setSandboxManager(sm);
+        p.parse("auto sub run(code c, string path) { return c(path); }", "barrier-callback-module");
+
+        # stands in for module code: this program has no manager
+        code module_read = string sub (string path) {
+            return ReadOnlyFile::readTextFile(path);
+        };
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING,
+            sub () {
+                SandboxManager::callWithSystemPolicy(\p.callFunction(), ("run", module_read, tmp_path));
+            }, NOTHING,
+            "module code called by a sandboxed callback inside the barrier is checked against its sandbox");
+
+        # the same call under the barrier without the sandboxed program on the stack is trusted code
+        assertEq("barrier probe\n", SandboxManager::callWithSystemPolicy(module_read, tmp_path),
+            "trusted code under the barrier is not governed");
+    }
+
+    #! A barrier established inside a callback lifts the callback's policy for the trusted code it calls
+    private testNestedBarrierInCallback() {
+        Program p(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        p.setSandboxManager(sm);
+        p.parse("auto sub run(code c, string path) { return c(path); }", "barrier-nested");
+
+        code barriered = auto sub (string path) {
+            return SandboxManager::callWithSystemPolicy(\ReadOnlyFile::readTextFile(), path);
+        };
+        assertEq("barrier probe\n",
+            SandboxManager::callWithSystemPolicy(\p.callFunction(), ("run", barriered, tmp_path)),
+            "the innermost barrier bounds resolution");
+
+        # after the inner barrier is released, the outer one still governs the callback's module code
+        code module_read = string sub (string path) {
+            return ReadOnlyFile::readTextFile(path);
+        };
+        code both = auto sub (string path) {
+            SandboxManager::callWithSystemPolicy(\ReadOnlyFile::readTextFile(), path);
+            return module_read(path);
+        };
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING,
+            sub () {
+                SandboxManager::callWithSystemPolicy(\p.callFunction(), ("run", both, tmp_path));
+            }, NOTHING,
+            "releasing the inner barrier restores the outer barrier's boundary");
+    }
+
+    #! A thread started by module code under a sandboxed callback inside the barrier inherits the sandbox
+    private testCallbackThreadInheritsSandbox() {
+        Program p(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        p.setSandboxManager(sm);
+        p.parse("auto sub run(code c, string path) { return c(path); }", "barrier-callback-thread");
+
+        code start_reader = auto sub (string path) {
+            Queue q();
+            background sub () {
+                try {
+                    q.push(ReadOnlyFile::readTextFile(path));
+                } catch (hash<ExceptionInfo> ex) {
+                    q.push(ex.err);
+                }
+            }();
+            return q.get();
+        };
+        assertEq("FILESYSTEM-ACCESS-DENIED",
+            SandboxManager::callWithSystemPolicy(\p.callFunction(), ("run", start_reader, tmp_path)),
+            "the thread inherits the sandbox of the callback that started it");
+        assertEq("barrier probe\n", SandboxManager::callWithSystemPolicy(start_reader, tmp_path),
+            "a thread started by trusted code under the barrier inherits no policy");
     }
 
     #! Sandboxed code cannot reach the barrier at all

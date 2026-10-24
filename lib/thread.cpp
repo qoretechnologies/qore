@@ -457,6 +457,12 @@ public:
     // own manager, so re-entering sandboxed code (a callback) stays sandboxed.
     unsigned sandbox_policy_barrier = 0;
 
+    // the program context helper that was current when each active policy barrier was pushed, innermost last;
+    // POLICY resolution under a barrier still walks the caller Programs entered after the innermost barrier was
+    // pushed and stops at this helper.  So a callback that re-enters a sandboxed Program inside the barrier
+    // governs the module code that callback calls, while the caller beyond the barrier is not inherited
+    std::vector<const ProgramThreadCountContextHelper*> sandbox_policy_barrier_ctx;
+
     // cancellation-deferral depth; while non-zero, qore_check_cancel() reports "not cancelled"
     // without touching the pending request, so that a bounded cleanup critical section (acquire a
     // lock, release ownership, signal waiters, unlock) can run to completion on a thread that has
@@ -3351,8 +3357,8 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(unsigned* pgm_
         }
         return sm;
     }
-    // issue #4285: with a policy barrier active, resolution does not walk out to enclosing
-    // callers; see ThreadData::sandbox_policy_barrier
+    // issue #4285: with a policy barrier active, resolution does not walk out to the callers that
+    // established it; see ThreadData::sandbox_policy_barrier and ThreadData::sandbox_policy_barrier_ctx
     const bool barrier = policy && td->sandbox_policy_barrier;
     // helper: try to resolve a ref'd manager from a single program
     auto try_pgm = [pgm_id](QoreProgram* p) -> QoreSandboxManager* {
@@ -3366,17 +3372,25 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(unsigned* pgm_
     if (QoreSandboxManager* sm = try_pgm(td->current_pgm)) {
         return sm;
     }
-    // a policy barrier stops here: the current Program's own manager (step 1) still governs,
-    // so a callback that re-enters sandboxed code is still checked against its own sandbox,
-    // but a caller's sandbox is not inherited by the trusted code running under the barrier
-    if (barrier) {
-        return nullptr;
-    }
     // 2) enclosing caller programs via the program-context (call) stack, innermost first
+    //
+    // a policy barrier stops the walk at the program context that was current when it was pushed: the
+    // Programs entered inside the barrier still govern, so a callback that re-enters sandboxed code is
+    // checked against its own sandbox, and so is any module code that callback calls, but the caller's
+    // sandbox is not inherited by the trusted code running under the barrier
+    const ProgramThreadCountContextHelper* barrier_ctx = barrier
+        ? td->sandbox_policy_barrier_ctx.back()
+        : nullptr;
     for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        if (barrier && ch == barrier_ctx) {
+            return nullptr;
+        }
         if (QoreSandboxManager* sm = try_pgm(ch->getOldProgram())) {
             return sm;
         }
+    }
+    if (barrier) {
+        return nullptr;
     }
     // 3) call program context fallback: matches getProgram()'s fallback when current_pgm is
     // null (issue #3024), preserving prior single-program resolution in that edge case
@@ -3456,7 +3470,15 @@ int qore_push_sandbox_policy_barrier() {
     if (!td) {
         return -1;
     }
+    // record the boundary first: if it cannot be recorded, no barrier is established, and the caller's policy
+    // continues to apply
+    try {
+        td->sandbox_policy_barrier_ctx.push_back(td->current_pgm_ctx);
+    } catch (std::bad_alloc&) {
+        return -1;
+    }
     ++td->sandbox_policy_barrier;
+    assert(td->sandbox_policy_barrier == td->sandbox_policy_barrier_ctx.size());
     return 0;
 }
 
@@ -3597,7 +3619,9 @@ void qore_pop_sandbox_policy_barrier() {
     ThreadData* td = thread_data.get();
     if (td) {
         assert(td->sandbox_policy_barrier);
+        assert(td->sandbox_policy_barrier == td->sandbox_policy_barrier_ctx.size());
         --td->sandbox_policy_barrier;
+        td->sandbox_policy_barrier_ctx.pop_back();
     }
 }
 

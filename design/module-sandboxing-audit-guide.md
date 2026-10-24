@@ -133,14 +133,18 @@ able to reach the resource, but the infrastructure must; inheriting the caller's
 denies the read and the feature is simply unavailable to sandboxed users.
 
 `SandboxManager::callWithSystemPolicy()` (C++: `QoreSandboxPolicyBarrierHelper`) establishes
-a **policy barrier** for the duration of a call: policy resolution stops at the current
-program instead of walking out to enclosing callers, so the caller's policy is not
-inherited. Three properties keep it from becoming a general bypass, and all three are
-asserted in `examples/test/qore/classes/SandboxManager/policy-barrier.qtest`:
+a **policy barrier** for the duration of a call: policy resolution stops at the program
+context that was current when the barrier was established instead of walking out to the
+callers beyond it, so the caller's policy is not inherited. Three properties keep it from
+becoming a general bypass, and all three are asserted in
+`examples/test/qore/classes/SandboxManager/policy-barrier.qtest`:
 
-- It does **not** override the current program's own manager. Code that re-enters a
-  sandboxed program — a callback — is still checked against that program's sandbox, because
-  that resolves at step 1, before the barrier is consulted.
+- It does **not** lift the policy of programs entered inside the barrier. Code that
+  re-enters a sandboxed program — a callback — is still checked against that program's
+  sandbox, and so is any module code that callback calls, because the walk still visits
+  the programs entered after the barrier was established and stops only where it was
+  established (issue #5514; before it, the walk stopped at the current program, so module
+  code called by such a callback was not governed).
 - It applies to **filesystem/network policy only**. Interrupt and force-terminate checks
   resolve with the full walk, so a barriered call stays cancellable. Use
   `QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy)` for a policy check;
@@ -150,7 +154,10 @@ asserted in `examples/test/qore/classes/SandboxManager/policy-barrier.qtest`:
 - It is restricted to `PO_NO_UNCONTROLLED_APIS`, so sandboxed code cannot establish one.
 
 Scope it as tightly as possible: everything executed inside the barrier runs without the
-caller's policy.
+caller's policy. Code supplied by the sandboxed caller (a callback, an object it configured)
+must be invoked through a program that carries the caller's sandbox, never directly by the
+trusted code inside the barrier: a module function or method the caller passed in runs in
+the module's program and is not governed unless such a program is on the stack.
 
 ### Key Principle: Sandbox Manager May Be Absent
 

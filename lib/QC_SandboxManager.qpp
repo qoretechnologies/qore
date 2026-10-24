@@ -654,12 +654,13 @@ hash<NetworkSecurityConfigInfo> SandboxManager::getNetworkConfiguration() {
     authenticate an outbound API call, for example.  There the caller must not be able to
     reach the resource, but the infrastructure must.
 
-    Calling through this method stops filesystem/network policy resolution at the current
-    %Program for the duration of the call, so the caller's policy is not inherited.  Two
+    Calling through this method stops filesystem/network policy resolution at the %Program
+    context of the call for its duration, so the caller's policy is not inherited.  Two
     properties keep it narrow:
 
-    - the CURRENT %Program's own manager still applies, so if @p call re-enters sandboxed
-      code (a callback, for example), that code is still checked against its own sandbox
+    - the managers of the Programs entered inside the call still apply, so if @p call
+      re-enters sandboxed code (a callback, for example), that code, and any module code it
+      calls, is still checked against its sandbox
     - only filesystem/network policy is affected; interrupt and force-terminate checks
       resolve unchanged, so a barriered call remains cancellable
 
