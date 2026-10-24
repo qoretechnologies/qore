@@ -12,7 +12,51 @@
 class EnumPresentationTest inherits QUnit::Test {
     constructor() : Test("Schema enumeration presentation", "1.0", \ARGV) {
         addTestCase("labels and descriptions survive adaptation and snapshots", \choices());
+        addTestCase("display names given to a schema label its values at every use", \displayNames());
         set_return_value(main());
+    }
+
+    private displayNames() {
+        OpenApi3Schema doc = OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3", "info": {"title": "Display names", "version": "1"}, "paths": {},
+            "components": {"schemas": {
+                "Condition": {"type": "object", "properties": {
+                    "op": {"type": "string", "enum": ("lt", "gt", "len_eq")},
+                }},
+                "Group": {"type": "object", "properties": {
+                    "first": {"$ref": "#/components/schemas/Condition"},
+                    "nested": {"type": "object", "properties": {
+                        "second": {"$ref": "#/components/schemas/Condition"},
+                    }},
+                }},
+                "Plain": {"type": "string"},
+            }},
+        }), True);
+        SchemaObject op = doc.getSchemaObjectAt("#/components/schemas/Condition/properties/op");
+        op.setEnumDisplayNames({"lt": "Less Than", "gt": "Greater Than"});
+        AbstractDataProviderType group = doc.components.schemas.Group.getDataType();
+        foreach list<string> path in ((("first",), ("nested", "second"))) {
+            AbstractDataProviderType t = group;
+            map t = t.getFields(){$1}.getDeclaredType(), path;
+            list<hash<AllowedValueInfo>> choices = t.getFields().op.getAllowedValues();
+            assertEq(("Less Than", "Greater Than", "len_eq"), (map $1.display_name, choices),
+                "the display names label the values at " + path.join("."));
+            assertEq(("lt", "gt", "len_eq"), (map $1.value, choices), "the values are unchanged");
+        }
+        assertThrows("SCHEMA-ENUM-ERROR", "already built", \op.setEnumDisplayNames(), {"lt": "Lower"});
+        SchemaObject fresh = OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3", "info": {"title": "Display names", "version": "1"}, "paths": {},
+            "components": {"schemas": {
+                "Condition": {"type": "object", "properties": {
+                    "op": {"type": "string", "enum": ("lt", "gt")},
+                }},
+                "Plain": {"type": "string"},
+            }},
+        }), True).getSchemaObjectAt("#/components/schemas/Condition/properties/op");
+        assertThrows("SCHEMA-ENUM-ERROR", "are not values of its enumeration", \fresh.setEnumDisplayNames(),
+            {"eq": "Equal"});
+        assertThrows("SCHEMA-ENUM-ERROR", "has no enumeration", \doc.components.schemas.Plain.setEnumDisplayNames(),
+            {"x": "X"});
     }
 
     private choices() {

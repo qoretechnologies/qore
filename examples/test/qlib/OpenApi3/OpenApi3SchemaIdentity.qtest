@@ -25,6 +25,7 @@ class OpenApi3SchemaIdentityTest inherits QUnit::Test {
         addTestCase("the identity does not depend on descriptions", \descriptionIndependenceTest());
         addTestCase("schemas with the same name and properties have their own catalog messages",
             \catalogTest());
+        addTestCase("a schema is found by its location", \locationTest());
         set_return_value(main());
     }
 
@@ -148,6 +149,33 @@ class OpenApi3SchemaIdentityTest inherits QUnit::Test {
         assertEq("Page where block starts", messages{DataProviderPresentation::typeFieldMessageId(App, block_span,
             "pageStart", "short_desc")}.source,
             "the field of the type built from the other schema has the other schema's text");
+    }
+
+    locationTest() {
+        OpenApi3Schema doc = document();
+        foreach string location in (("#/components/schemas/Chunk", "#/components/schemas/Chunk/properties/note",
+                "#/components/schemas/ChunkSpan/properties/pageStart", "#/components/schemas/List/items", "#/components/schemas/a~1b~0c",
+                "#/components/schemas/a~1b~0c/properties/x")) {
+            assertEq(location, doc.getSchemaObjectAt(location).getSchemaIdentity() ?? "",
+                sprintf("the schema at %y has the identity of its location", location));
+        }
+        assertEq("#/components/schemas/ChunkSpan",
+            doc.getSchemaObjectAt("#/components/schemas/Chunk/properties/pageSpan/allOf/0").getSchemaIdentity(),
+            "a reference at the location is the schema it refers to");
+        assertEq("#/components/schemas/ChunkSpan/properties/pageStart",
+            doc.getSchemaObjectAt("#/components/schemas/Chunk/properties/header/properties/pageSpan/properties/"
+                "pageStart").getSchemaIdentity(),
+            "a property of a schema that only adds to a referenced schema is the referenced schema's property");
+        assertThrows("INVALID-REFERENCE", "not a component schema location", \doc.getSchemaObjectAt(),
+            "#parameter/query/filter");
+        assertThrows("INVALID-REFERENCE", "no component schema", \doc.getSchemaObjectAt(),
+            "#/components/schemas/Missing");
+        assertThrows("INVALID-REFERENCE", "no schema at", \doc.getSchemaObjectAt(),
+            "#/components/schemas/Chunk/properties/missing");
+        assertThrows("INVALID-REFERENCE", "ends after", \doc.getSchemaObjectAt(),
+            "#/components/schemas/Chunk/properties");
+        assertThrows("INVALID-REFERENCE", "no schema at", \doc.getSchemaObjectAt(),
+            "#/components/schemas/Chunk/allOf/x");
     }
 
     #! Returns a document whose two components with the same name and properties are described differently

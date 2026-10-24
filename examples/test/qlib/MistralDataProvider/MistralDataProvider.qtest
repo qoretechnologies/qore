@@ -142,6 +142,7 @@ public class MistralDataProviderTest inherits QUnit::Test {
         }
         addTestCase("complete action contracts", \contractTest());
         addTestCase("pinned provenance and schema drift", \schemaTest());
+        addTestCase("an enumeration shows the same labels wherever an action reaches it", \enumLabelTest());
         addTestCase("resource dropdowns", \referenceTest());
         addTestCase("HTTP authentication, paths and named multipart files", \wireTest());
         addTestCase("invalid requests and transport failures", \negativeTest());
@@ -387,6 +388,58 @@ public class MistralDataProviderTest inherits QUnit::Test {
             assertEq(before + (decl.options_reference ? 2 : 1), fake.requests);
         }
 
+    }
+
+    private enumLabelTest() {
+        # (action, schema of the type, field) -> labels -> paths
+        hash<string, hash<string, list<string>>> labels = {};
+        foreach hash<auto> action in (DataProviderActionCatalog::getActions("MistralAi", False)) {
+            hash<string, bool> seen = {};
+            foreach hash<auto> option in (action.options.pairIterator()) {
+                if (option.value.type instanceof AbstractDataProviderType) {
+                    collectEnumLabels(action.action, option.value.type, option.key, \seen, \labels);
+                }
+            }
+        }
+        assertTrue(labels{"search-chat-events|#/components/schemas/FilterCondition|op"}.size() > 0,
+            "the filter condition's operator is reached");
+        assertTrue(labels{"chat-completion|#/components/schemas/ToolCall|type"}.size() > 0,
+            "the tool call's type is reached");
+        foreach hash<auto> e in (labels.pairIterator()) {
+            assertEq(1, e.value.size(), sprintf("%s has one set of labels; found: %y", e.key,
+                map {$1.key: $1.value[0]}, e.value.pairIterator()));
+        }
+    }
+
+    #! Collects the labels of the enumerated fields of the types an action option reaches
+    private collectEnumLabels(string action, AbstractDataProviderType type, string path,
+            reference<hash<string, bool>> seen, reference<hash<string, hash<string, list<string>>>> labels) {
+        if (seen{type.uniqueHash()}) {
+            return;
+        }
+        seen{type.uniqueHash()} = True;
+        if (type instanceof QoreUnionDataType) {
+            foreach AbstractDataProviderType alternative in (cast<QoreUnionDataType>(type).getUnionTypes()) {
+                collectEnumLabels(action, alternative, path, \seen, \labels);
+            }
+            return;
+        }
+        *hash<string, AbstractDataField> fields = type.getFields();
+        if (!fields) {
+            if (*AbstractDataProviderType element = type.getElementType()) {
+                collectEnumLabels(action, element, path + "[]", \seen, \labels);
+            }
+            return;
+        }
+        # an overlay's copy of a type is the schema's type
+        *string schema = (type.getSchemaIdentity() =~ x/^([^#]*#[^#]*)/)[0];
+        foreach hash<auto> field in (fields.pairIterator()) {
+            if (schema && (*list<hash<AllowedValueInfo>> values = field.value.getAllowedValues())) {
+                string key = sprintf("%s|%s|%s", action, schema, field.key);
+                labels{key}{(map $1.display_name, values).join(", ")} += path + "." + field.key;
+            }
+            collectEnumLabels(action, field.value.getDeclaredType(), path + "." + field.key, \seen, \labels);
+        }
     }
 
     private schemaTest() {

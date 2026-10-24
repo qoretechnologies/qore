@@ -1227,6 +1227,85 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         return versionMinor >= 1;
     }
 
+    #! Returns the schema object at a location in the document
+    /** @param location the location of a schema, as given by
+        @ref RestSchemaValidator::AbstractRestSchemaObject::getSchemaIdentity() "getSchemaIdentity()": a component
+        (\c "#/components/schemas/Name") followed by any of \c "/properties/<name>", \c "/items",
+        \c "/prefixItems/<index>", \c "/additionalProperties", \c "/allOf/<index>", \c "/oneOf/<index>",
+        \c "/anyOf/<index>" and \c "/not", with reference tokens escaped as in a JSON Pointer
+
+        @return the schema object at the location; a reference at the location is the schema it refers to
+
+        @throw INVALID-REFERENCE the location is not that of a schema declared in this document's components
+
+        @par Example:
+        @code{.py}
+SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition/properties/op");
+        @endcode
+
+        @since OpenApi3 1.0
+    */
+    SchemaObject getSchemaObjectAt(string location) {
+        *list<*string> m = (location =~ x/^#\/components\/schemas\/([^\/]+)(\/.*)?$/);
+        if (!m) {
+            throw "INVALID-REFERENCE", sprintf("schema location %y is not a component schema location", location);
+        }
+        string name = OpenApi3Schema::unescapeLocationToken(m[0]);
+        *SchemaObject rv = components.schemas{name};
+        if (!rv) {
+            throw "INVALID-REFERENCE", sprintf("schema location %y: the document has no component schema %y",
+                location, name);
+        }
+        list<string> tokens = m[1] ? (map OpenApi3Schema::unescapeLocationToken($1), m[1].substr(1).split("/"))
+            : ();
+        for (int i = 0; i < tokens.size(); ++i) {
+            string token = tokens[i];
+            *SchemaObject next;
+            switch (token) {
+                case "items":
+                    next = cast<*SchemaObject>(rv.items);
+                    break;
+                case "additionalProperties":
+                    next = rv.additionalProperties instanceof SchemaObject ? rv.additionalProperties : NOTHING;
+                    break;
+                case "not":
+                    next = cast<*SchemaObject>(rv.notSchema);
+                    break;
+                case "properties":
+                case "prefixItems":
+                case "allOf":
+                case "oneOf":
+                case "anyOf": {
+                    if (++i == tokens.size()) {
+                        throw "INVALID-REFERENCE", sprintf("schema location %y ends after %y", location, token);
+                    }
+                    string key = tokens[i];
+                    if (token == "properties") {
+                        next = cast<*SchemaObject>(rv.properties{key});
+                    } else if (key =~ /^[0-9]+$/) {
+                        *list<SchemaObject> members = token == "prefixItems"
+                            ? rv.getPrefixItems()
+                            : (token == "allOf" ? rv.allOf : (token == "oneOf" ? rv.oneOf : rv.anyOf));
+                        next = members[key.toInt()];
+                    }
+                    break;
+                }
+            }
+            if (!next) {
+                throw "INVALID-REFERENCE", sprintf("schema location %y: no schema at %y", location,
+                    tokens[0..i].join("/"));
+            }
+            rv = next;
+        }
+        return rv;
+    }
+
+    #! Returns a reference token of a schema location, unescaped
+    private static string unescapeLocationToken(string token) {
+        # RFC 6901 section 4: "~1" is '/', then "~0" is '~'
+        return replace(replace(token, "~1", "/"), "~0", "~");
+    }
+
     *SchemaObject tryGetSchemaObject(string name, hash<auto> oh, reference<string> hash_str) {
         hash_str = sprintf("%y", oh).toSHA256();
         return so_map{name}{hash_str};
@@ -6930,6 +7009,45 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             *bool composed, *string location) {
         throw "INVALID-FIELD-TYPE", sprintf("invalid field type %y for key %y; expecting \"hash\"", error.type(),
             name);
+    }
+
+    #! Gives the values of the schema's enumeration display names
+    /** The display names are those of the
+        @ref RestSchemaValidator::AbstractRestSchemaObject "allowed values" of every field the schema describes,
+        wherever it is used, as the \c x-enumNames extension gives them.  A producer that labels the values of a
+        schema it does not author, such as a vendored API description, gives the labels once here instead of at
+        each use.
+
+        @param display_names the display name of each value to label, keyed by the value as a string; a value not
+        given keeps the value as its display name
+
+        @throw SCHEMA-ENUM-ERROR the schema has no enumeration, a key is not one of its values, or the schema has
+        already built a field or type, which would keep the display names it had
+
+        @since OpenApi3 1.0
+    */
+    setEnumDisplayNames(hash<string, string> display_names) {
+        if (!enumValues) {
+            throw "SCHEMA-ENUM-ERROR", sprintf("schema %y has no enumeration to give display names to", name);
+        }
+        if (*list<string> unknown = keys (display_names - keys enumValues)) {
+            throw "SCHEMA-ENUM-ERROR", sprintf("schema %y: %y are not values of its enumeration %y", name, unknown,
+                keys enumValues);
+        }
+        if (dataType || orNothingDataType || fieldmap || usemap) {
+            throw "SCHEMA-ENUM-ERROR", sprintf("schema %y has already built a field or type; give its display "
+                "names before using it", name);
+        }
+        vendorExtensions."x-enumNames" = map display_names{$1} ?? $1, keys enumValues;
+    }
+
+    #! Returns the positional item schemas of a JSON Schema 2020-12 tuple, if any
+    /** @return the schemas of the positions of a tuple, or @ref nothing if the schema declares none
+
+        @since OpenApi3 1.0
+    */
+    *list<SchemaObject> getPrefixItems() {
+        return prefix_items;
     }
 
     #! Returns the x-example extension value if set.
