@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DataProvider webhook support
 
-/** WebhookSupport.qc Copyright 2025 Qore Technologies, s.r.o.
+/** WebhookSupport.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -45,7 +45,9 @@ public namespace DataProvider {
     The deletion callback takes a hash with \c url and \c ctx keys (as returned by the create callback)
 */
 public class DataProviderWebhook {
-    public {
+    # these are process-wide and are used by the code of every interface that creates a webhook, so they must not
+    # be writable outside this class: registerWebhookApis() sets them once
+    private:internal {
         #! Webhook creation callback
         static *code webhookCreate;
 

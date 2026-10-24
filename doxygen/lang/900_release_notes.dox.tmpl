@@ -4,6 +4,12 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    The webhook creation and deletion callbacks of
+    @ref DataProvider::DataProviderWebhook "DataProviderWebhook" are no longer public members: they are set once
+    with @ref DataProvider::DataProviderWebhook::registerWebhookApis() "registerWebhookApis()" and cannot be read
+    or replaced by other code in the process (see
+    <a href="https://github.com/qoretechnologies/qorus/issues/759">Qorus issue 759</a>).
+
     @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" now governs
     module code that is called by sandboxed code re-entered inside the call: a callback into a sandboxed
     %Program is checked against its sandbox together with the module functions and methods it calls, where
