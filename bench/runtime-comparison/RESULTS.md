@@ -21299,3 +21299,157 @@ process exits, dependencies, generated-code checks, qualification and 62-check
 audit. No fresh pure-develop ratio or global performance ceiling is established.
 Next investigate per-iteration diagnostic/cancellation bookkeeping and native
 scalar return boxing, with semantic proof and controlled measurements.
+
+
+## AOT native scalar snapshots (2026-10-24)
+
+Baseline feature/performance 3a2a068ede includes develop cf838e51a4 and the
+preceding static-call accumulation optimization. AOT RefSelf now preserves a
+physical native double or boolean SSA value across local/on_exit/catch cleanup.
+These values own no reference. Boxing remains at actual boxed boundaries;
+native integer and all boxed snapshots retain their existing behavior.
+QORE_DISABLE_AOT_NATIVE_REFSELF isolates this compile-time change. No runtime
+ABI, call admission, declared-return validation or cancellation checks change.
+IR interpreter and JIT behavior are unchanged by this candidate.
+
+Generated-code inspection verifies removed RefSelf calls and native fast-return
+boxing/unboxing in selected callees. The simple local-return fast body becomes
+inlined; ordinary boxed entries still box their result. Before and disabled
+bodies match after recorded normalization. All 45 inspected target-suite control
+bodies match, including all mixed functions. Eight separate sample runs observe
+native fast callers in both variants; sampling is excluded from timings.
+Equivalent bodies do not establish the cause of control timing differences.
+
+Target/control/mixed confirmation aggregates (median of layout medians of fork
+means, whole-workload ns/item rather than isolated call latency):
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate vs before
+|direct_local_float_return|14.421488|7.452208|14.466909|-48.33%
+|callback_local_float_return|141.772752|136.662671|141.886118|-3.60%
+|direct_loop_float_return|19.877815|13.168153|19.870912|-33.75%
+|callback_loop_float_return|155.828604|149.623864|156.034759|-3.98%
+|direct_float_add|0.796599|0.793301|0.790555|-0.41%
+|static_float_add|0.790747|0.792505|0.774902|+0.22%
+|typed_local_int_unary|7.199058|6.894614|7.237171|-4.23%
+|typed_local_float_unary|7.826444|7.888211|7.804790|+0.79%
+|result_float_add|7.005781|7.101739|7.021736|+1.37%
+|csv_report|932.092285|925.948079|926.336670|-0.66%
+|object_orders|1754.968068|1747.591710|1738.825722|-0.42%
+|callback_pipeline|82.049046|81.597858|82.110659|-0.55%
+|text_index|1301.213407|1300.083605|1293.789067|-0.09%
+
+Retained: the four target workloads improve in both phases against both
+comparators, with a 24.97% confirmation geometric-mean time reduction versus
+before. Direct local/loop returns improve 48.33%/33.75%; callback local/loop
+returns improve 3.60%/3.98%. No target confirmation disjoint-range regression
+flag remains, and mixed confirmation workloads stay within 0.7% of baseline.
+The broad screen has no disjoint-range flags, but four aggregates exceed +3%
+against at least one comparator: indirect_call, monomorphic_call, temporary_hash
+and object_short. A separate five-fork confirmation of all four, with arithmetic
+and callback_pipeline controls, has no >3% aggregate loss or disjoint-range
+flag. The four are 0.94–1.83% slower than before in that follow-up. All original
+screening losses remain recorded; this is an overall tradeoff decision, not a
+claim that every control is faster. All broad generated function bodies match
+after the documented normalization; that does not establish the cause of
+observed differences. Callback samples still execute generic callee entries,
+which is the next optimization target. No general Java parity is established.
+
+No >3% disjoint per-layout fork-range flag repeats across both target phases.
+
+The fresh broad 55 screening results follow. This is one broad pass, not a
+repeated-regression confirmation. All per-layout flags remain in the evidence.
+The user authorized assessment of overall workload tradeoffs.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate vs before
+|arithmetic|1.508535|1.512015|1.510837|+0.23%
+|direct_call|1.492769|1.503277|1.494227|+0.70%
+|method_call|1.571602|1.566179|1.565338|-0.35%
+|indirect_call|7.502754|7.714482|7.479882|+2.82%
+|polymorphic_call|23.516631|23.426576|23.778452|-0.38%
+|polymorphic_expression_call|10.923231|10.878876|11.091289|-0.41%
+|monomorphic_call|4.086374|4.119438|3.902135|+0.81%
+|optional_method_call|11.077867|11.150595|11.173379|+0.66%
+|polymorphic_float_call|23.969342|24.033135|24.418088|+0.27%
+|polymorphic_float_expression_call|11.081326|11.150246|11.182028|+0.62%
+|monomorphic_float_call|3.963580|4.078579|4.005073|+2.90%
+|optional_float_method_call|10.959594|10.891108|10.910844|-0.62%
+|boxed_float_method_call|20.237256|20.013136|19.976317|-1.11%
+|dynamic_int_result_call|10.543102|10.631319|10.681828|+0.84%
+|dynamic_int_result_fallback|20.916290|21.390830|21.215614|+2.27%
+|boxed_int_method_call|16.912006|17.034328|16.872443|+0.72%
+|boxed_int_method_fallback|33.332957|33.863528|33.198627|+1.59%
+|boxed_float_method_fallback|33.856767|33.815159|34.307071|-0.12%
+|boxed_int_method_effect|91.828178|90.671498|91.366720|-1.26%
+|dynamic_float_result_call|11.788251|11.857559|11.869382|+0.59%
+|indirect_wide|7.457851|7.535387|7.618726|+1.04%
+|indirect_float|8.009620|7.977154|8.024814|-0.41%
+|indirect_int_result|7.540679|7.513098|7.630966|-0.37%
+|indirect_float_result|8.548941|8.367536|8.433145|-2.12%
+|indirect_tagged_float|7.760512|7.824976|7.753227|+0.83%
+|indirect_branch_float|8.307556|8.417326|8.239118|+1.32%
+|indirect_affine|7.469138|7.408430|7.531421|-0.81%
+|indirect_affine_wide|7.455722|7.465239|7.478321|+0.13%
+|indirect_branch_int|7.503106|7.496715|7.537858|-0.09%
+|dispatch_control|1.844378|1.839209|1.834908|-0.28%
+|list_read|2.807452|2.815495|2.803763|+0.29%
+|list_build|27.464443|27.595752|27.617350|+0.48%
+|list_mutate|188.105862|184.786718|185.530621|-1.76%
+|temporary_list|1.591337|1.583165|1.585430|-0.51%
+|temporary_hash|323.514067|336.321366|342.731060|+3.96%
+|closure_call|17.760641|17.584926|17.894961|-0.99%
+|closure_capture|22.837256|23.192134|22.999274|+1.55%
+|object_loop|167.396346|167.863088|168.109937|+0.28%
+|object_short|1080.848570|1101.889834|1069.026419|+1.95%
+|float_loop|182.532593|181.071665|183.121427|-0.80%
+|float_short|1077.549047|1069.663783|1072.266104|-0.73%
+|string_loop|357.263734|352.581139|352.334889|-1.31%
+|string_short|1225.399901|1231.927993|1224.574285|+0.53%
+|effect_loop|350.435358|333.781971|341.362897|-4.75%
+|effect_short|1265.618452|1257.276045|1247.322591|-0.66%
+|two_read_loop|369.550317|364.498122|372.254314|-1.37%
+|two_read_short|1290.139585|1288.473195|1291.624573|-0.13%
+|default_loop|679.781869|672.998047|671.977492|-1.00%
+|default_short|1630.562160|1599.993867|1613.962662|-1.87%
+|string_result_loop|402.965955|412.222060|402.860280|+2.30%
+|string_result_short|1344.598679|1340.209961|1340.541295|-0.33%
+|csv_report|941.614709|932.089781|933.662402|-1.01%
+|object_orders|1787.318638|1780.285063|1778.018043|-0.39%
+|callback_pipeline|82.224819|82.642684|82.023582|+0.51%
+|text_index|1327.004819|1309.539845|1304.971128|-1.32%
+
+Follow-up confirmation of the four aggregate losses and two controls:
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate vs before
+|arithmetic|1.580260|1.578459|1.583382|-0.11%
+|indirect_call|7.865448|7.948798|7.983034|+1.06%
+|monomorphic_call|3.957187|4.026082|4.009095|+1.74%
+|temporary_hash|341.308624|347.567816|355.208679|+1.83%
+|object_short|1144.078496|1154.889502|1147.015735|+0.94%
+|callback_pipeline|86.997668|87.101525|87.967895|+0.12%
+
+Every native artifact uses -O3 -DNDEBUG, allocation tracking OFF, and qcc -O3
+--strip-source. The prospective native-only schedule uses one warmup and three
+150 ms samples per process, 4096 items, seed 7, three layouts and fixed randomized
+ordering. Target screening has three forks and confirmation five; broad 55 has
+three forks. The selected broad follow-up has five fresh forks. All 2,691 timed
+processes and 8,073 measured windows are replayed. Shorter windows are
+predeclared for already-optimized AOT code;
+aggregates are not directly compared to older 300 ms campaigns. All runs and
+layouts are retained. No other owned work runs during timing; external load,
+frequency and thermals are uncontrolled. Timed checksums are parsed; separate
+reference checks verify results over varying counts and seeds.
+
+Release/Debug each pass 38 selected fixtures, 18,330 QUnit assertions and 391 qmod
+builds. Eight Linux-only RSS cases/build are skipped. Native Debug suites pass
+11,756 assertions; 2,220 IR/AOT references, 1,950 target artifact references and 7,047
+broad artifact references pass. The new fixture covers source modes and
+stripped AOT O0/O3/EH/split and disabled controls. Release aliases are restored.
+This is not a full-suite, sanitizer, leak-proof or cross-platform qualification.
+
+[results-aot-native-refself-macos-arm64.json](results-aot-native-refself-macos-arm64.json) preserves plans, sources, raw timings, process exits,
+dependencies, qualification, generated-code checks and all 62 audit checks. No
+fresh Java or pure-develop ratio is established here. Next investigate bounded
+scalar-body proofs for local-return callbacks and their remaining frame overhead.
+Further candidates include native integer snapshots after auditing boxed-i64
+consumers, conversion-call frames and loop diagnostics/cancellation. No global ceiling or
+general Java parity is claimed.

@@ -4288,3 +4288,34 @@ Release/Debug each pass 27 selected fixtures and 7,756 QUnit assertions, with
 Eight Linux RSS cases/build remain skipped. No global ceiling or general Java
 parity is claimed. Next examine loop diagnostics/cancellation and unnecessary
 native scalar return boxing, preserving exceptional and cancellation behavior.
+
+
+## AOT native scalar snapshots (2026-10-24)
+
+Physical native double/bool RefSelf values now retain their evaluated SSA value
+across cleanup, removing redundant boxing and reference-count operations from
+native returns. Boxed boundaries retain ownership; integer handling, declared
+return validation, call admission and cancellation are unchanged. The compile
+control is QORE_DISABLE_AOT_NATIVE_REFSELF. This change applies to AOT only.
+
+Retained: the four target workloads improve in both phases against both
+comparators, with a 24.97% confirmation geometric-mean time reduction versus
+before. Direct local/loop returns improve 48.33%/33.75%; callback local/loop
+returns improve 3.60%/3.98%. No target confirmation disjoint-range regression
+flag remains, and mixed confirmation workloads stay within 0.7% of baseline.
+The broad screen has no disjoint-range flags, but four aggregates exceed +3%
+against at least one comparator: indirect_call, monomorphic_call, temporary_hash
+and object_short. A separate five-fork confirmation of all four, with arithmetic
+and callback_pipeline controls, has no >3% aggregate loss or disjoint-range
+flag. The four are 0.94–1.83% slower than before in that follow-up. All original
+screening losses remain recorded; this is an overall tradeoff decision, not a
+claim that every control is faster. All broad generated function bodies match
+after the documented normalization; that does not establish the cause of
+observed differences. Callback samples still execute generic callee entries,
+which is the next optimization target. No general Java parity is established.
+
+RESULTS and `results-aot-native-refself-macos-arm64.json` retain the target screen/confirmation and fresh broad
+55-workload screen, including every adverse result. Release/Debug each pass
+38 selected fixtures, 18,330 QUnit assertions and 391 qmod builds. Eight Linux
+RSS checks per build remain skipped; native Debug and reference suites pass.
+No new Java/develop ratio, global ceiling or general Java parity is claimed.

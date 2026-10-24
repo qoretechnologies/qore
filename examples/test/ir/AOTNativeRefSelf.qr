@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+sub expect(auto expected, auto actual) {
+    if (type(expected) != type(actual) || (type(expected) == "float"
+            ? (expected.nanp() ? !actual.nanp() : expected != actual
+                || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual)))
+            : expected != actual)) {
+        throw "NATIVE-REFSELF", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+float sub localFloat(float value) { float result = value; return result; }
+bool sub localBool(bool value) { bool result = value; return result; }
+int sub localInt(int value) { int result = value; return result; }
+auto sub boxedCopy(auto value) { auto result = value; return result; }
+float sub floatLoop(float value) { float result = value; for (int i = 0; i < 2; ++i) { result *= 1.0; } return result; }
+float sub nativeFloatLoop(float value) {
+    float result = value;
+    for (int i = 0; i < 2; ++i) { result = result * 1.0; }
+    return result;
+}
+float sub foldedSnapshot(float value) {
+    list<float> items = (value, 0.0);
+    return (foldl $1 + $2 * 1.0, items);
+}
+float sub exitSnapshot(float value) { float result = value; on_exit result = 123.0; return result; }
+bool sub exitBool(bool value) { bool result = value; on_exit result = !result; return result; }
+float sub referenceSnapshot(reference<float> value) { float result = value; on_exit value = 99.0; return result; }
+float sub catchSnapshot(float value) {
+    try { throw "EXPECTED", "catch"; }
+    catch (hash<ExceptionInfo> e) { float result = value; return result; }
+}
+*float sub optionalSnapshot(*float value, bool use) { *float result = use ? value : NOTHING; return result; }
+float sub cleanupFailure(float value) { float result = value; on_exit { throw "EXPECTED", "cleanup"; } return result; }
+thread_local int destroyed = 0;
+class Owned {
+    destructor() { ++destroyed; }
+}
+float sub ownedSnapshot(float value) { Owned owner(); float result = value; return result; }
+float sub ownedFailure(float value) {
+    Owned owner(); float result = value;
+    on_exit { throw "EXPECTED", "owned cleanup"; }
+    return result;
+}
+list<float> values = (0.0, -0.0, 1.5, -1.5, -3.0e307, -6.0e307, @inf@, -@inf@, @nan@, -@nan@);
+foreach float value in (values) {
+    expect(value, localFloat(value));
+    expect(value, boxedCopy(value));
+    expect(value, floatLoop(value));
+    expect(value, nativeFloatLoop(value));
+    expect(value + 0.0, foldedSnapshot(value));
+    expect(value, exitSnapshot(value));
+    expect(value, catchSnapshot(value));
+    expect(value, ownedSnapshot(value));
+    expect(value, optionalSnapshot(value, True));
+    expect(NOTHING, optionalSnapshot(value, False));
+    float original = value;
+    expect(value, referenceSnapshot(\original));
+    expect(99.0, original);
+    foreach code<float(float)> failure in ((\cleanupFailure(), \ownedFailure())) {
+        bool caught = False;
+        try { failure(value); }
+        catch (hash<ExceptionInfo> e) { if (e.err != "EXPECTED") { rethrow; } caught = True; }
+        expect(True, caught);
+    }
+}
+expect(values.size() * 2, destroyed);
+foreach bool value in ((True, False)) {
+    expect(value, localBool(value));
+    expect(value, exitBool(value));
+    expect(value, boxedCopy(value));
+}
+foreach int value in ((0, -1, 1, 1 << 50, -(1 << 50), 0x7fffffffffffffff)) {
+    expect(value, localInt(value));
+    expect(value, boxedCopy(value));
+}
+expect(NOTHING, boxedCopy(NOTHING));
+expect("owned", boxedCopy("owned"));
+list<int> list_value = (1, 2, 3);
+expect(list_value, boxedCopy(list_value));
+printf("native-refself: ok\n");

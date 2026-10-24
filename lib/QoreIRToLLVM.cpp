@@ -18442,6 +18442,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
+            if (aot_mode && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_REFSELF")
+                    && (val->getType() == double_type || val->getType() == i1_type)) {
+                // These SSA scalars already snapshot the value across local or
+                // handler cleanup and own no reference. Box only at an actual
+                // boxed-value boundary; it then acquires its own ownership.
+                values[inst->result.id] = val;
+                return true;
+            }
             llvm::Value* boxed = boxValue(val, inst->operands[0].id);
             if (aot_mode && elided_typed_foreach_refself_values.count(inst->result.id)) {
                 values[inst->result.id] = boxed;
