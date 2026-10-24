@@ -6039,7 +6039,19 @@ static bool check_cancel_in_scope(int tid) {
     return false;
 }
 
+#ifdef DEBUG
+//! the number of cancellation checks that the current thread has made; see q_get_cancel_check_count()
+static thread_local int64 cancel_check_count = 0;
+
+int64 q_get_cancel_check_count() {
+    return cancel_check_count;
+}
+#endif
+
 bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
+#ifdef DEBUG
+    ++cancel_check_count;
+#endif
     ThreadData* td = thread_data.get();
     // a cleanup critical section must be able to complete on a cancelled or interrupted thread;
     // the pending request is deliberately left untouched here, so the first cancellation point

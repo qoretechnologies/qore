@@ -422,6 +422,12 @@ DLLLOCAL int64 q_get_hash_create_count();
 
 //! Returns the number of lists that the current thread has created; see q_get_hash_create_count()
 DLLLOCAL int64 q_get_list_create_count();
+
+//! Returns the number of cancellation checks (qore_check_cancel()) that the current thread has made
+/** Code that checks for cancellation at a fixed interval of the work it does makes a number of checks that grows
+    with that work, so tests use the count to verify how the work grows; see dbg_get_cancel_check_count().
+*/
+DLLLOCAL int64 q_get_cancel_check_count();
 #endif
 // increments or decrements the object count depending on the sign of the argument (cannot be 0)
 DLLLOCAL void inc_container_obj(const AbstractQoreNode* n, int dt);

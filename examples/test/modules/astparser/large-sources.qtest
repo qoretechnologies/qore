@@ -2,6 +2,8 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
+%modern
+
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/FsUtil.qm
@@ -15,22 +17,17 @@ class LargeSourcesTest inherits QUnit::Test {
         const Small = 400;
         #! the number of declarations in a large source
         const Large = 3200;
-        #! the largest acceptable ratio between the search times for the large and the small source
-        /** The searches take linear time, so the ratio is about 8; it was over 60 when finding the doc comment of
-            each declaration took time linear in the number of its siblings.
-        */
-        const MaxScalingRatio = 24.0;
-
-        #! the number of times that the search time of each source is measured
-        /** The sources are measured alternately, so that a change of the load of the machine affects both, and the
-            shortest time of each is compared: the measurement least disturbed by other processes.
-        */
-        const Rounds = 5;
+        #! the number of searches that searchChecks() makes
+        const Searches = 3;
+        #! tree-sitter functions that find a child or a sibling by walking the children before it
+        const SiblingWalks = ("ts_node_child", "ts_node_named_child", "ts_node_prev_sibling",
+            "ts_node_prev_named_sibling", "ts_node_next_sibling", "ts_node_next_named_sibling");
     }
 
     constructor() : QUnit::Test("astparser large sources", "1.0") {
         addTestCase("Doc comments and declarations of large sources", \docComments());
-        addTestCase("Search time scales linearly", \scaling());
+        addTestCase("Search work scales linearly", \scaling());
+        addTestCase("Children are walked with a cursor", \childWalks());
         addTestCase("Operations can be cancelled", \cancellation());
         set_return_value(main());
     }
@@ -64,24 +61,63 @@ class LargeSourcesTest inherits QUnit::Test {
         assertEq("/** function 9 */\n#! second line", f9.docComment);
     }
 
+    #! The work of the searches grows linearly with the number of declarations
+    /** The searches check for cancellation every 100 nodes that they visit, so the number of checks that they make
+        measures their work independently of the speed and load of the machine.  Each search rounds the nodes it
+        visits down to the interval, so a search of the large source makes up to Large / Small checks more than
+        linear growth from the small source would give.
+    */
     scaling() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("cancellation checks are counted in debug builds only");
+        }
         AstParser parser();
         AstTree small = parser.parseString(makeSource(Small));
         AstTree large = parser.parseString(makeSource(Large));
         AstTreeSearcher searcher();
 
-        float smallTime = searchTime(searcher, small);
-        float largeTime = searchTime(searcher, large);
-        for (int i = 1; i < Rounds; ++i) {
-            smallTime = min(smallTime, searchTime(searcher, small));
-            largeTime = min(largeTime, searchTime(searcher, large));
-        }
-        float ratio = largeTime / smallTime;
+        int smallChecks = searchChecks(searcher, small);
+        int largeChecks = searchChecks(searcher, large);
         if (m_options.verbose) {
-            printf("search time: %d declarations: %.3f us; %d declarations: %.3f us; ratio: %.2f\n", Small,
-                smallTime, Large, largeTime, ratio);
+            printf("cancellation checks: %d declarations: %d; %d declarations: %d\n", Small, smallChecks, Large,
+                largeChecks);
         }
-        assertLt(MaxScalingRatio, ratio);
+        assertGe(Searches * 2 * Small / 100, smallChecks, "the searches visit every declaration");
+        assertLe(Large / Small * (smallChecks + Searches), largeChecks,
+            "the work of the searches grows linearly with the number of declarations");
+    }
+
+    #! The module's sources walk the children of a node with a cursor
+    /** tree-sitter finds a child by index or a sibling by walking the children before it, so a loop over the
+        children of a node with those functions takes time quadratic in their number: finding the doc comment of
+        each declaration that way made searching a class with 3200 members 60 times slower than one with 400.
+        CSTWalk.h walks children with a cursor instead.
+    */
+    childWalks() {
+        string dir = get_script_dir() + "/../../../../modules/astparser/src";
+        if (!is_dir(dir)) {
+            testSkip("the sources of the module are not available");
+        }
+        list<string> files = sort(glob(dir + "/*.cpp") + glob(dir + "/*.h"));
+        assertGt(0, files.size(), "the sources of the module are found");
+        assertEq((), siblingWalks(files));
+    }
+
+    #! Returns "file: function" for each call of a function of SiblingWalks in the given files, outside comments
+    private static list<string> siblingWalks(list<string> files) {
+        list<string> rv = ();
+        foreach string file in (files) {
+            string src = ReadOnlyFile::readTextFile(file);
+            # comments may name the functions
+            src =~ s/\/\*.*?\*\///gs;
+            src =~ s/\/\/[^\n]*//g;
+            foreach string fn in (SiblingWalks) {
+                if (src.regex("\\b" + fn + "\\s*\\(")) {
+                    push rv, sprintf("%s: %s", basename(file), fn);
+                }
+            }
+        }
+        return rv;
     }
 
     cancellation() {
@@ -160,17 +196,13 @@ class LargeSourcesTest inherits QUnit::Test {
         return {api: "none"};
     }
 
-    #! Returns the average time of the searches of a tree in microseconds
-    private static float searchTime(AstTreeSearcher searcher, AstTree tree) {
-        int count = 0;
-        date start = now_us();
-        do {
-            searcher.findSymbols(tree, "u");
-            searcher.findScopeSymbolsDetailed(tree, "u", 5, 31);
-            searcher.findTypeMembers(tree, "u", "C");
-            ++count;
-        } while ((now_us() - start).durationMicroseconds() < 200000);
-        return (now_us() - start).durationMicroseconds().toFloat() / count;
+    #! Returns the number of cancellation checks that the searches of a tree make
+    private static int searchChecks(AstTreeSearcher searcher, AstTree tree) {
+        int start = call_function("dbg_get_cancel_check_count");
+        searcher.findSymbols(tree, "u");
+        searcher.findScopeSymbolsDetailed(tree, "u", 5, 31);
+        searcher.findTypeMembers(tree, "u", "C");
+        return call_function("dbg_get_cancel_check_count") - start;
     }
 
     #! Returns a source with a class with the given number of methods and the same number of functions
