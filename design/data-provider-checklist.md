@@ -67,7 +67,8 @@ its overlay, not by module code).
       After a framework identity change, regenerate all existing source-owned roots in one deterministic owner-loading
       pass with `build/qore bin/qore-data-provider-i18n -C --update-source-tree -o .`; then refresh every translation
       and run the strict source-tree check below.
-      Regenerate whenever a `display_name`, `short_desc` or `desc` changes; the test compares the committed
+      Regenerate whenever a translated text (`DataProviderPresentation::PresentationFields`: `display_name`,
+      `short_desc`, `desc` or an option's or field's `validation_regex_desc`) changes; the test compares the committed
       tree against what the module currently produces. Note the check only reaches an app once its factory is
       in `FactoryMap`, so a module missing both fails silently until the factory is added.
 - [ ] `registerApp()` called with correct fields

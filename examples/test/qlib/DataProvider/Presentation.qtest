@@ -63,6 +63,20 @@ class DataProviderPresentationTest inherits QUnit::Test {
         const AllowedValue = "doručit";
         const CatalogApp = "処理元";
         const Domain = "test.data-provider.presentation";
+
+        #! An option of an action of the app that describes its validation pattern
+        const PatternOption = "jazyk";
+        #! An option of an action of the app whose type has a field that describes its validation pattern
+        const NestedPatternOption = "měna";
+        const PatternDesc = "dvoupísmenný kód jazyka, například cs";
+        const NestedPatternDesc = "třípísmenný kód měny, například CZK";
+
+        #! The fixture module that registers an app whose options describe their validation patterns
+        const PatternOwnerModule = "PresentationPatternOwner";
+        const PatternOwnerApp = "QoreTestPatternProvider";
+        const PatternOwnerAction = "set-language";
+        const PatternOwnerDesc = "a two-letter language code, such as en";
+        const PatternOwnerNestedDesc = "a three-letter currency code, such as EUR";
     }
 
     constructor() : Test("DataProvider presentation catalog test", "1.0") {
@@ -92,6 +106,10 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \sourceCatalogTest());
         addTestCase("source catalogs recursively cover nested option types",
             \nestedSourceCatalogTest());
+        addTestCase("validation pattern descriptions are extracted and delivered translated",
+            \validationPatternPresentationTest());
+        addTestCase("qore-data-provider-i18n extracts validation pattern descriptions",
+            \validationPatternExtractionToolTest());
         addTestCase("producer locale validation is metadata-only and comprehensive",
             \sourceLocaleInspectionTest());
         addTestCase("the checked-in Qore source catalog is synchronized",
@@ -1501,6 +1519,172 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertTrue(DataProviderPresentation::buildSourceCatalogs(app(),
                 (source_action,)).hasKey(Domain),
             "technical schema paths disambiguate equal-shaped anonymous types without presentation text");
+    }
+
+    #! A validation pattern description is producer prose: it is extracted and delivered like a description
+    validationPatternPresentationTest() {
+        hash<auto> pattern_option = {
+            "display_name": "Jazyk",
+            "short_desc": "Jazyk zprávy",
+            "validation_regex": "^[a-z]{2}$",
+            "validation_regex_desc": PatternDesc,
+        };
+        # a field of an option type has the description in its attributes
+        QoreDataField code(<auto>{
+            "name": "code",
+            "display_name": "Kód",
+            "type": new QoreStringDataType(),
+        });
+        code.setAttributes({
+            "validation_regex": "^[A-Z]{3}$",
+            "validation_regex_desc": NestedPatternDesc,
+        });
+        hash<auto> source_action = action() + {
+            "options": {
+                PatternOption: pattern_option,
+                NestedPatternOption: {
+                    "display_name": "Měna",
+                    "type": new HashDataType("PatternCurrency", {"code": code}),
+                },
+            },
+        };
+        hash<auto> source_messages = DataProviderPresentation::buildSourceCatalogs(app(),
+            (source_action,)){Domain}.locales.root.messages;
+
+        # each description is found by its text, so that a description that is not extracted fails as such
+        list<string> ids = map $1.key, source_messages.pairIterator(), $1.value.source == PatternDesc;
+        assertEq(1, ids.size(), "an option's validation pattern description is extracted");
+        string option_id = DataProviderPresentation::optionMessageId(App, Action, PatternOption,
+            "validation_regex_desc");
+        assertEq(option_id, ids[0], "an option's description has the option's message id for the member");
+        ids = map $1.key, source_messages.pairIterator(), $1.value.source == NestedPatternDesc;
+        assertEq(1, ids.size(), "the validation pattern description of a field of an option type is extracted");
+        string nested_id = DataProviderPresentation::nestedFieldMessageId(App, Action, NestedPatternOption,
+            ("code",), "validation_regex_desc");
+        assertEq(nested_id, ids[0], "a field's description has the field's message id for the member");
+        assertEq(0, (map $1, source_messages.iterator(), $1.source == "^[a-z]{2}$"
+                || $1.source == "^[A-Z]{3}$").size(),
+            "a validation pattern is technical and is not extracted");
+        assertEq(NestedPatternDesc, code.getPresentationInfo().validation_regex_desc,
+            "a field's static presentation includes its validation pattern description");
+
+        string root = make_tmp_dir("data-provider-pattern-presentation-");
+        on_exit remove_tree(root);
+        mkdir(root + DirSep + Domain);
+        writeJson(root + DirSep + Domain + DirSep + "ja.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": {
+                DataProviderPresentation::optionMessageId(App, Action, PatternOption, "display_name"):
+                    {"source": "Jazyk", "message": "言語"},
+                DataProviderPresentation::optionMessageId(App, Action, PatternOption, "short_desc"):
+                    {"source": "Jazyk zprávy", "message": "メッセージの言語"},
+                option_id: {"source": PatternDesc, "message": "2文字の言語コード（例：cs）"},
+                DataProviderPresentation::nestedFieldMessageId(App, Action, NestedPatternOption, ("code",),
+                    "display_name"): {"source": "Kód", "message": "コード"},
+                nested_id: {"source": NestedPatternDesc, "message": "3文字の通貨コード（例：CZK）"},
+            }}},
+        });
+
+        DataProviderPresentationCatalog ja(Domain, "ja", {"search_path": (root,)});
+        hash<auto> projected = ja.projectOption(app(), source_action, PatternOption, pattern_option);
+        assertEq("2文字の言語コード（例：cs）", projected.validation_regex_desc,
+            "a translated validation pattern description is delivered in the requested locale");
+        assertEq(PatternDesc, projected.producer_presentation.validation_regex_desc,
+            "the producer's description remains available separately");
+        assertEq("^[a-z]{2}$", projected.validation_regex, "the pattern itself is unchanged");
+        assertFalse(exists projected.presentation_incomplete,
+            "an option whose presentation is all translated is complete");
+        hash<auto> projected_field = ja.projectNestedField(app(), source_action, NestedPatternOption, ("code",),
+            (), code.getPresentationInfo());
+        assertEq("3文字の通貨コード（例：CZK）", projected_field.validation_regex_desc,
+            "a field's translated validation pattern description is delivered in the requested locale");
+        assertFalse(exists projected_field.presentation_incomplete,
+            "a field whose presentation is all translated is complete");
+        assertFalse(ja.projectOption(app(), source_action, Option, option()).hasKey("validation_regex_desc"),
+            "an option without a description is projected without one");
+
+        hash<auto> stale = ja.projectOption(app(), source_action, PatternOption,
+            pattern_option + {"validation_regex_desc": "kód jazyka podle ISO 639-1"});
+        assertEq("", stale.validation_regex_desc,
+            "a translation of a superseded description is not delivered");
+        assertTrue(stale.presentation_incomplete, "a superseded translation leaves the option incomplete");
+
+        DataProviderPresentationCatalog sk(Domain, "sk", {"search_path": (root,)});
+        hash<auto> untranslated = sk.projectOption(app(), source_action, PatternOption, pattern_option);
+        assertEq("", untranslated.validation_regex_desc,
+            "a description is not presented as localized in a locale that has no translation of it");
+        assertTrue(untranslated.presentation_incomplete, "an untranslated description leaves the option incomplete");
+        assertEq(PatternDesc, untranslated.producer_presentation.validation_regex_desc,
+            "the producer's untranslated description remains available separately");
+
+        DataProviderPresentationCatalog cs(Domain, "cs", {"search_path": (root,)});
+        assertEq(PatternDesc, cs.projectOption(app(), source_action, PatternOption,
+                pattern_option).validation_regex_desc,
+            "the producer's locale is presented the producer's description");
+
+        # typed records declare only some presentation members; projecting them reads only the members they have
+        hash<auto> typed_value = sk.projectAllowedValue(app(), source_action, Option, <AllowedValueInfo>{
+            "value": {"opaque": True},
+            "display_name": "Složitá hodnota",
+            "desc": "Hodnota bez stabilní identity.",
+        });
+        assertEq("", typed_value.display_name, "a typed complex allowed value is projected without its prose");
+        assertFalse(typed_value.hasKey("validation_regex_desc"),
+            "a typed allowed value is projected without members that its hashdecl does not declare");
+        hash<auto> typed_path_var = ja.projectOption(app(), source_action, PathVar, <DataProviderPathVarInfo>{
+            "display_name": "Účet",
+            "desc": "Technický identifikátor cílového účtu.",
+        });
+        assertTrue(typed_path_var.presentation_incomplete, "a typed path variable without translations is projected");
+    }
+
+    #! The tool writes the validation pattern descriptions of a provider module into its root catalog
+    validationPatternExtractionToolTest() {
+        string root = sourceRoot();
+        string output = make_tmp_dir("data-provider-i18n-pattern-");
+        on_exit remove_tree(output);
+        assertEq(0, runOwnerExtraction(root, output, PatternOwnerModule),
+            "the tool extracts the catalog of the owner module");
+        string path = output + DirSep + DataProviderPresentation::defaultCatalogDomain(PatternOwnerApp)
+            + DirSep + "root.json";
+        hash<auto> messages = parse_json(ReadOnlyFile::readTextFile(path)).locales.root.messages;
+
+        list<string> ids = map $1.key, messages.pairIterator(), $1.value.source == PatternOwnerDesc;
+        assertEq(1, ids.size(), "an option's validation pattern description is in the generated root catalog");
+        assertEq(DataProviderPresentation::optionMessageId(PatternOwnerApp, PatternOwnerAction, "language",
+                "validation_regex_desc"), ids[0],
+            "an option's description has the option's message id for the member");
+        ids = map $1.key, messages.pairIterator(), $1.value.source == PatternOwnerNestedDesc;
+        assertEq(1, ids.size(),
+            "the validation pattern description of a field of an option type is in the generated root catalog");
+        assertEq(DataProviderPresentation::nestedFieldMessageId(PatternOwnerApp, PatternOwnerAction, "currency",
+                ("code",), "validation_regex_desc"), ids[0],
+            "a field's description has the field's message id for the member");
+    }
+
+    #! Runs the tool to extract the catalogs of one owner module into a directory
+    /** The tool is run by the built qore when there is one, as for the other cases that run the tool, and
+        otherwise by the qore that runs this test, which loads the same source-tree modules.
+
+        @return the exit status of the tool
+    */
+    private int runOwnerExtraction(string root, string output, string owner) {
+        string build_qore = root + DirSep + "build/qore";
+        bool built = is_executable(build_qore);
+        list<string> module_path = (root + DirSep + "qlib", get_script_dir());
+        if (built) {
+            module_path += (root + DirSep + "build/modules/i18n", root + DirSep + "build/modules/json");
+        }
+        if (exists ENV.QORE_MODULE_DIR) {
+            module_path += ENV.QORE_MODULE_DIR;
+        }
+        string env = "QORE_MODULE_DIR=" + shellQuote(module_path.join(PathSep));
+        if (built) {
+            env += " LD_LIBRARY_PATH=" + shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build"));
+        }
+        return system(sprintf("%s %s %s -C -o %s --owner %s >/dev/null", env,
+            shellQuote(built ? build_qore : QORE_ARGV[0]),
+            shellQuote(root + DirSep + "bin/qore-data-provider-i18n"), shellQuote(output), shellQuote(owner)));
     }
 
     sourceCatalogSyncTest() {

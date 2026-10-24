@@ -45,6 +45,22 @@ public class DataProviderPresentation {
         */
         const StandardTranslationLocales = ("cs", "de", "es", "fr", "it",
             "ja", "ko", "pl", "sk", "uk", "zh-Hant", "zh-TW");
+
+        #! The members of provider presentation records whose text is translated
+        /** These are the producer-owned texts that a user interface shows to a person: the label
+            (\c display_name), the short and the long description (\c short_desc and \c desc), and the description in
+            plain words of the values that a validation pattern accepts (\c validation_regex_desc of an option or of
+            a field).  Each is extracted to the source catalogs by @ref buildSourceCatalogs(), has a message ID
+            built from the exact technical identity of its record and the member name, and is projected for a
+            requested locale by @ref DataProvider::DataProviderPresentationCatalog "DataProviderPresentationCatalog".
+            A member that a record does not have is ignored.
+
+            Other members, such as a validation pattern itself or an example value, are technical values and are
+            never translated.
+
+            @since %DataProvider 3.11
+        */
+        const PresentationFields = ("display_name", "short_desc", "desc", "validation_regex_desc");
     }
 
     #! Returns the default catalog domain for an exact app identifier
@@ -213,7 +229,7 @@ public class DataProviderPresentation {
 
     #! Returns a stable app presentation message id
     /** @param app exact technical app identifier
-        @param field presentation field name
+        @param field presentation field name; one of @ref PresentationFields
         @return stable symbolic message id
 
         @throw DATA-PROVIDER-PRESENTATION-ERROR if an identity is empty or \a field is unsupported
@@ -226,7 +242,7 @@ public class DataProviderPresentation {
     #! Returns a stable action presentation message id
     /** @param app exact technical app identifier
         @param action exact technical action identifier
-        @param field presentation field name
+        @param field presentation field name; one of @ref PresentationFields
         @return stable symbolic message id
 
         @throw DATA-PROVIDER-PRESENTATION-ERROR if an identity is empty or \a field is unsupported
@@ -241,7 +257,7 @@ public class DataProviderPresentation {
     /** @param app exact technical app identifier
         @param action exact technical action identifier
         @param option exact technical option identifier
-        @param field presentation field name
+        @param field presentation field name; one of @ref PresentationFields
         @return stable symbolic message id
 
         @throw DATA-PROVIDER-PRESENTATION-ERROR if an identity is empty or \a field is unsupported
@@ -264,7 +280,7 @@ public class DataProviderPresentation {
         @param action exact technical action identifier
         @param option exact technical option identifier
         @param field_path non-empty exact technical field path
-        @param field presentation field name
+        @param field presentation field name; one of @ref PresentationFields
         @param union_path ordered stable technical identities of union alternatives crossed on the way to the field;
             omitted when the path crosses no union
         @return stable symbolic message id
@@ -299,7 +315,7 @@ public class DataProviderPresentation {
         @param option exact technical option identifier
         @param field_path non-empty exact technical field path
         @param value exact technical allowed value
-        @param field presentation field name
+        @param field presentation field name; one of @ref PresentationFields
         @param element_value if @ref True, identify an \c element_allowed_values entry; otherwise identify an
             \c allowed_values entry
         @param union_path ordered stable technical identities of union alternatives crossed on the way to the field
@@ -417,7 +433,7 @@ public class DataProviderPresentation {
         @param app exact technical app identifier
         @param type_identity stable identity returned by @ref occurrenceTypePresentationIdentity()
         @param field_name exact technical field identifier
-        @param field presentation field name
+        @param field presentation field name; one of @ref PresentationFields
         @return stable symbolic message id
 
         @throw DATA-PROVIDER-PRESENTATION-ERROR if an identity is empty or \a field is unsupported
@@ -437,7 +453,7 @@ public class DataProviderPresentation {
         @param type_identity stable identity returned by @ref occurrenceTypePresentationIdentity()
         @param field_name exact technical field identifier
         @param value exact technical allowed value
-        @param field presentation field name
+        @param field presentation field name; one of @ref PresentationFields
         @param element_value if @ref True, identify an \c element_allowed_values entry; otherwise identify an
             \c allowed_values entry
         @return stable symbolic message id, or @ref nothing for a complex value
@@ -497,7 +513,7 @@ public class DataProviderPresentation {
         @param action exact technical action identifier
         @param option exact technical option identifier
         @param value exact technical allowed value
-        @param field presentation field name
+        @param field presentation field name; one of @ref PresentationFields
         @return stable symbolic message id, or @ref nothing for a complex value
 
         @throw DATA-PROVIDER-PRESENTATION-ERROR if an identity is empty or \a field is unsupported
@@ -520,6 +536,11 @@ public class DataProviderPresentation {
         derived from an exact source-owned technical identity and every source
         string remains producer-owned. Action-level catalog-domain and
         source-app overrides are honored without changing executable identity.
+
+        The members of @ref PresentationFields are extracted from the app, its
+        actions, their options and path variables, the allowed values of the
+        options, and the fields reachable through the options' types, with
+        their allowed values.
 
         @param app provider app metadata
         @param actions provider action metadata
@@ -798,7 +819,7 @@ public class DataProviderPresentation {
     }
 
     private static checkPresentationField(string field) {
-        if (!inlist(field, ("display_name", "short_desc", "desc"))) {
+        if (!inlist(field, PresentationFields)) {
             throw "DATA-PROVIDER-PRESENTATION-ERROR",
                 sprintf("unsupported presentation field %y", field);
         }
@@ -1035,7 +1056,7 @@ public class DataProviderPresentation {
         foreach hash<auto> entry in (record.pairIterator()) {
             presentation{entry.key} = entry.value;
         }
-        foreach string field in (("display_name", "short_desc", "desc")) {
+        foreach string field in (PresentationFields) {
             if (presentation{field}.typeCode() != NT_STRING
                     || !presentation{field}.toString().val()) {
                 continue;
@@ -1750,9 +1771,10 @@ public class DataProviderPresentationCatalog {
             return rv;
         }
         hash<auto!> producer = {};
-        foreach string field in (("display_name", "short_desc", "desc")) {
-            if (source{field}.typeCode() == NT_STRING) {
-                producer{field} = source{field};
+        # read the members from the open copy: a typed record has only the members of its hashdecl
+        foreach string field in (DataProviderPresentation::PresentationFields) {
+            if (rv{field}.typeCode() == NT_STRING) {
+                producer{field} = rv{field};
                 rv{field} = "";
             }
         }
@@ -1779,11 +1801,13 @@ public class DataProviderPresentationCatalog {
         bool use_source = DataProviderPresentation::sourceLocaleMatches(
             locale, source_locale);
 
-        foreach string field in (("display_name", "short_desc", "desc")) {
-            if (source{field}.typeCode() != NT_STRING) {
+        # read the members from the open copy: a typed record has only the members of its hashdecl, and each
+        # iteration replaces only the member that it has read
+        foreach string field in (DataProviderPresentation::PresentationFields) {
+            if (rv{field}.typeCode() != NT_STRING) {
                 continue;
             }
-            string source_text = source{field}.toString();
+            string source_text = rv{field}.toString();
             producer{field} = source_text;
             if (!source_text.val()) {
                 rv{field} = "";
