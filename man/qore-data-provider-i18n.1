@@ -101,14 +101,18 @@ catalogs whose messages identified such a type by the option and path that
 reached it have one message for each of them, and these come together.  When
 they had different translations of one text, the translation given most often
 is kept, or the first one in the file for a tie, and the text is reported as a
-variant.  A message without such a translation takes the translation that the
-locale gives the same text of the same field and member under another
-identifier, if there is exactly one.  For each domain that changes, a
+variant.  A message without such a translation takes the translation of the
+same text of the same field and member of a type with the same class and name
+in the same action whose identifier changed with its shape or schema identity
+(matched by type), chosen in the same way, and otherwise the translation that
+the locale gives the same text of the same field and member under another
+identifier, if there is exactly one (reused by text).  For each domain that
+changes, a
 .B REKEY:
 line gives the number of messages before and after and the numbers of
-translations carried, variants, translations reused by text, missing
-translations, and new texts, which are texts the old root catalog did not
-have.  Only the
+translations carried, matched by type, variants, translations reused by text,
+missing translations, and new texts, which are texts the old root catalog did
+not have.  Only the
 .I domain/root.json
 layout is supported.
 .IP

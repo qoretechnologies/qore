@@ -1889,15 +1889,15 @@ class DataProviderPresentationTest inherits QUnit::Test {
         string tree = join_paths(work, "tree");
         writeRekeyTree(tree, fx, old_messages, {"cs": cs, "de": fx.de});
         hash<string, string> before = readRekeyTree(tree);
-        string report = "(?m)^REKEY: .*root\\.json: 32 -> 27 message\\(s\\); translations carried 28, variants 2, "
-            "reused by text 1, missing 25; new texts 1$";
+        string report = "(?m)^REKEY: .*root\\.json: 32 -> 27 message\\(s\\); translations carried 28, matched by "
+            "type 2, variants 3, reused by text 3, missing 21; new texts 1$";
 
         string out;
         assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree --dry-run -o %s --owner %s", shellQuote(tree),
                 RekeyOwnerModule), \out), "a dry run without conflicts succeeds: " + out);
         assertRegex(report, out, "a dry run reports the counts of the domain");
         assertRegex("(?m)^surveyed 1 domain\\(s\\), 1 re-keyed; 32 -> 27 message\\(s\\); 0 conflict\\(s\\); "
-            "translations carried 28, variants 2, reused by text 1, missing 25; new texts 1 "
+            "translations carried 28, matched by type 2, variants 3, reused by text 3, missing 21; new texts 1 "
             "\\(dry run: nothing written\\)$", out, "a dry run reports the totals");
         assertEq(before, readRekeyTree(tree), "a dry run writes nothing");
 
@@ -1927,10 +1927,18 @@ class DataProviderPresentationTest inherits QUnit::Test {
 
         hash<auto> de_messages = parse_json(ReadOnlyFile::readTextFile(join_paths(dir, "de.json"))).locales.de
             .messages;
-        assertEq((DataProviderPresentation::appMessageId(RekeyOwnerApp, "display_name"), fx.city, fx.street),
-            keys de_messages, "a locale keeps exactly the translations it can carry or reuse, in the root's order");
+        list<string> address_ids = map DataProviderPresentation::nestedFieldMessageId(RekeyOwnerApp, RekeyOwnerAction,
+            $1, ("address",), "short_desc"), RekeyOwnerOptions;
+        assertEq((DataProviderPresentation::appMessageId(RekeyOwnerApp, "display_name"), fx.city, fx.street,
+                fx.city_desc) + address_ids, keys de_messages,
+            "a locale keeps exactly the translations it can carry, match or reuse, each where the translation it "
+            "comes from was in the file, and those reused after them in the order of the root");
         assertEq("Stadt", de_messages{fx.city}.message, "the translation that one option gave a text is kept");
         assertEq({"source": "Street", "message": "Straße"}, de_messages{fx.street},
+            "a text takes the translation of the same text of the same field of the type with another shape");
+        assertEq("Stadt der Adresse", de_messages{fx.city_desc}.message,
+            "of the translations of the type with another shape given equally often, the first one is kept");
+        assertEq(("Adresse", "Adresse", "Adresse"), (map de_messages{$1}.message, address_ids),
             "a text without a translation takes the one translation of the same text of the same field and member");
 
         hash<string, string> rekeyed = readRekeyTree(tree);
@@ -1955,8 +1963,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
         string mechanical = join_paths(work, "mechanical");
         writeRekeyTree(extracted, fx, fx.old_messages, {"cs": fx.cs, "de": fx.de});
         writeRekeyTree(mechanical, fx, fx.old_messages, {"cs": fx.cs, "de": fx.de});
-        string report = "(?m)^REKEY: .*root\\.json: 33 -> 27 message\\(s\\); translations carried 29, variants 2, "
-            "reused by text 1, missing 24; new texts 0$";
+        string report = "(?m)^REKEY: .*root\\.json: 33 -> 27 message\\(s\\); translations carried 29, matched by "
+            "type 2, variants 3, reused by text 3, missing 20; new texts 0$";
 
         string out;
         assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree -o %s --owner %s", shellQuote(extracted),
@@ -2147,8 +2155,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 "message": "Rekey-Anbieter",
             },
             occurrenceMessageId(city, "courier"): {"source": "City", "message": "Stadt"},
-            # the same texts of the same fields and members of a type of another shape: one translation is reused,
-            # two different translations are not
+            # the same texts of the same fields and members of the type with another shape: the translation given
+            # most often, the first one in the file for a tie, is kept
             occurrenceMessageId(otherShapeMessageId(street), "sender"): {"source": "Street", "message": "Straße"},
             occurrenceMessageId(otherShapeMessageId(city_desc), "sender"): {
                 "source": "The city of the address",
@@ -2158,6 +2166,9 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 "source": "The city of the address",
                 "message": "Ort der Adresse",
             },
+            # the same text of the same field and member elsewhere, once: it is reused for every message with it
+            DataProviderPresentation::nestedFieldMessageId(RekeyOwnerApp, RekeyOwnerAction, "returnee", ("address",),
+                "short_desc"): {"source": "Address", "message": "Adresse"},
         };
         return {
             "domain": domain,

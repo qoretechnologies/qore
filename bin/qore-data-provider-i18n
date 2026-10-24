@@ -623,9 +623,12 @@ class QoreDataProviderI18nCmd {
         must have the same source text).  The translations of each locale are carried to the new ids: a translation
         is kept for the new id of its old id if the new root has the same source text there; translations of one text
         that differ are reported as variants, and the most frequent one (the first one in the file for a tie) is
-        kept.  A new root message without such a translation takes the translation that the locale gives the same
-        text for the same field and member under another id, if there is exactly one; the others are reported as
-        missing.  A root text that the old root does not have is reported as a new text.
+        kept.  A new root message without such a translation takes the translation of the same text of the same
+        field and member of a type with the same class and name in the same action, whose id changed with its shape
+        or schema identity (see digestFreeMessageId()), chosen in the same way, and otherwise the translation that
+        the locale gives the same text for the same field and member under another id, if there is exactly one;
+        the others are reported as missing.  A root text that the old root does not have is reported as a new
+        text.
 
         Conflicting texts for one new id (or a conflict reported by the extraction) are reported for each domain;
         then nothing is written, and the program exits with status 2.
@@ -692,7 +695,7 @@ class QoreDataProviderI18nCmd {
         hash<string, hash<auto>> writes = {};
         hash<string, int> totals = {
             "domains": 0, "changed": 0, "before": 0, "after": 0, "conflicts": 0, "carried": 0, "variants": 0,
-            "reused": 0, "missing": 0, "new_texts": 0,
+            "matched": 0, "reused": 0, "missing": 0, "new_texts": 0,
         };
         foreach hash<auto> root in (sort_stable(roots, int sub (hash<auto> l, hash<auto> r) {
                 return l.path <=> r.path; })) {
@@ -761,6 +764,7 @@ class QoreDataProviderI18nCmd {
             # locale -> the translation catalog with the re-keyed messages
             hash<string, hash<auto>> locale_catalogs = {};
             int carried = 0;
+            int matched = 0;
             int variants = 0;
             int reused = 0;
             int missing = 0;
@@ -775,6 +779,9 @@ class QoreDataProviderI18nCmd {
                 # new id -> translation -> number of old ids giving it, and the position of the first one
                 hash<string, hash<string, int>> counts = {};
                 hash<string, hash<string, int>> first = {};
+                # (id without type digests, source) -> translation -> number of old ids giving it, first position
+                hash<string, hash<string, int>> by_type = {};
+                hash<string, hash<string, int>> by_type_first = {};
                 # (field, member, source) -> translations
                 hash<string, hash<string, bool>> by_text = {};
                 int pos = 0;
@@ -786,6 +793,13 @@ class QoreDataProviderI18nCmd {
                     }
                     string message = entry.value.message;
                     by_text{textKey(entry.key, entry.value.source)}{message} = True;
+                    string type_key = digestFreeMessageId(entry.key) + "|" + entry.value.source;
+                    if (exists by_type{type_key}{message}) {
+                        by_type{type_key}{message} = by_type{type_key}{message} + 1;
+                    } else {
+                        by_type{type_key}{message} = 1;
+                        by_type_first{type_key}{message} = pos;
+                    }
                     string id = idmap{entry.key} ?? rekeyMessageId(entry.key);
                     if (new_messages{id}.source != entry.value.source) {
                         continue;
@@ -797,37 +811,50 @@ class QoreDataProviderI18nCmd {
                         first{id}{message} = pos;
                     }
                 }
-                hash<auto> messages = {};
+                # each translation is written where the translation it comes from was in the file, so that the file
+                # changes no more than its ids; one without such a place comes after them, in the order of the root
+                list<hash<auto>> placed = ();
+                int unplaced = translations.size() + 1;
                 foreach hash<auto> entry in (new_messages.pairIterator()) {
                     if (*hash<string, int> c = counts{entry.key}) {
-                        string best = c.firstKey();
                         if (c.size() > 1) {
                             ++variants;
-                            *hash<string, int> f = first{entry.key};
-                            foreach hash<auto> candidate in (c.pairIterator()) {
-                                if (candidate.value > c{best}
-                                        || (candidate.value == c{best} && f{candidate.key} < f{best})) {
-                                    best = candidate.key;
-                                }
-                            }
                         }
-                        messages{entry.key} = {"source": entry.value.source, "message": best};
+                        string message = mostFrequent(c, first{entry.key});
+                        placed += {"id": entry.key, "pos": first{entry.key}{message},
+                            "value": {"source": entry.value.source, "message": message}};
                         ++carried;
+                        continue;
+                    }
+                    # the same text of the same field and member of a type with the same class and name in the
+                    # same action: the type's shape or schema identity has changed its message id
+                    string type_key = digestFreeMessageId(entry.key) + "|" + entry.value.source;
+                    if (*hash<string, int> c = by_type{type_key}) {
+                        if (c.size() > 1) {
+                            ++variants;
+                        }
+                        string message = mostFrequent(c, by_type_first{type_key});
+                        placed += {"id": entry.key, "pos": by_type_first{type_key}{message},
+                            "value": {"source": entry.value.source, "message": message}};
+                        ++matched;
                         continue;
                     }
                     *hash<string, bool> same_text = by_text{textKey(entry.key, entry.value.source)};
                     if (same_text.size() == 1) {
-                        messages{entry.key} = {"source": entry.value.source, "message": same_text.firstKey()};
+                        placed += {"id": entry.key, "pos": unplaced,
+                            "value": {"source": entry.value.source, "message": same_text.firstKey()}};
                         ++reused;
                         continue;
                     }
                     ++missing;
                 }
+                hash<auto> messages = map {$1.id: $1.value}, sort_stable(placed,
+                    int sub (hash<auto> l, hash<auto> r) { return l.pos <=> r.pos; });
                 locale_catalog.locales{locale}.messages = messages;
                 locale_catalogs{locale} = locale_catalog;
             }
-            hash<string, int> stats = {"carried": carried, "variants": variants, "reused": reused,
-                "missing": missing};
+            hash<string, int> stats = {"carried": carried, "matched": matched, "variants": variants,
+                "reused": reused, "missing": missing};
             int new_texts = (select new_messages.iterator(), !old_sources{$1.source}).size();
             map totals{$1.key} += $1.value, stats.pairIterator();
             totals.new_texts += new_texts;
@@ -836,12 +863,12 @@ class QoreDataProviderI18nCmd {
                 ++totals.changed;
             }
             if (changed || verbose) {
-                printf("%s %s: %d -> %d message(s); translations carried %d, variants %d, reused by text %d, "
-                    "missing %d; new texts %d\n", color.key(changed ? "REKEY:" : "SAME:"), root.path,
-                    old_messages.size(), new_messages.size(), stats.carried, stats.variants, stats.reused,
-                    stats.missing, new_texts);
+                printf("%s %s: %d -> %d message(s); translations carried %d, matched by type %d, variants %d, "
+                    "reused by text %d, missing %d; new texts %d\n", color.key(changed ? "REKEY:" : "SAME:"),
+                    root.path, old_messages.size(), new_messages.size(), stats.carried, stats.matched,
+                    stats.variants, stats.reused, stats.missing, new_texts);
             }
-            if (!changed && !stats.reused) {
+            if (!changed && !stats.matched && !stats.reused && new_catalog == old_catalog) {
                 continue;
             }
             writes{root.path} = new_catalog;
@@ -854,15 +881,58 @@ class QoreDataProviderI18nCmd {
             }
         }
         printf("%s %d domain(s), %d re-keyed; %d -> %d message(s); %d conflict(s); translations carried %d, "
-            "variants %d, reused by text %d, missing %d; new texts %d%s\n",
+            "matched by type %d, variants %d, reused by text %d, missing %d; new texts %d%s\n",
             dry_run || totals.conflicts ? "surveyed" : "re-keyed", totals.domains, totals.changed, totals.before,
-            totals.after, totals.conflicts, totals.carried, totals.variants, totals.reused, totals.missing,
-            totals.new_texts, dry_run
+            totals.after, totals.conflicts, totals.carried, totals.matched, totals.variants, totals.reused,
+            totals.missing, totals.new_texts, dry_run
                 ? " (dry run: nothing written)"
                 : (totals.conflicts ? " (conflicts: nothing written)" : ""));
         if (totals.conflicts) {
             exit(2);
         }
+    }
+
+    #! Returns the translation given most often, the first one in the file for a tie
+    /** @param counts translation -> number of old ids giving it
+        @param first translation -> position of the first old id giving it in the file
+    */
+    private static string mostFrequent(hash<string, int> counts, *hash<string, int> first) {
+        string best = counts.firstKey();
+        foreach hash<auto> candidate in (counts.pairIterator()) {
+            if (candidate.value > counts{best} || (candidate.value == counts{best} && first{candidate.key} < first{best})) {
+                best = candidate.key;
+            }
+        }
+        return best;
+    }
+
+    #! Returns a message id with the digests of its type identities removed
+    /** The type and union identities of a message id end with a digest of the type's technical shape and schema
+        identity (see DataProviderPresentation::typePresentationIdentity()), and a per-option identity with the
+        option and path; what remains is the action, class and name of the type.  Two ids that are equal without
+        them name the same field and member of a type with the same class and name in the same action.
+
+        @param id a message id
+        @return the id with each type and union identity reduced to the text before its \c "#", decoded
+    */
+    static string digestFreeMessageId(string id) {
+        list<string> parts = id.split(".");
+        # the keywords are at the even positions: app <app> type <identity> field <field> <member>
+        for (int i = 0; i + 1 < parts.size(); i += 2) {
+            if (parts[i] != "type" && parts[i] != "union") {
+                continue;
+            }
+            try {
+                string identity = parse_base64_url_string_to_string(parts[i + 1]);
+                int digest = identity.find("#");
+                if (digest > 0) {
+                    parts[i + 1] = identity.substr(0, digest);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # a segment that does not decode is kept as it is
+            }
+        }
+        return parts.join(".");
     }
 
     #! Returns the key of a text for a field and member: the last two components of the id and the source text
