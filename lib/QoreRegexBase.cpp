@@ -126,8 +126,24 @@ void QoreRegexBase::jitCompile() {
     pcre2_jit_compile(p, PCRE2_JIT_COMPLETE);
 }
 
+#ifdef DEBUG
+//! the number of subject bytes that the matches of the current thread had PCRE2 check for valid UTF-8
+static thread_local int64 regex_utf_check_bytes = 0;
+
+int64 q_get_regex_utf_check_bytes() {
+    return regex_utf_check_bytes;
+}
+#endif
+
 int qore_pcre2_match(const pcre2_code* code, PCRE2_SPTR8 subject, PCRE2_SIZE length,
         PCRE2_SIZE startoffset, uint32_t options, pcre2_match_data* md) {
+#ifdef DEBUG
+    // Qore compiles every pattern with PCRE2_UTF; without PCRE2_NO_UTF_CHECK, PCRE2 checks the subject from the start
+    // offset to its end
+    if (!(options & PCRE2_NO_UTF_CHECK) && startoffset < length) {
+        regex_utf_check_bytes += static_cast<int64>(length - startoffset);
+    }
+#endif
     if (!qore_pcre2_jit_enabled()) {
         // Also covers patterns with JIT code attached by an embedding application. No JIT
         // stack or thread-local match context is needed for the interpreter.

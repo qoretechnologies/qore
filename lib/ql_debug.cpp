@@ -66,6 +66,7 @@
 #include "qore/intern/NegotiatingConnectionPollOp.h"
 #include "qore/intern/RSection.h"
 #include "qore/intern/RSet.h"
+#include "qore/intern/QoreRegexBase.h"
 #include <qore/HttpClientConnectionManager.h>
 #include <qore/QoreHttpClientObject.h>
 #include <qore/QoreSandboxManager.h>
@@ -12093,6 +12094,15 @@ static QoreValue f_dbg_get_scan_object_count(const QoreListNode* params, Runtime
     return q_get_scan_object_count();
 }
 
+//! returns the number of subject bytes that the regular expression matches of the current thread had checked for UTF-8
+/** A match that does not skip the check checks the subject from its start offset to its end, so tests use this to
+    verify that a global match or substitution checks its subject once instead of once per match.
+*/
+static QoreValue f_dbg_get_regex_utf_check_bytes(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_regex_utf_check_bytes();
+}
+
 //! returns the number of regions whose dependencies scans in the current thread have walked
 /** A scan that reaches an object of a closed region decides whether the region is current, which can mean walking
     the regions it depends on; tests use this to verify that a region found current is not walked again while
@@ -13621,6 +13631,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_scan_object_count", f_dbg_get_scan_object_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_regex_utf_check_bytes", f_dbg_get_regex_utf_check_bytes, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_region_walk_count", f_dbg_get_region_walk_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);

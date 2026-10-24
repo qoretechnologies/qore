@@ -27,6 +27,7 @@ class RegexTest inherits QUnit::Test {
         addTestCase("invalid UTF-8 subject", \testInvalidUtf8Subject());
         addTestCase("large subject linear scan", \testLargeSubjectLinearScan());
         addTestCase("large subject correctness", \testLargeSubjectCorrectness());
+        addTestCase("global callback substitution checks UTF-8 once", \testCallbackSubstitutionUtfCheck());
         addTestCase("excessive backtracking raises", \testExcessiveBacktracking());
         addTestCase("large subject match is cancellable", \testLargeSubjectCancellable());
         set_return_value(main());
@@ -1301,16 +1302,25 @@ class RegexTest inherits QUnit::Test {
         assertGt(ReqCuCliffSize, utf8.size(), "UTF-8 subject exceeds the PCRE2 threshold in bytes");
         assertEq(("pw",), utf8.regexExtract(UriUserinfoPattern), "UTF-8 subject past the cliff");
 
-        # Callback substitution must validate UTF-8 once, then advance through global matches in
-        # linear time. Revalidating the complete subject for every callback made this quadratic, so four times as
-        # many matches took about sixteen times as long; the ratio does not depend on the speed of the machine
-        float small = callbackSubstitutionTime(16384);
-        float large = callbackSubstitutionTime(65536);
-        assertLt(8.0, large / small, "global callback substitution takes linear time");
-
         # case-insensitive matching past the cliff
         assertTrue(makeSubject(ReqCuCliffSize + 100000, "NEEDLE").regex("needle", RE_Caseless),
             "caseless match past the cliff");
+    }
+
+    #! A global substitution with a callback checks the UTF-8 of its subject once, not once for each match
+    /** Without PCRE2_NO_UTF_CHECK, PCRE2 checks the subject from the start offset of a match to its end, so checking
+        it for every callback made a substitution quadratic in the number of matches.  The number of bytes checked
+        is counted in debug builds, which makes this independent of the speed and load of the machine.
+    */
+    testCallbackSubstitutionUtfCheck() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the count of the bytes checked for UTF-8 requires a debug build");
+        }
+        int small = callbackSubstitutionUtfCheckBytes(16384);
+        int large = callbackSubstitutionUtfCheckBytes(65536);
+        assertEq(strmul("éx ", 16384).size(), small, "the subject of 16384 matches is checked once");
+        assertEq(strmul("éx ", 65536).size(), large, "the subject of 65536 matches is checked once");
+        assertEq(4 * small, large, "the bytes checked grow linearly with the number of matches");
     }
 
     testExcessiveBacktracking() {
@@ -1400,18 +1410,23 @@ class RegexTest inherits QUnit::Test {
         assertRegex("^regular expression", rv.desc, "the match loop raised the cancellation");
     }
 
-    #! Returns the time of a global callback substitution with the given number of matches in microseconds
-    private int callbackSubstitutionTime(int matches) {
+    #! Returns the number of subject bytes checked for UTF-8 by a global callback substitution with the given matches
+    private int callbackSubstitutionUtfCheckBytes(int matches) {
         string callback_subject = strmul("éx ", matches);
         int callback_count = 0;
-        int t0 = clock_getmicros_monotonic();
+        int checked = RegexTest::utfCheckBytes();
         string callback_result = regex_subst(callback_subject, "x", string sub (hash<RegexMatchInfo> match) {
             ++callback_count;
             return "y";
         }, RE_Global);
-        int elapsed = clock_getmicros_monotonic() - t0;
+        checked = RegexTest::utfCheckBytes() - checked;
         assertEq(matches, callback_count, "callback runs once per global UTF-8 match");
         assertEq(strmul("éy ", matches), callback_result, "callback substitution preserves UTF-8 offsets");
-        return elapsed;
+        return checked;
+    }
+
+    #! Returns the number of subject bytes that the regular expression matches of this thread had checked for UTF-8
+    private static int utfCheckBytes() {
+        return call_function("dbg_get_regex_utf_check_bytes");
     }
 }
