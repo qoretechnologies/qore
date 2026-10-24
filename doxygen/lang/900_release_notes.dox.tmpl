@@ -50,7 +50,9 @@
     Program ends that chain, and restricting domains and sandbox checks still apply.
     Cross-module data-provider factories can also construct an exact public module class imported by their
     application caller, even when its defining module enables injection or debugging. This class-specific
-    permission preserves factory creation without exposing other symbols or unrelated Programs.
+    permission preserves factory creation without exposing other symbols or unrelated Programs. A sandboxed
+    application can use such factories: a user module %Program has no sandbox manager of its own, so the provider's
+    code runs under the application's @ref Qore::SandboxManager "SandboxManager".
     See @ref reflection_caller_privilege and <a href="https://github.com/qoretechnologies/qore/issues/5483">issue 5483</a>.
 
     @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool" serialization

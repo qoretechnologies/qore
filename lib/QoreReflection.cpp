@@ -715,7 +715,10 @@ int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const ch
     if (privileged && sm) {
         QoreSandboxManager* target_sm = qore_program_private::get(*const_cast<QoreProgram*>(target))
             ->getSandboxManagerRef();
-        privileged = (target_sm == sm);
+        // A user module Program has no manager of its own: sandbox resolution walks out of it to the code that
+        // calls it, so code that runs there for this caller is governed by the caller's manager, as it is when the
+        // caller calls the module directly.  Any other Program must have the governing manager as its own.
+        privileged = target_sm ? target_sm == sm : tpo.hasAny(QoreParseOptions(PO_IN_MODULE));
         if (target_sm) {
             target_sm->deref(nullptr);
         }
