@@ -1524,47 +1524,14 @@ static inline bool qore_rt_is_weak_reference_type(qore_type_t type) {
     return type == NT_WEAKREF || type == NT_WEAKREF_HASH || type == NT_WEAKREF_LIST;
 }
 
-static bool qore_rt_normalize_weak_reference_for_assignment(QoreValue& val, ValueHolder& holder,
-        ExceptionSink* xsink) {
-    if (!qore_rt_is_weak_reference_type(val.getType())) {
-        return false;
-    }
-    holder = val.eval(xsink);
-    if (xsink && *xsink) {
-        return true;
-    }
-    val = *holder;
-    return true;
-}
-
-static bool qore_rt_evaluate_owned_weak_reference_result(QoreValue& val, ExceptionSink* xsink) {
-    if (!qore_rt_is_weak_reference_type(val.getType())) {
-        return false;
-    }
-    ValueHolder old(val, xsink);
-    val = old->eval(xsink);
-    return true;
-}
-
-// A weak reference read from a list element reads as its target, as one read from a hash value does; a weak
-// reference to an object that has been destroyed is kept, so that a method call through it raises
-// OBJECT-ALREADY-DELETED.  The value is owned by the caller.
-static void qore_rt_evaluate_owned_list_element(QoreValue& val, ExceptionSink* xsink) {
-    if (val.getType() == NT_WEAKREF && !val.get<const WeakReferenceNode>()->get()->isValid()) {
-        return;
-    }
-    qore_rt_evaluate_owned_weak_reference_result(val, xsink);
-}
-
-// As qore_rt_evaluate_owned_list_element() for a list element borrowed from its list; the target of a weak reference
-// is returned borrowed as well: the weak reference held by the list keeps it allocated
-static QoreValue qore_rt_get_borrowed_list_element(const QoreListNode* l, size_t i) {
-    QoreValue val = l->retrieveEntry(i);
+// Returns the target of a weak reference without a new reference: a weak reference reads as its target, as the AST
+// interpreter reads it (AbstractQoreNode::eval()), which for a weak reference to an object that has been destroyed is
+// the destroyed object, so that it exists and a method call through it raises OBJECT-ALREADY-DELETED; any other value
+// is returned as it is.  The weak reference keeps the target allocated.
+static QoreValue qore_rt_get_weak_reference_target(const QoreValue& val) {
     switch (val.getType()) {
-        case NT_WEAKREF: {
-            QoreObject* obj = val.get<const WeakReferenceNode>()->get();
-            return obj->isValid() ? QoreValue(obj) : val;
-        }
+        case NT_WEAKREF:
+            return QoreValue(val.get<const WeakReferenceNode>()->get());
         case NT_WEAKREF_HASH:
             return QoreValue(val.get<const WeakHashReferenceNode>()->get());
         case NT_WEAKREF_LIST:
@@ -1572,6 +1539,42 @@ static QoreValue qore_rt_get_borrowed_list_element(const QoreListNode* l, size_t
         default:
             return val;
     }
+}
+
+// Replaces a weak reference held by the caller in \a val with a reference to its target, as the AST interpreter reads
+// it; see qore_rt_get_weak_reference_target().  \a holder holds the reference to the target, and \a val is borrowed
+// from it.
+static bool qore_rt_normalize_weak_reference_for_assignment(QoreValue& val, ValueHolder& holder,
+        ExceptionSink* xsink) {
+    if (!qore_rt_is_weak_reference_type(val.getType())) {
+        return false;
+    }
+    holder = qore_rt_get_weak_reference_target(val).refSelf();
+    val = *holder;
+    return true;
+}
+
+// Replaces a weak reference owned by the caller in \a val with its target, owned by the caller, as the AST interpreter
+// reads it; see qore_rt_get_weak_reference_target()
+static bool qore_rt_evaluate_owned_weak_reference_result(QoreValue& val, ExceptionSink* xsink) {
+    if (!qore_rt_is_weak_reference_type(val.getType())) {
+        return false;
+    }
+    ValueHolder old(val, xsink);
+    val = qore_rt_get_weak_reference_target(*old).refSelf();
+    return true;
+}
+
+// A weak reference read from a list element reads as its target, as one read from a hash value does; the value is
+// owned by the caller
+static void qore_rt_evaluate_owned_list_element(QoreValue& val, ExceptionSink* xsink) {
+    qore_rt_evaluate_owned_weak_reference_result(val, xsink);
+}
+
+// As qore_rt_evaluate_owned_list_element() for a list element borrowed from its list; the target is returned borrowed
+// as well: the weak reference held by the list keeps it allocated
+static QoreValue qore_rt_get_borrowed_list_element(const QoreListNode* l, size_t i) {
+    return qore_rt_get_weak_reference_target(l->retrieveEntry(i));
 }
 
 static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSink* xsink,
@@ -2755,8 +2758,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_cast_with_inner_aot(QoreAOTContext* ctx, i
 static QoreValue qore_rt_cast_normalize_weak_ref(const QoreValue& val) {
     switch (val.getType()) {
         case NT_WEAKREF: {
-            QoreObject* obj = val.get<const WeakReferenceNode>()->get();
-            return obj && obj->isValid() ? QoreValue(obj) : QoreValue();
+            // the destroyed object for a weak reference to an object that has been destroyed, as the AST interpreter
+            // evaluates the input
+            return QoreValue(val.get<const WeakReferenceNode>()->get());
         }
         case NT_WEAKREF_HASH: {
             QoreHashNode* h = val.get<const WeakHashReferenceNode>()->get();

@@ -2262,7 +2262,9 @@ if (x || y)
     list is released, a weak reference to it reads it as empty, and any attempt to change it through a new
     reference raises \c HASH-ERROR or \c LIST-ERROR. Calling a method through a local weak reference to a destroyed
     object raises \c OBJECT-ALREADY-DELETED, including pseudo-methods such as <tt>val()</tt> and calls from
-    closures that capture the weak reference.\n<br>
+    closures that capture the weak reference.  A weak reference held by a hash, a list or an object member reads as
+    its target, also when the target is an object that has been destroyed: \c exists returns @ref True for the
+    destroyed object, and calling a method on it raises \c OBJECT-ALREADY-DELETED.\n<br>
     This operator should only be used in very special circumstances by
     expert users and is only allowed when the @ref allow-weak-references "%allow-weak-references" sandbox
     permission is set.

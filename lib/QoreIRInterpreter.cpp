@@ -503,46 +503,14 @@ static inline bool isWeakReferenceType(qore_type_t type) {
     return type == NT_WEAKREF || type == NT_WEAKREF_HASH || type == NT_WEAKREF_LIST;
 }
 
-static bool normalizeWeakReferenceForAssignment(QoreValue& value, ValueHolder& holder, ExceptionSink* xsink) {
-    if (!isWeakReferenceType(value.getType())) {
-        return false;
-    }
-    holder = value.eval(xsink);
-    if (xsink && *xsink) {
-        return true;
-    }
-    value = *holder;
-    return true;
-}
-
-static bool evaluateOwnedWeakReferenceResult(QoreValue& value, ExceptionSink* xsink) {
-    if (!isWeakReferenceType(value.getType())) {
-        return false;
-    }
-    ValueHolder old(value, xsink);
-    value = old->eval(xsink);
-    return true;
-}
-
-// A weak reference read from a list element reads as its target, as one read from a hash value does; a weak
-// reference to an object that has been destroyed is kept, so that a method call through it raises
-// OBJECT-ALREADY-DELETED.  The value is owned by the caller.
-static void evaluateOwnedListElement(QoreValue& value, ExceptionSink* xsink) {
-    if (value.getType() == NT_WEAKREF && !value.get<const WeakReferenceNode>()->get()->isValid()) {
-        return;
-    }
-    evaluateOwnedWeakReferenceResult(value, xsink);
-}
-
-// As evaluateOwnedListElement() for a list element borrowed from its list; the target of a weak reference is returned
-// borrowed as well: the weak reference held by the list keeps it allocated
-static QoreValue getBorrowedListElement(const QoreListNode* l, size_t i) {
-    QoreValue value = l->retrieveEntry(i);
+// Returns the target of a weak reference without a new reference: a weak reference reads as its target, as the AST
+// interpreter reads it (AbstractQoreNode::eval()), which for a weak reference to an object that has been destroyed is
+// the destroyed object, so that it exists and a method call through it raises OBJECT-ALREADY-DELETED; any other value
+// is returned as it is.  The weak reference keeps the target allocated.
+static QoreValue getWeakReferenceTarget(const QoreValue& value) {
     switch (value.getType()) {
-        case NT_WEAKREF: {
-            QoreObject* obj = value.get<const WeakReferenceNode>()->get();
-            return obj->isValid() ? QoreValue(obj) : value;
-        }
+        case NT_WEAKREF:
+            return QoreValue(value.get<const WeakReferenceNode>()->get());
         case NT_WEAKREF_HASH:
             return QoreValue(value.get<const WeakHashReferenceNode>()->get());
         case NT_WEAKREF_LIST:
@@ -550,6 +518,41 @@ static QoreValue getBorrowedListElement(const QoreListNode* l, size_t i) {
         default:
             return value;
     }
+}
+
+// Replaces a weak reference held by the caller in \a value with a reference to its target, as the AST interpreter
+// reads it; see getWeakReferenceTarget().  \a holder holds the reference to the target, and \a value is borrowed
+// from it.
+static bool normalizeWeakReferenceForAssignment(QoreValue& value, ValueHolder& holder, ExceptionSink* xsink) {
+    if (!isWeakReferenceType(value.getType())) {
+        return false;
+    }
+    holder = getWeakReferenceTarget(value).refSelf();
+    value = *holder;
+    return true;
+}
+
+// Replaces a weak reference owned by the caller in \a value with its target, owned by the caller, as the AST
+// interpreter reads it; see getWeakReferenceTarget()
+static bool evaluateOwnedWeakReferenceResult(QoreValue& value, ExceptionSink* xsink) {
+    if (!isWeakReferenceType(value.getType())) {
+        return false;
+    }
+    ValueHolder old(value, xsink);
+    value = getWeakReferenceTarget(*old).refSelf();
+    return true;
+}
+
+// A weak reference read from a list element reads as its target, as one read from a hash value does; the value is
+// owned by the caller
+static void evaluateOwnedListElement(QoreValue& value, ExceptionSink* xsink) {
+    evaluateOwnedWeakReferenceResult(value, xsink);
+}
+
+// As evaluateOwnedListElement() for a list element borrowed from its list; the target is returned borrowed as well:
+// the weak reference held by the list keeps it allocated
+static QoreValue getBorrowedListElement(const QoreListNode* l, size_t i) {
+    return getWeakReferenceTarget(l->retrieveEntry(i));
 }
 
 QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& left, const QoreValue& right,
