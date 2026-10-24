@@ -1,0 +1,72 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class FloatStaticCallAddTest
+
+class FloatStaticCallAddTest inherits QUnit::Test {
+    private {
+        string libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string behavior = get_script_dir() + "/IRFloatStaticCallAdd.qr";
+    }
+    constructor() : Test("Native float accumulation after static calls", "1.0", \ARGV) {
+        addTestCase("static return validation and guarded lowering", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(prefix
+            + "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + (map quote($1), args).join(" "));
+        if (result.mode) { ExecModeHarness::check_native(result); }
+        assertEq(0, result.rc, result.out);
+        return result.out;
+    }
+    private check() {
+        foreach string prefix in (("", "QORE_DISABLE_IR_FLOAT_LOCAL_ADD=1 ",
+                "QORE_DISABLE_IR_FLOAT_STATIC_CALL_ADD=1 ")) {
+            foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                assertEq("float-static-add: ok\n",
+                    run((qore, "--exec-mode=" + mode, behavior), prefix), prefix + mode);
+            }
+        }
+        TmpDir dir("qore-float-static-add-");
+        foreach string prefix in (("", "QORE_DISABLE_IR_FLOAT_LOCAL_ADD=1 ",
+                "QORE_DISABLE_IR_FLOAT_STATIC_CALL_ADD=1 ", "QORE_AOT_EH=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/behavior";
+                string generated = run((qcc, level, "--strip-source", "-o", executable, behavior),
+                    prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
+                if (level == "-O3") {
+                    foreach string name in (("staticAdd", "staticExpression", "defaultAdd", "coercedAdd",
+                            "inheritedAdd", "optionalAdd", "overloadedAdd", "genericAdd", "receiverGenericAdd",
+                            "mutatedAdd", "unassignedAdd", "conditionalAdd", "removedAdd")) {
+                        bool selected = !prefix.startsWith("QORE_DISABLE_")
+                            && (name == "staticAdd" || name == "staticExpression" || name == "defaultAdd"
+                                || name == "coercedAdd" || name == "inheritedAdd");
+                        int found = 0;
+                        foreach string definition in (generated.split("\ndefine ")) {
+                            string body = definition.split("\n}")[0];
+                            if (!body.split("\n")[0].contains("@" + name + "_")) { continue; }
+                            ++found;
+                            assertEq(!selected, regex(body, "@qore_rt_lv_path_compound_aot(?:_throwing)?\\("),
+                                "static-call float mutation path " + name + " " + prefix);
+                        }
+                        assertEq(selected ? 2 : 1, found, "static-call ordinary/fast entries " + name);
+                    }
+                }
+                assertEq("float-static-add: ok\n", run((executable,)), prefix + level);
+            }
+        }
+    }
+}

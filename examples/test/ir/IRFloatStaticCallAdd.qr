@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+sub expectFloat(float expected, auto actual) {
+    if (type(actual) != "float" || (expected.nanp() ? !actual.nanp()
+            : expected != actual || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual)))) {
+        throw "FLOAT-STATIC-ADD", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+thread_local int destroyed = 0;
+class Owned {
+    destructor() { ++destroyed; }
+}
+class StaticValues {
+    static float identity(float x) { return x; }
+    static float emptyValue() {}
+    static float unassignedValue() { float x; return x; }
+    static auto dynamicNothing() { return NOTHING; }
+    static float dynamicValue() { return StaticValues::dynamicNothing(); }
+    static float conditionalValue() { if (False) { return 1.5; } }
+    static float coercedValue() { return 3; }
+    static float defaultValue(float x = 2.5) { return x; }
+    static *float optionalValue(*float x) { return x; }
+    static float genericValue<T>(T x) { return 2.0; }
+    static float mutatedValue(reference<float> x) { x = 7.5; return 2.5; }
+    static float ownedValue(bool fail) { Owned item(); if (fail) { throw "EXPECTED", "RHS"; } return 2.5; }
+    static float overloaded(float x) { return x; }
+    static *float overloaded(nothing x) { return NOTHING; }
+}
+class GenericStaticValues<T> {
+    static float value() { return 2.0; }
+}
+class InheritedStaticValues inherits StaticValues {}
+float sub receiverGenericAdd() { float x = 1.5; x += GenericStaticValues<int>::value(); return x; }
+float sub inheritedAdd(float delta) { float x = 1.5; x += InheritedStaticValues::identity(delta); return x; }
+float sub staticAdd(float initial, float delta) { float x = initial; x += StaticValues::identity(delta); return x; }
+auto sub staticExpression(float initial, float delta) { float x = initial; return x += StaticValues::identity(delta); }
+float sub optionalAdd(*float delta) { float x = 1.5; x += StaticValues::optionalValue(delta); return x; }
+float sub defaultAdd() { float x = 1.5; x += StaticValues::defaultValue(); return x; }
+float sub coercedAdd() { float x = 1.5; x += StaticValues::coercedValue(); return x; }
+float sub genericAdd() { float x = 1.5; x += StaticValues::genericValue<int>(2); return x; }
+float sub unassignedAdd() { float x; x += StaticValues::identity(2.5); return x; }
+float sub conditionalAdd(bool assign) { float x; if (assign) { x = 1.5; } x += StaticValues::identity(-0.0); return x; }
+float sub removedAdd() { float x = 1.5; remove x; x += StaticValues::identity(2.5); return x; }
+float sub mutatedAdd() { float x = 1.5; x += StaticValues::mutatedValue(\x); return x; }
+float sub ownedAdd(bool fail) {
+    float x = 1.5;
+    try { x += StaticValues::ownedValue(fail); }
+    catch (hash<ExceptionInfo> e) { if (e.err != "EXPECTED") { rethrow; } }
+    return x;
+}
+sub badReturn(int which) {
+    float x = 1.5;
+    string error;
+    try {
+        switch (which) {
+            case 0: x += StaticValues::emptyValue(); break;
+            case 1: x += StaticValues::unassignedValue(); break;
+            case 2: x += StaticValues::dynamicValue(); break;
+            case 3: x += StaticValues::conditionalValue(); break;
+        }
+    } catch (hash<ExceptionInfo> e) { error = e.err; }
+    if (error != "RUNTIME-TYPE-ERROR") { throw "FLOAT-STATIC-ADD", sprintf("bad return %d: %y", which, error); }
+    expectFloat(1.5, x);
+}
+float sub overloadedAdd(*float delta) { float x = 1.5; x += StaticValues::overloaded(delta); return x; }
+foreach float initial in ((0.0, -0.0, 1.5, -1.5, -3.0e307, -6.0e307, @inf@, -@inf@, @nan@, -@nan@)) {
+    foreach float delta in ((0.0, -0.0, 2.5, -2.5, @inf@, -@inf@)) {
+        expectFloat(initial + delta, staticAdd(initial, delta));
+        expectFloat(initial + delta, staticExpression(initial, delta));
+    }
+}
+foreach int which in ((0, 1, 2, 3)) { badReturn(which); }
+expectFloat(3.5, receiverGenericAdd());
+expectFloat(4.0, inheritedAdd(2.5));
+expectFloat(4.0, defaultAdd());
+expectFloat(4.5, coercedAdd());
+expectFloat(3.5, genericAdd());
+expectFloat(1.5, optionalAdd(NOTHING));
+expectFloat(4.0, optionalAdd(2.5));
+expectFloat(2.5, unassignedAdd());
+expectFloat(0.0, conditionalAdd(False));
+expectFloat(1.5, conditionalAdd(True));
+expectFloat(2.5, removedAdd());
+expectFloat(10.0, mutatedAdd());
+expectFloat(1.5, ownedAdd(True));
+expectFloat(4.0, ownedAdd(False));
+if (destroyed != 2) { throw "FLOAT-STATIC-ADD", "temporary cleanup count"; }
+expectFloat(1.5, overloadedAdd(NOTHING));
+expectFloat(4.0, overloadedAdd(2.5));
+printf("float-static-add: ok\n");

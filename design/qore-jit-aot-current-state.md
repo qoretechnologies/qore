@@ -4267,3 +4267,24 @@ RESULTS and `bench/runtime-comparison/results-aot-float-direct-add-macos-arm64.j
 391 qmods/build, 2,220 references and the complete audit. Java parity and a
 global ceiling remain unestablished. Next inspect repeated fast-loop diagnostic
 stores and cancellation/exception bookkeeping, then method consumers/callbacks.
+
+## Static-method float accumulation (2026-10-24)
+
+The same-Program required-float consumer proof now covers resolved user static
+methods with nongeneric receivers and no explicit method type arguments or
+runtime overload dispatch. Expression-local assignment and existing private
+local checks remain; no return validation, ABI or ownership changes.
+
+The static-float accumulation checkpoint improves 74.13x:
+Qore AOT 0.763 versus Java 0.574 ns/item, or
+1.328x Java's time with ordinary inlining allowed.
+The baseline already inlined the method; the gain removes generic += mutation
+and synchronization. These are whole-loop times, not isolated call latency.
+RESULTS and `results-aot-float-static-add-macos-arm64.json` preserve all controls and adverse results,
+996 timing processes, 2,988 measured windows and the complete 62-check audit.
+
+Release/Debug each pass 27 selected fixtures and 7,756 QUnit assertions, with
+391 qmods/build, 2,220 IR/AOT references and separate native-suite checks.
+Eight Linux RSS cases/build remain skipped. No global ceiling or general Java
+parity is claimed. Next examine loop diagnostics/cancellation and unnecessary
+native scalar return boxing, preserving exceptional and cancellation behavior.

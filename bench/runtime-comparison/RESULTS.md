@@ -21198,3 +21198,104 @@ process exits, dependencies, controls, qualification and the 62-check audit.
 No fresh develop ratio or global performance ceiling is established. Next inspect
 the remaining fast-loop diagnostic/cancellation bookkeeping, then same-Program
 method result consumers and prepared callback overhead without weakening checks.
+
+## Static-method float accumulation (2026-10-24)
+
+The baseline is feature/performance merge ca960a569b, including origin/develop
+cf838e51a4. A resolved user static method returning required float now admits
+native private-local += after return validation. The LHS must be assigned at
+this expression; generic receivers, explicit method type arguments, runtime
+overload dispatch, cross-Program and shared/reference/capture cases retain
+the existing path. QORE_DISABLE_IR_FLOAT_STATIC_CALL_ADD isolates the change;
+QORE_DISABLE_IR_FLOAT_LOCAL_ADD disables the enclosing optimization too.
+No call ABI, return validation, ownership facts or cancellation checkpoints change.
+
+The static step was already inlined in the baseline. The improvement removes
+boxed generic mutation and local synchronization around accumulation, allowing
+the caller's existing native fast entry. It is not an isolated dispatch-latency
+measurement. A separate sampling run confirms execution of that entry. Before
+and disabled LLVM bodies match after metadata-length normalization; 28 control
+bodies match after documented debug/constant normalization. All 29 mixed LLVM
+functions are exactly equal across variants. This does not establish the cause
+of timing changes in controls.
+
+Confirmation aggregates (median of layout medians of fork means):
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate vs before
+|static_float_add|57.085056|0.769762|57.195433|-98.65%
+|direct_float_add|0.766795|0.763350|0.765379|-0.45%
+|local_float_add|1.012721|1.016649|1.016585|+0.39%
+|callback_float_add|7.365488|7.275347|7.409662|-1.22%
+|result_float_add|6.944197|6.600763|6.971197|-4.95%
+|typed_local_int_unary|7.099449|6.927486|7.066612|-2.42%
+|typed_local_float_unary|8.122429|7.789449|7.973897|-4.10%
+|typed_local_int_result|7.086794|7.135978|7.098426|+0.69%
+|typed_local_float_result|7.518229|7.146301|7.492493|-4.95%
+|csv_report|925.986001|937.094340|941.706914|+1.20%
+|object_orders|1796.068429|1775.107307|1782.628218|-1.17%
+|callback_pipeline|81.638906|81.831054|82.041173|+0.24%
+|text_index|1299.262030|1300.165899|1305.213522|+0.07%
+
+Retained: static float accumulation improves about 74x in both phases. Four
+mixed-workload confirmation aggregates range from -1.17% to +1.20%. Two controls
+repeat adverse layout results: callback_float_add/default is +4.24% against
+before (7.365 to 7.677 ns/item, +0.312), and typed_local_int_unary/shuffle487 is
++6.53% against before (6.944 to 7.398, +0.453) and +6.50% against disabled.
+Their across-layout aggregates improve 1.22% and 2.42%, respectively.
+
+These costs are accepted alongside the large target benefit; this is not a
+no-regression result. Equivalent control LLVM does not establish the cause.
+The predeclared full 55-workload checkpoint remains for accumulated improvements
+or material broad loss; this 13-workload check finds no material aggregate loss.
+
+Repeated >3% disjoint per-layout fork-range flags:
+
+|!Workload|!Layout|!Comparison|!Confirmation change
+|callback_float_add|default|before|+4.24%
+|typed_local_int_unary|shuffle-487|before|+6.53%
+|typed_local_int_unary|shuffle-487|disabled|+6.50%
+
+All screening and confirmation values and flags remain in the evidence; no
+run or layout was discarded. The user authorized evaluation of the overall
+workload tradeoff rather than an absolute no-regression rule.
+
+A fresh Java comparison uses Temurin 25.0.2+10 and JMH 1.37, binary64 arithmetic,
+64-bit induction/masking, varying seed and returned checksum. Inlining is
+allowed in both languages; a separate diagnostic verifies C2 compilation and
+hot helper inlining. Java layout labels pair runs with Qore code layouts;
+Java native symbol placement is not constrained.
+
+|!Static-float loop|!ns/item
+|before|56.547728
+|candidate|0.762856
+|disabled|56.770223
+|java|0.574339
+
+Qore takes 1.328x Java's time and improves
+74.13x against the branch baseline in this checkpoint.
+These are whole-loop measurements with different harness overhead; no general
+Java parity or overall Qore speedup is implied.
+
+Every native artifact uses -O3 -DNDEBUG, allocation tracking OFF and stripped
+AOT source. Each process uses 4,096 items, seed 7, three warmups and three 300 ms
+samples. Three layouts (default/reverse/shuffle487), three screening forks and
+five confirmation forks follow fixed randomized schedules; nondefault symbol
+placement is verified. Java has five fresh forks per paired layout/variant.
+All 996 timed processes / 2,988 measured windows are independently replayed.
+No other owned work runs during timing. External load, frequency and thermals
+are uncontrolled; observed checksums are parsed, not recomputed for every seed.
+
+Selected Release/Debug qualification passes 27 fixtures/build, 7,756 QUnit
+assertions/build, eight standalone fixtures/build, 2,220 IR/AOT references and
+11,756 native assertions. Eight Linux RSS cases/build are skipped, not passes.
+All 391 qmods/build are rebuilt and Release aliases restored. The new static
+fixture contributes 199 assertions/build and covers source modes and stripped
+AOT O0/O3/EH/split. No full-suite, sanitizer or cross-platform claim is made.
+The earlier assignment-state probe matched AST in all tested tiers and controls;
+it did not establish a correctness bug and no fix was made for it.
+
+[results-aot-float-static-add-macos-arm64.json](results-aot-float-static-add-macos-arm64.json) preserves the plans, sources, raw timings,
+process exits, dependencies, generated-code checks, qualification and 62-check
+audit. No fresh pure-develop ratio or global performance ceiling is established.
+Next investigate per-iteration diagnostic/cancellation bookkeeping and native
+scalar return boxing, with semantic proof and controlled measurements.

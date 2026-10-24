@@ -201,9 +201,9 @@
     Compound addition to an initialized private @ref float_type "float" local can now use native floating-point
     arithmetic when the compiler proves the right operand is a float. This improves IR, JIT and AOT execution and
     allows eligible AOT functions with floating accumulators to use their existing fast entry points.
-    Resolved user function calls in the same program with a required float return type can also use this
-    arithmetic path after normal return validation; runtime overload dispatch and optional returns retain
-    their existing behavior.
+    Resolved user function and nongeneric static method calls in the same program with a required float return
+    type can also use this arithmetic path after normal return validation; runtime overload dispatch and optional
+    returns retain their existing behavior.
 
     AOT-compiled modules record the AOT runtime identity of the %Qore library that compiled them, and a module
     compiled by a library with a different generated-code contract is refused when it is loaded, with an error that

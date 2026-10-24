@@ -7627,6 +7627,23 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             && !overloadedDirectCallNeedsRuntimeDispatch(call->getFunction(), variant,
                 call->getParseArgs(), call->getArgs());
     }
+    if (float_local && !native_float_rhs && parse_context
+            && getAnalysis(op->getLeft(), float_lhs_analysis)
+            && float_lhs_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && !q_env_is_set("QORE_DISABLE_IR_FLOAT_STATIC_CALL_ADD")) {
+        auto* call = dynamic_cast<const StaticMethodCallNode*>(right_expr.getInternalNode());
+        const AbstractQoreFunctionVariant* variant = call ? call->getVariant() : nullptr;
+        const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+        // As with a direct function, consume the validated return only here.
+        // Match lowerStaticCall's resolved-variant admission, excluding generic
+        // receivers and explicit method type arguments from this proof.
+        native_float_rhs = uvb && uvb->pgm == parse_context->pgm
+            && variant->getReturnTypeInfo() == floatTypeInfo
+            && !call->hasExplicitTypeArgs() && !call->getReceiverTypeInfo() && call->getMethod()
+            && !overloadedDirectCallNeedsRuntimeDispatch(
+                qore_method_private::get(*call->getMethod())->getFunction(), variant,
+                call->getParseArgs(), call->getArgs());
+    }
     bool native_float_add = float_local && parse_context
         && parse_context->isLocalDefinitelyAssigned(float_local->ref.id)
         && native_float_rhs;
