@@ -1,0 +1,124 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+int sub stepInt(int value) { return (value * 33 + 17) & 65535; }
+float sub stepFloat(float value) { return 65535.0 - value; }
+int sub resultInt() { return 17; }
+float sub resultFloat() { return 17.5; }
+int sub innerInt(int count, int seed, code<int(int)> callback) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) { seed = callback(seed); sum += seed; }
+    return sum;
+}
+int sub innerFloat(int count, int seed, code<float(float)> callback) {
+    float value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) { value = callback(value); sum += int(value); }
+    return sum;
+}
+int sub innerIntResult(int count, int seed, code<int()> callback) {
+    int sum = seed;
+    for (int i = 0; i < count; ++i) { sum += int(callback()); }
+    return sum;
+}
+int sub innerFloatResult(int count, int seed, code<float()> callback) {
+    int sum = seed;
+    for (int i = 0; i < count; ++i) { sum += int(callback()); }
+    return sum;
+}
+int sub localInt(int count, int seed) { code<int(int)> fn = \stepInt(); return innerInt(count, seed, fn); }
+int sub localFloat(int count, int seed) { code<float(float)> fn = \stepFloat(); return innerFloat(count, seed, fn); }
+int sub localIntResult(int count, int seed) { code<int()> fn = \resultInt(); return innerIntResult(count, seed, fn); }
+int sub localFloatResult(int count, int seed) { code<float()> fn = \resultFloat(); return innerFloatResult(count, seed, fn); }
+int sub localFloatAdd(int count, int seed) {
+    float sum = float(seed);
+    for (int i = 0; i < count; ++i) {
+        float value = float((i + seed) & 31) * 0.5;
+        sum += value;
+    }
+    return int(sum * 2.0);
+}
+int sub directFloatAdd(int count, int seed) {
+    float sum = float(seed);
+    for (int i = 0; i < count; ++i) { sum += stepFloat(float((i + seed) & 65535)); }
+    return int(sum);
+}
+int sub innerFloatAdd(int count, int seed, code<float(float)> callback) {
+    float value = float(seed);
+    float sum = 0.0;
+    for (int i = 0; i < count; ++i) { value = callback(value); sum += value; }
+    return int(sum);
+}
+int sub innerFloatAccResult(int count, int seed, code<float()> callback) {
+    float sum = float(seed);
+    for (int i = 0; i < count; ++i) { sum += float(callback()); }
+    return int(sum * 2.0);
+}
+int sub callbackFloatAdd(int count, int seed) {
+    code<float(float)> fn = \stepFloat();
+    return innerFloatAdd(count, seed, fn);
+}
+int sub resultFloatAdd(int count, int seed) {
+    code<float()> fn = \resultFloat();
+    return innerFloatAccResult(count, seed, fn);
+}
+int sub dispatch(string name, int count, int seed) {
+    switch (name) {
+        case "local_float_add": return localFloatAdd(count, seed);
+        case "direct_float_add": return directFloatAdd(count, seed);
+        case "callback_float_add": return callbackFloatAdd(count, seed);
+        case "result_float_add": return resultFloatAdd(count, seed);
+        case "typed_local_int_unary": return localInt(count, seed);
+        case "typed_local_float_unary": return localFloat(count, seed);
+        case "typed_local_int_result": return localIntResult(count, seed);
+        case "typed_local_float_result": return localFloatResult(count, seed);
+    }
+    throw "BENCH-ARGUMENT-ERROR", "unknown kernel";
+}
+int sub integerArg(int index, int minimum, int maximum) {
+    if (index >= ARGV.size() || ARGV[index] !~ /^\d+$/) {
+        throw "BENCH-ARGUMENT-ERROR", "missing or invalid integer argument";
+    }
+    int value = ARGV[index].toInt();
+    if (value < minimum || value > maximum) {
+        throw "BENCH-ARGUMENT-ERROR", "integer argument outside supported range";
+    }
+    return value;
+}
+sub main() {
+    if (ARGV.size() == 1 && ARGV[0] == "check") {
+        foreach int count in ((0, 1, 17, 257, 4096)) {
+            foreach int seed in ((0, 7, 65535)) {
+                foreach string name in (("local_float_add", "direct_float_add", "callback_float_add",
+                        "result_float_add", "typed_local_int_unary", "typed_local_float_unary",
+                        "typed_local_int_result", "typed_local_float_result")) {
+                    printf("CHECK\t%s\t%d\t%d\t%d\n", name, count, seed, dispatch(name, count, seed));
+                }
+            }
+        }
+        return;
+    }
+    if (ARGV.size() != 6) { throw "BENCH-ARGUMENT-ERROR", "expected check or KERNEL COUNT WARMUP SAMPLES MS SEED"; }
+    string name = ARGV[0];
+    int count = integerArg(1, 1, 1000000);
+    int warmup = integerArg(2, 0, 1000);
+    int samples = integerArg(3, 1, 1000);
+    int duration_us = integerArg(4, 1, 60000) * 1000;
+    int seed = integerArg(5, 0, 65535);
+    for (int sample = -warmup; sample < samples; ++sample) {
+        int checksum = 0;
+        int calls = 0;
+        int start = clock_get_monotonic_us();
+        int elapsed;
+        do {
+            seed = (seed + 1) & 65535;
+            checksum ^= dispatch(name, count, seed);
+            ++calls;
+            elapsed = clock_get_monotonic_us() - start;
+        } while (elapsed < duration_us);
+        printf("%s\t%s\t%d\t%d\t%d\t%d\n", sample < 0 ? "WARMUP" : "SAMPLE",
+            name, elapsed, calls, count, checksum);
+    }
+}
+main();

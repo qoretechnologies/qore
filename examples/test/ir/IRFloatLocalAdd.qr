@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+sub expectFloat(float expected, auto actual) {
+    if (type(actual) != "float" || (expected.nanp() ? !actual.nanp()
+            : expected != actual || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual)))) {
+        throw "FLOAT-LOCAL-ADD", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+float sub nativeAdd(float initial, float delta) {
+    float value = initial;
+    value += delta;
+    return value;
+}
+auto sub nativeExpression(float initial, float delta) {
+    float value = initial;
+    return value += delta;
+}
+float sub nativeLoop(int count, float initial, float delta) {
+    float value = initial;
+    for (int i = 0; i < count; ++i) { value += delta; }
+    return value;
+}
+float sub unassignedAdd() { float value; value += 2.5; return value; }
+float sub removedAdd() { float value = 1.0; remove value; value += 2.5; return value; }
+float sub optionalAdd(*float initial, float delta) { *float value = initial; value += delta; return value; }
+float sub mixedAdd(auto delta) { float value = 1.5; value += delta; return value; }
+float sub referenceAdd(reference<float> value, float delta) { return value += delta; }
+float sub capturedAdd() {
+    float value = 1.5;
+    code<float()> add = float sub () { return value += 2.5; };
+    add();
+    return add();
+}
+float sub aliasAdd() {
+    float value = 1.5;
+    reference<float> alias = \value;
+    referenceAdd(\value, 2.5);
+    value += 0.5;
+    return alias;
+}
+thread_local float globalFloat = 1.5;
+float sub globalAdd() { return globalFloat += 2.5; }
+float sub mutateCaller() { set_local_var_value(1, "value", 7.5); return 2.5; }
+float sub dynamicMutation() {
+    float value = 1.5;
+    reference<float> exposed = \value;
+    value += mutateCaller();
+    return exposed;
+}
+float sub replaceArgument(reference<float> value) { value = 7.5; return 2.5; }
+float sub rhsMutation() { float value = 1.5; value += replaceArgument(\value); return value; }
+thread_local int destroyed = 0;
+class FloatAddOwned {
+    destructor() { ++destroyed; }
+    float get(bool fail) {
+        if (fail) { throw "FLOAT-ADD-EXPECTED", "RHS failure"; }
+        return 2.5;
+    }
+}
+float sub temporaryResult(bool fail) { FloatAddOwned item(); return item.get(fail); }
+float sub cleanupAdd(bool fail) {
+    float value = 1.5;
+    try { value += float(temporaryResult(fail)); }
+    catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "FLOAT-ADD-EXPECTED") { rethrow; }
+    }
+    return value;
+}
+float sub concurrentAdd() {
+    float value = 0.0;
+    Counter done(2);
+    background sub () { on_exit done.dec(); for (int i = 0; i < 1024; ++i) { value += 0.5; } }();
+    background sub () { on_exit done.dec(); for (int i = 0; i < 1024; ++i) { value += 0.5; } }();
+    done.waitForZero();
+    return value;
+}
+foreach float initial in ((0.0, -0.0, 1.5, -1.5, -3.0e307, -6.0e307, @inf@, -@inf@, @nan@, -@nan@)) {
+    foreach float delta in ((0.0, -0.0, 2.5, -2.5, @inf@, -@inf@)) {
+        # Plain addition is an independent operation, not compound-assignment lowering.
+        expectFloat(initial + delta, nativeAdd(initial, delta));
+        expectFloat(initial + delta, nativeExpression(initial, delta));
+    }
+}
+foreach int count in ((0, 1, 17, 257)) { expectFloat(1.5 + float(count) * 0.5, nativeLoop(count, 1.5, 0.5)); }
+expectFloat(2.5, unassignedAdd());
+expectFloat(2.5, removedAdd());
+expectFloat(2.5, optionalAdd(NOTHING, 2.5));
+expectFloat(4.0, optionalAdd(1.5, 2.5));
+expectFloat(3.5, mixedAdd(2));
+expectFloat(4.0, mixedAdd(2.5));
+expectFloat(4.0, mixedAdd(2.5n));
+expectFloat(4.0, mixedAdd("2.5"));
+expectFloat(1.5, mixedAdd(NOTHING));
+expectFloat(6.5, capturedAdd());
+expectFloat(4.5, aliasAdd());
+expectFloat(4.0, globalAdd());
+
+expectFloat(10.0, rhsMutation());
+expectFloat(4.0, cleanupAdd(False));
+expectFloat(1.5, cleanupAdd(True));
+if (destroyed != 2) { throw "FLOAT-LOCAL-ADD", "temporary cleanup count"; }
+expectFloat(1024.0, concurrentAdd());
+printf("float-local-add: ok\n");
+# Record the baseline's mode-dependent reflection behavior separately.
+auto reflected;
+try { reflected = dynamicMutation(); }
+catch (hash<ExceptionInfo> ex) { reflected = ex.err; }
+printf("reflection:%y\n", reflected);

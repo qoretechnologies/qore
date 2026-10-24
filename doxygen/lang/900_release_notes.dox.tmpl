@@ -166,6 +166,10 @@
     transaction's thread ownership. These calls can no longer allow another thread to enter the
     transaction before its owner commits or rolls back.
 
+    Compound addition to an initialized private @ref float_type "float" local can now use native floating-point
+    arithmetic when the compiler proves the right operand is a float. This improves IR, JIT and AOT execution and
+    allows eligible AOT functions with floating accumulators to use their existing fast entry points.
+
     AOT-compiled modules record the AOT runtime identity of the %Qore library that compiled them, and a module
     compiled by a library with a different generated-code contract is refused when it is loaded, with an error that
     names the module and both identities and asks for the module to be rebuilt. The identity is derived

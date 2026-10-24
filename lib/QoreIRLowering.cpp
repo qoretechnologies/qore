@@ -7537,6 +7537,9 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     bool force_int = dynamic_cast<const QoreIntPlusEqualsOperatorNode*>(node) != nullptr;
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
+    const VarRefNode* float_local = isLocalNonClosureVar(left_var)
+        && left_var->getTypeInfo() == floatTypeInfo
+        && !q_env_is_set("QORE_DISABLE_IR_FLOAT_LOCAL_ADD") ? left_var : nullptr;
     // Force lvalue path for types where load-compute-store produces wrong types or O(n) copies:
     // - Objects: object + hash = hash (not object), needs in-place member merge
     // - Lists: list + element copies the entire list, making loops O(n^2)
@@ -7592,6 +7595,20 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
     if (!right.isValid()) {
         return QoreIRValue();
+    }
+    // Required private float locals and a proven float RHS have exactly the
+    // native addition semantics. Select only after evaluating the RHS, and
+    // retain lvalue handling for unassigned, optional, shared or mixed values.
+    const QoreIRValueFacts* right_facts = float_local
+        ? builder.getFunction()->getValueFacts(right) : nullptr;
+    bool native_float_add = float_local && parse_context
+        && parse_context->isLocalDefinitelyAssigned(float_local->ref.id)
+        && right_facts && right_facts->type_info == floatTypeInfo
+        && right_facts->assigned_state == QoreIRAssignedState::Assigned
+        && right_facts->never_nothing
+        && right_facts->representation == QoreIRValueRepresentation::NativeFloat;
+    if (native_float_add) {
+        left_var = float_local;
     }
     if (left_var && left_var->getType() == VT_IMMEDIATE) {
         left_var = nullptr;
@@ -7712,7 +7729,8 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             && isNeverNothingInt(left_analysis)
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::AddAssignInt;
-    } else if ((isFloatConstant(op->getLeft()) && isFloatConstant(right_expr))
+    } else if (native_float_add
+        || (isFloatConstant(op->getLeft()) && isFloatConstant(right_expr))
         || (getAnalysis(op->getLeft(), left_analysis)
             && getAnalysis(right_expr, right_analysis)
             && isNeverNothingFloat(left_analysis)

@@ -4222,3 +4222,26 @@ broad 55 qualification, new Java timing or ceiling claim.
 
 Next investigate the missing fast entry for floating accumulation followed
 by an integer return cast, then test any structural fix as a separate candidate.
+
+## Native private floating accumulation (2026-10-24)
+
+Exact assigned private float locals with proven native-float RHS values now
+lower += to existing AddAssignFloat. Three AOT loops gain fast entries and
+improve 11–57x; direct-call RHS proof remains insufficient and falls back.
+RHS ordering, shared/reference atomicity, optional/unassigned behavior and
+runtime call guards are preserved. The lowering also applies to IR/JIT.
+
+The targeted no-regression gate failed; the user explicitly chose broader
+tradeoff evaluation. A fixed 55-workload screen/confirmation found essentially
+flat mixed workloads and a repeated closure/reverse-layout +6.4% regression.
+Two targeted result-call controls lose about 0.21–0.26 ns/item. The change is
+retained under that explicit tradeoff, not a claim that either no-regression
+check passed. All adverse measurements remain in RESULTS and
+`bench/runtime-comparison/results-aot-float-local-add-macos-arm64.json`.
+
+Release/Debug each pass 9,793 QUnit assertions plus five standalone fixtures;
+eight Linux-only RSS cases per build are skipped. Native suites pass 11,756
+assertions and IR/AOT references total 2,220. All 252 qmods/build match their
+runtime and 253 Release aliases are restored. Next investigate exact
+float-returning call facts, then remaining callback/closure and container costs.
+No fresh Java/develop ratio, parity or global ceiling is established.

@@ -20962,3 +20962,109 @@ Next investigate why a typed callback loop with a floating accumulator and
 final integer cast lacks an AOT fast entry while integer consumption of the
 same callback has one. Establish the lowering/eligibility cause before a new
 prospective experiment. The literal subset change remains rejected.
+
+## Native private floating accumulation (2026-10-24)
+
+Required private float locals now use the existing AddAssignFloat operation
+when the local is definitely assigned and the evaluated RHS has exact assigned,
+non-NOTHING native-float facts. This removes generic lvalue mutation and enables
+existing AOT fast entries in three targeted loops. RHS evaluation still precedes
+the LHS load; shared/captured/referenced, optional, unassigned and mixed-value
+paths retain their existing behavior. The typed direct-call RHS lacks the
+required native-value proof and remains generic in this change. No ABI or runtime
+guard changes. IR/JIT share the lowering; performance results below measure AOT.
+
+The original targeted no-regression gate FAILED. After that result the user
+explicitly selected evaluation of the broader workload tradeoff. A new prospective
+55-workload diagnostic ran with fixed settings; it also contains a repeated
+closure/layout regression. Both failed checks remain recorded. The optimization
+is retained as an explicit tradeoff: three large targeted gains, small costs
+in several controls, and essentially flat mixed workloads. This is not a claim
+that either original no-regression check passed.
+
+Runtimes use -O3 -DNDEBUG, allocation tracking OFF and LLVM 22.1.8; all standalones
+use qcc -O3 --strip-source. Before, candidate and same-runtime compile-disabled
+(QORE_DISABLE_IR_FLOAT_LOCAL_ADD) artifacts use default/reverse/shuffle487 layouts.
+Nondefault orders derive from the fixed union of default symbols, filtering only
+absent symbols. All actual placements are checked. Each fork has three warmups
+and three 300 ms measurement windows, 4,096 items and seed 7. Screening uses three
+fresh-process forks; confirmation five. Aggregate is the median of layout
+medians of fork means. No owned builds/tests/profiles/analysis/edits ran during
+timings; host load, frequency and thermals remain uncontrolled.
+
+Confirmation whole-workload nanoseconds per item (not isolated call latency):
+
+|!Workload|!Before|!Candidate|!Disabled|!Change vs before|!Change vs disabled
+|local_float_add|57.586|1.009|57.154|-98.25%|-98.23%
+|direct_float_add|56.384|56.691|56.554|+0.54%|+0.24%
+|callback_float_add|83.960|7.293|85.011|-91.31%|-91.42%
+|result_float_add|81.319|6.846|81.031|-91.58%|-91.55%
+|typed_local_int_unary|7.026|6.954|7.023|-1.03%|-0.98%
+|typed_local_float_unary|7.877|7.707|7.834|-2.15%|-1.62%
+|typed_local_int_result|7.013|7.223|7.064|+3.00%|+2.25%
+|typed_local_float_result|7.237|7.500|7.249|+3.63%|+3.45%
+
+Local floating addition improves 57.08x; callback/result accumulation improves
+11.51x/11.88x. Integer and floating result-call controls lose 0.210/0.263 ns per item
+(about 3.00%/3.63%). Repeated disjoint-range flags are int-result/default/disabled
+and float-result/shuffle487/disabled. Four-target geometric-mean time reductions
+are 89.317%/89.331% (screen) and 89.347%/89.358% (confirmation) versus before/disabled.
+Those target-only summaries are not an overall Qore speedup.
+
+Broad confirmation, selected existing workloads; all 55 results are in the JSON:
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Change vs before
+|direct_call|1.557|1.558|1.567|+0.04%
+|method_call|1.633|1.650|1.674|+1.02%
+|indirect_call|7.725|7.773|7.954|+0.62%
+|indirect_float|8.261|8.435|8.375|+2.11%
+|indirect_int_result|7.818|7.795|7.794|-0.30%
+|indirect_float_result|8.176|8.222|8.296|+0.56%
+|closure_call|17.996|17.715|17.776|-1.56%
+|closure_capture|23.983|23.778|23.569|-0.85%
+|list_build|27.036|27.043|27.042|+0.03%
+|list_mutate|194.064|191.032|191.144|-1.56%
+|csv_report|998.388|984.298|977.150|-1.41%
+|object_orders|1882.285|1873.653|1857.751|-0.46%
+|callback_pipeline|86.786|86.388|86.627|-0.46%
+|text_index|1373.037|1367.847|1365.945|-0.38%
+
+Broad aggregates range -2.11% to +2.12% versus before in screening and -4.65%
+to +2.20% in confirmation. Four mixed workloads range -1.47% to +0.47% in screening
+and -1.41% to -0.38% in confirmation; relative to disabled, confirmation ranges
+-0.28% to +0.86%. These small shifts do not establish a mixed-workload speedup.
+The closure/reverse/before flag repeats at +6.65% and +6.38%: confirmation
+17.754 -> 18.888 ns/item, with disabled 18.697. Closure's aggregate across layouts
+is 17.996 -> 17.715 ns/item (-1.56%); the adverse layout remains part of the decision.
+All 210 normalized broad LLVM bodies are unchanged; before/disabled differ only
+in startup metadata length. Targeted controls also retain equivalent bodies.
+This does not establish the cause of timing differences. No alignment search,
+sample exclusion or rescue timing was used.
+
+The four campaigns contain 4,536 actual process runs and 13,608 measured windows,
+independently replayed from raw output. Target preparation checks 1,200 references,
+broad preparation 7,047, and paired behavior prechecks preserve AST/IR/native
+semantics. Selection and sampling verify three fast entries and the direct-call
+fallback. All 252 qmods are rebuilt per build and 253 Release aliases restored.
+Selected qualification covers 33 fixtures per build: 28 QUnit fixtures, 132 executed
+cases and 9,793 assertions, plus five silent standalone fixtures. Eight Linux-only
+RSS cases/build are skipped on macOS. Separate native AST/IR suites pass 11,756
+assertions and IR/AOT references total 2,220. No full-suite/sanitizer/Linux claim.
+
+Historical harness errors are preserved: explicit reference argument syntax,
+AST/native reflection visibility expectations, EH helper-name inspection, and
+classifying two silent standalone fixtures as QUnit tests in the first review.
+Before/candidate behavior agrees by execution mode: reflective mutation finds
+the AST local but raises UNKNOWN-VARIABLE in IR/native before and after. This
+pre-existing difference is recorded separately, not fixed or counted as a new
+pass. Timed checksum fields are observed/parsed, not exhaustively recomputed
+for every varying iteration seed.
+
+[results-aot-float-local-add-macos-arm64.json](results-aot-float-local-add-macos-arm64.json) retains source, plans, raw timings, actual process exits, dependency hashes,
+qualification and all 62 audit checks. Java/develop ratios remain the earlier
+optimized post-b7 checkpoint; this experiment supplies no fresh ratio. No Java
+parity or global performance ceiling has been established.
+
+Next investigate the missing native facts for exact float-returning direct calls,
+then measure a separate conservative proof extension. Continue reducing dynamic
+callback/closure overhead and container mutation after the scalar lowering work.
