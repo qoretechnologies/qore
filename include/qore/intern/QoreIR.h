@@ -3364,6 +3364,12 @@ public:
     // there, so an IR-only weak store target would abort execution.
     std::unordered_set<const void*> weak_store_locals;
 
+    // Locals assigned in AssignmentMode::Element: the variables of foreach loops, which are assigned each element as
+    // it is, so that a weak reference stays a weak reference.  Such a local can be IR-only: its value cache then
+    // holds the weak reference, and a read of the cache gives its target (see IRLocalSlotCache in
+    // QoreIRInterpreter.cpp and QoreIRToLLVM::loadLocalCacheValue()).
+    std::unordered_set<const void*> element_store_locals;
+
     // Locals assigned by a StoreLocal instruction anywhere in the IR.  Together with the
     // lvalue/COW/weak inventories above this is the complete write set: every other mutation
     // form reaches a local through the runtime local stack, which already keeps it

@@ -619,6 +619,20 @@ private:
     */
     bool lowering_top_level = false;
 
+    //! Local variables of foreach loops assigned each element as it is (AssignmentMode::Element)
+    /** Such a variable can hold a weak reference, which a mutation of the variable changes as the AST interpreter
+        changes it, through the variable itself; the mutations of these variables therefore use the structured
+        lvalue paths instead of the sequences that load and store the variable.
+    */
+    std::unordered_set<const LocalVar*> foreach_element_locals;
+
+    //! Returns true if an operation that reads and changes the variable must change it through its lvalue
+    /** A variable that other threads can change (see isSharedVar() in QoreIRLowering.cpp) is changed in one
+        operation, and the variable of a foreach loop (foreach_element_locals) is changed through the variable
+        itself, as it can hold a weak reference.
+    */
+    DLLLOCAL bool changesThroughLValue(const VarRefNode* var) const;
+
     //! Top-level handlers saved before block_handlers is erased
     /** Used by compileAllHandlerIRs() to iterate over handlers that would otherwise
      *  be lost when lowerStatementBlock() erases block_handlers. Only populated at

@@ -729,6 +729,12 @@ static bool isSharedVar(const VarRefNode* var) {
     }
 }
 
+// documented in QoreIRLowering.h
+bool QoreIRLowering::changesThroughLValue(const VarRefNode* var) const {
+    return isSharedVar(var)
+        || (var && var->getType() == VT_LOCAL && var->ref.id && foreach_element_locals.count(var->ref.id));
+}
+
 static bool qoreIrCallHasNoArgs(const FunctionCallBase* call) {
     if (!call) {
         return true;
@@ -1369,6 +1375,17 @@ QoreIRValue QoreIRLowering::tryPluginLowering(const QoreValue& expr, std::string
     }
 
     return tryDescriptorPluginLowering(*this, builder, parse_context, expr, node, error);
+}
+
+//! Returns true if a value of the given type can be a weak reference
+/** Only an object, a hash or a list can be assigned with \c :=, so a value whose type cannot be any of them cannot be
+    a weak reference; no type means any value.
+*/
+static bool qore_ir_type_may_hold_weak_reference(const QoreTypeInfo* ti) {
+    return !QoreTypeInfo::hasType(ti)
+        || QoreTypeInfo::parseReturns(ti, NT_OBJECT) != QTI_NOT_EQUAL
+        || QoreTypeInfo::parseReturns(ti, NT_HASH) != QTI_NOT_EQUAL
+        || QoreTypeInfo::parseReturns(ti, NT_LIST) != QTI_NOT_EQUAL;
 }
 
 bool QoreIRLowering::tryEmitFusedBranchIfLtLocalInt(const QoreValue& cond,
@@ -2303,17 +2320,28 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         // Assign the value to the loop variable
         if (var_expr && !var_expr.isNothing()) {
-            // Simple variable targets can use normal assignment lowering; complex
-            // lvalues and reference-typed vars are assigned through their lvalue path.
+            // The AST interpreter assigns the variable each element as it is, so that an element that is a weak
+            // reference makes the variable a weak reference, which does not keep the target alive while the body
+            // runs; a store in AssignmentMode::Element does the same.  A loop whose elements or variable cannot be
+            // a weak reference keeps the normal store, which the optimizations of the compiled tiers apply to.
             const auto* var_node = dynamic_cast<const VarRefNode*>(var_expr.getInternalNode());
             const QoreTypeInfo* var_type = var_node ? getVarRefTypeInfo(var_node) : nullptr;
+            AssignmentMode element_mode = qore_ir_type_may_hold_weak_reference(element_type)
+                    && qore_ir_type_may_hold_weak_reference(var_node ? var_type : nullptr)
+                ? AssignmentMode::Element : AssignmentMode::Normal;
+            if (element_mode == AssignmentMode::Element && var_node && var_node->getType() == VT_LOCAL
+                    && var_node->ref.id) {
+                foreach_element_locals.insert(var_node->ref.id);
+            }
+            // Simple variable targets can use normal assignment lowering; complex
+            // lvalues and reference-typed vars are assigned through their lvalue path.
             if (var_node && var_node->getType() != VT_IMMEDIATE
                     && !QoreTypeInfo::isReference(var_type)) {
-                if (!storeVarRef(var_node, value_val, error, "foreach assignment")) {
+                if (!storeVarRef(var_node, value_val, error, "foreach assignment", nullptr, nullptr, element_mode)) {
                     return false;
                 }
             } else if (!tryEmitLValuePathOp(QoreIROpcode::LValuePathAssign, var_expr, &value_val, stmt->loc,
-                    error, AssignmentMode::Normal).isValid()) {
+                    error, element_mode).isValid()) {
                 if (error.empty()) {
                     error = "unsupported foreach variable for native lowering";
                 }
@@ -4733,7 +4761,7 @@ bool QoreIRLowering::guaranteedFloatType(const QoreValue* expr) const {
 
 // Returns true if expr is $hash{"const_key"} where $hash is a local variable.
 // Sets container_var, key_name, and key_expr if true.
-static bool isConstKeyHashSubscript(const QoreValue& expr,
+static bool isConstKeyHashSubscript(const std::unordered_set<const LocalVar*>& element_locals, const QoreValue& expr,
         const VarRefNode*& container_var, std::string& key_name, QoreValue& key_expr) {
     const AbstractQoreNode* node = expr.getInternalNode();
     if (!node) {
@@ -4783,6 +4811,11 @@ static bool isConstKeyHashSubscript(const QoreValue& expr,
     if (lv && QoreTypeInfo::getUniqueReturnClass(lv->getTypeInfo()) != nullptr) {
         return false;
     }
+    // the variable of a foreach loop can hold a weak reference, which a store changes through the variable itself,
+    // as the AST interpreter does (see QoreIRLowering::changesThroughLValue())
+    if (vr->getType() == VT_LOCAL && vr->ref.id && element_locals.count(vr->ref.id)) {
+        return false;
+    }
     container_var = vr;
     return true;
 }
@@ -4790,7 +4823,7 @@ static bool isConstKeyHashSubscript(const QoreValue& expr,
 // Returns true if expr is $hash{dynamic_key} where $hash is a non-reference, non-object
 // local variable and key is any lowerable expression (not just constant string).
 // Sets container_var and key_expr (the dynamic key expression to lower).
-static bool isDynamicKeyHashSubscript(const QoreValue& expr,
+static bool isDynamicKeyHashSubscript(const std::unordered_set<const LocalVar*>& element_locals, const QoreValue& expr,
         const VarRefNode*& container_var, QoreValue& key_expr) {
     const AbstractQoreNode* node = expr.getInternalNode();
     if (!node) {
@@ -4820,6 +4853,11 @@ static bool isDynamicKeyHashSubscript(const QoreValue& expr,
         return false;
     }
     if (lv && QoreTypeInfo::getUniqueReturnClass(lv->getTypeInfo()) != nullptr) {
+        return false;
+    }
+    // the variable of a foreach loop can hold a weak reference, which a store changes through the variable itself,
+    // as the AST interpreter does (see QoreIRLowering::changesThroughLValue())
+    if (vr->getType() == VT_LOCAL && vr->ref.id && element_locals.count(vr->ref.id)) {
         return false;
     }
     container_var = vr;
@@ -5077,7 +5115,7 @@ static bool extractLValuePath(const QoreValue& expr,
 
 // Returns true if expr is $list[index] where $list is a local variable and index is compile-time constant.
 // Sets container_var and index_expr if true.
-static bool isConstIndexListSubscript(const QoreValue& expr,
+static bool isConstIndexListSubscript(const std::unordered_set<const LocalVar*>& element_locals, const QoreValue& expr,
         const VarRefNode*& container_var, QoreValue& index_expr) {
     const AbstractQoreNode* node = expr.getInternalNode();
     if (!node) return false;
@@ -5122,6 +5160,11 @@ static bool isConstIndexListSubscript(const QoreValue& expr,
     }
 
     // Set output parameters and succeed
+    // the variable of a foreach loop can hold a weak reference, which a store changes through the variable itself,
+    // as the AST interpreter does (see QoreIRLowering::changesThroughLValue())
+    if (vr->getType() == VT_LOCAL && vr->ref.id && element_locals.count(vr->ref.id)) {
+        return false;
+    }
     container_var = vr;
     index_expr = index;
     return true;
@@ -7440,18 +7483,18 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (!is_weak && isConstKeyHashSubscript(assign->getLeft(), container_var, key_name, key_expr)) {
+        if (!is_weak && isConstKeyHashSubscript(foreach_element_locals, assign->getLeft(), container_var, key_name, key_expr)) {
             return emitHashKeyDirectStore(container_var, key_name, key_expr, right, expr,
                 assign->loc, error);
         }
         // Fast path: dynamic-key hash subscript → LoadLocal + HashKeyStoreDynamic (no EXPR_TREE)
-        if (!is_weak && isDynamicKeyHashSubscript(assign->getLeft(), container_var, key_expr)) {
+        if (!is_weak && isDynamicKeyHashSubscript(foreach_element_locals, assign->getLeft(), container_var, key_expr)) {
             return emitHashKeyDynamicStore(container_var, key_expr, right, expr,
                 assign->loc, error);
         }
         // Fast path: const-index list subscript → LoadLocal + ListIndexStore (no EXPR_TREE)
         QoreValue index_expr;
-        if (!is_weak && isConstIndexListSubscript(assign->getLeft(), container_var, index_expr)) {
+        if (!is_weak && isConstIndexListSubscript(foreach_element_locals, assign->getLeft(), container_var, index_expr)) {
             return emitListIndexDirectStore(container_var, index_expr, right, expr,
                 assign->loc, error);
         }
@@ -7597,7 +7640,7 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         left_var = nullptr;
     }
     // a variable that other threads can change is changed in one operation; see isSharedVar()
-    if (isSharedVar(left_var)) {
+    if (changesThroughLValue(left_var)) {
         left_var = nullptr;
     }
     if (!left_var) {
@@ -7616,12 +7659,12 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
+        if (isConstKeyHashSubscript(foreach_element_locals, op->getLeft(), container_var, key_name, key_expr)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::AddAssignInt : QoreIROpcode::AddAssignAny;
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 arith_op, right, expr, op->loc, error);
         }
-        if (isDynamicKeyHashSubscript(op->getLeft(), container_var, key_expr)) {
+        if (isDynamicKeyHashSubscript(foreach_element_locals, op->getLeft(), container_var, key_expr)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::AddAssignInt : QoreIROpcode::AddAssignAny;
             return emitHashKeyDynamicCompoundOp(container_var, key_expr,
                 arith_op, right, expr, op->loc, error);
@@ -7629,7 +7672,7 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
 
         // Fast path: list index subscript compound assignment
         QoreValue index_expr;
-        if (isConstIndexListSubscript(op->getLeft(), container_var, index_expr)) {
+        if (isConstIndexListSubscript(foreach_element_locals, op->getLeft(), container_var, index_expr)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::AddAssignInt : QoreIROpcode::AddAssignAny;
             return emitListKeyCompoundOp(container_var, index_expr,
                 arith_op, right, expr, op->loc, error);
@@ -7791,7 +7834,7 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         left_var = nullptr;
     }
     // a variable that other threads can change is changed in one operation; see isSharedVar()
-    if (isSharedVar(left_var)) {
+    if (changesThroughLValue(left_var)) {
         left_var = nullptr;
     }
     if (!left_var) {
@@ -7808,12 +7851,12 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
+        if (isConstKeyHashSubscript(foreach_element_locals, op->getLeft(), container_var, key_name, key_expr)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::SubAssignInt : QoreIROpcode::SubAssignAny;
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 arith_op, right, expr, op->loc, error);
         }
-        if (isDynamicKeyHashSubscript(op->getLeft(), container_var, key_expr)) {
+        if (isDynamicKeyHashSubscript(foreach_element_locals, op->getLeft(), container_var, key_expr)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::SubAssignInt : QoreIROpcode::SubAssignAny;
             return emitHashKeyDynamicCompoundOp(container_var, key_expr,
                 arith_op, right, expr, op->loc, error);
@@ -7821,7 +7864,7 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
 
         // Fast path: list index subscript compound assignment
         QoreValue index_expr;
-        if (isConstIndexListSubscript(op->getLeft(), container_var, index_expr)) {
+        if (isConstIndexListSubscript(foreach_element_locals, op->getLeft(), container_var, index_expr)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::SubAssignInt : QoreIROpcode::SubAssignAny;
             return emitListKeyCompoundOp(container_var, index_expr,
                 arith_op, right, expr, op->loc, error);
@@ -7945,7 +7988,7 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         left_var = nullptr;
     }
     // a variable that other threads can change is changed in one operation; see isSharedVar()
-    if (isSharedVar(left_var)) {
+    if (changesThroughLValue(left_var)) {
         left_var = nullptr;
     }
     if (!left_var) {
@@ -7962,18 +8005,18 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
+        if (isConstKeyHashSubscript(foreach_element_locals, op->getLeft(), container_var, key_name, key_expr)) {
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 QoreIROpcode::MulAssignAny, right, expr, op->loc, error);
         }
-        if (isDynamicKeyHashSubscript(op->getLeft(), container_var, key_expr)) {
+        if (isDynamicKeyHashSubscript(foreach_element_locals, op->getLeft(), container_var, key_expr)) {
             return emitHashKeyDynamicCompoundOp(container_var, key_expr,
                 QoreIROpcode::MulAssignAny, right, expr, op->loc, error);
         }
 
         // Fast path: list index subscript compound assignment
         QoreValue index_expr;
-        if (isConstIndexListSubscript(op->getLeft(), container_var, index_expr)) {
+        if (isConstIndexListSubscript(foreach_element_locals, op->getLeft(), container_var, index_expr)) {
             return emitListKeyCompoundOp(container_var, index_expr,
                 QoreIROpcode::MulAssignAny, right, expr, op->loc, error);
         }
@@ -8060,7 +8103,7 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         left_var = nullptr;
     }
     // a variable that other threads can change is changed in one operation; see isSharedVar()
-    if (isSharedVar(left_var)) {
+    if (changesThroughLValue(left_var)) {
         left_var = nullptr;
     }
     if (!left_var) {
@@ -8077,18 +8120,18 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
+        if (isConstKeyHashSubscript(foreach_element_locals, op->getLeft(), container_var, key_name, key_expr)) {
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 QoreIROpcode::DivAssignAny, right, expr, op->loc, error);
         }
-        if (isDynamicKeyHashSubscript(op->getLeft(), container_var, key_expr)) {
+        if (isDynamicKeyHashSubscript(foreach_element_locals, op->getLeft(), container_var, key_expr)) {
             return emitHashKeyDynamicCompoundOp(container_var, key_expr,
                 QoreIROpcode::DivAssignAny, right, expr, op->loc, error);
         }
 
         // Fast path: list index subscript compound assignment
         QoreValue index_expr;
-        if (isConstIndexListSubscript(op->getLeft(), container_var, index_expr)) {
+        if (isConstIndexListSubscript(foreach_element_locals, op->getLeft(), container_var, index_expr)) {
             return emitListKeyCompoundOp(container_var, index_expr,
                 QoreIROpcode::DivAssignAny, right, expr, op->loc, error);
         }
@@ -8163,7 +8206,7 @@ QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string
         left_var = nullptr;
     }
     // a variable that other threads can change is changed in one operation; see isSharedVar()
-    if (isSharedVar(left_var)) {
+    if (changesThroughLValue(left_var)) {
         left_var = nullptr;
     }
     if (!left_var) {
@@ -8241,7 +8284,7 @@ QoreIRValue QoreIRLowering::lowerAndEquals(const QoreValue& expr, std::string& e
         left_var = nullptr;
     }
     // a variable that other threads can change is changed in one operation; see isSharedVar()
-    if (isSharedVar(left_var)) {
+    if (changesThroughLValue(left_var)) {
         left_var = nullptr;
     }
     if (!left_var) {
@@ -8319,7 +8362,7 @@ QoreIRValue QoreIRLowering::lowerOrEquals(const QoreValue& expr, std::string& er
         left_var = nullptr;
     }
     // a variable that other threads can change is changed in one operation; see isSharedVar()
-    if (isSharedVar(left_var)) {
+    if (changesThroughLValue(left_var)) {
         left_var = nullptr;
     }
     if (!left_var) {
@@ -8397,7 +8440,7 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
         left_var = nullptr;
     }
     // a variable that other threads can change is changed in one operation; see isSharedVar()
-    if (isSharedVar(left_var)) {
+    if (changesThroughLValue(left_var)) {
         left_var = nullptr;
     }
     if (!left_var) {
@@ -8494,7 +8537,7 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
             // Fallback: LoadLocal + AddAssignInt + StoreLocal, for a variable that no other thread can change;
             // a global or a local passed by reference takes the lvalue path below, which changes it in one
             // operation (see isSharedVar())
-            if (!isSharedVar(var)) {
+            if (!changesThroughLValue(var)) {
                 QoreIRValue loaded = loadVarRef(var, error, "pre-increment-int", lvexp);
                 if (!loaded.isValid()) {
                     return QoreIRValue();
@@ -8522,13 +8565,13 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (isConstKeyHashSubscript(lvexp, container_var, key_name, key_expr)
+        if (isConstKeyHashSubscript(foreach_element_locals, lvexp, container_var, key_name, key_expr)
                 && !qore_ir_hash_subscript_may_raise_invalid_member(container_var, true)) {
             QoreIRValue one = builder.createConstInt(1, op->loc)->result;
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 QoreIROpcode::AddAssignInt, one, expr, op->loc, error);
         }
-        if (isDynamicKeyHashSubscript(lvexp, container_var, key_expr)
+        if (isDynamicKeyHashSubscript(foreach_element_locals, lvexp, container_var, key_expr)
                 && !qore_ir_hash_subscript_may_raise_invalid_member(container_var, false)) {
             QoreIRValue one = builder.createConstInt(1, op->loc)->result;
             return emitHashKeyDynamicCompoundOp(container_var, key_expr,
@@ -8573,7 +8616,7 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
         // a variable that other threads can change takes the lvalue path below; see isSharedVar()
         if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
-                && !QoreTypeInfo::isReference(var->getTypeInfo()) && !isSharedVar(var)) {
+                && !QoreTypeInfo::isReference(var->getTypeInfo()) && !changesThroughLValue(var)) {
             QoreIRValue old_value = loadVarRef(var, error, "post-increment-int", lvexp);
             if (!old_value.isValid()) {
                 return QoreIRValue();
@@ -8648,7 +8691,7 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
             // Fallback: LoadLocal + SubAssignInt + StoreLocal, for a variable that no other thread can change;
             // a global or a local passed by reference takes the lvalue path below, which changes it in one
             // operation (see isSharedVar())
-            if (!isSharedVar(var)) {
+            if (!changesThroughLValue(var)) {
                 QoreIRValue loaded = loadVarRef(var, error, "pre-decrement-int", lvexp);
                 if (!loaded.isValid()) {
                     return QoreIRValue();
@@ -8676,13 +8719,13 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (isConstKeyHashSubscript(lvexp, container_var, key_name, key_expr)
+        if (isConstKeyHashSubscript(foreach_element_locals, lvexp, container_var, key_name, key_expr)
                 && !qore_ir_hash_subscript_may_raise_invalid_member(container_var, true)) {
             QoreIRValue one = builder.createConstInt(1, op->loc)->result;
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 QoreIROpcode::SubAssignInt, one, expr, op->loc, error);
         }
-        if (isDynamicKeyHashSubscript(lvexp, container_var, key_expr)
+        if (isDynamicKeyHashSubscript(foreach_element_locals, lvexp, container_var, key_expr)
                 && !qore_ir_hash_subscript_may_raise_invalid_member(container_var, false)) {
             QoreIRValue one = builder.createConstInt(1, op->loc)->result;
             return emitHashKeyDynamicCompoundOp(container_var, key_expr,
@@ -8727,7 +8770,7 @@ QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::strin
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
         // a variable that other threads can change takes the lvalue path below; see isSharedVar()
         if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
-                && !QoreTypeInfo::isReference(var->getTypeInfo()) && !isSharedVar(var)) {
+                && !QoreTypeInfo::isReference(var->getTypeInfo()) && !changesThroughLValue(var)) {
             QoreIRValue old_value = loadVarRef(var, error, "post-decrement-int", lvexp);
             if (!old_value.isValid()) {
                 return QoreIRValue();
@@ -9436,7 +9479,7 @@ QoreIRValue QoreIRLowering::lowerShiftLeftEquals(const QoreValue& expr, std::str
         left_var = nullptr;
     }
     // a variable that other threads can change is changed in one operation; see isSharedVar()
-    if (isSharedVar(left_var)) {
+    if (changesThroughLValue(left_var)) {
         left_var = nullptr;
     }
     if (!left_var) {
@@ -9506,7 +9549,7 @@ QoreIRValue QoreIRLowering::lowerShiftRightEquals(const QoreValue& expr, std::st
         left_var = nullptr;
     }
     // a variable that other threads can change is changed in one operation; see isSharedVar()
-    if (isSharedVar(left_var)) {
+    if (changesThroughLValue(left_var)) {
         left_var = nullptr;
     }
     if (!left_var) {
@@ -10061,8 +10104,10 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
             && parse_context->isLocalDefinitelyAssigned(var->ref.id)
             && local_type
             && QoreTypeInfo::parseReturns(local_type, NT_NOTHING) == QTI_NOT_EQUAL;
+        // the variable of a foreach loop can hold a weak reference, which a push changes as the AST interpreter
+        // does, through the variable itself (see changesThroughLValue())
         if (local_var && !local_may_be_reference && !var->ref.id->closureUse() && !lowering_top_level
-                && local_known_assigned) {
+                && local_known_assigned && !changesThroughLValue(var)) {
 
             // Lower the value to push first
             QoreIRValue push_val = lowerMutationOperand(left_expr, op->getRight(), op->loc, error);

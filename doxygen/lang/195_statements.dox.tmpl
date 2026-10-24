@@ -141,6 +141,7 @@ foreach hash ih in (h.pairIterator())
     @note
     - If a reference (<tt>\\lvalue_expression</tt>) is used as the list expression, any changes made to the <tt><b>foreach</b></tt> iterator variable will be written back to the list (in which case any @ref Qore::AbstractIterator "AbstractIterator" object is not iterated; references cannot be used with @ref Qore::AbstractIterator "AbstractIterator" objects as such objects provide read-only iteration).
     - When used with @ref new-style "%new-style" (which is a recommended parse option) or @ref allow-bare-refs "%allow-bare-refs", the \c \b my or \c \b our keywords are required with new variables or their type has to be declared, otherwise a parse exception will be raised
+    - If an element of the list is a weak reference (see the @ref weak_assignment_operator "weak assignment operator (:=)"), the iterator variable is assigned the weak reference itself: the variable reads as the target of the weak reference but does not keep it alive while the loop body runs
 
     @see @ref map for a flexible way to iterate a list or @ref Qore::AbstractIterator "AbstractIterator" object in a single expression
 

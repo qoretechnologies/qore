@@ -1,0 +1,990 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# writes the checks of weak-container-reads.qtest and their results with the AST interpreter, which is the benchmark
+# for the semantics of the other execution modes
+#
+# usage:
+#   make-weak-container-read-checks.qr            writes weak-container-read-checks.qi: every way of reading a weak
+#                                                 reference from a container with every operation on the value read
+#   make-weak-container-read-checks.qr --results  runs the checks with the AST interpreter and writes their results
+#                                                 to weak-container-read-results.qi
+#
+# after a change to the checks, run it without arguments, then with --results, and review both diffs
+
+#! a way of reading a weak reference from a container: name, read expression
+hashdecl ReadForm {
+    string name;
+    string expr;
+}
+
+#! an operation on the value read: name, code giving a string, where {E} stands for the read expression
+hashdecl ReadOperation {
+    string name;
+    string code;
+}
+
+const Forms = (
+    <ReadForm>{"name": "hash-value", "expr": "h.w"},
+    <ReadForm>{"name": "hash-dynamic-key", "expr": "h{k}"},
+    <ReadForm>{"name": "member", "expr": "o.w"},
+    <ReadForm>{"name": "member-dynamic-key", "expr": "o{k}"},
+    <ReadForm>{"name": "list-element", "expr": "l[0]"},
+    <ReadForm>{"name": "list-element-variable-index", "expr": "l[i]"},
+    <ReadForm>{"name": "typed-list-element", "expr": "tl[i]"},
+    <ReadForm>{"name": "map", "expr": "$1"},
+    <ReadForm>{"name": "foreach", "expr": "v"},
+    <ReadForm>{"name": "typed-foreach", "expr": "v"},
+);
+
+const Operations = (
+    <ReadOperation>{"name": "exists", "code": 'sprintf("%y", exists {E})'},
+    <ReadOperation>{"name": "is-nothing", "code": 'sprintf("%y", {E} === NOTHING)'},
+    <ReadOperation>{"name": "optional-object-argument", "code": 'sprintf("%y", has_value({E}))'},
+    <ReadOperation>{"name": "object-argument", "code": 'sprintf("%y", is_object({E}))'},
+    <ReadOperation>{"name": "auto-argument", "code": 'type_of({E})'},
+    <ReadOperation>{"name": "returned", "code": 'sprintf("%y", exists identity({E}))'},
+    <ReadOperation>{"name": "assigned", "code": 'assigned_exists({E})'},
+    <ReadOperation>{"name": "assigned-typed", "code": 'typed_assigned_exists({E})'},
+    <ReadOperation>{"name": "method-call", "code": 'sprintf("%y", {E}.ping())'},
+    <ReadOperation>{"name": "pseudo-method-call", "code": '{E}.type()'},
+    <ReadOperation>{"name": "member-read", "code": 'sprintf("%y", {E}.n)'},
+    <ReadOperation>{"name": "instanceof", "code": 'sprintf("%y", {E} instanceof Target)'},
+    <ReadOperation>{"name": "cast", "code": 'sprintf("%y", exists cast<*Target>({E}))'},
+    <ReadOperation>{"name": "bool", "code": 'sprintf("%y", {E} ? True : False)'},
+    <ReadOperation>{"name": "copied-into-list", "code": 'list_copy_exists(({E},))'},
+    <ReadOperation>{"name": "string", "code": 'sprintf("%y", {E})'},
+);
+
+const Header = '# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks of weak references read from containers, which every execution mode must read as the AST interpreter does;
+# included by weak-container-reads-worker.q, so that the checks run in the execution mode of the worker, by
+# weak-container-reads.qtest, so that they run in the mode of the test, and by WeakContainerReadChecks.qm for the
+# compiled run; written by make-weak-container-read-checks.qr
+#
+# each check applies one operation to a weak reference read in one way - from a hash value, an object member or a
+# list element, by map or as the variable of a foreach loop - and returns the result as a string, or the err of the
+# exception raised; the target of the weak reference exists or has been destroyed
+
+public namespace WeakContainerReadChecks {
+    #! the target of the weak references
+    public class Target {
+        public {
+            int n = 7;
+        }
+
+        int ping() {
+            return n;
+        }
+    }
+
+    #! holds a weak reference in an object member
+    public class Holder {
+        public {
+            auto w;
+        }
+    }
+
+    #! returns True if the argument has a value
+    bool sub has_value(*object o) {
+        return exists o;
+    }
+
+    #! returns True; requires an object
+    bool sub is_object(object o) {
+        return True;
+    }
+
+    #! returns the type of the argument
+    string sub type_of(auto v) {
+        return v.type();
+    }
+
+    #! returns its argument
+    auto sub identity(auto v) {
+        return v;
+    }
+
+    #! returns whether a local variable assigned the value has a value
+    string sub assigned_exists(auto v) {
+        auto a = v;
+        return sprintf("%y", exists a);
+    }
+
+    #! returns whether a typed local variable assigned the value has a value
+    string sub typed_assigned_exists(*Target v) {
+        *Target a = v;
+        return sprintf("%y", exists a);
+    }
+
+    #! returns whether the first element of the list has a value, read by an iterator
+    string sub list_copy_exists(list<auto> l) {
+        ListIterator it(l);
+        it.next();
+        return sprintf("%y", exists it.getValue());
+    }
+';
+
+const ResultsHeader = '    #! returns the results of every check for a live and for a destroyed target: name -> result
+    public hash<string, string> sub get_results() {
+        hash<string, string> rv = {};
+        foreach bool live in (True, False) {
+            hash<auto!> h = {};
+            Holder o();
+            list<auto!> l = (1,);
+            list<Target> tl = ();
+            *Target keep;
+            {
+                Target t();
+                h.w := t;
+                o.w := t;
+                l[0] := t;
+                tl[0] := t;
+                if (live) {
+                    keep = t;
+                }
+            }
+            string prefix = live ? "live-" : "destroyed-";';
+
+const ResultsFooter = '        }
+        return rv;
+    }
+';
+
+const Footer = '    #! returns the results of the checks of loops: name -> result
+    /** Compiled code can read the elements of a list in a bounded loop directly; each check reads the elements in
+        such a loop, compares them with no value and copies them, for a live and for a destroyed target.  The
+        variable of a foreach loop is assigned each element as it is; the checks of get_loop_variable_results()
+        cover it.
+    */
+    public hash<string, string> sub get_loop_results() {
+        hash<string, string> rv = {};
+        foreach bool live in (True, False) {
+            list<Target> tl = ();
+            *Target keep;
+            {
+                Target t();
+                tl[0] := t;
+                if (live) {
+                    keep = t;
+                }
+            }
+            string prefix = live ? "live-" : "destroyed-";
+            rv{prefix + "typed-list-loop-is-nothing"} = loop_is_nothing(tl);
+            rv{prefix + "typed-list-loop-copied"} = loop_copied(tl);
+        }
+        return rv + get_loop_variable_results();
+    }
+
+    string sub loop_is_nothing(list<Target> l) {
+        int nothing = 0;
+        for (int i = 0; i < l.size(); ++i) {
+            if (l[i] === NOTHING) {
+                ++nothing;
+            }
+        }
+        return sprintf("%d", nothing);
+    }
+
+    string sub loop_copied(list<Target> l) {
+        list<auto> copy = ();
+        for (int i = 0; i < l.size(); ++i) {
+            push copy, l[i];
+        }
+        return list_copy_exists(copy);
+    }
+
+    #! a hash with a declared type for the checks of typed loop variables
+    public hashdecl LoopInfo {
+        int a;
+    }
+
+    #! returns the result of the check as a string, or the err of the exception it raises
+    string sub loop_check(code<auto()> check) {
+        try {
+            auto rv = check();
+            return rv.typeCode() == NT_STRING ? rv : sprintf("%y", rv);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returns the results of the checks of the variable of a foreach loop: name -> result
+    /** The variable of a foreach loop is assigned each element of the list as it is, so that it is a weak reference
+        for an element that is a weak reference and a strong reference for any other element.  The checks cover a
+        loop variable captured by a closure, a global loop variable, a loop over a reference, when an element that
+        is not a weak reference is released, and the type checks and conversions of typed loop variables.
+    */
+    hash<string, string> sub get_loop_variable_results() {
+        Target t();
+        list<auto> wl = ();
+        wl[0] := t;
+        hash<auto> wh = {"a": 1};
+        list<auto> whl = ();
+        whl[0] := wh;
+        list<auto> ll = (1, 2);
+        list<auto> wll = ();
+        wll[0] := ll;
+        return {
+            "loop-variable-closure": loop_check(string sub () {
+                # the second run reads the weak reference that the first run read
+                return sprintf("%d %d", loop_variable_closure_sum(wl), loop_variable_closure_sum(wl));
+            }),
+            "loop-variable-closure-lifetime": loop_check(\loop_variable_closure_lifetime()),
+            "loop-variable-global": loop_check(int sub () {
+                int s = 0;
+                foreach our auto loop_variable_global in (wl) {
+                    s += loop_variable_global.ping();
+                }
+                return s;
+            }),
+            "loop-variable-reference-unchanged": loop_check(\loop_variable_reference_unchanged()),
+            "loop-variable-reference-assigned": loop_check(\loop_variable_reference_assigned()),
+            "loop-variable-strong-element-released": loop_check(\loop_variable_strong_element_released()),
+            "loop-variable-strong-element-in-body": loop_check(\loop_variable_strong_element_in_body()),
+            "loop-variable-typed-strong-element-released":
+                loop_check(\loop_variable_typed_strong_element_released()),
+            "loop-variable-closure-strong-element-released":
+                loop_check(\loop_variable_closure_strong_element_released()),
+            "loop-variable-object-over-weak": loop_check(int sub () {
+                int s = 0;
+                foreach Target x in (wl) {
+                    s += x.ping();
+                }
+                return s;
+            }),
+            "loop-variable-hash-over-weak-hash": loop_check(string sub () {
+                string rv;
+                foreach hash<auto> x in (whl) {
+                    rv = sprintf("%s %d", x.type(), x.a);
+                }
+                return rv;
+            }),
+            "loop-variable-list-over-weak-list": loop_check(string sub () {
+                string rv;
+                foreach list<auto> x in (wll) {
+                    rv = sprintf("%s %d", x.type(), x[1]);
+                }
+                return rv;
+            }),
+            "loop-variable-int-over-strings": loop_check(int sub () {
+                int s = 0;
+                foreach int x in (("a", "b")) {
+                    s += x;
+                }
+                return s;
+            }),
+            "loop-variable-hash-over-string": loop_check(int sub () {
+                int s = 0;
+                foreach hash<auto> x in (("a",)) {
+                    s += x.size();
+                }
+                return s;
+            }),
+            "loop-variable-object-over-int": loop_check(string sub () {
+                string rv;
+                foreach object x in ((1,)) {
+                    rv = get_class_name(x);
+                }
+                return rv;
+            }),
+            "loop-variable-string-over-weak": loop_check(string sub () {
+                string rv;
+                foreach string x in (wl) {
+                    rv = x;
+                }
+                return rv;
+            }),
+            "loop-variable-plain-hash-type": loop_check(string sub () {
+                string rv;
+                foreach hash x in (({"a": 1},)) {
+                    rv = x.fullType();
+                }
+                return rv;
+            }),
+            "loop-variable-plain-list-type": loop_check(string sub () {
+                string rv;
+                foreach list x in (((1, 2),)) {
+                    rv = x.fullType();
+                }
+                return rv;
+            }),
+            "loop-variable-hash-type": loop_check(string sub () {
+                string rv;
+                foreach hash<auto> x in (({"a": 1},)) {
+                    rv = x.fullType();
+                }
+                return rv;
+            }),
+            "loop-variable-auto-type": loop_check(string sub () {
+                string rv;
+                foreach auto x in (({"a": 1},)) {
+                    rv = x.fullType();
+                }
+                return rv;
+            }),
+            "loop-variable-no-narrow-hash-type": loop_check(string sub () {
+                string rv;
+                foreach hash<auto!> x in (({"a": 1},)) {
+                    rv = x.fullType();
+                }
+                return rv;
+            }),
+            "loop-variable-typed-hash-mismatch": loop_check(string sub () {
+                string rv;
+                foreach hash<string, int> x in (({"a": "x"},)) {
+                    rv = x.fullType();
+                }
+                return rv;
+            }),
+            "loop-variable-hashdecl-type": loop_check(string sub () {
+                string rv;
+                foreach hash<LoopInfo> x in ((<LoopInfo>{"a": 1},)) {
+                    rv = x.fullType();
+                }
+                return rv;
+            }),
+            "loop-variable-hashdecl-from-plain-hash": loop_check(string sub () {
+                string rv;
+                foreach hash<LoopInfo> x in (({"a": 1},)) {
+                    rv = x.fullType();
+                }
+                return rv;
+            }),
+            "loop-variable-typed-list-type": loop_check(string sub () {
+                string rv;
+                foreach list<int> x in (((1, 2),)) {
+                    rv = x.fullType();
+                }
+                return rv;
+            }),
+            "loop-variable-softlist": loop_check(string sub () {
+                list<string> rv = ();
+                foreach *softlist<auto> x in ((1, NOTHING)) {
+                    push rv, x.fullType();
+                }
+                return rv.join(" ");
+            }),
+            "loop-variable-softstring": loop_check(string sub () {
+                string rv = "";
+                foreach softstring x in ((1, 2)) {
+                    rv += x;
+                }
+                return rv;
+            }),
+            "loop-variable-push-weak-list": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach list<auto> x in (l) {
+                    push x, 3;
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-push-weak-list-untyped": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach auto x in (l) {
+                    push x, 3;
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-unshift-weak-list": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach list<auto> x in (l) {
+                    unshift x, 0;
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-unshift-weak-list-untyped": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach auto x in (l) {
+                    unshift x, 0;
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-pop-weak-list": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach list<auto> x in (l) {
+                    auto p = pop x;
+                    rv = sprintf("%y %y", p, x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-pop-weak-list-untyped": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach auto x in (l) {
+                    auto p = pop x;
+                    rv = sprintf("%y %y", p, x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-shift-weak-list": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach list<auto> x in (l) {
+                    auto p = shift x;
+                    rv = sprintf("%y %y", p, x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-shift-weak-list-untyped": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach auto x in (l) {
+                    auto p = shift x;
+                    rv = sprintf("%y %y", p, x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-index-store-weak-list": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach list<auto> x in (l) {
+                    x[0] = 9;
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-index-store-weak-list-untyped": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach auto x in (l) {
+                    x[0] = 9;
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-plus-assign-weak-list": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach list<auto> x in (l) {
+                    x += 4;
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-plus-assign-weak-list-untyped": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach auto x in (l) {
+                    x += 4;
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-splice-weak-list": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach list<auto> x in (l) {
+                    splice x, 0, 1;
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-splice-weak-list-untyped": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach auto x in (l) {
+                    splice x, 0, 1;
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-extract-weak-list": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach list<auto> x in (l) {
+                    auto e = extract x, 0, 1;
+                    rv = sprintf("%y %y", e, x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-extract-weak-list-untyped": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach auto x in (l) {
+                    auto e = extract x, 0, 1;
+                    rv = sprintf("%y %y", e, x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-remove-element-weak-list": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach list<auto> x in (l) {
+                    remove x[0];
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-remove-element-weak-list-untyped": loop_check(string sub () {
+                list<auto> target = (1, 2);
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach auto x in (l) {
+                    remove x[0];
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-key-store-weak-hash": loop_check(string sub () {
+                hash<auto> target = {"a": 1};
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach hash<auto> x in (l) {
+                    x.b = 2;
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-key-store-weak-hash-untyped": loop_check(string sub () {
+                hash<auto> target = {"a": 1};
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach auto x in (l) {
+                    x.b = 2;
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-remove-key-weak-hash": loop_check(string sub () {
+                hash<auto> target = {"a": 1};
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach hash<auto> x in (l) {
+                    remove x.a;
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-remove-key-weak-hash-untyped": loop_check(string sub () {
+                hash<auto> target = {"a": 1};
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach auto x in (l) {
+                    remove x.a;
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-merge-weak-hash": loop_check(string sub () {
+                hash<auto> target = {"a": 1};
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach hash<auto> x in (l) {
+                    x += {"c": 3};
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-merge-weak-hash-untyped": loop_check(string sub () {
+                hash<auto> target = {"a": 1};
+                list<auto!> l = (1,);
+                l[0] := target;
+                string rv;
+                foreach auto x in (l) {
+                    x += {"c": 3};
+                    rv = sprintf("%y", x);
+                }
+                return rv + sprintf(" target: %y", target);
+            }),
+            "loop-variable-read-twice": loop_check(int sub () {
+                int s = 0;
+                foreach auto x in (wl) {
+                    s = x.ping() + x.ping() + x.n;
+                }
+                return s;
+            }),
+            "loop-variable-nested": loop_check(int sub () {
+                int s = 0;
+                foreach auto x in (wl) {
+                    foreach auto y in (wl) {
+                        s += x.ping() * y.ping();
+                    }
+                }
+                return s;
+            }),
+            "loop-variable-argument": loop_check(int sub () {
+                int s = 0;
+                code f = int sub (Target o) {
+                    return o.n;
+                };
+                foreach auto x in (wl) {
+                    s += f(x);
+                }
+                return s;
+            }),
+            "loop-variable-compared": loop_check(bool sub () {
+                bool b;
+                foreach auto x in (wl) {
+                    b = (x == t);
+                }
+                return b;
+            }),
+            "loop-variable-member-write": loop_check(int sub () {
+                Target o();
+                list<auto!> l = (1,);
+                l[0] := o;
+                foreach auto x in (l) {
+                    x.n = 9;
+                }
+                return o.n;
+            }),
+            "loop-variable-strong-copy-lifetime": loop_check(\loop_variable_strong_copy_lifetime()),
+        };
+    }
+
+    #! a strong copy of the loop variable keeps the target alive after the loop, as any other variable does
+    string sub loop_variable_strong_copy_lifetime() {
+        int before = Tracked::destroyed;
+        *Tracked t = new Tracked();
+        list<auto> l = ();
+        l[0] := t;
+        *Tracked keep;
+        foreach auto v in (l) {
+            keep = v;
+        }
+        t = NOTHING;
+        int kept = Tracked::destroyed - before;
+        keep = NOTHING;
+        return sprintf("%d %d", kept, Tracked::destroyed - before);
+    }
+
+    #! returns the sum of calling closures that capture the variable of a foreach loop over the given list
+    int sub loop_variable_closure_sum(list<auto> l) {
+        list<code> cl = ();
+        foreach auto v in (l) {
+            push cl, int sub () {
+                return v.ping();
+            };
+        }
+        int s = 0;
+        for (int i = 0; i < cl.size(); ++i) {
+            s += cl[i]();
+        }
+        return s;
+    }
+
+    #! a closure that captures a loop variable assigned a weak reference does not keep its target alive
+    string sub loop_variable_closure_lifetime() {
+        int before = Tracked::destroyed;
+        *Tracked t = new Tracked();
+        list<auto> l = ();
+        l[0] := t;
+        code c;
+        foreach auto v in (l) {
+            c = bool sub () {
+                return exists v;
+            };
+        }
+        t = NOTHING;
+        return sprintf("%d %y", Tracked::destroyed - before, c());
+    }
+
+    #! a loop over a reference that does not change the variable writes the weak reference back to the list
+    string sub loop_variable_reference_unchanged() {
+        int before = Tracked::destroyed;
+        *Tracked t = new Tracked();
+        list<auto> l = ();
+        l[0] := t;
+        foreach auto v in (\l) {
+        }
+        t = NOTHING;
+        return sprintf("%d", Tracked::destroyed - before);
+    }
+
+    #! a loop over a reference that assigns the variable the target writes a strong reference back to the list
+    string sub loop_variable_reference_assigned() {
+        int before = Tracked::destroyed;
+        *Tracked t = new Tracked();
+        list<auto> l = ();
+        l[0] := t;
+        foreach auto v in (\l) {
+            auto target = v;
+            v = target;
+        }
+        t = NOTHING;
+        return sprintf("%d", Tracked::destroyed - before);
+    }
+
+    #! an element that is not a weak reference is released with the list once the variable no longer holds it
+    string sub loop_variable_strong_element_released() {
+        int before = Tracked::destroyed;
+        *list<auto> l = (new Tracked(),);
+        foreach auto v in (l) {
+            v = NOTHING;
+        }
+        l = NOTHING;
+        return sprintf("%d", Tracked::destroyed - before);
+    }
+
+    #! the variable keeps an element that is not a weak reference alive while the loop body runs
+    string sub loop_variable_strong_element_in_body() {
+        int before = Tracked::destroyed;
+        hash<auto> c = {"l": (new Tracked(),)};
+        string rv;
+        foreach auto v in (c.l) {
+            remove c.l;
+            rv = sprintf("%d %y", Tracked::destroyed - before, exists v);
+        }
+        return rv + sprintf(" %d", Tracked::destroyed - before);
+    }
+
+    #! as loop_variable_strong_element_released() with a typed variable
+    string sub loop_variable_typed_strong_element_released() {
+        int before = Tracked::destroyed;
+        *list<Tracked> l = (new Tracked(),);
+        foreach *Tracked v in (l) {
+            v = NOTHING;
+        }
+        l = NOTHING;
+        return sprintf("%d", Tracked::destroyed - before);
+    }
+
+    #! as loop_variable_strong_element_released() with a variable captured by a closure
+    string sub loop_variable_closure_strong_element_released() {
+        int before = Tracked::destroyed;
+        *list<auto> l = (new Tracked(),);
+        code c;
+        foreach auto v in (l) {
+            c = bool sub () {
+                return exists v;
+            };
+            v = NOTHING;
+        }
+        l = NOTHING;
+        return sprintf("%d %y", Tracked::destroyed - before, c());
+    }
+
+    #! a target whose destruction is counted
+    public class Tracked {
+        public {
+            static int destroyed = 0;
+        }
+
+        destructor() {
+            ++destroyed;
+        }
+    }
+
+    #! returns the results of the checks of when a target is destroyed while a value read from a weak reference to it
+    #! is held: name -> result
+    /** Each check reads a weak reference to the target, then releases the only strong reference to the target and
+        reports whether the target was destroyed while the value read is still in scope.
+    */
+    public hash<string, string> sub get_lifetime_results() {
+        return {
+            "lifetime-hash-value-assigned": lifetime_hash_value_assigned(),
+            "lifetime-list-element-assigned": lifetime_list_element_assigned(),
+            "lifetime-foreach": lifetime_foreach(),
+            "lifetime-typed-foreach": lifetime_typed_foreach(),
+            "lifetime-map": lifetime_map(),
+        };
+    }
+
+    #! returns a hash holding the only strong reference to a new target under "t", and the weak references "h" and "l"
+    hash<auto> sub make_tracked() {
+        Tracked::destroyed = 0;
+        hash<auto!> rv = {"t": new Tracked()};
+        hash<auto!> h = {};
+        h.w := rv.t;
+        list<auto!> l = (1,);
+        l[0] := rv.t;
+        rv.h = h;
+        rv.l = l;
+        return rv;
+    }
+
+    string sub lifetime_hash_value_assigned() {
+        hash<auto!> c = make_tracked();
+        auto a = c.h.w;
+        remove c.t;
+        return sprintf("destroyed: %d, exists: %y", Tracked::destroyed, exists a);
+    }
+
+    string sub lifetime_list_element_assigned() {
+        hash<auto!> c = make_tracked();
+        list<auto> l = c.l;
+        auto a = l[0];
+        remove c.t;
+        return sprintf("destroyed: %d, exists: %y", Tracked::destroyed, exists a);
+    }
+
+    string sub lifetime_foreach() {
+        hash<auto!> c = make_tracked();
+        string rv;
+        foreach auto v in (c.l) {
+            remove c.t;
+            rv = sprintf("destroyed: %d, exists: %y", Tracked::destroyed, exists v);
+        }
+        return rv;
+    }
+
+    string sub lifetime_typed_foreach() {
+        hash<auto!> c = make_tracked();
+        string rv;
+        foreach Tracked v in (c.l) {
+            remove c.t;
+            rv = sprintf("destroyed: %d, exists: %y", Tracked::destroyed, exists v);
+        }
+        return rv;
+    }
+
+    string sub lifetime_map() {
+        hash<auto!> c = make_tracked();
+        list<auto> l = c.l;
+        return (map lifetime_map_element($1, \c), l)[0];
+    }
+
+    string sub lifetime_map_element(auto v, reference<hash<auto!>> c) {
+        remove c.t;
+        return sprintf("destroyed: %d, exists: %y", Tracked::destroyed, exists v);
+    }
+}
+';
+
+#! returns the body of the check of the operation on the value read in the given way
+string sub check_body(ReadForm form, string expr) {
+    switch (form.name) {
+        case "map":
+            return sprintf("        try {\n            return (map %s, l)[0];\n        } catch (hash<ExceptionInfo> ex) {\n"
+                "            return ex.err;\n        }", expr);
+        case "foreach":
+        case "typed-foreach":
+            return sprintf("        string rv;\n        try {\n            foreach %s v in (l) {\n"
+                "                rv = %s;\n            }\n        } catch (hash<ExceptionInfo> ex) {\n"
+                "            return ex.err;\n        }\n        return rv;", form.name == "foreach" ? "auto" : "Target",
+                expr);
+    }
+    return sprintf("        try {\n            return %s;\n        } catch (hash<ExceptionInfo> ex) {\n"
+        "            return ex.err;\n        }", expr);
+}
+
+#! returns the checks
+string sub make_checks() {
+    list<string> out = (Header, ResultsHeader);
+    foreach hash<ReadForm> form in (Forms) {
+        int fi = $#;
+        foreach hash<ReadOperation> op in (Operations) {
+            push out, sprintf("            rv{prefix + \"%s-%s\"} = c_%d_%d(h, o, l, tl, \"w\", 0);", form.name,
+                op.name, fi, $#);
+        }
+    }
+    push out, ResultsFooter;
+    foreach hash<ReadForm> form in (Forms) {
+        int fi = $#;
+        foreach hash<ReadOperation> op in (Operations) {
+            push out, sprintf("    #! %s of a weak reference read as %s\n"
+                "    string sub c_%d_%d(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {\n"
+                "%s\n    }\n", op.name, form.name, fi, $#, check_body(form, replace(op.code, "{E}", form.expr)));
+        }
+    }
+    push out, Footer;
+    return out.join("\n");
+}
+
+#! returns the results of the checks with the AST interpreter as the results file
+string sub make_results(string dir) {
+    string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+    int rc;
+    string output = backquote(sprintf("%s -b --exec-mode=ast %s", qore_bin,
+        dir + DirSep + "weak-container-reads-worker.q"), \rc);
+    if (rc) {
+        throw "WORKER-ERROR", sprintf("the worker failed with exit code %d: %s", rc, output);
+    }
+    hash<string, string> results = {};
+    foreach string line in (output.split("\n")) {
+        *list<string> kv = (line =~ x/^([^=]+)=(.*)$/);
+        if (!kv) {
+            if (line.val()) {
+                throw "WORKER-ERROR", sprintf("unexpected worker output: %y", line);
+            }
+            continue;
+        }
+        results{kv[0]} = kv[1];
+    }
+    list<string> out = ('# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# the results of the checks in weak-container-read-checks.qi with the AST interpreter, which every execution mode
+# must give: the AST interpreter is the benchmark for the semantics of the other modes; written by
+# make-weak-container-read-checks.qr --results
+
+public namespace WeakContainerReadChecks {
+    #! check name -> the result of the check with the AST interpreter
+    public const AstResults = {',);
+    foreach string name in (sort(keys results)) {
+        push out, sprintf("        \"%s\": \"%s\",", name, replace(replace(results{name}, "\\", "\\\\"), "\"",
+            "\\\""));
+    }
+    push out, "    };\n}\n";
+    printf("%d results\n", results.size());
+    return out.join("\n");
+}
+
+#! writes the file
+sub write_file(string path, string contents) {
+    File f();
+    f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+    f.write(contents);
+    f.close();
+    printf("wrote %s\n", path);
+}
+
+string dir = get_script_dir();
+if (ARGV[0] == "--results") {
+    write_file(dir + DirSep + "weak-container-read-results.qi", make_results(dir));
+} else if (ARGV) {
+    stderr.printf("usage: %s [--results]\n", get_script_name());
+    exit(1);
+} else {
+    write_file(dir + DirSep + "weak-container-read-checks.qi", make_checks());
+}

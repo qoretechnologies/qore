@@ -1662,6 +1662,7 @@ void QoreIRFunction::computeIROnlyLocals() {
     cow_container_locals.clear();
     lvalue_path_locals.clear();
     weak_store_locals.clear();
+    element_store_locals.clear();
     stored_locals.clear();
     ast_referenced_locals.clear();
     non_structured_ast_referenced_locals.clear();
@@ -1708,10 +1709,15 @@ void QoreIRFunction::computeIROnlyLocals() {
                     if (inst->opcode == QoreIROpcode::StoreLocal) {
                         stored_locals.insert(reinterpret_cast<const void*>(linst->local));
                     }
-                    // A weak (":=") store assigns through LValueHelper, which
-                    // requires the variable on the runtime local stack
-                    if (inst->opcode == QoreIROpcode::StoreLocal && linst->mode != AssignmentMode::Normal) {
-                        weak_store_locals.insert(reinterpret_cast<const void*>(linst->local));
+                    // A weak (":=") or opaque store assigns through LValueHelper, which
+                    // requires the variable on the runtime local stack; an element store keeps
+                    // the element in the variable's cache if the variable is IR-only
+                    if (inst->opcode == QoreIROpcode::StoreLocal) {
+                        if (linst->mode == AssignmentMode::Element) {
+                            element_store_locals.insert(reinterpret_cast<const void*>(linst->local));
+                        } else if (linst->mode != AssignmentMode::Normal) {
+                            weak_store_locals.insert(reinterpret_cast<const void*>(linst->local));
+                        }
                     }
                 }
             }

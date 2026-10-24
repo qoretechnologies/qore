@@ -1061,18 +1061,36 @@ struct lvinfo {
 //! replaces a value with the weak or opaque representation the given assignment mode calls for
 /** Applied by the execution tiers that build the stored representation themselves instead of
     delegating to LValueHelper::assign().  Objects, hashes and lists are converted; every other
-    value is left unchanged.  The returned value holds its own reference, so the caller must
-    release the reference it held before the call once the store has taken its own.
+    value, including a value that is already a weak reference, is left unchanged.  A converted
+    value holds its own reference, so the caller must release the reference it held before the
+    call once the store has taken its own.
 
     @param val the value to convert in place
-    @param mode the assignment mode; must not be AssignmentMode::Normal
+    @param mode the assignment mode; must be AssignmentMode::Weak or AssignmentMode::Opaque
+
+    @return true if the value was converted, so that the caller must release the converted value once the store has
+    taken its own reference
 */
-DLLLOCAL void qore_apply_assignment_mode(QoreValue& val, AssignmentMode mode);
+DLLLOCAL bool qore_apply_assignment_mode(QoreValue& val, AssignmentMode mode);
 
 //! returns true if the value is a weak or opaque reference to an object, hash or list
 /** These are the representations that hold their target indirectly, so that a store which built
     one must release the reference taken when it was built.
 */
 DLLLOCAL bool qore_is_indirect_ref_value(const QoreValue& val);
+
+//! Removes the element with the given index from the value of an lvalue, as the remove operator does
+/** As LValueRemoveHelper::doRemove() does for an index operator with a single index: a list loses the element and
+    returns it, a string or a binary object returns the character or the byte at the index and is not changed, and
+    any other value - a hash, a weak reference to a list, an integer - is removed from the lvalue itself and
+    returned.  A negative index counts from the end with %negative-offsets and raises NEGATIVE-LIST-INDEX otherwise.
+
+    @param lvh the lvalue holding the container, after LValueHelper::startContainerRemoval()
+    @param index the index
+    @param xsink for exceptions
+
+    @return the value removed, owned by the caller
+*/
+DLLLOCAL QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink* xsink);
 
 #endif // _QORE_VARIABLE_H

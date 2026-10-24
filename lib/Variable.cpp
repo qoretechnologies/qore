@@ -1915,11 +1915,37 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                     break;
                 }
 
-                // For list index, we need to ensure unique and access the element
-                QoreListNode* l = nullptr;
-                if (t == NT_LIST) {
+                // a hash, also through a weak reference, takes the index as a key, as doListLValue() does
+                if (t == NT_HASH || t == NT_WEAKREF_HASH) {
+                    if (idx < 0) {
+                        vl.xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid "
+                            "(index must evaluate to a non-negative integer)", original_idx);
+                        return -1;
+                    }
                     ensureUnique();
-                    l = getValue().get<QoreListNode>();
+                    QoreHashNode* h = t == NT_HASH
+                        ? getValue().get<QoreHashNode>()
+                        : getValue().get<WeakHashReferenceNode>()->get();
+                    // a dynamic index keeps the value it was given
+                    QoreHashKeyHelper key(step.slice_values.size() == 1 ? step.slice_values[0]
+                        : QoreValue(original_idx), vl.xsink);
+                    if (*vl.xsink) {
+                        return -1;
+                    }
+                    if (qore_hash_private::get(*h)->getLValue(key.c_str(), *this, for_remove, vl.xsink)) {
+                        return -1;
+                    }
+                    break;
+                }
+
+                // For list index, we need to ensure unique and access the element; a weak reference to a list
+                // gives its list, as doListLValue() does
+                QoreListNode* l = nullptr;
+                if (t == NT_LIST || t == NT_WEAKREF_LIST) {
+                    ensureUnique();
+                    l = t == NT_LIST
+                        ? getValue().get<QoreListNode>()
+                        : getValue().get<WeakListReferenceNode>()->get();
                     if (negative_offsets && idx < 0) {
                         idx += static_cast<int64_t>(l->size());
                     }
@@ -2080,33 +2106,83 @@ void LValueHelper::rollbackVivification() {
     clearPtr();
 }
 
-void qore_apply_assignment_mode(QoreValue& val, AssignmentMode mode) {
-    assert(mode != AssignmentMode::Normal);
+bool qore_apply_assignment_mode(QoreValue& val, AssignmentMode mode) {
+    assert(mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque);
     switch (val.getType()) {
         case NT_OBJECT: {
             QoreObject* o = val.get<QoreObject>();
             val = mode == AssignmentMode::Weak
                 ? QoreValue(new WeakReferenceNode(o))
                 : QoreValue::makeOpaqueObject(o);
-            break;
+            return true;
         }
         case NT_HASH: {
             QoreHashNode* h = val.get<QoreHashNode>();
             val = mode == AssignmentMode::Weak
                 ? QoreValue(new WeakHashReferenceNode(h))
                 : QoreValue::makeOpaqueHash(h);
-            break;
+            return true;
         }
         case NT_LIST: {
             QoreListNode* l = val.get<QoreListNode>();
             val = mode == AssignmentMode::Weak
                 ? QoreValue(new WeakListReferenceNode(l))
                 : QoreValue::makeOpaqueList(l);
-            break;
+            return true;
         }
         default:
-            break;
+            return false;
     }
+}
+
+// documented in Variable.h
+QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink* xsink) {
+    int64 original_index = index;
+    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
+    qore_type_t t = lvh.getType();
+    if (t == NT_LIST || t == NT_STRING || t == NT_BINARY) {
+        lvh.ensureUnique();
+        QoreValue container = lvh.getValue();
+        size_t size = t == NT_LIST
+            ? container.get<QoreListNode>()->size()
+            : (t == NT_STRING ? container.get<QoreStringNode>()->length() : container.get<BinaryNode>()->size());
+        if (negative_offsets && index < 0) {
+            index += static_cast<int64>(size);
+        }
+        if (index < 0) {
+            xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
+                "non-negative integer)", original_index);
+            return QoreValue();
+        }
+        QoreValue rv;
+        if (t == NT_LIST) {
+            if (static_cast<size_t>(index) < size) {
+                QoreListNode* l = container.get<QoreListNode>();
+                rv = l->retrieveEntry(static_cast<size_t>(index)).refSelf();
+                l->setEntry(static_cast<size_t>(index), QoreValue(), xsink);
+            }
+        } else if (t == NT_STRING) {
+            QoreStringNode* str = container.get<QoreStringNode>();
+            rv = static_cast<size_t>(index) < size
+                ? str->substr(index, 1, xsink)
+                : new QoreStringNode(str->getEncoding());
+        } else {
+            BinaryNode* v = new BinaryNode;
+            if (static_cast<size_t>(index) < size) {
+                container.get<BinaryNode>()->substr(*v, index, 1);
+            }
+            rv = v;
+        }
+        lvh.removedValue(rv);
+        return rv;
+    }
+    // any other value is removed from the lvalue itself
+    bool static_assignment = false;
+    QoreValue rv = lvh.remove(static_assignment);
+    if (static_assignment) {
+        rv.ref();
+    }
+    return rv;
 }
 
 bool qore_is_indirect_ref_value(const QoreValue& val) {

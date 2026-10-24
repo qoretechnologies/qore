@@ -48,6 +48,12 @@ enum class AssignmentMode : unsigned char {
         broken only by the holder releasing it or by the owning QoreProgram being torn down.
     */
     Opaque = 2,
+    //! the value as it is, as the AST interpreter assigns the variable of a foreach loop each element of the list
+    /** A weak reference stays a weak reference, so that the variable reads as its target without keeping it alive,
+        and any other value is stored as with Normal; the assignment checks the type of the value as with Normal.
+        Only the IR uses this mode, for the variable of a foreach loop (see QoreIRLowering).
+    */
+    Element = 3,
 };
 
 //! Every interface that can see an assignment mode carries the mode itself.

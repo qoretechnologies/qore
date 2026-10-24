@@ -7391,6 +7391,7 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
     std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*> closure_values;
     std::unordered_set<LocalVar*> candidate_locals;
     std::unordered_set<LocalVar*> local_cow_candidates;
+    std::unordered_set<LocalVar*> element_locals;
     using InstructionPosition = std::pair<size_t, size_t>;
     std::unordered_map<const QoreIRInstruction*, InstructionPosition> positions;
     for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
@@ -7421,9 +7422,19 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
                             reinterpret_cast<const void*>(local_inst->local))) {
                         candidate_locals.insert(local_inst->local);
                     }
+                    if (inst->opcode == QoreIROpcode::StoreLocal
+                            && local_inst->mode == AssignmentMode::Element) {
+                        element_locals.insert(local_inst->local);
+                    }
                 }
             }
         }
+    }
+    // the variable of a foreach loop can hold a weak reference to a list (AssignmentMode::Element), which a push
+    // must not change in place through the variable's cache
+    for (LocalVar* local : element_locals) {
+        local_cow_candidates.erase(local);
+        candidate_locals.erase(local);
     }
 
     auto get_loaded_local = [&](QoreIRValue value) -> LocalVar* {

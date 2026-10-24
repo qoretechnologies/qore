@@ -519,7 +519,8 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     if ((inst->opcode == QoreIROpcode::StoreLocal
                             || inst->opcode == QoreIROpcode::StoreClosure)
                             && local_inst->mode != AssignmentMode::Normal) {
-                        out << " weak";
+                        // the variable of a foreach loop is assigned each element as it is
+                        out << (local_inst->mode == AssignmentMode::Element ? " element" : " weak");
                     }
                 }
             } else if (inst->opcode == QoreIROpcode::LoadGlobal || inst->opcode == QoreIROpcode::StoreGlobal

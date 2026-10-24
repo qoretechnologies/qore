@@ -1656,14 +1656,20 @@ extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak(LocalVar* var, uint64_t
     qore_rt_assign_local_impl(var, value, xsink, true, true);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint64_t value,
-        uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+//! Coerces a value as an assignment to an lvalue of the given type does; see qore_rt_coerce_value()
+/** @param normalize_weak_refs true to assign a weak reference as its target, false to keep it as it is (the variable
+    of a foreach loop, which is assigned each element as it is)
+*/
+static uint64_t qore_rt_coerce_value_impl(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,
+        ExceptionSink* xsink, bool normalize_weak_refs) {
     ti = qore_substitute_type_params_if_needed(ti);
     QoreValue val = fromBits(value);
     ValueHolder weak_eval_holder(xsink);
-    qore_rt_normalize_weak_reference_for_assignment(val, weak_eval_holder, xsink);
-    if (xsink && *xsink) {
-        return toBits(QoreValue());
+    if (normalize_weak_refs) {
+        qore_rt_normalize_weak_reference_for_assignment(val, weak_eval_holder, xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
     }
     // Take our own reference before acceptAssignment so its internal
     // `discard(p)` (in the copy branch of acceptInputComplexList/Hash)
@@ -1702,6 +1708,40 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint6
         *cleanup_ptr = result;
     }
     return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint64_t value,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    return qore_rt_coerce_value_impl(ti, value, cleanup_ptr, xsink, true);
+}
+
+//! Returns the flag that the reads of a typed variable of a foreach loop check, for a value stored in its cache
+/** @return 1 if the value is one that qore_rt_read_element_local() must read, a weak reference or a reference, 0
+    otherwise; see QoreIRToLLVM::element_local_read_flags
+*/
+extern "C" DLLEXPORT uint8_t qore_rt_element_value_read_flag(uint64_t value) {
+    QoreValue v = fromBits(value);
+    if (!v.hasNode()) {
+        return 0;
+    }
+    qore_type_t type = v.getInternalNode()->getType();
+    return qore_rt_is_weak_reference_type(type) || type == NT_REFERENCE ? 1 : 0;
+}
+
+//! Coerces the element assigned to the variable of a foreach loop, which is assigned as it is
+/** As qore_rt_coerce_value(), except that a weak reference stays a weak reference, as the AST interpreter assigns
+    the variable each element; the type of the value is checked as the AST interpreter checks it.  The variable's
+    cache then holds the weak reference, and its reads give the target (see qore_rt_read_element_local()).
+
+    @param read_flag if not null, set as qore_rt_element_value_read_flag() gives it for the value
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_element_value(const QoreTypeInfo* ti, uint64_t value,
+        uint64_t* cleanup_ptr, uint8_t* read_flag, ExceptionSink* xsink) {
+    uint64_t rv = qore_rt_coerce_value_impl(ti, value, cleanup_ptr, xsink, false);
+    if (read_flag) {
+        *read_flag = qore_rt_element_value_read_flag(rv);
+    }
+    return rv;
 }
 
 static uint64_t qore_rt_coerce_return_value(const QoreTypeInfo* ti, uint64_t value,
@@ -1925,6 +1965,27 @@ extern "C" DLLEXPORT void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t*
     *deferred = old_tracker;
     qore_rt_decref(old_deferred, xsink);
     *valid_epoch = epoch;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_deref_if_reference(uint64_t val, ExceptionSink* xsink);
+
+//! Returns the value of the variable of a foreach loop as the program reads it from the variable's cache
+/** The variable is assigned each element as it is, so its cache can hold a weak reference, which reads as its target,
+    borrowed: the weak reference in the cache keeps the target allocated, and a reference taken here would let the
+    frame run the target's destructor.  A reference held by an untyped variable is dereferenced as by
+    qore_rt_deref_if_reference(); any other value is returned as it is.  Native code calls it only for a value that
+    can be one of them (see qore_rt_element_value_read_flag() and QoreIRToLLVM::loadLocalCacheValue()).
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_read_element_local(uint64_t val, ExceptionSink* xsink) {
+    QoreValue v = fromBits(val);
+    if (!v.hasNode()) {
+        return val;
+    }
+    qore_type_t type = v.getInternalNode()->getType();
+    if (qore_rt_is_weak_reference_type(type)) {
+        return toBits(qore_rt_get_weak_reference_target(v));
+    }
+    return type == NT_REFERENCE ? qore_rt_deref_if_reference(val, xsink) : val;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_deref_if_reference(uint64_t val, ExceptionSink* xsink) {
@@ -11790,6 +11851,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_aot(QoreAOTContext* ctx, int3
     return qore_rt_coerce_value(ti, value, cleanup_ptr, xsink);
 }
 
+//! As qore_rt_coerce_element_value() for the local with the given AOT slot
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_element_value_aot(QoreAOTContext* ctx, int32_t local_idx,
+        uint64_t value, uint64_t* cleanup_ptr, uint8_t* read_flag, ExceptionSink* xsink) {
+    assert(ctx && local_idx >= 0 && local_idx < ctx->num_locals);
+    const QoreTypeInfo* ti = ctx->locals[local_idx]->getTypeInfoForLValue();
+    return qore_rt_coerce_element_value(ti, value, cleanup_ptr, read_flag, xsink);
+}
+
 // --- Phase 2B Step 5: Cast/coerce throwing wrappers ---
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_coerce_value_throwing(
@@ -12757,12 +12826,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
     QoreValue assign_val = val;
     ValueHolder eval_holder(xsink);
     qore_type_t val_type = val.getType();
-    if (inst->mode != AssignmentMode::Weak
+    // a weak and an element store (the variable of a foreach loop) assign a weak reference as it is; any other store
+    // assigns its target, as the AST interpreter reads it
+    if (inst->mode != AssignmentMode::Weak && inst->mode != AssignmentMode::Element
             && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
-        eval_holder = val.eval(xsink);
-        if (*xsink) {
-            return toBits(QoreValue());
-        }
+        eval_holder = qore_rt_get_weak_reference_target(val).refSelf();
         assign_val = *eval_holder;
     }
 
@@ -12785,13 +12853,11 @@ static uint64_t qore_rt_assign_consumed(LValueHelper& lvh, QoreValue val, Assign
         const char* desc, ExceptionSink* xsink) {
     ValueHolder val_holder(val, xsink);
     qore_type_t val_type = val.getType();
-    if (mode != AssignmentMode::Weak
+    if (mode != AssignmentMode::Weak && mode != AssignmentMode::Element
             && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
-        // a weak reference is assigned as the value it refers to; the weak reference itself is released here
-        ValueHolder eval_holder(val.eval(xsink), xsink);
-        if (*xsink) {
-            return toBits(QoreValue());
-        }
+        // a weak reference is assigned as its target, as the AST interpreter reads it; the weak reference itself is
+        // released here
+        ValueHolder eval_holder(qore_rt_get_weak_reference_target(val).refSelf(), xsink);
         if (lvh.assign(eval_holder.release(), desc, true, mode)) {
             return toBits(QoreValue());
         }
@@ -12874,12 +12940,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
     QoreValue assign_val = val;
     ValueHolder eval_holder(xsink);
     qore_type_t val_type = val.getType();
-    if (mode != AssignmentMode::Weak && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH
-            || val_type == NT_WEAKREF_LIST)) {
-        eval_holder = val.eval(xsink);
-        if (*xsink) {
-            return toBits(QoreValue());
-        }
+    if (mode != AssignmentMode::Weak && mode != AssignmentMode::Element && (val_type == NT_WEAKREF
+            || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
+        eval_holder = qore_rt_get_weak_reference_target(val).refSelf();
         assign_val = *eval_holder;
     }
 
@@ -13667,22 +13730,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     pending_delete_finish = true;
                 }
                 handled_multistep_remove = true;
-            } else if (last_is_list && !last_is_list_slice && ct == NT_LIST) {
-                lvh.ensureUnique();
-                QoreListNode* l = lvh.getValue().get<QoreListNode>();
-                int64_t idx = last_step.index;
-                if (runtime_check_parse_option(PO_NEGATIVE_OFFSETS) && idx < 0) {
-                    idx += static_cast<int64_t>(l->size());
-                }
-                if (idx >= 0 && static_cast<size_t>(idx) < l->size()) {
-                    // hold the removed entry in res: it is the caller's result for "remove", and for
-                    // "delete" it keeps the value alive until the destructor can be run below, with the
-                    // lvalue locks released
-                    res = l->retrieveEntry(static_cast<size_t>(idx)).refSelf();
-                    lvh.removedValue(res);
-                    pending_delete_finish = true;
-                    l->setEntry(static_cast<size_t>(idx), QoreValue(), xsink);
-                }
+            } else if (last_is_list && !last_is_list_slice && ct != NT_NOTHING) {
+                // as the remove operator does: an element of a list, a character of a string or a byte of a
+                // binary object, and any other value is removed itself; res holds the value removed: it is the
+                // caller's result for "remove", and for "delete" it keeps the value alive until the destructor
+                // can be run below, with the lvalue locks released
+                res = qore_lvalue_remove_index(lvh, last_step.index, xsink);
+                pending_delete_finish = true;
                 handled_multistep_remove = true;
             } else if (last_is_hash_slice && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
                 res = executeLVHashKeySliceRemove(lvh, ct, last_step,
@@ -13700,12 +13754,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                         inst->unary_op, xsink);
                 pending_delete_finish = pending_delete_direct_list = true;
                 handled_multistep_remove = true;
-            } else if (ct == NT_NOTHING) {
-                // Parent slot is empty: there is nothing to remove.
-                return toBits(QoreValue());
+            } else {
+                // any other parent - no value, a weak reference to a hash, a scalar - has nothing to remove, as with
+                // the IR interpreter and the AST interpreter (LValueRemoveHelper), which remove a key only from a
+                // hash or an object
+                handled_multistep_remove = true;
             }
-            // Fall through for NT_OBJECT / NT_WEAKREF / other parent types:
-            // the legacy navigate + lvh.remove() path handles them.
         }
         // The LValueHelper above has been destroyed here, so the lvalue locks are released.  A "delete"
         // runs the object's destructor, which is Qore code that can dereference objects in the
