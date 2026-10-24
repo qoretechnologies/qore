@@ -4,11 +4,9 @@
 # the checks run in the execution mode of the worker, by weak-object-reads.qtest, so that they run in the mode of the
 # test, and by WeakObjectReadChecks.qm for the compiled run
 
-/** A weak reference (\c ":=") to an object that has been destroyed reads as no value when it is read from a hash or
-    an object member, while a method call through it, directly or through a call reference created from it, raises
-    \c OBJECT-ALREADY-DELETED.  Each check returns 1 when it passes; the AST interpreter read such a reference as the
-    destroyed object, so that it existed and was accepted for a parameter of type \c *object, while the compiled
-    tiers read it as no value.
+/** A weak reference (\c ":=") held by a hash or an object member reads as its target while the target exists, and a
+    method call through a weak reference to an object that has been destroyed, directly or through a call reference
+    created from it, raises \c OBJECT-ALREADY-DELETED.  Each check returns 1 when it passes.
 */
 public namespace WeakObjectReadChecks {
     #! the target of the weak references
@@ -34,15 +32,7 @@ public namespace WeakObjectReadChecks {
         return {
             "live-hash-value": check_live_hash_value(),
             "live-object-member": check_live_object_member(),
-            "destroyed-hash-value-exists": check_destroyed_hash_value_exists(),
-            "destroyed-hash-value-is-nothing": check_destroyed_hash_value_is_nothing(),
-            "destroyed-hash-value-assigned": check_destroyed_hash_value_assigned(),
-            "destroyed-hash-value-argument": check_destroyed_hash_value_argument(),
             "destroyed-hash-value-call": check_destroyed_hash_value_call(),
-            "destroyed-member-exists": check_destroyed_member_exists(),
-            "destroyed-member-is-nothing": check_destroyed_member_is_nothing(),
-            "destroyed-member-assigned": check_destroyed_member_assigned(),
-            "destroyed-member-argument": check_destroyed_member_argument(),
             "destroyed-member-call": check_destroyed_member_call(),
         };
     }
@@ -112,27 +102,9 @@ public namespace WeakObjectReadChecks {
         return exists holder.member && o == t && has_value(holder.member) && holder.member.ping() == 7 ? 1 : 0;
     }
 
-    int sub check_destroyed_hash_value_exists() {
-        hash<auto> h = destroyed_hash();
-        return !exists h.target ? 1 : 0;
-    }
 
-    int sub check_destroyed_hash_value_is_nothing() {
-        hash<auto> h = destroyed_hash();
-        return h.target === NOTHING && !h.target ? 1 : 0;
-    }
 
-    int sub check_destroyed_hash_value_assigned() {
-        hash<auto> h = destroyed_hash();
-        *object o = h.target;
-        auto a = h.target;
-        return !exists o && !exists a ? 1 : 0;
-    }
 
-    int sub check_destroyed_hash_value_argument() {
-        hash<auto> h = destroyed_hash();
-        return !has_value(h.target) ? 1 : 0;
-    }
 
     int sub check_destroyed_hash_value_call() {
         hash<auto> h = destroyed_hash();
@@ -147,27 +119,9 @@ public namespace WeakObjectReadChecks {
         return rejects_deleted(c) ? 1 : 0;
     }
 
-    int sub check_destroyed_member_exists() {
-        Holder holder = destroyed_holder();
-        return !exists holder.member ? 1 : 0;
-    }
 
-    int sub check_destroyed_member_is_nothing() {
-        Holder holder = destroyed_holder();
-        return holder.member === NOTHING && !holder.member ? 1 : 0;
-    }
 
-    int sub check_destroyed_member_assigned() {
-        Holder holder = destroyed_holder();
-        *object o = holder.member;
-        auto a = holder.member;
-        return !exists o && !exists a ? 1 : 0;
-    }
 
-    int sub check_destroyed_member_argument() {
-        Holder holder = destroyed_holder();
-        return !has_value(holder.member) ? 1 : 0;
-    }
 
     int sub check_destroyed_member_call() {
         Holder holder = destroyed_holder();

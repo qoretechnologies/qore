@@ -40,12 +40,6 @@
     pseudo-methods such as <tt>val()</tt>, including calls through closure-bound variables
     (<a href="https://github.com/qoretechnologies/qore/issues/5509">issue 5509</a>).
 
-    A @ref weak_assignment_operator "weak reference" to a destroyed object that is held by a hash or by an object
-    member consistently reads as no value. Code run by the AST interpreter read it as the destroyed object, so that
-    \c exists returned @ref True for it and it could be assigned or passed as an argument; this affected AST
-    execution and code that the other execution modes run with the AST interpreter. Method calls through such a
-    reference raise \c OBJECT-ALREADY-DELETED as before.
-
     @ref Qore::seconds() "seconds()", numeric @ref Qore::date() "date()" conversions and the C++ relative-date
     factories preserve durations larger than 2^31 seconds without overflowing intermediate 32-bit arithmetic.
     Fractional numeric conversions also retain their microseconds, and adding such durations to an absolute date

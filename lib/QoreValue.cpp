@@ -1441,20 +1441,6 @@ int ValueEvalRefHolder::eval(RuntimeConfig& rc, const QoreValue exp) {
     return evalIntern(rc, exp);
 }
 
-int ValueEvalRefHolder::evalCallReceiver(RuntimeConfig& rc, const QoreValue& exp) {
-    v.discard(xsink);
-    if (!exp.needsEval()) {
-        needs_deref = false;
-        v = exp;
-        return 0;
-    }
-    // a value that needs evaluation is a node
-    assert(exp.hasNode());
-    needs_deref = true;
-    v = exp.getInternalNode()->evalCallReceiver(rc, needs_deref, xsink);
-    return xsink && *xsink ? -1 : 0;
-}
-
 ValueEvalOptimizedRefHolder::ValueEvalOptimizedRefHolder(const QoreValue& exp, ExceptionSink* xs)
     : ValueEvalRefHolder(xs) {
     eval(exp);
@@ -1473,21 +1459,6 @@ int ValueEvalOptimizedRefHolder::eval(const QoreValue& exp) {
     this->needs_deref = true;
     bool local_nd = true;
     v = exp.eval(local_nd, xsink);
-    this->needs_deref = local_nd;
-    return xsink && *xsink ? -1 : 0;
-}
-
-int ValueEvalOptimizedRefHolder::evalCallReceiver(const QoreValue& exp) {
-    if (!exp.needsEval()) {
-        needs_deref = false;
-        v = exp;
-        return 0;
-    }
-    // a value that needs evaluation is a node
-    assert(exp.hasNode());
-    this->needs_deref = true;
-    bool local_nd = true;
-    v = exp.getInternalNode()->evalCallReceiver(local_nd, xsink);
     this->needs_deref = local_nd;
     return xsink && *xsink ? -1 : 0;
 }

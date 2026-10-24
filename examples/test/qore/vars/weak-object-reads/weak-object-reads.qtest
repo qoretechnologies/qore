@@ -30,9 +30,10 @@ class Holder {
 }
 
 #! Tests reading weak references to objects held by hashes and object members
-/** A weak reference to an object that has been destroyed reads as no value, and a method call through it, directly
-    or through a call reference, raises \c OBJECT-ALREADY-DELETED.  The checks are in weak-object-read-checks.qi and
-    run in this program, in a worker in each execution mode and from a compiled module.
+/** A weak reference held by a hash or an object member reads as its target while the target exists, and a method
+    call through a weak reference to an object that has been destroyed, directly or through a call reference, raises
+    \c OBJECT-ALREADY-DELETED.  The checks are in weak-object-read-checks.qi and run in this program, in a worker in
+    each execution mode and from a compiled module.
 */
 class WeakObjectReadsTest inherits QUnit::Test {
     public {
@@ -80,13 +81,6 @@ class WeakObjectReadsTest inherits QUnit::Test {
             assertTrue(exists h.target, "a live target exists");
             assertEq(7, h.target.ping(), "a call reaches a live target");
         }
-        assertFalse(exists h.target, "a hash value referring to a destroyed object has no value");
-        assertFalse(exists holder.member, "a member referring to a destroyed object has no value");
-        assertTrue(h.target === NOTHING, "a hash value referring to a destroyed object is no value");
-        *object o = holder.member;
-        assertNothing(o, "assigning a member referring to a destroyed object assigns no value");
-        assertFalse(WeakObjectReadsTest::hasValue(h.target),
-            "an argument referring to a destroyed object has no value");
         assertThrows("OBJECT-ALREADY-DELETED", sub () { h.target.ping(); }, (), "a call raises");
         assertThrows("OBJECT-ALREADY-DELETED", sub () { holder.member.val(); }, (), "a pseudo-method call raises");
         code c = \h.target.ping();
@@ -95,10 +89,6 @@ class WeakObjectReadsTest inherits QUnit::Test {
         assertThrows("OBJECT-ALREADY-DELETED", c, (), "a call reference created from a member raises when called");
     }
 
-    #! returns @ref True if the argument has a value
-    private static bool hasValue(*object o) {
-        return exists o;
-    }
 
     testExecModes() {
         foreach string mode in (ExecModes) {
