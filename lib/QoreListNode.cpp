@@ -325,7 +325,19 @@ QoreListNode* qore_list_private::newComplexListFromValue(const QoreTypeInfo* typ
     return holder.release().get<QoreListNode>();
 }
 
+#ifdef DEBUG
+//! the number of lists that the current thread has created; see q_get_list_create_count()
+static thread_local int64 list_create_count = 0;
+
+int64 q_get_list_create_count() {
+    return list_create_count;
+}
+#endif
+
 QoreListNode::QoreListNode() : AbstractQoreNode(NT_LIST, true, false), priv(new qore_list_private) {
+#ifdef DEBUG
+    ++list_create_count;
+#endif
    //printd(5, "QoreListNode::QoreListNode() 1 this=%p ne=%d v=%d\n", this, needs_eval_flag, value);
 }
 

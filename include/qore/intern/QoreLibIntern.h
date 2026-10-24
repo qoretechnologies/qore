@@ -413,6 +413,15 @@ DLLLOCAL int64 q_get_container_copy_count();
 
 //! Counts a hash or list copy made in the current thread; see q_get_container_copy_count()
 DLLLOCAL void q_inc_container_copy_count();
+
+//! Returns the number of hashes that the current thread has created
+/** Code that builds a container where it could read an existing one creates one for each time it runs, so tests
+    compare the count before and after the code under test; see dbg_get_hash_create_count().
+*/
+DLLLOCAL int64 q_get_hash_create_count();
+
+//! Returns the number of lists that the current thread has created; see q_get_hash_create_count()
+DLLLOCAL int64 q_get_list_create_count();
 #endif
 // increments or decrements the object count depending on the sign of the argument (cannot be 0)
 DLLLOCAL void inc_container_obj(const AbstractQoreNode* n, int dt);

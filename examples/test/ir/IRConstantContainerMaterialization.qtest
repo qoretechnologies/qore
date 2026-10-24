@@ -18,13 +18,14 @@
     which evaluates the value node to a reference to itself.  The cost was therefore O(entries) per
     read instead of O(1).
 
-    The shape assertions below are the real regression guard - they check that the emitted IR loads
-    the constant instead of building it.  The timing assertion is a ratio between a small and a
-    large constant measured in one process, which stays meaningful under CI CPU throttling where an
-    absolute threshold would not.
+    The shape assertions check that the emitted IR loads the constant instead of building it, and in
+    debug builds the reads are counted: reading a constant container in a loop must create no hash
+    and no list in any execution mode (dbg_get_hash_create_count(), dbg_get_list_create_count()),
+    while a rebuilt constant creates one for each read.  A loop that builds a hash for each read
+    shows that the count sees each container created.
 
     AOT-compiled code cannot embed a constant value, so it names the constant instead; the same
-    shape and cost assertions are made against a compiled \c .qmod.  A constant whose value a
+    shape and count assertions are made against a compiled \c .qmod.  A constant whose value a
     deferred initializer produces must keep being rebuilt there: its value node is shared with the
     expression that computes it, so naming it would make that expression read the constant it is
     computing.  That case is asserted in both directions - the IR shape stays a rebuild, and the
@@ -37,12 +38,11 @@ class IRConstantContainerMaterializationTest inherits QUnit::Test {
 
         const Modes = ("ast", "ir", "tiered", "jit");
 
-        #! entries in the large constant used for the shape and ratio checks
+        #! entries in the large constant used for the shape and count checks
         const LargeEntries = 300;
 
-        #! a rebuilt constant grew ~23x from 3 to 300 entries; a materialized one does not grow at
-        #! all, so anything under this bound distinguishes the two without being timing-sensitive
-        const MaxSizeCostRatio = 5.0;
+        #! the number of reads counted
+        const CountedReads = 1000;
     }
 
     constructor() : QUnit::Test("IRConstantContainerMaterializationTest", "1.0", \ARGV) {
@@ -54,10 +54,10 @@ class IRConstantContainerMaterializationTest inherits QUnit::Test {
 
         addTestCase("a constant hash is loaded, not rebuilt", \testHashShape());
         addTestCase("a constant list is loaded, not rebuilt", \testListShape());
-        addTestCase("read cost does not grow with constant size", \testCostIndependentOfSize());
+        addTestCase("reading a constant creates no container", \testReadsCreateNoContainer());
         addTestCase("every tier reads the same values", \testTiersAgree());
         addTestCase("an AOT constant container is loaded, not rebuilt", \testAotShape());
-        addTestCase("AOT read cost does not grow with constant size", \testAotCostIndependentOfSize());
+        addTestCase("an AOT read of a constant creates no container", \testAotReadsCreateNoContainer());
         addTestCase("an AOT qmod reads the same values as its source", \testAotValuesMatchSource());
         addTestCase("a deferred AOT constant is still rebuilt", \testAotDeferredConstantIsRebuilt());
 
@@ -109,39 +109,83 @@ class IRConstantContainerMaterializationTest inherits QUnit::Test {
         assertFalse(ir =~ /make\.list/, "constant list is not rebuilt per read");
     }
 
-    #! Times one read of a small and a large constant in the same process and returns both
-    private hash<auto> measure() {
-        TmpDir tmp("qore-ir-const-materialization-cost-");
-        string path = tmp.path + "/cost.qr";
-        write(path, sprintf("%%modern
-const Small = {%s};
-const Large = {%s};
+    #! the code that counts the containers that the functions of readFunctions() create
+    /** Each function is called with no reads and with CountedReads reads, and the difference of the counts is
+        printed, so that the containers that the calls themselves create (their argument lists, for example) are not
+        counted.  The functions are called first, so that tiered execution compiles them.
+    */
+    private string countingCode(string prefix) {
+        return sprintf("int idx = 1;
 string k = \"k1\";
-auto sink;
-int N = 20000;
-for (int i = 0; i < 2000; ++i) { sink = Small{k}; sink = Large{k}; }
-int t0 = clock_getmicros();
-for (int i = 0; i < N; ++i) { sink = Small{k}; }
-int t1 = clock_getmicros();
-for (int i = 0; i < N; ++i) { sink = Large{k}; }
-int t2 = clock_getmicros();
-printf(\"%%d:%%d\\n\", t1 - t0, t2 - t1);
-", hashEntries(3), hashEntries(LargeEntries)));
-        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b %s 2>&1",
-            libqore_dir, qore_bin, path));
-        list<string> parts = (trim out).split(":");
-        assertEq(2, parts.size(), "cost probe produced two timings: " + out);
-        return {"small": parts[0].toInt(), "large": parts[1].toInt()};
+for (int i = 0; i < 200; ++i) {
+    %sreadHash(k, 1);
+    %sreadList(idx, 1);
+    %sbuildHashes(1);
+}
+int sub count(string counter, code call) {
+    int start = call_function(counter);
+    call();
+    return call_function(counter) - start;
+}
+int reads = %d;
+int hashes = count(\"dbg_get_hash_create_count\", sub () { %sreadHash(k, reads); })
+    - count(\"dbg_get_hash_create_count\", sub () { %sreadHash(k, 0); });
+int lists = count(\"dbg_get_list_create_count\", sub () { %sreadList(idx, reads); })
+    - count(\"dbg_get_list_create_count\", sub () { %sreadList(idx, 0); });
+int built = count(\"dbg_get_hash_create_count\", sub () { %sbuildHashes(reads); })
+    - count(\"dbg_get_hash_create_count\", sub () { %sbuildHashes(0); });
+printf(\"%%d:%%d:%%d\\n\", hashes, lists, built);
+", prefix, prefix, prefix, CountedReads, prefix, prefix, prefix, prefix, prefix, prefix);
     }
 
-    testCostIndependentOfSize() {
-        hash<auto> t = measure();
-        assertGt(0, t.small, "small-constant loop was measurable");
-        assertGt(0, t.large, "large-constant loop was measurable");
-        float ratio = t.large.toFloat() / t.small.toFloat();
-        assertLt(MaxSizeCostRatio, ratio,
-            sprintf("reading a %d-entry constant costs %.2fx a 3-entry one (small=%dus large=%dus)",
-                LargeEntries, ratio, t.small, t.large));
+    #! the functions that read the constants T and L and that build a hash for each read
+    private string readFunctions(string visibility) {
+        return sprintf("%sint sub readHash(string k, int n) {
+    int sink = 0;
+    for (int i = 0; i < n; ++i) { sink = T{k}; }
+    return sink;
+}
+%sint sub readList(int idx, int n) {
+    int sink = 0;
+    for (int i = 0; i < n; ++i) { sink = L[idx]; }
+    return sink;
+}
+# the hashes are kept, so that no tier can leave them out
+%sint sub buildHashes(int n) {
+    list<hash<auto>> built = ();
+    for (int i = 0; i < n; ++i) { push built, {\"k\": i}; }
+    return built.size();
+}", visibility, visibility, visibility);
+    }
+
+    #! checks the counts printed by countingCode()
+    private checkCounts(string label, string out) {
+        list<string> parts = (trim out).split(":");
+        assertEq(3, parts.size(), sprintf("%s: the counting script printed three counts: %s", label, out));
+        assertEq(0, parts[0].toInt(), sprintf("%s: %d reads of a %d-entry constant hash create no hash", label,
+            CountedReads, LargeEntries));
+        assertEq(0, parts[1].toInt(), sprintf("%s: %d reads of a %d-entry constant list create no list", label,
+            CountedReads, LargeEntries));
+        assertEq(CountedReads, parts[2].toInt(), sprintf("%s: building a hash %d times creates %d hashes", label,
+            CountedReads, CountedReads));
+    }
+
+    testReadsCreateNoContainer() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the containers created are counted in debug builds only");
+        }
+        TmpDir tmp("qore-ir-const-materialization-count-");
+        string path = tmp.path + "/count.qr";
+        write(path, sprintf("%%modern
+const T = {%s};
+const L = (%s);
+%s
+%s", hashEntries(LargeEntries), listEntries(LargeEntries), readFunctions(""), countingCode("")));
+        foreach string mode in (Modes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s", libqore_dir,
+                qore_bin, mode, path));
+            checkCounts("exec-mode=" + mode, out);
+        }
     }
 
     testTiersAgree() {
@@ -269,46 +313,20 @@ public class Holder {
         assertFalse(class_ir =~ /make\.hash/, "AOT class constant is not rebuilt per read");
     }
 
-    testAotCostIndependentOfSize() {
-        TmpDir tmp("qore-ir-const-materialization-aot-cost-");
-        hash<auto> m = buildModule(tmp, "AOTConstCostMod", moduleSource("AOTConstCostMod",
-            sprintf("public const Small = {%s};\npublic const Large = {%s};",
-                hashEntries(3), hashEntries(LargeEntries)),
-            "public int sub readSmall(string k, int n) {
-    int sink;
-    for (int i = 0; i < n; ++i) { sink = Small{k}; }
-    return sink;
-}
-public int sub readLarge(string k, int n) {
-    int sink;
-    for (int i = 0; i < n; ++i) { sink = Large{k}; }
-    return sink;
-}"));
+    testAotReadsCreateNoContainer() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the containers created are counted in debug builds only");
+        }
+        TmpDir tmp("qore-ir-const-materialization-aot-count-");
+        hash<auto> m = buildModule(tmp, "AOTConstCountMod", moduleSource("AOTConstCountMod",
+            sprintf("public const T = {%s};\npublic const L = (%s);", hashEntries(LargeEntries),
+                listEntries(LargeEntries)), readFunctions("public ")));
 
-        string script = tmp.path + "/cost.qr";
-        write(script, "%modern
-%requires AOTConstCostMod
-int N = 20000;
-AOTConstCostMod::readSmall(\"k1\", 2000);
-AOTConstCostMod::readLarge(\"k1\", 2000);
-int t0 = clock_getmicros();
-AOTConstCostMod::readSmall(\"k1\", N);
-int t1 = clock_getmicros();
-AOTConstCostMod::readLarge(\"k1\", N);
-int t2 = clock_getmicros();
-printf(\"%d:%d\\n\", t1 - t0, t2 - t1);
-");
-        string out = runWithModule(m.qmod_dir, script);
-        list<string> parts = (trim out).split(":");
-        assertEq(2, parts.size(), "AOT cost probe produced two timings: " + out);
-        int small = parts[0].toInt();
-        int large = parts[1].toInt();
-        assertGt(0, small, "AOT small-constant loop was measurable");
-        assertGt(0, large, "AOT large-constant loop was measurable");
-        float ratio = large.toFloat() / small.toFloat();
-        assertLt(MaxSizeCostRatio, ratio,
-            sprintf("an AOT read of a %d-entry constant costs %.2fx a 3-entry one "
-                "(small=%dus large=%dus)", LargeEntries, ratio, small, large));
+        string script = tmp.path + "/count.qr";
+        write(script, "%modern\n%requires AOTConstCountMod\n" + countingCode("AOTConstCountMod::"));
+        checkCounts("AOT qmod", runWithModule(m.qmod_dir, script));
+        # the module loaded from source runs the same code with the default execution mode
+        checkCounts("source module", runWithModule(m.src_dir, script));
     }
 
     testAotValuesMatchSource() {

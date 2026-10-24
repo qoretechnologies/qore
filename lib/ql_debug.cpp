@@ -12139,6 +12139,19 @@ static QoreValue f_dbg_get_container_copy_count(const QoreListNode* params, Runt
     return q_get_container_copy_count();
 }
 
+//! returns the number of hashes that the current thread has created
+/** Code that builds a container where it could read an existing one - a constant rebuilt at each read, for example -
+    creates one for each time it runs, so tests use this to verify that code which reads containers creates none.
+*/
+static QoreValue f_dbg_get_hash_create_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return q_get_hash_create_count();
+}
+
+//! returns the number of lists that the current thread has created; see dbg_get_hash_create_count()
+static QoreValue f_dbg_get_list_create_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return q_get_list_create_count();
+}
+
 //! returns the size of the innermost running IR-interpreter frame's temp cleanup vector on the current thread
 /** A break or continue that leaves a temp scope without draining it used to leave a sentinel on this vector every
     time it executed, so the vector grew without bound in a long-running loop and every later cleanup scan got
@@ -13659,6 +13672,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_live_bigint_count", f_dbg_get_live_bigint_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_container_copy_count", f_dbg_get_container_copy_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_hash_create_count", f_dbg_get_hash_create_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_list_create_count", f_dbg_get_list_create_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ir_cleanup_entries", f_dbg_get_ir_cleanup_entries, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
