@@ -4437,6 +4437,14 @@ QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, cons
     QORE_TRACE("qore_class_private::evalMethod()");
     assert(self);
 
+    // Dynamic dispatch can fall back to a pseudo-method without constructing a CodeEvaluationHelper
+    // with self.  Check the receiver here so that those calls reject destroyed weak-reference targets too.
+    if (!self->isValid()) {
+        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has "
+            "already been deleted", self->getClassName(), nme);
+        return QoreValue();
+    }
+
     if (!strcmp(nme, "copy")) {
         if (args) {
             xsink->raiseException("COPY-ERROR", "while calling %s::copy(): it is illegal to pass arguments to copy methods", self->getClassName());
@@ -4607,6 +4615,13 @@ QoreObject* QoreClass::execCopy(QoreObject* old, ExceptionSink* xsink) const {
 }
 
 QoreObject* qore_class_private::execCopy(QoreObject* old, ExceptionSink* xsink) const {
+    // Compiled calls can enter here directly, bypassing normal method dispatch.  Reject a deleted source
+    // before allocating the copy; otherwise a failed copy can run a destructor on an uninitialized object.
+    if (!old->isValid()) {
+        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::copy() on an object that has "
+            "already been deleted", old->getClassName());
+        return nullptr;
+    }
     RuntimeConfig& rc = rc_get_current_ref();
     // check for illegal private calls
     if (copyMethod && copyMethod->isPrivate() && cls != getStackClass()) {

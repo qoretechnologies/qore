@@ -4,6 +4,11 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Method calls through a local @ref weak_assignment_operator "weak reference" to a destroyed object consistently
+    raise \c OBJECT-ALREADY-DELETED. Dynamic dispatch now checks the receiver before falling back to
+    pseudo-methods such as <tt>val()</tt>, including calls through closure-bound variables
+    (<a href="https://github.com/qoretechnologies/qore/issues/5509">issue 5509</a>).
+
     @ref Qore::seconds() "seconds()", numeric @ref Qore::date() "date()" conversions and the C++ relative-date
     factories preserve durations larger than 2^31 seconds without overflowing intermediate 32-bit arithmetic.
     Fractional numeric conversions also retain their microseconds, and adding such durations to an absolute date
