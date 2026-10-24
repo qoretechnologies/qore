@@ -1557,7 +1557,18 @@ The three-state model:
 
 1. Peer announced no `max_idle_timeout`            → keepalive disabled (`UINT64_MAX`)
 2. No active streams (`streams_.empty()`)          → keepalive disabled (`UINT64_MAX`)
-3. Streams in flight                               → keepalive = `peer.max_idle_timeout / 2`
+3. Streams in flight                               → keepalive = `min(effective_idle / 2, 15 s)`
+
+`effective_idle` is the lesser of the two advertised idle timeouts (RFC 9000 §10.1.2), so half of it refreshes
+both endpoints' idle timers.  The 15 s cap (`QORE_QUIC_ACTIVE_STREAM_KEEP_ALIVE_NS`,
+`qore_quic_active_stream_keep_alive_ns()` in `include/qore/intern/QuicKeepAlive.h`) refreshes the path's UDP flow
+state as well: a NAT, or Linux conntrack with its default `nf_conntrack_udp_timeout` of 30 s, forgets a flow after
+30 s of silence, and drops a response the server sends later until the client sends again.  With Qore's 75 s idle
+timeout the first PING came at 37.5 s, so a request a server answered after 30 s waited for it, and one with a
+shorter deadline failed (Vertex AI requests answered in 30 to 37.5 s, 2026-10-24: their durations had a hole at 31 to
+36 s and a peak at 38 s).  The cap applies only while streams are active; the cooldown after the last stream keeps
+`effective_idle / 2`.  `HttpServerQuicKeepAlive.qtest` checks the policy (`qore-quic-keep-alive-test`) and, in debug
+builds, the interval an HTTP/3 client sets (its `QORE_ASYNC_IO_TRACE` lines).
 
 State (2) is the critical case: an idle client connection with no streams must let the **peer's**
 idle timer close it.  If we keep pinging the peer ourselves we reset the peer's idle timer on every
