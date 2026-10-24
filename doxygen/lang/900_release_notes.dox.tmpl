@@ -4935,6 +4935,10 @@ while (*binary chunk = input.read(65536)) {
       a pipe that returned the bytes of a value in parts: the value was made of the first part, and the rest was read
       as the start of the next value; the value is now read whole, and a value that the end of the file cuts short
       is not returned
+    - Fixed @ref Qore::File::writei8() "File::writei8()" and @ref Qore::File::writei8LSB() "File::writei8LSB()",
+      which wrote only 4 of the 8 bytes of the integer (and returned 4), so that
+      @ref Qore::ReadOnlyFile::readi8() "readi8()" and @ref Qore::ReadOnlyFile::readi8LSB() "readi8LSB()" could not
+      read the value back; all 8 bytes are now written
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module, not those the \c .qm file sets, so a warning that the \c .qm file
       enables, for example with @ref enable-all-warnings "%enable-all-warnings", was not raised in the other files.

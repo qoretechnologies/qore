@@ -487,7 +487,7 @@ f.writei1(val);
 
     @param value the integer to write; only the least-significant 8 bits will be written to the file
 
-    @return 0 for success
+    @return 1, the number of bytes written
 
     @throw FILE-WRITE-ERROR %File is not open or an I/O error occurred writing data to the File
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
@@ -512,7 +512,7 @@ f.writei2(val);
 
     @param value the integer to write in binary big-endian format; only the least-significant 16 bits of the integer will be written to the file
 
-    @return 0 for success
+    @return 2, the number of bytes written
 
     @throw FILE-WRITE-ERROR %File is not open or an I/O error occurred writing data to the File
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
@@ -537,7 +537,7 @@ f.writei4(val);
 
     @param value the integer to write in binary big-endian format; only the least-significant 32 bits of the integer will be written to the file
 
-    @return 0 for success
+    @return 4, the number of bytes written
 
     @throw FILE-WRITE-ERROR %File is not open or an I/O error occurred writing data to the File
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
@@ -562,12 +562,13 @@ f.writei8(val);
 
     @param value the integer to write in binary big-endian format; only the least-significant 64 bits of the integer will be written to the file
 
-    @return 0 for success
+    @return 8, the number of bytes written
 
     @throw FILE-WRITE-ERROR %File is not open or an I/O error occurred writing data to the File
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
+    @since %Qore 3.0 all 8 bytes of the integer are written; before, only 4 bytes were written
  */
 int File::writei8(int value) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::writei8", xsink))
@@ -587,7 +588,7 @@ f.writei2LSB(val);
 
     @param value the integer to write in binary little-endian format; only the least-significant 16 bits of the integer will be written to the file
 
-    @return 0 for success
+    @return 2, the number of bytes written
 
     @throw FILE-WRITE-ERROR %File is not open or an I/O error occurred writing data to the File
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
@@ -612,7 +613,7 @@ f.writei4LSB(val);
 
     @param value the integer to write in binary little-endian format; only the least-significant 32 bits of the integer will be written to the file
 
-    @return 0 for success
+    @return 4, the number of bytes written
 
     @throw FILE-WRITE-ERROR %File is not open or an I/O error occurred writing data to the File
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
@@ -637,12 +638,13 @@ f.writei8LSB(val);
 
     @param value the integer to write in binary little-endian format; only the least-significant 64 bits of the integer will be written to the file
 
-    @return 0 for success
+    @return 8, the number of bytes written
 
     @throw FILE-WRITE-ERROR %File is not open or an I/O error occurred writing data to the File
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
+    @since %Qore 3.0 all 8 bytes of the integer are written; before, only 4 bytes were written
  */
 int File::writei8LSB(int value) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::writei8LSB", xsink))

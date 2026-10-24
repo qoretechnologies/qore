@@ -1159,7 +1159,7 @@ int QoreFile::writei4(int i, ExceptionSink* xsink) {
 int QoreFile::writei8(int64 i, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     i = i8MSB(i);
-    return priv->writeCheck((char *)&i, 4, xsink);
+    return priv->writeCheck((char *)&i, 8, xsink);
 }
 
 int QoreFile::writei2LSB(short i, ExceptionSink* xsink) {
@@ -1177,7 +1177,7 @@ int QoreFile::writei4LSB(int i, ExceptionSink* xsink) {
 int QoreFile::writei8LSB(int64 i, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     i = i8LSB(i);
-    return priv->writeCheck((char *)&i, 4, xsink);
+    return priv->writeCheck((char *)&i, 8, xsink);
 }
 
 int QoreFile::readu1(unsigned char *val, ExceptionSink* xsink) {
