@@ -20,6 +20,12 @@ class LargeSourcesTest inherits QUnit::Test {
             each declaration took time linear in the number of its siblings.
         */
         const MaxScalingRatio = 24.0;
+
+        #! the number of times that the search time of each source is measured
+        /** The sources are measured alternately, so that a change of the load of the machine affects both, and the
+            shortest time of each is compared: the measurement least disturbed by other processes.
+        */
+        const Rounds = 5;
     }
 
     constructor() : QUnit::Test("astparser large sources", "1.0") {
@@ -66,6 +72,10 @@ class LargeSourcesTest inherits QUnit::Test {
 
         float smallTime = searchTime(searcher, small);
         float largeTime = searchTime(searcher, large);
+        for (int i = 1; i < Rounds; ++i) {
+            smallTime = min(smallTime, searchTime(searcher, small));
+            largeTime = min(largeTime, searchTime(searcher, large));
+        }
         float ratio = largeTime / smallTime;
         if (m_options.verbose) {
             printf("search time: %d declarations: %.3f us; %d declarations: %.3f us; ratio: %.2f\n", Small,

@@ -127,6 +127,15 @@ public class HttpClientIoTimeoutsTest inherits QUnit::Test {
         const KeyPem = TestCertificates::KeyPem;
     }
 
+    public {
+        #! the inactivity timeout of the clients that a stalled response times out
+        /** A request that receives its response with the same client must not time out, also on a loaded machine,
+            where a thread can wait for a CPU for hundreds of milliseconds; a stalled response times out with any
+            inactivity timeout, as it is answered only when the test ends.
+        */
+        const IoTimeout = 2s;
+    }
+
     private {
         HttpServer server;
         StallHandler handler();
@@ -214,7 +223,7 @@ public class HttpClientIoTimeoutsTest inherits QUnit::Test {
             HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
                 "protocol": i.key,
                 "request_timeout": 0,
-                "io_timeout": 300ms,
+                "io_timeout": IoTimeout,
                 "max_request_retries": 0,
             });
             on_exit mgr.closeAll();
@@ -269,11 +278,11 @@ public class HttpClientIoTimeoutsTest inherits QUnit::Test {
                 "url": i.value,
                 "protocol": i.key,
                 "data": "text",
-                "io_timeout": 300ms,
+                "io_timeout": IoTimeout,
                 "max_request_retries": 0,
             });
             on_exit rest.close();
-            assertEq(300, rest.getConnectionManager().getIoTimeout(), i.key);
+            assertEq(IoTimeout.durationMilliseconds(), rest.getConnectionManager().getIoTimeout(), i.key);
             assertThrows("HTTPCLIENT-TIMEOUT", "io_timeout", \rest.restGet(), "/stall", i.key);
             RestFuture f = rest.restGetAsync("/stall");
             assertThrows("HTTPCLIENT-TIMEOUT", "io_timeout", \f.get(), NOTHING, i.key);
