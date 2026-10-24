@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to an [SGLang](https://github.com/sgl-project/sglang) model server.\n\nSGLang exposes an OpenAI-compatible API at `/v1/*` plus SGLang-native endpoints (`/generate` for constrained decoding, `/get_server_info`, `/flush_cache`).\n\nThe target instance serves exactly one model; the `model` option is required.  If the deployment requires authentication, set `apikey`.\n\nThe connection uses the `sglang://` URL scheme for plain HTTP and `sglangs://` for servers behind TLS.",
+          "message": "Spojenie s modelovým serverom [SGLang](https://github.com/sgl-project/sglang).\n\nSGLang poskytuje kompatibilný s OpenAI rozhranie na `/v1/*` plus natívne koncové body SGLang (`/generate` pre obmedzené dekódovanie, `/get_server_info`, `/flush_cache`).\n\nCieľový inštanciu poskytuje práve jeden model; je vyžadovaná možnosť `model`. Ak nasadenie vyžaduje overenie identity, nastavte `apikey`.\n\nSpojenie používa schému URL `sglang://` pre bežný HTTP a `sglangs://` pre servery za TLS."
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "SGLang REST Connection",
+          "message": "SGLang REST spojenie"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The OpenAI-compatible API version segment used for `/v1/*` routing.  Defaults to `v1`; SGLang currently exposes only `v1` but this option allows forward compatibility.",
+          "message": "Segment verzie OpenAI kompatibilného rozhrania API používaný pre smerníkovanie `/v1/*`. Predvolená hodnota je `v1`; SGLang momentálne poskytuje iba `v1`, ale táto možnosť umožňuje budúcu kompatibilitu."
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "OpenAI-Compatible API Version",
+          "message": "Verzia OpenAI kompatibilného rozhrania API"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The OpenAI-compatible API version segment",
+          "message": "Segment verzie OpenAI kompatibilného rozhrania API"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Optional API key for SGLang deployments that enable authentication; sent as the `Authorization: Bearer` header.  Local inference deployments typically do not require a key.",
+          "message": "Voliteľný kľúč API pre nasadenia SGLang s povolenou autentifikáciou; odosielaný ako hlavička `Authorization: Bearer`. Lokálne nasadenia pre inšpirovanie obvykle nepotrebujú kľúč."
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "API key for SGLang servers with authentication enabled",
+          "message": "Kľúč API pre servery SGLang s povolenou autentifikáciou"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.bW9kZWw.desc": {
+          "source": "The model name served by the target SGLang instance; SGLang serves exactly one model per server, so the connection captures it here.  Used by client code (e.g. via `getModel()`) to populate the `model` field of OpenAI-compatible request bodies.",
+          "message": "Názov modelu poskytovaného cieľovým inštanciou SGLang; SGLang poskytuje presne jeden model na server, takže spojenie ho tu zachytáva. Používa sa kódom klienta (napr. cez `getModel()`) na vyplnenie poľa `model` v požiadavkách kompatibilných s OpenAI."
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.bW9kZWw.display_name": {
+          "source": "Model Name",
+          "message": "Názov modelu"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.bW9kZWw.short_desc": {
+          "source": "The model served by the target SGLang instance",
+          "message": "Model poskytovaný cieľovou inštanciou SGLang"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to an SGLang model server",
+          "message": "Spojenie s serverom modelu SGLang"
+        }
+      }
+    }
+  }
+}

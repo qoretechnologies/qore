@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [Stability AI](https://stability.ai) REST API for image generation and editing, audio, and 3D assets.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Stability AI dashboard](https://platform.stability.ai).",
+          "message": "Eine Verbindung zur [Stability AI](https://stability.ai) REST-API für Bildgenerierung und -bearbeitung, Audio und 3D-Assets.\n\nErfordert einen API-Schlüssel für Bearer-Authentifizierung. Holen Sie sich Ihren API-Schlüssel im [Stability AI-Dashboard](https://platform.stability.ai)."
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Stability AI Connection",
+          "message": "Stability AI Verbindung"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Stability AI API key used for Bearer authentication.",
+          "message": "Der Stability AI API-Schlüssel für die Bearer-Authentifizierung."
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API-Schlüssel"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Stability AI API key (Bearer token)",
+          "message": "Stability AI API-Schlüssel (Bearer-Token)"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Optional organization ID from the authenticated account's organizations. Omit it to use the API key's default organization.",
+          "message": "Optionale Organisations-ID aus der Organisation des authentifizierten Kontos. Lassen Sie sie weg, um die Standardorganisation des API-Schlüssels zu verwenden."
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Organization whose credits and resources are used",
+          "message": "Organisation, deren Guthaben und Ressourcen verwendet werden"
+        },
+        "connection.U3RhYmlsaXR5QWlSZXN0Q2xpZW50.scheme.U3RhYmlsaXR5QWlSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "Authenticated access to Stability AI media services",
+          "message": "Authentifizierter Zugriff auf Stability AI-Medien-Dienste"
+        }
+      }
+    }
+  }
+}

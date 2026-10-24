@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the BigCommerce REST API for e-commerce management including customers, products, orders, carts, shipments, and blog posts",
+          "message": "З’єднання з REST API BigCommerce для управління електронною комерцією, включаючи клієнтів, товари, замовлення, кошики, відправки та блог-записи"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "BigCommerce REST Connection",
+          "message": "З’єднання з REST API BigCommerce"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "The **Store Hash** is required to connect to your BigCommerce store.\n\n**How to find it:**\n1. Log in to your BigCommerce admin panel\n2. Look at the URL: `https://store-**XXXXX**.mybigcommerce.com`\n3. The store hash is the `XXXXX` part after `store-`\n\n**Alternative:** Go to **Settings > API Accounts** and check the **API Path**, e.g., `https://api.bigcommerce.com/stores/**XXXXX**/v3`",
+          "message": "**Store Hash** потрібен для підключення до вашого магазину BigCommerce.\n\n**Як знайти його:**\n1. Увійдіть у панель адміністрування BigCommerce\n2. Перегляньте URL: `https://store-**XXXXX**.mybigcommerce.com`\n3. Store hash — це частина після `store-`, наприклад, `XXXXX`\n\n**Альтернатива:** перейдіть до **Налаштування > Акаунти API** і перевірте **Шлях API**, наприклад, `https://api.bigcommerce.com/stores/**XXXXX**/v3`"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Find Your Store Hash",
+          "message": "Як знайти свій Store Hash"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfaGFzaA.desc": {
+          "source": "The store hash identifying your BigCommerce store. You can find it in the BigCommerce admin under Settings > API Accounts > API Path (e.g., https://api.bigcommerce.com/stores/<store_hash>/v3)",
+          "message": "Store hash, що ідентифікує ваш магазин BigCommerce. Ви можете знайти його в адміністративній панелі BigCommerce у розділі Налаштування > Акаунти API > Шлях API (наприклад, https://api.bigcommerce.com/stores/<store_hash>/v3)"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfaGFzaA.display_name": {
+          "source": "Store Hash",
+          "message": "Store Hash"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfaGFzaA.short_desc": {
+          "source": "BigCommerce store hash",
+          "message": "Store hash BigCommerce"
+        },
+        "connection.QmlnQ29tbWVyY2VSZXN0Q2xpZW50.scheme.QmlnQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the BigCommerce REST API",
+          "message": "Підключення до REST API BigCommerce"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Insightly CRM REST API for managing contacts, organizations, opportunities, projects, tasks, leads, and other CRM data.\n\n**To obtain your API key:**\n1. Log in to your Insightly account\n2. Click your profile avatar in the top-right corner\n3. Go to **User Settings**\n4. Find the **API** section and copy your API key\n\n**Pod/Region:**\nYour pod determines the API endpoint URL. It is visible in your Insightly URL (e.g., `na1.insightly.com` means pod `na1`). If not provided, the connection will default to `na1`.\n\n**Rate limits:** 10 requests/second with daily caps based on your plan. Rate limit info is returned in `X-RateLimit-Limit` and `X-RateLimit-Remaining` response headers.",
+          "message": "З'єднання з REST API Insightly CRM для керування контактами, організаціями, можливостями, проектами, завданнями, потенційними клієнтами та іншими даними CRM.\n\n**Щоб отримати свій ключ API:**\n1. Увійдіть у свій обліковий запис Insightly\n2. Натисніть іконку свого профілю у верхньому правому куті\n3. Перейдіть до **Налаштувань користувача**\n4. Знайдіть розділ **API** і скопіюйте свій ключ API\n\n**Під/Регіон:**\nВаш під визначає URL-адресу API. Він відображається у URL Insightly (наприклад, `na1.insightly.com` означає під `na1`). Якщо не вказано, з'єднання за замовчуванням використовуватиме `na1`.\n\n**Обмеження швидкості:** 10 запитів/секунду з щоденними лімітами, залежно від вашого плану. Інформація про ліміти повертається в заголовках `X-RateLimit-Limit` та `X-RateLimit-Remaining`."
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Insightly CRM REST Connection",
+          "message": "З’єднання REST Insightly CRM"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Insightly account\n2. Click your profile avatar in the top-right corner\n3. Go to **User Settings**\n4. Find the **API** section and copy your API key\n\n**Important:** The API key provides full access to your Insightly data. Keep it secure and never share it publicly.",
+          "message": "1. Увійдіть у свій обліковий запис Insightly\n2. Натисніть іконку свого аватара в правому верхньому куті\n3. Перейдіть до **Налаштувань користувача**\n4. Знайдіть розділ **API** і скопіюйте свій ключ API\n\n**Важливо:** Ключ API надає повний доступ до ваших даних Insightly. Зберігайте його в безпеці і ніколи не поширюйте публічно."
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "Як отримати свій ключ API"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
+          "source": "Your Insightly pod determines the API endpoint URL. It is visible in your Insightly URL (e.g., `na1.insightly.com` means pod `na1`).\n\n- **na1** — North America (default)\n- **eu1** — Europe\n- **au1** — Australia\n\nIf not sure, check the URL bar when logged into Insightly.",
+          "message": "Ваш під Insightly визначає URL-адресу API-точки входу. Він відображається в URL Insightly (наприклад, `na1.insightly.com` означає під `na1`).\n\n- **na1** — Північна Америка (за замовчуванням)\n- **eu1** — Європа\n- **au1** — Австралія\n\nЯкщо не впевнені, перевірте рядок адреси під час входу до Insightly."
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
+          "source": "Select Your Pod/Region",
+          "message": "Виберіть свій під/регіон"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Insightly API key used for HTTP Basic Auth authentication.\n\nThe API key is sent as the username with an empty password.\n\n**To obtain your API key:**\n1. Log in to your Insightly account\n2. Click your profile avatar in the top-right corner\n3. Go to **User Settings**\n4. Find the **API** section and copy your API key",
+          "message": "Ключ API Insightly, що використовується для автентифікації через HTTP Basic Auth.\n\nКлюч API надсилається як ім’я користувача з порожнім паролем.\n\n**Щоб отримати свій ключ API:**\n1. Увійдіть у свій обліковий запис Insightly\n2. Натисніть іконку свого аватара в правому верхньому куті\n3. Перейдіть до **Налаштувань користувача**\n4. Знайдіть розділ **API** і скопіюйте свій ключ API"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Insightly API key for authentication",
+          "message": "Ключ API Insightly для автентифікації"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOm5hMQ.desc": {
+          "source": "North America pod (api.na1.insightly.com)",
+          "message": "Під Північної Америки (api.na1.insightly.com)"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOm5hMQ.display_name": {
+          "source": "North America",
+          "message": "Північна Америка"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOmF1MQ.desc": {
+          "source": "Australia pod (api.au1.insightly.com)",
+          "message": "Під (pod) Австралія (api.au1.insightly.com)"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOmF1MQ.display_name": {
+          "source": "Australia",
+          "message": "Австралія"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOmV1MQ.desc": {
+          "source": "Europe pod (api.eu1.insightly.com)",
+          "message": "Під (pod) Європа (api.eu1.insightly.com)"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOmV1MQ.display_name": {
+          "source": "Europe",
+          "message": "Європа"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.desc": {
+          "source": "The Insightly pod/region that determines the API endpoint URL.\n\nAvailable pods:\n- `na1` - North America (default)\n- `eu1` - Europe\n- `au1` - Australia\n\nYour pod is visible in your Insightly URL (e.g., `na1.insightly.com` means pod `na1`). If not provided, defaults to `na1`.",
+          "message": "Під (pod)/регіон Insightly, який визначає URL-адресу API.\n\nДоступні піди:\n- `na1` - Північна Америка (за замовчуванням)\n- `eu1` - Європа\n- `au1` - Австралія\n\nВаш під видно в URL Insightly (наприклад, `na1.insightly.com` означає під `na1`). Якщо не вказано, за замовчуванням використовується `na1`."
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.display_name": {
+          "source": "Pod/Region",
+          "message": "Під/Регіон"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.short_desc": {
+          "source": "Insightly pod/region (auto-detected if not provided)",
+          "message": "Під/Регіон Insightly (автоматично визначається, якщо не вказано)"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Insightly CRM REST API",
+          "message": "Підключення до REST API CRM Insightly"
+        }
+      }
+    }
+  }
+}

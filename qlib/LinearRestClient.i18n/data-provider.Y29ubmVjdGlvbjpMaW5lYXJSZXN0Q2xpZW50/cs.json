@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.TGluZWFyUmVzdENsaWVudA.scheme.TGluZWFyUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Linear GraphQL API for issue tracking and project management",
+          "message": "Připojení k GraphQL API Linearu pro sledování úkolů a správu projektů"
+        },
+        "connection.TGluZWFyUmVzdENsaWVudA.scheme.TGluZWFyUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Linear REST Connection",
+          "message": "Spojení s rozhraním Linear REST"
+        },
+        "connection.TGluZWFyUmVzdENsaWVudA.scheme.TGluZWFyUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Linear GraphQL API",
+          "message": "Spojení s GraphQL rozhraním Linear"
+        }
+      }
+    }
+  }
+}

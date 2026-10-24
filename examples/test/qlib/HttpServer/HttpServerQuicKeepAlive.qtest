@@ -1,0 +1,232 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTP/3 keep-alive interval tests.
+
+    While a QUIC connection has active streams, it PINGs every half of its effective idle timeout, but at least
+    every 15 s: a NAT forgets a UDP flow after 30 s of silence (Linux conntrack's nf_conntrack_udp_timeout), and a
+    response the server sent later was dropped until the client's next PING re-created the flow.  With Qore's 75 s
+    idle timeout that PING came at 37.5 s, so a request a server answered in 30 to 37.5 s took 37.5 s, and one with
+    a shorter deadline failed (Vertex AI calls answered after 30 s, 2026-10-24).
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+
+%exec-class HttpServerQuicKeepAliveTest
+
+class KeepAliveTestHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, cx."header-info".http3 ? "h3" : "not h3");
+    }
+}
+
+public class HttpServerQuicKeepAliveTest inherits QUnit::Test {
+    private {
+        string qore_exe;
+        HttpServer server;
+        int quic_port;
+        list<string> tmp_files = ();
+
+        #! the interval cap, in nanoseconds (QORE_QUIC_ACTIVE_STREAM_KEEP_ALIVE_NS)
+        const KeepAliveCapNs = 15000000000;
+
+        #! Qore's idle timeout, in nanoseconds (QuicSession::QUIC_IDLE_TIMEOUT_NS)
+        const DefaultIdleNs = 75000000000;
+    }
+
+    constructor() : Test("HttpServerQuicKeepAliveTest", "1.0") {
+        qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+
+        addTestCase("the keep-alive interval policy", \testNativePolicy());
+        addTestCase("an HTTP/3 request PINGs every 15 s, within a 30 s NAT timeout", \testDefaultIdleCapped());
+        addTestCase("an HTTP/3 request with a short idle timeout PINGs at half of it", \testShortIdleHalved());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("quic-keep-alive-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        server.setDefaultHandler("default", new KeepAliveTestHandler());
+        server.waitForAsyncIo();
+
+        string pem;
+        try {
+            pem = backquote("openssl req -x509 -newkey rsa:2048 -keyout /dev/stdout "
+                "-out /dev/stdout -days 1 -nodes -subj /CN=localhost 2>/dev/null");
+        } catch (hash<ExceptionInfo> ex) {
+            return;
+        }
+        if (!pem.val()) {
+            return;
+        }
+        string key_pem = (pem =~ x/(-----BEGIN PRIVATE KEY-----[\s\S]+?-----END PRIVATE KEY-----)/)[0];
+        string cert_pem = (pem =~ x/(-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----)/)[0];
+        server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(cert_pem),
+            "key": new SSLPrivateKey(key_pem),
+            "enable_h3": True,
+        });
+        server.waitForAsyncIo();
+        foreach hash<auto> l in (server.getListeners().pairIterator()) {
+            if (l.value.name =~ /^quic-/) {
+                quic_port = l.value.port;
+                break;
+            }
+        }
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+        foreach string path in (tmp_files) {
+            try {
+                unlink(path);
+            } catch () {
+            }
+        }
+    }
+
+    #! The policy itself, in the native test next to the qore binary (qore-quic-keep-alive-test)
+    testNativePolicy() {
+        string native = ENV.QORE_QUIC_KEEP_ALIVE_TEST ?? dirname(qore_exe) + "/qore-quic-keep-alive-test";
+        if (!is_file(native)) {
+            testSkip("the native QUIC keep-alive test executable is not available");
+            return;
+        }
+        int rc;
+        string output = backquote("'" + replace(native, "'", "'\\''") + "' 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertTrue(output.startsWith("PASS: "), output);
+    }
+
+    #! With Qore's 75 s idle timeout on both sides, the client PINGs every 15 s, not every 37.5 s
+    testDefaultIdleCapped() {
+        list<hash<auto>> settings = getClientKeepAliveSettings();
+        if (!settings) {
+            return;
+        }
+        foreach hash<auto> setting in (settings) {
+            assertEq(DefaultIdleNs, setting.effective_idle_ns, "both sides advertise 75 s");
+            assertEq(KeepAliveCapNs, setting.keep_ns, "PINGs every 15 s while the request is active");
+        }
+    }
+
+    #! With a 10 s idle timeout, half of it is below the cap: the client PINGs every 5 s
+    testShortIdleHalved() {
+        list<hash<auto>> settings = getClientKeepAliveSettings({"QORE_QUIC_IDLE_TIMEOUT_MS": "10000"});
+        if (!settings) {
+            return;
+        }
+        foreach hash<auto> setting in (settings) {
+            assertEq(10000000000, setting.effective_idle_ns, "the lesser of 10 s and the server's 75 s");
+            assertEq(5000000000, setting.keep_ns, "half of the effective idle timeout");
+        }
+    }
+
+    #! Makes one HTTP/3 request in a child process and returns the keep-alive settings its connection traced
+    /** The session traces each setting of an active connection's keep-alive interval (QORE_ASYNC_IO_TRACE, in
+        debug builds); the client runs in its own process so that its trace holds no server session.  Skips the
+        test when there is no QUIC listener or the build traces nothing.
+    */
+    private list<hash<auto>> getClientKeepAliveSettings(*hash<string, string> env) {
+        if (!quic_port) {
+            testSkip("no QUIC listener: openssl or QUIC is not available here");
+            return ();
+        }
+        string script_path = newTmpPath("qr");
+        File f();
+        f.open2(script_path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf("%%modern
+%%prepend-module-path \"%s\"
+%%requires HttpClientIo
+
+HttpClientIo::HttpClientConnectionManager mgr(
+    <HttpClientIo::HttpClientConnectionManagerOptions>{
+        \"protocol\": \"h3\",
+        \"accept_all_certs\": True,
+        \"request_timeout\": 30s,
+        \"connect_timeout\": 15s,
+    },
+);
+hash<auto> response = mgr.request(\"https://127.0.0.1:%d\", \"GET\", \"/\");
+printf(\"STATUS=%%d BODY=%%s\\n\", response.status_code, response.body);
+", getModulePath(), quic_port));
+        f.close();
+
+        string cmd = "QORE_ASYNC_IO_TRACE=1";
+        foreach hash<auto> i in (env.pairIterator()) {
+            cmd += sprintf(" %s=%s", i.key, i.value);
+        }
+        cmd += sprintf(" '%s' '%s' 2>&1", replace(qore_exe, "'", "'\\''"), replace(script_path, "'", "'\\''"));
+        int rc;
+        string output = backquote(cmd, \rc);
+        assertEq(0, rc, output);
+        assertTrue(output =~ /STATUS=200 BODY=h3/, "the request was answered over HTTP/3");
+        if (output !~ /\[ASYNC-IO /) {
+            testSkip("async I/O tracing is compiled into debug builds only");
+            return ();
+        }
+        list<hash<auto>> rv = ();
+        foreach string line in (output.split("\n")) {
+            *list<*string> m = (line =~ x/updateKeepAlive ACTIVE .*effective_idle_ns=([0-9]+) keep_ns=([0-9]+)/);
+            if (m) {
+                rv += {"effective_idle_ns": m[0].toInt(), "keep_ns": m[1].toInt()};
+            }
+        }
+        assertTrue(rv.size() > 0, "the active connection set its keep-alive interval");
+        return rv;
+    }
+
+    #! Returns the qlib directory this test loads its modules from
+    private string getModulePath() {
+        return normalize_dir(get_script_dir() + "/../../../../qlib");
+    }
+
+    private string newTmpPath(string ext) {
+        string path = sprintf("%s%squic-keep-alive-%d-%d.%s", tmp_location(), DirSep, getpid(), tmp_files.size(),
+            ext);
+        tmp_files += path;
+        return path;
+    }
+}

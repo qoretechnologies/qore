@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.RHJvcGJveFJlc3RDbGllbnQ.scheme.RHJvcGJveFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [Dropbox](https://www.dropbox.com) REST API for cloud file storage and sharing.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from a [Dropbox app](https://www.dropbox.com/developers/apps). The connection uses the `dropbox://` URL scheme.\n\nThe app must be granted the scopes this connection requests, and `token_access_type` must remain `offline`; Dropbox issues no refresh token otherwise, and the connection stops working four hours after it is authorized",
+          "message": "連線至 [Dropbox](https://www.dropbox.com) REST API，用於雲端檔案儲存與分享。\n\n需要從 [Dropbox 應用程式](https://www.dropbox.com/developers/apps) 取得 OAuth2 憑證 (`oauth2_client_id` 和 `oauth2_client_secret`)。此連線使用 `dropbox://` URL 方案。\n\n應用程式必須授予此連線所請求的權限範圍，且 `token_access_type` 必須保持為 `offline`；否則 Dropbox 不會發放重新授權金鑰，連線在授權後四小時內將停止運作"
+        },
+        "connection.RHJvcGJveFJlc3RDbGllbnQ.scheme.RHJvcGJveFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Dropbox",
+          "message": "Dropbox"
+        },
+        "connection.RHJvcGJveFJlc3RDbGllbnQ.scheme.RHJvcGJveFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Dropbox REST API",
+          "message": "與 Dropbox REST API 的連接"
+        }
+      }
+    }
+  }
+}

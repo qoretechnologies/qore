@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Insightly CRM REST API for managing contacts, organizations, opportunities, projects, tasks, leads, and other CRM data.\n\n**To obtain your API key:**\n1. Log in to your Insightly account\n2. Click your profile avatar in the top-right corner\n3. Go to **User Settings**\n4. Find the **API** section and copy your API key\n\n**Pod/Region:**\nYour pod determines the API endpoint URL. It is visible in your Insightly URL (e.g., `na1.insightly.com` means pod `na1`). If not provided, the connection will default to `na1`.\n\n**Rate limits:** 10 requests/second with daily caps based on your plan. Rate limit info is returned in `X-RateLimit-Limit` and `X-RateLimit-Remaining` response headers.",
+          "message": "Připojení k REST API Insightly CRM pro správu kontaktů, organizací, příležitostí, projektů, úkolů, zájemců a dalších dat CRM.\n\n**Získání API klíče:**\n1. Přihlaste se do svého účtu Insightly\n2. Klikněte na ikonu svého profilu v pravém horním rohu\n3. Přejděte na **Nastavení uživatele**\n4. Najděte sekci **API** a zkopírujte svůj API klíč\n\n**Pod/Region:**\nVáš pod určuje adresu koncového bodu API. Je viditelný v adrese URL Insightly (např. `na1.insightly.com` znamená pod `na1`). Pokud není zadán, bude připojení výchozí na `na1`.\n\n**Omezení rychlosti:** 10 požadavků/sekundu s denními kapacitami podle vašeho plánu. Informace o omezení rychlosti jsou obsaženy v hlavičkách `X-RateLimit-Limit` a `X-RateLimit-Remaining` odpovědi."
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Insightly CRM REST Connection",
+          "message": "Připojení k REST API Insightly CRM"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Insightly account\n2. Click your profile avatar in the top-right corner\n3. Go to **User Settings**\n4. Find the **API** section and copy your API key\n\n**Important:** The API key provides full access to your Insightly data. Keep it secure and never share it publicly.",
+          "message": "1. Přihlaste se do svého účtu Insightly\n2. Klikněte na ikonu svého profilu v pravém horním rohu\n3. Přejděte na **Nastavení uživatele**\n4. Najděte sekci **API** a zkopírujte svůj API klíč\n\n**Důležité:** API klíč poskytuje plný přístup ke všem datům ve vašem Insightly. Uchovávejte jej v bezpečí a nikdy jej nezveřejňujte."
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "Jak získat svůj klíč API"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
+          "source": "Your Insightly pod determines the API endpoint URL. It is visible in your Insightly URL (e.g., `na1.insightly.com` means pod `na1`).\n\n- **na1** — North America (default)\n- **eu1** — Europe\n- **au1** — Australia\n\nIf not sure, check the URL bar when logged into Insightly.",
+          "message": "Váš pod Insightly určuje adresu koncového bodu API. Je viditelný v adrese URL Insightly (např. `na1.insightly.com` znamená pod `na1`).\n\n- **na1** — Severní Amerika (výchozí)\n- **eu1** — Evropa\n- **au1** — Austrálie\n\nPokud si nejste jisti, podívejte se do adresního řádku při přihlášení do Insightly."
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
+          "source": "Select Your Pod/Region",
+          "message": "Vyberte svůj pod/region"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Insightly API key used for HTTP Basic Auth authentication.\n\nThe API key is sent as the username with an empty password.\n\n**To obtain your API key:**\n1. Log in to your Insightly account\n2. Click your profile avatar in the top-right corner\n3. Go to **User Settings**\n4. Find the **API** section and copy your API key",
+          "message": "API klíč Insightly používaný pro ověření pomocí HTTP Basic Auth.\n\nAPI klíč se pošle jako uživatelské jméno s prázdným heslem.\n\n**Získání API klíče:**\n1. Přihlaste se do svého účtu Insightly\n2. Klikněte na ikonu svého profilu v pravém horním rohu\n3. Přejděte na **Nastavení uživatele**\n4. Najděte sekci **API** a zkopírujte svůj API klíč"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klíč API"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Insightly API key for authentication",
+          "message": "Insightly API klíč pro ověření"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOm5hMQ.desc": {
+          "source": "North America pod (api.na1.insightly.com)",
+          "message": "Pod Severní Amerika (api.na1.insightly.com)"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOm5hMQ.display_name": {
+          "source": "North America",
+          "message": "Severní Amerika"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOmF1MQ.desc": {
+          "source": "Australia pod (api.au1.insightly.com)",
+          "message": "Pód Austrálie (api.au1.insightly.com)"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOmF1MQ.display_name": {
+          "source": "Australia",
+          "message": "Austrálie"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOmV1MQ.desc": {
+          "source": "Europe pod (api.eu1.insightly.com)",
+          "message": "Pód Evropy (api.eu1.insightly.com)"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.allowed_values.c3RyaW5nOmV1MQ.display_name": {
+          "source": "Europe",
+          "message": "Evropa"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.desc": {
+          "source": "The Insightly pod/region that determines the API endpoint URL.\n\nAvailable pods:\n- `na1` - North America (default)\n- `eu1` - Europe\n- `au1` - Australia\n\nYour pod is visible in your Insightly URL (e.g., `na1.insightly.com` means pod `na1`). If not provided, defaults to `na1`.",
+          "message": "Pód/oblast Insightly určující adresu URL rozhraní API.\n\nDostupné pódy:\n- `na1` - Severní Amerika (výchozí)\n- `eu1` - Evropa\n- `au1` - Austrálie\n\nVáš pód je viditelný ve vaší adrese Insightly (např. `na1.insightly.com` znamená pód `na1`). Pokud není zadán, použije se výchozí `na1`."
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.display_name": {
+          "source": "Pod/Region",
+          "message": "Pód/Oblast"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.option.cG9k.short_desc": {
+          "source": "Insightly pod/region (auto-detected if not provided)",
+          "message": "Pód/oblast Insightly (automaticky detekováno, pokud není zadáno)"
+        },
+        "connection.SW5zaWdodGx5UmVzdENsaWVudA.scheme.SW5zaWdodGx5UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Insightly CRM REST API",
+          "message": "Připojení k REST API CRM systému Insightly"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Twilio Segment Public API for managing your Customer Data Platform workspace.\n\nSegment helps you collect, clean, and control your customer data.\n\n**Supported Operations:**\n- Sources: Manage data collection points\n- Destinations: Configure integration targets\n- Warehouses: Manage data warehouse connections\n- Tracking Plans: Define and enforce event schemas\n- Labels: Organize and tag resources",
+          "message": "與用於管理您的客戶資料平台工作區的 Twilio Segment 公共 API 建立連接。\n\nSegment 協助您收集、清理並控制客戶資料。\n\n**支援的操作：**\n- 資料來源：管理資料收集點\n- 目標端：設定整合目標\n- 資料倉儲：管理資料倉儲連接\n- 追蹤規劃：定義並強制執行事件架構\n- 標籤：組織與標記資源"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Segment REST Connection",
+          "message": "Segment REST 連接"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Segment, you need a Public API token:\n\n1. Log in to [Segment](https://app.segment.com)\n2. Go to **Settings > Workspace settings > Access Management > Tokens**\n3. Create a new Public API token\n\nOnly Workspace Owners can create tokens. Keep your token secure.",
+          "message": "要連接到 Segment，您需要一個公共 API 憑證：\n\n1. 登入 [Segment](https://app.segment.com)\n2. 前往 **設定 > 工作區設定 > 存取管理 > 憑證**\n3. 建立新的公共 API 憑證\n\n僅工作區擁有者可建立憑證。請妥善保管您的憑證。"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Segment API Key",
+          "message": "Segment API 憑證"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Choose the region that matches your Segment workspace:\n- **US**: United States data center (default)\n- **EU**: European Union data center\n\nYour region was set when you created your workspace and cannot be changed.",
+          "message": "選擇與您的 Segment 工作區相符的區域：\n- **美國**: 美國資料中心（預設）\n- **EU**: 歐洲聯盟資料中心\n\n您的區域是在建立工作區時設定的，無法變更。"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Select Your Region",
+          "message": "選擇您的區域"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Segment Public API token used for Bearer token authentication.\n\n**To obtain your API token:**\n1. Log in to [Segment](https://app.segment.com)\n2. Go to **Settings > Workspace settings > Access Management > Tokens**\n3. Create a new Public API token\n\n**Note:** Only Workspace Owners can create API tokens.",
+          "message": "用於 Bearer 憑證驗證的 Segment 公共 API 憑證。\n\n**取得您的 API 憑證：**\n1. 登入 [Segment](https://app.segment.com)\n2. 前往 **設定 > 工作區設定 > 存取管理 > 憑證**\n3. 建立新的公共 API 憑證\n\n**注意：** 僅工作區擁有者可建立 API 憑證。"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Segment Public API key for Bearer authentication",
+          "message": "用於 Bearer 驗證的 Segment 公共 API 憑證"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "EU data center (eu1.api.segmentapis.com)",
+          "message": "歐洲資料中心 (eu1.api.segmentapis.com)"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "EU",
+          "message": "歐洲"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.short_desc": {
+          "source": "European Union",
+          "message": "歐盟"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "US data center (api.segmentapis.com)",
+          "message": "美國資料中心（api.segmentapis.com）"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "US",
+          "message": "美國"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.short_desc": {
+          "source": "United States",
+          "message": "美國"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "Select the Segment data center region for your workspace.\n\nYour region is determined when you create your Segment workspace and cannot be changed.",
+          "message": "選擇您的工作區所使用的 Segment 資料中心區域。\n\n您的區域是在建立 Segment 工作區時決定的，且無法變更。"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "區域"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "Segment data center region",
+          "message": "Segment 資料中心區域"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Twilio Segment REST API",
+          "message": "連線至 Twilio Segment REST API"
+        }
+      }
+    }
+  }
+}

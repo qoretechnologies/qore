@@ -290,7 +290,8 @@ public class EasyPostRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "easypostrests://api.easypost.com/v2";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("EasyPostRestClient",
+            "EasyPostRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "EasyPost REST Connection",
             "short_desc": "A connection to the EasyPost REST API",
             "desc": "A connection to the EasyPost REST API for shipping label generation, tracking, "
@@ -337,6 +338,7 @@ public class EasyPostRestConnection inherits RestClient::RestConnection {
             "required_options": "apikey",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Obtain Your EasyPost API Key",
                     "intent": "info",
                     "content": "1. Log in to your EasyPost account at https://www.easypost.com/account/api-keys\n"
@@ -352,7 +354,7 @@ public class EasyPostRestConnection inherits RestClient::RestConnection {
                         "- The API key is used as the HTTP Basic Auth username with an empty password",
                 },
             ),
-        };
+        });
     }
 
     #! creates the EasyPostRestConnection object

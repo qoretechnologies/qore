@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [Klaviyo](https://www.klaviyo.com) for profiles, lists, segments, tags, campaigns, events and subscriptions.\n\n**Authentication** is the OAuth2 authorization code flow with `oauth2_client_id` and `oauth2_client_secret` from an app registered in Klaviyo's developer portal. Klaviyo requires PKCE and takes the client credentials as HTTP basic authentication on the token endpoint, both of which are set by default. The scopes requested are the ones the registered app holds; asking for one outside that set fails authorization before a user sees a consent screen.\n\nA **private API key** works as an alternative for an integration that only ever serves one account: set `token` to the key and `token_type` to `Klaviyo-API-Key`, which is how Klaviyo spells that credential. It carries the account's full permissions and cannot be scoped, so prefer OAuth2 where both are available.\n\n**The API revision is sent on every call** as `revision: 2026-07-15`, matching the description the actions are generated from. Klaviyo declares that header required on almost every operation, and a revision is removed two years after it ships, so it is never left to a default.\n\nKlaviyo is a trademark of Klaviyo, Inc.",
+          "message": "Eine Verbindung zu [Klaviyo](https://www.klaviyo.com) für Profile, Listen, Segmente, Tags, Kampagnen, Ereignisse und Abonnements.\n\n**Authentifizierung** ist der OAuth2-Autorisierungscode-Flow mit `oauth2_client_id` und `oauth2_client_secret` aus einer in Klaviyos Entwickler-Portal registrierten App. Klaviyo erfordert PKCE und übermittelt die Client-Credentials als HTTP-Basic-Authentifizierung am Token-Endpunkt, beides standardmäßig eingestellt. Die angeforderten Bereiche sind diejenigen, die die registrierte App besitzt; eine Anfrage nach einem Bereich außerhalb dieses Satzes schlägt vor der Benutzerkonsent-Bildschirm-Anzeige fehl.\n\nEin **privater API-Schlüssel** funktioniert als Alternative für eine Integration, die nur ein einziges Konto bedient: Setzen Sie `token` auf den Schlüssel und `token_type` auf `Klaviyo-API-Key`, wie Klaviyo diesen Nachweis nennt. Er verleiht dem Konto volle Berechtigungen und kann nicht eingeschränkt werden, daher bevorzugen Sie OAuth2, wenn beide verfügbar sind.\n\n**Die API-Version wird bei jeder Anfrage gesendet** als `revision: 2026-07-15`, die der Beschreibung der generierten Aktionen entspricht. Klaviyo erachtet diesen Header bei fast allen Operationen als erforderlich, und eine Version wird zwei Jahre nach ihrer Einführung entfernt, sodass sie niemals auf einen Standardwert zurückgefallen ist.\n\nKlaviyo ist eine Marke von Klaviyo, Inc."
+        },
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Klaviyo REST Connection",
+          "message": "Klaviyo-REST-Verbindung"
+        },
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Klaviyo REST API",
+          "message": "Eine Verbindung zur Klaviyo-REST-API"
+        }
+      }
+    }
+  }
+}

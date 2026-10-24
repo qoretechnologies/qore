@@ -264,7 +264,8 @@ public class LinearRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "linear://api.linear.app/graphql";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("LinearRestClient",
+            "LinearRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Linear REST Connection",
             "short_desc": "A connection to the Linear GraphQL API",
             "desc": "A connection to the Linear GraphQL API for issue tracking and project management",
@@ -310,7 +311,7 @@ public class LinearRestConnection inherits RestClient::RestConnection {
             },
             "required_options": "token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
                 "oauth2_client_id,oauth2_client_secret",
-        };
+        });
     }
 
     #! creates the LinearRestConnection object

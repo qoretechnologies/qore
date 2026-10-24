@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [GitLab](https://gitlab.com) for source code, issues, merge requests, CI/CD variables and wikis.\n\n**The instance is the connection.** `hostname` names the GitLab installation this connection works against - `https://gitlab.com` or a self-managed instance - and the target URL and both OAuth2 endpoints are derived from it. GitLab.com and a self-managed instance run the same API over entirely different data, so an integration pointed at the wrong one does not fail; it succeeds against the wrong repositories.\n\n**Authentication** is either an access token or the OAuth2 authorization code flow:\n- a personal, project or group access token with the `api` scope, created under **User Settings > Access Tokens**, sent as a bearer token; or\n- `oauth2_client_id` and `oauth2_client_secret` from an OAuth application registered in the instance itself. There is no shared application, so a self-managed instance needs its own.\n\nGitLab is a trademark of GitLab B.V.",
+          "message": "з’єднання з [GitLab](https://gitlab.com) для коду, завдань, запитів на злиття, змінних CI/CD та вікі.\n\n**Екземпляр — це з’єднання.** `hostname` вказує на встановлення GitLab, з яким працює це з’єднання — `https://gitlab.com` або власне управління. Цільовий URL і обидва точки входу OAuth2 виводяться з нього. GitLab.com і власне управління використовують однаковий API, але над різними даними, тому інтеграція, спрямована на неправильний екземпляр, не помилиться; вона успішно працюватиме з неправильними репозиторіями.\n\n**Аутентифікація** — це або токен доступу, або потік коду авторизації OAuth2:\n- особистий, проектний або груповий токен доступу з дозволом `api`, створений у **Налаштуваннях користувача > Токени доступу**, що надсилається як носій токена; або\n- `oauth2_client_id` та `oauth2_client_secret` з OAuth-додатку, зареєстрованого в самому екземплярі. Спільного додатку немає, тому власне управління потребує свого.\n\nGitLab — товарний знак компанії GitLab B.V."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "GitLab REST Connection",
+          "message": "З’єднання з REST API GitLab"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.aG9zdG5hbWU.desc": {
+          "source": "The base URL of the GitLab installation this connection works against, ex: `https://gitlab.com` or `https://gitlab.example.com`.\n\nThis is the connection's defining option: the target URL and both OAuth2 endpoints are derived from it, and a stored URL that disagrees with it is ignored rather than allowed to decide where requests go.\n\nA bare host is given `https`.",
+          "message": "Базовий URL встановлення GitLab, з яким працює це з’єднання, наприклад, `https://gitlab.com` або `https://gitlab.example.com`.\n\nЦе визначальна опція з’єднання: цільовий URL і обидва точки входу OAuth2 виводяться з неї, і збережений URL, що не відповідає їй, ігнорується замість того, щоб вирішувати, куди надсилати запити.\n\nБезпосередній хост отримує `https`."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.aG9zdG5hbWU.display_name": {
+          "source": "GitLab Hostname",
+          "message": "Хост GitLab"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.aG9zdG5hbWU.short_desc": {
+          "source": "The GitLab instance to work against",
+          "message": "Екземпляр GitLab, з яким потрібно працювати"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "The client ID of an OAuth application registered in this GitLab instance.\n\nOnly needed for the OAuth2 flow; an access token in `token` needs neither this nor `oauth2_client_secret`. Register the application under **Admin > Applications** (or **User Settings > Applications**) with `https://api.qoretechnologies.com/qorus-oauth2-redirect` as the redirect URI.",
+          "message": "Ідентифікатор клієнта OAuth-додатку, зареєстрованого в цьому екземплярі GitLab.\n\nПотрібен лише для потоку OAuth2; токен доступу в `token` не потребує ні цього, ні `oauth2_client_secret`.\nЗареєструйте додаток у **Адміністративній панелі > Додатки** (або **Налаштування користувача > Додатки**) з `https://api.qoretechnologies.com/qorus-oauth2-redirect` як URI перенаправлення."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "The client secret of an OAuth application registered in this GitLab instance.\n\nOnly needed for the OAuth2 flow; see `oauth2_client_id`.",
+          "message": "Секрет клієнта OAuth-додатку, зареєстрованого в цьому екземплярі GitLab.\n\nПотрібен лише для потоку OAuth2; див. `oauth2_client_id`."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A GitLab access token, sent as a bearer token.\n\n**To obtain one:**\n1. Log in to the GitLab instance this connection targets\n2. Go to **User Settings > Access Tokens** (or a project's or group's **Settings > Access Tokens**)\n3. Create a token with the `api` scope, or `read_api` for read-only use\n\nLeave this unset to use the OAuth2 flow instead.",
+          "message": "Токен доступу до GitLab, надсилається як носій токена.\n\n**Щоб отримати його:**\n1. Увійдіть у екземпляр GitLab, на який спрямована ця з’єднання\n2. Перейдіть до **Налаштування користувача > Токени доступу** (або до **Налаштування проекту або групи > Токени доступу**)\n3. Створіть токен із дозволом `api`, або `read_api` для тільки читання\n\nЗалиште порожнім, щоб використовувати потік OAuth2 замість цього."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "Токен доступу"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A GitLab personal, project or group access token",
+          "message": "Токен особистого, проектного або групового доступу до GitLab"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a GitLab instance",
+          "message": "З’єднання з екземпляром GitLab"
+        }
+      }
+    }
+  }
+}

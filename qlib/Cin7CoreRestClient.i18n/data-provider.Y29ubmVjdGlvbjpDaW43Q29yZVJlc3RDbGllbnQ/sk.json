@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Cin7Core REST API for inventory management, sales, and order processing.\n\nCin7Core (formerly DEAR Inventory) is a comprehensive inventory management and ERP platform that enables you to manage products, sales, purchases, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and suppliers\n- Create and track sales orders\n- Process payments and invoices\n- Monitor inventory and stock levels\n- Handle stock adjustments\n- Track shipments and fulfillment\n\n**Authentication:**\nCin7Core uses Account ID and API Key authentication. Both credentials are required.",
+          "message": "Pripojenie k REST API Cin7Core pre správu zásob, predaj a spracovanie objednávok.\n\nCin7Core (dodnes DEAR Inventory) je komplexný nástroj na správu zásob a ERP platforma, ktorá vám umožňuje spravovať produkty, predaje, nákupy, zákazníkov, dodávateľov a úrovne zásob.\n\n**Funkcie:**\n- Správa zákazníkov a dodávateľov\n- Vytváranie a sledovanie predajných objednávok\n- Spracovanie platieb a faktúr\n- Monitorovanie zásob a úrovní zásob\n- Spracovanie úprav zásob\n- Sledovanie dopravy a vybavenia\n\n**Overenie identity:**\nCin7Core používa overenie pomocou ID účtu a kľúča API. Obe povinné údaje sú potrebné."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Cin7Core REST Connection",
+          "message": "Pripojenie REST Cin7Core"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Cin7Core, you need both an Account ID and API Key:\n\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Open the **Setup** tab for the Application\n4. Copy both credentials:\n   - **Account ID** - Your unique account identifier\n   - **Application Key** - Your API authentication key\n\nKeep your credentials secure and never share them publicly.",
+          "message": "Pre pripojenie k Cin7Core potrebujete účtové ID a kľúč API:\n\n1. Prejdite na https://inventory.dearsystems.com/ExternalApi\n2. Vytvorte novú aplikáciu alebo vyberte existujúcu\n3. Otvorte záložku **Nastavenie** pre aplikáciu\n4. Skopírujte obe povinné údaje:\n   - **Účtové ID** – váš jedinečný identifikátor účtu\n   - **Kľúč aplikácie** – kľúč pre overenie API\n\nUchovávajte svoje povolenia v bezpečí a nikdy ich nezdieľajte verejne."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Credentials",
+          "message": "Ako získať svoje API povolenia"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.desc": {
+          "source": "Your Cin7Core Account ID used for API authentication.\n\n**To obtain your Account ID:**\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Find your **Account ID** on the **Setup** tab\n\n**Note:** Both Account ID and API Key are required for authentication.",
+          "message": "Vaše účtové ID Cin7Core používané pre overenie API.\n\n**Ako získať účtové ID:**\n1. Prejdite na https://inventory.dearsystems.com/ExternalApi\n2. Vytvorte novú aplikáciu alebo vyberte existujúcu\n3. Nájdite svoje **Účtové ID** na záložke **Nastavenie**\n\n**Poznámka:** Pre overenie sú potrebné oboje – účtové ID aj kľúč API."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID účtu"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Cin7Core Account ID for authentication",
+          "message": "Účtové ID Cin7Core pre overenie"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Your Cin7Core Application/API Key for authentication.\n\n**To obtain your API Key:**\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Find your **Application Key** on the **Setup** tab\n\n**Note:** Both Account ID and API Key are required for authentication.",
+          "message": "Vaš kľúč aplikácie/ API pre Cin7Core pre overenie.\n\n**Ako získať kľúč API:**\n1. Prejdite na https://inventory.dearsystems.com/ExternalApi\n2. Vytvorte novú aplikáciu alebo vyberte existujúcu\n3. Nájdite svoj **Kľúč aplikácie** na záložke **Nastavenie**\n\n**Poznámka:** Pre overenie sú potrebné oboje – účtové ID aj kľúč API."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Cin7Core Application/API Key",
+          "message": "Kľúč aplikácie/ API Cin7Core"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Cin7Core (DEAR Inventory) API",
+          "message": "Pripojenie k API Cin7Core (DEAR Inventory)"
+        }
+      }
+    }
+  }
+}

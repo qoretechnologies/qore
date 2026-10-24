@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Bitbucket Cloud](https://bitbucket.org) for repositories, commits, pull requests, deployments and code search.\n\n**Authentication** is any one of three credentials:\n- an **access token** in `token` - a repository, project or workspace access token, created under the relevant **Settings > Access tokens**. The narrowest option, and the one to prefer;\n- an **app password** in `username` and `password`, sent as basic authentication. The username is the Atlassian account username, **not** the email address;\n- the **OAuth2 authorization code flow**, with `oauth2_client_id` and `oauth2_client_secret` from an OAuth consumer created in workspace settings.\n\nThis connection targets Bitbucket **Cloud**. Bitbucket Data Center is a different product with a different API and is not supported.\n\nBitbucket is a trademark of Atlassian Pty Ltd.",
+          "message": "連接到 [Bitbucket Cloud](https://bitbucket.org) 的連接，用於儲存庫、提交、拉取請求、部署和程式碼搜尋。\n\n**驗證** 可以是下列三種憑證之一：\n- 在 `token` 中的 **存取權杖**：在相關的 **設定 > 存取權杖** 下建立的儲存庫、專案或工作區權杖。最精細的選項，也是建議使用的選項；\n- 在 `username` 和 `password` 中的 **應用程式密碼**，以基本驗證傳送。使用者名稱為 Atlassian 帳戶使用者名稱，**不是** 電子郵件地址；\n- **OAuth2 授權碼流程**，使用在工作區設定中建立的 OAuth 消費者所產生的 `oauth2_client_id` 和 `oauth2_client_secret`。\n\n此連接針對 Bitbucket **雲端**。Bitbucket Data Center 是另一個產品，擁有不同的 API，且不受支援。\n\nBitbucket 是 Atlassian Pty Ltd. 的商標。"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Bitbucket REST Connection",
+          "message": "Bitbucket REST 連接"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "An app password created under **Personal settings > App passwords**, used with `username`.\n\nThis is not the account password, which Bitbucket does not accept for API access.",
+          "message": "在 **個人設定 > 應用程式密碼** 下建立的應用程式密碼，與 `username` 一起使用。\n\n這不是帳戶密碼，Bitbucket 不接受帳戶密碼進行 API 存取。"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A Bitbucket access token, sent as a bearer token.\n\n**To obtain one:** open the repository, project or workspace **Settings > Access tokens**, create a token, and grant it only the scopes the integration needs.\n\nLeave this unset to authenticate with an app password or the OAuth2 flow instead.",
+          "message": "Bitbucket 存取權杖，以承載權杖形式傳送。\n\n**取得方式：** 開啟儲存庫、專案或工作區 **設定 > 存取權杖**，建立權杖，並僅授予整合所需的範圍。\n\n若要使用應用程式密碼或 OAuth2 流程進行驗證，請保持未設定。"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "存取權杖"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A Bitbucket repository, project or workspace access token",
+          "message": "Bitbucket 儲存庫、專案或工作區存取權杖"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The Atlassian account username to use with an app password.\n\n**Not** the email address: Bitbucket rejects an email address here. The username is shown under **Personal settings > Account settings**.",
+          "message": "用於應用程式密碼的 Atlassian 帳戶使用者名稱。\n\n**不是** 電子郵件地址：Bitbucket 會拒絕在此處使用電子郵件地址。使用者名稱顯示於 **個人設定 > 帳戶設定** 中。"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Bitbucket Cloud REST API",
+          "message": "連接到 Bitbucket Cloud REST API"
+        }
+      }
+    }
+  }
+}

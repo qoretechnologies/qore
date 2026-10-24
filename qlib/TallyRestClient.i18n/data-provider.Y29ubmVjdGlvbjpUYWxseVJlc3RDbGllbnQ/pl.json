@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Tally.so REST API for form building and management.\n\nRequires an API key (set as `apikey`) from your [Tally account settings](https://tally.so/settings/api). The connection uses the `tally://` URL scheme",
+          "message": "Połączenie z interfejsem API REST Tally.so do tworzenia i zarządzania formularzami.\n\nWymaga klucza API (ustawionego jako `apikey`) z ustawień [konta Tally](https://tally.so/settings/api). Połączenie używa schematu adresu `tally://`"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Tally REST Connection",
+          "message": "Połączenie REST Tally"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Tally, you need an API key:\n\n1. Sign in to your [Tally account](https://tally.so/)\n2. Go to **Settings** → **API**\n3. Click **Create API key**\n4. Copy the key and paste it in the `apikey` field above\n\n**Note**: API access requires a Tally Pro or Business plan",
+          "message": "Aby połączyć się z Tally, potrzebujesz klucza API:\n\n1. Zaloguj się do swojego [konta Tally](https://tally.so/)\n2. Przejdź do **Ustawienia** → **API**\n3. Kliknij **Utwórz klucz API**\n4. Skopiuj klucz i wklej go do pola `apikey` powyżej\n\n**Uwaga**: dostęp do API wymaga planu Tally Pro lub Business"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Tally API Key",
+          "message": "Jak uzyskać klucz API Tally"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Tally API key used for authentication; sent as the `Authorization: Bearer` header.\n\nGet your API key from your [Tally account settings](https://tally.so/settings/api)",
+          "message": "Klucz API Tally używany do uwierzytelniania; wysyłany jako nagłówek `Authorization: Bearer`.\n\nPobierz swój klucz API z ustawień [konta Tally](https://tally.so/settings/api)"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klucz API"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Tally API key for authentication",
+          "message": "Klucz Tally do uwierzytelniania"
+        },
+        "connection.VGFsbHlSZXN0Q2xpZW50.scheme.VGFsbHlSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Tally.so REST API",
+          "message": "Połączenie z REST API Tally.so"
+        }
+      }
+    }
+  }
+}

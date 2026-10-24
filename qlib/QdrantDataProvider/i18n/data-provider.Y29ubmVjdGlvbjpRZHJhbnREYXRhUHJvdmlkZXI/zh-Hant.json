@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a Qdrant vector database server",
+          "message": "連接到 Qdrant 向量資料庫伺服器的連接"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Qdrant REST Connection",
+          "message": "Qdrant REST 連接"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.desc": {
+          "source": "The API key for authenticating with the Qdrant server; sent as the `api-key` header",
+          "message": "用於向 Qdrant 伺服器進行驗證的 API 金鑰；作為 `api-key` 標頭傳送"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.short_desc": {
+          "source": "The Qdrant API key for authentication",
+          "message": "用於驗證的 Qdrant API 金鑰"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.desc": {
+          "source": "HTTP headers to send with ping requests; defaults to `{\"Connection\": \"close\"}` to force a fresh TCP connection on each ping, preventing stale keep-alive connection failures against qdrant's actix-web server (which closes idle keep-alive connections after a short timeout)",
+          "message": "用於 ping 請求的 HTTP 標頭；預設為 `{\"Connection\": \"close\"}`，強制每次 ping 都建立新的 TCP 連接，避免因 qdrant 的 actix-web 伺服器（在短暫空閒後關閉保持連接）導致的舊連接失效問題"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.cGluZ19wYXRo.desc": {
+          "source": "The URI path to use for pings; defaults to `/collections`, which requires authentication and therefore verifies the credential as well as reachability.  Do not use `/`: qdrant serves the root path outside its authentication layer, so a ping against it succeeds even when the connection carries no credential at all and no real operation can be performed",
+          "message": "用於 ping 的 URI 路徑；預設為 `/collections`，此設定需要驗證憑證，因此可同時驗證憑證與連線可達性。請勿使用 `/`：qdrant 在認證層之外提供根路徑，因此即使連線未攜帶憑證，ping 仍會成功，但無法執行任何實際操作"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Qdrant vector database server",
+          "message": "連接到 Qdrant 向量資料庫伺服器的連接"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to an MCP server for accessing AI tools, resources, and prompts",
+          "message": "Připojení k serveru MCP pro přístup k nástrojům, prostředkům a příkazům AI"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.display_name": {
+          "source": "MCP Connection",
+          "message": "Připojení MCP"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X25hbWU.desc": {
+          "source": "The name of this client to report to the MCP server during initialization",
+          "message": "Název tohoto klienta pro hlášení serveru MCP během inicializace"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X25hbWU.display_name": {
+          "source": "Client Name",
+          "message": "Název klienta"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X25hbWU.short_desc": {
+          "source": "The client name to use for MCP initialization",
+          "message": "Název klienta pro inicializaci MCP"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X3ZlcnNpb24.desc": {
+          "source": "The version of this client to report to the MCP server during initialization",
+          "message": "Verze tohoto klienta pro hlášení serveru MCP během inicializace"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X3ZlcnNpb24.display_name": {
+          "source": "Client Version",
+          "message": "Verze klienta"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X3ZlcnNpb24.short_desc": {
+          "source": "The client version to use for MCP initialization",
+          "message": "Verze klienta používaná při inicializaci MCP"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to an MCP (Model Context Protocol) server",
+          "message": "Připojení k serveru MCP (Model Context Protocol)"
+        }
+      }
+    }
+  }
+}

@@ -219,16 +219,24 @@ public:
         @param str the string to write to the file
         @param xsink if an error occurs, the Qore-language exception info will be added here
         @return returns the number of bytes written (-1 if an exception was thrown)
+
+        @since %Qore 3.0 returns an \c int64 instead of an \c int, which truncated the number of bytes of a write of
+        2 GiB or more; the exported symbol is the same, and a module compiled with the earlier header reads the lower
+        32 bits of the result
     */
-    DLLEXPORT int write(const QoreString *str, ExceptionSink* xsink);
+    DLLEXPORT int64 write(const QoreString *str, ExceptionSink* xsink);
 
     //! writes binary data to the file and returns the number of bytes written
     /** Qore-language exceptions can be thrown if the file is not opened
         @param b the binary data to write the file
         @param xsink if an error occurs, the Qore-language exception info will be added here
         @return returns the number of bytes written (-1 if an exception was thrown)
+
+        @since %Qore 3.0 returns an \c int64 instead of an \c int, which truncated the number of bytes of a write of
+        2 GiB or more; the exported symbol is the same, and a module compiled with the earlier header reads the lower
+        32 bits of the result
     */
-    DLLEXPORT int write(const BinaryNode* b, ExceptionSink* xsink);
+    DLLEXPORT int64 write(const BinaryNode* b, ExceptionSink* xsink);
 
     //! writes binary data to the file and returns the number of bytes written
     /** Qore-language exceptions can be thrown if the file is not opened
@@ -236,8 +244,12 @@ public:
         @param len the length of data to write to the file
         @param xsink if an error occurs, the Qore-language exception info will be added here
         @return returns the number of bytes written (-1 if an exception was thrown)
+
+        @since %Qore 3.0 returns an \c int64 instead of an \c int, which truncated the number of bytes of a write of
+        2 GiB or more; the exported symbol is the same, and a module compiled with the earlier header reads the lower
+        32 bits of the result
     */
-    DLLEXPORT int write(const void* data, size_t len, ExceptionSink* xsink);
+    DLLEXPORT int64 write(const void* data, size_t len, ExceptionSink* xsink);
 
     //! writes 1-byte binary integer data to the file and returns the number of bytes written (normally 1)
     /** Qore-language exceptions can be thrown if the file is not opened

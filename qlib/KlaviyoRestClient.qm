@@ -273,7 +273,8 @@ public class KlaviyoRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "klaviyo://a.klaviyo.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("KlaviyoRestClient",
+            "KlaviyoRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Klaviyo REST Connection",
             "short_desc": "A connection to the Klaviyo REST API",
             "desc": "A connection to [Klaviyo](https://www.klaviyo.com) for profiles, lists, segments, "
@@ -341,7 +342,7 @@ public class KlaviyoRestConnection inherits RestClient::RestConnection {
             # the registered app holds and revocable per install, where a private API key carries the whole
             # account and cannot be narrowed
             "required_options": "oauth2_client_id,oauth2_client_secret|token",
-        };
+        });
     }
 
     #! Creates the KlaviyoRestConnection object

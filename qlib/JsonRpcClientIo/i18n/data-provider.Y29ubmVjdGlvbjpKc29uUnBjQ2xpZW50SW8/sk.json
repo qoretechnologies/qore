@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to a JSON-RPC server using async I/O via HttpClientIo with automatic protocol negotiation (HTTP/3, HTTP/2, HTTP/1.1)",
+          "message": "Spojenie s serverom JSON-RPC pomocou asynchrónneho I/O cez HttpClientIo s automatickým vyhodnocovaním protokolu (HTTP/3, HTTP/2, HTTP/1.1)"
+        },
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.display_name": {
+          "source": "JSON-RPC (Async I/O) Connection",
+          "message": "Spojenie JSON-RPC (asynchrónne I/O)"
+        },
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.option.dmVyc2lvbg.desc": {
+          "source": "The JSON-RPC protocol version to use (\"1.0\", \"1.1\", or \"2.0\")",
+          "message": "Verzia protokolu JSON-RPC na použitie (\"1.0\", \"1.1\" alebo \"2.0\")"
+        },
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.option.dmVyc2lvbg.display_name": {
+          "source": "JSON-RPC Version",
+          "message": "Verzia JSON-RPC"
+        },
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.option.dmVyc2lvbg.short_desc": {
+          "source": "The JSON-RPC protocol version",
+          "message": "Verzia protokolu JSON-RPC"
+        },
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a JSON-RPC server using async I/O",
+          "message": "Pripojenie k serveru JSON-RPC pomocou asynchrónneho I/O"
+        }
+      }
+    }
+  }
+}

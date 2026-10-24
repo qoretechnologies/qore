@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [Klaviyo](https://www.klaviyo.com) for profiles, lists, segments, tags, campaigns, events and subscriptions.\n\n**Authentication** is the OAuth2 authorization code flow with `oauth2_client_id` and `oauth2_client_secret` from an app registered in Klaviyo's developer portal. Klaviyo requires PKCE and takes the client credentials as HTTP basic authentication on the token endpoint, both of which are set by default. The scopes requested are the ones the registered app holds; asking for one outside that set fails authorization before a user sees a consent screen.\n\nA **private API key** works as an alternative for an integration that only ever serves one account: set `token` to the key and `token_type` to `Klaviyo-API-Key`, which is how Klaviyo spells that credential. It carries the account's full permissions and cannot be scoped, so prefer OAuth2 where both are available.\n\n**The API revision is sent on every call** as `revision: 2026-07-15`, matching the description the actions are generated from. Klaviyo declares that header required on almost every operation, and a revision is removed two years after it ships, so it is never left to a default.\n\nKlaviyo is a trademark of Klaviyo, Inc.",
+          "message": "Підключення до [Klaviyo](https://www.klaviyo.com) для профілів, списків, сегментів, тегів, кампаній, подій та підписок.\n\n**Автентифікація** — це потік авторизації OAuth2 з кодом, де `oauth2_client_id` та `oauth2_client_secret` отримуються з додатку, зареєстрованого в розробницькому порталі Klaviyo. Klaviyo вимагає PKCE та передає облікові дані клієнта як HTTP basic аутентифікацію на точці отримання токенів, що встановлено за замовчуванням. Запитані дозволи — це ті, які має зареєстрований додаток; запит на дозвіл, якого немає у наборі, призведе до невдачі авторизації до того, як користувач побачить екран згоди.\n\n**Приватний ключ API** може використовуватися як альтернатива для інтеграції, яка працює лише з одним обліковим записом: встановіть `token` у ключ і `token_type` у `Klaviyo-API-Key`, як Klaviyo називає цей обліковий запис. Він має повні права на обліковий запис і не може бути обмежений, тому краще використовувати OAuth2, якщо обидва варіанти доступні.\n\n**Ревізія API відправляється на кожному виклику** як `revision: 2026-07-15`, що відповідає опису, з якого були згенеровані дії. Klaviyo вказує, що цей заголовок обов’язковий для майже всіх операцій, і ревізія видаляється через два роки після випуску, тому її ніколи не залишають за замовчуванням.\n\nKlaviyo — товарний знак Klaviyo, Inc."
+        },
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Klaviyo REST Connection",
+          "message": "Підключення до REST API Klaviyo"
+        },
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Klaviyo REST API",
+          "message": "Підключення до REST API Klaviyo"
+        }
+      }
+    }
+  }
+}

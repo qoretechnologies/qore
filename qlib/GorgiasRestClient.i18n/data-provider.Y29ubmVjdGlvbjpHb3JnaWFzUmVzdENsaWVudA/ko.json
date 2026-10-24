@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Gorgias REST API for customer support ticket management, customer data, and helpdesk operations",
+          "message": "고객 지원 티켓 관리, 고객 데이터 및 도움말 센터 운영을 위한 Gorgias REST API 연결"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Gorgias REST Connection",
+          "message": "Gorgias REST 연결"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "Your **subdomain** is the first part of your Gorgias URL.\n\nFor example, if you access Gorgias at `https://mycompany.gorgias.com`, your subdomain is `mycompany`.\n\n**How to find it:**\n1. Log in to your Gorgias helpdesk\n2. Look at the URL in your browser's address bar\n3. Copy the part before `.gorgias.com`",
+          "message": "**서브도메인**은 Gorgias URL의 첫 번째 부분입니다.\n\n예를 들어, `https://mycompany.gorgias.com`에서 Gorgias에 접속한다면, 서브도메인은 `mycompany`입니다.\n\n**찾는 방법:**\n1. Gorgias 도움말 센터에 로그인합니다\n2. 브라우저 주소 표시줄의 URL을 확인합니다\n3. `.gorgias.com` 앞의 부분을 복사합니다"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Finding Your Gorgias Subdomain",
+          "message": "Gorgias 서브도메인 찾기"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.desc": {
+          "source": "The subdomain for your Gorgias account.\n\nFor example, if your Gorgias URL is `https://mycompany.gorgias.com`, enter `mycompany` as the subdomain.\n\nThis is used to build the API base URL and OAuth2 endpoints.",
+          "message": "Gorgias 계정의 서브도메인입니다.\n\n예를 들어, Gorgias URL이 `https://mycompany.gorgias.com`이라면, 서브도메인으로 `mycompany`을 입력합니다.\n\n이 값은 API 기본 URL 및 OAuth2 엔드포인트를 구성하는 데 사용됩니다."
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.display_name": {
+          "source": "Gorgias Subdomain",
+          "message": "Gorgias 하위 도메인"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.short_desc": {
+          "source": "Your Gorgias account subdomain",
+          "message": "귀하의 Gorgias 계정 하위 도메인"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Gorgias REST API",
+          "message": "Gorgias REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

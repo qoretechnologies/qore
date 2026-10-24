@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Microsoft OneDrive REST API via Microsoft Graph for cloud file storage and management.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from your [Azure app registration](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps). The connection uses the `onedrive://` URL scheme",
+          "message": "クラウド上のファイルストレージおよび管理のため、Microsoft Graphを介してMicrosoft OneDrive REST APIに接続します。\n\nAzureアプリ登録のOAuth2資格情報（`oauth2_client_id` および `oauth2_client_secret`）が必要です。[Azureアプリ登録](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps)から取得してください。接続は `onedrive://` URLスキームを使用します。"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Microsoft OneDrive",
+          "message": "Microsoft OneDrive"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.allowed_values.c3RyaW5nOm9yZ2FuaXphdGlvbnM.display_name": {
+          "source": "Organizations (Work/School Only)",
+          "message": "組織（業務／学校専用）"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.allowed_values.c3RyaW5nOmNvbW1vbg.display_name": {
+          "source": "Common (All Account Types)",
+          "message": "共通（すべてのアカウントタイプ）"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.allowed_values.c3RyaW5nOmNvbnN1bWVycw.display_name": {
+          "source": "Consumers (Personal Only)",
+          "message": "消費者（個人専用）"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.desc": {
+          "source": "Azure AD tenant ID for authentication; use `common` for multi-tenant apps, `organizations` for work/school accounts only, `consumers` for personal accounts only, or provide a specific tenant ID or domain name",
+          "message": "認証用のAzure ADテナントID。マルチテナントアプリには `common` を、業務／学校アカウント専用には `organizations` を、個人アカウント専用には `consumers` を使用するか、特定のテナントIDまたはドメイン名を直接指定してください。"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.display_name": {
+          "source": "Tenant ID",
+          "message": "テナント ID"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.short_desc": {
+          "source": "Azure AD tenant ID",
+          "message": "Azure AD テナント ID"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Microsoft OneDrive REST API via Microsoft Graph",
+          "message": "Microsoft Graph経由のMicrosoft OneDrive REST APIへの接続"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.U2hhcmVQb2ludFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to Microsoft SharePoint via the Microsoft Graph API, for document libraries and lists.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from your [Azure app registration](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps). The connection uses the `sharepoint://` URL scheme",
+          "message": "Microsoft Graph API経由でMicrosoft SharePointへの接続（ドキュメントライブラリおよびリスト用）。\n\nOAuth2資格情報（`oauth2_client_id` および `oauth2_client_secret`）が必要です。[Azureアプリ登録](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps)から取得してください。接続には `sharepoint://` URLスキームが使用されます"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.U2hhcmVQb2ludFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Microsoft SharePoint",
+          "message": "Microsoft SharePoint"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.U2hhcmVQb2ludFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to Microsoft SharePoint via the Microsoft Graph API",
+          "message": "Microsoft Graph API経由でMicrosoft SharePointへの接続"
+        }
+      }
+    }
+  }
+}

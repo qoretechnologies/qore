@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.desc": {
+          "source": "A TCP or TLS connection to an MLLP endpoint for HL7 v2 message exchange",
+          "message": "TCP nebo TLS připojení k bodu MLLP pro výměnu zpráv HL7 v2"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.display_name": {
+          "source": "MLLP Connection",
+          "message": "Připojení MLLP"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connection timeout to use in milliseconds (default: 30 seconds)",
+          "message": "Časový limit připojení v milisekundách (výchozí: 30 sekund)"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Časový limit připojení"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "Časový limit připojení v milisekundách"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding used to decode and encode HL7 payloads",
+          "message": "Kódování znaků používané k dekódování a kódování dat HL7"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Payload Encoding",
+          "message": "Kódování dat"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The HL7 payload character encoding",
+          "message": "Kódování znaků dat HL7"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.bWF4X2ZyYW1lX3NpemU.desc": {
+          "source": "Rejects inbound MLLP frames larger than this byte count",
+          "message": "Odmítá příchozí rámy MLLP větší než tato velikost v bajtech"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.bWF4X2ZyYW1lX3NpemU.display_name": {
+          "source": "Maximum Frame Size",
+          "message": "Maximální velikost rámu"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.bWF4X2ZyYW1lX3NpemU.short_desc": {
+          "source": "The maximum inbound MLLP payload size in bytes",
+          "message": "Maximální velikost příchozího datového proudu MLLP v bajtech"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.dGltZW91dA.desc": {
+          "source": "The socket read/write timeout to use in milliseconds (default: 30 seconds)",
+          "message": "Časový limit pro čtení a zápis socketu v milisekundách (výchozí: 30 sekund)"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Časový limit I/O"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.dGltZW91dA.short_desc": {
+          "source": "The read/write timeout in milliseconds",
+          "message": "Časový limit pro čtení a zápis v milisekundách"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to an MLLP endpoint",
+          "message": "Spojení s koncovým bodem MLLP"
+        }
+      }
+    }
+  }
+}

@@ -231,7 +231,8 @@ public class GroqRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "groq://api.groq.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("GroqRestClient",
+            "GroqRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Groq REST Connection",
             "short_desc": "A connection to the Groq LPU inference REST API",
             "desc": "A connection to the [Groq](https://groq.com) LPU inference REST API.\n\n"
@@ -290,7 +291,7 @@ public class GroqRestConnection inherits RestClient::RestConnection {
                 }),
             },
             "required_options": "apikey",
-        };
+        });
 
         #! Default Groq ping method
         const DefaultPingMethod = "GET";

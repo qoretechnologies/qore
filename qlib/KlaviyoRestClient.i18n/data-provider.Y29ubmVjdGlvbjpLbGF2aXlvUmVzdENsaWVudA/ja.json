@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [Klaviyo](https://www.klaviyo.com) for profiles, lists, segments, tags, campaigns, events and subscriptions.\n\n**Authentication** is the OAuth2 authorization code flow with `oauth2_client_id` and `oauth2_client_secret` from an app registered in Klaviyo's developer portal. Klaviyo requires PKCE and takes the client credentials as HTTP basic authentication on the token endpoint, both of which are set by default. The scopes requested are the ones the registered app holds; asking for one outside that set fails authorization before a user sees a consent screen.\n\nA **private API key** works as an alternative for an integration that only ever serves one account: set `token` to the key and `token_type` to `Klaviyo-API-Key`, which is how Klaviyo spells that credential. It carries the account's full permissions and cannot be scoped, so prefer OAuth2 where both are available.\n\n**The API revision is sent on every call** as `revision: 2026-07-15`, matching the description the actions are generated from. Klaviyo declares that header required on almost every operation, and a revision is removed two years after it ships, so it is never left to a default.\n\nKlaviyo is a trademark of Klaviyo, Inc.",
+          "message": "[Klaviyo](https://www.klaviyo.com)への接続：プロフィール、リスト、セグメント、タグ、キャンペーン、イベント、購読機能。\n\n**認証**は、Klaviyoの開発者ポータルで登録されたアプリから`oauth2_client_id`と`oauth2_client_secret`を使用したOAuth2認可コードフローです。KlaviyoではPKCEが必須で、トークンエンドポイントではクライアント資格情報をHTTP Basic認証で受け取りますが、これらはデフォルトで設定されています。要求されるスコープは登録されたアプリが保有するものに限定され、その範囲外のスコープを要求すると、ユーザーが同意画面を見る前に認証が失敗します。\n\n**プライベートAPIキー**は、1つのアカウントにのみ対応する統合の代替手段として利用できます：`token`にキーを設定し、`token_type`を`Klaviyo-API-Key`に設定します。これはKlaviyoがその資格情報を表す方法です。このキーはアカウントのすべての権限を持ち、スコープを設定できません。両方が利用可能な場合、OAuth2を優先してください。\n\n**APIリビジョンはすべての呼び出しで送信されます**。`revision: 2026-07-15`として送信され、操作が生成される説明と一致します。Klaviyoはほぼすべての操作でこのヘッダーを必須としています。リビジョンはリリース後2年で削除されるため、デフォルトに任せることがありません。\n\nKlaviyoはKlaviyo, Inc.の商標です。"
+        },
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Klaviyo REST Connection",
+          "message": "Klaviyo REST接続"
+        },
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Klaviyo REST API",
+          "message": "Klaviyo REST APIへの接続"
+        }
+      }
+    }
+  }
+}

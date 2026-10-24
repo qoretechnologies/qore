@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.QXBvbGxvUmVzdENsaWVudA.scheme.QXBvbGxvUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Apollo REST API for B2B sales intelligence, contacts, accounts, deals, and data enrichment",
+          "message": "Una connessione all'API REST di Apollo per l'intelligenza commerciale B2B, contatti, account, affari e arricchimento dati"
+        },
+        "connection.QXBvbGxvUmVzdENsaWVudA.scheme.QXBvbGxvUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Apollo REST Connection",
+          "message": "Connessione REST di Apollo"
+        },
+        "connection.QXBvbGxvUmVzdENsaWVudA.scheme.QXBvbGxvUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Apollo REST API",
+          "message": "Una connessione all'API REST di Apollo"
+        }
+      }
+    }
+  }
+}

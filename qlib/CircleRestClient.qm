@@ -185,7 +185,8 @@ CircleRestClient circle({
 public class CircleRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("CircleRestClient",
+            "CircleRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Circle REST Connection",
             "short_desc": "A connection to the Circle REST API",
             "desc": "A connection to the Circle REST API for community management including "
@@ -201,6 +202,7 @@ public class CircleRestConnection inherits RestClient::RestConnection {
             "required_options": "apikey",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Generate Your API Token",
                     "intent": "info",
                     "content": "1. Log in to your Circle community at https://app.circle.so\n"
@@ -242,7 +244,7 @@ public class CircleRestConnection inherits RestClient::RestConnection {
                     "default_value": CircleRestClientBase::DefaultPingPath,
                 }),
             },
-        };
+        });
     }
 
     #! creates the CircleRestConnection object

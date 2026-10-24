@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Freshsales CRM REST API for managing contacts, accounts, deals, tasks, appointments, and notes.\n\n**To obtain your API key:**\n1. Log in to your Freshsales account\n2. Click your profile picture in the top-right corner\n3. Go to **Settings** > **API Settings**\n4. Copy your API key\n\n**To find your subdomain:**\nYour subdomain is the part before `.myfreshworks.com` in your Freshsales URL (e.g., `mycompany` from `https://mycompany.myfreshworks.com`)",
+          "message": "Una connessione all'API REST di Freshsales CRM per gestire contatti, account, affari, attività, appuntamenti e note.\n\n**Per ottenere la tua chiave API:**\n1. Accedi al tuo account Freshsales\n2. Clicca sulla tua immagine del profilo nell'angolo in alto a destra\n3. Vai su **Impostazioni** > **Impostazioni API**\n4. Copia la tua chiave API\n\n**Per trovare il tuo sottodominio:**\nIl tuo sottodominio è la parte prima di `.myfreshworks.com` nella tua URL di Freshsales (es. `mycompany` da `https://mycompany.myfreshworks.com`)"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Freshsales REST Connection",
+          "message": "Connessione REST di Freshsales"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Freshsales API key used for token authentication.\n\n**To obtain your API key:**\n1. Log in to your Freshsales account\n2. Click your profile picture in the top-right corner\n3. Go to **Settings** > **API Settings**\n4. Copy your API key\n\nRate limit: 1,000 API requests per hour per account",
+          "message": "La chiave API di Freshsales utilizzata per l'autenticazione con token.\n\n**Per ottenere la tua chiave API:**\n1. Accedi al tuo account Freshsales\n2. Clicca sulla tua immagine del profilo nell'angolo in alto a destra\n3. Vai su **Impostazioni** > **Impostazioni API**\n4. Copia la tua chiave API\n\nLimite di richiesta: 1.000 richieste API all'ora per account"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Chiave API"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Freshsales API key for authentication",
+          "message": "Chiave API di Freshsales per l'autenticazione"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.desc": {
+          "source": "The domain of your Freshsales account.\n\nYou can provide either:\n- Just the subdomain (e.g., `mycompany`)\n- The full domain (e.g., `mycompany-org.myfreshworks.com`)\n- A full URL (e.g., `https://mycompany-org.myfreshworks.com/crm/sales`)\n\nThe subdomain or domain is extracted automatically",
+          "message": "Il dominio del tuo account Freshsales.\n\nPuoi fornire:\n- Solo il sottodominio (es. `mycompany`)\n- Il dominio completo (es. `mycompany-org.myfreshworks.com`)\n- Un URL completo (es. `https://mycompany-org.myfreshworks.com/crm/sales`)\n\nIl sottodominio o il dominio vengono estratti automaticamente"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.display_name": {
+          "source": "Freshsales Domain",
+          "message": "Dominio Freshsales"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.short_desc": {
+          "source": "Your Freshsales subdomain or full domain",
+          "message": "Il tuo sottodominio o dominio Freshsales"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Freshsales CRM REST API",
+          "message": "Una connessione all'API REST di Freshsales CRM"
+        }
+      }
+    }
+  }
+}

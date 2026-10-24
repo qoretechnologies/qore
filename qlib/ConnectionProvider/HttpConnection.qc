@@ -166,7 +166,8 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         );
 
         #! Connection entry info
-        const hash<ConnectionSchemeInfo> ConnectionScheme = <ConnectionSchemeInfo>{
+        const hash<ConnectionSchemeInfo> ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ConnectionProvider",
+            "HttpConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "HTTP Connection",
             "short_desc": "A connection to a HTTP server",
             "desc": "A connectioas to a HTTP server",
@@ -388,7 +389,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
                         "and if the `password` option is also used",
                 },
             },
-        };
+        });
 
         #! HttpConnection object connection options
         const hash<string, bool> Options = map {$1: True}, keys ConnectionScheme.options;

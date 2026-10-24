@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the ShipStation REST API for shipping and fulfillment management.\n\nShipStation is a web-based shipping software that streamlines order fulfillment for e-commerce businesses. This integration enables managing orders, shipments, carriers, products, stores, and warehouses.\n\n**Important:** This integration uses the ShipStation **V1 API** and requires V1 API credentials (API Key + API Secret pair). ShipStation V2 API keys are not compatible.",
+          "message": "ShipStation REST API를 통한 배송 및 충전 관리 연결.\n\nShipStation은 전자상거래 기업의 주문 처리를 간소화하는 웹 기반 배송 소프트웨어입니다. 이 통합은 주문, 운송, 운송사, 제품, 스토어 및 창고를 관리할 수 있게 합니다.\n\n**중요:** 이 통합은 ShipStation **V1 API**를 사용하며, V1 API 자격 증명(-API 키 + API 비밀번호 쌍)이 필요합니다. ShipStation V2 API 키는 호환되지 않습니다."
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "ShipStation REST Connection",
+          "message": "ShipStation REST 연결"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires **ShipStation V1 API credentials** (an API Key + API Secret pair).\n\n**Steps to generate V1 API credentials:**\n1. Log in to ShipStation at https://app.shipstation.com\n2. Click the **gear icon** (Settings) in the top right corner\n3. Navigate to **Account > API Settings**\n4. Make sure **V1** is selected (not V2)\n5. Click **Generate API Keys** if you don't have existing credentials\n6. Copy both your **API Key** and **API Secret**\n\n**Important:**\n- The API Secret is only displayed once when generated; store your credentials securely\n- V1 API credentials are available on ShipStation **Gold, Scale, or higher-tier** plans\n- ShipStation also offers **V2 API keys** (a single token); these are **not compatible** with this integration",
+          "message": "이 통합은 **ShipStation V1 API 자격 증명**(API 키 + API 시크릿 쌍)이 필요합니다.\n\n**V1 API 자격 증명 생성 단계:**\n1. https://app.shipstation.com 에서 ShipStation에 로그인하세요\n2. 상단 오른쪽 모서리의 **기어 아이콘**(설정)을 클릭하세요\n3. **계정 > API 설정**으로 이동하세요\n4. **V1**이 선택되어 있는지 확인하세요 (V2가 아님)\n5. 기존 자격 증명이 없으면 **API 키 생성**을 클릭하세요\n6. **API 키**와 **API 시크릿**을 모두 복사하세요\n\n**중요:**\n- API 시크릿은 생성 시 한 번만 표시됩니다; 자격 증명을 안전하게 보관하세요\n- V1 API 자격 증명은 ShipStation **골드, 스케일, 또는 더 높은 등급** 플랜에서만 사용 가능합니다\n- ShipStation은 **V2 API 키**(단일 토큰)도 제공하지만, 이 통합과는 **호환되지 않습니다**"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Credentials",
+          "message": "API 자격 증명 확보 방법"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.desc": {
+          "source": "The ShipStation **V1** API key used as the username for HTTP Basic Auth.\n\n**To obtain your V1 API credentials:**\n1. Log in to ShipStation at https://app.shipstation.com\n2. Click the gear icon (Settings) in the top right\n3. Go to **Account > API Settings**\n4. Click 'Generate API Keys' if you don't have any\n5. Copy your API Key\n\n**Important:** This must be a V1 API key (part of an API Key + API Secret pair). ShipStation V2 API keys (single token) are not compatible with this integration. V1 API keys are available on ShipStation Gold, Scale, or higher-tier plans.",
+          "message": "HTTP 기본 인증의 사용자 이름으로 사용되는 ShipStation **V1** API 키입니다.\n\n**V1 API 자격 증명 확보 방법:**\n1. https://app.shipstation.com 에서 ShipStation에 로그인하세요\n2. 상단 오른쪽의 기어 아이콘(설정)을 클릭하세요\n3. **계정 > API 설정**으로 이동하세요\n4. 자격 증명이 없으면 'API 키 생성'을 클릭하세요\n5. API 키를 복사하세요\n\n**중요:** 이는 V1 API 키여야 합니다 (API 키 + API 시크릿 쌍의 일부). ShipStation V2 API 키(단일 토큰)는 이 통합과 호환되지 않습니다. V1 API 키는 ShipStation 골드, 스케일, 또는 더 높은 등급 플랜에서 사용 가능합니다."
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.short_desc": {
+          "source": "ShipStation V1 API key for authentication",
+          "message": "인증을 위한 ShipStation V1 API 키"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX3NlY3JldA.desc": {
+          "source": "The ShipStation **V1** API secret used as the password for HTTP Basic Auth.\n\n**To obtain your V1 API credentials:**\n1. Log in to ShipStation at https://app.shipstation.com\n2. Click the gear icon (Settings) in the top right\n3. Go to **Account > API Settings**\n4. Your API Secret is shown alongside your API Key\n\n**Note:** The API Secret is only shown once when generated. If you lose it, you'll need to generate new credentials.",
+          "message": "HTTP 기본 인증의 비밀번호로 사용되는 ShipStation **V1** API 시크릿입니다.\n\n**V1 API 자격 증명 확보 방법:**\n1. https://app.shipstation.com 에서 ShipStation에 로그인하세요\n2. 상단 오른쪽의 기어 아이콘(설정)을 클릭하세요\n3. **계정 > API 설정**으로 이동하세요\n4. API 시크릿은 API 키 옆에 표시됩니다\n\n**참고:** API 시크릿은 생성 시 한 번만 표시됩니다. 분실할 경우 새 자격 증명을 생성해야 합니다."
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX3NlY3JldA.display_name": {
+          "source": "API Secret",
+          "message": "API 시크릿"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX3NlY3JldA.short_desc": {
+          "source": "ShipStation V1 API secret for authentication",
+          "message": "인증을 위한 ShipStation V1 API 시크릿"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the ShipStation REST API",
+          "message": "ShipStation REST API에 연결합니다"
+        }
+      }
+    }
+  }
+}

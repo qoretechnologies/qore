@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.desc": {
+          "source": "A TCP or TLS connection to an MLLP endpoint for HL7 v2 message exchange",
+          "message": "Une connexion TCP ou TLS à un point de terminaison MLLP pour l'échange de messages HL7 v2"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.display_name": {
+          "source": "MLLP Connection",
+          "message": "Connexion MLLP"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connection timeout to use in milliseconds (default: 30 seconds)",
+          "message": "Délai d'attente de connexion en millisecondes (par défaut : 30 secondes)"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Délai d'expiration de connexion"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "Le délai d'expiration de connexion en millisecondes"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding used to decode and encode HL7 payloads",
+          "message": "Encodage des caractères utilisé pour décoder et encoder les charges utiles HL7"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Payload Encoding",
+          "message": "Encodage des charges utiles"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The HL7 payload character encoding",
+          "message": "Encodage des caractères des charges utiles HL7"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.bWF4X2ZyYW1lX3NpemU.desc": {
+          "source": "Rejects inbound MLLP frames larger than this byte count",
+          "message": "Rejette les trames MLLP entrantes dont la taille dépasse ce nombre d'octets"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.bWF4X2ZyYW1lX3NpemU.display_name": {
+          "source": "Maximum Frame Size",
+          "message": "Taille maximale de trame"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.bWF4X2ZyYW1lX3NpemU.short_desc": {
+          "source": "The maximum inbound MLLP payload size in bytes",
+          "message": "La taille maximale du contenu MLLP entrant en octets"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.dGltZW91dA.desc": {
+          "source": "The socket read/write timeout to use in milliseconds (default: 30 seconds)",
+          "message": "Le délai d'attente de lecture/écriture du socket en millisecondes (par défaut : 30 secondes)"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Délai d'expiration d'E/S"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.option.dGltZW91dA.short_desc": {
+          "source": "The read/write timeout in milliseconds",
+          "message": "Le délai d'attente de lecture/écriture en millisecondes"
+        },
+        "connection.TWxscFV0aWw.scheme.TWxscENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to an MLLP endpoint",
+          "message": "Une connexion à un point d'entrée MLLP"
+        }
+      }
+    }
+  }
+}

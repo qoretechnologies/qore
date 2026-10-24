@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [DeepSeek](https://platform.deepseek.com) REST API.\n\nRequires an API key for Bearer authentication.  Get your API key from the [DeepSeek Platform](https://platform.deepseek.com/api_keys).",
+          "message": "Spojenie s REST API [DeepSeek](https://platform.deepseek.com).\n\nVyžaduje API kľúč pre overenie typu Bearer. Získajte svoj API kľúč z [Platformy DeepSeek](https://platform.deepseek.com/api_keys)."
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "DeepSeek REST Connection",
+          "message": "Spojenie DeepSeek REST"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.allowed_values.c3RyaW5nOmRlZXBzZWVrLWZsYXNo.display_name": {
+          "source": "DeepSeek V4.1 Flash",
+          "message": "DeepSeek V4.1 Flash"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.allowed_values.c3RyaW5nOmRlZXBzZWVrLXY0LXBybw.display_name": {
+          "source": "DeepSeek V4 Pro",
+          "message": "DeepSeek V4 Pro"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "Model ID for chat through this connection. Use the app's `List Models` action to inspect available models. Custom model IDs are accepted.",
+          "message": "ID modelu pre čatovanie cez toto spojenie. Použite akciu `List Models` v aplikácii na prehľad dostupných modelov. Sú prijímané vlastné ID modelov."
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Chatovací model"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "DeepSeek chat model name",
+          "message": "Názov chatového modelu DeepSeek"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBp.allowed_values.c3RyaW5nOmJldGE.display_name": {
+          "source": "Beta API",
+          "message": "Beta API"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "Stable API",
+          "message": "Stabilné API"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBp.desc": {
+          "source": "Select the stable API or the beta API for prefix completion and strict tools.",
+          "message": "Vyberte stabilné API alebo beta API pre dokončovanie predpon a striktné nástroje."
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Verzia API na použitie"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The DeepSeek API key used for Bearer authentication.\n\nGet your API key from the [DeepSeek Platform](https://platform.deepseek.com/api_keys).",
+          "message": "Kľúč DeepSeek API používaný pre overenie cez Bearer.\n\nZískajte svoj kľúč API z [platformy DeepSeek](https://platform.deepseek.com/api_keys)."
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "DeepSeek API key for authentication",
+          "message": "DeepSeek kľúč API pre overenie"
+        },
+        "connection.RGVlcFNlZWtSZXN0Q2xpZW50.scheme.RGVlcFNlZWtSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the DeepSeek REST API",
+          "message": "Pripojenie k REST API DeepSeek"
+        }
+      }
+    }
+  }
+}

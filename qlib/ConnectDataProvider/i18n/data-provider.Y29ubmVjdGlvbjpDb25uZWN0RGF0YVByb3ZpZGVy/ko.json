@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.desc": {
+          "source": "Connect RPC protocol connection for DataStream 2.0",
+          "message": "DataStream 2.0용 RPC 프로토콜 연결"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.display_name": {
+          "source": "Connect RPC",
+          "message": "Connect RPC"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOmNib3I.desc": {
+          "source": "CBOR binary codec (`json` module >= 1.12 required)",
+          "message": "CBOR 바이너리 코덱 (`json` 모듈 ≥ 1.12 필요)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOmNib3I.display_name": {
+          "source": "CBOR",
+          "message": "CBOR"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "JSON codec (`json` module required)",
+          "message": "JSON 코덱 (`json` 모듈 필요)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOnlhbWw.desc": {
+          "source": "YAML codec with full Qore type fidelity",
+          "message": "완전한 Qore 타입 정밀도를 갖춘 YAML 코덱"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.desc": {
+          "source": "The codec for message serialization: `yaml` (default), `json`, or `cbor`",
+          "message": "메시지 직렬화용 코덱: `yaml` (기본값), `json`, 또는 `cbor`"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.display_name": {
+          "source": "Codec",
+          "message": "코덱"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.short_desc": {
+          "source": "Serialization codec",
+          "message": "직렬화 코덱"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.YWNjZXB0X2FsbF9jZXJ0cw.desc": {
+          "source": "Accept all server TLS certificates without validation (for testing only; default: True)",
+          "message": "모든 서버 TLS 인증서를 검증 없이 수락합니다 (테스트 전용; 기본값: True)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.YWNjZXB0X2FsbF9jZXJ0cw.display_name": {
+          "source": "Accept All Certs",
+          "message": "모든 인증서 수락"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.YWNjZXB0X2FsbF9jZXJ0cw.short_desc": {
+          "source": "Accept all TLS certificates",
+          "message": "모든 TLS 인증서 수락"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.allowed_values.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "Raw `deflate` compression (RFC 1951)",
+          "message": "원시 `deflate` 압축 (RFC 1951)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.allowed_values.c3RyaW5nOmRlZmxhdGU.display_name": {
+          "source": "Deflate",
+          "message": "Deflate"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.allowed_values.c3RyaW5nOmd6aXA.desc": {
+          "source": "Standard `gzip` compression (RFC 1952)",
+          "message": "표준 `gzip` 압축 (RFC 1952)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.allowed_values.c3RyaW5nOmd6aXA.display_name": {
+          "source": "Gzip",
+          "message": "Gzip"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.desc": {
+          "source": "Per-message compression encoding: `gzip` or `deflate`",
+          "message": "메시지별 압축 인코딩: `gzip` 또는 `deflate`"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Compression",
+          "message": "압축"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Compression encoding",
+          "message": "압축 인코딩"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmF1dG8.desc": {
+          "source": "Auto-detect protocol (tries HTTP/3, falls back to HTTP/2)",
+          "message": "프로토콜 자동 감지 (HTTP/3 시도 후 HTTP/2로 대체)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmgy.desc": {
+          "source": "HTTP/2 over TLS (`h2` ALPN negotiation)",
+          "message": "TLS를 통한 HTTP/2 (`h2` ALPN 협상)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmgy.display_name": {
+          "source": "HTTP/2",
+          "message": "HTTP/2"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmgz.desc": {
+          "source": "HTTP/3 over QUIC (requires QUIC support in the Qore runtime)",
+          "message": "QUIC를 통한 HTTP/3 (Qore 런타임에서 QUIC 지원 필요)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmgz.display_name": {
+          "source": "HTTP/3",
+          "message": "HTTP/3"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.desc": {
+          "source": "HTTP protocol: `auto` (default), `h2` (HTTP/2), or `h3` (HTTP/3)",
+          "message": "HTTP 프로토콜: `auto` (기본값), `h2` (HTTP/2), 또는 `h3` (HTTP/3)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.display_name": {
+          "source": "Protocol",
+          "message": "프로토콜"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.short_desc": {
+          "source": "HTTP protocol version",
+          "message": "HTTP 프로토콜 버전"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dGltZW91dF9tcw.desc": {
+          "source": "Default request timeout in milliseconds",
+          "message": "기본 요청 타임아웃 (밀리초)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dGltZW91dF9tcw.display_name": {
+          "source": "Timeout",
+          "message": "제한 시간"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dGltZW91dF9tcw.short_desc": {
+          "source": "Default timeout (ms)",
+          "message": "기본 타임아웃 (ms)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dXNlX2Rpc2NvdmVyeQ.desc": {
+          "source": "Enable automatic service discovery via Connect reflection (default: True)",
+          "message": "Connect 반사기를 통한 자동 서비스 탐색 활성화 (기본값: True)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dXNlX2Rpc2NvdmVyeQ.display_name": {
+          "source": "Use Discovery",
+          "message": "탐색 사용"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dXNlX2Rpc2NvdmVyeQ.short_desc": {
+          "source": "Enable service discovery",
+          "message": "서비스 탐색 활성화"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.short_desc": {
+          "source": "Connect RPC connection",
+          "message": "Connect RPC 연결"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Oracle NetSuite REST API",
+          "message": "連接到 Oracle NetSuite REST API 的連接"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Oracle NetSuite REST Connection",
+          "message": "Oracle NetSuite REST 連接"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.desc": {
+          "source": "The NetSuite account ID or company ID; if not provided, its value is auto-determined",
+          "message": "NetSuite 帳戶 ID 或公司 ID；若未提供，則自動判斷其值"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.display_name": {
+          "source": "NetSuite Account ID",
+          "message": "NetSuite 帳戶 ID"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "The NetSuite account ID or company ID",
+          "message": "NetSuite 帳戶 ID 或公司 ID"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.b2F1dGgyX2xvZ291dF91cmw.desc": {
+          "source": "The logout / deauthorize URL for OAuth2 tokens",
+          "message": "OAuth2 權杖的登出／取消授權 URL"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.b2F1dGgyX2xvZ291dF91cmw.display_name": {
+          "source": "OAuth2 Logout URL",
+          "message": "OAuth2 登出 URL"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.b2F1dGgyX2xvZ291dF91cmw.short_desc": {
+          "source": "The logout / deauthorize URL for OAuth2 tokens",
+          "message": "OAuth2 權杖的登出／取消授權 URL"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Oracle NetSuite REST API",
+          "message": "連接到 Oracle NetSuite REST API 的連接"
+        }
+      }
+    }
+  }
+}

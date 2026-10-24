@@ -41,6 +41,7 @@
 
 #include "qore/intern/QoreDatagramDispatcher.h"
 #include "qore/intern/QuicSessionTicketCache.h"
+#include "qore/intern/QuicKeepAlive.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/WebSocketStreamFrameState.h"
@@ -4399,18 +4400,22 @@ void QuicSession::updateKeepAliveLocked() {
 
     if (hasActiveApplicationStreamsLocked()) {
         // Streams are active — keep both sides' idle timers refreshed by
-        // PINGing every effective_idle/2.  Mirrors curl's
-        // cf_ngtcp2_setup_keep_alive (lib/vquic/curl_ngtcp2.c:180-215) but
-        // uses the effective value rather than peer's only.
+        // PINGing every effective_idle/2 (curl's cf_ngtcp2_setup_keep_alive,
+        // lib/vquic/curl_ngtcp2.c:180-215, with the effective value rather
+        // than the peer's only), and the path's UDP flow state by PINGing at
+        // least every QORE_QUIC_ACTIVE_STREAM_KEEP_ALIVE_NS: a NAT that forgot
+        // the flow after 30 s of silence dropped a response sent later until
+        // the PING at 37.5 s re-created it (QuicKeepAlive.h)
+        const ngtcp2_duration active_keep_ns = qore_quic_active_stream_keep_alive_ns(effective_idle);
         ASYNC_IO_TRACE("QuicSession::updateKeepAlive ACTIVE session=%lld "
             "peer_max_idle_ns=%llu effective_idle_ns=%llu keep_ns=%llu "
             "streams=%zu body_data=%zu streaming_body_data=%zu input_streams=%zu\n",
             (long long)session_id_,
             (unsigned long long)(rp ? rp->max_idle_timeout : 0),
             (unsigned long long)effective_idle,
-            (unsigned long long)keep_ns, streams_.size(), body_data_.size(),
+            (unsigned long long)active_keep_ns, streams_.size(), body_data_.size(),
             streaming_body_data_.size(), stream_input_streams_.size());
-        ngtcp2_conn_set_keep_alive_timeout(conn_, keep_ns);
+        ngtcp2_conn_set_keep_alive_timeout(conn_, active_keep_ns);
         // Active streams cancel any prior cooldown.
         keepalive_cooldown_until_ = 0;
         return;

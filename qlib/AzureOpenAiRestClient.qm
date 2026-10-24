@@ -328,7 +328,8 @@ public class AzureOpenAiRestClientIo inherits RestClientIo::RestClientIo, AzureO
 #! Azure OpenAI REST connection (registered under the \c "azure-openai" scheme)
 public class AzureOpenAiRestConnection inherits RestClient::RestConnection {
     public {
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("AzureOpenAiRestClient",
+            "AzureOpenAiRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Azure OpenAI Connection",
             "short_desc": "A connection to an Azure OpenAI Service resource",
             "desc": "Connect to an Azure OpenAI resource for model inference, files, batches, and retrieval. "
@@ -434,7 +435,7 @@ public class AzureOpenAiRestConnection inherits RestClient::RestConnection {
                 "ping_path": connection_option_override(RestConnection::ConnectionScheme.options.ping_path,
                     {"default_value": "/openai/v1/models"}),
             },
-        };
+        });
     }
 
     constructor(string name, string description, string url, hash<auto> attributes = {},

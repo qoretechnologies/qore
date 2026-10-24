@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.desc": {
+          "source": "A connection to a WebSocket server service",
+          "message": "Une connexion à un service serveur WebSocket"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.display_name": {
+          "source": "WebSocket Connection",
+          "message": "Connexion WebSocket"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.Y29va2ll.desc": {
+          "source": "An optional cookie value (e.g., `name=value` or `n1=v1; n2=v2`) sent as a `Cookie` header with the initial HTTP WebSocket upgrade request",
+          "message": "Une valeur de cookie facultative (par exemple `name=value` ou `n1=v1; n2=v2`) envoyée dans l’en-tête `Cookie` avec la requête initiale d’élévation WebSocket HTTP"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.Y29va2ll.display_name": {
+          "source": "Cookie",
+          "message": "Cookie"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.Y29va2ll.short_desc": {
+          "source": "Set a cookie value to send with the WebSocket handshake",
+          "message": "Définir une valeur de cookie à envoyer avec la négociation WebSocket"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.YXN5bmNfaW8.desc": {
+          "source": "Compatibility option; WebSocket socket I/O always uses the global AsyncSocketIoController, and False is ignored",
+          "message": "Option de compatibilité ; l’I/O socket WebSocket utilise toujours le contrôleur global AsyncSocketIoController, et False est ignoré"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.YXN5bmNfaW8.display_name": {
+          "source": "Async I/O",
+          "message": "I/O asynchrone"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.YXN5bmNfaW8.short_desc": {
+          "source": "Compatibility option; WebSocket socket I/O is always async",
+          "message": "Option de compatibilité ; l’I/O socket WebSocket est toujours asynchrone"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "no serialization is used",
+          "message": "aucune sérialisation n’est utilisée"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "utiliser la sérialisation JSON"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.allowed_values.c3RyaW5nOnlhbWw.desc": {
+          "source": "use only YAML serialization",
+          "message": "utiliser uniquement la sérialisation YAML"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.desc": {
+          "source": "Sets the data serialization option",
+          "message": "Définit l'option de sérialisation des données"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Sérialisation des données"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.ZGF0YQ.short_desc": {
+          "source": "Sets the data serialization option",
+          "message": "Définit l'option de sérialisation des données"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmFpc2VfcGluZ19ldmVudHM.desc": {
+          "source": "Raise events for WebSocket pings?",
+          "message": "Générer des événements pour les ping WebSocket ?"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmFpc2VfcGluZ19ldmVudHM.display_name": {
+          "source": "Raise Ping Events?",
+          "message": "Générer des événements de ping ?"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmFpc2VfcGluZ19ldmVudHM.short_desc": {
+          "source": "Raise events for WebSocket pings?",
+          "message": "Générer des événements pour les ping WebSocket ?"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmVjb25uZWN0.desc": {
+          "source": "Try to reconnect when the connection is closed or lost",
+          "message": "Tenter de se reconnecter lorsque la connexion est fermée ou perdue"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmVjb25uZWN0.display_name": {
+          "source": "Reconnect?",
+          "message": "Se reconnecter ?"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.cmVjb25uZWN0.short_desc": {
+          "source": "Try to reconnect when the connection is closed or lost",
+          "message": "Tenter de se reconnecter lorsque la connexion est fermée ou perdue"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW4.desc": {
+          "source": "Any token to use for the initial HTTP request to authenticate with the server",
+          "message": "Tout jeton à utiliser pour la requête HTTP initiale afin d'authentifier auprès du serveur"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Jeton d'autorisation"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token",
+          "message": "Définir un jeton d'autorisation"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "Le type de `token` à utiliser pour l'en-tête `Authorization` ; ignoré si aucune option `token` n'est définie"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "Type de jeton d'autorisation"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "Le type de jeton d'autorisation"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.allowed_values.aW50OjEz.desc": {
+          "source": "Version 13",
+          "message": "Version 13"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.allowed_values.aW50Ojg.desc": {
+          "source": "Version 8",
+          "message": "Version 8"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.desc": {
+          "source": "The WebSocket protocol version to use in the client",
+          "message": "La version du protocole WebSocket à utiliser dans le client"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.display_name": {
+          "source": "WebSocket Version",
+          "message": "Version WebSocket"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.option.dmVyc2lvbg.short_desc": {
+          "source": "Sets the WebSocket protocol version",
+          "message": "Définit la version du protocole WebSocket"
+        },
+        "connection.V2ViU29ja2V0Q2xpZW50.scheme.V2ViU29ja2V0Q29ubmVjdGlvbk9iamVjdA.short_desc": {
+          "source": "A connection to a WebSocket server service",
+          "message": "Une connexion à un service serveur WebSocket"
+        }
+      }
+    }
+  }
+}

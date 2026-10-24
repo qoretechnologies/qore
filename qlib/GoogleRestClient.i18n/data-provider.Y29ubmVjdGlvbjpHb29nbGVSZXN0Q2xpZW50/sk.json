@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R21haWxSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Gmail cloud REST API",
+          "message": "Spojenie s cloudu REST API Gmail"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R21haWxSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Gmail REST Connection",
+          "message": "Spojenie REST Gmail"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R21haWxSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmdtYWls.desc": {
+          "source": "Set REST client options for the Gmail API",
+          "message": "Nastavenie možností klienta REST pre API Gmail"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R21haWxSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Gmail cloud REST API",
+          "message": "Spojenie s cloudu REST API Gmail"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlQ2FsZW5kYXJSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Google Calendar cloud REST API",
+          "message": "Spojenie s cloudu REST API Google Kalendára"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlQ2FsZW5kYXJSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Google Calendar REST Connection",
+          "message": "Spojenie REST Google Kalendára"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlQ2FsZW5kYXJSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Google Calendar cloud REST API",
+          "message": "Spojenie s cloudu REST API Google Kalendára"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [Google Drive](https://www.google.com/drive/) cloud REST API",
+          "message": "Spojenie s cloudovým REST API [Google Drive](https://www.google.com/drive/)"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Google Drive REST Connection",
+          "message": "Spojenie Google Drive REST"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZl.desc": {
+          "source": "Set client options for the Google Drive API with access to all of the user's Drive content; required to reach files the application did not create",
+          "message": "Nastavte možnosti klienta pre Google Drive API s prístupom ku všetkým obsahom používateľovho Drive; vyžadované na prístup k súborom, ktoré aplikácia nevytvorila"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZl.display_name": {
+          "source": "Full Drive Access",
+          "message": "Plný prístup k Drive"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZl.short_desc": {
+          "source": "Access to all of the user's Drive content",
+          "message": "Prístup ku všetkým obsahom používateľovho Drive"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZlLWZpbGU.desc": {
+          "source": "Set client options for the Google Drive API with access only to files this application created, or that the user explicitly opened with it; **prefer this scope** where the integration only reads back what it wrote",
+          "message": "Nastavte možnosti klienta pre Google Drive API s prístupom iba k súborom, ktoré táto aplikácia vytvorila, alebo ktoré používateľ s ňou explicitne otvoril; **preferujte tento rozsah**, ak integrácia číta iba to, čo napísala"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZlLWZpbGU.display_name": {
+          "source": "Application Files Only",
+          "message": "Len súbory aplikácie"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZlLWZpbGU.short_desc": {
+          "source": "Access only to files this application created or the user opened with it",
+          "message": "Súborové prístupy: vytvorené alebo otvorené touto aplikáciou"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Google Drive cloud REST API",
+          "message": "Spojenie s cloudovým REST API Google Drive"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to Google cloud REST API services",
+          "message": "Spojenie s službami REST API Google Cloud"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Google REST Connection",
+          "message": "Google REST spojenie"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "No options are set",
+          "message": "Nepožadujú sa žiadne možnosti"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmNhbGVuZGFy.desc": {
+          "source": "Set REST client options for the Google calendar API",
+          "message": "Nastavenie možností klienta REST pre Google kalendár API"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.desc": {
+          "source": "Sets the API profile according to the Google API in use; this option will set the REST options if they are not already set (`oauth2_scopes`, `ping_body`, `ping_headers`, and `ping_method`); valid values:\n- `none`: no options configured (default)\n- `calendar`: set options for the Google calendar API",
+          "message": "Nastaví profil API podľa používaného Google API; táto možnosť nastaví možnosti REST, ak ešte nie sú nastavené (`oauth2_scopes`, `ping_body`, `ping_headers`, a `ping_method`); platné hodnoty:\n- `none`: žiadne možnosti nie sú nakonfigurované (predvolené)\n- `calendar`: nastavenie možností pre Google kalendár API"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.display_name": {
+          "source": "API Profile",
+          "message": "Profíl rozhrania API"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.short_desc": {
+          "source": "Sets the Google service API profile",
+          "message": "Nastavenie profilu API služby Google"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to Google cloud REST API services",
+          "message": "Spojenie s službami REST API Google Cloud"
+        }
+      }
+    }
+  }
+}

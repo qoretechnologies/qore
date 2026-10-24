@@ -35,10 +35,151 @@
 #include "qore/intern/qore_qf_private.h"
 #include "qore/intern/qore_encoding_private.h"
 #include "qore/intern/QC_FilePollOperation.h"
+#include "qore/intern/ql_debug.h"
 
+#include <cerrno>
 #include <climits>
+#include <cstdio>
 #include <memory>
 #include <string>
+
+#ifdef DEBUG
+std::atomic<qore_dbg_fd_wait_hook_t> qore_dbg_fd_wait_hook{nullptr};
+std::atomic<qore_dbg_file_read_ready_hook_t> qore_dbg_file_read_ready_hook{nullptr};
+
+void qore_dbg_fd_wait(int fd) {
+    if (qore_dbg_fd_wait_hook_t hook = qore_dbg_fd_wait_hook.load()) {
+        hook(fd);
+    }
+}
+
+void qore_dbg_file_read_ready(int fd) {
+    if (qore_dbg_file_read_ready_hook_t hook = qore_dbg_file_read_ready_hook.load()) {
+        hook(fd);
+    }
+}
+#endif
+
+int qore_fd_wait_ready(int fd, bool read, ExceptionSink* xsink, const char* operation) {
+#ifdef DEBUG
+    qore_dbg_fd_wait(fd);
+#endif
+#ifdef HAVE_POLL
+    // on Linux and macOS, readiness means that a read returns data or the end of the input, and that a write of up
+    // to PIPE_BUF bytes to a pipe or a named pipe is taken whole and a longer one in part (see FileStreamIo.h), so
+    // the read or write that follows does not return EAGAIN again, unless another holder of the descriptor has taken
+    // the data or the room first; the next wait then waits for more
+    struct pollfd pfd = {fd, static_cast<short>(read ? POLLIN : POLLOUT), 0};
+    if (xsink) {
+        // the wait ends at once when the thread is cancelled or its Program is interrupted; a named pipe is waited on
+        // with select(2) on Darwin, where poll(2) misses its hang-up (see QorePollCompat.h)
+        int rc = qore_cancellable_poll(&pfd, 1, -1, xsink, operation);
+        if (rc == QORE_POLL_CANCELLED) {
+            return QORE_POLL_CANCELLED;
+        }
+        return rc < 0 ? -1 : 0;
+    }
+    while (true) {
+        int rc = qore_poll_compat(&pfd, 1, -1);
+        if (rc >= 0) {
+            return 0;
+        }
+        if (errno != EINTR) {
+            return -1;
+        }
+    }
+#else
+    (void)fd;
+    (void)read;
+    (void)xsink;
+    (void)operation;
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+
+int qore_fd_write_all(int fd, const void* data, size_t len, ExceptionSink* xsink, const char* operation) {
+    const char* p = static_cast<const char*>(data);
+    size_t written = 0;
+    // only a wait for room is a cancellation point: output that the descriptor takes at once is written as before,
+    // also by a thread that has been cancelled
+    while (written < len) {
+        ssize_t rc = ::write(fd, p + written, std::min(len - written, QORE_FD_IO_MAX_SIZE));
+        if (rc > 0) {
+            written += static_cast<size_t>(rc);
+            continue;
+        }
+        if (!rc) {
+            // write(2) returns 0 only for an empty write
+            errno = EIO;
+            return -1;
+        }
+        if (errno == EINTR) {
+            continue;
+        }
+        if (qore_qf_private::wouldBlock(errno)) {
+            int wait_rc = qore_fd_wait_ready(fd, false, xsink, operation);
+            if (wait_rc) {
+                return wait_rc;
+            }
+            continue;
+        }
+        return -1;
+    }
+    return 0;
+}
+
+#ifndef _Q_WINDOWS
+namespace {
+//! holds the lock of a C stdio stream, so that the text written is not mixed with other output to the stream
+class QoreStdioStreamLocker {
+public:
+    QoreStdioStreamLocker(FILE* fp) : fp(fp) {
+        flockfile(fp);
+    }
+
+    ~QoreStdioStreamLocker() {
+        funlockfile(fp);
+    }
+
+    QoreStdioStreamLocker(const QoreStdioStreamLocker&) = delete;
+    QoreStdioStreamLocker& operator=(const QoreStdioStreamLocker&) = delete;
+
+private:
+    FILE* fp;
+};
+}
+#endif
+
+int qore_stdio_write(FILE* fp, const char* data, size_t len, ExceptionSink* xsink, const char* operation) {
+#ifdef _Q_WINDOWS
+    // descriptors are not nonblocking on Windows; the text is written with the stream
+    (void)xsink;
+    (void)operation;
+    int rc = (len && fwrite(data, 1, len, fp) != len) ? -1 : 0;
+    if (fflush(fp)) {
+        rc = -1;
+    }
+    return rc;
+#else
+    QoreStdioStreamLocker locker(fp);
+    int fd = fileno(fp);
+    // text that other code has left in the stream's buffer is written first, so that the output stays in order; a
+    // flush that finds a nonblocking descriptor full is made again once there is room: a C library that keeps the
+    // text that it could not write writes it then (the GNU C library drops it)
+    while (fflush(fp)) {
+        if (!qore_qf_private::wouldBlock(errno)) {
+            break;
+        }
+        clearerr(fp);
+        int wait_rc = qore_fd_wait_ready(fd, false, xsink, operation);
+        if (wait_rc) {
+            return wait_rc;
+        }
+    }
+    return qore_fd_write_all(fd, data, len, xsink, operation);
+#endif
+}
 
 class FileReadPollState : public AbstractPollState {
 public:
@@ -82,7 +223,7 @@ public:
             }
             ssize_t rc = ::read(file->fd,
                 reinterpret_cast<void*>(const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + received)),
-                to_read);
+                std::min(to_read, QORE_FD_IO_MAX_SIZE));
 
             if (rc >= 0) {
                 // the end of a named pipe is recorded for the file's later waits (see qore_qf_private::fifo_end_read)
@@ -284,11 +425,11 @@ int qore_qf_private::setNonBlockingIo(bool non_blocking, ExceptionSink* xsink) {
     return 0;
 }
 
-int qore_qf_private::readUnicode(int* n_len) const {
+int qore_qf_private::readUnicode(ExceptionSink* xsink, int* n_len) const {
     // the width of a character in any encoding is at most UCHAR_MAX bytes
     char buf[UCHAR_MAX];
     assert(charset->getMaxCharWidth() <= static_cast<int>(sizeof(buf)));
-    if (read(buf, 1) != 1) {
+    if (read(buf, 1, xsink) != 1) {
         return -1;
     }
 
@@ -299,7 +440,7 @@ int qore_qf_private::readUnicode(int* n_len) const {
             return -1;
         }
         for (int i = 1; i < len; ++i) {
-            if (read(&buf[i], 1) != 1) {
+            if (read(&buf[i], 1, xsink) != 1) {
                 return -1;
             }
         }
@@ -757,7 +898,7 @@ QoreStringNode* QoreFile::getchar(ExceptionSink* xsink) {
 
         SimpleRefHolder<QoreStringNode> str(new QoreStringNode(priv->charset));
 
-        int c = priv->readChar();
+        int c = priv->readChar(xsink);
         if (c < 0) {
             return nullptr;
         }
@@ -782,8 +923,12 @@ QoreStringNode* QoreFile::getchar(ExceptionSink* xsink) {
         assert(rc < 0);
         rc = -rc;
         while (--rc) {
-            c = priv->readChar();
+            c = priv->readChar(xsink);
             if (c < 0) {
+                // a wait for data that was cancelled has raised its exception
+                if (*xsink) {
+                    return nullptr;
+                }
                 xsink->raiseException("FILE-GETCHAR-ERROR", "invalid multi-byte character received: EOF "
                     "encountered after %lu byte%s read of a %lu byte string with %s encoding", str->strlen(),
                     str->strlen() == 1 ? "" : "s", str->strlen() + rc + 1, priv->charset->getCode());
@@ -805,7 +950,7 @@ QoreStringNode* QoreFile::getchar() {
         if (!priv->is_open)
             return nullptr;
 
-        c = priv->readChar();
+        c = priv->readChar(nullptr);
     }
 
     if (c < 0)
@@ -816,7 +961,7 @@ QoreStringNode* QoreFile::getchar() {
     return str;
 }
 
-int QoreFile::write(const void* data, size_t len, ExceptionSink* xsink) {
+int64 QoreFile::write(const void* data, size_t len, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     if (priv->checkNonBlock(xsink) || priv->checkWriteOpen(xsink)) {
         return -1;
@@ -829,7 +974,7 @@ int QoreFile::write(const void* data, size_t len, ExceptionSink* xsink) {
     return priv->write(data, len, xsink);
 }
 
-int QoreFile::write(const QoreString *str, ExceptionSink* xsink) {
+int64 QoreFile::write(const QoreString *str, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     if (priv->checkNonBlock(xsink) || priv->checkWriteOpen(xsink)) {
         return -1;
@@ -848,7 +993,7 @@ int QoreFile::write(const QoreString *str, ExceptionSink* xsink) {
     return priv->write(wstr->c_str(), wstr->strlen(), xsink);
 }
 
-int QoreFile::write(const BinaryNode* b, ExceptionSink* xsink) {
+int64 QoreFile::write(const BinaryNode* b, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     if (priv->checkNonBlock(xsink) || priv->checkWriteOpen(xsink)) {
         return -1;
@@ -1025,7 +1170,7 @@ int QoreFile::writei4(int i, ExceptionSink* xsink) {
 int QoreFile::writei8(int64 i, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     i = i8MSB(i);
-    return priv->writeCheck((char *)&i, 4, xsink);
+    return priv->writeCheck((char *)&i, 8, xsink);
 }
 
 int QoreFile::writei2LSB(short i, ExceptionSink* xsink) {
@@ -1043,13 +1188,13 @@ int QoreFile::writei4LSB(int i, ExceptionSink* xsink) {
 int QoreFile::writei8LSB(int64 i, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     i = i8LSB(i);
-    return priv->writeCheck((char *)&i, 4, xsink);
+    return priv->writeCheck((char *)&i, 8, xsink);
 }
 
 int QoreFile::readu1(unsigned char *val, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     int rc = priv->readCheck(xsink, val, 1);
-    if (rc <= 0)
+    if (rc != 1)
         return -1;
     return 0;
 }
@@ -1057,7 +1202,7 @@ int QoreFile::readu1(unsigned char *val, ExceptionSink* xsink) {
 int QoreFile::readu2(unsigned short *val, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     int rc = priv->readCheck(xsink, val, 2);
-    if (rc <= 0)
+    if (rc != 2)
         return -1;
 
     *val = ntohs(*val);
@@ -1067,7 +1212,7 @@ int QoreFile::readu2(unsigned short *val, ExceptionSink* xsink) {
 int QoreFile::readu4(unsigned int *val, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     int rc = priv->readCheck(xsink, val, 4);
-    if (rc <= 0)
+    if (rc != 4)
         return -1;
 
     *val = ntohl(*val);
@@ -1077,7 +1222,7 @@ int QoreFile::readu4(unsigned int *val, ExceptionSink* xsink) {
 int QoreFile::readu2LSB(unsigned short *val, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     int rc = priv->readCheck(xsink, val, 2);
-    if (rc <= 0)
+    if (rc != 2)
         return -1;
 
     *val = LSBi2(*val);
@@ -1087,7 +1232,7 @@ int QoreFile::readu2LSB(unsigned short *val, ExceptionSink* xsink) {
 int QoreFile::readu4LSB(unsigned int *val, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     int rc = priv->readCheck(xsink, val, 4);
-    if (rc <= 0)
+    if (rc != 4)
         return -1;
 
     *val = LSBi4(*val);
@@ -1097,7 +1242,7 @@ int QoreFile::readu4LSB(unsigned int *val, ExceptionSink* xsink) {
 int QoreFile::readi1(char *val, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     int rc = priv->readCheck(xsink, val, 1);
-    if (rc <= 0)
+    if (rc != 1)
         return -1;
     return 0;
 }
@@ -1105,7 +1250,7 @@ int QoreFile::readi1(char *val, ExceptionSink* xsink) {
 int QoreFile::readi2(short *val, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     int rc = priv->readCheck(xsink, val, 2);
-    if (rc <= 0)
+    if (rc != 2)
         return -1;
 
     *val = ntohs(*val);
@@ -1115,7 +1260,7 @@ int QoreFile::readi2(short *val, ExceptionSink* xsink) {
 int QoreFile::readi4(int *val, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     int rc = priv->readCheck(xsink, val, 4);
-    if (rc <= 0)
+    if (rc != 4)
         return -1;
 
     *val = ntohl(*val);
@@ -1125,7 +1270,7 @@ int QoreFile::readi4(int *val, ExceptionSink* xsink) {
 int QoreFile::readi8(int64 *val, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     int rc = priv->readCheck(xsink, val, 8);
-    if (rc <= 0)
+    if (rc != 8)
         return -1;
 
     *val = MSBi8(*val);
@@ -1135,7 +1280,7 @@ int QoreFile::readi8(int64 *val, ExceptionSink* xsink) {
 int QoreFile::readi2LSB(short *val, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     int rc = priv->readCheck(xsink, val, 2);
-    if (rc <= 0)
+    if (rc != 2)
         return -1;
 
     *val = LSBi2(*val);
@@ -1145,7 +1290,7 @@ int QoreFile::readi2LSB(short *val, ExceptionSink* xsink) {
 int QoreFile::readi4LSB(int *val, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     int rc = priv->readCheck(xsink, val, 4);
-    if (rc <= 0)
+    if (rc != 4)
         return -1;
 
     *val = LSBi4(*val);
@@ -1155,7 +1300,7 @@ int QoreFile::readi4LSB(int *val, ExceptionSink* xsink) {
 int QoreFile::readi8LSB(int64 *val, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     int rc = priv->readCheck(xsink, val, 8);
-    if (rc <= 0)
+    if (rc != 8)
         return -1;
 
     *val = LSBi8(*val);

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the EasyPost REST API for shipping label generation, tracking, address verification, rate shopping, and multi-carrier fulfillment.\n\nEasyPost provides a unified API across 100+ carriers (USPS, UPS, FedEx, DHL, and more).\n\n**Authentication:** A single API key is used as the HTTP Basic Auth username (with an empty password).\n\n**Test vs. production keys:**\n- Test keys (prefixed `EZTK...`) only return mocked label/tracker data and are free\n- Production keys (prefixed `EZAK...`) bill the EasyPost wallet for real shipments",
+          "message": "배송 라벨 생성, 추적, 주소 검증, 요금 비교, 다중 운송사 출고를 위한 EasyPost REST API에 연결.\n\nEasyPost는 100개 이상의 운송사(USPS, UPS, FedEx, DHL 등)를 통합한 단일 API를 제공합니다.\n\n**인증:** HTTP 기본 인증 사용자 이름으로 단일 API 키를 사용하며, 비밀번호는 비워둡니다.\n\n**테스트 키 vs. 생산 키:**\n- 테스트 키(`EZTK...`로 시작)는 모의 라벨/추적 데이터만 반환하며 무료입니다\n- 생산 키(`EZAK...`로 시작)는 실제 운송에 대해 EasyPost 지갑에서 청구됩니다."
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "EasyPost REST Connection",
+          "message": "EasyPost REST 연결"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your EasyPost account at https://www.easypost.com/account/api-keys\n2. You will see two sets of keys:\n   - **Test keys** (prefixed `EZTK...`): free, return mocked label/tracker data; use these for development and integration testing\n   - **Production keys** (prefixed `EZAK...`): bill the EasyPost wallet for real shipments; use these only when you are ready to ship live\n3. Copy the appropriate key for your environment\n\n**Important:**\n- Production keys incur real charges; treat them as secrets\n- Test keys cannot purchase real labels or generate real tracking numbers\n- The API key is used as the HTTP Basic Auth username with an empty password",
+          "message": "1. https://www.easypost.com/account/api-keys 에서 EasyPost 계정에 로그인합니다\n2. 두 가지 키 세트를 확인할 수 있습니다:\n   - **테스트 키**(`EZTK...`로 시작): 무료이며, 모의 라벨/추적 데이터를 반환합니다. 개발 및 통합 테스트에 사용하세요\n   - **생산 키**(`EZAK...`로 시작): 실제 운송에 대해 EasyPost 지갑에서 청구됩니다. 실제 배송을 시작할 때만 사용하세요\n3. 환경에 맞는 적절한 키를 복사합니다\n\n**중요:**\n- 생산 키는 실제 비용이 발생하므로 비밀로 취급하세요\n- 테스트 키는 실제 라벨을 구매하거나 실제 추적 번호를 생성할 수 없습니다\n- API 키는 비밀번호가 비어 있는 HTTP 기본 인증 사용자 이름으로 사용됩니다"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your EasyPost API Key",
+          "message": "EasyPost API 키를 얻는 방법"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Your EasyPost API key. Test keys are prefixed `EZTK...` and only return mocked label/tracker data; production keys are prefixed `EZAK...` and bill the wallet for real shipments. Obtain a key at https://www.easypost.com/account/api-keys.",
+          "message": "귀하의 EasyPost API 키. 테스트 키는 `EZTK...`로 시작하며, 가짜 레이블/트래커 데이터만 반환합니다. 프로덕션 키는 `EZAK...`로 시작하며, 실제 운송에 대해 지갑에서 청구됩니다. 키는 https://www.easypost.com/account/api-keys 에서 획득할 수 있습니다."
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "EasyPost API key for HTTP Basic Auth",
+          "message": "HTTP Basic 인증용 EasyPost API 키"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the EasyPost REST API",
+          "message": "EasyPost REST API에 연결"
+        }
+      }
+    }
+  }
+}

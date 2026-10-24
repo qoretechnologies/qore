@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Anthropic Claude REST API.\n\nRequires an API key (set as `apikey`) from the [Anthropic Console](https://console.anthropic.com/). The connection uses the `anthropic://` URL scheme and automatically sets the required `anthropic-version` header on all API requests",
+          "message": "Połączenie z interfejsem API REST Anthropic Claude.\n\nWymaga klucza API (ustawionego jako `apikey`) z [Konsoli Anthropic](https://console.anthropic.com/). Połączenie używa schematu URL `anthropic://` i automatycznie ustawia wymagany nagłówek `anthropic-version` we wszystkich żądaniach API"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Anthropic REST Connection",
+          "message": "Połączenie REST Anthropic"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Anthropic chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `claude-opus-5` (the default), `claude-sonnet-5`, `claude-haiku-4-5`",
+          "message": "Model czatowy Anthropic używany przez klienty LLM, gdy ta połączenie jest wybrane do czatu.\n\nModele czatowe to osobna rodzina od modeli embeddingowych i nie mogą być używane zamiennie.\n\nPrzykładowe wartości: `claude-opus-5` (domyślna), `claude-sonnet-5`, `claude-haiku-4-5`"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Model czatowy"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Anthropic chat model name",
+          "message": "Nazwa modelu czatowego Anthropic"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YW50aHJvcGljX3ZlcnNpb24.desc": {
+          "source": "The anthropic-version header value sent with all API requests",
+          "message": "Wartość nagłówka anthropic-version wysyłana z każdym żądaniem API"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YW50aHJvcGljX3ZlcnNpb24.display_name": {
+          "source": "Anthropic Version",
+          "message": "Wersja Anthropic"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YW50aHJvcGljX3ZlcnNpb24.short_desc": {
+          "source": "The anthropic-version header value",
+          "message": "Wartość nagłówka anthropic-version"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The API version to use",
+          "message": "Wersja API do użycia"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Wersja API"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Wersja API do użycia"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Anthropic API key used for authentication; sent as the `x-api-key` header.\n\nGet your API key from the [Anthropic Console](https://console.anthropic.com/)",
+          "message": "Klucz do API Anthropic używany do uwierzytelniania; wysyłany jako nagłówek `x-api-key`.\n\nPobierz swój klucz API w [Konsoli Anthropic](https://console.anthropic.com/)"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klucz API"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Anthropic API key for authentication",
+          "message": "Klucz API Anthropic do uwierzytelniania"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Anthropic Claude REST API",
+          "message": "Połączenie z REST API Anthropic Claude"
+        }
+      }
+    }
+  }
+}

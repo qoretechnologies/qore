@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Mews REST API",
+          "message": "與 Mews REST API 的連接"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Mews REST Connection",
+          "message": "Mews REST 連接"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50.desc": {
+          "source": "The Mews client value for requests",
+          "message": "請求所用的 Mews 客戶端值"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50.display_name": {
+          "source": "Mews Client",
+          "message": "Mews 客戶端"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50.short_desc": {
+          "source": "The Mews client value for requests",
+          "message": "請求所用的 Mews 客戶端值"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50X3Rva2Vu.desc": {
+          "source": "The Mews client token for access to the given Mews instance",
+          "message": "用於存取指定 Mews 實例的 Mews 客戶端權杖"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50X3Rva2Vu.display_name": {
+          "source": "Mews Client Token",
+          "message": "Mews 客戶端權杖"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50X3Rva2Vu.short_desc": {
+          "source": "The Mews client token for access to the given Mews instance",
+          "message": "用於存取指定 Mews 實例的 Mews 客戶端權杖"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.YWNjZXNzX3Rva2Vu.desc": {
+          "source": "The Mews account token for access to the given Mews instance",
+          "message": "用於存取指定 Mews 實例的 Mews 帳戶權杖"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.YWNjZXNzX3Rva2Vu.display_name": {
+          "source": "Mews Account Token",
+          "message": "Mews 帳戶權杖"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.YWNjZXNzX3Rva2Vu.short_desc": {
+          "source": "The Mews account token for access to the given Mews instance",
+          "message": "用於存取指定 Mews 實例的 Mews 帳戶權杖"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Mews REST API",
+          "message": "與 Mews REST API 的連接"
+        }
+      }
+    }
+  }
+}

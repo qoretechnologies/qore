@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.VW5ib3VuY2VSZXN0Q2xpZW50.scheme.VW5ib3VuY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Unbounce REST API for landing pages, popups, sticky bars, leads, form submissions, and A/B testing",
+          "message": "Spojenie s Unbounce REST API pre webové stránky, pop-up okná, prilepené lišty, vedúce údaje, odoslanie formulárov a A/B testovanie"
+        },
+        "connection.VW5ib3VuY2VSZXN0Q2xpZW50.scheme.VW5ib3VuY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Unbounce REST Connection",
+          "message": "Unbounce REST spojenie"
+        },
+        "connection.VW5ib3VuY2VSZXN0Q2xpZW50.scheme.VW5ib3VuY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Unbounce REST API",
+          "message": "Spojenie s Unbounce REST API"
+        }
+      }
+    }
+  }
+}

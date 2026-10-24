@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started), LlamaIndex's document platform: parsing documents into markdown, text and structured items, extracting structured data against a schema, classifying documents against rules, and splitting a document that holds many.\n\nRequires an API key for Bearer authentication.  Get your API key from the [LlamaCloud dashboard](https://cloud.llamaindex.ai/).\n\nAn API key belongs to one region and is rejected by the other.  When the configured region rejects the key, the connection tries the other known region on the next ping and moves itself to whichever one accepts it.",
+          "message": "Połączenie z [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started), platformą dokumentów LlamaIndex: przetwarzanie dokumentów na markdown, tekst i elementy strukturalne, wyodrębnianie danych strukturalnych na podstawie schematu, klasyfikacja dokumentów według reguł oraz dzielenie dokumentu zawierającego wiele elementów.\n\nWymaga klucza API do uwierzytelniania typu Bearer. Pobierz swój klucz API z [pulpitu LlamaCloud](https://cloud.llamaindex.ai/).\n\nKlucz API należy do jednego regionu i jest odrzucany przez inny. Gdy skonfigurowany region odrzuci klucz, połączenie spróbuje drugiego znanego regionu podczas kolejnej próby i przeniesie się do tego, który go zaakceptuje."
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "LlamaParse Connection",
+          "message": "Połączenie LlamaParse"
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The LlamaParse API key used for Bearer authentication.",
+          "message": "Klucz interfejsu API LlamaParse używany do uwierzytelniania typu Bearer."
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klucz API"
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "LlamaParse API key (Bearer token)",
+          "message": "Klucz interfejsu API LlamaParse (token Bearer)"
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the LlamaIndex Cloud document APIs",
+          "message": "Połączenie z interfejsami API dokumentów LlamaIndex Cloud"
+        }
+      }
+    }
+  }
+}

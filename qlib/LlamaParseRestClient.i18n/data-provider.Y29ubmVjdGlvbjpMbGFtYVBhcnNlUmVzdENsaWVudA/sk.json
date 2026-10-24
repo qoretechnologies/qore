@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started), LlamaIndex's document platform: parsing documents into markdown, text and structured items, extracting structured data against a schema, classifying documents against rules, and splitting a document that holds many.\n\nRequires an API key for Bearer authentication.  Get your API key from the [LlamaCloud dashboard](https://cloud.llamaindex.ai/).\n\nAn API key belongs to one region and is rejected by the other.  When the configured region rejects the key, the connection tries the other known region on the next ping and moves itself to whichever one accepts it.",
+          "message": "Spojenie s [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started), platformou dokumentov LlamaIndex: spracovanie dokumentov na markdown, text a štruktúrované položky, extrakcia štruktúrovaných dát podľa schémy, triedenie dokumentov podľa pravidiel a rozdelenie dokumentu obsahujúceho viacero položiek.\n\nVyžaduje API kľúč pre overenie Bearer. Získajte svoj API kľúč na [dashboard LlamaCloud](https://cloud.llamaindex.ai/).\n\nAPI kľúč patrí jednej oblasti a je zamietnutý v druhej. Keď je konfigurovaná oblasť kľúč zamietnu, spojenie sa pokúsi o inú známu oblasť pri ďalšom pingovaní a presunie sa do tej, ktorá ho prijme."
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "LlamaParse Connection",
+          "message": "Spojenie LlamaParse"
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The LlamaParse API key used for Bearer authentication.",
+          "message": "API kľúč LlamaParse používaný pre overenie Bearer."
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "LlamaParse API key (Bearer token)",
+          "message": "API kľúč LlamaParse (Bearer token)"
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the LlamaIndex Cloud document APIs",
+          "message": "Spojenie s dokumentovými rozhraniami LlamaIndex Cloud"
+        }
+      }
+    }
+  }
+}

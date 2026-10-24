@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Firecrawl REST Connection",
+          "message": "Firecrawl REST Connection"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Firecrawl REST API",
+          "message": "A connection to the Firecrawl REST API"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Firecrawl REST API for web scraping, crawling, and data extraction",
+          "message": "A connection to the Firecrawl REST API for web scraping, crawling, and data extraction"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Firecrawl API Key",
+          "message": "How to Get Your Firecrawl API Key"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Firecrawl, you need an API key:\n\n1. Sign in to your account at [firecrawl.dev](https://www.firecrawl.dev)\n2. Navigate to your **Dashboard**\n3. Find or generate your API key\n4. Copy the key (it starts with `fc-`)\n\nKeep your API key secure and never share it publicly.",
+          "message": "To connect to Firecrawl, you need an API key:\n\n1. Sign in to your account at [firecrawl.dev](https://www.firecrawl.dev)\n2. Navigate to your **Dashboard**\n3. Find or generate your API key\n4. Copy the key (it starts with `fc-`)\n\nKeep your API key secure and never share it publicly."
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API Key"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Firecrawl API key for authentication",
+          "message": "Firecrawl API key for authentication"
+        },
+        "connection.RmlyZWNyYXdsUmVzdENsaWVudA.scheme.RmlyZWNyYXdsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Firecrawl API key used for authentication; sent as a Bearer token in the `Authorization` header. To obtain a key, sign in at [firecrawl.dev](https://www.firecrawl.dev) and navigate to your dashboard",
+          "message": "The Firecrawl API key used for authentication; sent as a Bearer token in the `Authorization` header. To obtain a key, sign in at [firecrawl.dev](https://www.firecrawl.dev) and navigate to your dashboard"
+        }
+      }
+    }
+  }
+}

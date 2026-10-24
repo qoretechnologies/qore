@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to a ServerSentEvent server service",
+          "message": "ServerSentEvent 서버 서비스에 대한 연결입니다"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.display_name": {
+          "source": "ServerSentEvent Connection",
+          "message": "ServerSentEvent 연결"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGk.desc": {
+          "source": "AsyncAPI schema URL or file path used to validate received SSE event data",
+          "message": "수신된 SSE 이벤트 데이터를 검증하는 데 사용되는 AsyncAPI 스키마 URL 또는 파일 경로"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGk.display_name": {
+          "source": "AsyncAPI Schema",
+          "message": "AsyncAPI 스키마"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGk.short_desc": {
+          "source": "AsyncAPI schema URL or file path",
+          "message": "AsyncAPI 스키마 URL 또는 파일 경로"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGlfY2hhbm5lbA.desc": {
+          "source": "AsyncAPI channel name to use when `asyncapi` is configured",
+          "message": "`asyncapi` 구성 시 사용할 AsyncAPI 채널 이름"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGlfY2hhbm5lbA.display_name": {
+          "source": "AsyncAPI Channel",
+          "message": "AsyncAPI 채널"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGlfY2hhbm5lbA.short_desc": {
+          "source": "AsyncAPI channel for validation",
+          "message": "검증용 AsyncAPI 채널"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.Ym9keQ.desc": {
+          "source": "The request body to send with the SSE connection request; only valid with non-GET methods. The body is resent on each reconnection attempt",
+          "message": "SSE 연결 요청과 함께 전송할 요청 본문입니다. GET 메서드 외의 경우에만 유효합니다. 본문은 재연결 시도마다 다시 전송됩니다."
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.Ym9keQ.display_name": {
+          "source": "Request Body",
+          "message": "요청 본문"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.Ym9keQ.short_desc": {
+          "source": "Request body for non-GET SSE requests",
+          "message": "GET 이외의 SSE 요청을 위한 요청 본문"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "no serialization is used",
+          "message": "직렬화가 사용되지 않습니다"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "JSON 직렬화 사용"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.desc": {
+          "source": "Sets the data serialization option",
+          "message": "데이터 직렬화 옵션을 설정합니다"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "데이터 직렬화"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.short_desc": {
+          "source": "Sets the data serialization option",
+          "message": "데이터 직렬화 옵션을 설정합니다"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bGFzdF9ldmVudF9pZA.desc": {
+          "source": "Request the server restart sending events from this ID. This will be send in the `Last-Event-ID` header in the connection request to the SSE server",
+          "message": "서버가 이 ID부터 이벤트 전송을 다시 시작하도록 요청합니다. 이는 SSE 서버로의 연결 요청 시 `Last-Event-ID` 헤더에 전송됩니다."
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bGFzdF9ldmVudF9pZA.display_name": {
+          "source": "Last Event ID",
+          "message": "마지막 이벤트 ID"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bGFzdF9ldmVudF9pZA.short_desc": {
+          "source": "Request the server restart sending events from this ID",
+          "message": "서버가 이 ID부터 이벤트 전송을 다시 시작하도록 요청"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the SSE connection request; default: GET. Use POST for APIs that require a request body (e.g., OpenAI, Anthropic streaming APIs)",
+          "message": "SSE 연결 요청에 사용할 HTTP 메서드입니다. 기본값: GET. 요청 본문이 필요한 API(예: OpenAI, Anthropic 스트리밍 API)에는 POST를 사용합니다."
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bWV0aG9k.short_desc": {
+          "source": "HTTP method for the SSE connection request",
+          "message": "SSE 연결 요청을 위한 HTTP 메서드"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.cmVjb25uZWN0.desc": {
+          "source": "Try to reconnect when the connection is closed or lost",
+          "message": "연결이 닫히거나 손실된 경우 재연결을 시도합니다"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.cmVjb25uZWN0.display_name": {
+          "source": "Reconnect?",
+          "message": "다시 연결하시겠습니까?"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.cmVjb25uZWN0.short_desc": {
+          "source": "Try to reconnect when the connection is closed or lost",
+          "message": "연결이 닫히거나 손실된 경우 재연결을 시도합니다"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW4.desc": {
+          "source": "Any token to use for the initial HTTP request to authenticate with the server",
+          "message": "서버 인증을 위해 초기 HTTP 요청에 사용할 토큰입니다"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "인증 토큰"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token",
+          "message": "인증 토큰을 설정합니다"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "`Authorization` 헤더에 사용할 `token` 유형입니다. `token` 옵션이 설정되어 있지 않으면 무시됩니다."
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "인증 토큰 유형"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "인증 토큰의 유형"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.allowed_values.aW50OjEz.desc": {
+          "source": "Version 13",
+          "message": "버전 13"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.allowed_values.aW50Ojg.desc": {
+          "source": "Version 8",
+          "message": "버전 8"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.desc": {
+          "source": "The ServerSentEvent protocol version to use in the client",
+          "message": "클라이언트에서 사용할 ServerSentEvent 프로토콜 버전"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.display_name": {
+          "source": "ServerSentEvent Version",
+          "message": "ServerSentEvent 버전"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.short_desc": {
+          "source": "Sets the ServerSentEvent protocol version",
+          "message": "ServerSentEvent 프로토콜 버전을 설정합니다"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a ServerSentEvent server service",
+          "message": "ServerSentEvent 서버 서비스에 대한 연결입니다"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [AWS Textract](https://aws.amazon.com/textract/) for document text and structure extraction via SigV4-signed REST calls.  Inherits all AWS credential modes from AwsRestConnection (static keys, env vars, ECS task-role, IMDSv2, STS AssumeRole). The ping authenticates with `ListAdapters` and requires `textract:ListAdapters`; an authorization denial is reported as a failure.",
+          "message": "Une connexion à [AWS Textract](https://aws.amazon.com/textract/) pour l'extraction de texte et de structure de documents via des appels REST signés avec SigV4. Hérite tous les modes d'authentification AWS de AwsRestConnection (clés statiques, variables d'environnement, rôle de tâche ECS, IMDSv2, STS AssumeRole). La vérification d'accessibilité s'authentifie avec `ListAdapters` et nécessite `textract:ListAdapters` ; un refus d'autorisation est signalé comme une erreur."
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "AWS Textract Connection",
+          "message": "Connexion AWS Textract"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2V4dGVybmFsX2lk.desc": {
+          "source": "External ID for an STS role requiring cross-account verification.",
+          "message": "ID externe pour un rôle STS nécessitant une vérification entre comptes."
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2V4dGVybmFsX2lk.display_name": {
+          "source": "STS External ID",
+          "message": "ID externe STS"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2V4dGVybmFsX2lk.short_desc": {
+          "source": "Optional external ID required by the role",
+          "message": "ID externe facultatif requis par le rôle"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2ltZHNfZGlzYWJsZWQ.desc": {
+          "source": "Set to `True` when credentials must come from explicit options or the environment.",
+          "message": "Défini sur `True` lorsque les identifiants doivent provenir d'options explicites ou de l'environnement"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2ltZHNfZGlzYWJsZWQ.display_name": {
+          "source": "Disable Instance Credentials",
+          "message": "Désactiver les identifiants d'instance"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX2ltZHNfZGlzYWJsZWQ.short_desc": {
+          "source": "Disable ECS and instance metadata credential lookup",
+          "message": "Désactiver la recherche des identifiants ECS et des métadonnées d'instance"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfYXJu.desc": {
+          "source": "Role ARN to assume after resolving the base credentials.",
+          "message": "ARN du rôle à supposer après avoir résolu les identifiants de base."
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfYXJu.display_name": {
+          "source": "STS Role ARN",
+          "message": "ARN du rôle STS"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfYXJu.short_desc": {
+          "source": "Optional AWS role to assume",
+          "message": "Rôle AWS facultatif à supposer"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.desc": {
+          "source": "Session name sent with `aws_role_arn` to AWS STS.",
+          "message": "Nom de session envoyé avec `aws_role_arn` à AWS STS."
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.display_name": {
+          "source": "STS Role Session Name",
+          "message": "Nom de session du rôle STS"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.short_desc": {
+          "source": "Name of the assumed-role session",
+          "message": "Nom de la session de rôle supposé"
+        },
+        "connection.QXdzVGV4dHJhY3RSZXN0Q2xpZW50.scheme.QXdzVGV4dHJhY3RSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to AWS Textract document-extraction services",
+          "message": "Une connexion aux services d'extraction de documents AWS Textract"
+        }
+      }
+    }
+  }
+}

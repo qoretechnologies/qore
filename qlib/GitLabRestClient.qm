@@ -338,7 +338,8 @@ public class GitLabRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "gitlab://gitlab.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("GitLabRestClient",
+            "GitLabRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "GitLab REST Connection",
             "short_desc": "A connection to a GitLab instance",
             "desc": "A connection to [GitLab](https://gitlab.com) for source code, issues, merge "
@@ -435,7 +436,7 @@ public class GitLabRestConnection inherits RestClient::RestConnection {
             # declares "hostname" as required, because GitLab's authorization and token endpoints are
             # per-instance, which is why "hostname" carries a default and is preselected
             "required_options": "oauth2_client_id,oauth2_client_secret|token",
-        };
+        });
     }
 
     #! Creates the GitLabRestConnection object

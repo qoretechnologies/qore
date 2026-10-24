@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.V2F2ZVJlc3RDbGllbnQ.scheme.V2F2ZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Wave GraphQL API for accounting and invoicing",
+          "message": "회계 및 송장 발행을 위한 Wave GraphQL API에 대한 연결"
+        },
+        "connection.V2F2ZVJlc3RDbGllbnQ.scheme.V2F2ZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Wave REST Connection",
+          "message": "Wave REST 연결"
+        },
+        "connection.V2F2ZVJlc3RDbGllbnQ.scheme.V2F2ZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Wave GraphQL API",
+          "message": "Wave GraphQL API에 대한 연결"
+        }
+      }
+    }
+  }
+}

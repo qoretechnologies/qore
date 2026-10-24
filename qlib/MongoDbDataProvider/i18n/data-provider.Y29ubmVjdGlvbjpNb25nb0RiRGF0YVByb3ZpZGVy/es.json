@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.desc": {
+          "source": "A connection to a [MongoDB](https://www.mongodb.com) server or a [MongoDB Atlas](https://www.mongodb.com/atlas) cluster, for document storage, retrieval, aggregation and Atlas Vector Search.\n\nUse a `mongodb://` URL for a server or replica set whose hosts are known, and a `mongodb+srv://` URL for Atlas, where the hosts are discovered from DNS and TLS is implied.  An Atlas connection string looks like `mongodb+srv://cluster0.abcde.mongodb.net`.\n\nSupply the credentials as the `username` and `password` options rather than in the URL: they are then stored as connection options - the password as a password - and are URL-encoded when the client is created, so a password containing `@`, `:` or `/` works without the caller having to encode it.",
+          "message": "Una conexión a un servidor [MongoDB](https://www.mongodb.com) o un clúster [MongoDB Atlas](https://www.mongodb.com/atlas) para almacenamiento, recuperación, agregación y búsqueda de vectores en Atlas.\n\nUtilice una URL `mongodb://` para un servidor o conjunto réplica cuyos hosts son conocidos, y una URL `mongodb+srv://` para Atlas, donde los hosts se descubren a través de DNS y TLS se implica. Una cadena de conexión de Atlas tiene el formato `mongodb+srv://cluster0.abcde.mongodb.net`.\n\nProporcione las credenciales mediante las opciones `username` y `password` en lugar de en la URL: se almacenan como opciones de conexión - la contraseña como contraseña - y se codifican en URL cuando se crea el cliente, por lo que una contraseña que contenga `@`, `:` o `/` funciona sin que el llamador tenga que codificarla."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.display_name": {
+          "source": "MongoDB Connection",
+          "message": "Conexión a MongoDB"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "How long to wait for a connection to be established, sent as the `connectTimeoutMS` URI option.",
+          "message": "Duración máxima para esperar la conexión, enviada como la opción URI `connectTimeoutMS`."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Tiempo de espera de conexión"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "How long to wait for a connection to be established",
+          "message": "Duración máxima para esperar la conexión"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXBwbmFtZQ.desc": {
+          "source": "The name this client reports to the server, sent as the `appName` URI option.\n\nAtlas shows it against every operation in the cluster's monitoring, which is what makes one application's load distinguishable from another's.  Defaults to `qore-mongodb` when neither this option nor the URL sets one.",
+          "message": "El nombre que este cliente reporta al servidor, enviado como la opción URI `appName`.\n\nAtlas lo muestra junto a cada operación en el monitoreo del clúster, lo que permite distinguir la carga de una aplicación de otra. Por defecto es `qore-mongodb` cuando ni esta opción ni la URL establecen uno."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXBwbmFtZQ.display_name": {
+          "source": "Application Name",
+          "message": "Nombre de la Aplicación"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXBwbmFtZQ.short_desc": {
+          "source": "The name this client reports to the server",
+          "message": "El nombre que este cliente reporta al servidor"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXV0aHNvdXJjZQ.desc": {
+          "source": "The database holding the user's credentials, sent as the `authSource` URI option.\n\nAtlas keeps database users in `admin`, which is also what the server assumes when this is not set; set it only where the credentials live elsewhere.",
+          "message": "La base de datos que almacena las credenciales del usuario, enviada como la opción URI `authSource`.\n\nAtlas almacena los usuarios de la base de datos en `admin`, que también es lo que el servidor asume cuando esta opción no se establece; úsela solo cuando las credenciales se encuentren en otro lugar."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXV0aHNvdXJjZQ.display_name": {
+          "source": "Authentication Database",
+          "message": "Base de datos de autenticación"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXV0aHNvdXJjZQ.short_desc": {
+          "source": "The database holding the user's credentials",
+          "message": "La base de datos que almacena las credenciales del usuario"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.ZGF0YWJhc2U.desc": {
+          "source": "The database used when an action does not name one, and the default authentication database when `authsource` is not set.",
+          "message": "La base de datos utilizada cuando una operación no especifica una, y la base de datos de autenticación predeterminada cuando no se establece `authsource`."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.ZGF0YWJhc2U.display_name": {
+          "source": "Default Database",
+          "message": "Base de datos predeterminada"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.ZGF0YWJhc2U.short_desc": {
+          "source": "The database used when an action does not name one",
+          "message": "La base de datos utilizada cuando una operación no especifica una"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c29ja2V0X3RpbWVvdXQ.desc": {
+          "source": "How long to wait for a reply on an established connection, sent as the `socketTimeoutMS` URI option.\n\nThis is the only timeout that bounds a server which completes the TCP handshake and then stops answering - a hung `mongod`, a firewall dropping an established flow, a stale NAT mapping, a suspended container - because `connect_timeout` and `server_selection_timeout` have both finished by the time a reply is awaited.\n\n**It applies to every operation on the client**, so it has to be longer than the slowest query the connection is expected to run; to bound an unattended monitor ping, set `ping_timeout` rather than lowering this.",
+          "message": "Tiempo de espera para recibir una respuesta en una conexión establecida, enviada como la opción URI `socketTimeoutMS`.\n\nEste es el único tiempo de espera que limita un servidor que completa el handshake TCP y luego deja de responder: un `mongod` colgado, un firewall que descarta un flujo establecido, un mapeo NAT obsoleto, un contenedor suspendido - porque `connect_timeout` y `server_selection_timeout` ya han finalizado cuando se espera una respuesta.\n\n**Se aplica a cada operación del cliente**, por lo que debe ser más largo que la consulta más lenta que se espera que ejecute la conexión; para limitar una ping de monitoreo no supervisado, establezca `ping_timeout` en lugar de reducir este valor."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c29ja2V0X3RpbWVvdXQ.display_name": {
+          "source": "Socket Timeout",
+          "message": "Tiempo de espera de conexión"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c29ja2V0X3RpbWVvdXQ.short_desc": {
+          "source": "How long to wait for a reply on an established connection",
+          "message": "Durante cuánto tiempo esperar una respuesta en una conexión establecida"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c2VydmVyX3NlbGVjdGlvbl90aW1lb3V0.desc": {
+          "source": "How long to wait for a suitable server to be found, sent as the `serverSelectionTimeoutMS` URI option.\n\nThis is the timeout a connection to an unreachable cluster actually waits on, because the driver selects a server before it connects to one.",
+          "message": "Durante cuánto tiempo esperar a encontrar un servidor adecuado, enviado como la opción `serverSelectionTimeoutMS` en la URI.\n\nEste es el tiempo de espera que el controlador realmente espera cuando se conecta a un clúster inaccesible, ya que el controlador selecciona un servidor antes de conectarse a uno."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c2VydmVyX3NlbGVjdGlvbl90aW1lb3V0.display_name": {
+          "source": "Server Selection Timeout",
+          "message": "Tiempo de espera para selección de servidor"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c2VydmVyX3NlbGVjdGlvbl90aW1lb3V0.short_desc": {
+          "source": "How long to wait for a suitable server to be found",
+          "message": "Durante cuánto tiempo esperar a encontrar un servidor adecuado"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database user.\n\nGiven here rather than in the URL, it is stored as a password and is URL-encoded when the client is created, so a password containing `@`, `:`, `/` or `?` works without the caller having to encode it.",
+          "message": "La contraseña del usuario de la base de datos.\n\nProporcionada aquí en lugar de en la URL, se almacena como contraseña y se codifica en URL cuando se crea el cliente, por lo que una contraseña que contenga `@`, `:`, `/` o `?` funciona sin que el llamador tenga que codificarla."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Contraseña"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for the database user",
+          "message": "La contraseña del usuario de la base de datos"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGluZ190aW1lb3V0.desc": {
+          "source": "The upper bound on a single connection ping.\n\nA ping runs unattended, on a timer, in a thread that something else waits on, so it is bounded independently of the timeouts that apply to data operations: the client the ping uses caps `connectTimeoutMS`, `serverSelectionTimeoutMS` and `socketTimeoutMS` at this value, whatever the URL or the other options say, and the client returned for data operations is left alone.",
+          "message": "Límite superior para una sola ping de conexión.\n\nUn ping se ejecuta sin intervención, en un temporizador, en un hilo que otra cosa espera, por lo que está limitado independientemente de los tiempos de espera que aplican a las operaciones de datos: el cliente que utiliza el ping limita `connectTimeoutMS`, `serverSelectionTimeoutMS` y `socketTimeoutMS` a este valor, sin importar la URL ni las otras opciones, y el cliente devuelto para operaciones de datos queda sin modificar."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGluZ190aW1lb3V0.display_name": {
+          "source": "Ping Timeout",
+          "message": "Tiempo de espera de ping"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGluZ190aW1lb3V0.short_desc": {
+          "source": "The upper bound on a single connection ping",
+          "message": "Límite superior para una sola comprobación de conexión"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dGxz.desc": {
+          "source": "Encrypt the connection with TLS.\n\nAtlas requires TLS and a `mongodb+srv://` URL implies it, so this is only needed for a `mongodb://` server that requires TLS without advertising it.",
+          "message": "Cifre la conexión con TLS.\n\nAtlas requiere TLS y una URL con `mongodb+srv://` lo implica, por lo que esto solo es necesario para un servidor `mongodb://` que requiere TLS sin anunciarlo."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dGxz.display_name": {
+          "source": "Use TLS",
+          "message": "Usar TLS"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dGxz.short_desc": {
+          "source": "Encrypt the connection with TLS",
+          "message": "Cifrar la conexión con TLS"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The database user to authenticate as.\n\nFor Atlas this is a database user, created under **Database Access** in the Atlas UI - not the Atlas account itself.\n\nGiven here rather than in the URL, the value is URL-encoded when the client is created, so it needs no encoding of its own.",
+          "message": "El usuario de la base de datos para autenticarse.\n\nPara Atlas, se trata de un usuario de base de datos, creado bajo **Acceso a bases de datos** en la interfaz de Atlas, no la cuenta de Atlas misma.\n\nSe proporciona aquí en lugar de en la URL, el valor se codifica en URL al crear el cliente, por lo que no necesita codificación propia."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Nombre de usuario"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "The database user to authenticate as",
+          "message": "El usuario de la base de datos para autenticarse"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a MongoDB server or an Atlas cluster",
+          "message": "Una conexión a un servidor MongoDB o un clúster de Atlas"
+        }
+      }
+    }
+  }
+}

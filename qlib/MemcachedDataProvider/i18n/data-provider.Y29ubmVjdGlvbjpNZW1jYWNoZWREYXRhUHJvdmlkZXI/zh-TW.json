@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.desc": {
+          "source": "Connection to a memcached server for caching data using the memcached binary protocol",
+          "message": "使用 memcached 二進位協定連線至 memcached 伺服器以進行資料快取"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.display_name": {
+          "source": "Memcached Connection",
+          "message": "Memcached 連線"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "Connection timeout in milliseconds (default: 30000)",
+          "message": "連線逾時時間（毫秒），預設值：30000"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "連線逾時"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "Connection timeout in milliseconds",
+          "message": "連接逾時時間（毫秒）"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.aW9fdGltZW91dA.desc": {
+          "source": "I/O timeout in milliseconds for read/write operations (default: 15000)",
+          "message": "讀取/寫入作業的 I/O 逾時時間（毫秒），預設值：15000"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.aW9fdGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "I/O 逾時"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.option.aW9fdGltZW91dA.short_desc": {
+          "source": "Read/write timeout in milliseconds",
+          "message": "讀取/寫入逾時時間（毫秒）"
+        },
+        "connection.TWVtY2FjaGVkRGF0YVByb3ZpZGVy.scheme.TWVtY2FjaGVkQ29ubmVjdGlvbg.short_desc": {
+          "source": "Connection to a memcached server",
+          "message": "連線至 memcached 伺服器"
+        }
+      }
+    }
+  }
+}

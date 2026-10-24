@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Anthropic Claude REST API.\n\nRequires an API key (set as `apikey`) from the [Anthropic Console](https://console.anthropic.com/). The connection uses the `anthropic://` URL scheme and automatically sets the required `anthropic-version` header on all API requests",
+          "message": "Anthropic Claude REST API에 대한 연결입니다.\n\nAPI 키(`apikey`)가 필요하며, [Anthropic 콘솔](https://console.anthropic.com/)에서 설정해야 합니다. 연결은 `anthropic://` URL 스키마를 사용하며, 모든 API 요청에 대해 필요한 `anthropic-version` 헤더를 자동으로 설정합니다."
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Anthropic REST Connection",
+          "message": "Anthropic REST 연결"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Anthropic chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `claude-opus-5` (the default), `claude-sonnet-5`, `claude-haiku-4-5`",
+          "message": "이 연결이 채팅에 선택되었을 때 LLM 클라이언트가 사용하는 Anthropic 챗 모델입니다.\n\n챗 모델은 임베딩 모델과 별개의 계열이며, 상호 교환할 수 없습니다.\n\n예시 값: `claude-opus-5` (기본값), `claude-sonnet-5`, `claude-haiku-4-5`"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "채팅 모델"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Anthropic chat model name",
+          "message": "애너트로픽 채팅 모델 이름"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YW50aHJvcGljX3ZlcnNpb24.desc": {
+          "source": "The anthropic-version header value sent with all API requests",
+          "message": "모든 API 요청과 함께 전송되는 anthropic-version 헤더 값"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YW50aHJvcGljX3ZlcnNpb24.display_name": {
+          "source": "Anthropic Version",
+          "message": "애너트로픽 버전"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YW50aHJvcGljX3ZlcnNpb24.short_desc": {
+          "source": "The anthropic-version header value",
+          "message": "anthropic-version 헤더 값"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The API version to use",
+          "message": "사용할 API 버전"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API 버전"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "사용할 API 버전"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Anthropic API key used for authentication; sent as the `x-api-key` header.\n\nGet your API key from the [Anthropic Console](https://console.anthropic.com/)",
+          "message": "인증에 사용되는 애너트로픽 API 키; `x-api-key` 헤더로 전송됩니다.\n\n[애너트로픽 콘솔](https://console.anthropic.com/)에서 API 키를 얻으세요."
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Anthropic API key for authentication",
+          "message": "인증용 애너트로픽 API 키"
+        },
+        "connection.QW50aHJvcGljUmVzdENsaWVudA.scheme.QW50aHJvcGljUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Anthropic Claude REST API",
+          "message": "Anthropic Claude REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

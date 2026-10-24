@@ -243,7 +243,8 @@ public hash<auto> sub vertexAuthHeaders(string token, *string quota_project_id) 
 #! Vertex AI REST connection (registered under the \c "vertex-ai" scheme)
 public class VertexAiRestConnection inherits RestClient::RestConnection {
     public {
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("VertexAiRestClient",
+            "VertexAiRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Google Vertex AI Connection",
             "short_desc": "A connection to Google Vertex AI",
             "desc": "A connection to Google Vertex AI for generative model "
@@ -301,7 +302,7 @@ public class VertexAiRestConnection inherits RestClient::RestConnection {
                         "project in the URL path is authoritative",
                 },
             },
-        };
+        });
     }
 
     constructor(string name, string description, string url,

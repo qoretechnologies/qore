@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Lemlist REST API for sales outreach and email campaign management.\n\nLemlist is a sales engagement platform enabling personalized outreach campaigns, lead management, and email automation.\n\n**Rate Limits:**\n- 20 requests per 2 seconds per API key\n- Rate limit headers are included in all responses",
+          "message": "Pripojenie k REST API Lemlistu pre predajný kontakt a správu kampaní e-mailov.\n\nLemlist je platforma na správu predajných kontaktov umožňujúca osobné kampane, správu záujemcov a automatizáciu e-mailov.\n\n**Obmedzenia rýchlosti:**\n- 20 požiadaviek za 2 sekundy na kľúč API\n- Hlavičky obmedzenia rýchlosti sú vložené do všetkých odpovedí"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Lemlist REST Connection",
+          "message": "Pripojenie REST API Lemlistu"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to Lemlist\n2. Go to **Settings** (bottom left corner)\n3. Click **Integrations** → **API & Webhooks**\n4. Click **Generate Key** and copy the key",
+          "message": "1. Prihláste sa do Lemlistu\n2. Choďte na **Nastavenia** (v dolnom ľavom rohu)\n3. Kliknite na **Integrácie** → **API a Webhooks**\n4. Kliknite na **Vygenerovať kľúč** a skopírujte kľúč"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Where to find your API key",
+          "message": "Kde nájsť váš API kľúč"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Lemlist enforces a rate limit of **20 requests per 2 seconds** per API key.\n\nExceeding this limit will result in HTTP 429 (Too Many Requests) responses.\nWait briefly before retrying if you encounter rate limit errors.",
+          "message": "Lemlist aplikuje limit rýchlosti **20 požiadaviek za 2 sekundy** na jeden API kľúč.\n\nPrekročenie tohto limitu spôsobí odpovede HTTP 429 (Príliš veľa požiadaviek).\nAk sa stretnete s chybami limitu rýchlosti, počkajte chvíľku pred opätovným skúšaním."
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Rate Limits",
+          "message": "Obmedzenia rýchlosti"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Lemlist API key used for authentication.\n\nTo find your API key, log in to Lemlist and go to **Settings** → **Integrations** → **API & Webhooks**, then click **Generate Key**.",
+          "message": "API kľúč Lemlistu používaný na overenie.\n\nAk chcete nájsť váš API kľúč, prihláste sa do Lemlistu a prejdite na **Nastavenia** → **Integrácie** → **API a Webhooks**, potom kliknite na **Vytvoriť kľúč**."
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Lemlist API key for authentication",
+          "message": "API kľúč Lemlistu pre overenie"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Lemlist REST API",
+          "message": "Pripojenie k REST API Lemlistu"
+        }
+      }
+    }
+  }
+}

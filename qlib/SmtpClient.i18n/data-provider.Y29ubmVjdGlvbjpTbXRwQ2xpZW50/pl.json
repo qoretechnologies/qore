@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.desc": {
+          "source": "A connection to an SMTP server",
+          "message": "Połączenie z serwerem SMTP"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.display_name": {
+          "source": "SMTP Connection",
+          "message": "Połączenie SMTP"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOk9BVVRIQkVBUkVS.desc": {
+          "source": "OAuth2 bearer-token authentication with SASL `OAUTHBEARER` ([RFC 7628](https://datatracker.ietf.org/doc/html/rfc7628)); requires the `token` option",
+          "message": "Uwierzytelnianie bearer-token OAuth2 z SASL `OAUTHBEARER` ([RFC 7628](https://datatracker.ietf.org/doc/html/rfc7628)); wymaga opcji `token`"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOk9BVVRIQkVBUkVS.display_name": {
+          "source": "SASL OAUTHBEARER",
+          "message": "SASL OAUTHBEARER"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOlBMQUlO.desc": {
+          "source": "Username and password authentication with SASL `PLAIN`",
+          "message": "Uwierzytelnianie za pomocą nazwy użytkownika i hasła z SASL `PLAIN`"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOlBMQUlO.display_name": {
+          "source": "SASL PLAIN",
+          "message": "SASL PLAIN"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOlhPQVVUSDI.desc": {
+          "source": "OAuth2 bearer-token authentication with SASL `XOAUTH2`; requires the `token` option",
+          "message": "Uwierzytelnianie z tokenem nośnym OAuth2 z SASL `XOAUTH2`; wymaga opcji `token`"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOlhPQVVUSDI.display_name": {
+          "source": "SASL XOAUTH2",
+          "message": "SASL XOAUTH2"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOmF1dG8.desc": {
+          "source": "Select the mechanism from the server's `EHLO` capability list",
+          "message": "Wybierz mechanizm z listy możliwości serwera `EHLO`"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.allowed_values.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Automatic",
+          "message": "Automatyczne"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.desc": {
+          "source": "Forces a specific SASL authentication mechanism instead of selecting one from the mechanisms the server advertises in its `EHLO` reply.\n\nLeave this at `auto` unless a server advertises a mechanism it cannot actually complete; the automatic selection always uses the capability list read after `STARTTLS`, which is the list that reflects what the secure connection really supports",
+          "message": "Wymusza wybrany mechanizm uwierzytelniania SASL zamiast automatycznego wyboru z mechanizmów oferowanych przez serwer w odpowiedzi `EHLO`.\n\nZostaw to ustawione na `auto` chyba że serwer oferuje mechanizm, którego nie może zrealizować; automatyczny wybór zawsze używa listy możliwości odczytanej po `STARTTLS`, która odzwierciedla rzeczywiste możliwości bezpiecznego połączenia"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.display_name": {
+          "source": "Auth Mechanism",
+          "message": "Mechanizm uwierzytelniania"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.YXV0aF9tZWNoYW5pc20.short_desc": {
+          "source": "Forces a specific SASL authentication mechanism",
+          "message": "Wymusza określony mechanizm uwierzytelniania SASL"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.allowed_values.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Security implied only by the protocol scheme",
+          "message": "Bezpieczeństwo wynika wyłącznie z schematu protokołu"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.allowed_values.c3RyaW5nOnNzbA.desc": {
+          "source": "Immediately negotiate an SSL session; fo not use `STARTTLS`",
+          "message": "Natychmiast ustanów sesję SSL; nie używaj `STARTTLS`"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.allowed_values.c3RyaW5nOnRscw.desc": {
+          "source": "Make a standard socket connection and immediately issue a `STARTTLS` command for a secure connection",
+          "message": "Utwórz standardowe połączenie gniazdowe i natychmiast wyślij polecenie `STARTTLS` w celu bezpiecznego połączenia"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.desc": {
+          "source": "Sets the security option for the object; note that this option, if set to any value other than `default` will override any security implied by the URL scheme",
+          "message": "Ustawia opcję bezpieczeństwa dla obiektu; zauważ, że jeśli ta opcja zostanie ustawiona na wartość inna niż `default`, zastąpi ona każde bezpieczeństwo wynikające ze schematu adresu URL"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.display_name": {
+          "source": "Security Type",
+          "message": "Typ zabezpieczenia"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.c2VjdXJpdHk.short_desc": {
+          "source": "Sets the type of security to use",
+          "message": "Ustawia typ zabezpieczenia do użycia"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; only used if no username or password is set in the URL and if the `username` option is also used; conflicts with the `token` option",
+          "message": "Hasło do uwierzytelniania; używane tylko wtedy, gdy w adresie URL nie ustawiono nazwy użytkownika ani hasła oraz gdy używana jest również opcja `username`; powoduje konflikt z opcją `token`"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Hasło"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password to use for authentication",
+          "message": "Hasło do uwierzytelniania"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "An OAuth2 bearer token to use for authentication.\n\nWhen set, the connection authenticates with a bearer-token SASL mechanism (`XOAUTH2` or `OAUTHBEARER`) instead of a password, which is what providers that have retired password logins require.\n\n**Requires the `username` option** and conflicts with the `password` option and with credentials given in the URL. Access tokens expire; refresh them on the connection rather than relying on a token captured once",
+          "message": "Token nośnik OAuth2 do uwierzytelniania.\n\nPo ustawieniu połączenie uwierzytelnia się przy użyciu mechanizmu SASL z tokenem nośnikowym (`XOAUTH2` lub `OAUTHBEARER`) zamiast hasła, co wymagają dostawcy, które wycofały logowanie hasłem.\n\n**Wymaga opcji `username`** i jest niezgodne z opcją `password` oraz z poświadczeniami podanymi w adresie URL. Tokeny dostępu wygasały; odświeżaj je w połączeniu, a nie polegaj na tokenie przechwyconym raz"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Token autoryzacji"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "An OAuth2 bearer token for SASL XOAUTH2 / OAUTHBEARER logins",
+          "message": "Token OAuth2 typu bearer do logowania SASL XOAUTH2 / OAUTHBEARER"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL and if either the `password` or the `token` option is also used",
+          "message": "Nazwa użytkownika do uwierzytelniania; używana tylko, jeśli nie ustawiono nazwy użytkownika ani hasła w adresie URL i jeśli użyto również opcji `password` lub `token`"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Nazwa użytkownika"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "The username to use for authentication",
+          "message": "Nazwa użytkownika do uwierzytelniania"
+        },
+        "connection.U210cENsaWVudA.scheme.U210cENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to an SMTP server",
+          "message": "Połączenie z serwerem SMTP"
+        }
+      }
+    }
+  }
+}

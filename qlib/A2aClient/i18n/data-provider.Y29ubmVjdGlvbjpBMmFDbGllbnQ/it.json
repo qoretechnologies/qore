@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.QTJhQ2xpZW50.scheme.QTJhQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to an A2A agent for agent-to-agent collaboration via JSON-RPC 2.0",
+          "message": "Una connessione a un agente A2A per la collaborazione tra agenti tramite JSON-RPC 2.0"
+        },
+        "connection.QTJhQ2xpZW50.scheme.QTJhQ29ubmVjdGlvbg.display_name": {
+          "source": "A2A Connection",
+          "message": "Connessione A2A"
+        },
+        "connection.QTJhQ2xpZW50.scheme.QTJhQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to an A2A (Agent-to-Agent) agent",
+          "message": "Una connessione a un agente A2A (Agente-Ad-Agente)"
+        }
+      }
+    }
+  }
+}

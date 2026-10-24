@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a Qdrant vector database server",
+          "message": "Spojení s databázovým serverem Qdrant pro vektory"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Qdrant REST Connection",
+          "message": "Qdrant REST spojení"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.desc": {
+          "source": "The API key for authenticating with the Qdrant server; sent as the `api-key` header",
+          "message": "Klíč pro ověření přístupu k serveru Qdrant; odesílán jako hlavička `api-key`"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "Klíč API"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.short_desc": {
+          "source": "The Qdrant API key for authentication",
+          "message": "Klíč Qdrant pro ověření přístupu"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.desc": {
+          "source": "HTTP headers to send with ping requests; defaults to `{\"Connection\": \"close\"}` to force a fresh TCP connection on each ping, preventing stale keep-alive connection failures against qdrant's actix-web server (which closes idle keep-alive connections after a short timeout)",
+          "message": "HTTP hlavičky odesílané s požadavky na ping; výchozí hodnota `{\"Connection\": \"close\"}` zajistí nové TCP spojení při každém pingu, čímž se zabrání selháním způsobeným zastaralými spojeními udržovanými přes keep-alive (actix-web server Qdrant uzavírá nečinná spojení po krátké době)"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.option.cGluZ19wYXRo.desc": {
+          "source": "The URI path to use for pings; defaults to `/collections`, which requires authentication and therefore verifies the credential as well as reachability.  Do not use `/`: qdrant serves the root path outside its authentication layer, so a ping against it succeeds even when the connection carries no credential at all and no real operation can be performed",
+          "message": "Cestina URI pro pingování; výchozí hodnota je `/collections`, která vyžaduje ověření přihlašovacích údajů a tedy ověřuje i platnost přihlašovacích údajů a dostupnost. Nepoužívejte `/`: Qdrant poskytuje kořenovou cestu mimo vrstvu ověření, takže ping proti ní uspěje i když spojení nemá žádné přihlašovací údaje a žádná skutečná operace nemůže být provedena"
+        },
+        "connection.UWRyYW50RGF0YVByb3ZpZGVy.scheme.UWRyYW50UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a Qdrant vector database server",
+          "message": "Spojení s databázovým serverem Qdrant pro vektory"
+        }
+      }
+    }
+  }
+}

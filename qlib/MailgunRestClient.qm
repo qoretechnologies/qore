@@ -229,7 +229,8 @@ public class MailgunRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "mailgun://api.mailgun.net";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("MailgunRestClient",
+            "MailgunRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Mailgun REST Connection",
             "short_desc": "A connection to the Mailgun REST API",
             "desc": "A connection to the Mailgun REST API for email sending and management.\n\n"
@@ -311,6 +312,7 @@ public class MailgunRestConnection inherits RestClient::RestConnection {
             "required_options": "apikey",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Obtain Your API Key",
                     "intent": "info",
                     "content": "1. Log in to your Mailgun account at https://app.mailgun.com\n"
@@ -321,6 +323,7 @@ public class MailgunRestConnection inherits RestClient::RestConnection {
                         "- Keep your API key secure and never share it publicly",
                 },
                 <UiMessageInfo>{
+                    "presentation_id": "setup-2",
                     "title": "Selecting the Right API Region",
                     "intent": "info",
                     "content": "Choose your API region based on where your Mailgun account is hosted:\n\n"
@@ -331,6 +334,7 @@ public class MailgunRestConnection inherits RestClient::RestConnection {
                         "- EU accounts: app.eu.mailgun.com",
                 },
                 <UiMessageInfo>{
+                    "presentation_id": "setup-3",
                     "title": "When is Sending Domain Required?",
                     "intent": "info",
                     "content": "The **Sending Domain** is required for:\n"
@@ -345,7 +349,7 @@ public class MailgunRestConnection inherits RestClient::RestConnection {
                         "**Sending > Domains**.",
                 },
             ),
-        };
+        });
     }
 
     #! creates the MailgunRestConnection object

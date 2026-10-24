@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the ClickFunnels REST API for managing contacts, orders, products, funnels, courses, forms, and fulfillments",
+          "message": "用於管理聯絡人、訂單、產品、漏斗、課程、表單與履行作業的 ClickFunnels REST API 連線"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "ClickFunnels REST Connection",
+          "message": "ClickFunnels REST 連線"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "The **Team Subdomain** is required to connect to your ClickFunnels account.\n\n**How to find it:**\n1. Log in to your ClickFunnels 2.0 account\n2. Look at the URL in your browser: `https://**myteam**.myclickfunnels.com`\n3. The team subdomain is the part before `.myclickfunnels.com`",
+          "message": "連線至您的 ClickFunnels 帳戶時，需要 **團隊子網域**。\n\n**如何查找：**\n1. 登入您的 ClickFunnels 2.0 帳戶\n2. 查看瀏覽器中的網址：`https://**myteam**.myclickfunnels.com`\n3. 團隊子網域為 `.myclickfunnels.com` 之前的那部分"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Find Your Team Subdomain",
+          "message": "如何查找您的團隊子網域"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
+          "source": "An **API Token** is required for authentication.\n\n**How to generate one:**\n1. Log in to your ClickFunnels 2.0 account\n2. Go to **Teams List > Your Team > Team Settings > Developer Portal**\n3. Click **Add new platform application** and fill in the required information\n4. Copy the **API access token** from the platform application details\n\n**Note:** Store this token securely; it provides full API access to your ClickFunnels account. API access requires a Scale, Optimize, or Dominate plan",
+          "message": "需要 **API 憑證** 進行驗證。\n\n**如何產生：**\n1. 登入您的 ClickFunnels 2.0 帳戶\n2. 前往 **團隊清單 > 您的團隊 > 團隊設定 > 開發者入口**\n3. 點選 **新增平台應用程式**，並填寫必要資訊\n4. 從平台應用程式詳情中複製 **API 存取憑證**\n\n**注意：** 請安全儲存此憑證；它將提供對您 ClickFunnels 帳戶的完整 API 存取權限。API 存取需要 Scale、Optimize 或 Dominate 方案"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
+          "source": "How to Generate an API Token",
+          "message": "如何產生 API 憑證"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The ClickFunnels API Bearer token for authentication. Generate this token in ClickFunnels under **Teams List > Your Team > Team Settings > Developer Portal**",
+          "message": "用於認證的 ClickFunnels API Bearer 憑證。請在 ClickFunnels 中的 **團隊清單 > 您的團隊 > 團隊設定 > 開發者入口** 產生此憑證"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "ClickFunnels API Bearer token",
+          "message": "ClickFunnels API Bearer 憑證"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.dGVhbQ.desc": {
+          "source": "The ClickFunnels team subdomain used to build the API URL. For example, if your ClickFunnels URL is `https://myteam.myclickfunnels.com`, the team value is `myteam`",
+          "message": "用於建構 API URL 的 ClickFunnels 團隊子網域。例如，若您 ClickFunnels 的網址為 `https://myteam.myclickfunnels.com`，則團隊值為 `myteam`"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.dGVhbQ.display_name": {
+          "source": "Team Subdomain",
+          "message": "團隊子網域"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.dGVhbQ.short_desc": {
+          "source": "ClickFunnels team subdomain",
+          "message": "ClickFunnels 團隊子網域"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the ClickFunnels REST API",
+          "message": "連線至 ClickFunnels REST API"
+        }
+      }
+    }
+  }
+}

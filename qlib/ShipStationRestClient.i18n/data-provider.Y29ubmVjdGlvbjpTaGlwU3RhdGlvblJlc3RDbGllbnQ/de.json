@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the ShipStation REST API for shipping and fulfillment management.\n\nShipStation is a web-based shipping software that streamlines order fulfillment for e-commerce businesses. This integration enables managing orders, shipments, carriers, products, stores, and warehouses.\n\n**Important:** This integration uses the ShipStation **V1 API** and requires V1 API credentials (API Key + API Secret pair). ShipStation V2 API keys are not compatible.",
+          "message": "Eine Verbindung zur ShipStation REST-API für Versand- und Fulfillment-Management.\n\nShipStation ist eine webbasierte Versandsoftware, die die Auftragsabwicklung für E-Commerce-Unternehmen vereinfacht. Diese Integration ermöglicht die Verwaltung von Aufträgen, Sendungen, Versanddienstleistern, Produkten, Shops und Lagern.\n\n**Wichtig:** Diese Integration verwendet die ShipStation **V1-API** und erfordert V1-API-Zugangsdaten (API-Schlüssel + API-Geheimnis). ShipStation V2-API-Schlüssel sind nicht kompatibel."
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "ShipStation REST Connection",
+          "message": "ShipStation REST-Verbindung"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires **ShipStation V1 API credentials** (an API Key + API Secret pair).\n\n**Steps to generate V1 API credentials:**\n1. Log in to ShipStation at https://app.shipstation.com\n2. Click the **gear icon** (Settings) in the top right corner\n3. Navigate to **Account > API Settings**\n4. Make sure **V1** is selected (not V2)\n5. Click **Generate API Keys** if you don't have existing credentials\n6. Copy both your **API Key** and **API Secret**\n\n**Important:**\n- The API Secret is only displayed once when generated; store your credentials securely\n- V1 API credentials are available on ShipStation **Gold, Scale, or higher-tier** plans\n- ShipStation also offers **V2 API keys** (a single token); these are **not compatible** with this integration",
+          "message": "Diese Integration erfordert **ShipStation V1-API-Zugangsdaten** (einen API-Schlüssel + API-Geheimnis).\n\n**Schritte zum Generieren von V1-API-Zugangsdaten:**\n1. Melden Sie sich bei ShipStation unter https://app.shipstation.com an\n2. Klicken Sie auf das **Zahnrad-Symbol** (Einstellungen) in der rechten oberen Ecke\n3. Navigieren Sie zu **Konto > API-Einstellungen**\n4. Stellen Sie sicher, dass **V1** ausgewählt ist (nicht V2)\n5. Klicken Sie auf **API-Schlüssel generieren**, falls Sie keine vorhandenen Zugangsdaten haben\n6. Kopieren Sie sowohl Ihren **API-Schlüssel** als auch Ihr **API-Geheimnis**\n\n**Wichtig:**\n- Das API-Geheimnis wird nur einmal angezeigt, wenn es generiert wird; speichern Sie Ihre Zugangsdaten sicher\n- V1-API-Zugangsdaten sind auf ShipStation-Plänen **Gold, Scale oder höher** verfügbar\n- ShipStation bietet außerdem **V2-API-Schlüssel** (ein einzelner Token); diese sind **nicht kompatibel** mit dieser Integration"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Credentials",
+          "message": "So erhalten Sie Ihre API-Zugangsdaten"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.desc": {
+          "source": "The ShipStation **V1** API key used as the username for HTTP Basic Auth.\n\n**To obtain your V1 API credentials:**\n1. Log in to ShipStation at https://app.shipstation.com\n2. Click the gear icon (Settings) in the top right\n3. Go to **Account > API Settings**\n4. Click 'Generate API Keys' if you don't have any\n5. Copy your API Key\n\n**Important:** This must be a V1 API key (part of an API Key + API Secret pair). ShipStation V2 API keys (single token) are not compatible with this integration. V1 API keys are available on ShipStation Gold, Scale, or higher-tier plans.",
+          "message": "Der ShipStation **V1**-API-Schlüssel, der als Benutzername für HTTP Basic Auth verwendet wird.\n\n**So erhalten Sie Ihre V1-API-Zugangsdaten:**\n1. Melden Sie sich bei ShipStation unter https://app.shipstation.com an\n2. Klicken Sie auf das Zahnrad-Symbol (Einstellungen) in der rechten oberen Ecke\n3. Gehen Sie zu **Konto > API-Einstellungen**\n4. Klicken Sie auf „API-Schlüssel generieren“, falls Sie noch keine besitzen\n5. Kopieren Sie Ihren API-Schlüssel\n\n**Wichtig:** Dies muss ein V1-API-Schlüssel sein (Teil eines API-Schlüssel + API-Geheimnis-Paares). ShipStation V2-API-Schlüssel (einzelner Token) sind mit dieser Integration nicht kompatibel. V1-API-Schlüssel sind auf ShipStation Gold, Scale oder höheren Abonnements verfügbar."
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "API-Schlüssel"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.short_desc": {
+          "source": "ShipStation V1 API key for authentication",
+          "message": "ShipStation V1-API-Schlüssel zur Authentifizierung"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX3NlY3JldA.desc": {
+          "source": "The ShipStation **V1** API secret used as the password for HTTP Basic Auth.\n\n**To obtain your V1 API credentials:**\n1. Log in to ShipStation at https://app.shipstation.com\n2. Click the gear icon (Settings) in the top right\n3. Go to **Account > API Settings**\n4. Your API Secret is shown alongside your API Key\n\n**Note:** The API Secret is only shown once when generated. If you lose it, you'll need to generate new credentials.",
+          "message": "Das ShipStation **V1**-API-Geheimnis, das als Passwort für HTTP Basic Auth verwendet wird.\n\n**So erhalten Sie Ihre V1-API-Zugangsdaten:**\n1. Melden Sie sich bei ShipStation unter https://app.shipstation.com an\n2. Klicken Sie auf das Zahnrad-Symbol (Einstellungen) in der rechten oberen Ecke\n3. Gehen Sie zu **Konto > API-Einstellungen**\n4. Ihr API-Geheimnis wird neben Ihrem API-Schlüssel angezeigt\n\n**Hinweis:** Das API-Geheimnis wird nur einmal angezeigt, wenn es generiert wird. Falls Sie es verlieren, müssen Sie neue Zugangsdaten generieren."
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX3NlY3JldA.display_name": {
+          "source": "API Secret",
+          "message": "API-Geheimnis"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX3NlY3JldA.short_desc": {
+          "source": "ShipStation V1 API secret for authentication",
+          "message": "ShipStation V1-API-Geheimnis zur Authentifizierung"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the ShipStation REST API",
+          "message": "Eine Verbindung zur ShipStation REST-API"
+        }
+      }
+    }
+  }
+}

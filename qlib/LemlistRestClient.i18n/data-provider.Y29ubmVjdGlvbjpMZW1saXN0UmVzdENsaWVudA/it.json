@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Lemlist REST API for sales outreach and email campaign management.\n\nLemlist is a sales engagement platform enabling personalized outreach campaigns, lead management, and email automation.\n\n**Rate Limits:**\n- 20 requests per 2 seconds per API key\n- Rate limit headers are included in all responses",
+          "message": "Una connessione all'API REST di Lemlist per l'outsourcing di vendita e la gestione delle campagne email.\n\nLemlist è una piattaforma di engagement commerciale che permette campagne di contatto personalizzate, gestione dei lead e automazione email.\n\n**Limiti di velocità:**\n- 20 richieste ogni 2 secondi per chiave API\n- Le intestazioni dei limiti di velocità sono incluse in tutte le risposte"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Lemlist REST Connection",
+          "message": "Connessione REST di Lemlist"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to Lemlist\n2. Go to **Settings** (bottom left corner)\n3. Click **Integrations** → **API & Webhooks**\n4. Click **Generate Key** and copy the key",
+          "message": "1. Accedi a Lemlist\n2. Vai su **Impostazioni** (angolo in basso a sinistra)\n3. Clicca **Integrazioni** → **API e Webhook**\n4. Clicca **Genera Chiave** e copia la chiave"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Where to find your API key",
+          "message": "Dove trovare la tua chiave API"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Lemlist enforces a rate limit of **20 requests per 2 seconds** per API key.\n\nExceeding this limit will result in HTTP 429 (Too Many Requests) responses.\nWait briefly before retrying if you encounter rate limit errors.",
+          "message": "Lemlist impone un limite di velocità di **20 richieste ogni 2 secondi** per ogni chiave API.\n\nSuperare questo limite comporta risposte HTTP 429 (Troppo richieste).\nAttendi brevemente prima di riprovare in caso di errori di limite di velocità."
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Rate Limits",
+          "message": "Limiti di velocità"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Lemlist API key used for authentication.\n\nTo find your API key, log in to Lemlist and go to **Settings** → **Integrations** → **API & Webhooks**, then click **Generate Key**.",
+          "message": "La chiave API di Lemlist utilizzata per l'autenticazione.\n\nPer trovare la tua chiave API, accedi a Lemlist e vai su **Impostazioni** → **Integrazioni** → **API e Webhook**, quindi clicca su **Genera chiave**."
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Chiave API"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Lemlist API key for authentication",
+          "message": "Chiave API di Lemlist per l'autenticazione"
+        },
+        "connection.TGVtbGlzdFJlc3RDbGllbnQ.scheme.TGVtbGlzdFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Lemlist REST API",
+          "message": "Una connessione all'API REST di Lemlist"
+        }
+      }
+    }
+  }
+}

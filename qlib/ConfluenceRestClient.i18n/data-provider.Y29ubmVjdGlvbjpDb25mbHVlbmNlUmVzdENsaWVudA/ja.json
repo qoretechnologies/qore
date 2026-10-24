@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a [Confluence Cloud](https://www.atlassian.com/software/confluence) site for pages, blog posts, spaces and tasks.\n\n**The site is the connection.** With the OAuth2 authorization code flow the site fills itself in - `cloud_id` is read back from the credential once it is issued - and with an API token it is `site` (ex: `example.atlassian.net`). The target URL is derived from whichever is set, and a stored URL that disagrees is ignored rather than allowed to decide which site is reached.\n\n**Authentication** is either:\n- an **API token** in `password` with the account email in `username`, sent as basic authentication - created at **id.atlassian.com > Security > API tokens**; or\n- the **OAuth2 authorization code flow** with `oauth2_client_id` and `oauth2_client_secret` from an app created in the Atlassian developer console.\n\nThis connection targets Confluence **Cloud**; Confluence Data Center has a different API.\n\nConfluence is a trademark of Atlassian Pty Ltd.",
+          "message": "[Confluence Cloud](https://www.atlassian.com/software/confluence) サイトへの接続、ページ、ブログ投稿、スペース、タスクの操作。\n\n**サイトが接続です。** OAuth2 認証コードフローでは、サイトが自動で入力されます - 認証資格情報が発行された後、`cloud_id` から読み込まれます - API トークンでは `site` になります（例: `example.atlassian.net`）。ターゲット URL は、どちらかが設定されたものから導出され、保存された URL が一致しない場合は無視され、どのサイトに到達するかを決定するものとはなりません。\n\n**認証**は以下のいずれかです：\n- `password` に API トークン、`username` にアカウントメールを含む基本認証 - **id.atlassian.com > セキュリティ > API トークン** で作成；または\n- Atlassian 開発者コンソールで作成したアプリから取得した `oauth2_client_id` と `oauth2_client_secret` を用いた OAuth2 認証コードフロー。\n\nこの接続は Confluence **Cloud** をターゲットとしています。Confluence Data Center は別の API を使用します。\n\nConfluence は Atlassian Pty Ltd. の登録商標です。"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Confluence REST Connection",
+          "message": "Confluence REST 接続"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.desc": {
+          "source": "The Confluence site's cloud ID, used with the OAuth2 authorization code flow; the site is then reached through Atlassian's API gateway.\n\n**This is filled in automatically** when the connection is authorized, so it normally needs no attention: a credential is issued against the gateway rather than against a site, and the site it reaches is read back from it afterwards. Where a credential reaches several sites the first one is used and the others are logged; set this to work on one of those instead - a value set here is never overwritten.\n\nSet this **or** `site`, not both.",
+          "message": "Confluence サイトのクラウド ID。OAuth2 認証コードフローで使用され、サイトは Atlassian の API ゲートウェイ経由でアクセスされます。\n\n**接続が承認された時点で自動で入力されます**。通常、手動での設定は不要です。ゲートウェイに対して認証資格情報が発行され、その後その資格情報からアクセス先サイトが読み込まれます。複数のサイトにアクセスできる資格情報の場合、最初のサイトが使用され、他のサイトはログに記録されます。その中から特定のサイトで作業するには、ここに値を設定してください。このフィールドに設定された値は、決して上書きされません。\n\n`site` のいずれかを設定してください。両方を設定しないでください。"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.display_name": {
+          "source": "Cloud ID",
+          "message": "クラウドID"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.short_desc": {
+          "source": "The site's cloud ID, used with the OAuth2 flow",
+          "message": "サイトのクラウド ID。OAuth2 フローで使用"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.desc": {
+          "source": "The Confluence site host, ex: `example.atlassian.net`, used with an API token.\n\nSet this **or** `cloud_id`, not both.",
+          "message": "Confluence サイトのホスト。例: `example.atlassian.net`。API トークンと併用する。\n\nこの値 **または** `cloud_id` を設定する。両方を設定しないこと。"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.display_name": {
+          "source": "Site",
+          "message": "サイト"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.short_desc": {
+          "source": "The site host, ex: \"example.atlassian.net\"",
+          "message": "サイトのホスト。例: \"example.atlassian.net\""
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.cGFzc3dvcmQ.desc": {
+          "source": "An API token created at **id.atlassian.com > Security > API tokens**, used with the account email in `username`.\n\nThis is not the account password, which Confluence Cloud does not accept.",
+          "message": "**id.atlassian.com > セキュリティ > API トークン** で作成された API トークン。`username` で使用されるアカウントのメールアドレスと併用する。\n\nこれはアカウントのパスワードではない。Confluence Cloud ではパスワードは受け付けない。"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.dXNlcm5hbWU.desc": {
+          "source": "The Atlassian account email address, used with an API token in `password`",
+          "message": "Atlassian アカウントのメールアドレス。`password` で使用される API トークンと併用する。"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a Confluence Cloud site",
+          "message": "Confluence Cloud サイトへの接続"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Mews REST API",
+          "message": "Spojenie s REST API Mews"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Mews REST Connection",
+          "message": "Spojenie Mews REST"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50.desc": {
+          "source": "The Mews client value for requests",
+          "message": "Hodnota klienta Mews pre požiadavky"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50.display_name": {
+          "source": "Mews Client",
+          "message": "Klient Mews"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50.short_desc": {
+          "source": "The Mews client value for requests",
+          "message": "Hodnota klienta Mews pre požiadavky"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50X3Rva2Vu.desc": {
+          "source": "The Mews client token for access to the given Mews instance",
+          "message": "Token klienta Mews pre prístup k danému inštancii Mews"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50X3Rva2Vu.display_name": {
+          "source": "Mews Client Token",
+          "message": "Token klienta Mews"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50X3Rva2Vu.short_desc": {
+          "source": "The Mews client token for access to the given Mews instance",
+          "message": "Token klienta Mews pre prístup k danému inštancii Mews"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.YWNjZXNzX3Rva2Vu.desc": {
+          "source": "The Mews account token for access to the given Mews instance",
+          "message": "Token účtu Mews pre prístup k danej inštancii Mews"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.YWNjZXNzX3Rva2Vu.display_name": {
+          "source": "Mews Account Token",
+          "message": "Token účtu Mews"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.YWNjZXNzX3Rva2Vu.short_desc": {
+          "source": "The Mews account token for access to the given Mews instance",
+          "message": "Token účtu Mews pre prístup k danej inštancii Mews"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Mews REST API",
+          "message": "Spojenie s REST API Mews"
+        }
+      }
+    }
+  }
+}

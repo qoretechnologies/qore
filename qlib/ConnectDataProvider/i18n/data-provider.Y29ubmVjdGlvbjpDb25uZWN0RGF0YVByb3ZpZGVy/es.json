@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.desc": {
+          "source": "Connect RPC protocol connection for DataStream 2.0",
+          "message": "Conexión del protocolo Connect RPC para DataStream 2.0"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.display_name": {
+          "source": "Connect RPC",
+          "message": "Connect RPC"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOmNib3I.desc": {
+          "source": "CBOR binary codec (`json` module >= 1.12 required)",
+          "message": "Codificador binario CBOR (`json` módulo >= 1.12 requerido)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOmNib3I.display_name": {
+          "source": "CBOR",
+          "message": "CBOR"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "JSON codec (`json` module required)",
+          "message": "Codificador JSON (`json` módulo requerido)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOnlhbWw.desc": {
+          "source": "YAML codec with full Qore type fidelity",
+          "message": "Codificador YAML con fidelidad completa de tipos Qore"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.desc": {
+          "source": "The codec for message serialization: `yaml` (default), `json`, or `cbor`",
+          "message": "El codificador para la serialización de mensajes: `yaml` (predeterminado), `json` o `cbor`"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.display_name": {
+          "source": "Codec",
+          "message": "Codificador"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.short_desc": {
+          "source": "Serialization codec",
+          "message": "Codificador de serialización"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.YWNjZXB0X2FsbF9jZXJ0cw.desc": {
+          "source": "Accept all server TLS certificates without validation (for testing only; default: True)",
+          "message": "Aceptar todos los certificados TLS del servidor sin validación (solo para pruebas; predeterminado: Verdadero)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.YWNjZXB0X2FsbF9jZXJ0cw.display_name": {
+          "source": "Accept All Certs",
+          "message": "Aceptar todos los certificados"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.YWNjZXB0X2FsbF9jZXJ0cw.short_desc": {
+          "source": "Accept all TLS certificates",
+          "message": "Aceptar todos los certificados TLS"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.allowed_values.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "Raw `deflate` compression (RFC 1951)",
+          "message": "Compresión sin procesar `deflate` (RFC 1951)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.allowed_values.c3RyaW5nOmRlZmxhdGU.display_name": {
+          "source": "Deflate",
+          "message": "Deflate"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.allowed_values.c3RyaW5nOmd6aXA.desc": {
+          "source": "Standard `gzip` compression (RFC 1952)",
+          "message": "Compresión estándar `gzip` (RFC 1952)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.allowed_values.c3RyaW5nOmd6aXA.display_name": {
+          "source": "Gzip",
+          "message": "Gzip"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.desc": {
+          "source": "Per-message compression encoding: `gzip` or `deflate`",
+          "message": "Codificación de compresión por mensaje: `gzip` o `deflate`"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Compression",
+          "message": "Compresión"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Compression encoding",
+          "message": "Codificación de compresión"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmF1dG8.desc": {
+          "source": "Auto-detect protocol (tries HTTP/3, falls back to HTTP/2)",
+          "message": "Detección automática del protocolo (prueba HTTP/3, retrocede a HTTP/2)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automático"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmgy.desc": {
+          "source": "HTTP/2 over TLS (`h2` ALPN negotiation)",
+          "message": "HTTP/2 sobre TLS (`h2` negociación ALPN)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmgy.display_name": {
+          "source": "HTTP/2",
+          "message": "HTTP/2"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmgz.desc": {
+          "source": "HTTP/3 over QUIC (requires QUIC support in the Qore runtime)",
+          "message": "HTTP/3 sobre QUIC (requiere soporte QUIC en el runtime de Qore)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmgz.display_name": {
+          "source": "HTTP/3",
+          "message": "HTTP/3"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.desc": {
+          "source": "HTTP protocol: `auto` (default), `h2` (HTTP/2), or `h3` (HTTP/3)",
+          "message": "Protocolo HTTP: `auto` (predeterminado), `h2` (HTTP/2) o `h3` (HTTP/3)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.display_name": {
+          "source": "Protocol",
+          "message": "Protocolo"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.short_desc": {
+          "source": "HTTP protocol version",
+          "message": "Versión del protocolo HTTP"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dGltZW91dF9tcw.desc": {
+          "source": "Default request timeout in milliseconds",
+          "message": "Tiempo de espera predeterminado de la solicitud en milisegundos"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dGltZW91dF9tcw.display_name": {
+          "source": "Timeout",
+          "message": "Tiempo de espera"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dGltZW91dF9tcw.short_desc": {
+          "source": "Default timeout (ms)",
+          "message": "Tiempo de espera predeterminado (ms)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dXNlX2Rpc2NvdmVyeQ.desc": {
+          "source": "Enable automatic service discovery via Connect reflection (default: True)",
+          "message": "Habilitar la detección automática de servicios mediante reflexión Connect (predeterminado: True)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dXNlX2Rpc2NvdmVyeQ.display_name": {
+          "source": "Use Discovery",
+          "message": "Usar descubrimiento"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dXNlX2Rpc2NvdmVyeQ.short_desc": {
+          "source": "Enable service discovery",
+          "message": "Habilitar el descubrimiento de servicios"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.short_desc": {
+          "source": "Connect RPC connection",
+          "message": "Conexión de RPC Connect"
+        }
+      }
+    }
+  }
+}

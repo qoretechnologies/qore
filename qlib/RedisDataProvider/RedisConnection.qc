@@ -43,7 +43,8 @@ public namespace RedisDataProvider {
 public class RedisConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("RedisDataProvider",
+            "RedisConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Redis Connection",
             "short_desc": "A connection to a Redis server",
             "desc": "A connection to a Redis server using the `redis` or `rediss` (TLS) protocols",
@@ -92,7 +93,7 @@ public class RedisConnection inherits ConnectionProvider::AbstractConnectionWith
                         "the URL",
                 },
             },
-        };
+        });
     }
 
     #! creates the RedisConnection object

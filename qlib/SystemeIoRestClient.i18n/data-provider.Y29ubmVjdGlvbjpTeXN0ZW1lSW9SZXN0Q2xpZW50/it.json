@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Systeme.io REST API for managing contacts, tags, courses, communities, and subscriptions.\n\nSysteme.io is an all-in-one online marketing platform for building sales funnels, running email campaigns, managing courses and communities, and handling affiliate programs.\n\n**To obtain your API key:**\n1. Log in to your Systeme.io account\n2. Go to **Profile Settings**\n3. Navigate to the **Public API keys** section\n4. Click **Create** to generate a new key\n5. Copy the key immediately (it cannot be retrieved later)\n\n**Note:** Maximum 3 API keys per account. Keys are shared across all API integrations.",
+          "message": "Una connessione all'API REST di Systeme.io per gestire contatti, tag, corsi, comunità e abbonamenti.\n\nSysteme.io è una piattaforma di marketing online completa per creare funnel di vendita, gestire campagne email, gestire corsi e comunità e gestire programmi di affiliazione.\n\n**Per ottenere la tua chiave API:**\n1. Accedi al tuo account Systeme.io\n2. Vai su **Impostazioni del profilo**\n3. Naviga nella sezione **Chiavi API pubbliche**\n4. Clicca su **Crea** per generare una nuova chiave\n5. Copia immediatamente la chiave (non può essere recuperata in seguito)\n\n**Nota:** massimo 3 chiavi API per account. Le chiavi sono condivise tra tutte le integrazioni API."
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Systeme.io REST Connection",
+          "message": "Connessione REST di Systeme.io"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires a **Systeme.io API key**.\n\n**Steps to generate an API key:**\n1. Log in to your Systeme.io account\n2. Go to **Profile Settings**\n3. Navigate to the **Public API keys** section\n4. Click **Create** and give the key a name\n5. Copy the key immediately\n\n**Important:**\n- API keys are only shown once at creation time\n- Maximum 3 API keys per account\n- Rate limits are plan-based and shared across all keys",
+          "message": "Questa integrazione richiede una **chiave API di Systeme.io**.\n\n**Passaggi per generare una chiave API:**\n1. Accedi al tuo account Systeme.io\n2. Vai su **Impostazioni del profilo**\n3. Naviga nella sezione **Chiavi API pubbliche**\n4. Clicca su **Crea** e assegna un nome alla chiave\n5. Copia immediatamente la chiave\n\n**Importante:**\n- Le chiavi API vengono visualizzate solo una volta al momento della creazione\n- Massimo 3 chiavi API per account\n- I limiti di velocità dipendono dal piano e sono condivisi tra tutte le chiavi"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "Come ottenere la tua chiave API"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Systeme.io API key used for authentication via the `X-API-Key` header.\n\n**To obtain your API key:**\n1. Log in to your Systeme.io account\n2. Go to **Profile Settings**\n3. Navigate to the **Public API keys** section\n4. Click **Create** to generate a new key\n5. Copy the key immediately (it cannot be retrieved later)\n\n**Important:** API keys are only visible immediately after creation. If you lose a key, you must delete it and create a new one.",
+          "message": "La chiave API di Systeme.io utilizzata per l'autenticazione tramite l'intestazione `X-API-Key`.\n\n**Per ottenere la tua chiave API:**\n1. Accedi al tuo account Systeme.io\n2. Vai su **Impostazioni del profilo**\n3. Naviga nella sezione **Chiavi API pubbliche**\n4. Clicca su **Crea** per generare una nuova chiave\n5. Copia immediatamente la chiave (non può essere recuperata in seguito)\n\n**Importante:** le chiavi API sono visibili solo immediatamente dopo la creazione. Se perdi una chiave, devi eliminarla e crearne una nuova."
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Chiave API"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Systeme.io API key for authentication",
+          "message": "Chiave API di Systeme.io per l'autenticazione"
+        },
+        "connection.U3lzdGVtZUlvUmVzdENsaWVudA.scheme.U3lzdGVtZUlvUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Systeme.io REST API",
+          "message": "Una connessione all'API REST di Systeme.io"
+        }
+      }
+    }
+  }
+}

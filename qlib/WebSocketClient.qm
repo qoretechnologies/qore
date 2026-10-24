@@ -4097,7 +4097,8 @@ public class WebSocketPingPollOperation inherits ConnectionProvider::HttpClientI
 public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("WebSocketClient",
+            "WebSocketConnectionObject", "en", <ConnectionSchemeInfo>{
             "display_name": "WebSocket Connection",
             "short_desc": "A connection to a WebSocket server service",
             "desc": "A connection to a WebSocket server service",
@@ -4189,7 +4190,7 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
                     "default_value": True,
                 },
             },
-        };
+        });
     }
 
     #! creates the WebSocketConnectionObject connection object

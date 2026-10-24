@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Bitly REST API for URL shortening, branded links, QR codes, campaigns, and click analytics",
+          "message": "Una connessione all'API REST di Bitly per accorciamento URL, collegamenti personalizzati, codici QR, campagne e analisi dei clic"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Bitly REST Connection",
+          "message": "Connessione REST di Bitly"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Bitly API access token used for Bearer token authentication.\n\n**To obtain your access token:**\n1. Log in to your Bitly account\n2. Go to **Settings** > **Developer settings** > **API**\n3. Generate a new access token\n\nRate limit: 5 concurrent connections, hourly and monthly limits based on plan",
+          "message": "Il token di accesso all'API Bitly utilizzato per l'autenticazione con token di portatore.\n\n**Per ottenere il tuo token di accesso:**\n1. Accedi al tuo account Bitly\n2. Vai su **Impostazioni** > **Impostazioni sviluppatore** > **API**\n3. Genera un nuovo token di accesso\n\nLimite di velocità: 5 connessioni simultanee, limiti orari e mensili basati sul piano"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Access Token",
+          "message": "Token di accesso API"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Bitly API access token for authentication",
+          "message": "Token di accesso all'API Bitly per l'autenticazione"
+        },
+        "connection.Qml0bHlSZXN0Q2xpZW50.scheme.Qml0bHlSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Bitly REST API",
+          "message": "Una connessione all'API REST di Bitly"
+        }
+      }
+    }
+  }
+}

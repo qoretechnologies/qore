@@ -3,6 +3,106 @@
   "locales": {
     "de": {
       "messages": {
+        "app.U1FMaXRl.connection.option.Y2hhcnNldA.desc": {
+          "source": "The character set to use for the connection (e.g. utf8)",
+          "message": "Die Zeichensatzkodierung für die Verbindung verwenden (z. B. utf8)"
+        },
+        "app.U1FMaXRl.connection.option.Y2hhcnNldA.display_name": {
+          "source": "Character Set",
+          "message": "Zeichensatz"
+        },
+        "app.U1FMaXRl.connection.option.Y2hhcnNldA.short_desc": {
+          "source": "Connection character set",
+          "message": "Verbindungszeichensatz"
+        },
+        "app.U1FMaXRl.connection.option.ZGI.desc": {
+          "source": "The name of the database to connect to",
+          "message": "Der Name der Datenbank, mit der verbunden werden soll"
+        },
+        "app.U1FMaXRl.connection.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "Datenbank"
+        },
+        "app.U1FMaXRl.connection.option.ZGI.short_desc": {
+          "source": "Database name",
+          "message": "Datenbankname"
+        },
+        "app.U1FMaXRl.connection.option.aG9zdA.desc": {
+          "source": "The hostname or IP address of the database server",
+          "message": "Der Hostname oder die IP-Adresse des Datenbank-Servers"
+        },
+        "app.U1FMaXRl.connection.option.aG9zdA.display_name": {
+          "source": "Host",
+          "message": "Host"
+        },
+        "app.U1FMaXRl.connection.option.aG9zdA.short_desc": {
+          "source": "Database server hostname",
+          "message": "Hostname des Datenbank-Servers"
+        },
+        "app.U1FMaXRl.connection.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Maximale Anzahl an Verbindungen im Pool"
+        },
+        "app.U1FMaXRl.connection.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Max. Poolgröße"
+        },
+        "app.U1FMaXRl.connection.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Maximale Anzahl an Poolverbindungen"
+        },
+        "app.U1FMaXRl.connection.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Minimale Anzahl an Verbindungen im Pool"
+        },
+        "app.U1FMaXRl.connection.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Min. Poolgröße"
+        },
+        "app.U1FMaXRl.connection.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Minimale Anzahl an Poolverbindungen"
+        },
+        "app.U1FMaXRl.connection.option.cG9ydA.desc": {
+          "source": "The port number of the database server",
+          "message": "Die Portnummer des Datenbank-Servers"
+        },
+        "app.U1FMaXRl.connection.option.cG9ydA.display_name": {
+          "source": "Port",
+          "message": "Hafen"
+        },
+        "app.U1FMaXRl.connection.option.cG9ydA.short_desc": {
+          "source": "Database server port",
+          "message": "Port des Datenbank-Servers"
+        },
+        "app.U1FMaXRl.connection.option.cGFzcw.desc": {
+          "source": "The password for database authentication",
+          "message": "Das Passwort für die Datenbank-Authentifizierung"
+        },
+        "app.U1FMaXRl.connection.option.cGFzcw.display_name": {
+          "source": "Password",
+          "message": "Passwort"
+        },
+        "app.U1FMaXRl.connection.option.cGFzcw.short_desc": {
+          "source": "Database password",
+          "message": "Datenbankpasswort"
+        },
+        "app.U1FMaXRl.connection.option.dXNlcg.desc": {
+          "source": "The database user name for authentication",
+          "message": "Der Benutzername für die Datenbank-Authentifizierung"
+        },
+        "app.U1FMaXRl.connection.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Benutzer"
+        },
+        "app.U1FMaXRl.connection.option.dXNlcg.short_desc": {
+          "source": "Database user",
+          "message": "Datenbankbenutzer"
+        },
+        "app.U1FMaXRl.desc": {
+          "source": "Create and manage connections to a SQLite embedded database",
+          "message": "Verbindungen zu einer eingebetteten SQLite-Datenbank erstellen und verwalten"
+        },
         "app.U1FMaXRl.display_name": {
           "source": "SQLite",
           "message": "SQLite"
@@ -10,10 +110,6 @@
         "app.U1FMaXRl.short_desc": {
           "source": "SQLite embedded database",
           "message": "Eingebettete SQLite-Datenbank"
-        },
-        "app.U1FMaXRl.desc": {
-          "source": "Create and manage connections to a SQLite embedded database",
-          "message": "Verbindungen zu einer eingebetteten SQLite-Datenbank erstellen und verwalten"
         }
       }
     }

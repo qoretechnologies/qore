@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.VW5ib3VuY2VSZXN0Q2xpZW50.scheme.VW5ib3VuY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Unbounce REST API for landing pages, popups, sticky bars, leads, form submissions, and A/B testing",
+          "message": "用於落地頁、浮動視窗、懸浮欄、潛在客戶、表單提交及 A/B 測試的 Unbounce REST API 連接"
+        },
+        "connection.VW5ib3VuY2VSZXN0Q2xpZW50.scheme.VW5ib3VuY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Unbounce REST Connection",
+          "message": "Unbounce REST 連接"
+        },
+        "connection.VW5ib3VuY2VSZXN0Q2xpZW50.scheme.VW5ib3VuY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Unbounce REST API",
+          "message": "與 Unbounce REST API 的連接"
+        }
+      }
+    }
+  }
+}

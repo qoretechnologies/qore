@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a Salesforce instance with the REST API",
+          "message": "Una conexión a una instancia de Salesforce con la API REST"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Salesforce REST Connection",
+          "message": "Conexión REST de Salesforce"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "The Salesforce API version to use; use `auto` (the default) to use the latest API version",
+          "message": "La versión de la API de Salesforce a utilizar; use `auto` (el valor predeterminado) para usar la versión más reciente de la API"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Versión de API"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "La versión de la API a utilizar"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.aW5zdGFuY2VfdXJs.desc": {
+          "source": "The Salesforce.com instance URL returned in the OAuth2 login process (set automatically on login)",
+          "message": "La URL de instancia de Salesforce.com devuelta en el proceso de inicio de sesión OAuth2 (configurada automáticamente al iniciar sesión)"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.aW5zdGFuY2VfdXJs.display_name": {
+          "source": "Instance URL",
+          "message": "URL de instancia"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.aW5zdGFuY2VfdXJs.short_desc": {
+          "source": "The Salesforce.com instance URL",
+          "message": "La URL de instancia de Salesforce.com"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.aWRfc2VydmljZV91cmw.desc": {
+          "source": "The Salesforce.com identity service URL returned in the OAuth2 login process (set automatically on login)",
+          "message": "La URL del servicio de identidad de Salesforce.com devuelta en el proceso de inicio de sesión OAuth2 (configurada automáticamente al iniciar sesión)"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.aWRfc2VydmljZV91cmw.display_name": {
+          "source": "ID Service URL",
+          "message": "URL del servicio de identidad"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.aWRfc2VydmljZV91cmw.short_desc": {
+          "source": "The Salesforce.com identity service URL",
+          "message": "La URL del servicio de identidad de Salesforce.com"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "The OAuth2 client_id and also the Salesforce \"consumer key\" for the Connected App",
+          "message": "El client_id de OAuth2 y también la \"clave de consumidor\" de Salesforce para la aplicación conectada"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "The OAuth2 client_secret and also the Salesforce \"consumer secret\" for the Connected App",
+          "message": "El client_secret de OAuth2 y también el \"secreto de consumidor\" de Salesforce para la aplicación conectada"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2xvZ291dF91cmw.desc": {
+          "source": "The OAuth logout / revoke token URL",
+          "message": "La URL de cierre de sesión / revocación de token de OAuth"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2xvZ291dF91cmw.display_name": {
+          "source": "OAuth2 Revocation URL",
+          "message": "URL de revocación de OAuth2"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2xvZ291dF91cmw.short_desc": {
+          "source": "The OAuth logout / revoke token URL",
+          "message": "La URL de cierre de sesión / revocación de token de OAuth"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.cGFzc3dvcmQ.desc": {
+          "source": "the Salesforce.com password (will override any password in the URL)",
+          "message": "la contraseña de Salesforce.com (sobrescribirá cualquier contraseña en la URL)"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.option.dXNlcm5hbWU.desc": {
+          "source": "the Salesforce.com username (will override any username in the URL)",
+          "message": "el nombre de usuario de Salesforce.com (sobrescribirá cualquier nombre de usuario en la URL)"
+        },
+        "connection.U2FsZXNmb3JjZVJlc3RDbGllbnQ.scheme.U2FsZXNmb3JjZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a Salesforce instance with the REST API",
+          "message": "Una conexión a una instancia de Salesforce con la API REST"
+        }
+      }
+    }
+  }
+}

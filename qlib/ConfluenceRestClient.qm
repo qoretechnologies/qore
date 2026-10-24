@@ -486,7 +486,8 @@ public class ConfluenceRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "confluence://api.atlassian.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ConfluenceRestClient",
+            "ConfluenceRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Confluence REST Connection",
             "short_desc": "A connection to a Confluence Cloud site",
             "desc": "A connection to a [Confluence Cloud](https://www.atlassian.com/software/confluence) "
@@ -581,7 +582,7 @@ public class ConfluenceRestConnection inherits RestClient::RestConnection {
             # has to supply, and is named first because that is the flow this connection defaults to.
             # \c site is the API-token path, where there is nothing to discover from
             "required_options": "oauth2_client_id,oauth2_client_secret|site",
-        };
+        });
     }
 
     #! Creates the ConfluenceRestConnection object

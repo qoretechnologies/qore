@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Bitbucket Cloud](https://bitbucket.org) for repositories, commits, pull requests, deployments and code search.\n\n**Authentication** is any one of three credentials:\n- an **access token** in `token` - a repository, project or workspace access token, created under the relevant **Settings > Access tokens**. The narrowest option, and the one to prefer;\n- an **app password** in `username` and `password`, sent as basic authentication. The username is the Atlassian account username, **not** the email address;\n- the **OAuth2 authorization code flow**, with `oauth2_client_id` and `oauth2_client_secret` from an OAuth consumer created in workspace settings.\n\nThis connection targets Bitbucket **Cloud**. Bitbucket Data Center is a different product with a different API and is not supported.\n\nBitbucket is a trademark of Atlassian Pty Ltd.",
+          "message": "Підключення до [Bitbucket Cloud](https://bitbucket.org) для репозиторіїв, комітів, запитів на злиття, розгортань та пошуку коду.\n\n**Аутентифікація** — це будь-який із трьох параметрів:\n- **токен доступу** у `token` — токен доступу до репозиторію, проекту або робочій області, створений у розділі **Налаштування > Токени доступу**. Найвужчий варіант, і його слід використовувати;\n- **пароль додатку** у `username` та `password`, який надсилається як базова аутентифікація. Ім'я користувача — це ім'я користувача облікового запису Atlassian, **не** електронна пошта;\n- **потік авторизації OAuth2**, з `oauth2_client_id` та `oauth2_client_secret` з споживача OAuth, створеного в налаштуваннях робочої області.\n\nЦе підключення спрямоване на Bitbucket **Cloud**. Bitbucket Data Center — це інший продукт із іншим API, і підтримки не має.\n\nBitbucket — товарний знак компанії Atlassian Pty Ltd."
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Bitbucket REST Connection",
+          "message": "Підключення до REST Bitbucket"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "An app password created under **Personal settings > App passwords**, used with `username`.\n\nThis is not the account password, which Bitbucket does not accept for API access.",
+          "message": "Пароль додатку, створений у розділі **Налаштування > Паролі додатків**, використовується разом із `username`.\n\nЦе не пароль облікового запису, який Bitbucket не приймає для доступу до API."
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A Bitbucket access token, sent as a bearer token.\n\n**To obtain one:** open the repository, project or workspace **Settings > Access tokens**, create a token, and grant it only the scopes the integration needs.\n\nLeave this unset to authenticate with an app password or the OAuth2 flow instead.",
+          "message": "Токен доступу Bitbucket, надсилається як носій токену.\n\n**Щоб отримати:** відкрийте репозиторій, проект або робочу область **Налаштування > Токени доступу**, створіть токен і надайте йому тільки ті дозволи, які потрібні інтеграції.\n\nЗалиште порожнім, щоб аутентифікуватися за допомогою пароля додатку або потоку OAuth2."
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "Токен доступу"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A Bitbucket repository, project or workspace access token",
+          "message": "Токен доступу до репозиторію, проекту або робочої області Bitbucket"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The Atlassian account username to use with an app password.\n\n**Not** the email address: Bitbucket rejects an email address here. The username is shown under **Personal settings > Account settings**.",
+          "message": "Ім’я користувача облікового запису Atlassian для використання з паролем додатку.\n\n**Не** електронна пошта: Bitbucket відхиляє електронну пошту тут. Ім’я користувача відображається у розділі **Особисті налаштування > Налаштування облікового запису**."
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Bitbucket Cloud REST API",
+          "message": "З’єднання з REST API Bitbucket Cloud"
+        }
+      }
+    }
+  }
+}

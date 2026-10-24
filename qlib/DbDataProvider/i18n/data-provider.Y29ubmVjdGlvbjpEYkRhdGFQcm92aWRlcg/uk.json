@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.desc": {
+          "source": "Connection to a database server using a datasource connection string",
+          "message": "Підключення до сервера бази даних за допомогою рядка підключення до джерела даних"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.display_name": {
+          "source": "Database Connection",
+          "message": "Підключення до бази даних"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Максимальна кількість з'єднань у пулі"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Макс. розмір пулу"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Максимальна кількість підключень до пулу"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Мінімальна кількість з’єднань у пулі"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Мінімальний розмір пулу"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Мінімальна кількість підключень до пулу"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.short_desc": {
+          "source": "Connection to a database server",
+          "message": "Підключення до сервера бази даних"
+        }
+      }
+    }
+  }
+}

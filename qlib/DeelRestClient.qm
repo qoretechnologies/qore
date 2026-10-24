@@ -195,7 +195,8 @@ public class DeelRestConnection inherits RestClient::RestConnection {
         const SandboxConnectionUrl = "deel://api-sandbox.demo.deel.com/rest/v2";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("DeelRestClient",
+            "DeelRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Deel REST Connection",
             "short_desc": "A connection to the Deel REST API",
             "desc": "A connection to the Deel REST API for global workforce management.\n\n"
@@ -252,6 +253,7 @@ public class DeelRestConnection inherits RestClient::RestConnection {
             "required_options": "apikey",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Generate Your API Token",
                     "intent": "info",
                     "content": "1. Log in to Deel at https://app.deel.com\n"
@@ -268,6 +270,7 @@ public class DeelRestConnection inherits RestClient::RestConnection {
                         "- Store your token securely; treat it like a password",
                 },
                 <UiMessageInfo>{
+                    "presentation_id": "setup-2",
                     "title": "Sandbox vs Production",
                     "intent": "info",
                     "content": "**Sandbox environment** is available for safe testing without "
@@ -279,7 +282,7 @@ public class DeelRestConnection inherits RestClient::RestConnection {
                         "- Leave **Use Sandbox** disabled for production use",
                 },
             ),
-        };
+        });
     }
 
     #! creates the DeelRestConnection object

@@ -1,0 +1,333 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [AWS Bedrock](https://aws.amazon.com/bedrock/) for chat, embeddings, and model-management actions through SigV4-signed REST calls.\n\nThe runtime endpoint is derived from `aws_region`. Authentication uses explicit access keys when supplied, otherwise the standard AWS environment, ECS task-role, or IMDSv2 credential chain. An optional role ARN applies STS AssumeRole after resolving the base credential. The connection ping makes an authenticated, inference-free `ListFoundationModels` request.",
+          "message": "與 [AWS Bedrock](https://aws.amazon.com/bedrock/) 的連接，透過 SigV4 簽署的 REST 請求執行對話、嵌入與模型管理操作。\n\n執行時端點由 `aws_region` 決定。驗證使用明確提供的存取金鑰，否則使用標準 AWS 環境、ECS 任務角色或 IMDSv2 憑證鏈。可選的角色 ARN 在解析基本憑證後，使用 STS AssumeRole。連接測試會發出已驗證、無推論的 `ListFoundationModels` 請求。"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "AWS Bedrock Connection",
+          "message": "AWS Bedrock 連接"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2V4dGVybmFsX2lk.desc": {
+          "source": "External ID sent to AWS STS when the target role requires one.",
+          "message": "當目標角色需要時，傳送至 AWS STS 的外部 ID。"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2V4dGVybmFsX2lk.display_name": {
+          "source": "STS External ID",
+          "message": "STS 外部 ID"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2V4dGVybmFsX2lk.short_desc": {
+          "source": "Optional external ID required by the role",
+          "message": "角色所需的可選外部 ID"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2tleWlk.desc": {
+          "source": "AWS access key ID for explicit credentials. Leave this and `aws_secret` empty to use the AWS environment, ECS task-role, or IMDSv2 credential chain.",
+          "message": "用於明確憑證的 AWS 存取金鑰 ID。將此項與 `aws_secret` 留空，以使用 AWS 環境、ECS 任務角色或 IMDSv2 憑證鏈。"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2tleWlk.display_name": {
+          "source": "AWS Access Key ID",
+          "message": "AWS 存取金鑰 ID"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2tleWlk.short_desc": {
+          "source": "Optional access key ID for SigV4 authentication",
+          "message": "用於 SigV4 驗證的選擇性存取金鑰 ID"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLWNlbnRyYWwtMQ.desc": {
+          "source": "Middle East (UAE)",
+          "message": "中東（阿拉伯聯合大公國）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLWNlbnRyYWwtMQ.display_name": {
+          "source": "Middle East (UAE)",
+          "message": "中東（阿拉伯聯合大公國）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLXNvdXRoLTE.desc": {
+          "source": "Middle East (Bahrain)",
+          "message": "中東（巴林）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLXNvdXRoLTE.display_name": {
+          "source": "Middle East (Bahrain)",
+          "message": "中東（巴林）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFmLXNvdXRoLTE.desc": {
+          "source": "Africa (Cape Town)",
+          "message": "非洲（開普敦）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFmLXNvdXRoLTE.display_name": {
+          "source": "Africa (Cape Town)",
+          "message": "非洲（開普敦）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0x.desc": {
+          "source": "Asia Pacific (Tokyo)",
+          "message": "亞太地區（東京）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0x.display_name": {
+          "source": "Asia Pacific (Tokyo)",
+          "message": "亞太地區（東京）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0y.desc": {
+          "source": "Asia Pacific (Seoul)",
+          "message": "亞太地區（首爾）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0y.display_name": {
+          "source": "Asia Pacific (Seoul)",
+          "message": "亞太地區（首爾）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0z.desc": {
+          "source": "Asia Pacific (Osaka)",
+          "message": "亞太地區（大阪）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0z.display_name": {
+          "source": "Asia Pacific (Osaka)",
+          "message": "亞太地區（大阪）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLWVhc3QtMQ.desc": {
+          "source": "Asia Pacific (Hong Kong)",
+          "message": "亞太地區（香港）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLWVhc3QtMQ.display_name": {
+          "source": "Asia Pacific (Hong Kong)",
+          "message": "亞太地區（香港）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTE.desc": {
+          "source": "Asia Pacific (Mumbai)",
+          "message": "亞太地區（孟買）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTE.display_name": {
+          "source": "Asia Pacific (Mumbai)",
+          "message": "亞太地區（孟買）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTI.desc": {
+          "source": "Asia Pacific (Hyderabad)",
+          "message": "亞太地區（海得拉巴）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTI.display_name": {
+          "source": "Asia Pacific (Hyderabad)",
+          "message": "亞太地區（海得拉巴）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC00.desc": {
+          "source": "Asia Pacific (Melbourne)",
+          "message": "亞太地區（墨爾本）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC00.display_name": {
+          "source": "Asia Pacific (Melbourne)",
+          "message": "亞太地區（墨爾本）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.desc": {
+          "source": "Asia Pacific (Singapore)",
+          "message": "亞太地區（新加坡）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.display_name": {
+          "source": "Asia Pacific (Singapore)",
+          "message": "亞太地區（新加坡）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0y.desc": {
+          "source": "Asia Pacific (Sydney)",
+          "message": "亞太地區（雪梨）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0y.display_name": {
+          "source": "Asia Pacific (Sydney)",
+          "message": "亞太地區（雪梨）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0z.desc": {
+          "source": "Asia Pacific (Jakarta)",
+          "message": "亞太地區（雅加達）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0z.display_name": {
+          "source": "Asia Pacific (Jakarta)",
+          "message": "亞太地區（雅加達）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLWNlbnRyYWwtMQ.desc": {
+          "source": "Canada (Central)",
+          "message": "加拿大（中部）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLWNlbnRyYWwtMQ.display_name": {
+          "source": "Canada (Central)",
+          "message": "加拿大（中部）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLXdlc3QtMQ.desc": {
+          "source": "Canada West (Calgary)",
+          "message": "加拿大西部（卡加利）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLXdlc3QtMQ.display_name": {
+          "source": "Canada West (Calgary)",
+          "message": "加拿大西部（卡加利）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LW5vcnRoLTE.desc": {
+          "source": "Europe (Stockholm)",
+          "message": "歐洲（斯德哥爾摩）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LW5vcnRoLTE.display_name": {
+          "source": "Europe (Stockholm)",
+          "message": "歐洲（斯德哥爾摩）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMQ.desc": {
+          "source": "Europe (Frankfurt)",
+          "message": "歐洲（法蘭克福）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMQ.display_name": {
+          "source": "Europe (Frankfurt)",
+          "message": "歐洲（法蘭克福）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMg.desc": {
+          "source": "Europe (Zurich)",
+          "message": "歐洲（蘇黎世）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMg.display_name": {
+          "source": "Europe (Zurich)",
+          "message": "歐洲（蘇黎世）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTE.desc": {
+          "source": "Europe (Milan)",
+          "message": "歐洲（米蘭）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTE.display_name": {
+          "source": "Europe (Milan)",
+          "message": "歐洲（米蘭）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTI.desc": {
+          "source": "Europe (Spain)",
+          "message": "歐洲（西班牙）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTI.display_name": {
+          "source": "Europe (Spain)",
+          "message": "歐洲（西班牙）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMQ.desc": {
+          "source": "Europe (Ireland)",
+          "message": "歐洲（愛爾蘭）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMQ.display_name": {
+          "source": "Europe (Ireland)",
+          "message": "歐洲（愛爾蘭）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMg.desc": {
+          "source": "Europe (London)",
+          "message": "歐洲（倫敦）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMg.display_name": {
+          "source": "Europe (London)",
+          "message": "歐洲（倫敦）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMw.desc": {
+          "source": "Europe (Paris)",
+          "message": "歐洲（巴黎）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMw.display_name": {
+          "source": "Europe (Paris)",
+          "message": "歐洲（巴黎）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmlsLWNlbnRyYWwtMQ.desc": {
+          "source": "Israel (Tel Aviv)",
+          "message": "以色列（特拉維夫）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmlsLWNlbnRyYWwtMQ.display_name": {
+          "source": "Israel (Tel Aviv)",
+          "message": "以色列（特拉維夫）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnNhLWVhc3QtMQ.desc": {
+          "source": "South America (São Paulo)",
+          "message": "南美洲（聖保羅）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnNhLWVhc3QtMQ.display_name": {
+          "source": "South America (São Paulo)",
+          "message": "南美洲（聖保羅）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMQ.desc": {
+          "source": "US East (N. Virginia)",
+          "message": "美國東部（弗吉尼亞北部）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMQ.display_name": {
+          "source": "US East (N. Virginia)",
+          "message": "美國東部（弗吉尼亞北部）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMg.desc": {
+          "source": "US East (Ohio)",
+          "message": "美國東部（俄亥俄）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMg.display_name": {
+          "source": "US East (Ohio)",
+          "message": "美國東部（俄亥俄）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMQ.desc": {
+          "source": "US West (N. California)",
+          "message": "美國西部（北加州）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMQ.display_name": {
+          "source": "US West (N. California)",
+          "message": "美國西部（北加州）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMg.desc": {
+          "source": "US West (Oregon)",
+          "message": "美國西部（俄勒岡）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMg.display_name": {
+          "source": "US West (Oregon)",
+          "message": "美國西部（俄勒岡）"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.desc": {
+          "source": "AWS region used for Bedrock runtime and control-plane requests. The connection derives both service endpoints from this value.",
+          "message": "用於 Bedrock 運行時與控制平面請求的 AWS 區域。此值會用來推導兩個服務端點。"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.short_desc": {
+          "source": "AWS region hosting the Bedrock resources",
+          "message": "託管 Bedrock 資源的 AWS 區域"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfYXJu.desc": {
+          "source": "AWS role ARN to assume after resolving the base credential. The resulting temporary credential signs Bedrock requests.",
+          "message": "解析基本憑證後要假設的 AWS 角色 ARN。產生的暫時憑證會用來簽署 Bedrock 請求。"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfYXJu.display_name": {
+          "source": "STS Role ARN",
+          "message": "STS 角色 ARN"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfYXJu.short_desc": {
+          "source": "Optional AWS role to assume",
+          "message": "可選的 AWS 角色以進行假設"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.desc": {
+          "source": "Session name sent to AWS STS when `aws_role_arn` is set.",
+          "message": "當 `aws_role_arn` 設定時，傳送至 AWS STS 的會話名稱。"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.display_name": {
+          "source": "STS Role Session Name",
+          "message": "STS 角色會話名稱"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.short_desc": {
+          "source": "Optional name for the assumed-role session",
+          "message": "假設角色會話的選擇性名稱"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3NlY3JldA.desc": {
+          "source": "AWS secret access key paired with `aws_keyid`. Leave both fields empty to use the standard AWS credential chain.",
+          "message": "與 `aws_keyid` 配對的 AWS 暫時存取金鑰。兩個欄位皆留空則使用標準 AWS 憑證鏈。"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3NlY3JldA.display_name": {
+          "source": "AWS Secret Access Key",
+          "message": "AWS 秘密存取金鑰"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3NlY3JldA.short_desc": {
+          "source": "Optional secret key for SigV4 authentication",
+          "message": "用於 SigV4 驗證的選擇性金鑰"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3Rva2Vu.desc": {
+          "source": "AWS session token supplied with temporary access-key credentials.",
+          "message": "搭配暫時存取金鑰使用的 AWS 會話代碼。"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3Rva2Vu.display_name": {
+          "source": "AWS Session Token",
+          "message": "AWS 會話代碼"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3Rva2Vu.short_desc": {
+          "source": "Optional token for temporary AWS credentials",
+          "message": "用於暫時 AWS 憑證的選擇性代碼"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the AWS Bedrock runtime",
+          "message": "連線至 AWS Bedrock 運行時"
+        }
+      }
+    }
+  }
+}

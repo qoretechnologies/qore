@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Zoho Books REST API for accounting and invoicing",
+          "message": "用於會計與發票的 Zoho Books REST API 連接"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Zoho Books REST Connection",
+          "message": "Zoho Books REST 連接"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "Select the subdomain and domain that match your Zoho account:\n- **Sub Domain**: 'zoho' (standard) or 'zohocloud' (cloud accounts)\n- **Domain**: Based on your data center region (.com for US/Global, .eu for Europe, .in for India, .com.au for Australia, .ca for Canada, .sa for Saudi Arabia, .jp for Japan)",
+          "message": "選擇符合您 Zoho 帳戶的子網域和網域：\n- **子網域**：'zoho'（標準）或 'zohocloud'（雲端帳戶）\n- **網域**：根據您的資料中心區域（.com 代表美國/全球，.eu 代表歐洲，.in 代表印度，.com.au 代表澳洲，.ca 代表加拿大，.sa 代表沙烏地阿拉伯，.jp 代表日本）"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "Select Your Zoho Region",
+          "message": "選擇您的 Zoho 區域"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jYQ.desc": {
+          "source": "Canada data center",
+          "message": "加拿大資料中心"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jYQ.display_name": {
+          "source": ".ca",
+          "message": ".ca"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jYQ.short_desc": {
+          "source": "Canada",
+          "message": "加拿大"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.desc": {
+          "source": "United States / Global data center",
+          "message": "美國／全球資料中心"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.display_name": {
+          "source": ".com",
+          "message": ".com"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.short_desc": {
+          "source": "US/Global",
+          "message": "美國／全球"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20uYXU.desc": {
+          "source": "Australia data center",
+          "message": "澳洲資料中心"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20uYXU.display_name": {
+          "source": ".com.au",
+          "message": ".com.au"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20uYXU.short_desc": {
+          "source": "Australia",
+          "message": "澳洲"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.desc": {
+          "source": "European Union data center",
+          "message": "歐盟資料中心"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.display_name": {
+          "source": ".eu",
+          "message": ".eu"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.short_desc": {
+          "source": "Europe",
+          "message": "歐洲"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5pbg.desc": {
+          "source": "India data center",
+          "message": "印度資料中心"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5pbg.display_name": {
+          "source": ".in",
+          "message": ".in"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5pbg.short_desc": {
+          "source": "India",
+          "message": "印度"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5qcA.desc": {
+          "source": "Japan data center",
+          "message": "日本資料中心"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5qcA.display_name": {
+          "source": ".jp",
+          "message": ".jp"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5qcA.short_desc": {
+          "source": "Japan",
+          "message": "日本"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5zYQ.desc": {
+          "source": "Saudi Arabia data center",
+          "message": "沙烏地阿拉伯資料中心"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5zYQ.display_name": {
+          "source": ".sa",
+          "message": ".sa"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5zYQ.short_desc": {
+          "source": "Saudi Arabia",
+          "message": "沙烏地阿拉伯"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.desc": {
+          "source": "Select the Zoho domain for your account based on your data center region.",
+          "message": "根據您的資料中心區域，選擇帳戶的 Zoho 區域。"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "網域"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.short_desc": {
+          "source": "Zoho domain",
+          "message": "Zoho 區域"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG8.desc": {
+          "source": "Standard Zoho subdomain (accounts.zoho.{domain})",
+          "message": "標準 Zoho 子網域（accounts.zoho.{domain}）"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG8.display_name": {
+          "source": "zoho",
+          "message": "zoho"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG8.short_desc": {
+          "source": "Standard Zoho",
+          "message": "標準 Zoho"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG9jbG91ZA.desc": {
+          "source": "Zoho Cloud subdomain (accounts.zohocloud.{domain})",
+          "message": "Zoho Cloud 子網域（accounts.zohocloud.{domain}）"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG9jbG91ZA.display_name": {
+          "source": "zohocloud",
+          "message": "zohocloud"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG9jbG91ZA.short_desc": {
+          "source": "Zoho Cloud",
+          "message": "Zoho Cloud"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.desc": {
+          "source": "Select the Zoho subdomain for your account.",
+          "message": "選擇帳戶的 Zoho 子網域。"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.display_name": {
+          "source": "Sub Domain",
+          "message": "子網域"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.short_desc": {
+          "source": "Zoho subdomain",
+          "message": "Zoho 子網域"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Zoho Books REST API",
+          "message": "連接到 Zoho Books REST API 的連線"
+        }
+      }
+    }
+  }
+}

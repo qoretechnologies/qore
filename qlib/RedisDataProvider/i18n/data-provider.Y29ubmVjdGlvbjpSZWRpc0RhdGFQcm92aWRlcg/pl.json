@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.desc": {
+          "source": "A connection to a Redis server using the `redis` or `rediss` (TLS) protocols",
+          "message": "Połączenie z serwerem Redis przy użyciu protokołów `redis` lub `rediss` (TLS)"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.display_name": {
+          "source": "Redis Connection",
+          "message": "Połączenie Redis"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connection timeout in seconds",
+          "message": "Czas wygaśnięcia połączenia w sekundach"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Limit czasu połączenia"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connection timeout in seconds",
+          "message": "Czas wygaśnięcia połączenia w sekundach"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.ZGI.desc": {
+          "source": "The Redis database number to select (0-15 by default, configurable per server)",
+          "message": "Numer bazy Redis do wyboru (domyślnie 0-15, konfigurowalne per serwer)"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "Baza danych"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.ZGI.short_desc": {
+          "source": "The Redis database number to select",
+          "message": "Numer bazy Redis do wyboru"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; only used if no password is set in the URL",
+          "message": "Hasło do uwierzytelniania; używane tylko jeśli nie jest ustawione w adresie URL"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Hasło"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.cGFzc3dvcmQ.short_desc": {
+          "source": "Sets the password for authentication",
+          "message": "Ustawia hasło do uwierzytelniania"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dGltZW91dA.desc": {
+          "source": "The I/O timeout for read and write operations in seconds",
+          "message": "Czas wygaśnięcia operacji odczytu i zapisu w sekundach"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Limit czasu we/wy"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dGltZW91dA.short_desc": {
+          "source": "The I/O timeout in seconds",
+          "message": "Czas wygaśnięcia operacji I/O w sekundach"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dXNlcm5hbWU.desc": {
+          "source": "The username for ACL authentication (Redis 6.0+); only used if no username is set in the URL",
+          "message": "Nazwa użytkownika do uwierzytelniania ACL (Redis 6.0+); używana tylko jeśli nie jest ustawiona w adresie URL"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Nazwa użytkownika"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for ACL authentication",
+          "message": "Ustawia nazwę użytkownika do uwierzytelniania ACL"
+        },
+        "connection.UmVkaXNEYXRhUHJvdmlkZXI.scheme.UmVkaXNDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a Redis server",
+          "message": "Połączenie z serwerem Redis"
+        }
+      }
+    }
+  }
+}

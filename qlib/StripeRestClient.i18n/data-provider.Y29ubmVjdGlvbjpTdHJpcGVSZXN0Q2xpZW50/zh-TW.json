@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Stripe](https://stripe.com) REST API for payments, billing and connected accounts.\n\nStripe processes payments and manages the objects around them - customers, charges, invoices, subscriptions, refunds and payouts - so an integration can charge a customer, issue an invoice, reconcile a payout or onboard a connected account without handling card data itself.\n\n**Authentication** is a bearer token, which is either:\n- a secret or restricted key from the Stripe dashboard, set as `api_key`, for an integration acting as your own account; or\n- an access token from Stripe Connect's OAuth2 flow, for a platform acting on behalf of accounts that authorized it.\n\nA **restricted key** can be limited to the resources the integration actually needs and is the better choice in production; a secret key grants full access to the account.\n\n**Rate limits** are 100 read and 100 write requests per second in live mode and 25 of each in test mode; Stripe returns HTTP 429 when they are exceeded.\n\nStripe is a trademark of Stripe, Inc.",
+          "message": "用於付款、帳單與連接帳戶的 [Stripe](https://stripe.com) REST API 連接。\n\nStripe 處理付款並管理相關物件——客戶、交易、發票、訂閱、退款與付款——因此整合程式可在不處理信用卡資料的情況下，執行收費、發出發票、核對付款或新增連接帳戶。\n\n**驗證** 使用權杖（bearer token），其為：\n- 來自 Stripe 控制台的祕密金鑰或限制金鑰，設定為 `api_key`，適用於以您自身帳戶身分執行的整合；或\n- 來自 Stripe Connect 的 OAuth2 流程的存取權杖，適用於代表已授權帳戶執行的平台。\n\n**限制金鑰** 可限制於整合程式實際需要的資源，是生產環境的較佳選擇；祕密金鑰則提供帳戶的完整存取權。\n\n**速率限制** 在正式模式下為每秒 100 筆讀取與 100 筆寫入請求，測試模式下為每秒 25 筆；超過時 Stripe 會回傳 HTTP 429。\n\nStripe 是 Stripe, Inc. 的商標。"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Stripe REST Connection",
+          "message": "Stripe REST 連接"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.desc": {
+          "source": "A Stripe secret key (`sk_live_…` or `sk_test_…`) or restricted key (`rk_live_…` or `rk_test_…`), sent as a bearer token.\n\n**To obtain one:**\n1. Log in to the Stripe dashboard\n2. Go to Developers > API keys\n3. Reveal the secret key, or create a restricted key limited to the resources this integration needs\n\n**Note:** a test-mode key only ever sees test data, which makes it the right choice while building an integration. Leave this unset when authenticating with Stripe Connect's OAuth2 flow instead.",
+          "message": "Stripe 秘密金鑰 (`sk_live_…` 或 `sk_test_…`) 或限制金鑰 (`rk_live_…` 或 `rk_test_…`)，以權杖形式傳送。\n\n**取得方式：**\n1. 登入 Stripe 控制台\n2. 前往「開發者」>「API 金鑰」\n3. 顯示祕密金鑰，或建立僅限此整合所需資源的限制金鑰\n\n**注意：** 測試模式金鑰僅能看見測試資料，因此在建置整合時是正確的選擇。若使用 Stripe Connect 的 OAuth2 流程，則應保持未設定。"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.short_desc": {
+          "source": "A Stripe secret or restricted key",
+          "message": "Stripe 秘密金鑰或限制金鑰"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX2FjY291bnQ.desc": {
+          "source": "The ID of a Stripe Connect account (`acct_…`) that every request through this connection acts on behalf of, sent as the `Stripe-Account` header.\n\nLeave this unset for an integration working with your own account. Set it when a platform manages one connected account through this connection; a platform working with many accounts should instead leave it unset and supply the account per request.",
+          "message": "此連接所代表的 Stripe Connect 帳戶 ID (`acct_…`)，以 `Stripe-Account` 標頭傳送。\n\n若整合程式以您自身帳戶運作，請保持未設定。當平台透過此連接管理單一連接帳戶時，請設定；若平台需管理多個帳戶，則應保持未設定，並在每次請求時提供帳戶。"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX2FjY291bnQ.display_name": {
+          "source": "Connected Account",
+          "message": "已連結帳戶"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX2FjY291bnQ.short_desc": {
+          "source": "Act on behalf of this connected account",
+          "message": "代表此連接帳戶執行操作"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX3ZlcnNpb24.desc": {
+          "source": "The Stripe API version sent as the `Stripe-Version` header with every request.\n\nStripe changes response shapes between versions, so requests are pinned to a version explicitly rather than following the account's default. The default here is the version the **Stripe** application's actions describe.\n\n**Changing this is not supported**: pointing the connection at a different version makes the declared response types disagree with what Stripe actually returns.",
+          "message": "每次請求都會透過 `Stripe-Version` 標頭傳送的 Stripe API 版本。\n\nStripe 會在不同版本間變更回應格式，因此請求必須明確指定版本，而非依賴帳戶的預設版本。這裡的預設版本是 **Stripe** 應用程式動作所描述的版本。\n\n**不支援變更此設定**：將連接指向其他版本會導致宣告的回應類型與 Stripe 實際回傳的內容不符。"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX3ZlcnNpb24.short_desc": {
+          "source": "The Stripe API version sent with every request",
+          "message": "每次請求都會傳送的 Stripe API 版本"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Stripe REST API",
+          "message": "連接到 Stripe REST API 的連接"
+        }
+      }
+    }
+  }
+}

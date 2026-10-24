@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the WooCommerce REST API v3 for e-commerce management.\n\nWooCommerce is the most popular open-source e-commerce platform built on WordPress. This integration enables managing orders, products, customers, coupons, webhooks, reports, shipping, taxes, and store settings.\n\n**Authentication:**\n- Uses HTTP Basic Auth with Consumer Key and Consumer Secret\n- Generate API credentials in WordPress admin: WooCommerce > Settings > Advanced > REST API\n\n**Pagination:**\n- Page-based with `page` and `per_page` parameters (max `100` per page)\n- Total counts available in `X-WP-Total` and `X-WP-TotalPages` response headers",
+          "message": "e-commerce管理用のWooCommerce REST API v3への接続。\n\nWooCommerceはWordPress上で構築された最も人気のあるオープンソースe-commerceプラットフォームです。この統合により、注文、製品、顧客、クーポン、Webhook、レポート、配送、税金、ストア設定の管理が可能になります。\n\n**認証：**\n- Consumer KeyとConsumer Secretを使用したHTTP Basic認証\n- WordPress管理画面でAPI資格情報を生成：WooCommerce > 設定 > 高度 > REST API\n\n**ページネーション：**\n- ページベースで、`page` および `per_page` パラメータを使用（1ページあたり最大 `100` 件）\n- 総件数は `X-WP-Total` および `X-WP-TotalPages` 応答ヘッダーに含まれます"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "WooCommerce REST Connection",
+          "message": "WooCommerce REST接続"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your **WordPress admin panel**\n2. Navigate to **WooCommerce > Settings > Advanced > REST API**\n3. Click **Add key**\n4. Enter a description (e.g., \"Qorus Integration\")\n5. Select a WordPress user and choose **Read/Write** permissions\n6. Click **Generate API key**\n7. Copy both the **Consumer key** (`ck_...`) and **Consumer secret** (`cs_...`)\n\n**Important:**\n- The Consumer secret is only displayed once when generated\n- Store your credentials securely\n- HTTPS is required for Basic Auth (HTTP requires OAuth 1.0a)",
+          "message": "1. **WordPress管理パネル**にログイン\n2. **WooCommerce > 設定 > 高度 > REST API**に移動\n3. **キーの追加**をクリック\n4. 説明を入力（例：\"Qorus統合\"）\n5. WordPressユーザーを選択し、**読み取り/書き込み**権限を設定\n6. **APIキーの生成**をクリック\n7. **Consumer key** (`ck_...`) と **Consumer secret** (`cs_...`) をコピー\n\n**重要：**\n- Consumer secretは生成時に一度だけ表示されます\n- 資格情報を安全に保管してください\n- HTTP Basic認証ではHTTPSが必要です（HTTPではOAuth 1.0aが必要）"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Credentials",
+          "message": "API 認証情報の取得方法"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfa2V5.desc": {
+          "source": "The WooCommerce REST API consumer key used as the username for HTTP Basic Auth.\n\n**To obtain your API credentials:**\n1. Log in to your WordPress admin panel\n2. Go to **WooCommerce > Settings > Advanced > REST API**\n3. Click **Add key**\n4. Enter a description, select a user, and choose **Read/Write** permissions\n5. Click **Generate API key**\n6. Copy the **Consumer key** (starts with `ck_`)",
+          "message": "HTTP Basic認証のユーザー名として使用されるWooCommerce REST APIのConsumer Key。\n\n**API資格情報を取得するには：**\n1. WordPress管理パネルにログイン\n2. **WooCommerce > 設定 > 高度 > REST API**に移動\n3. **キーの追加**をクリック\n4. 説明を入力し、ユーザーを選択し、**読み取り/書き込み**権限を設定\n5. **APIキーの生成**をクリック\n6. **Consumer key**（`ck_` で始まる）をコピー"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfa2V5.display_name": {
+          "source": "Consumer Key",
+          "message": "コンシューマーキー"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfa2V5.short_desc": {
+          "source": "WooCommerce consumer key for authentication",
+          "message": "認証用のWooCommerce Consumer Key"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfc2VjcmV0.desc": {
+          "source": "The WooCommerce REST API consumer secret used as the password for HTTP Basic Auth.\n\n**To obtain your API credentials:**\n1. Follow the same steps as for the Consumer Key above\n2. Copy the **Consumer secret** (starts with `cs_`)\n\n**Note:** The consumer secret is only shown once when generated. If you lose it, you will need to generate new credentials.",
+          "message": "HTTP Basic認証のパスワードとして使用されるWooCommerce REST APIのConsumer Secret。\n\n**API資格情報を取得するには：**\n1. 上記のConsumer Keyと同様の手順を実行\n2. **Consumer secret**（`cs_` で始まる）をコピー\n\n**注意：** Consumer secretは生成時に一度だけ表示されます。紛失した場合、新しい資格情報を再生成する必要があります。"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfc2VjcmV0.display_name": {
+          "source": "Consumer Secret",
+          "message": "Consumer Secret"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfc2VjcmV0.short_desc": {
+          "source": "WooCommerce consumer secret for authentication",
+          "message": "認証用のWooCommerce Consumer Secret"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfdXJs.desc": {
+          "source": "The full URL of your WooCommerce store (e.g., `https://mystore.com`).\n\nThis is the base URL of your WordPress site where WooCommerce is installed. The API path `/wp-json/wc/v3/` will be appended automatically.\n\n**Examples:**\n- `https://mystore.com`\n- `https://shop.example.com`\n- `https://example.com/shop` (if WordPress is in a subdirectory)",
+          "message": "WooCommerceストアの完全なURL（例：`https://mystore.com`）。\n\nこれは、WooCommerceがインストールされているWordPressサイトのベースURLです。APIパス `/wp-json/wc/v3/` は自動的に追加されます。\n\n**例：**\n- `https://mystore.com`\n- `https://shop.example.com`\n- `https://example.com/shop`（WordPressがサブディレクトリにある場合）"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfdXJs.display_name": {
+          "source": "Store URL",
+          "message": "ストアURL"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfdXJs.short_desc": {
+          "source": "WooCommerce store URL",
+          "message": "WooCommerceストアURL"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the WooCommerce REST API",
+          "message": "WooCommerce REST APIへの接続"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to a [BGE-M3](https://huggingface.co/BAAI/bge-m3) FastAPI embedding sidecar.\n\nBGE-M3 is a multilingual text embedding model supporting dense, sparse, and multi-vector representations.  The sidecar exposes:\n- `POST /embed` — generate dense and/or sparse embeddings\n- `GET /health` — liveness with host memory pressure info\n- `GET /metrics` — Prometheus text-format metrics\n\nThe sidecar serves a single model; the `model` option defaults to `bge-m3` and is reported back via `getModel()` for collection-metadata bookkeeping.\n\nIf the deployment requires authentication, set `apikey`; it is sent as the `Authorization: Bearer` header.\n\nThe connection uses the `bge-m3://` URL scheme; `bge-m3-fastapi://` is accepted as an alias.",
+          "message": "[BGE-M3](https://huggingface.co/BAAI/bge-m3) FastAPI 임베딩 사이드카에 대한 연결.\n\nBGE-M3은 밀도, 희소성, 다중 벡터 표현을 지원하는 다국어 텍스트 임베딩 모델입니다. 사이드카는 다음을 노출합니다:\n- `POST /embed` — 밀도 및/또는 희소 임베딩 생성\n- `GET /health` — 호스트 메모리 압박 정보와 함께 라이브니스\n- `GET /metrics` — Prometheus 텍스트 형식 메트릭\n\n사이드카는 단일 모델을 제공합니다; `model` 옵션은 기본적으로 `bge-m3`로 설정되며, 수집 메타데이터 기록을 위해 `getModel()`를 통해 반환됩니다.\n\n배포에 인증이 필요하면 `apikey`를 설정하세요. 이는 `Authorization: Bearer` 헤더로 전송됩니다.\n\n이 연결은 `bge-m3://` URL 스키마를 사용합니다; `bge-m3-fastapi://`는 별칭으로 허용됩니다."
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "BGE-M3 FastAPI Connection",
+          "message": "BGE-M3 FastAPI 연결"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Optional API key for sidecar deployments that enable authentication; sent as the `Authorization: Bearer` header.  Local deployments typically do not require a key.\n\n**Note that this connection's ping cannot verify this option.**  The BGE-M3 sidecar serves `/health`, `/metrics` and `/embed` without authentication, and `/health` - the ping target - is also the Kubernetes liveness and readiness probe path, so it must stay unauthenticated even where a gateway enforces authentication in front of the sidecar.  There is therefore no endpoint that answers 401 for a missing or wrong key.  A successful ping means the sidecar is reachable and the model is loaded; it does not mean this key is correct.  Where a gateway does enforce authentication, a wrong or missing key surfaces on the first `/embed` call instead.",
+          "message": "인증이 활성화된 사이드카 배포용 선택적 API 키; `Authorization: Bearer` 헤더로 전송됩니다. 로컬 배포는 일반적으로 키가 필요하지 않습니다.\n\n**이 연결의 핑은 이 옵션을 검증할 수 없습니다.** BGE-M3 사이드카는 인증 없이 `/health`, `/metrics`, `/embed`를 제공하며, `/health` — 핑 대상 — 는 Kubernetes 라이브니스 및 준비 상태 프로브 경로이므로, 사이드카 앞에 게이트웨이가 인증을 강제하더라도 여전히 인증 없이 유지되어야 합니다. 따라서 잘못된 키 또는 누락된 키에 대해 401을 응답하는 엔드포인트는 없습니다. 성공적인 핑은 사이드카에 도달 가능하고 모델이 로드되었음을 의미할 뿐, 이 키가 올바른 것은 아닙니다. 게이트웨이가 인증을 강제하는 경우, 잘못된 또는 누락된 키는 첫 번째 `/embed` 호출 시에 나타납니다."
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "API key for sidecar deployments with authentication enabled",
+          "message": "인증이 활성화된 사이드카 배포용 API 키"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.bW9kZWw.desc": {
+          "source": "The model name reported back via `getModel()`.  The BGE-M3 FastAPI sidecar always serves the `bge-m3` model; this option exists so downstream collection metadata can record the model name without an extra server-info round trip.",
+          "message": "`getModel()`를 통해 반환되는 모델 이름입니다. BGE-M3 FastAPI 사이드카는 항상 `bge-m3` 모델을 제공합니다. 이 옵션은 하류 수집 메타데이터가 모델 이름을 추가 서버 정보 라운드 트립 없이 기록할 수 있도록 하기 위해 존재합니다."
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.bW9kZWw.display_name": {
+          "source": "Model Name",
+          "message": "모델 이름"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.bW9kZWw.short_desc": {
+          "source": "The model reported back via getModel()",
+          "message": "getModel()을 통해 반환되는 모델"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a BGE-M3 FastAPI embedding sidecar",
+          "message": "BGE-M3 FastAPI 임베딩 사이드카에 대한 연결"
+        }
+      }
+    }
+  }
+}

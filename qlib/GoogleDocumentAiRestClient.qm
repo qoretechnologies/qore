@@ -362,7 +362,8 @@ public class GoogleDocumentAiRestConnection inherits RestClient::RestConnection 
     public {
         const DefaultUrl = "google-documentai://us-documentai.googleapis.com";
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("GoogleDocumentAiRestClient",
+            "GoogleDocumentAiRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Google Document AI Connection",
             "short_desc": "A connection to Google Document AI",
             "desc": "A connection to [Google Document AI](https://cloud.google.com/document-ai) "
@@ -416,7 +417,7 @@ public class GoogleDocumentAiRestConnection inherits RestClient::RestConnection 
                 },
             },
             "required_options": "gcp_project_id",
-        };
+        });
     }
 
     constructor(string name, string description, string url = DefaultUrl,

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.RGlzY29yZFdlYlNvY2tldENsaWVudA.scheme.RGlzY29yZFdlYlNvY2tldENvbm5lY3Rpb24.desc": {
+          "source": "A connection to Discord WebSocket server services",
+          "message": "З’єднання з серверами Discord WebSocket"
+        },
+        "connection.RGlzY29yZFdlYlNvY2tldENsaWVudA.scheme.RGlzY29yZFdlYlNvY2tldENvbm5lY3Rpb24.display_name": {
+          "source": "Discord WebSocket Connection",
+          "message": "З’єднання Discord WebSocket"
+        },
+        "connection.RGlzY29yZFdlYlNvY2tldENsaWVudA.scheme.RGlzY29yZFdlYlNvY2tldENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to Discord WebSocket server services",
+          "message": "З’єднання з серверами Discord WebSocket"
+        }
+      }
+    }
+  }
+}

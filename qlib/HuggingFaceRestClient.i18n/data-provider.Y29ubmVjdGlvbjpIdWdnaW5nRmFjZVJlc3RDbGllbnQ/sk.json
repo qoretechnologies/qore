@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Hugging Face REST API.\n\nRequires an API key (set as `apikey`) from [Hugging Face Settings](https://huggingface.co/settings/tokens). The connection uses the `huggingface://` URL scheme and provides access to the Hub API for models, datasets, and spaces",
+          "message": "Spojenie s REST API Hugging Face.\n\nVyžaduje kľúč API (nastavený ako `apikey`) z [Nastavenia Hugging Face](https://huggingface.co/settings/tokens). Spojeenie používa schému URL `huggingface://` a poskytuje prístup k Hub API pre modely, súbory dát a priestory"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Hugging Face REST Connection",
+          "message": "Spojenie Hugging Face REST"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBp.desc": {
+          "source": "The API base path to use",
+          "message": "Základná cesta k rozhraniu API"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBp.display_name": {
+          "source": "API Path",
+          "message": "Cesta k rozhraniu API"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBp.short_desc": {
+          "source": "The API base path",
+          "message": "Základná cesta k rozhraniu API"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Hugging Face API token used for authentication; sent as the `Authorization: Bearer` header.\n\nGet your token from [Hugging Face Settings](https://huggingface.co/settings/tokens)",
+          "message": "Hugging Face token rozhrania API používaný na overenie; odosielaný ako hlavička `Authorization: Bearer`.\n\nZískajte svoj token z [Nastavení Hugging Face](https://huggingface.co/settings/tokens)"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Hugging Face API token for authentication",
+          "message": "Hugging Face token rozhrania API na overenie"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Hugging Face REST API",
+          "message": "Spojenie s REST rozhraním Hugging Face"
+        }
+      }
+    }
+  }
+}

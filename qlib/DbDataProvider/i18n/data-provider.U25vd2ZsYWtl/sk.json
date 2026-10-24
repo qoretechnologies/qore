@@ -3,6 +3,118 @@
   "locales": {
     "sk": {
       "messages": {
+        "app.U25vd2ZsYWtl.connection.option.Y2hhcnNldA.desc": {
+          "source": "The character set to use for the connection (e.g. utf8)",
+          "message": "Znaková sada použitá pre pripojenie (napr. utf8)"
+        },
+        "app.U25vd2ZsYWtl.connection.option.Y2hhcnNldA.display_name": {
+          "source": "Character Set",
+          "message": "Znaková sada"
+        },
+        "app.U25vd2ZsYWtl.connection.option.Y2hhcnNldA.short_desc": {
+          "source": "Connection character set",
+          "message": "Znaková sada pripojenia"
+        },
+        "app.U25vd2ZsYWtl.connection.option.Y2xhc3NwYXRo.desc": {
+          "source": "The path to the JDBC driver JAR file(s)",
+          "message": "Cesta k súboru JAR s JDBC ovládačom"
+        },
+        "app.U25vd2ZsYWtl.connection.option.Y2xhc3NwYXRo.display_name": {
+          "source": "JDBC Classpath",
+          "message": "JDBC classpath"
+        },
+        "app.U25vd2ZsYWtl.connection.option.Y2xhc3NwYXRo.short_desc": {
+          "source": "JDBC driver classpath",
+          "message": "Classpath ovládača JDBC"
+        },
+        "app.U25vd2ZsYWtl.connection.option.ZGI.desc": {
+          "source": "The name of the database to connect to",
+          "message": "Názov databázy, ku ktorej sa pripája"
+        },
+        "app.U25vd2ZsYWtl.connection.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "Databáza"
+        },
+        "app.U25vd2ZsYWtl.connection.option.ZGI.short_desc": {
+          "source": "Database name",
+          "message": "Názov databázy"
+        },
+        "app.U25vd2ZsYWtl.connection.option.aG9zdA.desc": {
+          "source": "The hostname or IP address of the database server",
+          "message": "Názov hostiteľa alebo IP adresa databázového servera"
+        },
+        "app.U25vd2ZsYWtl.connection.option.aG9zdA.display_name": {
+          "source": "Host",
+          "message": "Hostiteľ"
+        },
+        "app.U25vd2ZsYWtl.connection.option.aG9zdA.short_desc": {
+          "source": "Database server hostname",
+          "message": "Názov hostiteľa databázového servera"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Maximálny počet spojení v zásobníku"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Maximálna veľkosť zásobníka"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Maximálny počet spojení v zásobníku"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Minimálny počet spojení v zásobníku"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Minimálna veľkosť zásobníka"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Minimálne počet spojení v zásobníku"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cG9ydA.desc": {
+          "source": "The port number of the database server",
+          "message": "Číslo portu databázového servera"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cG9ydA.display_name": {
+          "source": "Port",
+          "message": "Prístav"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cG9ydA.short_desc": {
+          "source": "Database server port",
+          "message": "Port databázového servera"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cGFzcw.desc": {
+          "source": "The password for database authentication",
+          "message": "Heslo pre overenie databázy"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cGFzcw.display_name": {
+          "source": "Password",
+          "message": "Heslo"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cGFzcw.short_desc": {
+          "source": "Database password",
+          "message": "Heslo databázy"
+        },
+        "app.U25vd2ZsYWtl.connection.option.dXNlcg.desc": {
+          "source": "The database user name for authentication",
+          "message": "Meno užívateľa databázy pre overenie totožnosti"
+        },
+        "app.U25vd2ZsYWtl.connection.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Užívateľ"
+        },
+        "app.U25vd2ZsYWtl.connection.option.dXNlcg.short_desc": {
+          "source": "Database user",
+          "message": "Užívateľ databázy"
+        },
+        "app.U25vd2ZsYWtl.desc": {
+          "source": "Create and manage connections to a Snowflake cloud data warehouse",
+          "message": "Vytvárajte a spravujte pripojenia ku cloudovému dátovému skladu Snowflake"
+        },
         "app.U25vd2ZsYWtl.display_name": {
           "source": "Snowflake",
           "message": "Snowflake"
@@ -10,10 +122,6 @@
         "app.U25vd2ZsYWtl.short_desc": {
           "source": "Snowflake cloud data warehouse",
           "message": "Cloudový dátový sklad Snowflake"
-        },
-        "app.U25vd2ZsYWtl.desc": {
-          "source": "Create and manage connections to a Snowflake cloud data warehouse",
-          "message": "Vytvárajte a spravujte pripojenia ku cloudovému dátovému skladu Snowflake"
         }
       }
     }

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.desc": {
+          "source": "A connection to Sewio WebSocket services",
+          "message": "Sewio 웹소켓 서비스에 연결합니다"
+        },
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.display_name": {
+          "source": "Sewio WebSocket Connection",
+          "message": "Sewio 웹소켓 연결"
+        },
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Sewio RTLS Studio API key",
+          "message": "Sewio RTLS 스튜디오 API 키"
+        },
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "The Sewio RTLS Studio API key",
+          "message": "Sewio RTLS 스튜디오 API 키"
+        },
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to Sewio WebSocket services",
+          "message": "Sewio 웹소켓 서비스에 연결합니다"
+        }
+      }
+    }
+  }
+}

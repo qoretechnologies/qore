@@ -1,0 +1,385 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to AWS cloud REST API services",
+          "message": "Підключення до REST-сервісів хмарної платформи AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "AWS REST Connection",
+          "message": "Підключення до AWS REST"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX2tleWlk.desc": {
+          "source": "The AWS key ID",
+          "message": "Ідентифікатор ключа AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX2tleWlk.display_name": {
+          "source": "AWS Key ID",
+          "message": "Ідентифікатор ключа AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX2tleWlk.short_desc": {
+          "source": "The AWS key ID",
+          "message": "Ідентифікатор ключа AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3JlZ2lvbg.desc": {
+          "source": "The AWS region to use (ex: `us-east-1`)",
+          "message": "Регіон AWS для використання (наприклад: `us-east-1`)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3JlZ2lvbg.display_name": {
+          "source": "AWS Region",
+          "message": "Регіон AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3JlZ2lvbg.short_desc": {
+          "source": "The AWS region to use",
+          "message": "Регіон AWS для використання"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Mz.desc": {
+          "source": "Set to `True` to flag this object for use with AWS S3, which requires special message encoding",
+          "message": "Встановіть значення `True` для позначення цього об’єкта як призначеного для використання з AWS S3, що вимагає спеціального кодування повідомлень"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Mz.display_name": {
+          "source": "AWS S3",
+          "message": "AWS S3"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Mz.short_desc": {
+          "source": "Flag for use with AWS S3",
+          "message": "Прапорець для використання з AWS S3"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlY3JldA.desc": {
+          "source": "The AWS secret access key value",
+          "message": "Значення секретного ключа AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlY3JldA.display_name": {
+          "source": "AWS Secret",
+          "message": "Секрет AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlY3JldA.short_desc": {
+          "source": "The AWS secret access key value",
+          "message": "Значення секретного ключа AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlcnZpY2U.desc": {
+          "source": "The AWS service to use (ex: `iam`)",
+          "message": "Сервіс AWS для використання (наприклад: `iam`)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlcnZpY2U.display_name": {
+          "source": "AWS Service",
+          "message": "Сервіс AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3NlcnZpY2U.short_desc": {
+          "source": "The AWS service to use",
+          "message": "Сервіс AWS для використання"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Rva2Vu.desc": {
+          "source": "A temporary session token from AWS Security Token Service for this HTTP session",
+          "message": "Тимчасовий сеансовий токен від AWS Security Token Service для цього HTTP-сесії"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Rva2Vu.display_name": {
+          "source": "AWS Token",
+          "message": "Токен AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.YXdzX3Rva2Vu.short_desc": {
+          "source": "A temporary session token",
+          "message": "Тимчасовий сеансовий токен"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "використовувати серіалізацію JSON"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.ZGF0YQ.desc": {
+          "source": "Data serialization options are limited to `json` with this object",
+          "message": "Опції серіалізації даних обмежені `json` для цього об’єкта"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Серіалізація даних"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.option.ZGF0YQ.short_desc": {
+          "source": "The data serialization to use",
+          "message": "Серіалізація даних, що використовується"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to AWS cloud REST API services",
+          "message": "Підключення до REST-сервісів хмарної платформи AWS"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to object storage that speaks the Amazon S3 protocol but is not Amazon S3, such as [MinIO](https://min.io) or [Ceph](https://ceph.io).\n\nRequires the URL the service is reached at, plus an access key ID and secret access key.  The region is whatever the service was configured with, and is often left at `us-east-1`, which is what most S3-compatible services default to.\n\nUse an **Amazon S3** connection instead for Amazon S3 itself; that one derives its URL from the region and needs no URL at all",
+          "message": "Підключення до об’єктного сховища, що використовує протокол Amazon S3, але не є Amazon S3, наприклад [MinIO](https://min.io) або [Ceph](https://ceph.io).\n\nПотрібен URL-адреса служби, а також ідентифікатор ключа доступу та секретний ключ доступу. Регіон — це те, з яким була налаштована служба, і часто залишається `us-east-1`, що є значенням за замовчуванням для більшості служб, сумісних із S3.\n\nВикористовуйте підключення **Amazon S3** для самого Amazon S3; воно визначає URL-адресу з регіону і не потребує URL-адреси взагалі"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "S3-Compatible Storage",
+          "message": "Сховище, сумісне з S3"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.option.YXdzX3JlZ2lvbg.desc": {
+          "source": "The region the service was configured with; most S3-compatible services default to `us-east-1` and ignore the value beyond using it to sign requests",
+          "message": "Регіон, з яким була налаштована служба; більшість служб, сумісних із S3, за замовчуванням використовують `us-east-1` і ігнорують значення поза його використанням для підпису запитів"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.option.cGF0aF9zdHlsZQ.desc": {
+          "source": "Address buckets in the URI path (`https://<host>/<bucket>/<key>`) rather than in the hostname (`https://<bucket>.<host>/<key>`).\n\nThis is the default and currently the only supported mode: virtual-host addressing needs a separate endpoint per bucket, which the data provider module does not yet create.  Most S3-compatible services require path-style addressing in any case",
+          "message": "Вказувати контейнери в шляху URI (`https://<host>/<bucket>/<key>`) замість у хості (`https://<bucket>.<host>/<key>`).\n\nЦе значення за замовчуванням і зараз єдиний підтримуваний режим: вирішення за віртуальним хостом потребує окремого точки входу для кожного контейнера, яку модуль даних ще не створює. Більшість служб, сумісних із S3, вимагають адресації за шляхом"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.option.cGF0aF9zdHlsZQ.display_name": {
+          "source": "Path-Style Addressing",
+          "message": "Адресація за шляхом"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.option.cGF0aF9zdHlsZQ.short_desc": {
+          "source": "Address buckets in the URI path rather than in the hostname",
+          "message": "Вказувати контейнери в шляху URI замість у хості"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNDb21wYXRpYmxlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to S3-compatible object storage such as MinIO or Ceph",
+          "message": "Підключення до сховища об’єктів S3-сумісного, такого як MinIO або Ceph"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [Amazon S3](https://aws.amazon.com/s3/) object storage.\n\nRequires an AWS access key ID and secret access key with permission for the buckets to be used, plus the region the buckets live in.  The URL is derived from the region, and the AWS service and S3 request-encoding options are set automatically.\n\nUse an **S3-Compatible Storage** connection instead for MinIO, Ceph, or another service that speaks the S3 protocol but is not Amazon",
+          "message": "Підключення до [об’єктного сховища Amazon S3](https://aws.amazon.com/s3/)\n\nВимагає ключа доступу AWS та секретного ключа доступу з дозволом на використання бакетів, а також регіону, де розташовані бакети. URL-адреса визначається на основі регіону, а служба AWS та параметри кодування запитів S3 встановлюються автоматично.\n\nВикористовуйте підключення **S3-сумісного сховища** замість цього для MinIO, Ceph або іншої служби, яка використовує протокол S3, але не є Amazon"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Amazon S3",
+          "message": "Amazon S3"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLWNlbnRyYWwtMQ.desc": {
+          "source": "Middle East (UAE)",
+          "message": "Середній Схід (ОАЕ)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLWNlbnRyYWwtMQ.display_name": {
+          "source": "Middle East (UAE)",
+          "message": "Середній Схід (ОАЕ)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLXNvdXRoLTE.desc": {
+          "source": "Middle East (Bahrain)",
+          "message": "Середній Схід (Бахрейн)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLXNvdXRoLTE.display_name": {
+          "source": "Middle East (Bahrain)",
+          "message": "Середній Схід (Бахрейн)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFmLXNvdXRoLTE.desc": {
+          "source": "Africa (Cape Town)",
+          "message": "Африка (Кейп-Таун)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFmLXNvdXRoLTE.display_name": {
+          "source": "Africa (Cape Town)",
+          "message": "Африка (Кейп-Таун)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0x.desc": {
+          "source": "Asia Pacific (Tokyo)",
+          "message": "Азія-Південно-Схід (Токіо)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0x.display_name": {
+          "source": "Asia Pacific (Tokyo)",
+          "message": "Азія-Південно-Схід (Токіо)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0y.desc": {
+          "source": "Asia Pacific (Seoul)",
+          "message": "Азія-Південно-Схід (Сеул)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0y.display_name": {
+          "source": "Asia Pacific (Seoul)",
+          "message": "Азія-Південно-Схід (Сеул)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0z.desc": {
+          "source": "Asia Pacific (Osaka)",
+          "message": "Азія-Південно-Схід (Осака)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0z.display_name": {
+          "source": "Asia Pacific (Osaka)",
+          "message": "Азія-Південно-Схід (Осака)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLWVhc3QtMQ.desc": {
+          "source": "Asia Pacific (Hong Kong)",
+          "message": "Азія та Тихоокеанський регіон (Гонконг)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLWVhc3QtMQ.display_name": {
+          "source": "Asia Pacific (Hong Kong)",
+          "message": "Азія та Тихоокеанський регіон (Гонконг)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTE.desc": {
+          "source": "Asia Pacific (Mumbai)",
+          "message": "Азія та Тихоокеанський регіон (Мумбаї)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTE.display_name": {
+          "source": "Asia Pacific (Mumbai)",
+          "message": "Азія та Тихоокеанський регіон (Мумбаї)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTI.desc": {
+          "source": "Asia Pacific (Hyderabad)",
+          "message": "Азія та Тихоокеанський регіон (Гідрабад)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTI.display_name": {
+          "source": "Asia Pacific (Hyderabad)",
+          "message": "Азія та Тихоокеанський регіон (Гідрабад)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC00.desc": {
+          "source": "Asia Pacific (Melbourne)",
+          "message": "Азія та Тихоокеанський регіон (Мельбурн)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC00.display_name": {
+          "source": "Asia Pacific (Melbourne)",
+          "message": "Азія та Тихоокеанський регіон (Мельбурн)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.desc": {
+          "source": "Asia Pacific (Singapore)",
+          "message": "Азія та Тихоокеанський регіон (Сінгапур)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.display_name": {
+          "source": "Asia Pacific (Singapore)",
+          "message": "Азія та Тихоокеанський регіон (Сінгапур)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0y.desc": {
+          "source": "Asia Pacific (Sydney)",
+          "message": "Азія та Тихоокеанський регіон (Сідней)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0y.display_name": {
+          "source": "Asia Pacific (Sydney)",
+          "message": "Азія та Тихоокеанський регіон (Сідней)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0z.desc": {
+          "source": "Asia Pacific (Jakarta)",
+          "message": "Азія та Тихоокеанський регіон (Джакарта)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0z.display_name": {
+          "source": "Asia Pacific (Jakarta)",
+          "message": "Азія та Тихоокеанський регіон (Джакарта)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLWNlbnRyYWwtMQ.desc": {
+          "source": "Canada (Central)",
+          "message": "Канада (Центральна)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLWNlbnRyYWwtMQ.display_name": {
+          "source": "Canada (Central)",
+          "message": "Канада (Центральна)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLXdlc3QtMQ.desc": {
+          "source": "Canada West (Calgary)",
+          "message": "Канада Західна (Калгари)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLXdlc3QtMQ.display_name": {
+          "source": "Canada West (Calgary)",
+          "message": "Канада Західна (Калгари)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LW5vcnRoLTE.desc": {
+          "source": "Europe (Stockholm)",
+          "message": "Європа (Стокгольм)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LW5vcnRoLTE.display_name": {
+          "source": "Europe (Stockholm)",
+          "message": "Європа (Стокгольм)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMQ.desc": {
+          "source": "Europe (Frankfurt)",
+          "message": "Європа (Франкфурт)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMQ.display_name": {
+          "source": "Europe (Frankfurt)",
+          "message": "Європа (Франкфурт)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMg.desc": {
+          "source": "Europe (Zurich)",
+          "message": "Європа (Цюрих)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMg.display_name": {
+          "source": "Europe (Zurich)",
+          "message": "Європа (Цюрих)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTE.desc": {
+          "source": "Europe (Milan)",
+          "message": "Європа (Мілан)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTE.display_name": {
+          "source": "Europe (Milan)",
+          "message": "Європа (Мілан)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTI.desc": {
+          "source": "Europe (Spain)",
+          "message": "Європа (Іспанія)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTI.display_name": {
+          "source": "Europe (Spain)",
+          "message": "Європа (Іспанія)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMQ.desc": {
+          "source": "Europe (Ireland)",
+          "message": "Європа (Ірландія)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMQ.display_name": {
+          "source": "Europe (Ireland)",
+          "message": "Європа (Ірландія)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMg.desc": {
+          "source": "Europe (London)",
+          "message": "Європа (Лондон)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMg.display_name": {
+          "source": "Europe (London)",
+          "message": "Європа (Лондон)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMw.desc": {
+          "source": "Europe (Paris)",
+          "message": "Європа (Париж)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMw.display_name": {
+          "source": "Europe (Paris)",
+          "message": "Європа (Париж)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmlsLWNlbnRyYWwtMQ.desc": {
+          "source": "Israel (Tel Aviv)",
+          "message": "Ізраїль (Тель-Авів)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmlsLWNlbnRyYWwtMQ.display_name": {
+          "source": "Israel (Tel Aviv)",
+          "message": "Ізраїль (Тель-Авів)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnNhLWVhc3QtMQ.desc": {
+          "source": "South America (São Paulo)",
+          "message": "Південна Америка (Сан-Паулу)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnNhLWVhc3QtMQ.display_name": {
+          "source": "South America (São Paulo)",
+          "message": "Південна Америка (Сан-Паулу)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMQ.desc": {
+          "source": "US East (N. Virginia)",
+          "message": "Північна Вірджинія (Північна Америка)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMQ.display_name": {
+          "source": "US East (N. Virginia)",
+          "message": "Північна Вірджинія (Північна Америка)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMg.desc": {
+          "source": "US East (Ohio)",
+          "message": "Огайо (Північна Америка)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMg.display_name": {
+          "source": "US East (Ohio)",
+          "message": "Огайо (Північна Америка)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMQ.desc": {
+          "source": "US West (N. California)",
+          "message": "Північна Каліфорнія (Північна Америка)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMQ.display_name": {
+          "source": "US West (N. California)",
+          "message": "Північна Каліфорнія (Північна Америка)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMg.desc": {
+          "source": "US West (Oregon)",
+          "message": "Орегон (Північна Америка)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMg.display_name": {
+          "source": "US West (Oregon)",
+          "message": "Орегон (Північна Америка)"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.option.YXdzX3JlZ2lvbg.desc": {
+          "source": "The AWS region holding the buckets to be used; this also selects the endpoint the connection is made to, so a region other than the one the buckets live in produces redirects and signature errors",
+          "message": "Регіон AWS, що містить бакети, які мають бути використані; це також визначає точку входу, до якої встановлюється з'єднання, тому регіон, відмінний від того, де знаходяться бакети, призводить до перенаправлень та помилок підпису"
+        },
+        "connection.QXdzUmVzdENsaWVudA.scheme.QXdzUzNSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to Amazon S3 object storage",
+          "message": "Підключення до об’єктного сховища Amazon S3"
+        }
+      }
+    }
+  }
+}

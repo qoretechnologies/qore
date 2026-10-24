@@ -1,0 +1,717 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a REST server",
+          "message": "連接到 REST 伺服器的連線"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "REST Connection",
+          "message": "REST 連線"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.allowed_values.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "使用 bzip2 編碼"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.allowed_values.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "使用 deflate 演算法 ([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.allowed_values.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "使用 GNU zip 編碼 ([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.allowed_values.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "不使用內容編碼"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.desc": {
+          "source": "Sets the data compression / send encoding (if the `send_encoding` option is not set) and the response encoding used",
+          "message": "設定資料壓縮 / 傳送編碼（若未設定 `send_encoding` 選項）以及使用的回應編碼"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.display_name": {
+          "source": "Compression",
+          "message": "壓縮"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.short_desc": {
+          "source": "Sets data compression / encoding",
+          "message": "設定資料壓縮 / 編碼"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET` method",
+          "message": "HTTP `GET` 方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET method",
+          "message": "HTTP GET 方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH` method",
+          "message": "HTTP `PATCH` 方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH method",
+          "message": "HTTP PATCH 方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST` method",
+          "message": "HTTP `POST` 方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST method",
+          "message": "HTTP POST 方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT` method",
+          "message": "HTTP `PUT` 方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT method",
+          "message": "HTTP PUT 方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.desc": {
+          "source": "Sets the HTTP method for custom token refresh actions",
+          "message": "設定自訂權杖重新整理動作的 HTTP 方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.display_name": {
+          "source": "Custom Token Refresh Method",
+          "message": "自訂權杖重新整理方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.short_desc": {
+          "source": "Sets the HTTP method for custom token refresh actions",
+          "message": "設定自訂權杖重新整理動作的 HTTP 方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2F1dGg.allowed_values.c3RyaW5nOmJvZHktdXNlci1wYXNz.desc": {
+          "source": "Include the username and password in the message body; cannot be used with `custom_token_method` = `GET`",
+          "message": "在訊息本文中包含使用者名稱與密碼；不能與 `custom_token_method` = `GET` 一起使用"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2F1dGg.desc": {
+          "source": "Sets the auth method for custom token refresh actions",
+          "message": "設定自訂權杖重新整理動作的驗證方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2F1dGg.display_name": {
+          "source": "Custom Token Refresh Auth Method",
+          "message": "自訂權杖重新整理驗證方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2F1dGg.short_desc": {
+          "source": "Sets the auth method for custom token refresh actions",
+          "message": "設定自訂權杖重新整理動作的驗證方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.allowed_values.c3RyaW5nOmJvZHktZGlyZWN0.desc": {
+          "source": "Take the token from the response body directly",
+          "message": "直接從回應本文取得權杖"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.allowed_values.c3RyaW5nOmJvZHktcGxhaW4.desc": {
+          "source": "Take the token from the response body without any deserialization",
+          "message": "從回應本文取得權杖，而不進行任何還原序列化"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.desc": {
+          "source": "Provides the location of the new token in the response",
+          "message": "提供新權杖在回應中的位置"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.display_name": {
+          "source": "Custom Token Refresh Location",
+          "message": "自訂權杖重新整理位置"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.short_desc": {
+          "source": "Provides the location of the new token in the response",
+          "message": "提供新權杖在回應中的位置"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX3BhdGg.desc": {
+          "source": "Sets the URI path for the request for custom token refresh actions",
+          "message": "設定自訂權杖重新整理動作請求的 URI 路徑"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX3BhdGg.display_name": {
+          "source": "Custom Token Refresh URI Path",
+          "message": "自訂權杖重新整理 URI 路徑"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX3BhdGg.short_desc": {
+          "source": "Sets the URI path for the request for custom token refresh actions",
+          "message": "設定自訂權杖重新整理動作請求的 URI 路徑"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.YWxsb3dfYW55X3Jlc3BvbnNl.desc": {
+          "source": "If set, undeserializable responses will be returned as-is; this is useful when making REST-like requests that return HTML or file data",
+          "message": "如果設定，無法還原序列化的回應將按原樣傳回；這在進行傳回 HTML 或檔案資料的 REST 類似請求時很有用"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.YWxsb3dfYW55X3Jlc3BvbnNl.display_name": {
+          "source": "Allow Any Response?",
+          "message": "允許任何回應？"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.YWxsb3dfYW55X3Jlc3BvbnNl.short_desc": {
+          "source": "If set, undeserializable responses will be returned as-is",
+          "message": "如果設定，無法還原序列化的回應將按原樣傳回"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOmF1dG8.desc": {
+          "source": "prefers in this order: `json`, `yaml`, `rawxml`, `xml`, `url`, and `text`",
+          "message": "依此順序偏好：`json`、`yaml`、`rawxml`、`xml`、`url` 及 `text`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOmJpbg.desc": {
+          "source": "for binary message bodies without data serialization",
+          "message": "用於不進行資料序列化的二進位訊息本文"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "使用 JSON 序列化"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnJhd3htbA.desc": {
+          "source": "use raw XML serialization",
+          "message": "使用原始 XML 序列化"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnRleHQ.desc": {
+          "source": "use only plain text; no serialization is used",
+          "message": "僅使用純文字；不使用序列化"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnVybA.desc": {
+          "source": "for URL-encoded message bodies",
+          "message": "用於 URL 編碼的訊息本文"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnhtbA.desc": {
+          "source": "use only XML-RPC serialization",
+          "message": "僅使用 XML-RPC 序列化"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnlhbWw.desc": {
+          "source": "use only YAML serialization",
+          "message": "僅使用 YAML 序列化"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.desc": {
+          "source": "Sets how data is serialized in requests",
+          "message": "設定如何在請求中序列化資料"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "資料序列化"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.short_desc": {
+          "source": "Sets how data is serialized",
+          "message": "設定資料序列化方式"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.aGVhZGVycw.desc": {
+          "source": "Sets an optional hash of headers to send with every request, these can also be overridden in request method calls",
+          "message": "設定可選的標頭雜湊，每次請求都會傳送這些標頭，也可在請求方法呼叫中覆寫"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.aGVhZGVycw.display_name": {
+          "source": "HTTP Headers",
+          "message": "HTTP 標頭"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.aGVhZGVycw.short_desc": {
+          "source": "Sets headers to send in each request",
+          "message": "設定每次請求要傳送的標頭"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.desc": {
+          "source": "If OAuth2 tokens should be automatically refreshed",
+          "message": "是否應自動重新整理 OAuth2 權杖"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.display_name": {
+          "source": "OAuth2 Auto Refresh",
+          "message": "OAuth2 自動重新整理"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.short_desc": {
+          "source": "Whether tokens are refreshed automatically",
+          "message": "權杖是否會自動重新整理"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfYXJncw.desc": {
+          "source": "Optional arguments for authentication requests for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token. Supply unencoded keys and values; consent URL generation URL-encodes keys and values exactly once, including scope lists",
+          "message": "`authorization_code` 授權類型的驗證請求選用引數；如果設定了 `token` 選項則會被忽略。請注意，`authorization_code` 授權類型需要外部使用者授權才能取得存取權杖。請提供未編碼的鍵與值；產生同意授權的 URL 時，鍵與值（包括權限範圍清單）都只會進行一次 URL 編碼"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfYXJncw.display_name": {
+          "source": "OAuth2 Authorization Args",
+          "message": "OAuth2 授權引數"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfYXJncw.short_desc": {
+          "source": "Extra arguments for authorization_code token requests",
+          "message": "authorization_code 權杖請求的額外引數"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfdXJs.desc": {
+          "source": "The OAuth2 authorization URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
+          "message": "`authorization_code` 授權類型的 OAuth2 授權 URL；如果設定了 `token` 選項則會被忽略。請注意，`authorization_code` 授權類型需要外部使用者授權才能取得存取權杖"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfdXJs.display_name": {
+          "source": "OAuth2 Auth URL",
+          "message": "OAuth2 授權 URL"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfdXJs.short_desc": {
+          "source": "Sets the OAuth2 authorization URL for the authorization_code grant type",
+          "message": "設定 authorization_code 授權類型的 OAuth2 授權 URL"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF90b2tlbl91cmw.desc": {
+          "source": "An alternate token URL which will be used to wrap the call to get the token; if this is set, then it takes precedence over `oauth2_token_url`",
+          "message": "將用於封裝取得權杖呼叫的替代權杖 URL；如果設定了此項，其優先順序高於 `oauth2_token_url`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF90b2tlbl91cmw.display_name": {
+          "source": "OAuth2 Alternate Token URL",
+          "message": "OAuth2 替代權杖 URL"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF90b2tlbl91cmw.short_desc": {
+          "source": "An alternate token URL which will be used to wrap the call to get the token",
+          "message": "將用於封裝取得權杖呼叫的替代權杖 URL"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.desc": {
+          "source": "Optional URL substitution info for token requests to the alternate server",
+          "message": "傳送至替代伺服器的權杖請求的選用 URL 替換資訊"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.display_name": {
+          "source": "OAuth2 Alternate URL Substitution Info",
+          "message": "OAuth2 替代 URL 替換資訊"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.short_desc": {
+          "source": "Optional URL substitution info for token requests to the alternate server",
+          "message": "傳送至替代伺服器的權杖請求的選用 URL 替換資訊"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FwcA.desc": {
+          "source": "This is a hint to external programs processing OAuth2 requests to external configuration for the OAuth2 configuration",
+          "message": "這是提供給處理 OAuth2 請求之外部程式的提示，用以參考 OAuth2 設定的外部組態"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FwcA.display_name": {
+          "source": "OAuth2 Application",
+          "message": "OAuth2 應用程式"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FwcA.short_desc": {
+          "source": "Sets a hint to external programs for the OAuth2 config",
+          "message": "設定提供給外部程式的 OAuth2 設定提示"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "The OAuth2 client ID; ignored for logins if the `token` option is set (but possibly used when refreshing tokens)",
+          "message": "OAuth2 用戶端 ID；如果設定了 `token` 選項，則在登入時會被忽略（但在重新整理權杖時可能會使用）"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9pZA.display_name": {
+          "source": "OAuth2 Client ID",
+          "message": "OAuth2 用戶端 ID"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9pZA.short_desc": {
+          "source": "Sets the OAuth2 client ID",
+          "message": "設定 OAuth2 用戶端 ID"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "Sets the OAuth2 client secret; ignored for logins if the `token` option is set (but possibly used when refreshing tokens)",
+          "message": "設定 OAuth2 用戶端密碼；如果設定了 `token` 選項，則在登入時會被忽略（但在重新整理權杖時可能會使用）"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.display_name": {
+          "source": "OAuth2 Client Secret",
+          "message": "OAuth2 用戶端密碼"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.short_desc": {
+          "source": "Sets the OAuth2 client secret",
+          "message": "設定 OAuth2 用戶端密碼"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "No OAuth2 grant flow will be used",
+          "message": "不使用 OAuth2 授權流程"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOmF1dGhvcml6YXRpb25fY29kZQ.desc": {
+          "source": "OAuth2 2.0 authorization code grant ([RFC 6749 authorization code grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1)); this grant type requires external user authorization to acquire an access token; the `oauth2_auth_url` must be set to inform external code where to request authorization from the external authorization server",
+          "message": "OAuth2 2.0 授權碼授權 ([RFC 6749 authorization code grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1))；此授權類型需要外部使用者授權才能取得存取權杖；必須設定 `oauth2_auth_url` 以告知外部程式碼向何處的外部授權伺服器請求授權"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOmNsaWVudF9jcmVkZW50aWFscw.desc": {
+          "source": "OAuth2 2.0 client credentials grant ([RFC 6749 client credentials grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.4))",
+          "message": "OAuth2 2.0 用戶端憑證授權 ([RFC 6749 client credentials grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.4))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOmltcGxpY2l0.desc": {
+          "source": "OAuth2 2.0 implicit grant ([RFC 6749 implicit grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.2)); this grant type returns the access token directly in the redirect URL fragment without a code exchange step; requires external user authorization; the `oauth2_auth_url` must be set; no `oauth2_token_url` is required",
+          "message": "OAuth2 2.0 隱含授權 ([RFC 6749 implicit grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.2))；此授權類型直接在重新導向 URL 片段中傳回存取權杖，無需代碼交換步驟；需要外部使用者授權；必須設定 `oauth2_auth_url`；不需要 `oauth2_token_url`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOnBhc3N3b3Jk.desc": {
+          "source": "OAuth2 2.0 legacy password grant ([RFC 6749 password grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.3))",
+          "message": "OAuth2 2.0 舊版密碼授權 ([RFC 6749 password grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.3))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.desc": {
+          "source": "The OAuth2 grant type; ignored for logins if the `token` option is set",
+          "message": "OAuth2 授權類型；如果設定了 `token` 選項，則在登入時會被忽略"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.display_name": {
+          "source": "OAuth2 Grant Type",
+          "message": "OAuth2 授權類型"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.short_desc": {
+          "source": "Sets the OAuth2 grant type",
+          "message": "設定 OAuth2 授權類型"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.allowed_values.c3RyaW5nOlMyNTY.desc": {
+          "source": "The code challenge will be sent as a URL-encoded SHA-256 digest when PKCE is used",
+          "message": "使用 PKCE 時，程式碼驗證挑戰將以經過 URL 編碼的 SHA-256 摘要形式傳送"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "PKCE will not be used",
+          "message": "不使用 PKCE"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.allowed_values.c3RyaW5nOnBsYWlu.desc": {
+          "source": "No encoding will be made with the code challenge when PKCE is used",
+          "message": "使用 PKCE 時，程式碼驗證挑戰將不進行編碼"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.desc": {
+          "source": "The code challenge method for PKCE (Proof Key Code Exchange) with the `authorization_code` flow",
+          "message": "搭配 `authorization_code` 流程使用 PKCE (Proof Key Code Exchange) 的程式碼驗證挑戰方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.display_name": {
+          "source": "OAuth2 PKCE",
+          "message": "OAuth2 PKCE"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.short_desc": {
+          "source": "Hint to use PKCE with the authorization code flow",
+          "message": "在授權碼流程中使用 PKCE 的提示"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.desc": {
+          "source": "Per OAuth2 spec (RFC 6749), the state parameter should be returned by the authorization server. Some providers (like Trello) do not pass through the state parameter. Set this to False to embed the state in the redirect_uri as a workaround for non-compliant providers. Default: True (spec-compliant behavior).",
+          "message": "根據 OAuth2 規格 (RFC 6749)，授權伺服器應傳回 state 參數。某些提供者（如 Trello）不會傳遞 state 參數。將此項設為 False 可將 state 嵌入 redirect_uri 中，作為不合規提供者的因應措施。預設值：True（符合規格之行為）。"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.display_name": {
+          "source": "OAuth2 Redirect Passthrough State?",
+          "message": "OAuth2 重新導向傳遞 State？"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.short_desc": {
+          "source": "If False, embed state in redirect_uri for non-compliant OAuth2 providers",
+          "message": "若為 False，則為不合規的 OAuth2 提供者將 state 嵌入 redirect_uri"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3VybA.desc": {
+          "source": "The OAuth2 redirect URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token; the special value `auto` (the default) is meant to be interpreted by servers that implement OAuth2 authorization code client handling",
+          "message": "`authorization_code` 授權類型的 OAuth2 重新導向 URL；如果設定了 `token` 選項則會被忽略。請注意，`authorization_code` 授權類型需要外部使用者授權才能取得存取權杖；特殊值 `auto`（預設值）供實作 OAuth2 授權碼用戶端處理的伺服器解讀"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3VybA.display_name": {
+          "source": "OAuth2 Redirect URL",
+          "message": "OAuth2 重新導向 URL"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3VybA.short_desc": {
+          "source": "The OAuth2 redirect URL for the authorization code grant type",
+          "message": "授權碼授權類型的 OAuth2 重新導向 URL"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.desc": {
+          "source": "Sets the OAuth2 refresh token, if any (complements option `token`)",
+          "message": "設定 OAuth2 重新整理權杖（如果有的話，補足選項 `token`）"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.display_name": {
+          "source": "OAuth2 Refresh Token",
+          "message": "OAuth2 重新整理權杖"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.short_desc": {
+          "source": "Sets the OAuth2 refresh token",
+          "message": "設定 OAuth2 重新整理權杖"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.desc": {
+          "source": "A separator character for OAuth2 scopes in URI arguments",
+          "message": "URI 引數中 OAuth2 範圍的分隔符號"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.display_name": {
+          "source": "OAuth2 Scope Separator",
+          "message": "OAuth2 範圍分隔符號"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.short_desc": {
+          "source": "A separator character for OAuth2 scopes in URI arguments",
+          "message": "URI 引數中 OAuth2 範圍的分隔符號"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3Blcw.desc": {
+          "source": "List of OAuth2 scope strings to request; ignored if the `token` option is set",
+          "message": "要請求的 OAuth2 範圍字串清單；若設定了 `token` 選項則會被忽略"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3Blcw.display_name": {
+          "source": "OAuth2 Scopes",
+          "message": "OAuth2 範圍"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3Blcw.short_desc": {
+          "source": "List of OAuth2 scopes to request",
+          "message": "要請求的 OAuth2 範圍清單"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.desc": {
+          "source": "Use basic authorization with the client secret only when making token requests",
+          "message": "在發出權杖請求時僅使用用戶端密鑰進行基本授權"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.display_name": {
+          "source": "OAuth2 Token Auth Client Secret Only?",
+          "message": "OAuth2 權杖驗證僅使用用戶端密鑰？"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.short_desc": {
+          "source": "Use basic authorization with the client secret only when making token requests",
+          "message": "在發出權杖請求時僅使用用戶端密鑰進行基本授權"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2FyZ3M.desc": {
+          "source": "Optional extra arguments for token refresh requests; if this option is set as well as `oauth2_alt_token_url`, then the `oauth2_token_url` value will be added to this as well when the request is made to the `oauth2_alt_token_url`",
+          "message": "權杖重新整理請求的選用額外引數；若同時設定了此選項與 `oauth2_alt_token_url`，則在向 `oauth2_alt_token_url` 發出請求時，`oauth2_token_url` 的值也會新增至此"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2FyZ3M.display_name": {
+          "source": "OAuth2 Token Refresh Args",
+          "message": "OAuth2 權杖重新整理引數"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2FyZ3M.short_desc": {
+          "source": "Optional extra arguments for token requests",
+          "message": "權杖請求的選用額外引數"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.desc": {
+          "source": "The expiry date for the token",
+          "message": "權杖的到期日"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.display_name": {
+          "source": "OAuth2 Token Expiry Date",
+          "message": "OAuth2 權杖到期日"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.short_desc": {
+          "source": "The expiry date for the token",
+          "message": "權杖的到期日"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.desc": {
+          "source": "The expected number of minutes that a token will remain valid before it must be refreshed. This option is only used when the connection has a refresh token and the server does not indicate the lifetime of the token in token responses",
+          "message": "權杖在必須重新整理前預期維持有效的分鐘數。此選項僅在連線具有重新整理權杖且伺服器未在權杖回應中指出權杖生命週期時使用"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.display_name": {
+          "source": "OAuth2 Token Lifetime Hint in Minutes",
+          "message": "OAuth2 權杖生命週期提示（分鐘）"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.short_desc": {
+          "source": "How many minutes a token stays valid",
+          "message": "權杖維持有效的分鐘數"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VybA.desc": {
+          "source": "The token URL for OAuth2 flows; ignored for logins if the `token` option is set",
+          "message": "OAuth2 流程的權杖 URL；若設定了 `token` 選項，登入時會忽略此項"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VybA.display_name": {
+          "source": "OAuth2 Token URL",
+          "message": "OAuth2 權杖 URL"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VybA.short_desc": {
+          "source": "The token URL for OAuth2 flows",
+          "message": "OAuth2 流程的權杖 URL"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.desc": {
+          "source": "Use basic authorization with the client ID and client secret when making token requests",
+          "message": "在發出權杖請求時使用用戶端 ID 與用戶端密鑰進行基本授權"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.display_name": {
+          "source": "OAuth2 Token Use Basic Auth?",
+          "message": "OAuth2 權杖使用基本驗證？"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.short_desc": {
+          "source": "Send the client ID and secret as basic authorization",
+          "message": "以基本授權方式傳送用戶端 ID 和密鑰"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b3BlbmFwaTM.desc": {
+          "source": "Sets the location of an OpenApi 3 schema to use for message validation; processed with `FileLocationHandler::getTextFileFromLocation()` (ex: `file:///path/to/swagger-schema.json`); conflicts with `swagger` and `validator`",
+          "message": "設定用於訊息驗證的 OpenApi 3 資料結構位置；由 `FileLocationHandler::getTextFileFromLocation()` 處理（例如：`file:///path/to/swagger-schema.json`）；與 `swagger` 和 `validator` 互相衝突"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b3BlbmFwaTM.display_name": {
+          "source": "OpenApi 3 Schema",
+          "message": "OpenApi 3 結構描述"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b3BlbmFwaTM.short_desc": {
+          "source": "Sets the location of an OpenApi 3 schema to use for the connection",
+          "message": "設定用於連線的 OpenApi 3 結構描述位置"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "使用 bzip2 編碼"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "使用 deflate 演算法 ([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "使用 GNU zip 編碼 ([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "不使用內容編碼"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "設定傳送訊息時使用的壓縮演算法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.display_name": {
+          "source": "Send Compression",
+          "message": "傳送壓縮"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.short_desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "設定傳送訊息時使用的壓縮演算法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcg.desc": {
+          "source": "Sets the location of a Swagger schema to use for message validation; processed with `FileLocationHandler::getTextFileFromLocation()` (ex: `file:///path/to/swagger-schema.json`); conflicts with `openapi3` and `validator`",
+          "message": "設定用於訊息驗證的 Swagger 資料結構位置；由 `FileLocationHandler::getTextFileFromLocation()` 處理（例如：`file:///path/to/swagger-schema.json`）；與 `openapi3` 和 `validator` 互相衝突"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcg.display_name": {
+          "source": "Swagger Schema",
+          "message": "Swagger 資料結構"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcg.short_desc": {
+          "source": "Sets the location of a Swagger schema to use for the connection",
+          "message": "設定用於連線的 Swagger 資料結構位置"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9iYXNlX3BhdGg.desc": {
+          "source": "In case a REST validator is used, the base path in the schema can be overridden with this option (applies to any REST validator; not just Swagger validators)",
+          "message": "若使用 REST 驗證器，可使用此選項覆蓋資料結構中的基本路徑（適用於任何 REST 驗證器；不僅限於 Swagger 驗證器）"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9iYXNlX3BhdGg.display_name": {
+          "source": "Override Schema Base Path",
+          "message": "覆蓋資料結構基本路徑"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9iYXNlX3BhdGg.short_desc": {
+          "source": "Overrides the base path for REST / Swagger schemas",
+          "message": "覆蓋 REST / Swagger 資料結構的基本路徑"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9sYXhfcGFyc2luZw.desc": {
+          "source": "Try to parse invalid Swagger schemas; this option is not recommended; it will not parse all bad Swagger schemas; schemas should be corrected instead of setting this option",
+          "message": "嘗試解析無效的 Swagger 結構；此選項不建議使用；它無法解析所有錯誤的 Swagger 結構；應修正結構而非設定此選項"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9sYXhfcGFyc2luZw.display_name": {
+          "source": "Swagger Lax Parsing",
+          "message": "Swagger 演算法解析"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9sYXhfcGFyc2luZw.short_desc": {
+          "source": "Sets lax parsing for Swagger schemas",
+          "message": "設定 Swagger 結構的寬鬆解析"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; only used if no username or password is set in the URL and if the `username` option is also used; conflicts with the `token` option",
+          "message": "用於驗證的密碼；僅在 URL 中未設定使用者名稱或密碼且同時使用 `username` 選項時使用；與 `token` 選項衝突"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "密碼"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for authentication",
+          "message": "用於驗證的密碼"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19ib2R5.desc": {
+          "source": "Any message body to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set or if `ping_method` is `GET`",
+          "message": "執行進階 Ping 操作時要傳送的任何訊息本文；若 `ping_method` 和 `ping_path` 其中之一未設定，或 `ping_method` 為 `GET`，則會被忽略"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19ib2R5.display_name": {
+          "source": "Ping Body",
+          "message": "Ping 本文"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19ib2R5.short_desc": {
+          "source": "The message body to send with pings",
+          "message": "隨 ping 發送的訊息內文"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.desc": {
+          "source": "Any HTTP headers to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set",
+          "message": "執行進階 ping 操作時發送的任何 HTTP 標頭；如果 `ping_method` 和 `ping_path` 中有任一個未設定，則忽略此項目"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.display_name": {
+          "source": "Ping Headers",
+          "message": "Ping 標頭"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.short_desc": {
+          "source": "Any HTTP headers to send with pings",
+          "message": "隨 ping 發送的任何 HTTP 標頭"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.desc": {
+          "source": "The HTTP method to use for an advanced ping; this and `ping_path` must be set to make an HTTP request as a part of the socket polling ping operation; must be a valid HTTP method name",
+          "message": "用於進階 ping 的 HTTP 方法；必須設定此項與 `ping_path`，才能在通訊端輪詢 ping 操作中發出 HTTP 請求；必須是有效的 HTTP 方法名稱"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.display_name": {
+          "source": "Ping Method",
+          "message": "Ping 方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.short_desc": {
+          "source": "The HTTP method to use for pings",
+          "message": "用於 ping 的 HTTP 方法"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19wYXRo.desc": {
+          "source": "The URI path to use for an advanced ping; this and `ping_method` must be set to make an HTTP request as a part of the socket polling ping operation.  If the value for this option begins with a `/` character, then it replaces any connection path for the REST client, otherwise the value is appended to the connection path for the REST client.",
+          "message": "用於進階 ping 的 URI 路徑；必須設定此項與 `ping_method`，才能在通訊端輪詢 ping 操作中發出 HTTP 請求。如果此選項的值以 `/` 字元開頭，則會取代 REST 用戶端的任何連線路徑，否則該值會附加至 REST 用戶端的連線路徑。"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19wYXRo.display_name": {
+          "source": "Ping Path",
+          "message": "Ping 路徑"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19wYXRo.short_desc": {
+          "source": "The URI path to use for pings",
+          "message": "用於 ping 的 URI 路徑"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.desc": {
+          "source": "A hash to check all deserialized bodies from the server to check for authentication errors",
+          "message": "用於檢查所有來自伺服器的反序列化主體以檢查驗證錯誤的雜湊"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.display_name": {
+          "source": "REST Body Auth Error Check",
+          "message": "REST 主體驗證錯誤檢查"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.short_desc": {
+          "source": "Values marking a 200 OK body as an authentication error",
+          "message": "將 200 OK 主體標記為驗證錯誤的值"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "Any authorization token to use for the connection; will be passed as `Authorization: Bearer ...` (assuming that `token_type` is `Bearer`) in request headers; this option cannot be used with username and password options or authentication information in the URL; if this option is set then most OAuth2 options are ignored for logins",
+          "message": "用於連線的任何授權權杖；將在請求標頭中作為 `Authorization: Bearer ...` 傳遞（假設 `token_type` 為 `Bearer`）；此選項無法與使用者名稱和密碼選項或 URL 中的驗證資訊一起使用；若設定此選項，登入時將忽略大部分 OAuth2 選項"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "授權權杖"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token to be included in requests",
+          "message": "設定要包含在請求中的授權權杖"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.desc": {
+          "source": "The name of the HTTP header where `token` will be sent as an API key; this option is incompatible with OAuth2 options",
+          "message": "將 `token` 作為 API 金鑰發送時的 HTTP 標頭名稱；此選項與 OAuth2 選項不相容"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.display_name": {
+          "source": "API Key Header",
+          "message": "API 金鑰標頭"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.short_desc": {
+          "source": "The name of the HTTP header where the token will be sent as an API key",
+          "message": "權杖作為 API 金鑰發送時的 HTTP 標頭名稱"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "用於 `Authorization` 標頭的 `token` 類型；若未設定 `token` 選項則忽略"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "授權權杖類型"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "授權權杖的類型"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL; conflicts with the `token` option",
+          "message": "用於驗證的使用者名稱；僅在 URL 中未設定使用者名稱或密碼時使用；與 `token` 選項衝突"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "使用者名稱"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for authentication",
+          "message": "設定用於驗證的使用者名稱"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dmFsaWRhdG9y.desc": {
+          "source": "Sets an `AbstractRestSchemaValidator` object for REST message validation; conflicts with `openapi3` and `swagger`",
+          "message": "設定 `AbstractRestSchemaValidator` 物件以進行 REST 訊息驗證；與 `openapi3` 和 `swagger` 互相衝突"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dmFsaWRhdG9y.display_name": {
+          "source": "Schema Validator",
+          "message": "結構驗證器"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dmFsaWRhdG9y.short_desc": {
+          "source": "Sets a schema validator object",
+          "message": "設定結構驗證器物件"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a REST server",
+          "message": "連接到 REST 伺服器的連線"
+        }
+      }
+    }
+  }
+}

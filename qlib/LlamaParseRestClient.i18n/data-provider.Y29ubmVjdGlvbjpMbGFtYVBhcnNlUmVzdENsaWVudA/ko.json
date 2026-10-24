@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started), LlamaIndex's document platform: parsing documents into markdown, text and structured items, extracting structured data against a schema, classifying documents against rules, and splitting a document that holds many.\n\nRequires an API key for Bearer authentication.  Get your API key from the [LlamaCloud dashboard](https://cloud.llamaindex.ai/).\n\nAn API key belongs to one region and is rejected by the other.  When the configured region rejects the key, the connection tries the other known region on the next ping and moves itself to whichever one accepts it.",
+          "message": "[LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started)에 대한 연결, LlamaIndex의 문서 플랫폼: 문서를 마크다운, 텍스트 및 구조화된 항목으로 파싱하고 스키마 기반으로 구조화된 데이터를 추출하며, 규칙 기반으로 문서를 분류하고 여러 문서를 포함하는 문서를 분할합니다.\n\nBearer 인증을 위한 API 키가 필요합니다. [LlamaCloud 대시보드](https://cloud.llamaindex.ai/)에서 API 키를 획득하세요.\n\nAPI 키는 하나의 지역에 속하며 다른 지역에서는 거부됩니다. 구성된 지역에서 키가 거부되면 연결은 다음 핑에서 다른 알려진 지역을 시도하고, 허용하는 쪽으로 이동합니다."
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "LlamaParse Connection",
+          "message": "LlamaParse 연결"
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The LlamaParse API key used for Bearer authentication.",
+          "message": "Bearer 인증에 사용되는 LlamaParse API 키입니다."
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "LlamaParse API key (Bearer token)",
+          "message": "LlamaParse API 키 (Bearer 토큰)"
+        },
+        "connection.TGxhbWFQYXJzZVJlc3RDbGllbnQ.scheme.TGxhbWFQYXJzZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the LlamaIndex Cloud document APIs",
+          "message": "LlamaIndex Cloud 문서 API에 대한 연결입니다."
+        }
+      }
+    }
+  }
+}

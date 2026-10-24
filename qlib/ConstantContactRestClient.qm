@@ -249,7 +249,8 @@ public class ConstantContactRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "constantcontactres://api.cc.email/v3";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ConstantContactRestClient",
+            "ConstantContactRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Constant Contact REST Connection",
             "short_desc": "A connection to the Constant Contact REST API",
             "desc": "A connection to the Constant Contact REST API for email marketing, contacts, "
@@ -304,7 +305,7 @@ public class ConstantContactRestConnection inherits RestClient::RestConnection {
                     }),
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
-        };
+        });
     }
 
     #! creates the ConstantContactRestConnection object

@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to an [SGLang](https://github.com/sgl-project/sglang) model server.\n\nSGLang exposes an OpenAI-compatible API at `/v1/*` plus SGLang-native endpoints (`/generate` for constrained decoding, `/get_server_info`, `/flush_cache`).\n\nThe target instance serves exactly one model; the `model` option is required.  If the deployment requires authentication, set `apikey`.\n\nThe connection uses the `sglang://` URL scheme for plain HTTP and `sglangs://` for servers behind TLS.",
+          "message": "[SGLang](https://github.com/sgl-project/sglang) 모델 서버에 대한 연결입니다.\n\nSGLang은 `/v1/*`에서 OpenAI 호환 API를 제공하며, SGLang 고유의 엔드포인트(`/generate`은 제한된 디코딩용, `/get_server_info`, `/flush_cache`)도 제공합니다.\n\n대상 인스턴스는 정확히 하나의 모델만 서비스합니다; `model` 옵션이 필요합니다. 배포에 인증이 필요하면 `apikey`를 설정하세요.\n\n연결은 평문 HTTP용 `sglang://` URL 스킴과 TLS 뒤의 서버용 `sglangs://`를 사용합니다."
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "SGLang REST Connection",
+          "message": "SGLang REST 연결"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The OpenAI-compatible API version segment used for `/v1/*` routing.  Defaults to `v1`; SGLang currently exposes only `v1` but this option allows forward compatibility.",
+          "message": "`/v1/*` 라우팅에 사용되는 OpenAI 호환 API 버전 세그먼트입니다. 기본값은 `v1`이며, SGLang은 현재 `v1`만 제공하지만, 이 옵션은 향후 호환성을 위해 허용합니다."
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "OpenAI-Compatible API Version",
+          "message": "OpenAI 호환 API 버전"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The OpenAI-compatible API version segment",
+          "message": "OpenAI 호환 API 버전 세그먼트"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Optional API key for SGLang deployments that enable authentication; sent as the `Authorization: Bearer` header.  Local inference deployments typically do not require a key.",
+          "message": "인증을 활성화한 SGLang 배포용 선택적 API 키; `Authorization: Bearer` 헤더로 전송됩니다. 로컬 추론 배포는 일반적으로 키가 필요하지 않습니다."
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "API key for SGLang servers with authentication enabled",
+          "message": "인증이 활성화된 SGLang 서버용 API 키"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.bW9kZWw.desc": {
+          "source": "The model name served by the target SGLang instance; SGLang serves exactly one model per server, so the connection captures it here.  Used by client code (e.g. via `getModel()`) to populate the `model` field of OpenAI-compatible request bodies.",
+          "message": "대상 SGLang 인스턴스에서 제공하는 모델 이름; SGLang은 서버당 정확히 하나의 모델만 제공하므로 연결에서 이를 캡처합니다. 클라이언트 코드(예: `getModel()`을 통해)가 OpenAI 호환 요청 본문의 `model` 필드를 채우는 데 사용됩니다."
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.bW9kZWw.display_name": {
+          "source": "Model Name",
+          "message": "모델 이름"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.option.bW9kZWw.short_desc": {
+          "source": "The model served by the target SGLang instance",
+          "message": "대상 SGLang 인스턴스에서 제공하는 모델"
+        },
+        "connection.U0dMYW5nUmVzdENsaWVudA.scheme.U0dMYW5nUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to an SGLang model server",
+          "message": "SGLang 모델 서버에 대한 연결"
+        }
+      }
+    }
+  }
+}

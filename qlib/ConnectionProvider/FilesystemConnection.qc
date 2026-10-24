@@ -36,7 +36,8 @@ public namespace ConnectionProvider {
 public class FilesystemConnection inherits AbstractConnectionWithInfo {
     public {
         #! Connection entry info
-        const hash<ConnectionSchemeInfo> ConnectionScheme = <ConnectionSchemeInfo>{
+        const hash<ConnectionSchemeInfo> ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ConnectionProvider",
+            "FilesystemConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Filesystem Connection",
             "short_desc": "A connection to the local filesystem",
             "desc": "A connection to the local filesystem",
@@ -56,7 +57,7 @@ public class FilesystemConnection inherits AbstractConnectionWithInfo {
                     "default_value": False,
                 },
             },
-        };
+        });
 
         #! Data provider subtypes supported
         const hash<auto> DataProviderSubtypeMap = {

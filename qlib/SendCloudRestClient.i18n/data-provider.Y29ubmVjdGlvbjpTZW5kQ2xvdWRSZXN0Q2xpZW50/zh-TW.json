@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the SendCloud REST API for shipping automation.\n\nSendCloud is a shipping platform used by European e-commerce merchants to manage parcels, carriers, shipping labels, returns and tracking.  The SendCloud Public API is authenticated with **HTTP Basic Auth**, where the username is your integration's **public_key** and the password is the associated **secret_key**.\n\n**Important:** SendCloud does **not** provide a sandbox environment.  When writing integration tests, use shipment method ID `8` (*Unstamped letter*) so that no real parcel is produced or billed.",
+          "message": "連線至 SendCloud REST API 以進行物流自動化。\n\nSendCloud 是歐洲電商商家用來管理包裹、承運商、運送標籤、退貨與追蹤的物流平台。SendCloud 公開 API 使用 **HTTP Basic Auth** 進行驗證，其中使用者名稱為您的整合專案的 **public_key**，密碼則為對應的 **secret_key**。\n\n**重要：** SendCloud **不提供** 沙箱環境。撰寫整合測試時，請使用運送方式 ID `8`（*未貼郵票的信件*），以確保不會產生真實包裹或產生費用。"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "SendCloud REST Connection",
+          "message": "SendCloud REST 連線"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "This integration uses the **SendCloud Public API** with HTTP Basic Auth.\n\n**Steps to generate API credentials:**\n1. Log in to the [Sendcloud Panel](https://panel.sendcloud.sc)\n2. Navigate to **Settings > Integrations**\n3. Click **+ Add Integration** and select **Sendcloud API**\n4. Copy the **Public key** and **Secret key** shown on the integration detail page\n\nBoth keys are required: the public key is sent as the Basic Auth username and the secret key as the password.\n\n**No sandbox:** SendCloud does not offer a test environment, so all API calls run against live data.  When writing integration tests, use shipment method ID `8` (*Unstamped letter*) — it is the safe test method because it does not produce a real parcel or generate billing.",
+          "message": "此整合使用 **SendCloud 公開 API** 與 HTTP Basic Auth。\n\n**產生 API 憑證的步驟：**\n1. 登入 [Sendcloud 面板](https://panel.sendcloud.sc)\n2. 導覽至 **設定 > 整合**\n3. 點選 **+ 新增整合**，並選擇 **Sendcloud API**\n4. 複製整合詳細頁面顯示的 **公開金鑰** 與 **秘密金鑰**\n\n兩個金鑰皆為必要：公開金鑰作為 Basic Auth 的使用者名稱，秘密金鑰作為密碼。\n\n**無沙箱環境：** SendCloud 不提供測試環境，因此所有 API 呼叫都會直接對應至實際資料。撰寫整合測試時，請使用運送方式 ID `8`（*未貼郵票的信件*）——這是安全的測試方法，因為不會產生真實包裹或產生費用。"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your SendCloud API Credentials",
+          "message": "如何取得您的 SendCloud API 憑證"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.c2VjcmV0X2tleQ.desc": {
+          "source": "The SendCloud **secret API key** used as the password for HTTP Basic Auth.\n\n**To obtain your API credentials:**\n1. Log in to the [Sendcloud Panel](https://panel.sendcloud.sc)\n2. Navigate to **Settings > Integrations**\n3. Click **+ Add Integration** and select **Sendcloud API**\n4. After creating the integration, copy the **Public key** and **Secret key** shown on the integration detail page\n\nStore this value securely; it is only visible on the integration detail page.",
+          "message": "SendCloud 的 **私密 API 金鑰**，用於 HTTP Basic Auth 的密碼。\n\n**取得您的 API 憑證：**\n1. 登入 [Sendcloud 控制台](https://panel.sendcloud.sc)\n2. 前往 **設定 > 整合**\n3. 點選 **+ 新增整合**，並選擇 **Sendcloud API**\n4. 建立整合後，複製整合詳情頁面顯示的 **公開金鑰** 和 **私密金鑰**\n\n請安全儲存此值；僅在整合詳情頁面可見。"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.c2VjcmV0X2tleQ.display_name": {
+          "source": "Secret Key",
+          "message": "私密金鑰"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.c2VjcmV0X2tleQ.short_desc": {
+          "source": "SendCloud secret API key (Basic Auth password)",
+          "message": "SendCloud 私密 API 金鑰（Basic Auth 密碼）"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.cHVibGljX2tleQ.desc": {
+          "source": "The SendCloud **public API key** used as the username for HTTP Basic Auth.\n\n**To obtain your API credentials:**\n1. Log in to the [Sendcloud Panel](https://panel.sendcloud.sc)\n2. Navigate to **Settings > Integrations**\n3. Click **+ Add Integration** and select **Sendcloud API**\n4. After creating the integration, copy the **Public key** and **Secret key** shown on the integration detail page\n\nBoth the public key and the secret key are required to authenticate every request.",
+          "message": "SendCloud 的 **公開 API 金鑰**，用於 HTTP Basic Auth 的使用者名稱。\n\n**取得您的 API 憑證：**\n1. 登入 [Sendcloud 控制台](https://panel.sendcloud.sc)\n2. 前往 **設定 > 整合**\n3. 點選 **+ 新增整合**，並選擇 **Sendcloud API**\n4. 建立整合後，複製整合詳情頁面顯示的 **公開金鑰** 和 **私密金鑰**\n\n每筆請求皆需同時提供公開金鑰與私密金鑰以進行驗證。"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.cHVibGljX2tleQ.display_name": {
+          "source": "Public Key",
+          "message": "公用金鑰"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.cHVibGljX2tleQ.short_desc": {
+          "source": "SendCloud public API key (Basic Auth username)",
+          "message": "SendCloud 公開 API 金鑰（Basic Auth 使用者名稱）"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.dmVyc2lvbg.allowed_values.c3RyaW5nOnYy.desc": {
+          "source": "v2 (stable)",
+          "message": "v2（穩定版）"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.dmVyc2lvbg.allowed_values.c3RyaW5nOnYz.desc": {
+          "source": "v3 (future — not yet implemented)",
+          "message": "v3（未來版本 — 尚未實作）"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.dmVyc2lvbg.desc": {
+          "source": "The SendCloud API version used in the base URL.\n\n- `v2` — **stable**; this is the only version currently wired in this integration.\n- `v3` — reserved for a future update and **not yet implemented**; selecting it will cause requests to fail with a `SENDCLOUD-UNSUPPORTED-VERSION` error.",
+          "message": "此整合所使用的 SendCloud API 版本，位於基礎 URL 中。\n\n- `v2` — **穩定版**；目前此整合僅支援此版本。\n- `v3` — 預留給未來更新，**尚未實作**；選擇此版本將導致請求失敗，並回傳 `SENDCLOUD-UNSUPPORTED-VERSION` 錯誤。"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.dmVyc2lvbg.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.dmVyc2lvbg.short_desc": {
+          "source": "SendCloud API version",
+          "message": "SendCloud API 版本"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "Connect to SendCloud shipping with HTTP Basic authentication",
+          "message": "使用 HTTP Basic 驗證連接至 SendCloud 運送服務"
+        }
+      }
+    }
+  }
+}

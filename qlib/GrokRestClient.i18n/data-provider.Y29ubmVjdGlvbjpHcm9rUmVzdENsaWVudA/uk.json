@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the xAI Grok REST API.\n\nRequires an API key for Bearer authentication. Get your API key from the [xAI Console](https://console.x.ai/)",
+          "message": "З’єднання з REST API xAI Grok.\n\nВимагає ключ API для автентифікації Bearer. Отримайте свій ключ у [консолі xAI](https://console.x.ai/"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "xAI Grok REST Connection",
+          "message": "З’єднання xAI Grok REST"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The xAI Grok chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `grok-3` (the default)",
+          "message": "Модель чату xAI Grok, яка використовується клієнтами LLM, коли це з’єднання вибрано для чату.\n\nМоделі чату — це окрема родина від моделей вбудовування і не можуть використовуватися взаємозамінно.\n\nПриклади значень: `grok-3` (за замовчуванням)"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Модель чату"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "xAI Grok chat model name",
+          "message": "Назва моделі xAI Grok для чату"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "The API version to use",
+          "message": "Версія API, яку слід використовувати"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Версія API"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Версія API, яку слід використовувати"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The xAI Grok API key used for Bearer authentication.\n\nGet your API key from the [xAI Console](https://console.x.ai/)",
+          "message": "Ключ API xAI Grok, що використовується для автентифікації Bearer.\n\nОтримайте свій ключ API у [консолі xAI](https://console.x.ai/)"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "xAI Grok API key for authentication",
+          "message": "Ключ API xAI Grok для автентифікації"
+        },
+        "connection.R3Jva1Jlc3RDbGllbnQ.scheme.R3Jva1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the xAI Grok REST API",
+          "message": "Підключення до REST API xAI Grok"
+        }
+      }
+    }
+  }
+}

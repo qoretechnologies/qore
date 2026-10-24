@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.T25lUmVjb3JkQ2xpZW50.scheme.T25lUmVjb3JkQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to an IATA ONE Record server for air cargo data sharing via REST/JSON-LD",
+          "message": "Una connessione a un server IATA ONE Record per lo scambio di dati relativi al trasporto aereo tramite REST/JSON-LD"
+        },
+        "connection.T25lUmVjb3JkQ2xpZW50.scheme.T25lUmVjb3JkQ29ubmVjdGlvbg.display_name": {
+          "source": "ONE Record Connection",
+          "message": "Connessione ONE Record"
+        },
+        "connection.T25lUmVjb3JkQ2xpZW50.scheme.T25lUmVjb3JkQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to an IATA ONE Record server",
+          "message": "Una connessione a un server IATA ONE Record"
+        }
+      }
+    }
+  }
+}

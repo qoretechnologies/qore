@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Twilio Segment Public API for managing your Customer Data Platform workspace.\n\nSegment helps you collect, clean, and control your customer data.\n\n**Supported Operations:**\n- Sources: Manage data collection points\n- Destinations: Configure integration targets\n- Warehouses: Manage data warehouse connections\n- Tracking Plans: Define and enforce event schemas\n- Labels: Organize and tag resources",
+          "message": "고객 데이터 플랫폼 워크스페이스를 관리하기 위한 Twilio Segment 공개 API에 연결.\n\nSegment는 고객 데이터를 수집, 정제, 제어하는 데 도움을 줍니다.\n\n**지원되는 작업:**\n- 소스: 데이터 수집 지점 관리\n- 목적지: 통합 대상 구성\n- 웨어하우스: 데이터 웨어하우스 연결 관리\n- 추적 계획: 이벤트 스키마 정의 및 강제 적용\n- 레이블: 리소스 조직 및 태그 지정"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Segment REST Connection",
+          "message": "Segment REST 연결"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Segment, you need a Public API token:\n\n1. Log in to [Segment](https://app.segment.com)\n2. Go to **Settings > Workspace settings > Access Management > Tokens**\n3. Create a new Public API token\n\nOnly Workspace Owners can create tokens. Keep your token secure.",
+          "message": "Segment에 연결하려면 공개 API 토큰이 필요합니다:\n\n1. [Segment](https://app.segment.com)에 로그인합니다\n2. **설정 > 워크스페이스 설정 > 액세스 관리 > 토큰**으로 이동합니다\n3. 새 공개 API 토큰을 생성합니다\n\n워크스페이스 소유자만 토큰을 생성할 수 있습니다. 토큰을 안전하게 보관하세요."
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Segment API Key",
+          "message": "Segment API 키"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Choose the region that matches your Segment workspace:\n- **US**: United States data center (default)\n- **EU**: European Union data center\n\nYour region was set when you created your workspace and cannot be changed.",
+          "message": "작업공간과 일치하는 지역을 선택하세요:\n- **미국**: 미국 데이터 센터 (기본값)\n- **EU**: 유럽 연합 데이터 센터\n\n귀하의 지역은 작업공간을 생성할 때 설정되었으며, 변경할 수 없습니다."
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Select Your Region",
+          "message": "지역 선택"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Segment Public API token used for Bearer token authentication.\n\n**To obtain your API token:**\n1. Log in to [Segment](https://app.segment.com)\n2. Go to **Settings > Workspace settings > Access Management > Tokens**\n3. Create a new Public API token\n\n**Note:** Only Workspace Owners can create API tokens.",
+          "message": "Bearer 토큰 인증에 사용되는 Segment 공개 API 토큰입니다.\n\n**API 토큰을 얻으려면:**\n1. [Segment](https://app.segment.com)에 로그인합니다\n2. **설정 > 작업공간 설정 > 액세스 관리 > 토큰**으로 이동합니다\n3. 새 공개 API 토큰을 생성합니다\n\n**참고:** 작업공간 소유자만 API 토큰을 생성할 수 있습니다."
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Segment Public API key for Bearer authentication",
+          "message": "Bearer 인증용 Segment 공개 API 키"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "EU data center (eu1.api.segmentapis.com)",
+          "message": "유럽 데이터 센터 (eu1.api.segmentapis.com)"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "EU",
+          "message": "유럽"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.short_desc": {
+          "source": "European Union",
+          "message": "유럽 연합"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "US data center (api.segmentapis.com)",
+          "message": "미국 데이터 센터 (api.segmentapis.com)"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "US",
+          "message": "미국"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.short_desc": {
+          "source": "United States",
+          "message": "미국"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "Select the Segment data center region for your workspace.\n\nYour region is determined when you create your Segment workspace and cannot be changed.",
+          "message": "작업공간용 Segment 데이터 센터 지역을 선택하세요.\n\n귀하의 지역은 Segment 작업공간을 생성할 때 결정되며, 변경할 수 없습니다."
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "리전"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "Segment data center region",
+          "message": "Segment 데이터 센터 지역"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Twilio Segment REST API",
+          "message": "Twilio Segment REST API로의 연결"
+        }
+      }
+    }
+  }
+}

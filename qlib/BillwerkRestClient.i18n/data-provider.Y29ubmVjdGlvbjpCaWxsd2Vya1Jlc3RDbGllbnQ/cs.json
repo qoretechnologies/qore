@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.QmlsbHdlcmtSZXN0Q2xpZW50.scheme.QmlsbHdlcmtSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to Billwerk with the REST API",
+          "message": "Připojení k Billwerku pomocí REST API"
+        },
+        "connection.QmlsbHdlcmtSZXN0Q2xpZW50.scheme.QmlsbHdlcmtSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Billwerk Connection",
+          "message": "Připojení Billwerk"
+        },
+        "connection.QmlsbHdlcmtSZXN0Q2xpZW50.scheme.QmlsbHdlcmtSZXN0Q29ubmVjdGlvbg.option.Y2xpZW50X2lk.desc": {
+          "source": "the Billwerk OAuth2 client ID",
+          "message": "ID klienta Billwerk OAuth2"
+        },
+        "connection.QmlsbHdlcmtSZXN0Q2xpZW50.scheme.QmlsbHdlcmtSZXN0Q29ubmVjdGlvbg.option.Y2xpZW50X3NlY3JldA.desc": {
+          "source": "the Billwerk OAuth2 client secret",
+          "message": "Tajný klíč klienta Billwerk OAuth2"
+        },
+        "connection.QmlsbHdlcmtSZXN0Q2xpZW50.scheme.QmlsbHdlcmtSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to Billwerk with the REST API",
+          "message": "Připojení k Billwerku pomocí REST API"
+        }
+      }
+    }
+  }
+}

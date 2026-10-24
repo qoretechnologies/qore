@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Smartsheet REST API for spreadsheet and work management, including sheets, rows, columns, workspaces, folders, reports, users, and groups",
+          "message": "스프레드시트 및 작업 관리용 Smartsheet REST API 연결(시트, 행, 열, 워크스페이스, 폴더, 보고서, 사용자 및 그룹 포함)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Smartsheet REST Connection",
+          "message": "Smartsheet REST 연결"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5hdQ.desc": {
+          "source": "Australia (api.smartsheet.au)",
+          "message": "오스트레일리아 (api.smartsheet.au)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5hdQ.display_name": {
+          "source": "AU",
+          "message": "AU"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.desc": {
+          "source": "United States (api.smartsheet.com)",
+          "message": "미국 (api.smartsheet.com)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.display_name": {
+          "source": "US",
+          "message": "미국"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.desc": {
+          "source": "European Union (api.smartsheet.eu)",
+          "message": "유럽 연합 (api.smartsheet.eu)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.display_name": {
+          "source": "EU",
+          "message": "유럽"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5nb3Y.desc": {
+          "source": "US Government (api.smartsheetgov.com)",
+          "message": "미국 정부 (api.smartsheetgov.com)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5nb3Y.display_name": {
+          "source": "Gov",
+          "message": "정부"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.desc": {
+          "source": "Select the Smartsheet data center region for your account.\n\n**Available regions:**\n- `.com` — United States\n- `.eu` — European Union\n- `.au` — Australia\n- `.gov` — US Government\n\n**Note:** Tokens are region-specific. A token from one region cannot be used with another region's API endpoint",
+          "message": "계정의 스마트시트 데이터센터 지역을 선택하세요.\n\n**사용 가능한 지역:**\n- `.com` — 미국\n- `.eu` — 유럽 연합\n- `.au` — 호주\n- `.gov` — 미국 정부\n\n**참고:** 토큰은 지역별로 특정됩니다. 한 지역의 토큰은 다른 지역의 API 엔드포인트에서 사용할 수 없습니다."
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.display_name": {
+          "source": "Region",
+          "message": "리전"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.short_desc": {
+          "source": "Smartsheet data center region",
+          "message": "스마트시트 데이터센터 지역"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Smartsheet REST API",
+          "message": "스마트시트 REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

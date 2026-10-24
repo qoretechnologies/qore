@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to a ZeyOS instance with the REST API",
+          "message": "Una conexión a una instancia de ZeyOS con la API REST"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "ZeyOS Connection",
+          "message": "Conexión ZeyOS"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.YXBwc2VjcmV0.desc": {
+          "source": "Sets the Zeyos application secret",
+          "message": "Establece el secreto de la aplicación Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.YXBwc2VjcmV0.display_name": {
+          "source": "Zeyos App Secret",
+          "message": "Secreto de aplicación Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.YXBwc2VjcmV0.short_desc": {
+          "source": "Sets the Zeyos application secret",
+          "message": "Establece el secreto de la aplicación Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aW5zdGFuY2U.desc": {
+          "source": "Sets the Zeyos instance name (first segment of URI path)",
+          "message": "Establece el nombre de la instancia Zeyos (primer segmento de la ruta de la URI)"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aW5zdGFuY2U.display_name": {
+          "source": "Zeyos Instance",
+          "message": "Instancia ZeyOS"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aW5zdGFuY2U.short_desc": {
+          "source": "Sets the Zeyos instance name",
+          "message": "Establece el nombre de la instancia de Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aWRlbnRpZmllcg.desc": {
+          "source": "Sets the Zeyos identifier; if none is provided, a random identifier string is used",
+          "message": "Establece el identificador de Zeyos; si no se proporciona ninguno, se utiliza una cadena de identificador aleatoria"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aWRlbnRpZmllcg.display_name": {
+          "source": "Zeyos Identifier",
+          "message": "Identificador de Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aWRlbnRpZmllcg.short_desc": {
+          "source": "Sets the Zeyos identifier",
+          "message": "Establece el identificador de Zeyos"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a ZeyOS instance with the REST API",
+          "message": "Una conexión a una instancia de ZeyOS con la API REST"
+        }
+      }
+    }
+  }
+}

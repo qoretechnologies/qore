@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Gorgias REST API for customer support ticket management, customer data, and helpdesk operations",
+          "message": "與 Gorgias REST API 的連接，用於客戶支援工單管理、客戶資料及客服中心作業"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Gorgias REST Connection",
+          "message": "Gorgias REST 連接"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "Your **subdomain** is the first part of your Gorgias URL.\n\nFor example, if you access Gorgias at `https://mycompany.gorgias.com`, your subdomain is `mycompany`.\n\n**How to find it:**\n1. Log in to your Gorgias helpdesk\n2. Look at the URL in your browser's address bar\n3. Copy the part before `.gorgias.com`",
+          "message": "您的 **子網域** 是 Gorgias URL 的第一部分。\n\n例如，如果您透過 `https://mycompany.gorgias.com` 進入 Gorgias，則您的子網域為 `mycompany`。\n\n**如何查找：**\n1. 登入您的 Gorgias 客服中心\n2. 查看瀏覽器位址列中的 URL\n3. 複製 `.gorgias.com` 之前的那部分"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Finding Your Gorgias Subdomain",
+          "message": "尋找您的 Gorgias 子網域"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.desc": {
+          "source": "The subdomain for your Gorgias account.\n\nFor example, if your Gorgias URL is `https://mycompany.gorgias.com`, enter `mycompany` as the subdomain.\n\nThis is used to build the API base URL and OAuth2 endpoints.",
+          "message": "您 Gorgias 帳戶的子網域。\n\n例如，若您 Gorgias 的網址為 `https://mycompany.gorgias.com`，請輸入 `mycompany` 作為子網域。\n\n此資訊將用於建構 API 基底 URL 與 OAuth2 端點。"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.display_name": {
+          "source": "Gorgias Subdomain",
+          "message": "Gorgias 子網域"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.option.c3ViZG9tYWlu.short_desc": {
+          "source": "Your Gorgias account subdomain",
+          "message": "您的 Gorgias 帳戶子網域"
+        },
+        "connection.R29yZ2lhc1Jlc3RDbGllbnQ.scheme.R29yZ2lhc1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Gorgias REST API",
+          "message": "與 Gorgias REST API 的連接"
+        }
+      }
+    }
+  }
+}

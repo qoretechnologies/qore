@@ -1,0 +1,333 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [AWS Bedrock](https://aws.amazon.com/bedrock/) for chat, embeddings, and model-management actions through SigV4-signed REST calls.\n\nThe runtime endpoint is derived from `aws_region`. Authentication uses explicit access keys when supplied, otherwise the standard AWS environment, ECS task-role, or IMDSv2 credential chain. An optional role ARN applies STS AssumeRole after resolving the base credential. The connection ping makes an authenticated, inference-free `ListFoundationModels` request.",
+          "message": "Eine Verbindung zu [AWS Bedrock](https://aws.amazon.com/bedrock/) für Chat, Embeddings und Modellverwaltung über SigV4-signierte REST-Aufrufe.\n\nDer Laufzeit-Endpunkt wird aus `aws_region` abgeleitet. Die Authentifizierung erfolgt mit expliziten Zugriffsschlüsseln, falls angegeben, ansonsten mit der standardmäßigen AWS-Umgebung, ECS-Aufgabenrolle oder IMDSv2-Credential-Kette. Optional kann eine Rollen-ARN verwendet werden, um STS AssumeRole nach der Basis-Credential-Auflösung auszuführen. Der Verbindungstest sendet eine authentifizierte, inferencefreie `ListFoundationModels`-Anfrage."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "AWS Bedrock Connection",
+          "message": "AWS Bedrock-Verbindung"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2V4dGVybmFsX2lk.desc": {
+          "source": "External ID sent to AWS STS when the target role requires one.",
+          "message": "Externe ID, die an AWS STS gesendet wird, wenn die Zielrolle dies erfordert"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2V4dGVybmFsX2lk.display_name": {
+          "source": "STS External ID",
+          "message": "STS-Externe ID"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2V4dGVybmFsX2lk.short_desc": {
+          "source": "Optional external ID required by the role",
+          "message": "Optionale externe ID, die von der Rolle erforderlich ist"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2tleWlk.desc": {
+          "source": "AWS access key ID for explicit credentials. Leave this and `aws_secret` empty to use the AWS environment, ECS task-role, or IMDSv2 credential chain.",
+          "message": "AWS-Zugriffsschlüssel-ID für explizite Anmeldeinformationen. Lassen Sie diese und `aws_secret` leer, um die AWS-Umgebung, die ECS-Auftragsrolle oder die IMDSv2-Anmeldekette zu verwenden."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2tleWlk.display_name": {
+          "source": "AWS Access Key ID",
+          "message": "AWS Access Key-ID"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX2tleWlk.short_desc": {
+          "source": "Optional access key ID for SigV4 authentication",
+          "message": "Optionale Zugriffsschlüssel-ID für die SigV4-Authentifizierung"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLWNlbnRyYWwtMQ.desc": {
+          "source": "Middle East (UAE)",
+          "message": "Mittlerer Osten (Vereinigte Arabische Emirate)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLWNlbnRyYWwtMQ.display_name": {
+          "source": "Middle East (UAE)",
+          "message": "Mittlerer Osten (Vereinigte Arabische Emirate)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLXNvdXRoLTE.desc": {
+          "source": "Middle East (Bahrain)",
+          "message": "Mittlerer Osten (Bahrain)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOm1lLXNvdXRoLTE.display_name": {
+          "source": "Middle East (Bahrain)",
+          "message": "Mittlerer Osten (Bahrain)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFmLXNvdXRoLTE.desc": {
+          "source": "Africa (Cape Town)",
+          "message": "Afrika (Kapstadt)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFmLXNvdXRoLTE.display_name": {
+          "source": "Africa (Cape Town)",
+          "message": "Afrika (Kapstadt)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0x.desc": {
+          "source": "Asia Pacific (Tokyo)",
+          "message": "Asien-Pazifik (Tokio)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0x.display_name": {
+          "source": "Asia Pacific (Tokyo)",
+          "message": "Asien-Pazifik (Tokio)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0y.desc": {
+          "source": "Asia Pacific (Seoul)",
+          "message": "Asien-Pazifik (Seoul)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0y.display_name": {
+          "source": "Asia Pacific (Seoul)",
+          "message": "Asien-Pazifik (Seoul)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0z.desc": {
+          "source": "Asia Pacific (Osaka)",
+          "message": "Asien-Pazifik (Osaka)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLW5vcnRoZWFzdC0z.display_name": {
+          "source": "Asia Pacific (Osaka)",
+          "message": "Asien-Pazifik (Osaka)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLWVhc3QtMQ.desc": {
+          "source": "Asia Pacific (Hong Kong)",
+          "message": "Asien-Pazifik (Hongkong)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLWVhc3QtMQ.display_name": {
+          "source": "Asia Pacific (Hong Kong)",
+          "message": "Asien-Pazifik (Hongkong)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTE.desc": {
+          "source": "Asia Pacific (Mumbai)",
+          "message": "Asien-Pazifik (Mumbai)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTE.display_name": {
+          "source": "Asia Pacific (Mumbai)",
+          "message": "Asien-Pazifik (Mumbai)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTI.desc": {
+          "source": "Asia Pacific (Hyderabad)",
+          "message": "Asien-Pazifik (Hyderabad)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoLTI.display_name": {
+          "source": "Asia Pacific (Hyderabad)",
+          "message": "Asien-Pazifik (Hyderabad)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC00.desc": {
+          "source": "Asia Pacific (Melbourne)",
+          "message": "Asien-Pazifik (Melbourne)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC00.display_name": {
+          "source": "Asia Pacific (Melbourne)",
+          "message": "Asien-Pazifik (Melbourne)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.desc": {
+          "source": "Asia Pacific (Singapore)",
+          "message": "Asien-Pazifik (Singapur)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.display_name": {
+          "source": "Asia Pacific (Singapore)",
+          "message": "Asien-Pazifik (Singapur)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0y.desc": {
+          "source": "Asia Pacific (Sydney)",
+          "message": "Asien-Pazifik (Sydney)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0y.display_name": {
+          "source": "Asia Pacific (Sydney)",
+          "message": "Asien-Pazifik (Sydney)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0z.desc": {
+          "source": "Asia Pacific (Jakarta)",
+          "message": "Asien-Pazifik (Jakarta)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmFwLXNvdXRoZWFzdC0z.display_name": {
+          "source": "Asia Pacific (Jakarta)",
+          "message": "Asien-Pazifik (Jakarta)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLWNlbnRyYWwtMQ.desc": {
+          "source": "Canada (Central)",
+          "message": "Kanada (Zentral)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLWNlbnRyYWwtMQ.display_name": {
+          "source": "Canada (Central)",
+          "message": "Kanada (Zentral)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLXdlc3QtMQ.desc": {
+          "source": "Canada West (Calgary)",
+          "message": "Kanada West (Calgary)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmNhLXdlc3QtMQ.display_name": {
+          "source": "Canada West (Calgary)",
+          "message": "Kanada West (Calgary)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LW5vcnRoLTE.desc": {
+          "source": "Europe (Stockholm)",
+          "message": "Europa (Stockholm)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LW5vcnRoLTE.display_name": {
+          "source": "Europe (Stockholm)",
+          "message": "Europa (Stockholm)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMQ.desc": {
+          "source": "Europe (Frankfurt)",
+          "message": "Europa (Frankfurt)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMQ.display_name": {
+          "source": "Europe (Frankfurt)",
+          "message": "Europa (Frankfurt)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMg.desc": {
+          "source": "Europe (Zurich)",
+          "message": "Europa (Zürich)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LWNlbnRyYWwtMg.display_name": {
+          "source": "Europe (Zurich)",
+          "message": "Europa (Zürich)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTE.desc": {
+          "source": "Europe (Milan)",
+          "message": "Europa (Mailand)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTE.display_name": {
+          "source": "Europe (Milan)",
+          "message": "Europa (Mailand)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTI.desc": {
+          "source": "Europe (Spain)",
+          "message": "Europa (Spanien)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXNvdXRoLTI.display_name": {
+          "source": "Europe (Spain)",
+          "message": "Europa (Spanien)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMQ.desc": {
+          "source": "Europe (Ireland)",
+          "message": "Europa (Irlandien)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMQ.display_name": {
+          "source": "Europe (Ireland)",
+          "message": "Europa (Irlandien)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMg.desc": {
+          "source": "Europe (London)",
+          "message": "Europa (London)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMg.display_name": {
+          "source": "Europe (London)",
+          "message": "Europa (London)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMw.desc": {
+          "source": "Europe (Paris)",
+          "message": "Europa (Paris)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmV1LXdlc3QtMw.display_name": {
+          "source": "Europe (Paris)",
+          "message": "Europa (Paris)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmlsLWNlbnRyYWwtMQ.desc": {
+          "source": "Israel (Tel Aviv)",
+          "message": "Israel (Tel Aviv)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOmlsLWNlbnRyYWwtMQ.display_name": {
+          "source": "Israel (Tel Aviv)",
+          "message": "Israel (Tel Aviv)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnNhLWVhc3QtMQ.desc": {
+          "source": "South America (São Paulo)",
+          "message": "Südamerika (São Paulo)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnNhLWVhc3QtMQ.display_name": {
+          "source": "South America (São Paulo)",
+          "message": "Südamerika (São Paulo)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMQ.desc": {
+          "source": "US East (N. Virginia)",
+          "message": "US Osten (Nord-Virginia)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMQ.display_name": {
+          "source": "US East (N. Virginia)",
+          "message": "US Osten (Nord-Virginia)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMg.desc": {
+          "source": "US East (Ohio)",
+          "message": "US Osten (Ohio)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLWVhc3QtMg.display_name": {
+          "source": "US East (Ohio)",
+          "message": "US Osten (Ohio)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMQ.desc": {
+          "source": "US West (N. California)",
+          "message": "US West (Kalifornien, N.)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMQ.display_name": {
+          "source": "US West (N. California)",
+          "message": "US West (Kalifornien, N.)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMg.desc": {
+          "source": "US West (Oregon)",
+          "message": "US West (Oregon)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.allowed_values.c3RyaW5nOnVzLXdlc3QtMg.display_name": {
+          "source": "US West (Oregon)",
+          "message": "US West (Oregon)"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.desc": {
+          "source": "AWS region used for Bedrock runtime and control-plane requests. The connection derives both service endpoints from this value.",
+          "message": "AWS-Region für Bedrock-Runtime- und Steuerungsebene Anfragen. Die Verbindung leitet beide Dienstendpunkte aus diesem Wert ab."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JlZ2lvbg.short_desc": {
+          "source": "AWS region hosting the Bedrock resources",
+          "message": "AWS-Region, in der die Bedrock-Ressourcen gehostet werden"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfYXJu.desc": {
+          "source": "AWS role ARN to assume after resolving the base credential. The resulting temporary credential signs Bedrock requests.",
+          "message": "AWS-Rollen-ARN, den nach der Auflösung der Basisanmeldeinformationen angenommen wird. Die resultierende temporäre Anmeldeinformation unterschreibt Bedrock-Anfragen."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfYXJu.display_name": {
+          "source": "STS Role ARN",
+          "message": "STS-Rollen-ARN"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfYXJu.short_desc": {
+          "source": "Optional AWS role to assume",
+          "message": "Optionale AWS-Rolle, die angenommen werden soll"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.desc": {
+          "source": "Session name sent to AWS STS when `aws_role_arn` is set.",
+          "message": "Sitzungsnamen, der an AWS STS gesendet wird, wenn `aws_role_arn` gesetzt ist."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.display_name": {
+          "source": "STS Role Session Name",
+          "message": "STS-Rollen-Sitzungsname"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3JvbGVfc2Vzc2lvbl9uYW1l.short_desc": {
+          "source": "Optional name for the assumed-role session",
+          "message": "Optionaler Name für die angenommene Rollensitzung"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3NlY3JldA.desc": {
+          "source": "AWS secret access key paired with `aws_keyid`. Leave both fields empty to use the standard AWS credential chain.",
+          "message": "AWS-Secret-Zugriffsschlüssel, der mit `aws_keyid` gepaart ist. Lassen Sie beide Felder leer, um die standardmäßige AWS-Anmeldekette zu verwenden."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3NlY3JldA.display_name": {
+          "source": "AWS Secret Access Key",
+          "message": "AWS Secret Access Key"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3NlY3JldA.short_desc": {
+          "source": "Optional secret key for SigV4 authentication",
+          "message": "Optionaler Geheimschlüssel für die SigV4-Authentifizierung"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3Rva2Vu.desc": {
+          "source": "AWS session token supplied with temporary access-key credentials.",
+          "message": "AWS-Sitzungstoken, das mit temporären Zugriffsschlüsselanmeldeinformationen übermittelt wird."
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3Rva2Vu.display_name": {
+          "source": "AWS Session Token",
+          "message": "AWS-Sitzungstoken"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.option.YXdzX3Rva2Vu.short_desc": {
+          "source": "Optional token for temporary AWS credentials",
+          "message": "Optionales Token für temporäre AWS-Anmeldeinformationen"
+        },
+        "connection.QmVkcm9ja1Jlc3RDbGllbnQ.scheme.QmVkcm9ja1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the AWS Bedrock runtime",
+          "message": "Eine Verbindung zur AWS Bedrock-Runtime"
+        }
+      }
+    }
+  }
+}

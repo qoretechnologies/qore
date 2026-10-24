@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [ElevenLabs](https://elevenlabs.io) REST API for AI voice synthesis, text-to-speech, and audio processing services.\n\nAn API key is required for authentication. To obtain one, sign in to your ElevenLabs account and navigate to **Profile + API Key** in the bottom-left menu at [elevenlabs.io](https://elevenlabs.io)",
+          "message": "Підключення до REST API [ElevenLabs](https://elevenlabs.io) для синтезу голосу штучного інтелекту, перетворення тексту у мову та обробки аудіо.\n\nДля автентифікації потрібен ключ API. Щоб отримати його, увійдіть до свого облікового запису ElevenLabs і перейдіть до **Профіль + Ключ API** у меню внизу зліва на [elevenlabs.io](https://elevenlabs.io)"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "ElevenLabs REST Connection",
+          "message": "Підключення REST до ElevenLabs"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "To connect to ElevenLabs, you need an API key:\n\n1. Sign in to your account at [elevenlabs.io](https://elevenlabs.io)\n2. Click your **profile icon** in the bottom-left corner\n3. Select **Profile + API Key**\n4. Click the **eye icon** to reveal your API key, then copy it\n\nKeep your API key secure and never share it publicly.",
+          "message": "Щоб підключитися до ElevenLabs, вам потрібен ключ API:\n\n1. Увійдіть до свого облікового запису за адресою [elevenlabs.io](https://elevenlabs.io)\n2. Натисніть на **іконку профілю** у нижньому лівому куті\n3. Виберіть **Профіль + Ключ API**\n4. Натисніть **іконку ока**, щоб показати свій ключ API, а потім скопіюйте його\n\nЗберігайте свій ключ API в безпеці і ніколи не діліться ним публічно."
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your ElevenLabs API Key",
+          "message": "Як отримати ключ API ElevenLabs"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The ElevenLabs API key used for authentication; sent as the `xi-api-key` header. To obtain a key, sign in at [elevenlabs.io](https://elevenlabs.io) and navigate to **Profile + API Key** in the bottom-left menu",
+          "message": "Ключ API ElevenLabs для автентифікації; надсилається як заголовок `xi-api-key`. Щоб отримати ключ, увійдіть на [elevenlabs.io](https://elevenlabs.io) та перейдіть до **Профіль + Ключ API** у меню внизу зліва"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "ElevenLabs API key for authentication",
+          "message": "Ключ API ElevenLabs для автентифікації"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "Use the EU data residency endpoint (api.eu.residency.elevenlabs.io)",
+          "message": "Використовуйте точку входу для розташування даних у ЄС (api.eu.residency.elevenlabs.io)"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "EU",
+          "message": "EU"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "Use the global API endpoint (api.elevenlabs.io)",
+          "message": "Використовуйте глобальну точку входу API (api.elevenlabs.io)"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "US (Global)",
+          "message": "США (Глобально)"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "The API region to use; `us` (default) uses the global endpoint, `eu` uses the EU data residency endpoint",
+          "message": "Регіон API для використання; `us` (за замовчуванням) використовує глобальну точку входу, `eu` використовує точку входу для розташування даних у ЄС"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Регіон"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "The API region to use",
+          "message": "Регіон API для використання"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the ElevenLabs REST API",
+          "message": "Підключення до REST API ElevenLabs"
+        }
+      }
+    }
+  }
+}

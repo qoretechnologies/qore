@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to an MCP server for accessing AI tools, resources, and prompts",
+          "message": "Une connexion à un serveur MCP pour accéder aux outils, ressources et invites d’IA"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.display_name": {
+          "source": "MCP Connection",
+          "message": "Connexion MCP"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X25hbWU.desc": {
+          "source": "The name of this client to report to the MCP server during initialization",
+          "message": "Le nom de ce client à signaler au serveur MCP lors de l'initialisation"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X25hbWU.display_name": {
+          "source": "Client Name",
+          "message": "Nom du client"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X25hbWU.short_desc": {
+          "source": "The client name to use for MCP initialization",
+          "message": "Le nom du client à utiliser pour l'initialisation MCP"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X3ZlcnNpb24.desc": {
+          "source": "The version of this client to report to the MCP server during initialization",
+          "message": "La version de ce client à signaler au serveur MCP lors de l'initialisation"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X3ZlcnNpb24.display_name": {
+          "source": "Client Version",
+          "message": "Version du client"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X3ZlcnNpb24.short_desc": {
+          "source": "The client version to use for MCP initialization",
+          "message": "La version du client à utiliser pour l'initialisation MCP"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to an MCP (Model Context Protocol) server",
+          "message": "Une connexion à un serveur MCP (protocole de contexte de modèle)"
+        }
+      }
+    }
+  }
+}

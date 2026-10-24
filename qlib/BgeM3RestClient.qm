@@ -266,7 +266,8 @@ public class BgeM3RestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "bge-m3://localhost:30680";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("BgeM3RestClient",
+            "BgeM3RestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "BGE-M3 FastAPI Connection",
             "short_desc": "A connection to a BGE-M3 FastAPI embedding sidecar",
             "desc": "A connection to a [BGE-M3](https://huggingface.co/BAAI/bge-m3) "
@@ -336,7 +337,7 @@ public class BgeM3RestConnection inherits RestClient::RestConnection {
                     "default_value": BgeM3RestClientBase::DefaultPingPath,
                 }),
             },
-        };
+        });
     }
 
     #! creates the BgeM3RestConnection object

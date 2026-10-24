@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Twilio Segment Public API for managing your Customer Data Platform workspace.\n\nSegment helps you collect, clean, and control your customer data.\n\n**Supported Operations:**\n- Sources: Manage data collection points\n- Destinations: Configure integration targets\n- Warehouses: Manage data warehouse connections\n- Tracking Plans: Define and enforce event schemas\n- Labels: Organize and tag resources",
+          "message": "Una connessione all'API pubblica di Twilio Segment per gestire lo spazio di lavoro del tuo Customer Data Platform.\n\nSegment ti aiuta a raccogliere, pulire e controllare i tuoi dati sui clienti.\n\n**Operazioni supportate:**\n- Fonti: gestisci i punti di raccolta dati\n- Destinazioni: configura i punti di integrazione\n- Magazzini: gestisci le connessioni ai data warehouse\n- Piani di tracciamento: definisci e applica schemi di eventi\n- Etichette: organizza e contrassegna le risorse"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Segment REST Connection",
+          "message": "Connessione REST Segment"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Segment, you need a Public API token:\n\n1. Log in to [Segment](https://app.segment.com)\n2. Go to **Settings > Workspace settings > Access Management > Tokens**\n3. Create a new Public API token\n\nOnly Workspace Owners can create tokens. Keep your token secure.",
+          "message": "Per connetterti a Segment, hai bisogno di un token API pubblico:\n\n1. Accedi a [Segment](https://app.segment.com)\n2. Vai su **Impostazioni > Impostazioni dello spazio di lavoro > Gestione accessi > Token**\n3. Crea un nuovo token API pubblico\n\nSolo i proprietari dello spazio di lavoro possono creare token. Tieni il token al sicuro."
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "Segment API Key",
+          "message": "Chiave API Segment"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Choose the region that matches your Segment workspace:\n- **US**: United States data center (default)\n- **EU**: European Union data center\n\nYour region was set when you created your workspace and cannot be changed.",
+          "message": "Scegli la regione corrispondente al tuo spazio di lavoro Segment:\n- **US**: centro dati Stati Uniti (predefinito)\n- **UE**: centro dati Unione Europea\n\nLa tua regione è stata impostata al momento della creazione dello spazio di lavoro e non può essere modificata."
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Select Your Region",
+          "message": "Seleziona la tua regione"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Segment Public API token used for Bearer token authentication.\n\n**To obtain your API token:**\n1. Log in to [Segment](https://app.segment.com)\n2. Go to **Settings > Workspace settings > Access Management > Tokens**\n3. Create a new Public API token\n\n**Note:** Only Workspace Owners can create API tokens.",
+          "message": "Il token API pubblico di Segment utilizzato per l'autenticazione con Bearer token.\n\n**Per ottenere il tuo token API:**\n1. Accedi a [Segment](https://app.segment.com)\n2. Vai su **Impostazioni > Impostazioni dello spazio di lavoro > Gestione accessi > Token**\n3. Crea un nuovo token API pubblico\n\n**Nota:** Solo i proprietari dello spazio di lavoro possono creare token API."
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Chiave API"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Segment Public API key for Bearer authentication",
+          "message": "Chiave API pubblica di Segment per l'autenticazione Bearer"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "EU data center (eu1.api.segmentapis.com)",
+          "message": "Centro dati EU (eu1.api.segmentapis.com)"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "EU",
+          "message": "UE"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.short_desc": {
+          "source": "European Union",
+          "message": "Unione Europea"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "US data center (api.segmentapis.com)",
+          "message": "Centro dati US (api.segmentapis.com)"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "US",
+          "message": "US"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.short_desc": {
+          "source": "United States",
+          "message": "Stati Uniti"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "Select the Segment data center region for your workspace.\n\nYour region is determined when you create your Segment workspace and cannot be changed.",
+          "message": "Seleziona la regione del centro dati Segment per il tuo workspace.\n\nLa tua regione viene determinata quando crei il tuo workspace Segment e non può essere modificata."
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Regione"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "Segment data center region",
+          "message": "Regione del centro dati Segment"
+        },
+        "connection.U2VnbWVudFJlc3RDbGllbnQ.scheme.U2VnbWVudFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Twilio Segment REST API",
+          "message": "Una connessione all'API REST di Twilio Segment"
+        }
+      }
+    }
+  }
+}

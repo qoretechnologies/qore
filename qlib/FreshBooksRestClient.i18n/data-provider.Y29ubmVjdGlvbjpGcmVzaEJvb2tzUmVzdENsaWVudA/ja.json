@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the FreshBooks REST API for accounting, invoicing, and time tracking",
+          "message": "会計、請求書作成、タイムトラッキング用の FreshBooks REST API への接続"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "FreshBooks REST Connection",
+          "message": "FreshBooks REST 接続"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID, used for accounting API endpoints (clients, invoices, expenses, estimates, items). Find this by calling GET /auth/api/v1/users/me after authentication - it appears as 'account_id' in the business_memberships array, or in your FreshBooks URL (e.g. https://my.freshbooks.com/service/ACCOUNT_ID/...).",
+          "message": "会計 API エンドポイント (クライアント、請求書、経費、見積もり、アイテム) に使用される FreshBooks アカウント ID。認証後に GET /auth/api/v1/users/me を呼び出すことで取得できます。'account_id' は business_memberships 配列に含まれており、FreshBooks URL にも表示されます（例: https://my.freshbooks.com/service/ACCOUNT_ID/ ...）。"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID, used for time tracking API endpoints (services, time entries, projects). Find this by calling GET /auth/api/v1/users/me after authentication - it appears as 'business.id' in the business_memberships array.",
+          "message": "タイムトラッキング API エンドポイント (サービス、タイムエントリ、プロジェクト) に使用される FreshBooks ビジネス ID。認証後に GET /auth/api/v1/users/me を呼び出すことで取得できます。'business.id' は business_memberships 配列に含まれます。"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "ビジネス ID"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "FreshBooksビジネスID"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the FreshBooks REST API",
+          "message": "FreshBooks REST API への接続"
+        }
+      }
+    }
+  }
+}

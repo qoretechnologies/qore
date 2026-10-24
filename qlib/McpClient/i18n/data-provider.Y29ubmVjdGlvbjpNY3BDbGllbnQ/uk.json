@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to an MCP server for accessing AI tools, resources, and prompts",
+          "message": "Підключення до сервера MCP для доступу до інструментів, ресурсів та запитів AI"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.display_name": {
+          "source": "MCP Connection",
+          "message": "Підключення MCP"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X25hbWU.desc": {
+          "source": "The name of this client to report to the MCP server during initialization",
+          "message": "Ім’я цього клієнта для повідомлення серверу MCP під час ініціалізації"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X25hbWU.display_name": {
+          "source": "Client Name",
+          "message": "Назва клієнта"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X25hbWU.short_desc": {
+          "source": "The client name to use for MCP initialization",
+          "message": "Ім’я клієнта для ініціалізації MCP"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X3ZlcnNpb24.desc": {
+          "source": "The version of this client to report to the MCP server during initialization",
+          "message": "Версія цього клієнта для повідомлення серверу MCP під час ініціалізації"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X3ZlcnNpb24.display_name": {
+          "source": "Client Version",
+          "message": "Версія клієнта"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X3ZlcnNpb24.short_desc": {
+          "source": "The client version to use for MCP initialization",
+          "message": "Версія клієнта для ініціалізації MCP"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to an MCP (Model Context Protocol) server",
+          "message": "Підключення до сервера MCP (протокол моделі контексту)"
+        }
+      }
+    }
+  }
+}

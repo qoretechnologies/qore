@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.TGluZWFyUmVzdENsaWVudA.scheme.TGluZWFyUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Linear GraphQL API for issue tracking and project management",
+          "message": "이슈 추적 및 프로젝트 관리를 위한 Linear GraphQL API에 대한 연결"
+        },
+        "connection.TGluZWFyUmVzdENsaWVudA.scheme.TGluZWFyUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Linear REST Connection",
+          "message": "Linear REST 연결"
+        },
+        "connection.TGluZWFyUmVzdENsaWVudA.scheme.TGluZWFyUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Linear GraphQL API",
+          "message": "Linear GraphQL API에 대한 연결"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Shippo REST API for shipping, label creation, and order management.\n\nShippo is a multi-carrier shipping API that enables you to connect with multiple shipping carriers (USPS, UPS, FedEx, DHL, and 85+ more) through a single integration.\n\n**Features:**\n- Compare shipping rates across carriers\n- Create shipping labels\n- Track shipments\n- Validate addresses\n- Manage orders\n\n**Authentication:**\nYou can authenticate using either:\n- **API Token**: Recommended for server-to-server integrations\n- **OAuth2**: For user-authorized access",
+          "message": "連線至 Shippo REST API，用於運輸、寄送標籤產生與訂單管理。\n\nShippo 是一個多運輸商的運輸 API，可讓您透過單一整合連接多個運輸商（USPS、UPS、FedEx、DHL 及 85 個以上）。\n\n**功能：**\n- 比較各運輸商的運費\n- 產生運送標籤\n- 追蹤貨物\n- 驗證地址\n- 管理訂單\n\n**驗證方式：**\n您可以使用下列其中一種方式進行驗證：\n- **API 金鑰**：建議用於伺服器對伺服器整合\n- **OAuth2**：用於使用者授權存取"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Shippo REST Connection",
+          "message": "Shippo REST 連線"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "Shippo supports two authentication methods:\n\n**Option 1: OAuth2 (Recommended)**\nSimply click the authorize button to connect your Shippo account.\nNo additional configuration needed.\n\n**Option 2: API Token**\nEnter your Shippo API token in the 'API Token' field.\nUse this if you prefer to authenticate with a token directly.",
+          "message": "Shippo 支援兩種驗證方式：\n\n**選項 1：OAuth2（建議）**\n只需按一下授權按鈕即可連接您的 Shippo 帳戶。\n無需額外設定。\n\n**選項 2：API 金鑰**\n在「API 金鑰」欄位中輸入您的 Shippo API 金鑰。\n若您偏好直接以金鑰驗證，請使用此方式。"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "Authentication Options",
+          "message": "驗證選項"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
+          "source": "If using API Token authentication:\n\n1. Log in to https://apps.goshippo.com/\n2. Navigate to **Settings > API**\n3. Copy your **Live Token** for production\n4. Use **Test Token** for development/testing\n\n**Token formats:**\n- Live: `shippo_live_xxxxx`\n- Test: `shippo_test_xxxxx`\n\nKeep your tokens secure and never share them publicly.",
+          "message": "若使用 API 金鑰驗證：\n\n1. 登入 https://apps.goshippo.com/\n2. 導覽至 **設定 > API**\n3. 複製您的 **正式金鑰** 用於生產環境\n4. 使用 **測試金鑰** 進行開發與測試\n\n**金鑰格式：**\n- 正式：`shippo_live_xxxxx`\n- 測試：`shippo_test_xxxxx`\n\n請妥善保管您的金鑰，切勿公開分享。"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
+          "source": "How to Get Your API Token",
+          "message": "如何取得您的 API 憑證"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Your Shippo API token used for authentication.\n\n**To obtain your API token:**\n1. Log in to https://apps.goshippo.com/\n2. Navigate to **Settings > API**\n3. Copy your **Live Token** for production use\n4. Use **Test Token** for development/testing\n\n**Token format:** `shippo_live_xxxxx` or `shippo_test_xxxxx`\n\n**Note:** Use either API Token OR OAuth2 authentication - not both.",
+          "message": "用於驗證的 Shippo API 憑證。\n\n**取得 API 憑證的方法：**\n1. 登入 https://apps.goshippo.com/\n2. 前往 **設定 > API**\n3. 複製您的 **正式環境憑證** 以供生產使用\n4. 使用 **測試憑證** 進行開發或測試\n\n**憑證格式：** `shippo_live_xxxxx` 或 `shippo_test_xxxxx`\n\n**注意：** 請使用 API 憑證或 OAuth2 驗證其中一種方式，不要同時使用兩者。"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API 金鑰"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Shippo API token for authentication",
+          "message": "用於驗證的 Shippo API 憑證"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Shippo shipping API",
+          "message": "連線至 Shippo 運送 API"
+        }
+      }
+    }
+  }
+}

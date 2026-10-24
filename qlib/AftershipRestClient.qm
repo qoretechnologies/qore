@@ -161,7 +161,8 @@ public class AftershipRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "aftership://api.aftership.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("AftershipRestClient",
+            "AftershipRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Aftership REST Connection",
             "short_desc": "A connection to the Aftership REST API",
             "desc": "A connection to the Aftership REST API for package tracking and returns management.\n\n"
@@ -200,6 +201,7 @@ public class AftershipRestConnection inherits RestClient::RestConnection {
             "required_options": "apikey",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Get Your Aftership API Key",
                     "intent": "info",
                     "content": "To connect to Aftership, you need an API key:\n\n"
@@ -213,7 +215,7 @@ public class AftershipRestConnection inherits RestClient::RestConnection {
                         "Keep your API key secure and rotate it periodically.",
                 },
             ),
-        };
+        });
     }
 
     #! creates the AftershipRestConnection object

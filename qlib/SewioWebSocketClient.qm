@@ -226,7 +226,8 @@ SewioWebSocketClient ws(\event(), ("url": "ws://example.com:8080/path"));
 public class SewioWebSocketConnection inherits WebSocketClient::WebSocketConnectionObject {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("SewioWebSocketClient",
+            "SewioWebSocketConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Sewio WebSocket Connection",
             "short_desc": "A connection to Sewio WebSocket services",
             "desc": "A connection to Sewio WebSocket services",
@@ -249,7 +250,7 @@ public class SewioWebSocketConnection inherits WebSocketClient::WebSocketConnect
                 },
             },
             "required_options": foldl $1 + "," + $2, SewioWebSocketClient::RequiredOptions,
-        };
+        });
 
         #! object connection options
         const Options = map {$1: True}, keys ConnectionScheme.options;

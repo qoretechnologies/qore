@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [Xero](https://www.xero.com) for contacts, invoices, payments, bank transactions, quotes, projects and payroll employees.\n\n**Authentication** is the OAuth2 authorization code flow with `oauth2_client_id` and `oauth2_client_secret` from an app registered in the Xero developer portal. The `offline_access` scope is requested by default, without which the connection stops working when the access token expires.\n\n**`tenant_id` names the organisation.** A Xero credential can reach several organisations and every call has to say which one it means, so the tenant belongs here rather than to each action - a connection is a connection to one organisation's books. It is filled in automatically when the connection is authorized, from `GET /connections` - which lists what the credential can reach and is also the ping.\n\n**`payroll_region`** selects the payroll API: Australia is served at `payroll.xro/1.0` and New Zealand and the United Kingdom at `payroll.xro/2.0`, which are different API versions rather than the same one at different addresses.\n\nXero is a trademark of Xero Limited.",
+          "message": "連接到 [Xero](https://www.xero.com) 的連接，用於聯絡人、發票、付款、銀行交易、報價、專案及薪資員工。\n\n**驗證** 使用 OAuth2 授權碼流程，需提供 `oauth2_client_id` 和 `oauth2_client_secret`，來自 Xero 開發者門戶中註冊的應用程式。預設會請求 `offline_access` 權限，若未請求，存取權杖到期後連接將失效。\n\n**`tenant_id` 指定組織名稱。** Xero 憑證可存取多個組織，每次呼叫都需明確指定目標組織，因此租戶資訊應在此處設定，而非每個動作中——連接即為對某一組織帳簿的連接。授權時會自動填入，來源為 `GET /connections`，該處列出憑證可存取的組織，同時也是驗證 Ping。\n\n**`payroll_region`** 選擇薪資 API：澳洲使用 `payroll.xro/1.0`，紐西蘭與英國則使用 `payroll.xro/2.0`，兩者為不同版本的 API，而非同一版本的不同位址。\n\nXero 為 Xero Limited 的商標。"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Xero REST Connection",
+          "message": "Xero REST 連接"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.cGF5cm9sbF9yZWdpb24.allowed_values.c3RyaW5nOm56.desc": {
+          "source": "New Zealand (payroll.xro/2.0)",
+          "message": "紐西蘭（payroll.xro/2.0）"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.cGF5cm9sbF9yZWdpb24.allowed_values.c3RyaW5nOmF1.desc": {
+          "source": "Australia (payroll.xro/1.0)",
+          "message": "澳洲（payroll.xro/1.0）"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.cGF5cm9sbF9yZWdpb24.allowed_values.c3RyaW5nOnVr.desc": {
+          "source": "United Kingdom (payroll.xro/2.0)",
+          "message": "英國（payroll.xro/2.0）"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.cGF5cm9sbF9yZWdpb24.desc": {
+          "source": "Which regional payroll API the employee actions use.\n\nXero has no single payroll API: Australia is served at `payroll.xro/1.0` and New Zealand and the United Kingdom at `payroll.xro/2.0`, and the two versions differ in what they accept. Leave this unset for an organisation that does not use Xero payroll; the employee actions then report that no region is set rather than guessing one.",
+          "message": "員工操作所使用的區域性薪資 API。\n\nXero 沒有單一薪資 API：澳洲由 `payroll.xro/1.0` 提供服務，而紐西蘭與英國則由 `payroll.xro/2.0` 提供，兩者接受的內容有所不同。若組織不使用 Xero 薪資，請保持未設定；此時員工操作將報告未設定區域，而非猜測。"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.cGF5cm9sbF9yZWdpb24.display_name": {
+          "source": "Payroll Region",
+          "message": "薪資區域"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.cGF5cm9sbF9yZWdpb24.short_desc": {
+          "source": "Which regional payroll API to use",
+          "message": "要使用的區域性薪資 API"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.dGVuYW50X2lk.desc": {
+          "source": "The ID of the Xero organisation this connection works in, sent as `Xero-Tenant-Id` with every call.\n\n**This is filled in automatically** when the connection is authorized, so it normally needs no attention. A credential can reach several organisations, and a call that does not name one is rejected; the first organisation `GET /connections` lists is used, and the others are logged. Set this to work in one of those instead - a value set here is never overwritten.",
+          "message": "此連接所屬的 Xero 組織 ID，每次呼叫時都會以 `Xero-Tenant-Id` 傳送。\n\n**此欄位在連接授權時會自動填入**，因此通常無需手動處理。憑證可存取多個組織，若呼叫未指定組織則會被拒絕；系統會使用第一個 `GET /connections` 列出的組織，其餘組織僅記錄。若需使用其他組織，請手動設定此值——此處設定的值永遠不會被覆蓋。"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.dGVuYW50X2lk.display_name": {
+          "source": "Tenant ID",
+          "message": "租戶 ID"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.option.dGVuYW50X2lk.short_desc": {
+          "source": "The Xero organisation this connection works in",
+          "message": "此連接所屬的 Xero 組織"
+        },
+        "connection.WGVyb1Jlc3RDbGllbnQ.scheme.WGVyb1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Xero REST API",
+          "message": "連接到 Xero REST API 的連接"
+        }
+      }
+    }
+  }
+}

@@ -398,7 +398,8 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "bigcommerceres://api.bigcommerce.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("BigCommerceRestClient",
+            "BigCommerceRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "BigCommerce REST Connection",
             "short_desc": "A connection to the BigCommerce REST API",
             "desc": "A connection to the BigCommerce REST API for e-commerce management "
@@ -457,6 +458,7 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
             "required_options": "store_hash",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Find Your Store Hash",
                     "intent": "warning",
                     "content": "The **Store Hash** is required to connect to your BigCommerce store.\n\n"
@@ -468,7 +470,7 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
                         "**API Path**, e.g., `https://api.bigcommerce.com/stores/**XXXXX**/v3`",
                 },
             ),
-        };
+        });
     }
 
     #! creates the BigCommerceRestConnection object

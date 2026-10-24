@@ -454,10 +454,10 @@ public class SendCloudRestClientIo inherits RestClientIo::RestClientIo, SendClou
 public class SendCloudRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("SendCloudRestClient",
+            "SendCloudRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "SendCloud REST Connection",
-            "short_desc": "Connect to SendCloud shipping automation API using HTTP Basic Auth "
-                "(public_key + secret_key)",
+            "short_desc": "Connect to SendCloud shipping with HTTP Basic authentication",
             "desc": "A connection to the SendCloud REST API for shipping automation.\n\n"
                 "SendCloud is a shipping platform used by European e-commerce merchants to "
                 "manage parcels, carriers, shipping labels, returns and tracking.  The "
@@ -537,6 +537,7 @@ public class SendCloudRestConnection inherits RestClient::RestConnection {
             "required_options": "public_key,secret_key",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Obtain Your SendCloud API Credentials",
                     "intent": "info",
                     "content": "This integration uses the **SendCloud Public API** with HTTP "
@@ -556,7 +557,7 @@ public class SendCloudRestConnection inherits RestClient::RestConnection {
                         "generate billing.",
                 },
             ),
-        };
+        });
     }
 
     #! creates the SendCloudRestConnection object

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Circle REST API for community management including posts, comments, members, spaces, events, and messaging",
+          "message": "Підключення до REST API Circle для управління спільнотою, включаючи дописи, коментарі, учасників, простори, події та повідомлення"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Circle REST Connection",
+          "message": "Підключення до REST API Circle"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Circle community at https://app.circle.so\n2. Click on your community in the top-left corner\n3. Select **Developer** > **Tokens**\n4. Click **Create Token**, select **Admin V2** as the type\n5. Copy the token and paste it into the **API Token** field\n\n**Important:**\n- API access requires a **Business plan** or above\n- Rate limit: 2,000 requests per 5 minutes per IP\n- Store your token securely; treat it like a password",
+          "message": "1. Увійдіть у вашу спільноту Circle за адресою https://app.circle.so\n2. Натисніть на вашу спільноту у верхньому лівому куті\n3. Виберіть **Розробник** > **Токени**\n4. Натисніть **Створити токен**, виберіть тип **Admin V2**\n5. Скопіюйте токен і вставте його у поле **API-токен**\n\n**Важливо:**\n- Доступ до API вимагає плану **Business** або вище\n- Ліміт швидкості: 2 000 запитів за 5 хвилин на IP-адресу\n- Зберігайте токен безпечно; ставте його на рівні пароля"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Generate Your API Token",
+          "message": "Як створити свій API-токен"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Circle API token used for Bearer token authentication.\n\n**To obtain your API token:**\n1. Log in to your Circle community as an admin\n2. Click on your community in the top-left corner\n3. Select **Developer** > **Tokens**\n4. Click **Create Token** and select **Admin V2**\n\n**Note:** API access requires a Business plan or above.\n\nRate limit: 2,000 requests per 5 minutes per IP",
+          "message": "Токен API Circle, що використовується для автентифікації через Bearer-токен.\n\n**Щоб отримати токен API:**\n1. Увійдіть у вашу спільноту Circle як адміністратор\n2. Натисніть на вашу спільноту у верхньому лівому куті\n3. Виберіть **Розробник** > **Токени**\n4. Натисніть **Створити токен** і виберіть **Admin V2**\n\n**Примітка:** Доступ до API вимагає плану Business або вище.\n\nЛіміт швидкості: 2 000 запитів за 5 хвилин на IP-адресу"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API-токен"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Circle API token for authentication",
+          "message": "Токен API Circle для автентифікації"
+        },
+        "connection.Q2lyY2xlUmVzdENsaWVudA.scheme.Q2lyY2xlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Circle REST API",
+          "message": "Підключення до REST API Circle"
+        }
+      }
+    }
+  }
+}

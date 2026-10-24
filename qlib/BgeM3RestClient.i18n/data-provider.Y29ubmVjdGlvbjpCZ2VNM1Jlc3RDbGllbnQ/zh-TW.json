@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to a [BGE-M3](https://huggingface.co/BAAI/bge-m3) FastAPI embedding sidecar.\n\nBGE-M3 is a multilingual text embedding model supporting dense, sparse, and multi-vector representations.  The sidecar exposes:\n- `POST /embed` — generate dense and/or sparse embeddings\n- `GET /health` — liveness with host memory pressure info\n- `GET /metrics` — Prometheus text-format metrics\n\nThe sidecar serves a single model; the `model` option defaults to `bge-m3` and is reported back via `getModel()` for collection-metadata bookkeeping.\n\nIf the deployment requires authentication, set `apikey`; it is sent as the `Authorization: Bearer` header.\n\nThe connection uses the `bge-m3://` URL scheme; `bge-m3-fastapi://` is accepted as an alias.",
+          "message": "連接到 [BGE-M3](https://huggingface.co/BAAI/bge-m3) FastAPI 嵌入側車。\n\nBGE-M3 是支援密集、稀疏與多向量表示的多語言文字嵌入模型。側車公開：\n- `POST /embed` — 產生密集與/或稀疏嵌入\n- `GET /health` — 主機記憶體壓力資訊的存活狀態\n- `GET /metrics` — Prometheus 文字格式指標\n\n側車僅服務單一模型；`model` 選項預設為 `bge-m3`，並透過 `getModel()` 回傳，用於收集元資料記錄。\n\n若部署需要驗證，請設定 `apikey`；它會以 `Authorization: Bearer` 標頭傳送。\n\n此連接使用 `bge-m3://` 通訊協定；`bge-m3-fastapi://` 可作為別名接受。"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "BGE-M3 FastAPI Connection",
+          "message": "BGE-M3 FastAPI 連接"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Optional API key for sidecar deployments that enable authentication; sent as the `Authorization: Bearer` header.  Local deployments typically do not require a key.\n\n**Note that this connection's ping cannot verify this option.**  The BGE-M3 sidecar serves `/health`, `/metrics` and `/embed` without authentication, and `/health` - the ping target - is also the Kubernetes liveness and readiness probe path, so it must stay unauthenticated even where a gateway enforces authentication in front of the sidecar.  There is therefore no endpoint that answers 401 for a missing or wrong key.  A successful ping means the sidecar is reachable and the model is loaded; it does not mean this key is correct.  Where a gateway does enforce authentication, a wrong or missing key surfaces on the first `/embed` call instead.",
+          "message": "側車部署啟用驗證時的選擇性 API 金鑰；以 `Authorization: Bearer` 標頭傳送。本地部署通常不需要金鑰。\n\n**注意：此連接的 ping 無法驗證此選項。** BGE-M3 側車在未驗證下提供 `/health`、`/metrics` 和 `/embed`，而 `/health` — ping 目標 — 也是 Kubernetes 存活與就緒探針路徑，因此即使前段有閘道器強制驗證，也必須保持未驗證。因此不存在對缺失或錯誤金鑰回應 401 的端點。成功的 ping 僅表示側車可達且模型已載入；不代表此金鑰正確。當閘道器強制驗證時，錯誤或缺失的金鑰會在第一個 `/embed` 呼叫時暴露。"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "API key for sidecar deployments with authentication enabled",
+          "message": "啟用驗證的側車部署用 API 金鑰"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.bW9kZWw.desc": {
+          "source": "The model name reported back via `getModel()`.  The BGE-M3 FastAPI sidecar always serves the `bge-m3` model; this option exists so downstream collection metadata can record the model name without an extra server-info round trip.",
+          "message": "模型名稱由 `getModel()` 回傳。BGE-M3 FastAPI sidecar 始終提供 `bge-m3` 模型；此選項可讓下游收集的元資料記錄模型名稱，無需額外的伺服器資訊往返通訊。"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.bW9kZWw.display_name": {
+          "source": "Model Name",
+          "message": "模型名稱"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.option.bW9kZWw.short_desc": {
+          "source": "The model reported back via getModel()",
+          "message": "由 getModel() 回傳的模型"
+        },
+        "connection.QmdlTTNSZXN0Q2xpZW50.scheme.QmdlTTNSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a BGE-M3 FastAPI embedding sidecar",
+          "message": "連接到 BGE-M3 FastAPI 嵌入 sidecar 的連接"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Freshsales REST Connection",
+          "message": "Freshsales REST Connection"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Freshsales CRM REST API",
+          "message": "A connection to the Freshsales CRM REST API"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Freshsales CRM REST API for managing contacts, accounts, deals, tasks, appointments, and notes.\n\n**To obtain your API key:**\n1. Log in to your Freshsales account\n2. Click your profile picture in the top-right corner\n3. Go to **Settings** > **API Settings**\n4. Copy your API key\n\n**To find your subdomain:**\nYour subdomain is the part before `.myfreshworks.com` in your Freshsales URL (e.g., `mycompany` from `https://mycompany.myfreshworks.com`)",
+          "message": "A connection to the Freshsales CRM REST API for managing contacts, accounts, deals, tasks, appointments, and notes.\n\n**To obtain your API key:**\n1. Log in to your Freshsales account\n2. Click your profile picture in the top-right corner\n3. Go to **Settings** > **API Settings**\n4. Copy your API key\n\n**To find your subdomain:**\nYour subdomain is the part before `.myfreshworks.com` in your Freshsales URL (e.g., `mycompany` from `https://mycompany.myfreshworks.com`)"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API Key"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Freshsales API key for authentication",
+          "message": "Freshsales API key for authentication"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Freshsales API key used for token authentication.\n\n**To obtain your API key:**\n1. Log in to your Freshsales account\n2. Click your profile picture in the top-right corner\n3. Go to **Settings** > **API Settings**\n4. Copy your API key\n\nRate limit: 1,000 API requests per hour per account",
+          "message": "The Freshsales API key used for token authentication.\n\n**To obtain your API key:**\n1. Log in to your Freshsales account\n2. Click your profile picture in the top-right corner\n3. Go to **Settings** > **API Settings**\n4. Copy your API key\n\nRate limit: 1,000 API requests per hour per account"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.display_name": {
+          "source": "Freshsales Domain",
+          "message": "Freshsales Domain"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.short_desc": {
+          "source": "Your Freshsales subdomain or full domain",
+          "message": "Your Freshsales subdomain or full domain"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.desc": {
+          "source": "The domain of your Freshsales account.\n\nYou can provide either:\n- Just the subdomain (e.g., `mycompany`)\n- The full domain (e.g., `mycompany-org.myfreshworks.com`)\n- A full URL (e.g., `https://mycompany-org.myfreshworks.com/crm/sales`)\n\nThe subdomain or domain is extracted automatically",
+          "message": "The domain of your Freshsales account.\n\nYou can provide either:\n- Just the subdomain (e.g., `mycompany`)\n- The full domain (e.g., `mycompany-org.myfreshworks.com`)\n- A full URL (e.g., `https://mycompany-org.myfreshworks.com/crm/sales`)\n\nThe subdomain or domain is extracted automatically"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.SHVlUmVzdENsaWVudA.scheme.SHVlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Philips Hue REST API",
+          "message": "Una connessione all'API REST di Philips Hue"
+        },
+        "connection.SHVlUmVzdENsaWVudA.scheme.SHVlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Philips Hue REST Connection",
+          "message": "Connessione REST Philips Hue"
+        },
+        "connection.SHVlUmVzdENsaWVudA.scheme.SHVlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Philips Hue REST API",
+          "message": "Una connessione all'API REST di Philips Hue"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a ServiceNow instance using the REST API",
+          "message": "Spojenie s inštanciou ServiceNow pomocou REST rozhrania"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "ServiceNow REST Connection",
+          "message": "Spojenie ServiceNow REST"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "the API version for ServiceNow; if not set the latest version is used",
+          "message": "verzia rozhrania API pre ServiceNow; ak nie je nastavená, použije sa najnovšia verzia"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Verzia API na použitie"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "the REST API key",
+          "message": "kľúč rozhrania REST"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "The REST API key",
+          "message": "Kľúč rozhrania REST"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5X2hlYWRlcg.desc": {
+          "source": "the REST API key header",
+          "message": "hlavička kľúča rozhrania REST"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5X2hlYWRlcg.display_name": {
+          "source": "API Key Header",
+          "message": "Hlavička kľúča API"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5X2hlYWRlcg.short_desc": {
+          "source": "The REST API key header",
+          "message": "Hlavička kľúča rozhrania REST"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "the ServiceNow OAuth2 client ID",
+          "message": "ID klienta ServiceNow OAuth2"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "the ServiceNow OAuth2 client secret",
+          "message": "tajný kľúč OAuth2 klienta ServiceNow"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.cGFzc3dvcmQ.desc": {
+          "source": "the ServiceNow password",
+          "message": "heslo ServiceNow"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.dXNlcm5hbWU.desc": {
+          "source": "the ServiceNow username",
+          "message": "užívateľské meno ServiceNow"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a ServiceNow instance using the REST API",
+          "message": "Spojenie s inštanciou ServiceNow pomocou REST rozhrania"
+        }
+      }
+    }
+  }
+}

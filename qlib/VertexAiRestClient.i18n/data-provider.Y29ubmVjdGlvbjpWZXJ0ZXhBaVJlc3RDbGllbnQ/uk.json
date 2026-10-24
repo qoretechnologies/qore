@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to Google Vertex AI for generative model access via regional REST endpoints. Authentication is via Application Default Credentials or an explicit service-account JSON key file.",
+          "message": "З’єднання з Google Vertex AI для доступу до генеративних моделей через регіональні REST-точки. Аутентифікація відбувається за допомогою Application Default Credentials або явного файлу ключа службової облікової записі у форматі JSON."
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Google Vertex AI Connection",
+          "message": "З’єднання з Google Vertex AI"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Vertex AI chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `gemini-2.0-flash` (the default), `gemini-2.5-pro`",
+          "message": "Модель чату Vertex AI, яка використовується клієнтами LLM, коли це з’єднання вибрано для чату.\n\nМоделі чату — це окрема родина від моделей вбудовування, і їх не можна використовувати взаємозамінно.\n\nПриклади значень: `gemini-2.0-flash` (за замовчуванням), `gemini-2.5-pro`"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Модель чату"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Vertex AI chat model name",
+          "message": "Назва моделі чату Vertex AI"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3Byb2plY3RfaWQ.desc": {
+          "source": "GCP project ID (required)",
+          "message": "ID проекту GCP (обов’язково)"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3Byb2plY3RfaWQ.display_name": {
+          "source": "GCP Project ID",
+          "message": "Ідентифікатор проекту GCP"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3Byb2plY3RfaWQ.short_desc": {
+          "source": "GCP project that owns the Vertex AI workload",
+          "message": "Проект GCP, який володіє навантаженням Vertex AI"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.desc": {
+          "source": "Optional GCP billing/quota project; when set it is sent as the x-goog-user-project header so quota and billing are attributed to that project. Not required for the project-scoped Vertex endpoints, where the project in the URL path is authoritative",
+          "message": "Додатковий проект GCP для рахування витрат/квот; коли встановлено, він надсилається як заголовок x-goog-user-project, тому витрати та квоти призначені цьому проекту. Не обов’язково для проектних кінцевих точок Vertex, де проект у шляху URL є авторитетним"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.display_name": {
+          "source": "GCP Quota Project ID",
+          "message": "ID проекту квоти GCP"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3F1b3RhX3Byb2plY3RfaWQ.short_desc": {
+          "source": "Billing/quota project for the x-goog-user-project header",
+          "message": "Проект рахування/квоти для заголовка x-goog-user-project"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3JlZ2lvbg.desc": {
+          "source": "Vertex AI region (e.g. us-central1, europe-west4), multi-region (us or eu), or global location",
+          "message": "Регіон Vertex AI (наприклад, us-central1, europe-west4), мультирегіон (us або eu) або глобальна локація"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3JlZ2lvbg.display_name": {
+          "source": "GCP Region",
+          "message": "Регіон GCP"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3JlZ2lvbg.short_desc": {
+          "source": "Vertex AI region",
+          "message": "Регіон Vertex AI"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3NhX2pzb25fcGF0aA.desc": {
+          "source": "Location of a GCP service-account JSON file for JWT-bearer auth; processed with `FileLocationHandler::getTextFileFromLocation()`, so it may be a bare path or any registered scheme (ex: `file:///etc/gcp/sa.json`, `http(s)://`, `sftp://`); when omitted, Application Default Credentials are used",
+          "message": "Розташування файлу JSON службового облікового запису GCP для автентифікації JWT-bearer; обробляється з використанням `FileLocationHandler::getTextFileFromLocation()`, тому це може бути простий шлях або будь-яка зареєстрована схема (наприклад, `file:///etc/gcp/sa.json`, `http(s)://`, `sftp://`); коли не вказано, використовуються застосунки за замовчуванням"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3NhX2pzb25fcGF0aA.display_name": {
+          "source": "Service-Account JSON Location",
+          "message": "Розташування файлу JSON службового облікового запису"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3NhX2pzb25fcGF0aA.short_desc": {
+          "source": "Location of a service-account JSON key file",
+          "message": "Розташування файлу ключа службового облікового запису"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to Google Vertex AI",
+          "message": "Підключення до Google Vertex AI"
+        }
+      }
+    }
+  }
+}

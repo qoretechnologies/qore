@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.WWFtbFJwY0NsaWVudElv.scheme.WWFtbFJwY0lvQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to a YAML-RPC server using async I/O via HttpClientIo with automatic protocol negotiation (HTTP/3, HTTP/2, HTTP/1.1)",
+          "message": "透過 HttpClientIo 使用非同步 I/O 連線至 YAML-RPC 伺服器，並自動協商通訊協定（HTTP/3、HTTP/2、HTTP/1.1）"
+        },
+        "connection.WWFtbFJwY0NsaWVudElv.scheme.WWFtbFJwY0lvQ29ubmVjdGlvbg.display_name": {
+          "source": "YAML-RPC (Async I/O) Connection",
+          "message": "YAML-RPC（非同步 I/O）連線"
+        },
+        "connection.WWFtbFJwY0NsaWVudElv.scheme.WWFtbFJwY0lvQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a YAML-RPC server using async I/O",
+          "message": "透過非同步 I/O 連線至 YAML-RPC 伺服器"
+        }
+      }
+    }
+  }
+}

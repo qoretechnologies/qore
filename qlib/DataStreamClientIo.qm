@@ -1811,7 +1811,8 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
 public class DataStreamConnectionIo inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("DataStreamClientIo",
+            "DataStreamConnectionIo", "en", <ConnectionSchemeInfo>{
             "display_name": "DataStream REST Connection (Multiplexed I/O)",
             "short_desc": "A connection to a DataStream API server using multiplexed I/O",
             "desc": "A connection to a DataStream API server using RestClientIo for multiplexed "
@@ -1843,7 +1844,7 @@ public class DataStreamConnectionIo inherits ConnectionProvider::AbstractConnect
                     "default_value": CONNECT_DEFAULT_MAX_MESSAGE_SIZE,
                 },
             },
-        };
+        });
     }
 
     #! creates the DataStreamConnectionIo object

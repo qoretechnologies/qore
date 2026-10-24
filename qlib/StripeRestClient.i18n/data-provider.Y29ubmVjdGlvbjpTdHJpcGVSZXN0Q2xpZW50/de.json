@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Stripe](https://stripe.com) REST API for payments, billing and connected accounts.\n\nStripe processes payments and manages the objects around them - customers, charges, invoices, subscriptions, refunds and payouts - so an integration can charge a customer, issue an invoice, reconcile a payout or onboard a connected account without handling card data itself.\n\n**Authentication** is a bearer token, which is either:\n- a secret or restricted key from the Stripe dashboard, set as `api_key`, for an integration acting as your own account; or\n- an access token from Stripe Connect's OAuth2 flow, for a platform acting on behalf of accounts that authorized it.\n\nA **restricted key** can be limited to the resources the integration actually needs and is the better choice in production; a secret key grants full access to the account.\n\n**Rate limits** are 100 read and 100 write requests per second in live mode and 25 of each in test mode; Stripe returns HTTP 429 when they are exceeded.\n\nStripe is a trademark of Stripe, Inc.",
+          "message": "Eine Verbindung zur [Stripe](https://stripe.com) REST-API für Zahlungen, Abrechnung und verbundene Konten.\n\nStripe verarbeitet Zahlungen und verwaltet die dazugehörigen Objekte – Kunden, Belastungen, Rechnungen, Abonnements, Rückerstattungen und Auszahlungen – sodass eine Integration einen Kunden belasten, eine Rechnung ausstellen, eine Auszahlung abrechnen oder ein verbundenes Konto einrichten kann, ohne Karten-Daten selbst zu verarbeiten.\n\n**Authentifizierung** ist ein Bearer-Token, der entweder:\n- ein Geheimnis oder eingeschränkter Schlüssel aus dem Stripe-Dashboard, festgelegt als `api_key`, für eine Integration, die als Ihr eigenes Konto agiert; oder\n- ein Zugriffstoken aus dem OAuth2-Flow von Stripe Connect, für eine Plattform, die im Namen autorisierter Konten agiert.\n\nEin **eingeschränkter Schlüssel** kann auf die Ressourcen beschränkt werden, die die Integration tatsächlich benötigt, und ist in der Produktion die bessere Wahl; ein Geheimnis gewährt vollen Zugriff auf das Konto.\n\n**Rate Limits** betragen 100 Lese- und 100 Schreibanfragen pro Sekunde im Live-Modus und 25 von jeweils im Testmodus; Stripe gibt HTTP 429 zurück, wenn sie überschritten werden.\n\nStripe ist ein Warenzeichen von Stripe, Inc."
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Stripe REST Connection",
+          "message": "Stripe REST-Verbindung"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.desc": {
+          "source": "A Stripe secret key (`sk_live_…` or `sk_test_…`) or restricted key (`rk_live_…` or `rk_test_…`), sent as a bearer token.\n\n**To obtain one:**\n1. Log in to the Stripe dashboard\n2. Go to Developers > API keys\n3. Reveal the secret key, or create a restricted key limited to the resources this integration needs\n\n**Note:** a test-mode key only ever sees test data, which makes it the right choice while building an integration. Leave this unset when authenticating with Stripe Connect's OAuth2 flow instead.",
+          "message": "Ein Stripe-Geheimschlüssel (`sk_live_…` oder `sk_test_…`) oder eingeschränkter Schlüssel (`rk_live_…` oder `rk_test_…`), gesendet als Bearer-Token.\n\n**So erhalten Sie einen:**\n1. Melden Sie sich im Stripe-Dashboard an\n2. Gehen Sie zu Entwickler > API-Schlüssel\n3. Zeigen Sie den Geheimschlüssel an oder erstellen Sie einen eingeschränkten Schlüssel, der nur auf die Ressourcen beschränkt ist, die diese Integration benötigt\n\n**Hinweis:** Ein Schlüssel im Testmodus sieht nur Testdaten, was ihn ideal für die Entwicklung einer Integration macht. Lassen Sie dies leer, wenn Sie stattdessen mit dem OAuth2-Flow von Stripe Connect authentifizieren."
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "API-Schlüssel"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.short_desc": {
+          "source": "A Stripe secret or restricted key",
+          "message": "Ein Stripe-Geheim- oder eingeschränkter Schlüssel"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX2FjY291bnQ.desc": {
+          "source": "The ID of a Stripe Connect account (`acct_…`) that every request through this connection acts on behalf of, sent as the `Stripe-Account` header.\n\nLeave this unset for an integration working with your own account. Set it when a platform manages one connected account through this connection; a platform working with many accounts should instead leave it unset and supply the account per request.",
+          "message": "Die ID eines Stripe Connect-Kontos (`acct_…`), auf das jeder Anfrage über diese Verbindung im Namen handelt, gesendet als `Stripe-Account`-Header.\n\nLassen Sie dies leer, wenn die Integration mit Ihrem eigenen Konto arbeitet. Setzen Sie es, wenn eine Plattform ein verbundenes Konto über diese Verbindung verwaltet; eine Plattform, die mit mehreren Konten arbeitet, sollte es stattdessen leer lassen und das Konto pro Anfrage bereitstellen."
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX2FjY291bnQ.display_name": {
+          "source": "Connected Account",
+          "message": "Verbundenes Konto"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX2FjY291bnQ.short_desc": {
+          "source": "Act on behalf of this connected account",
+          "message": "Im Namen dieses verbundenen Kontos handeln"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX3ZlcnNpb24.desc": {
+          "source": "The Stripe API version sent as the `Stripe-Version` header with every request.\n\nStripe changes response shapes between versions, so requests are pinned to a version explicitly rather than following the account's default. The default here is the version the **Stripe** application's actions describe.\n\n**Changing this is not supported**: pointing the connection at a different version makes the declared response types disagree with what Stripe actually returns.",
+          "message": "Die Stripe-API-Version, die mit jeder Anfrage als `Stripe-Version`-Header gesendet wird.\n\nStripe ändert die Antwortformen zwischen Versionen, daher werden Anfragen explizit an einer Version festgelegt, anstatt der Standardversion des Kontos zu folgen. Der Standardwert hier ist die Version, die die Aktionen der **Stripe**-Anwendung beschreibt.\n\n**Ändern dieser Einstellung wird nicht unterstützt**: Wenn die Verbindung auf eine andere Version zeigt, stimmen die deklarierten Antworttypen nicht mit dem überein, was Stripe tatsächlich zurückgibt."
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API-Version"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX3ZlcnNpb24.short_desc": {
+          "source": "The Stripe API version sent with every request",
+          "message": "Die Stripe-API-Version, die mit jeder Anfrage gesendet wird"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Stripe REST API",
+          "message": "Eine Verbindung zur Stripe REST-API"
+        }
+      }
+    }
+  }
+}

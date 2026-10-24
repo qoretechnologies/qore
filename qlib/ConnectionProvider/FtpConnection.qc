@@ -32,7 +32,8 @@ public namespace ConnectionProvider {
 public class FtpConnection inherits AbstractConnectionWithInfo {
     public {
         #! Connection entry info
-        const hash<ConnectionSchemeInfo> ConnectionScheme = <ConnectionSchemeInfo>{
+        const hash<ConnectionSchemeInfo> ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ConnectionProvider",
+            "FtpConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "FTP Connection",
             "short_desc": "A connection to an FTP server",
             "desc": "A connection to an FTP server with the `ftp` or `ftps` (secure, not to be confused with sftp) "
@@ -59,7 +60,7 @@ public class FtpConnection inherits AbstractConnectionWithInfo {
                         "and if the `password` option is also used",
                 },
             },
-        };
+        });
 
         #! Data provider subtypes supported
         const hash<auto> DataProviderSubtypeMap = {

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Chargebee REST API for subscription billing and revenue management.\n\nChargebee is a subscription billing and revenue management platform that helps businesses manage their recurring revenue. This integration enables managing subscriptions, customers, invoices, coupons, and receiving event notifications.\n\n**Rate Limits:**\n- ~150 requests per minute for test sites\n- Plan-dependent limits for live sites\n- HTTP 429 with Retry-After header when exceeded",
+          "message": "구독 요금 및 수익 관리용 Chargebee REST API에 연결합니다.\n\nChargebee는 기업이 반복 수익을 관리하는 데 도움을 주는 구독 요금 및 수익 관리 플랫폼입니다. 이 통합을 통해 구독, 고객, 송장, 쿠폰 관리 및 이벤트 알림 수신이 가능합니다.\n\n**요청 제한:**\n- 테스트 사이트: 분당 약 150건\n- 실사이트: 계획에 따라 제한 다름\n- 초과 시 HTTP 429 응답 및 Retry-After 헤더 제공"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Chargebee REST Connection",
+          "message": "Chargebee REST 연결"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your Chargebee site (e.g., https://your-site.chargebee.com)\n2. Go to **Settings** > **Configure Chargebee**\n3. Under **API & Webhooks**, click **API Keys**\n4. Copy an existing key or click **Add API Key** to create a new one\n\n**Important:**\n- Use **test site** keys during development\n- Use **live site** keys for production\n- Full-access keys can perform all API operations\n- Read-only keys can only read data",
+          "message": "1. Chargebee 사이트에 로그인하세요 (예: https://your-site.chargebee.com)\n2. **설정** > **Chargebee 구성**으로 이동하세요\n3. **API 및 웹훅** 아래에서 **API 키**를 클릭하세요\n4. 기존 키를 복사하거나 **API 키 추가**를 클릭하여 새 키를 생성하세요\n\n**중요:**\n- 개발 시에는 **테스트 사이트** 키 사용\n- 운영 시에는 **실사이트** 키 사용\n- 전체 접근 권한 키는 모든 API 작업 수행 가능\n- 읽기 전용 키는 데이터 읽기만 가능"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "API 키를 얻는 방법"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.desc": {
+          "source": "The Chargebee API key used as the username for HTTP Basic Auth.\n\n**To obtain your API key:**\n1. Log in to your Chargebee site\n2. Go to Settings > Configure Chargebee > API Keys (under API & Webhooks)\n3. Copy an existing API key or create a new one\n\n**Note:** Use test site keys for development and live site keys for production.",
+          "message": "HTTP 기본 인증의 사용자 이름으로 사용되는 Chargebee API 키입니다.\n\n**API 키를 얻는 방법:**\n1. Chargebee 사이트에 로그인합니다\n2. 설정 > Chargebee 구성 > API 키 (API 및 웹훅 아래)\n3. 기존 API 키를 복사하거나 새 키를 생성합니다\n\n**참고:** 개발용으로는 테스트 사이트 키를, 운영용으로는 라이브 사이트 키를 사용하세요."
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.short_desc": {
+          "source": "Chargebee API key for authentication",
+          "message": "인증을 위한 Chargebee API 키"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.c2l0ZQ.desc": {
+          "source": "Your Chargebee site name. This is the subdomain of your Chargebee URL.\n\nFor example, if your Chargebee URL is https://acme-test.chargebee.com, your site name is 'acme-test'.",
+          "message": "귀하의 Chargebee 사이트 이름입니다. 이는 Chargebee URL의 하위 도메인입니다.\n\n예를 들어, Chargebee URL이 https://acme-test.chargebee.com 인 경우 사이트 이름은 'acme-test'입니다."
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.c2l0ZQ.display_name": {
+          "source": "Site Name",
+          "message": "사이트 이름"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.option.c2l0ZQ.short_desc": {
+          "source": "Chargebee site name",
+          "message": "Chargebee 사이트 이름"
+        },
+        "connection.Q2hhcmdlYmVlUmVzdENsaWVudA.scheme.Q2hhcmdlYmVlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Chargebee REST API",
+          "message": "Chargebee REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

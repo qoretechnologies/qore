@@ -325,7 +325,8 @@ public class ShipStationRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "shipstation://ssapi.shipstation.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ShipStationRestClient",
+            "ShipStationRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "ShipStation REST Connection",
             "short_desc": "A connection to the ShipStation REST API",
             "desc": "A connection to the ShipStation REST API for shipping and fulfillment management.\n\n"
@@ -391,6 +392,7 @@ public class ShipStationRestConnection inherits RestClient::RestConnection {
             "required_options": "api_key,api_secret",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Obtain Your API Credentials",
                     "intent": "info",
                     "content": "This integration requires **ShipStation V1 API credentials** "
@@ -411,7 +413,7 @@ public class ShipStationRestConnection inherits RestClient::RestConnection {
                         "compatible** with this integration",
                 },
             ),
-        };
+        });
     }
 
     #! creates the ShipStationRestConnection object

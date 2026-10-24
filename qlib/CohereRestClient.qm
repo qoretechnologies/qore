@@ -162,7 +162,8 @@ public class CohereRestConnection inherits RestClient::RestConnection {
     public {
         const DefaultUrl = "cohere://api.cohere.com";
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("CohereRestClient",
+            "CohereRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Cohere REST Connection",
             "short_desc": "A connection to the Cohere REST API",
             "desc": "A connection to the [Cohere](https://cohere.com) REST API for chat, "
@@ -249,7 +250,7 @@ public class CohereRestConnection inherits RestClient::RestConnection {
                 }),
             },
             "required_options": "apikey",
-        };
+        });
 
         const DefaultPingMethod = "POST";
         const DefaultPingHeaders = {"Accept": MimeTypeJson};

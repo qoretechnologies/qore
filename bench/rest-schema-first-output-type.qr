@@ -1,0 +1,230 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Times the first output type built by REST-schema provider modules.
+#
+# A REST-schema module builds each action's output type on first use (RestSchemaActionSet::LazyResponseTypes),
+# and the first type built pulls in every type of the schema that it reaches, so this is the cost that the first
+# reader of an action's output type pays.  Each measurement runs in a new process, which loads the module, builds
+# the output type of one action, and then the output types of the module's other actions.
+#
+# Usage:
+#   rest-schema-first-output-type.qr [options] [<module>:<app>[:<action>] ...]
+#
+# Options:
+#   --runs=<n>   processes per case (default 3); the median of each value is reported
+#   --json=<f>   also write the results to the given file as JSON
+#   --stats      also report the recursive-reference scans made while the first output type is built (see
+#                design/dgc.md "Diagnosing scan contention"); costs a little time
+#
+# Without cases, it measures the Stripe "get-customer" action, the Azure OpenAI "create-response" action and the AWS
+# Bedrock "apply-guardrail" action.  The modules are loaded from the module path, so the same command measures the
+# installed modules or, with QORE_MODULE_DIR set to a source tree's qlib directory, the modules of that tree:
+#
+#   bench/rest-schema-first-output-type.qr
+#   QORE_MODULE_DIR=$PWD/qlib bench/rest-schema-first-output-type.qr
+
+%enable-all-warnings
+
+%requires json
+%requires Util
+%requires FsUtil
+
+%exec-class RestSchemaFirstOutputType
+
+class RestSchemaFirstOutputType {
+    public {
+        #! The cases measured when none is given: module, app, action
+        const DefaultCases = (
+            ("StripeDataProvider", "Stripe", "get-customer"),
+            ("AzureOpenAiDataProvider", "AzureOpenAI", "create-response"),
+            ("BedrockDataProvider", "AWSBedrock", "apply-guardrail"),
+        );
+
+        #! The values measured, in the order they are reported
+        const Columns = (
+            "load_s", "first_s", "rest_s", "load_rss_mb", "first_rss_mb", "rest_rss_mb",
+            "peak_rss_mb", "scan_nodes", "scan_ms",
+        );
+    }
+
+    constructor() {
+        int runs = 3;
+        *string json_file;
+        bool stats = False;
+        list<list<string>> cases = ();
+        foreach string arg in (ARGV) {
+            if (arg =~ /^--runs=/) {
+                runs = arg.substr(7).toInt();
+            } else if (arg =~ /^--json=/) {
+                json_file = arg.substr(7);
+            } else if (arg == "--stats") {
+                stats = True;
+            } else if (arg == "--child") {
+                child();
+                return;
+            } else {
+                list<string> c = arg.split(":");
+                if (c.size() < 2) {
+                    stderr.printf("invalid case %y: expecting <module>:<app>[:<action>]\n", arg);
+                    exit(1);
+                }
+                push cases, c;
+            }
+        }
+        if (!cases) {
+            cases = DefaultCases;
+        }
+        if (runs < 1) {
+            stderr.printf("--runs must be at least 1\n");
+            exit(1);
+        }
+
+        list<hash<auto>> results = ();
+        printf("qore %s, module path: %s\n", Qore::VersionString, ENV.QORE_MODULE_DIR ?? "<default>");
+        printf("%-12s %-49s %7s %7s %7s %7s %7s %7s %10s\n", "app", "action", "load s", "first s", "rest s",
+            "load MB", "1st MB", "peak MB", "scan nodes");
+        foreach list<string> c in (cases) {
+            list<hash<auto>> samples = ();
+            for (int i = 0; i < runs; ++i) {
+                push samples, measure(c, stats);
+            }
+            hash<auto> r = {
+                "module": c[0],
+                "app": c[1],
+                "action": samples[0].action,
+                "runs": runs,
+            };
+            foreach string col in (Columns) {
+                if (exists samples[0]{col}) {
+                    r{col} = RestSchemaFirstOutputType::median(map $1{col}, samples);
+                }
+            }
+            push results, r;
+            printf("%-12s %-49s %7.2f %7.2f %7.2f %7d %7d %7d %10s\n", r.app, r.action, r.load_s, r.first_s,
+                r.rest_s, r.load_rss_mb, r.first_rss_mb, r.peak_rss_mb,
+                exists r.scan_nodes ? r.scan_nodes.toString() : "-");
+        }
+        if (json_file) {
+            File f();
+            f.open2(json_file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(make_json({
+                "qore_version": Qore::VersionString,
+                "module_path": ENV.QORE_MODULE_DIR,
+                "results": results,
+            }));
+        }
+    }
+
+    #! Runs one measurement in a new process and returns what it reports
+    private hash<auto> measure(list<string> c, bool stats) {
+        string qore = ENV.QORE_EXECUTABLE ?? QORE_ARGV[0] ?? "qore";
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string out = dir + DirSep + "result.json";
+        string cmd = sprintf("%s %s %s --child %s %s %s %s 2>&1", stats ? "env QORE_SCAN_STATS=" + dir
+            + DirSep + "scan-stats" : "", qore, get_script_path(), out, c[0], c[1], c[2] ?? "-");
+        string log = backquote(cmd);
+        if (!is_file(out)) {
+            stderr.printf("%s failed: %s\n", cmd, log);
+            exit(1);
+        }
+        return parse_json(ReadOnlyFile::readTextFile(out));
+    }
+
+    #! Returns the median of the given values
+    private static auto median(list<auto> values) {
+        values = sort(values);
+        int n = values.size();
+        if (n % 2) {
+            return values[n / 2];
+        }
+        auto v = (values[n / 2 - 1] + values[n / 2]) / 2;
+        return values[0].typeCode() == NT_INT ? v.toInt() : v;
+    }
+
+    #! The measuring process: loads the module and builds the output types
+    private child() {
+        # the "--child" argument
+        shift ARGV;
+        string out = shift ARGV;
+        string mod = shift ARGV;
+        string app = shift ARGV;
+        string action = shift ARGV;
+
+        int rss0 = RestSchemaFirstOutputType::rssKb();
+        date t0 = now_us();
+        load_module(mod);
+        date t1 = now_us();
+        int rss1 = RestSchemaFirstOutputType::rssKb();
+
+        # the actions as the module registered them, with the callbacks that build their output types
+        hash<string, hash<auto>> actions = map {$1.action: $1},
+            call_static_method("DataProvider::DataProviderActionCatalog", "getActionsNoInit", app) ?? ();
+        list<string> lazy = sort(keys (map {$1.key: True}, actions.pairIterator(), $1.value.get_output_type));
+        if (!lazy) {
+            throw "BENCH-ERROR", sprintf("application %y of module %y has no action whose output type is built on "
+                "first use", app, mod);
+        }
+        if (action == "-") {
+            action = lazy[0];
+        } else if (!actions{action}.get_output_type) {
+            throw "BENCH-ERROR", sprintf("action %y of application %y has no output type built on first use; "
+                "actions that have one: %y", action, app, lazy);
+        }
+
+        *hash<string, hash<auto>> stats0 = RestSchemaFirstOutputType::scanStats();
+        date t2 = now_us();
+        actions{action}.get_output_type();
+        date t3 = now_us();
+        *hash<string, hash<auto>> stats1 = RestSchemaFirstOutputType::scanStats();
+        int rss2 = RestSchemaFirstOutputType::rssKb();
+
+        foreach string a in (lazy) {
+            if (a != action) {
+                actions{a}.get_output_type();
+            }
+        }
+        date t4 = now_us();
+        int rss3 = RestSchemaFirstOutputType::rssKb();
+
+        hash<auto> rv = {
+            "action": action,
+            "load_s": (t1 - t0).durationSecondsFloat(),
+            "first_s": (t3 - t2).durationSecondsFloat(),
+            "rest_s": (t4 - t3).durationSecondsFloat(),
+            "load_rss_mb": (rss1 - rss0) / 1024,
+            "first_rss_mb": (rss2 - rss1) / 1024,
+            "rest_rss_mb": (rss3 - rss2) / 1024,
+            "peak_rss_mb": rss3 / 1024,
+        };
+        if (stats1) {
+            int nodes = 0;
+            float ms = 0;
+            foreach hash<auto> i in (stats1.pairIterator()) {
+                nodes += i.value.nodes - (stats0{i.key}.nodes ?? 0);
+                ms += i.value.total_ms - (stats0{i.key}.total_ms ?? 0);
+            }
+            rv.scan_nodes = nodes;
+            rv.scan_ms = ms;
+        }
+        File f();
+        f.open2(out, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(make_json(rv));
+    }
+
+    #! Returns the resident set size of this process in KiB
+    private static int rssKb() {
+        return backquote(sprintf("ps -o rss= -p %d", getpid())).toInt();
+    }
+
+    #! Returns the scan accounting rows by root, or @ref nothing if scan accounting is not enabled
+    private static *hash<string, hash<auto>> scanStats() {
+        if (!ENV.QORE_SCAN_STATS) {
+            return;
+        }
+        return map {$1.root: $1}, get_scan_stats();
+    }
+}

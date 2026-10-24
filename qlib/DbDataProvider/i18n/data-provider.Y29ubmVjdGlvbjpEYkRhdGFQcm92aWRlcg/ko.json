@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.desc": {
+          "source": "Connection to a database server using a datasource connection string",
+          "message": "데이터소스 연결 문자열을 사용하여 데이터베이스 서버에 연결"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.display_name": {
+          "source": "Database Connection",
+          "message": "데이터베이스 연결"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "풀에 있는 최대 연결 수"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "최대 풀 크기"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "최대 풀 연결 수"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "풀의 최소 연결 수"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "최소 풀 크기"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "최소 풀 연결"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.short_desc": {
+          "source": "Connection to a database server",
+          "message": "데이터베이스 서버에 연결"
+        }
+      }
+    }
+  }
+}

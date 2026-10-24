@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.SW50ZXJjb21SZXN0Q2xpZW50.scheme.SW50ZXJjb21SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [Intercom](https://www.intercom.com) for contacts, companies, conversations, tags, notes, data events and help center articles.\n\n**Authentication** is the OAuth2 authorization code flow with `oauth2_client_id` and `oauth2_client_secret` from an app created in the Intercom developer hub, or a `token` for an integration that only ever works in its own workspace - Intercom issues one per app for exactly that. Intercom declares no scopes in the flow: what a token may do is set by the permissions granted to the app in its own dashboard, so a capability the integration needs is added there rather than requested here.\n\n**The API revision is sent on every call** as `Intercom-Version: 2.16`, matching the description the actions are generated from. Without it a call would ride whichever revision the workspace's app package happens to name, so the same integration could behave differently in two workspaces.\n\n**Regional hosting**: a workspace lives in the United States (`api.intercom.io`), Europe (`api.eu.intercom.io`) or Australia (`api.au.intercom.io`). Intercom routes a call to the default host on to the right region, so the region normally needs no attention; set the URL to a regional host to address it directly.\n\nIntercom is a trademark of Intercom, Inc.",
+          "message": "Une connexion à [Intercom](https://www.intercom.com) pour les contacts, entreprises, conversations, balises, notes, événements de données et articles de l'assistance.\n\n**Authentification** est le flux d'autorisation OAuth2 avec `oauth2_client_id` et `oauth2_client_secret` à partir d'une application créée dans le hub développeur Intercom, ou un `token` pour une intégration qui ne fonctionne jamais qu'à l'intérieur de son propre espace de travail – Intercom en délivre un par application, exactement pour cela. Intercom ne déclare aucune portée dans le flux : ce qu'un jeton peut faire est déterminé par les autorisations accordées à l'application dans son tableau de bord, donc une fonctionnalité dont l'intégration a besoin est ajoutée là-bas plutôt que demandée ici.\n\n**La révision de l'API est envoyée à chaque appel** sous la forme de `Intercom-Version: 2.16`, correspondant à la description des actions générées. Sans elle, un appel utiliserait la révision que le package d'application de l'espace de travail nomme, donc la même intégration pourrait se comporter différemment dans deux espaces de travail.\n\n**Hébergement régional** : un espace de travail se trouve aux États-Unis (`api.intercom.io`), en Europe (`api.eu.intercom.io`) ou en Australie (`api.au.intercom.io`). Intercom redirige un appel vers l'hôte par défaut vers la bonne région, donc la région n'a normalement pas besoin d'être prise en compte ; définissez l'URL sur un hôte régional pour l'adresser directement.\n\nIntercom est une marque déposée d'Intercom, Inc."
+        },
+        "connection.SW50ZXJjb21SZXN0Q2xpZW50.scheme.SW50ZXJjb21SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Intercom REST Connection",
+          "message": "Connexion API REST Intercom"
+        },
+        "connection.SW50ZXJjb21SZXN0Q2xpZW50.scheme.SW50ZXJjb21SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Intercom REST API",
+          "message": "Une connexion à l'API REST Intercom"
+        }
+      }
+    }
+  }
+}

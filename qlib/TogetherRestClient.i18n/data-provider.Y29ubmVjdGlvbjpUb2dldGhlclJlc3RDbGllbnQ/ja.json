@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [Together AI](https://www.together.ai) REST API.\n\nTogether serves OSS chat (Llama, Qwen, DeepSeek, Mixtral), embedding (`BAAI/bge-*`, `togethercomputer/m2-bert-*`), and image-generation (FLUX, Stable Diffusion XL) models via an OpenAI-compatible API.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Together AI Console](https://api.together.ai/settings/api-keys).",
+          "message": "[Together AI](https://www.together.ai) REST API への接続。\n\nTogether は、OSS チャット（Llama、Qwen、DeepSeek、Mixtral）、埋め込み (`BAAI/bge-*`, `togethercomputer/m2-bert-*`)、画像生成（FLUX、Stable Diffusion XL）モデルを OpenAI 互換 API で提供しています。\n\nBearer 認証には API キーが必要です。[Together AI コンソール](https://api.together.ai/settings/api-keys) から API キーを取得してください。"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Together AI REST Connection",
+          "message": "Together AI REST 接続"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Together chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `meta-llama/Llama-3.3-70B-Instruct-Turbo` (the default)",
+          "message": "この接続がチャットに選択された場合、LLM クライアントで使用される Together チャットモデル。\n\nチャットモデルは埋め込みモデルとは別系列であり、互換性がありません。\n\n例: `meta-llama/Llama-3.3-70B-Instruct-Turbo`（デフォルト）"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "チャットモデル"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Together chat model name",
+          "message": "Together チャットモデル名"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1",
+          "message": "V1"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBp.desc": {
+          "source": "The API version to use.",
+          "message": "使用する API バージョン。"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "使用するAPIバージョン"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Together AI API key used for Bearer authentication.\n\nGet your API key from the [Together AI Console](https://api.together.ai/settings/api-keys).",
+          "message": "Bearer 認証に使用する Together AI API キー。\n\n[Together AI コンソール](https://api.together.ai/settings/api-keys) から API キーを取得してください。"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Together AI API key for authentication",
+          "message": "認証用 Together AI API キー"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Together AI REST API",
+          "message": "Together AI REST API への接続"
+        }
+      }
+    }
+  }
+}

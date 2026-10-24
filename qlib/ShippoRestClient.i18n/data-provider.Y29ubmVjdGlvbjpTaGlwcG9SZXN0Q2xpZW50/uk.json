@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Shippo REST API for shipping, label creation, and order management.\n\nShippo is a multi-carrier shipping API that enables you to connect with multiple shipping carriers (USPS, UPS, FedEx, DHL, and 85+ more) through a single integration.\n\n**Features:**\n- Compare shipping rates across carriers\n- Create shipping labels\n- Track shipments\n- Validate addresses\n- Manage orders\n\n**Authentication:**\nYou can authenticate using either:\n- **API Token**: Recommended for server-to-server integrations\n- **OAuth2**: For user-authorized access",
+          "message": "З’єднання з REST API Shippo для доставки, створення накладних та управління замовленнями.\n\nShippo — це багатоносійний API доставки, який дозволяє підключитися до багатьох перевізників (USPS, UPS, FedEx, DHL та 85+ інших) через один інтеграційний пункт.\n\n**Функції:**\n- Порівнювати тарифи доставки між перевізниками\n- Створювати накладні\n- Відстежувати відправлення\n- Перевіряти адреси\n- Управляти замовленнями\n\n**Автентифікація:**\nВи можете автентифікуватися за допомогою:\n- **API-токену**: Рекомендовано для інтеграцій між серверами\n- **OAuth2**: Для доступу з авторизацією користувача"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Shippo REST Connection",
+          "message": "З’єднання з Shippo REST"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "Shippo supports two authentication methods:\n\n**Option 1: OAuth2 (Recommended)**\nSimply click the authorize button to connect your Shippo account.\nNo additional configuration needed.\n\n**Option 2: API Token**\nEnter your Shippo API token in the 'API Token' field.\nUse this if you prefer to authenticate with a token directly.",
+          "message": "Shippo підтримує два методи автентифікації:\n\n**Варіант 1: OAuth2 (Рекомендовано)**\nПросто натисніть кнопку авторизації, щоб підключити ваш обліковий запис Shippo.\nДодаткові налаштування не потрібні.\n\n**Варіант 2: API-токен**\nВведіть свій API-токен Shippo у полі «API-токен».\nВикористовуйте це, якщо ви бажаєте автентифікуватися безпосередньо за токеном."
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "Authentication Options",
+          "message": "Варіанти автентифікації"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
+          "source": "If using API Token authentication:\n\n1. Log in to https://apps.goshippo.com/\n2. Navigate to **Settings > API**\n3. Copy your **Live Token** for production\n4. Use **Test Token** for development/testing\n\n**Token formats:**\n- Live: `shippo_live_xxxxx`\n- Test: `shippo_test_xxxxx`\n\nKeep your tokens secure and never share them publicly.",
+          "message": "Якщо використовуєте автентифікацію за токеном API:\n\n1. Увійдіть у https://apps.goshippo.com/\n2. Перейдіть до **Налаштування > API**\n3. Скопіюйте свій **Основний токен** для виробництва\n4. Використовуйте **Тестовий токен** для розробки/тестування\n\n**Формати токенів:**\n- Основний: `shippo_live_xxxxx`\n- Тестовий: `shippo_test_xxxxx`\n\nЗберігайте свої токени в безпеці та не діліться ними публічно."
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
+          "source": "How to Get Your API Token",
+          "message": "Як отримати свій токен API"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Your Shippo API token used for authentication.\n\n**To obtain your API token:**\n1. Log in to https://apps.goshippo.com/\n2. Navigate to **Settings > API**\n3. Copy your **Live Token** for production use\n4. Use **Test Token** for development/testing\n\n**Token format:** `shippo_live_xxxxx` or `shippo_test_xxxxx`\n\n**Note:** Use either API Token OR OAuth2 authentication - not both.",
+          "message": "Ваш токен API Shippo для автентифікації.\n\n**Щоб отримати токен API:**\n1. Увійдіть у https://apps.goshippo.com/\n2. Перейдіть до **Налаштування > API**\n3. Скопіюйте свій **Основний токен** для використання в продуктивній середовищі\n4. Використовуйте **Тестовий токен** для розробки/тестування\n\n**Формат токена:** `shippo_live_xxxxx` або `shippo_test_xxxxx`\n\n**Зауваження:** Використовуйте або токен API, або автентифікацію OAuth2 — не обидва."
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API-токен"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Shippo API token for authentication",
+          "message": "Токен API Shippo для автентифікації"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Shippo shipping API",
+          "message": "Підключення до API доставки Shippo"
+        }
+      }
+    }
+  }
+}

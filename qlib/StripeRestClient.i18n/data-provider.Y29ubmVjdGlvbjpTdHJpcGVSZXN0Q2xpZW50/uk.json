@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Stripe](https://stripe.com) REST API for payments, billing and connected accounts.\n\nStripe processes payments and manages the objects around them - customers, charges, invoices, subscriptions, refunds and payouts - so an integration can charge a customer, issue an invoice, reconcile a payout or onboard a connected account without handling card data itself.\n\n**Authentication** is a bearer token, which is either:\n- a secret or restricted key from the Stripe dashboard, set as `api_key`, for an integration acting as your own account; or\n- an access token from Stripe Connect's OAuth2 flow, for a platform acting on behalf of accounts that authorized it.\n\nA **restricted key** can be limited to the resources the integration actually needs and is the better choice in production; a secret key grants full access to the account.\n\n**Rate limits** are 100 read and 100 write requests per second in live mode and 25 of each in test mode; Stripe returns HTTP 429 when they are exceeded.\n\nStripe is a trademark of Stripe, Inc.",
+          "message": "Підключення до REST API [Stripe](https://stripe.com) для оплат, рахунків та зв’язаних облікових записів.\n\nStripe обробляє оплати та керує об’єктами навколо них — клієнтами, платежами, рахунками, підписками, поверненнями та виплатами, тому інтеграція може здійснювати оплату клієнта, видавати рахунок, здійснювати виплату або налаштовувати зв’язаний обліковий запис без обробки даних карток.\n\n**Аутентифікація** — це токен носія, який є:\n- секретним або обмеженим ключем із панелі Stripe, встановленим як `api_key`, для інтеграції, що діє від вашого облікового запису; або\n- токеном доступу з потоку OAuth2 Stripe Connect, для платформи, що діє від імені облікових записів, які її затвердили.\n\n**Обмежений ключ** може бути обмежений ресурсами, які насправді потрібні інтеграції, і є кращим вибором у виробничому середовищі; секретний ключ надає повний доступ до облікового запису.\n\n**Обмеження швидкості** становлять 100 читань і 100 записів на секунду у живому режимі та 25 кожного у тестовому режимі; Stripe повертає HTTP 429, коли вони перевищені.\n\nStripe — товарний знак компанії Stripe, Inc."
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Stripe REST Connection",
+          "message": "Підключення до REST API Stripe"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.desc": {
+          "source": "A Stripe secret key (`sk_live_…` or `sk_test_…`) or restricted key (`rk_live_…` or `rk_test_…`), sent as a bearer token.\n\n**To obtain one:**\n1. Log in to the Stripe dashboard\n2. Go to Developers > API keys\n3. Reveal the secret key, or create a restricted key limited to the resources this integration needs\n\n**Note:** a test-mode key only ever sees test data, which makes it the right choice while building an integration. Leave this unset when authenticating with Stripe Connect's OAuth2 flow instead.",
+          "message": "Секретний ключ Stripe (`sk_live_…` або `sk_test_…`) або обмежений ключ (`rk_live_…` або `rk_test_…`), надсилається як токен носія.\n\n**Щоб отримати:**\n1. Увійдіть у панель Stripe\n2. Перейдіть до Розробників > Ключі API\n3. Покажіть секретний ключ або створіть обмежений ключ, обмежений ресурсами, які потрібні цій інтеграції\n\n**Примітка:** ключ у тестовому режимі завжди бачить лише тестові дані, тому він є правильним вибором під час створення інтеграції. Залиште його порожнім, коли аутентифікуєтеся через потік OAuth2 Stripe Connect."
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.YXBpX2tleQ.short_desc": {
+          "source": "A Stripe secret or restricted key",
+          "message": "Секретний або обмежений ключ Stripe"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX2FjY291bnQ.desc": {
+          "source": "The ID of a Stripe Connect account (`acct_…`) that every request through this connection acts on behalf of, sent as the `Stripe-Account` header.\n\nLeave this unset for an integration working with your own account. Set it when a platform manages one connected account through this connection; a platform working with many accounts should instead leave it unset and supply the account per request.",
+          "message": "Ідентифікатор облікового запису Stripe Connect (`acct_…`), який кожен запит через це підключення виконує від імені, надсилається як заголовок `Stripe-Account`.\n\nЗалиште його порожнім для інтеграції, що працює з вашим власним обліковим записом. Встановіть його, коли платформа керує одним зв’язаним обліковим записом через це підключення; платформа, що працює з багатьма обліковими записами, повинна залишити його порожнім і надавати обліковий запис на кожен запит."
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX2FjY291bnQ.display_name": {
+          "source": "Connected Account",
+          "message": "Підключений акаунт"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX2FjY291bnQ.short_desc": {
+          "source": "Act on behalf of this connected account",
+          "message": "Діяти від імені цього підключеного облікового запису"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX3ZlcnNpb24.desc": {
+          "source": "The Stripe API version sent as the `Stripe-Version` header with every request.\n\nStripe changes response shapes between versions, so requests are pinned to a version explicitly rather than following the account's default. The default here is the version the **Stripe** application's actions describe.\n\n**Changing this is not supported**: pointing the connection at a different version makes the declared response types disagree with what Stripe actually returns.",
+          "message": "Версія API Stripe, яка надсилається як заголовок `Stripe-Version` з кожним запитом.\n\nStripe змінює формат відповідей між версіями, тому запити прив’язані до конкретної версії, а не використовують за замовчуванням версію облікового запису. За замовчуванням тут використовується версія, яку описують дії додатка **Stripe**.\n\n**Зміна цього не підтримується**: зміна версії робить оголошені типи відповідей несумісними з тим, що повертає Stripe."
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Версія API"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.option.c3RyaXBlX3ZlcnNpb24.short_desc": {
+          "source": "The Stripe API version sent with every request",
+          "message": "Версія API Stripe, яка надсилається з кожним запитом"
+        },
+        "connection.U3RyaXBlUmVzdENsaWVudA.scheme.U3RyaXBlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Stripe REST API",
+          "message": "Підключення до REST API Stripe"
+        }
+      }
+    }
+  }
+}

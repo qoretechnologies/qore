@@ -1,0 +1,717 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a REST server",
+          "message": "Pripojenie k serveru REST"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "REST Connection",
+          "message": "REST pripojenie"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.allowed_values.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "použiť kódovanie bzip2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.allowed_values.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "použiť algoritmus deflate ([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.allowed_values.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "použiť kódovanie GNU zip ([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.allowed_values.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "nepoužívať žiadne kódovanie obsahu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.desc": {
+          "source": "Sets the data compression / send encoding (if the `send_encoding` option is not set) and the response encoding used",
+          "message": "Nastavuje kompresiu dát / kódovanie odosielania (ak nie je nastavená možnosť `send_encoding`) a použité kódovanie odpovede"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.display_name": {
+          "source": "Compression",
+          "message": "Kompresia"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y29udGVudF9lbmNvZGluZw.short_desc": {
+          "source": "Sets data compression / encoding",
+          "message": "Nastavuje kompresiu / kódovanie dát"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET` method",
+          "message": "Metóda HTTP `GET`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET method",
+          "message": "Metóda HTTP GET"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH` method",
+          "message": "Metóda HTTP `PATCH`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH method",
+          "message": "Metóda HTTP PATCH"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST` method",
+          "message": "Metóda HTTP `POST`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST method",
+          "message": "Metóda HTTP POST"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT` method",
+          "message": "Metóda HTTP `PUT`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed_values.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT method",
+          "message": "Metóda HTTP PUT"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.desc": {
+          "source": "Sets the HTTP method for custom token refresh actions",
+          "message": "Nastavuje metódu HTTP pre vlastné akcie obnovenia tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.display_name": {
+          "source": "Custom Token Refresh Method",
+          "message": "Metóda vlastného obnovenia tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.short_desc": {
+          "source": "Sets the HTTP method for custom token refresh actions",
+          "message": "Nastavuje metódu HTTP pre vlastné akcie obnovenia tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2F1dGg.allowed_values.c3RyaW5nOmJvZHktdXNlci1wYXNz.desc": {
+          "source": "Include the username and password in the message body; cannot be used with `custom_token_method` = `GET`",
+          "message": "Zahrnúť používateľské meno a heslo do tela správy; nemožno použiť s `custom_token_method` = `GET`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2F1dGg.desc": {
+          "source": "Sets the auth method for custom token refresh actions",
+          "message": "Nastavuje metódu autentifikácie pre vlastné akcie obnovenia tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2F1dGg.display_name": {
+          "source": "Custom Token Refresh Auth Method",
+          "message": "Metóda autentifikácie vlastného obnovenia tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2F1dGg.short_desc": {
+          "source": "Sets the auth method for custom token refresh actions",
+          "message": "Nastavuje metódu autentifikácie pre vlastné akcie obnovenia tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.allowed_values.c3RyaW5nOmJvZHktZGlyZWN0.desc": {
+          "source": "Take the token from the response body directly",
+          "message": "Prevziať token priamo z tela odpovede"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.allowed_values.c3RyaW5nOmJvZHktcGxhaW4.desc": {
+          "source": "Take the token from the response body without any deserialization",
+          "message": "Prevziať token z tela odpovede bez akejkoľvek deserializácie"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.desc": {
+          "source": "Provides the location of the new token in the response",
+          "message": "Poskytuje umiestnenie nového tokenu v odpovedi"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.display_name": {
+          "source": "Custom Token Refresh Location",
+          "message": "Umiestnenie vlastného obnovenia tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.short_desc": {
+          "source": "Provides the location of the new token in the response",
+          "message": "Poskytuje umiestnenie nového tokenu v odpovedi"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX3BhdGg.desc": {
+          "source": "Sets the URI path for the request for custom token refresh actions",
+          "message": "Nastavuje cestu URI požiadavky pre vlastné akcie obnovenia tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX3BhdGg.display_name": {
+          "source": "Custom Token Refresh URI Path",
+          "message": "Cesta URI vlastného obnovenia tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.Y3VzdG9tX3Rva2VuX3BhdGg.short_desc": {
+          "source": "Sets the URI path for the request for custom token refresh actions",
+          "message": "Nastavuje cestu URI požiadavky pre vlastné akcie obnovenia tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.YWxsb3dfYW55X3Jlc3BvbnNl.desc": {
+          "source": "If set, undeserializable responses will be returned as-is; this is useful when making REST-like requests that return HTML or file data",
+          "message": "Ak je nastavené, nedeserializovateľné odpovede sa vrátia tak, ako sú; to je užitočné pri vykonávaní požiadaviek typu REST, ktoré vracajú HTML alebo dáta súborov"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.YWxsb3dfYW55X3Jlc3BvbnNl.display_name": {
+          "source": "Allow Any Response?",
+          "message": "Povoliť akúkoľvek odpoveď?"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.YWxsb3dfYW55X3Jlc3BvbnNl.short_desc": {
+          "source": "If set, undeserializable responses will be returned as-is",
+          "message": "Ak je nastavené, nedeserializovateľné odpovede sa vrátia tak, ako sú"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOmF1dG8.desc": {
+          "source": "prefers in this order: `json`, `yaml`, `rawxml`, `xml`, `url`, and `text`",
+          "message": "uprednostňuje v tomto poradí: `json`, `yaml`, `rawxml`, `xml`, `url` a `text`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOmJpbg.desc": {
+          "source": "for binary message bodies without data serialization",
+          "message": "pre binárne telá správ bez serializácie dát"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "použiť serializáciu JSON"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnJhd3htbA.desc": {
+          "source": "use raw XML serialization",
+          "message": "použiť nespracovanú serializáciu XML"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnRleHQ.desc": {
+          "source": "use only plain text; no serialization is used",
+          "message": "použiť iba čistý text; nepoužíva sa žiadna serializácia"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnVybA.desc": {
+          "source": "for URL-encoded message bodies",
+          "message": "pre telá správ kódované v URL"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnhtbA.desc": {
+          "source": "use only XML-RPC serialization",
+          "message": "použiť iba serializáciu XML-RPC"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.allowed_values.c3RyaW5nOnlhbWw.desc": {
+          "source": "use only YAML serialization",
+          "message": "použiť iba serializáciu YAML"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.desc": {
+          "source": "Sets how data is serialized in requests",
+          "message": "Nastavuje spôsob serializácie dát v požiadavkách"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Serializácia dát"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.ZGF0YQ.short_desc": {
+          "source": "Sets how data is serialized",
+          "message": "Nastavuje spôsob serializácie dát"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.aGVhZGVycw.desc": {
+          "source": "Sets an optional hash of headers to send with every request, these can also be overridden in request method calls",
+          "message": "Nastaví voliteľný hash hlavičiek, ktoré sa pošlú s každým požiadavkou, tieto môžu byť prepísané v volaniach metód požiadavky"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.aGVhZGVycw.display_name": {
+          "source": "HTTP Headers",
+          "message": "Hlavičky HTTP"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.aGVhZGVycw.short_desc": {
+          "source": "Sets headers to send in each request",
+          "message": "Nastaví hlavičky, ktoré sa pošlú v každom požiadavku"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.desc": {
+          "source": "If OAuth2 tokens should be automatically refreshed",
+          "message": "Či sa majú tokeny OAuth2 automaticky obnovovať"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.display_name": {
+          "source": "OAuth2 Auto Refresh",
+          "message": "Automatická obnova OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.short_desc": {
+          "source": "Whether tokens are refreshed automatically",
+          "message": "Či sa tokeny obnovujú automaticky"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfYXJncw.desc": {
+          "source": "Optional arguments for authentication requests for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token. Supply unencoded keys and values; consent URL generation URL-encodes keys and values exactly once, including scope lists",
+          "message": "Voliteľné argumenty pre autentifikačné požiadavky pre typ udelenia prístupu `authorization_code`; ignorované, ak je nastavená možnosť `token`. Všimnite si, že typ udelenia prístupu `authorization_code` vyžaduje externú autorizáciu používateľa na získanie prístupového tokenu. Zadajte nekódované kľúče a hodnoty; pri vytváraní adresy URL na udelenie súhlasu sa kľúče a hodnoty zakódujú pre URL práve raz, vrátane zoznamov oprávnení"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfYXJncw.display_name": {
+          "source": "OAuth2 Authorization Args",
+          "message": "Autorizačné argumenty OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfYXJncw.short_desc": {
+          "source": "Extra arguments for authorization_code token requests",
+          "message": "Ďalšie argumenty pre požiadavky na token authorization_code"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfdXJs.desc": {
+          "source": "The OAuth2 authorization URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
+          "message": "Autorizačná URL OAuth2 pre typ udelenia prístupu `authorization_code`; ignorované, ak je nastavená možnosť `token`. Všimnite si, že typ udelenia prístupu `authorization_code` vyžaduje externú autorizáciu používateľa na získanie prístupového tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfdXJs.display_name": {
+          "source": "OAuth2 Auth URL",
+          "message": "Autorizačná URL OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2F1dGhfdXJs.short_desc": {
+          "source": "Sets the OAuth2 authorization URL for the authorization_code grant type",
+          "message": "Nastavuje autorizačnú URL OAuth2 pre typ udelenia prístupu authorization_code"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF90b2tlbl91cmw.desc": {
+          "source": "An alternate token URL which will be used to wrap the call to get the token; if this is set, then it takes precedence over `oauth2_token_url`",
+          "message": "Alternatívna URL tokenu, ktorá sa použije na obalenie volania na získanie tokenu; ak je nastavená, má prednosť pred `oauth2_token_url`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF90b2tlbl91cmw.display_name": {
+          "source": "OAuth2 Alternate Token URL",
+          "message": "Alternatívna URL tokenu OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF90b2tlbl91cmw.short_desc": {
+          "source": "An alternate token URL which will be used to wrap the call to get the token",
+          "message": "Alternatívna URL tokenu, ktorá sa použije na obalenie volania na získanie tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.desc": {
+          "source": "Optional URL substitution info for token requests to the alternate server",
+          "message": "Voliteľné informácie o náhrade URL pre požiadavky tokenu na alternatívny server"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.display_name": {
+          "source": "OAuth2 Alternate URL Substitution Info",
+          "message": "Informácie o substitúcii alternatívnej URL OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.short_desc": {
+          "source": "Optional URL substitution info for token requests to the alternate server",
+          "message": "Voliteľné informácie o náhrade URL pre požiadavky tokenu na alternatívny server"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FwcA.desc": {
+          "source": "This is a hint to external programs processing OAuth2 requests to external configuration for the OAuth2 configuration",
+          "message": "Toto je nápoveda pre externé programy spracúvajúce požiadavky OAuth2 k externej konfigurácii pre konfiguráciu OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FwcA.display_name": {
+          "source": "OAuth2 Application",
+          "message": "Aplikácia OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2FwcA.short_desc": {
+          "source": "Sets a hint to external programs for the OAuth2 config",
+          "message": "Nastavuje nápovedu pre externé programy pre konfiguráciu OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "The OAuth2 client ID; ignored for logins if the `token` option is set (but possibly used when refreshing tokens)",
+          "message": "Klientske ID OAuth2; ignorované pri prihlasovaní, ak je nastavená možnosť `token` (môže sa však použiť pri obnove tokenov)"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9pZA.display_name": {
+          "source": "OAuth2 Client ID",
+          "message": "Klientske ID OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9pZA.short_desc": {
+          "source": "Sets the OAuth2 client ID",
+          "message": "Nastavuje klientske ID OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "Sets the OAuth2 client secret; ignored for logins if the `token` option is set (but possibly used when refreshing tokens)",
+          "message": "Nastavuje klientsky tajný kľúč OAuth2; ignorované pri prihlasovaní, ak je nastavená možnosť `token` (môže sa však použiť pri obnove tokenov)"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.display_name": {
+          "source": "OAuth2 Client Secret",
+          "message": "Klientsky tajný kľúč OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.short_desc": {
+          "source": "Sets the OAuth2 client secret",
+          "message": "Nastavuje klientsky tajný kľúč OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "No OAuth2 grant flow will be used",
+          "message": "Nepoužije sa žiadny tok udelenia prístupu OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOmF1dGhvcml6YXRpb25fY29kZQ.desc": {
+          "source": "OAuth2 2.0 authorization code grant ([RFC 6749 authorization code grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1)); this grant type requires external user authorization to acquire an access token; the `oauth2_auth_url` must be set to inform external code where to request authorization from the external authorization server",
+          "message": "OAuth2 2.0 authorization code grant ([RFC 6749 authorization code grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1)); tento typ udelenia prístupu vyžaduje externú autorizáciu používateľa na získanie prístupového tokenu; `oauth2_auth_url` musí byť nastavené, aby informovalo externý kód o tom, kde požadovať autorizáciu od externého autorizačného servera"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOmNsaWVudF9jcmVkZW50aWFscw.desc": {
+          "source": "OAuth2 2.0 client credentials grant ([RFC 6749 client credentials grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.4))",
+          "message": "OAuth2 2.0 s prihlasovacími údajmi klienta ([RFC 6749 – prihlasovacie údaje klienta](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.4))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOmltcGxpY2l0.desc": {
+          "source": "OAuth2 2.0 implicit grant ([RFC 6749 implicit grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.2)); this grant type returns the access token directly in the redirect URL fragment without a code exchange step; requires external user authorization; the `oauth2_auth_url` must be set; no `oauth2_token_url` is required",
+          "message": "OAuth2 2.0 implicit grant ([RFC 6749 implicit grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.2)); tento typ udelenia prístupu vracia prístupový token priamo vo fragmente URL presmerovania bez kroku výmeny kódu; vyžaduje externú autorizáciu používateľa; `oauth2_auth_url` musí byť nastavené; nevyžaduje sa žiadne `oauth2_token_url`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOnBhc3N3b3Jk.desc": {
+          "source": "OAuth2 2.0 legacy password grant ([RFC 6749 password grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.3))",
+          "message": "Starší spôsob autorizácie OAuth2 2.0 heslom ([RFC 6749 – autorizácia heslom](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.3))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.desc": {
+          "source": "The OAuth2 grant type; ignored for logins if the `token` option is set",
+          "message": "Typ udelenia prístupu OAuth2; ignorované pri prihlasovaní, ak je nastavená možnosť `token`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.display_name": {
+          "source": "OAuth2 Grant Type",
+          "message": "Typ udelenia prístupu OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2dyYW50X3R5cGU.short_desc": {
+          "source": "Sets the OAuth2 grant type",
+          "message": "Nastavuje typ udelenia prístupu OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.allowed_values.c3RyaW5nOlMyNTY.desc": {
+          "source": "The code challenge will be sent as a URL-encoded SHA-256 digest when PKCE is used",
+          "message": "Pri použití PKCE sa kódová výzva odošle ako URL-kódovaný SHA-256 digest"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "PKCE will not be used",
+          "message": "PKCE sa nepoužije"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.allowed_values.c3RyaW5nOnBsYWlu.desc": {
+          "source": "No encoding will be made with the code challenge when PKCE is used",
+          "message": "Pri použití PKCE sa na kódovú výzvu nepoužije žiadne kódovanie"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.desc": {
+          "source": "The code challenge method for PKCE (Proof Key Code Exchange) with the `authorization_code` flow",
+          "message": "Metóda kódovej výzvy pre PKCE (Proof Key Code Exchange) s tokom `authorization_code`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.display_name": {
+          "source": "OAuth2 PKCE",
+          "message": "OAuth2 PKCE"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3BrY2U.short_desc": {
+          "source": "Hint to use PKCE with the authorization code flow",
+          "message": "Odporúčanie použiť PKCE s tokom authorization code"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.desc": {
+          "source": "Per OAuth2 spec (RFC 6749), the state parameter should be returned by the authorization server. Some providers (like Trello) do not pass through the state parameter. Set this to False to embed the state in the redirect_uri as a workaround for non-compliant providers. Default: True (spec-compliant behavior).",
+          "message": "Podľa špecifikácie OAuth2 (RFC 6749) by mal parameter state vracať autorizačný server. Niektorí poskytovatelia (ako napr. Trello) parameter state nevracajú. Nastavte túto možnosť na False, aby sa stav vložil do redirect_uri ako alternatívne riešenie pre nekompatibilných poskytovateľov. Predvolené: True (správanie v súlade so špecifikáciou)."
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.display_name": {
+          "source": "OAuth2 Redirect Passthrough State?",
+          "message": "OAuth2 presmerovanie – odovzdať parameter state?"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.short_desc": {
+          "source": "If False, embed state in redirect_uri for non-compliant OAuth2 providers",
+          "message": "Pri False vloží stav do redirect_uri pre neštandardných poskytovateľov OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3VybA.desc": {
+          "source": "The OAuth2 redirect URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token; the special value `auto` (the default) is meant to be interpreted by servers that implement OAuth2 authorization code client handling",
+          "message": "URL presmerovania OAuth2 pre typ udelenia prístupu `authorization_code`; ignorované, ak je nastavená možnosť `token`. Všimnite si, že typ udelenia prístupu `authorization_code` vyžaduje externú autorizáciu používateľa na získanie prístupového tokenu; špeciálna hodnota `auto` (predvolené) je určená na interpretáciu servermi, ktoré implementujú klientske spracovanie autorizačného kódu OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3VybA.display_name": {
+          "source": "OAuth2 Redirect URL",
+          "message": "URL presmerovania OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZGlyZWN0X3VybA.short_desc": {
+          "source": "The OAuth2 redirect URL for the authorization code grant type",
+          "message": "URL presmerovania OAuth2 pre typ udelenia prístupu authorization code"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.desc": {
+          "source": "Sets the OAuth2 refresh token, if any (complements option `token`)",
+          "message": "Nastavuje obnovovací token OAuth2, ak existuje (dopĺňa možnosť `token`)"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.display_name": {
+          "source": "OAuth2 Refresh Token",
+          "message": "Obnovovací token OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.short_desc": {
+          "source": "Sets the OAuth2 refresh token",
+          "message": "Nastavuje obnovovací token OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.desc": {
+          "source": "A separator character for OAuth2 scopes in URI arguments",
+          "message": "Oddeľovací znak pre rozsahy platnosti (scopes) OAuth2 v argumentoch URI"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.display_name": {
+          "source": "OAuth2 Scope Separator",
+          "message": "Oddeľovač OAuth2 rozsahov"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.short_desc": {
+          "source": "A separator character for OAuth2 scopes in URI arguments",
+          "message": "Oddeľovací znak pre rozsahy platnosti (scopes) OAuth2 v argumentoch URI"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3Blcw.desc": {
+          "source": "List of OAuth2 scope strings to request; ignored if the `token` option is set",
+          "message": "Zoznam reťazcov OAuth2 rozsahov, ktoré sa majú vyžiadať; ignoruje sa, ak je nastavená možnosť `token`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3Blcw.display_name": {
+          "source": "OAuth2 Scopes",
+          "message": "OAuth2 rozsahy"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Njb3Blcw.short_desc": {
+          "source": "List of OAuth2 scopes to request",
+          "message": "Zoznam OAuth2 rozsahov na vyžiadanie"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.desc": {
+          "source": "Use basic authorization with the client secret only when making token requests",
+          "message": "Použite základné overenie s len tajným kľúčom klienta pri vyžiadaní tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.display_name": {
+          "source": "OAuth2 Token Auth Client Secret Only?",
+          "message": "Overenie tokenu OAuth2 iba s klientskym tajomstvom?"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.short_desc": {
+          "source": "Use basic authorization with the client secret only when making token requests",
+          "message": "Použite základné overenie s len tajným kľúčom klienta pri vyžiadaní tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2FyZ3M.desc": {
+          "source": "Optional extra arguments for token refresh requests; if this option is set as well as `oauth2_alt_token_url`, then the `oauth2_token_url` value will be added to this as well when the request is made to the `oauth2_alt_token_url`",
+          "message": "Voliteľné dodatočné argumenty pre požiadavky na obnovenie tokenu; ak je nastavená táto možnosť aj `oauth2_alt_token_url`, hodnota `oauth2_token_url` sa k tomu pridá aj pri odoslaní požiadavky na `oauth2_alt_token_url`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2FyZ3M.display_name": {
+          "source": "OAuth2 Token Refresh Args",
+          "message": "Argumenty obnovenia OAuth2 tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2FyZ3M.short_desc": {
+          "source": "Optional extra arguments for token requests",
+          "message": "Voliteľné dodatočné argumenty pre požiadavky na token"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.desc": {
+          "source": "The expiry date for the token",
+          "message": "Dátum vypršania platnosti tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.display_name": {
+          "source": "OAuth2 Token Expiry Date",
+          "message": "Dátum vypršania platnosti OAuth2 tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.short_desc": {
+          "source": "The expiry date for the token",
+          "message": "Dátum vypršania platnosti tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.desc": {
+          "source": "The expected number of minutes that a token will remain valid before it must be refreshed. This option is only used when the connection has a refresh token and the server does not indicate the lifetime of the token in token responses",
+          "message": "Očakávaný počet minút, počas ktorých zostane token platný pred nutnosťou jeho obnovenia. Táto možnosť sa používa iba vtedy, keď pripojenie má obnovovací token a server v odpovediach s tokenom neuvádza jeho životnosť"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.display_name": {
+          "source": "OAuth2 Token Lifetime Hint in Minutes",
+          "message": "Nápoveda životnosti OAuth2 tokenu v minútach"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.short_desc": {
+          "source": "How many minutes a token stays valid",
+          "message": "Počet minút, počas ktorých zostáva token platný"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VybA.desc": {
+          "source": "The token URL for OAuth2 flows; ignored for logins if the `token` option is set",
+          "message": "URL tokenu pre OAuth2 toky; ignoruje sa pri prihlasovaní, ak je nastavená možnosť `token`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VybA.display_name": {
+          "source": "OAuth2 Token URL",
+          "message": "URL OAuth2 tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VybA.short_desc": {
+          "source": "The token URL for OAuth2 flows",
+          "message": "URL tokenu pre OAuth2 toky"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.desc": {
+          "source": "Use basic authorization with the client ID and client secret when making token requests",
+          "message": "Pri odosielaní požiadaviek na token použiť základnú autorizáciu s ID klienta a klientskym tajomstvom"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.display_name": {
+          "source": "OAuth2 Token Use Basic Auth?",
+          "message": "Použiť základné overenie pre OAuth2 token?"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.short_desc": {
+          "source": "Send the client ID and secret as basic authorization",
+          "message": "Odoslať ID klienta a tajný kľúč ako základnú autorizáciu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b3BlbmFwaTM.desc": {
+          "source": "Sets the location of an OpenApi 3 schema to use for message validation; processed with `FileLocationHandler::getTextFileFromLocation()` (ex: `file:///path/to/swagger-schema.json`); conflicts with `swagger` and `validator`",
+          "message": "Nastaví umiestnenie schémy OpenApi 3 na použitie pre overenie správ; spracováva sa s `FileLocationHandler::getTextFileFromLocation()` (napr. `file:///path/to/swagger-schema.json`); konfliktné s `swagger` a `validator`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b3BlbmFwaTM.display_name": {
+          "source": "OpenApi 3 Schema",
+          "message": "Schéma OpenApi 3"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.b3BlbmFwaTM.short_desc": {
+          "source": "Sets the location of an OpenApi 3 schema to use for the connection",
+          "message": "Nastavuje umiestnenie schémy OpenApi 3, ktorá sa má použiť pre pripojenie"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "použiť kódovanie bzip2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "použiť algoritmus deflate ([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "použiť kódovanie GNU zip ([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "nepoužívať žiadne kódovanie obsahu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "Nastavuje kompresný algoritmus, ktorý sa má použiť pri odosielaní správ"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.display_name": {
+          "source": "Send Compression",
+          "message": "Kompresia pri odosielaní"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c2VuZF9lbmNvZGluZw.short_desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "Nastavuje kompresný algoritmus, ktorý sa má použiť pri odosielaní správ"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcg.desc": {
+          "source": "Sets the location of a Swagger schema to use for message validation; processed with `FileLocationHandler::getTextFileFromLocation()` (ex: `file:///path/to/swagger-schema.json`); conflicts with `openapi3` and `validator`",
+          "message": "Nastaví umiestnenie schémy Swagger na použitie pre overenie správ; spracováva sa s `FileLocationHandler::getTextFileFromLocation()` (napr. `file:///path/to/swagger-schema.json`); konfliktné s `openapi3` a `validator`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcg.display_name": {
+          "source": "Swagger Schema",
+          "message": "Schéma Swagger"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcg.short_desc": {
+          "source": "Sets the location of a Swagger schema to use for the connection",
+          "message": "Nastaví umiestnenie schémy Swagger na použitie pre spojenie"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9iYXNlX3BhdGg.desc": {
+          "source": "In case a REST validator is used, the base path in the schema can be overridden with this option (applies to any REST validator; not just Swagger validators)",
+          "message": "V prípade použitia overovača REST môže byť základný priečinok v schéme prepísaný touto voľbou (platí pre akýkoľvek overovač REST; nie len pre overovače Swagger)"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9iYXNlX3BhdGg.display_name": {
+          "source": "Override Schema Base Path",
+          "message": "Prepísať základný priečinok schémy"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9iYXNlX3BhdGg.short_desc": {
+          "source": "Overrides the base path for REST / Swagger schemas",
+          "message": "Prepíše základný priečinok pre schémy REST / Swagger"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9sYXhfcGFyc2luZw.desc": {
+          "source": "Try to parse invalid Swagger schemas; this option is not recommended; it will not parse all bad Swagger schemas; schemas should be corrected instead of setting this option",
+          "message": "Skúšať analyzovať neplatné schémazy Swagger; táto možnosť sa nedoporučuje; nebude analyzovať všetky chybné schémazy Swagger; schémazy by mali byť opravené namiesto nastavenia tejto možnosti"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9sYXhfcGFyc2luZw.display_name": {
+          "source": "Swagger Lax Parsing",
+          "message": "Lax analýza Swagger"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.c3dhZ2dlcl9sYXhfcGFyc2luZw.short_desc": {
+          "source": "Sets lax parsing for Swagger schemas",
+          "message": "Nastaví laxnú analýzu pre schémazy Swagger"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; only used if no username or password is set in the URL and if the `username` option is also used; conflicts with the `token` option",
+          "message": "Heslo na overenie; používa sa iba vtedy, ak v URL nie je nastavené používateľské meno ani heslo a zároveň sa použije možnosť `username`; je v konflikte s možnosťou `token`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Heslo"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for authentication",
+          "message": "Heslo na overenie"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19ib2R5.desc": {
+          "source": "Any message body to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set or if `ping_method` is `GET`",
+          "message": "Ľubovoľné telo správy na odoslanie pri vykonávaní pokročilej operácie ping; ignoruje sa, ak niektorá z možností `ping_method` a `ping_path` nie je nastavená alebo ak je `ping_method` `GET`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19ib2R5.display_name": {
+          "source": "Ping Body",
+          "message": "Telo pingu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19ib2R5.short_desc": {
+          "source": "The message body to send with pings",
+          "message": "Telo správy, ktoré sa má odoslať s pingmi"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.desc": {
+          "source": "Any HTTP headers to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set",
+          "message": "Akékoľvek hlavičky HTTP, ktoré sa majú odoslať pri vykonávaní pokročilej operácie ping; ignoruje sa, ak aspoň jedna z možností `ping_method` a `ping_path` nie je nastavená"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.display_name": {
+          "source": "Ping Headers",
+          "message": "Hlavičky pre ping"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19oZWFkZXJz.short_desc": {
+          "source": "Any HTTP headers to send with pings",
+          "message": "Akékoľvek hlavičky HTTP, ktoré sa majú odoslať s pingmi"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.desc": {
+          "source": "The HTTP method to use for an advanced ping; this and `ping_path` must be set to make an HTTP request as a part of the socket polling ping operation; must be a valid HTTP method name",
+          "message": "Metóda HTTP, ktorá sa má použiť pre pokročilý ping; táto možnosť a `ping_path` musia byť nastavené na vykonanie požiadavky HTTP v rámci operácie ping dotazovaním socketu; musí ísť o platný názov metódy HTTP"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.display_name": {
+          "source": "Ping Method",
+          "message": "Metóda pre ping"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19tZXRob2Q.short_desc": {
+          "source": "The HTTP method to use for pings",
+          "message": "Metóda HTTP, ktorá sa má použiť pre pingy"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19wYXRo.desc": {
+          "source": "The URI path to use for an advanced ping; this and `ping_method` must be set to make an HTTP request as a part of the socket polling ping operation.  If the value for this option begins with a `/` character, then it replaces any connection path for the REST client, otherwise the value is appended to the connection path for the REST client.",
+          "message": "Cesta URI, ktorá sa má použiť pre pokročilý ping; táto možnosť a `ping_method` musia byť nastavené na vykonanie požiadavky HTTP v rámci operácie ping dotazovaním socketu. Ak sa hodnota tejto možnosti začína znakom `/`, nahradí akúkoľvek cestu pripojenia pre klienta REST, inak sa hodnota pripojí k ceste pripojenia pre klienta REST."
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19wYXRo.display_name": {
+          "source": "Ping Path",
+          "message": "Cesta pre ping"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cGluZ19wYXRo.short_desc": {
+          "source": "The URI path to use for pings",
+          "message": "Cesta URI, ktorá sa má použiť pre pingy"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.desc": {
+          "source": "A hash to check all deserialized bodies from the server to check for authentication errors",
+          "message": "Haš na kontrolu všetkých deserializovaných tiel zo servera na chyby autentifikácie"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.display_name": {
+          "source": "REST Body Auth Error Check",
+          "message": "Kontrola chýb autentifikácie v tele REST"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.short_desc": {
+          "source": "Values marking a 200 OK body as an authentication error",
+          "message": "Hodnoty označujúce telo 200 OK ako chybu autentifikácie"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "Any authorization token to use for the connection; will be passed as `Authorization: Bearer ...` (assuming that `token_type` is `Bearer`) in request headers; this option cannot be used with username and password options or authentication information in the URL; if this option is set then most OAuth2 options are ignored for logins",
+          "message": "Akýkoľvek autorizačný token, ktorý sa má použiť pre pripojenie; odošle sa ako `Authorization: Bearer ...` (za predpokladu, že `token_type` je `Bearer`) v hlavičkách požiadavky; túto možnosť nie je možné použiť s možnosťami používateľského mena a hesla ani s autentifikačnými údajmi v URL adrese; ak je táto možnosť nastavená, väčšina možností OAuth2 sa pri prihlasovaní ignoruje"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Autorizačný token"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token to be included in requests",
+          "message": "Nastaviť autorizačný token, ktorý sa má zahrnúť do požiadaviek"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.desc": {
+          "source": "The name of the HTTP header where `token` will be sent as an API key; this option is incompatible with OAuth2 options",
+          "message": "Názov hlavičky HTTP, v ktorej sa `token` odošle ako kľúč API; táto možnosť je nekompatibilná s možnosťami OAuth2"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.display_name": {
+          "source": "API Key Header",
+          "message": "Hlavička kľúča API"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.short_desc": {
+          "source": "The name of the HTTP header where the token will be sent as an API key",
+          "message": "Názov hlavičky HTTP, v ktorej sa token odošle ako kľúč API"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "Typ `token`, ktorý sa má použiť pre hlavičku `Authorization`; ignoruje sa, ak nie je nastavená možnosť `token`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "Typ autorizačného tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "Typ autorizačného tokenu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL; conflicts with the `token` option",
+          "message": "Používateľské meno na autentifikáciu; použije sa iba vtedy, ak v URL adrese nie je nastavené používateľské meno ani heslo; je v konflikte s možnosťou `token`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Používateľské meno"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for authentication",
+          "message": "Nastavuje používateľské meno na autentifikáciu"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dmFsaWRhdG9y.desc": {
+          "source": "Sets an `AbstractRestSchemaValidator` object for REST message validation; conflicts with `openapi3` and `swagger`",
+          "message": "Nastaví objekt `AbstractRestSchemaValidator` pre overenie REST správ; konfliktné s `openapi3` a `swagger`"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dmFsaWRhdG9y.display_name": {
+          "source": "Schema Validator",
+          "message": "Overovač schém"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.option.dmFsaWRhdG9y.short_desc": {
+          "source": "Sets a schema validator object",
+          "message": "Nastaví objekt overovača schém"
+        },
+        "connection.UmVzdENsaWVudA.scheme.UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a REST server",
+          "message": "Pripojenie k serveru REST"
+        }
+      }
+    }
+  }
+}

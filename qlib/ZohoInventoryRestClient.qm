@@ -375,7 +375,8 @@ public class ZohoInventoryRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "zohoinventory://www.zohoapis.com/inventory/v1";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ZohoInventoryRestClient",
+            "ZohoInventoryRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Zoho Inventory REST Connection",
             "short_desc": "A connection to the Zoho Inventory REST API",
             "desc": "A connection to the Zoho Inventory REST API for inventory and order management",
@@ -499,6 +500,7 @@ public class ZohoInventoryRestConnection inherits RestClient::RestConnection {
             "required_options": "token|oauth2_client_id,oauth2_client_secret",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "Select Your Zoho Region",
                     "intent": "info",
                     "content": "Select the subdomain and domain that match your Zoho account:\n"
@@ -507,7 +509,7 @@ public class ZohoInventoryRestConnection inherits RestClient::RestConnection {
                         ".in for India, .com.au for Australia, .ca for Canada, .sa for Saudi Arabia, .jp for Japan)",
                 },
             ),
-        };
+        });
     }
 
     #! creates the ZohoInventoryRestConnection object

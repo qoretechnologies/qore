@@ -168,7 +168,8 @@ public class FirecrawlRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "firecrawlrest://api.firecrawl.dev";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("FirecrawlRestClient",
+            "FirecrawlRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Firecrawl REST Connection",
             "short_desc": "A connection to the Firecrawl REST API",
             "desc": "A connection to the Firecrawl REST API for web scraping, crawling, and data extraction",
@@ -204,6 +205,7 @@ public class FirecrawlRestConnection inherits RestClient::RestConnection {
             "required_options": "apikey",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Get Your Firecrawl API Key",
                     "intent": "info",
                     "content": "To connect to Firecrawl, you need an API key:\n\n"
@@ -214,7 +216,7 @@ public class FirecrawlRestConnection inherits RestClient::RestConnection {
                         "Keep your API key secure and never share it publicly.",
                 },
             ),
-        };
+        });
     }
 
     #! Creates the FirecrawlRestConnection object

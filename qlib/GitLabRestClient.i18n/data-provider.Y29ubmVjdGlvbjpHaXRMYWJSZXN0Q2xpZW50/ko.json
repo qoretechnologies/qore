@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [GitLab](https://gitlab.com) for source code, issues, merge requests, CI/CD variables and wikis.\n\n**The instance is the connection.** `hostname` names the GitLab installation this connection works against - `https://gitlab.com` or a self-managed instance - and the target URL and both OAuth2 endpoints are derived from it. GitLab.com and a self-managed instance run the same API over entirely different data, so an integration pointed at the wrong one does not fail; it succeeds against the wrong repositories.\n\n**Authentication** is either an access token or the OAuth2 authorization code flow:\n- a personal, project or group access token with the `api` scope, created under **User Settings > Access Tokens**, sent as a bearer token; or\n- `oauth2_client_id` and `oauth2_client_secret` from an OAuth application registered in the instance itself. There is no shared application, so a self-managed instance needs its own.\n\nGitLab is a trademark of GitLab B.V.",
+          "message": "소스 코드, 이슈, 머지 요청, CI/CD 변수 및 위키를 위한 [GitLab](https://gitlab.com) 연결입니다.\n\n**인스턴스가 연결입니다.** `hostname`은 이 연결이 작동하는 GitLab 설치를 지정합니다 - `https://gitlab.com` 또는 자체 관리 인스턴스이며, 대상 URL과 두 개의 OAuth2 엔드포인트는 이로부터 유도됩니다. GitLab.com과 자체 관리 인스턴스는 완전히 다른 데이터 위에서 동일한 API를 실행하므로, 잘못된 인스턴스에 연결된 통합은 실패하지 않고 잘못된 저장소에 성공적으로 작동합니다.\n\n**인증**은 액세스 토큰 또는 OAuth2 인가 코드 흐름 중 하나입니다:\n- **사용자 설정 > 액세스 토큰**에서 생성한 개인, 프로젝트 또는 그룹 액세스 토큰으로, 베어러 토큰으로 전송되며 `api` 범위를 가져야 합니다; 또는\n- 인스턴스 자체에서 등록된 OAuth 애플리케이션에서 얻은 `oauth2_client_id` 및 `oauth2_client_secret`. 공유 애플리케이션이 없으므로, 자체 관리 인스턴스는 자체 애플리케이션을 필요로 합니다.\n\nGitLab은 GitLab B.V.의 상표입니다."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "GitLab REST Connection",
+          "message": "GitLab REST 연결"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.aG9zdG5hbWU.desc": {
+          "source": "The base URL of the GitLab installation this connection works against, ex: `https://gitlab.com` or `https://gitlab.example.com`.\n\nThis is the connection's defining option: the target URL and both OAuth2 endpoints are derived from it, and a stored URL that disagrees with it is ignored rather than allowed to decide where requests go.\n\nA bare host is given `https`.",
+          "message": "이 연결이 작동하는 GitLab 설치의 기본 URL입니다. 예: `https://gitlab.com` 또는 `https://gitlab.example.com`.\n\n이 옵션이 연결의 핵심입니다. 대상 URL과 두 개의 OAuth2 엔드포인트는 이로부터 유도되며, 이와 다른 저장된 URL은 허용되지 않고 요청이 어디로 가야 할지 결정하는 데 사용되지 않습니다.\n\n단순한 호스트는 `https`로 제공됩니다."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.aG9zdG5hbWU.display_name": {
+          "source": "GitLab Hostname",
+          "message": "GitLab 호스트명"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.aG9zdG5hbWU.short_desc": {
+          "source": "The GitLab instance to work against",
+          "message": "작업할 GitLab 인스턴스"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "The client ID of an OAuth application registered in this GitLab instance.\n\nOnly needed for the OAuth2 flow; an access token in `token` needs neither this nor `oauth2_client_secret`. Register the application under **Admin > Applications** (or **User Settings > Applications**) with `https://api.qoretechnologies.com/qorus-oauth2-redirect` as the redirect URI.",
+          "message": "이 GitLab 인스턴스에 등록된 OAuth 애플리케이션의 클라이언트 ID입니다.\n\nOAuth2 흐름에만 필요합니다. `token`에 액세스 토큰이 있는 경우 이 필드와 `oauth2_client_secret`은 필요하지 않습니다. **관리자 > 애플리케이션**(또는 **사용자 설정 > 애플리케이션**)에서 `https://api.qoretechnologies.com/qorus-oauth2-redirect`를 리디렉션 URI로 등록하세요."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "The client secret of an OAuth application registered in this GitLab instance.\n\nOnly needed for the OAuth2 flow; see `oauth2_client_id`.",
+          "message": "이 GitLab 인스턴스에 등록된 OAuth 애플리케이션의 클라이언트 시크릿입니다.\n\nOAuth2 흐름에만 필요합니다. `oauth2_client_id`을 참조하세요."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A GitLab access token, sent as a bearer token.\n\n**To obtain one:**\n1. Log in to the GitLab instance this connection targets\n2. Go to **User Settings > Access Tokens** (or a project's or group's **Settings > Access Tokens**)\n3. Create a token with the `api` scope, or `read_api` for read-only use\n\nLeave this unset to use the OAuth2 flow instead.",
+          "message": "GitLab 액세스 토큰으로, 베어러 토큰으로 전송됩니다.\n\n**얻는 방법:**\n1. 이 연결이 대상으로 하는 GitLab 인스턴스에 로그인합니다\n2. **사용자 설정 > 액세스 토큰**(또는 프로젝트 또는 그룹의 **설정 > 액세스 토큰**)으로 이동합니다\n3. `api` 범위 또는 읽기 전용 사용을 위해 `read_api` 범위로 토큰을 생성합니다\n\nOAuth2 흐름을 사용하려면 이 값을 비워 두세요."
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "액세스 토큰"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A GitLab personal, project or group access token",
+          "message": "GitLab 개인, 프로젝트 또는 그룹 액세스 토큰"
+        },
+        "connection.R2l0TGFiUmVzdENsaWVudA.scheme.R2l0TGFiUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a GitLab instance",
+          "message": "GitLab 인스턴스에 대한 연결"
+        }
+      }
+    }
+  }
+}

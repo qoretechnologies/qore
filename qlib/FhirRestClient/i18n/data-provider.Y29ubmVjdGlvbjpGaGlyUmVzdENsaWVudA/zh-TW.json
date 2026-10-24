@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a FHIR REST server using JSON resources",
+          "message": "使用 JSON 資源連接至 FHIR REST 伺服器"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "FHIR REST Connection",
+          "message": "FHIR REST 連接"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.option.bm9fY2hhcnNldA.desc": {
+          "source": "If `True`, no charset parameter is appended to request Content-Type headers",
+          "message": "若使用 `True`，請求的 Content-Type 標頭不會附加 charset 參數"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.option.bm9fY2hhcnNldA.display_name": {
+          "source": "No Charset in Content-Type?",
+          "message": "Content-Type 中沒有 Charset？"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.option.bm9fY2hhcnNldA.short_desc": {
+          "source": "Do not append a charset parameter to request Content-Type headers",
+          "message": "請勿將 charset 參數附加至請求的 Content-Type 標頭"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a FHIR REST server",
+          "message": "連接到 FHIR REST 伺服器的連接"
+        }
+      }
+    }
+  }
+}

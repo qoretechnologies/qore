@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.RHJvcGJveFJlc3RDbGllbnQ.scheme.RHJvcGJveFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [Dropbox](https://www.dropbox.com) REST API for cloud file storage and sharing.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from a [Dropbox app](https://www.dropbox.com/developers/apps). The connection uses the `dropbox://` URL scheme.\n\nThe app must be granted the scopes this connection requests, and `token_access_type` must remain `offline`; Dropbox issues no refresh token otherwise, and the connection stops working four hours after it is authorized",
+          "message": "[Dropbox](https://www.dropbox.com) REST API への接続、クラウドファイルストレージおよび共有用。\n\nOAuth2 認証情報 (`oauth2_client_id` および `oauth2_client_secret`) が必要です。[Dropbox アプリ](https://www.dropbox.com/developers/apps) から取得します。接続は `dropbox://` URL スキームを使用します。\n\nアプリは、この接続が要求するスコープを許可されている必要があります。また、`token_access_type` は `offline` のままにしておく必要があります。それ以外の場合、Dropbox はリフレッシュトークンを発行せず、認可後 4 時間で接続が機能しなくなります"
+        },
+        "connection.RHJvcGJveFJlc3RDbGllbnQ.scheme.RHJvcGJveFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Dropbox",
+          "message": "Dropbox"
+        },
+        "connection.RHJvcGJveFJlc3RDbGllbnQ.scheme.RHJvcGJveFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Dropbox REST API",
+          "message": "Dropbox REST API への接続"
+        }
+      }
+    }
+  }
+}

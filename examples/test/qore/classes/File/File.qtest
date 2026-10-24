@@ -29,6 +29,8 @@ class FileTest inherits QUnit::Test {
         addTestCase("issue 3061", \issue3061());
         addTestCase("redirect test", \redirectTest());
         addTestCase("a closed file has no descriptor", \closedFileDescriptorTest());
+        # writei8() and writei8LSB() wrote only 4 of the 8 bytes of the integer
+        addTestCase("8-byte integers are written whole", \int8WriteTest());
         set_return_value(main());
     }
 
@@ -208,6 +210,25 @@ class FileTest inherits QUnit::Test {
         stderr.write(data: "test2");
 
         assertEq("test2", ReadOnlyFile::readTextFile(file));
+    }
+
+    int8WriteTest() {
+        string path = tmp_location() + DirSep + get_random_string();
+        on_exit unlink(path);
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        assertEq(8, f.writei8(0x0102030405060708), "writei8() writes 8 bytes");
+        assertEq(8, f.writei8LSB(0x0102030405060708), "writei8LSB() writes 8 bytes");
+        assertEq(8, f.writei8(-2), "writei8() writes 8 bytes of a negative integer");
+        f.close();
+        assertEq(<01020304050607080807060504030201fffffffffffffffe>, File::readBinaryFile(path),
+            "the bytes of the integers in big-endian and little-endian order");
+
+        ReadOnlyFile r(path);
+        assertEq(0x0102030405060708, r.readi8(), "readi8() reads the integer written by writei8()");
+        assertEq(0x0102030405060708, r.readi8LSB(), "readi8LSB() reads the integer written by writei8LSB()");
+        assertEq(-2, r.readi8(), "readi8() reads the negative integer");
+        assertEq(NOTHING, r.readi8(), "the end of the file");
     }
 
     closedFileDescriptorTest() {

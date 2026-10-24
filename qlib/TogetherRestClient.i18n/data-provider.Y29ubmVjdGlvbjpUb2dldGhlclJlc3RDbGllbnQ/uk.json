@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [Together AI](https://www.together.ai) REST API.\n\nTogether serves OSS chat (Llama, Qwen, DeepSeek, Mixtral), embedding (`BAAI/bge-*`, `togethercomputer/m2-bert-*`), and image-generation (FLUX, Stable Diffusion XL) models via an OpenAI-compatible API.\n\nRequires an API key for Bearer authentication.  Get your API key from the [Together AI Console](https://api.together.ai/settings/api-keys).",
+          "message": "Підключення до REST API [Together AI](https://www.together.ai).\n\nTogether надає відкриті моделі чату (Llama, Qwen, DeepSeek, Mixtral), векторні моделі (`BAAI/bge-*`, `togethercomputer/m2-bert-*`), та моделі генерації зображень (FLUX, Stable Diffusion XL) через API, сумісне з OpenAI.\n\nДля автентифікації за допомогою токена Bearer потрібен ключ API. Отримайте свій ключ у [Консолі Together AI](https://api.together.ai/settings/api-keys)."
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Together AI REST Connection",
+          "message": "Підключення до REST API Together AI"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Together chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `meta-llama/Llama-3.3-70B-Instruct-Turbo` (the default)",
+          "message": "Модель чату Together, яка використовується клієнтами LLM, коли це підключення вибрано для чату.\n\nМоделі чату — це окрема група від моделей векторизації і не можуть використовуватися взаємозамінно.\n\nПриклади значень: `meta-llama/Llama-3.3-70B-Instruct-Turbo` (за замовчуванням)"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Модель чату"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Together chat model name",
+          "message": "Назва моделі чату Together"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1",
+          "message": "V1"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBp.desc": {
+          "source": "The API version to use.",
+          "message": "Версія API, яку потрібно використовувати."
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Версія API"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "Версія API, яку слід використовувати"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Together AI API key used for Bearer authentication.\n\nGet your API key from the [Together AI Console](https://api.together.ai/settings/api-keys).",
+          "message": "Ключ API Together AI для автентифікації за допомогою токена Bearer.\n\nОтримайте свій ключ API у [Консолі Together AI](https://api.together.ai/settings/api-keys)."
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Together AI API key for authentication",
+          "message": "Ключ API Together AI для автентифікації"
+        },
+        "connection.VG9nZXRoZXJSZXN0Q2xpZW50.scheme.VG9nZXRoZXJSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Together AI REST API",
+          "message": "Підключення до REST API Together AI"
+        }
+      }
+    }
+  }
+}

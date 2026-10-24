@@ -407,7 +407,8 @@ public class VoyageRestConnection inherits RestClient::RestConnection {
         const PingMaxWaitMs = 1000;
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("VoyageRestClient",
+            "VoyageRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Voyage AI REST Connection",
             "short_desc": "A connection to the Voyage AI REST API",
             "desc": "A connection to the Voyage AI REST API for text embeddings and reranking.\n\n"
@@ -524,7 +525,7 @@ public class VoyageRestConnection inherits RestClient::RestConnection {
                 }),
             },
             "required_options": "apikey",
-        };
+        });
     }
 
     #! creates the VoyageRestConnection object

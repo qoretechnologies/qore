@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the ClickFunnels REST API for managing contacts, orders, products, funnels, courses, forms, and fulfillments",
+          "message": "Eine Verbindung zur ClickFunnels REST-API zum Verwalten von Kontakten, Bestellungen, Produkten, Funnels, Kursen, Formularen und Erfüllungen"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "ClickFunnels REST Connection",
+          "message": "ClickFunnels REST-Verbindung"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "The **Team Subdomain** is required to connect to your ClickFunnels account.\n\n**How to find it:**\n1. Log in to your ClickFunnels 2.0 account\n2. Look at the URL in your browser: `https://**myteam**.myclickfunnels.com`\n3. The team subdomain is the part before `.myclickfunnels.com`",
+          "message": "Der **Team-Unterdomain** ist erforderlich, um eine Verbindung zu Ihrem ClickFunnels-Konto herzustellen.\n\n**So finden Sie ihn:**\n1. Melden Sie sich bei Ihrem ClickFunnels 2.0-Konto an\n2. Sehen Sie sich die URL in Ihrem Browser an: `https://**myteam**.myclickfunnels.com`\n3. Der Team-Unterdomain ist der Teil vor `.myclickfunnels.com`"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Find Your Team Subdomain",
+          "message": "So finden Sie Ihren Team-Unterdomain"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
+          "source": "An **API Token** is required for authentication.\n\n**How to generate one:**\n1. Log in to your ClickFunnels 2.0 account\n2. Go to **Teams List > Your Team > Team Settings > Developer Portal**\n3. Click **Add new platform application** and fill in the required information\n4. Copy the **API access token** from the platform application details\n\n**Note:** Store this token securely; it provides full API access to your ClickFunnels account. API access requires a Scale, Optimize, or Dominate plan",
+          "message": "Ein **API-Token** ist zur Authentifizierung erforderlich.\n\n**So erstellen Sie eines:**\n1. Melden Sie sich bei Ihrem ClickFunnels 2.0-Konto an\n2. Gehen Sie zu **Teams Liste > Ihr Team > Team-Einstellungen > Entwickler-Portal**\n3. Klicken Sie auf **Neue Plattform-Anwendung hinzufügen** und füllen Sie die erforderlichen Angaben aus\n4. Kopieren Sie den **API-Zugangstoken** aus den Details der Plattform-Anwendung\n\n**Hinweis:** Speichern Sie diesen Token sicher; er gewährt vollen API-Zugriff auf Ihr ClickFunnels-Konto. API-Zugriff erfordert einen Scale-, Optimize- oder Dominate-Plan"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
+          "source": "How to Generate an API Token",
+          "message": "So erstellen Sie ein API-Token"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The ClickFunnels API Bearer token for authentication. Generate this token in ClickFunnels under **Teams List > Your Team > Team Settings > Developer Portal**",
+          "message": "Der ClickFunnels API-Bearertoken zur Authentifizierung. Generieren Sie diesen Token in ClickFunnels unter **Teams Liste > Ihr Team > Team-Einstellungen > Entwickler-Portal**"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API-Schlüssel"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "ClickFunnels API Bearer token",
+          "message": "ClickFunnels-API-Bearertoken"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.dGVhbQ.desc": {
+          "source": "The ClickFunnels team subdomain used to build the API URL. For example, if your ClickFunnels URL is `https://myteam.myclickfunnels.com`, the team value is `myteam`",
+          "message": "Der ClickFunnels-Team-Unterdomäne, der zur Erstellung der API-URL verwendet wird. Zum Beispiel, wenn Ihre ClickFunnels-URL `https://myteam.myclickfunnels.com` lautet, ist der Teamwert `myteam`"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.dGVhbQ.display_name": {
+          "source": "Team Subdomain",
+          "message": "Team-Unterdomäne"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.option.dGVhbQ.short_desc": {
+          "source": "ClickFunnels team subdomain",
+          "message": "ClickFunnels-Team-Unterdomäne"
+        },
+        "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the ClickFunnels REST API",
+          "message": "Eine Verbindung zur ClickFunnels-REST-API"
+        }
+      }
+    }
+  }
+}

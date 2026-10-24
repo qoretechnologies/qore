@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to an MCP server for accessing AI tools, resources, and prompts",
+          "message": "AI 도구, 자원 및 프롬프트에 접근하기 위한 MCP 서버에 대한 연결"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.display_name": {
+          "source": "MCP Connection",
+          "message": "MCP 연결"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X25hbWU.desc": {
+          "source": "The name of this client to report to the MCP server during initialization",
+          "message": "초기화 중 MCP 서버에 보고할 이 클라이언트의 이름"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X25hbWU.display_name": {
+          "source": "Client Name",
+          "message": "클라이언트 이름"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X25hbWU.short_desc": {
+          "source": "The client name to use for MCP initialization",
+          "message": "MCP 초기화에 사용할 클라이언트 이름"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X3ZlcnNpb24.desc": {
+          "source": "The version of this client to report to the MCP server during initialization",
+          "message": "초기화 중 MCP 서버에 보고할 이 클라이언트의 버전"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X3ZlcnNpb24.display_name": {
+          "source": "Client Version",
+          "message": "클라이언트 버전"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.option.Y2xpZW50X3ZlcnNpb24.short_desc": {
+          "source": "The client version to use for MCP initialization",
+          "message": "MCP 초기화에 사용할 클라이언트 버전"
+        },
+        "connection.TWNwQ2xpZW50.scheme.TWNwQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to an MCP (Model Context Protocol) server",
+          "message": "MCP(모델 컨텍스트 프로토콜) 서버에 연결"
+        }
+      }
+    }
+  }
+}

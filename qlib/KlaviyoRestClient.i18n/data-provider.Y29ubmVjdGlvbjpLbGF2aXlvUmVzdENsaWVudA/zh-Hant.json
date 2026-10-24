@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [Klaviyo](https://www.klaviyo.com) for profiles, lists, segments, tags, campaigns, events and subscriptions.\n\n**Authentication** is the OAuth2 authorization code flow with `oauth2_client_id` and `oauth2_client_secret` from an app registered in Klaviyo's developer portal. Klaviyo requires PKCE and takes the client credentials as HTTP basic authentication on the token endpoint, both of which are set by default. The scopes requested are the ones the registered app holds; asking for one outside that set fails authorization before a user sees a consent screen.\n\nA **private API key** works as an alternative for an integration that only ever serves one account: set `token` to the key and `token_type` to `Klaviyo-API-Key`, which is how Klaviyo spells that credential. It carries the account's full permissions and cannot be scoped, so prefer OAuth2 where both are available.\n\n**The API revision is sent on every call** as `revision: 2026-07-15`, matching the description the actions are generated from. Klaviyo declares that header required on almost every operation, and a revision is removed two years after it ships, so it is never left to a default.\n\nKlaviyo is a trademark of Klaviyo, Inc.",
+          "message": "連接到 [Klaviyo](https://www.klaviyo.com) 的連接，用於資料檔、清單、群組、標籤、行銷活動、事件及訂閱。\n\n**驗證** 使用 OAuth2 授權碼流程，包含 `oauth2_client_id` 與 `oauth2_client_secret`，來自 Klaviyo 開發者入口網站註冊的應用程式。Klaviyo 要求 PKCE，並在 Token 端點上以 HTTP 基本驗證方式傳遞客戶端憑證，這兩者皆為預設設定。所請求的範圍為註冊應用程式所擁有的範圍；若請求超出範圍，授權將在使用者看到同意畫面之前失敗。\n\n**私人 API 金鑰** 是僅服務單一帳戶整合的替代方案：將 `token` 設為金鑰，`token_type` 設為 `Klaviyo-API-Key`，這是 Klaviyo 對此憑證的命名方式。該金鑰擁有帳戶的全部權限，無法進行範圍限制，因此在兩者皆可用時，建議優先使用 OAuth2。\n\n**API 版本會在每次呼叫中傳送**，以 `revision: 2026-07-15` 表示，與產生動作所依據的描述相符。Klaviyo 要求幾乎所有操作都必須包含此標頭，且版本在發佈兩年後會被移除，因此不會依賴預設值。\n\nKlaviyo 是 Klaviyo, Inc. 的商標。"
+        },
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Klaviyo REST Connection",
+          "message": "Klaviyo REST 連接"
+        },
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Klaviyo REST API",
+          "message": "連接到 Klaviyo REST API 的連接"
+        }
+      }
+    }
+  }
+}

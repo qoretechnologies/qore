@@ -3,6 +3,118 @@
   "locales": {
     "de": {
       "messages": {
+        "app.SDI.connection.option.Y2hhcnNldA.desc": {
+          "source": "The character set to use for the connection (e.g. utf8)",
+          "message": "Die Zeichensatzkodierung für die Verbindung verwenden (z. B. utf8)"
+        },
+        "app.SDI.connection.option.Y2hhcnNldA.display_name": {
+          "source": "Character Set",
+          "message": "Zeichensatz"
+        },
+        "app.SDI.connection.option.Y2hhcnNldA.short_desc": {
+          "source": "Connection character set",
+          "message": "Verbindungszeichensatz"
+        },
+        "app.SDI.connection.option.Y2xhc3NwYXRo.desc": {
+          "source": "The path to the JDBC driver JAR file(s)",
+          "message": "Der Pfad zur JDBC-Treiber-JAR-Datei(en)"
+        },
+        "app.SDI.connection.option.Y2xhc3NwYXRo.display_name": {
+          "source": "JDBC Classpath",
+          "message": "JDBC-Klassenpfad"
+        },
+        "app.SDI.connection.option.Y2xhc3NwYXRo.short_desc": {
+          "source": "JDBC driver classpath",
+          "message": "JDBC-Treiber-Klassenpfad"
+        },
+        "app.SDI.connection.option.ZGI.desc": {
+          "source": "The name of the database to connect to",
+          "message": "Der Name der Datenbank, mit der verbunden werden soll"
+        },
+        "app.SDI.connection.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "Datenbank"
+        },
+        "app.SDI.connection.option.ZGI.short_desc": {
+          "source": "Database name",
+          "message": "Datenbankname"
+        },
+        "app.SDI.connection.option.aG9zdA.desc": {
+          "source": "The hostname or IP address of the database server",
+          "message": "Der Hostname oder die IP-Adresse des Datenbank-Servers"
+        },
+        "app.SDI.connection.option.aG9zdA.display_name": {
+          "source": "Host",
+          "message": "Host"
+        },
+        "app.SDI.connection.option.aG9zdA.short_desc": {
+          "source": "Database server hostname",
+          "message": "Hostname des Datenbank-Servers"
+        },
+        "app.SDI.connection.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Maximale Anzahl an Verbindungen im Pool"
+        },
+        "app.SDI.connection.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Max. Poolgröße"
+        },
+        "app.SDI.connection.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Maximale Anzahl an Poolverbindungen"
+        },
+        "app.SDI.connection.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Minimale Anzahl an Verbindungen im Pool"
+        },
+        "app.SDI.connection.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Min. Poolgröße"
+        },
+        "app.SDI.connection.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Minimale Anzahl an Poolverbindungen"
+        },
+        "app.SDI.connection.option.cG9ydA.desc": {
+          "source": "The port number of the database server",
+          "message": "Die Portnummer des Datenbank-Servers"
+        },
+        "app.SDI.connection.option.cG9ydA.display_name": {
+          "source": "Port",
+          "message": "Hafen"
+        },
+        "app.SDI.connection.option.cG9ydA.short_desc": {
+          "source": "Database server port",
+          "message": "Port des Datenbank-Servers"
+        },
+        "app.SDI.connection.option.cGFzcw.desc": {
+          "source": "The password for database authentication",
+          "message": "Das Passwort für die Datenbank-Authentifizierung"
+        },
+        "app.SDI.connection.option.cGFzcw.display_name": {
+          "source": "Password",
+          "message": "Passwort"
+        },
+        "app.SDI.connection.option.cGFzcw.short_desc": {
+          "source": "Database password",
+          "message": "Datenbankpasswort"
+        },
+        "app.SDI.connection.option.dXNlcg.desc": {
+          "source": "The database user name for authentication",
+          "message": "Der Benutzername für die Datenbank-Authentifizierung"
+        },
+        "app.SDI.connection.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Benutzer"
+        },
+        "app.SDI.connection.option.dXNlcg.short_desc": {
+          "source": "Database user",
+          "message": "Datenbankbenutzer"
+        },
+        "app.SDI.desc": {
+          "source": "Create and manage connections to a H2 embedded Java SQL database",
+          "message": "Verbindungen zu einer eingebetteten H2-Java-SQL-Datenbank erstellen und verwalten"
+        },
         "app.SDI.display_name": {
           "source": "H2",
           "message": "H2"
@@ -10,10 +122,6 @@
         "app.SDI.short_desc": {
           "source": "H2 embedded Java SQL database",
           "message": "Eingebettete H2-Java-SQL-Datenbank"
-        },
-        "app.SDI.desc": {
-          "source": "Create and manage connections to a H2 embedded Java SQL database",
-          "message": "Verbindungen zu einer eingebetteten H2-Java-SQL-Datenbank erstellen und verwalten"
         }
       }
     }

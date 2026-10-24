@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [GitHub](https://github.com) for repositories, issues, pull requests, releases and Actions secrets.\n\n**Authentication** is either:\n- a **personal access token** in `token`, fine-grained or classic, sent as a bearer token. A fine-grained token can be scoped to a single repository, which is the narrowest option; or\n- the **OAuth2 authorization code flow** with `oauth2_client_id` and `oauth2_client_secret` from an OAuth app registered on GitHub.\n\nEvery request sends `X-GitHub-Api-Version: 2022-11-28`, because GitHub versions its REST API by date and sending no version means accepting whatever it currently defaults to.\n\nGitHub is a trademark of GitHub, Inc.",
+          "message": "저장소, 이슈, 풀 리퀘스트, 릴리스 및 Actions 시크릿을 위한 [GitHub](https://github.com)에 대한 연결입니다.\n\n**인증**은 다음 중 하나입니다:\n- **개인용 액세스 토큰**을 `token`에 포함하여 베어러 토큰으로 전송합니다. 세부 토큰은 단일 저장소에 한정될 수 있으며, 가장 좁은 범위입니다. 또는\n- GitHub에서 등록된 OAuth 앱에서 `oauth2_client_id`과 `oauth2_client_secret`를 사용한 **OAuth2 인증 코드 흐름**입니다.\n\n모든 요청은 `X-GitHub-Api-Version: 2022-11-28`을 전송합니다. GitHub은 REST API 버전을 날짜로 버전 관리하기 때문에, 버전을 전송하지 않으면 현재 기본값을 수락하게 됩니다.\n\nGitHub는 GitHub, Inc.의 상표입니다."
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "GitHub REST Connection",
+          "message": "GitHub REST 연결"
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.option.aGVhZGVycw.desc": {
+          "source": "Headers sent with every request.\n\n`X-GitHub-Api-Version` pins the REST API version and should be left alone unless you mean to move to a different one: this application's actions describe the fields and responses of **that** version.",
+          "message": "모든 요청에 함께 전송되는 헤더입니다.\n\n`X-GitHub-Api-Version`은 REST API 버전을 고정하며, 다른 버전으로 이동하려는 의도가 없다면 변경하지 마세요. 이 애플리케이션의 동작은 **해당 버전**의 필드와 응답을 설명합니다."
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A GitHub personal access token, sent as a bearer token.\n\n**To obtain one:** **Settings > Developer settings > Personal access tokens**. A fine-grained token is scoped to chosen repositories and permissions and is the narrower choice; a classic token uses scopes such as `repo`.\n\nLeave this unset to use the OAuth2 flow instead.",
+          "message": "GitHub 개인 액세스 토큰으로, 베어러 토큰으로 전송됩니다.\n\n**얻는 방법:** **설정 > 개발자 설정 > 개인 액세스 토큰**. 세부 토큰은 선택한 저장소와 권한에 대해 범위가 지정되며, 더 좁은 선택입니다. 고전적 토큰은 `repo`과 같은 범위를 사용합니다.\n\nOAuth2 흐름을 사용하려면 이 값을 비워 두세요."
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "액세스 토큰"
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A GitHub personal access token",
+          "message": "GitHub 개인 액세스 토큰"
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the GitHub REST API",
+          "message": "GitHub REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

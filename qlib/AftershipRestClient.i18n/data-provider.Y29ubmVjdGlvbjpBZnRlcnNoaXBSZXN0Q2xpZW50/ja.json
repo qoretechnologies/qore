@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Aftership REST API for package tracking and returns management.\n\nRequires an API key (set as `apikey`) from the [Aftership Dashboard](https://admin.aftership.com/). The connection uses the `aftership://` URL scheme and automatically sets the required `as-api-key` header on all API requests",
+          "message": "パッケージ追跡および返品管理のためのAftership REST APIへの接続。\n\nAPIキー（`apikey`として設定）が必要です。[Aftershipダッシュボード](https://admin.aftership.com/)から取得してください。接続は`aftership://` URLスキームを使用し、すべてのAPIリクエストで必要な`as-api-key`ヘッダーを自動的に設定します。"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Aftership REST Connection",
+          "message": "Aftership REST 接続"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Aftership, you need an API key:\n\n1. Sign up or sign in at the [Aftership Dashboard](https://accounts.aftership.com)\n2. Go to **Settings** > **API Keys** (or visit [admin.aftership.com/settings/api-keys](https://admin.aftership.com/settings/api-keys) directly)\n3. Click **Create API key**\n4. Enter a descriptive name, select the `as-api-key` signature type, and set permissions\n5. Click **Save** and copy your new API key\n\nKeep your API key secure and rotate it periodically.",
+          "message": "Aftership に接続するには、API キーが必要です。\n\n1. [Aftership ダッシュボード](https://accounts.aftership.com) で登録またはログイン\n2. **設定** > **API キー** に移動する（または [admin.aftership.com/settings/api-keys](https://admin.aftership.com/settings/api-keys) を直接訪問）\n3. **API キーの作成** をクリック\n4. 説明的な名前を入力し、`as-api-key` 署名タイプを選択し、権限を設定\n5. **保存** をクリックして新しい API キーをコピー\n\nAPI キーは安全に保管し、定期的にローテーションしてください。"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Aftership API Key",
+          "message": "Aftership API キーの取得方法"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Aftership API key used for authentication; sent as the `as-api-key` header.\n\nGet your API key from the [Aftership Dashboard](https://admin.aftership.com/)",
+          "message": "認証に使用される Aftership API キー。`as-api-key` ヘッダーとして送信されます。\n\n[Aftership ダッシュボード](https://admin.aftership.com/) から API キーを取得"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Aftership API key for authentication",
+          "message": "認証用の Aftership API キー"
+        },
+        "connection.QWZ0ZXJzaGlwUmVzdENsaWVudA.scheme.QWZ0ZXJzaGlwUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Aftership REST API",
+          "message": "Aftership REST API への接続"
+        }
+      }
+    }
+  }
+}

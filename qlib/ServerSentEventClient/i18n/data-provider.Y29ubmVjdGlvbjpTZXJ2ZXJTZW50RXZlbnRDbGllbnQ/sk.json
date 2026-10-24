@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to a ServerSentEvent server service",
+          "message": "Pripojenie k službe ServerSentEvent servera"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.display_name": {
+          "source": "ServerSentEvent Connection",
+          "message": "Pripojenie ServerSentEvent"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGk.desc": {
+          "source": "AsyncAPI schema URL or file path used to validate received SSE event data",
+          "message": "URL schéma AsyncAPI alebo cesta k súboru použitá na validáciu prijatých údajov udalosti SSE"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGk.display_name": {
+          "source": "AsyncAPI Schema",
+          "message": "Schéma AsyncAPI"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGk.short_desc": {
+          "source": "AsyncAPI schema URL or file path",
+          "message": "URL schémy AsyncAPI alebo cesta k súboru"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGlfY2hhbm5lbA.desc": {
+          "source": "AsyncAPI channel name to use when `asyncapi` is configured",
+          "message": "Názov kanála AsyncAPI, ktorý sa má použiť, keď je nakonfigurovaný `asyncapi`"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGlfY2hhbm5lbA.display_name": {
+          "source": "AsyncAPI Channel",
+          "message": "Kanál AsyncAPI"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGlfY2hhbm5lbA.short_desc": {
+          "source": "AsyncAPI channel for validation",
+          "message": "Kanál AsyncAPI na validáciu"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.Ym9keQ.desc": {
+          "source": "The request body to send with the SSE connection request; only valid with non-GET methods. The body is resent on each reconnection attempt",
+          "message": "Telo požiadavky, ktoré sa pošle spolu s požiadavkou na pripojenie SSE; platné iba s metódami inými ako GET. Telo sa opakuje pri každej pokuse o znovupripojenie"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.Ym9keQ.display_name": {
+          "source": "Request Body",
+          "message": "Telo požiadavky"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.Ym9keQ.short_desc": {
+          "source": "Request body for non-GET SSE requests",
+          "message": "Telo požiadavky pre požiadavky SSE iné ako GET"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "no serialization is used",
+          "message": "není použitá žiadna serializácia"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "použiť serializáciu JSON"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.desc": {
+          "source": "Sets the data serialization option",
+          "message": "Nastaví možnosť serializácie dát"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Serializácia dát"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.short_desc": {
+          "source": "Sets the data serialization option",
+          "message": "Nastaví možnosť serializácie dát"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bGFzdF9ldmVudF9pZA.desc": {
+          "source": "Request the server restart sending events from this ID. This will be send in the `Last-Event-ID` header in the connection request to the SSE server",
+          "message": "Požiadať server o opätovné odosielanie udalostí od tohto ID. Bude odoslané v hlavičke `Last-Event-ID` v požiadavke na pripojenie k serveru SSE"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bGFzdF9ldmVudF9pZA.display_name": {
+          "source": "Last Event ID",
+          "message": "ID poslednej udalosti"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bGFzdF9ldmVudF9pZA.short_desc": {
+          "source": "Request the server restart sending events from this ID",
+          "message": "Požiadať server o opätovné odosielanie udalostí od tohto ID"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the SSE connection request; default: GET. Use POST for APIs that require a request body (e.g., OpenAI, Anthropic streaming APIs)",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku na pripojenie SSE; predvolené: GET. Použite POST pre rozhrania API, ktoré vyžadujú telo požiadavky (napr. streamovacie rozhrania API OpenAI, Anthropic)"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bWV0aG9k.short_desc": {
+          "source": "HTTP method for the SSE connection request",
+          "message": "Metóda HTTP pre požiadavku na pripojenie SSE"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.cmVjb25uZWN0.desc": {
+          "source": "Try to reconnect when the connection is closed or lost",
+          "message": "Skúste znovu pripojiť, keď je spojenie uzatvorené alebo stratené"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.cmVjb25uZWN0.display_name": {
+          "source": "Reconnect?",
+          "message": "Znova pripojiť?"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.cmVjb25uZWN0.short_desc": {
+          "source": "Try to reconnect when the connection is closed or lost",
+          "message": "Skúste znovu pripojiť, keď je spojenie uzatvorené alebo stratené"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW4.desc": {
+          "source": "Any token to use for the initial HTTP request to authenticate with the server",
+          "message": "Akýkoľvek token na použitie pri prvom HTTP požiadavku na overenie so serverom"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Autorizačný token"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token",
+          "message": "Nastavte autorizačný token"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "Typ `token`, ktorý sa má použiť pre hlavičku `Authorization`; ignoruje sa, ak nie je nastavená možnosť `token`"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "Typ autorizačného tokenu"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "Typ autorizačného tokenu"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.allowed_values.aW50OjEz.desc": {
+          "source": "Version 13",
+          "message": "Verzia 13"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.allowed_values.aW50Ojg.desc": {
+          "source": "Version 8",
+          "message": "Verzia 8"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.desc": {
+          "source": "The ServerSentEvent protocol version to use in the client",
+          "message": "Verzia protokolu ServerSentEvent, ktorú použiť v klientovi"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.display_name": {
+          "source": "ServerSentEvent Version",
+          "message": "Verzia ServerSentEvent"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.short_desc": {
+          "source": "Sets the ServerSentEvent protocol version",
+          "message": "Nastaví verziu protokolu ServerSentEvent"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a ServerSentEvent server service",
+          "message": "Pripojenie k službe ServerSentEvent servera"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Freshsales CRM REST API for managing contacts, accounts, deals, tasks, appointments, and notes.\n\n**To obtain your API key:**\n1. Log in to your Freshsales account\n2. Click your profile picture in the top-right corner\n3. Go to **Settings** > **API Settings**\n4. Copy your API key\n\n**To find your subdomain:**\nYour subdomain is the part before `.myfreshworks.com` in your Freshsales URL (e.g., `mycompany` from `https://mycompany.myfreshworks.com`)",
+          "message": "Spojenie s REST API Freshsales CRM na správu kontaktov, účtov, obchodov, úloh, stretnutí a poznámok.\n\n**Na získanie kľúča API:**\n1. Prihláste sa do svojho účtu Freshsales\n2. Kliknite na ikonu svojho profilu v pravom hornom rohu\n3. Choďte na **Nastavenia** > **Nastavenia API**\n4. Skopírujte svoj kľúč API\n\n**Na nájdenie poddomény:**\nPoddoména je časť pred `.myfreshworks.com` v URL Freshsales (napr. `mycompany` z `https://mycompany.myfreshworks.com`)"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Freshsales REST Connection",
+          "message": "Spojenie REST Freshsales"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Freshsales API key used for token authentication.\n\n**To obtain your API key:**\n1. Log in to your Freshsales account\n2. Click your profile picture in the top-right corner\n3. Go to **Settings** > **API Settings**\n4. Copy your API key\n\nRate limit: 1,000 API requests per hour per account",
+          "message": "Kľúč Freshsales API používaný pre overenie tokenom.\n\n**Ako získať váš kľúč API:**\n1. Prihláste sa do svojho účtu Freshsales\n2. Kliknite na ikonu svojho profilu v pravom hornom rohu\n3. Choďte na **Nastavenia** > **Nastavenia API**\n4. Skopírujte váš kľúč API\n\nLimit rýchlosti: 1 000 požiadaviek API za hodinu na účet"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Freshsales API key for authentication",
+          "message": "Freshsales kľúč API pre overenie"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.desc": {
+          "source": "The domain of your Freshsales account.\n\nYou can provide either:\n- Just the subdomain (e.g., `mycompany`)\n- The full domain (e.g., `mycompany-org.myfreshworks.com`)\n- A full URL (e.g., `https://mycompany-org.myfreshworks.com/crm/sales`)\n\nThe subdomain or domain is extracted automatically",
+          "message": "Doména vášho účtu Freshsales.\n\nMôžete zadať buď:\n- Len poddoménu (napr. `mycompany`)\n- Plnú doménu (napr. `mycompany-org.myfreshworks.com`)\n- Plnú URL (napr. `https://mycompany-org.myfreshworks.com/crm/sales`)\n\nPoddoména alebo doména sa extrahuje automaticky"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.display_name": {
+          "source": "Freshsales Domain",
+          "message": "Freshsales Doména"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.short_desc": {
+          "source": "Your Freshsales subdomain or full domain",
+          "message": "Váš poddoména alebo plná doména Freshsales"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Freshsales CRM REST API",
+          "message": "Spojenie s REST API Freshsales CRM"
+        }
+      }
+    }
+  }
+}

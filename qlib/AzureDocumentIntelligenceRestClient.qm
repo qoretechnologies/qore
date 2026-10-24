@@ -412,7 +412,8 @@ public class AzureDocumentIntelligenceRestConnection inherits RestClient::RestCo
         #! Authenticated read-only resource information endpoint
         const DefaultPingPath = "/documentintelligence/info?api-version=" + DefaultApiVersion;
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("AzureDocumentIntelligenceRestClient",
+            "AzureDocumentIntelligenceRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Azure Document Intelligence Connection",
             "short_desc": "A connection to Azure Document Intelligence",
             "desc": "A connection to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) "
@@ -458,7 +459,7 @@ public class AzureDocumentIntelligenceRestConnection inherits RestClient::RestCo
                     {"default_value": DefaultPingPath}),
             },
             "required_options": "apikey|entra_token|headers",
-        };
+        });
     }
 
     constructor(string name, string description, string url,

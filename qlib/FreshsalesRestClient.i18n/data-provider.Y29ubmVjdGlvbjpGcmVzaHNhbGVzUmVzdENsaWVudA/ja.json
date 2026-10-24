@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Freshsales CRM REST API for managing contacts, accounts, deals, tasks, appointments, and notes.\n\n**To obtain your API key:**\n1. Log in to your Freshsales account\n2. Click your profile picture in the top-right corner\n3. Go to **Settings** > **API Settings**\n4. Copy your API key\n\n**To find your subdomain:**\nYour subdomain is the part before `.myfreshworks.com` in your Freshsales URL (e.g., `mycompany` from `https://mycompany.myfreshworks.com`)",
+          "message": "コンタクト、アカウント、取引、タスク、予約、メモを管理するための Freshsales CRM REST API への接続。\n\n**API キーの取得方法：**\n1. Freshsales アカウントにログイン\n2. 右上隅のプロフィール画像をクリック\n3. **設定** > **API 設定** へ移動\n4. API キーをコピー\n\n**サブドメインの確認方法：**\nサブドメインは Freshsales URL の `.myfreshworks.com` の前の部分です（例: `mycompany` は `https://mycompany.myfreshworks.com` から得られます）"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Freshsales REST Connection",
+          "message": "Freshsales REST 接続"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Freshsales API key used for token authentication.\n\n**To obtain your API key:**\n1. Log in to your Freshsales account\n2. Click your profile picture in the top-right corner\n3. Go to **Settings** > **API Settings**\n4. Copy your API key\n\nRate limit: 1,000 API requests per hour per account",
+          "message": "トークン認証に使用する Freshsales API キー。\n\n**API キーの取得手順：**\n1. Freshsales アカウントにログイン\n2. 右上隅のプロフィール画像をクリック\n3. **設定** > **API 設定** へ移動\n4. API キーをコピー\n\nレート制限：アカウントあたり1時間に1,000回のAPIリクエスト"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Freshsales API key for authentication",
+          "message": "認証用の Freshsales API キー"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.desc": {
+          "source": "The domain of your Freshsales account.\n\nYou can provide either:\n- Just the subdomain (e.g., `mycompany`)\n- The full domain (e.g., `mycompany-org.myfreshworks.com`)\n- A full URL (e.g., `https://mycompany-org.myfreshworks.com/crm/sales`)\n\nThe subdomain or domain is extracted automatically",
+          "message": "Your Freshsales accountのドメイン。\n\n以下のいずれかを指定できます：\n- サブドメインのみ（例：`mycompany`）\n- 完全なドメイン（例：`mycompany-org.myfreshworks.com`）\n- 完全なURL（例：`https://mycompany-org.myfreshworks.com/crm/sales`）\n\nサブドメインまたはドメインは自動的に抽出されます"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.display_name": {
+          "source": "Freshsales Domain",
+          "message": "Freshsales ドメイン"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.short_desc": {
+          "source": "Your Freshsales subdomain or full domain",
+          "message": "Your Freshsales サブドメインまたは完全なドメイン"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Freshsales CRM REST API",
+          "message": "Freshsales CRM REST API への接続"
+        }
+      }
+    }
+  }
+}

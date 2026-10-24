@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Paddle](https://www.paddle.com) REST API for billing, subscriptions and payments.\n\nPaddle is a **merchant of record**: it sells your software on your behalf, so it handles payment processing, sales tax and invoicing, and pays out the balance. An integration works with catalog products and prices, customers, transactions, subscriptions and reports.\n\n**Authentication** is an API key sent as a bearer token; there is no OAuth2 flow. A key is created in the Paddle dashboard under **Paddle > Developer Tools > Authentication** and is granted an explicit set of permissions, so it can be scoped to exactly what the integration needs.\n\n**Sandbox and production are separate environments** with separate data and separate keys. Set `instance_type` to match the key.\n\nPaddle is a trademark of Paddle.com Market Ltd.",
+          "message": "[Paddle](https://www.paddle.com) REST API로의 연결: 청구, 구독 및 결제에 사용됩니다.\n\nPaddle는 **판매자 대리인**(merchant of record)입니다: 귀하의 소프트웨어를 대신 판매하며 결제 처리, 부가세 및 송장 발행을 담당하고 잔액을 지급합니다. 통합은 카탈로그 제품과 가격, 고객, 거래, 구독 및 보고서와 함께 작동합니다.\n\n**인증**은 베어러 토큰으로 전송되는 API 키이며, OAuth2 흐름이 없습니다. 키는 Paddle 대시보드의 **Paddle > 개발자 도구 > 인증**에서 생성되며, 명시적인 권한 세트가 부여되어 통합이 필요로 하는 것에 정확히 맞춰질 수 있습니다.\n\n**샌드박스와 프로덕션은 별도의 환경**이며, 별도의 데이터와 별도의 키를 사용합니다. `instance_type`를 키와 일치시켜야 합니다.\n\nPaddle는 Paddle.com Market Ltd.의 상표입니다."
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Paddle REST Connection",
+          "message": "Paddle REST 연결"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOmFwaQ.desc": {
+          "source": "The live Paddle environment: real customers, real money",
+          "message": "실제 Paddle 환경: 실제 고객, 실제 금액"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOmFwaQ.display_name": {
+          "source": "Production",
+          "message": "생산"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnNhbmRib3gtYXBp.desc": {
+          "source": "The Paddle test environment: no real money moves",
+          "message": "Paddle 테스트 환경: 실제 금전 거래 없음"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.allowed_values.c3RyaW5nOnNhbmRib3gtYXBp.display_name": {
+          "source": "Sandbox",
+          "message": "샌드박스"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.desc": {
+          "source": "The Paddle environment this connection works against, which also determines the target URL.\n\n- `api`: **Production** - `https://api.paddle.com`\n- `sandbox-api`: **Sandbox** - `https://sandbox-api.paddle.com`\n\nThe two environments are entirely separate: they hold different data and accept different API keys, so this must match the key in `token`.\n\nDefaults to **sandbox**, so a connection created without setting this talks to test data rather than billing real customers.",
+          "message": "이 연결이 작동하는 Paddle 환경이며, 이는 대상 URL을 결정합니다.\n\n- `api`: **생산** - `https://api.paddle.com`\n- `sandbox-api`: **샌드박스** - `https://sandbox-api.paddle.com`\n\n두 환경은 완전히 별개이며, 서로 다른 데이터를 보유하고 있으며, 서로 다른 API 키를 수락하므로, `token`에 있는 키와 일치해야 합니다.\n\n기본값은 **샌드박스**이므로, 이 값을 설정하지 않으면 실제 고객의 청구가 아닌 테스트 데이터와 통신합니다."
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.display_name": {
+          "source": "Instance Type",
+          "message": "인스턴스 유형"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.aW5zdGFuY2VfdHlwZQ.short_desc": {
+          "source": "The Paddle environment to connect to",
+          "message": "연결할 Paddle 환경"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A Paddle API key (`pdl_live_apikey_…` or `pdl_sdbx_apikey_…`), sent as a bearer token.\n\n**To obtain one:**\n1. Log in to the Paddle dashboard for the environment this connection targets\n2. Go to Paddle > Developer Tools > Authentication\n3. Create an API key and grant it the permissions this integration needs\n\n**Note:** a key belongs to one environment only; a sandbox key is rejected by production and the other way round. Set `instance_type` to match.",
+          "message": "Paddle API 키 (`pdl_live_apikey_…` 또는 `pdl_sdbx_apikey_…`), 베어러 토큰으로 전송됩니다.\n\n**얻는 방법:**\n1. 이 연결이 대상으로 하는 환경의 Paddle 대시보드에 로그인합니다\n2. Paddle > 개발자 도구 > 인증으로 이동합니다\n3. API 키를 생성하고, 이 통합에 필요한 권한을 부여합니다\n\n**참고:** 키는 하나의 환경에만 속합니다. 샌드박스 키는 생산 환경에서 거부되며, 그 반대도 마찬가지입니다. `instance_type`를 일치시켜야 합니다."
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A Paddle API key",
+          "message": "Paddle API 키"
+        },
+        "connection.UGFkZGxlUmVzdENsaWVudA.scheme.UGFkZGxlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Paddle REST API",
+          "message": "Paddle REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

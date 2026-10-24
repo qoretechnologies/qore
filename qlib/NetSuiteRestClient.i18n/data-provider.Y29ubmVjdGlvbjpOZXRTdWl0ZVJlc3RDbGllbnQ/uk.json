@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Oracle NetSuite REST API",
+          "message": "З'єднання з REST API Oracle NetSuite"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Oracle NetSuite REST Connection",
+          "message": "З'єднання з Oracle NetSuite REST"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.desc": {
+          "source": "The NetSuite account ID or company ID; if not provided, its value is auto-determined",
+          "message": "Ідентифікатор облікового запису NetSuite або компанії; якщо не вказано, його значення визначається автоматично"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.display_name": {
+          "source": "NetSuite Account ID",
+          "message": "ID облікового запису NetSuite"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "The NetSuite account ID or company ID",
+          "message": "ID облікового запису NetSuite або ID компанії"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.b2F1dGgyX2xvZ291dF91cmw.desc": {
+          "source": "The logout / deauthorize URL for OAuth2 tokens",
+          "message": "URL виходу / скасування авторизації для токенів OAuth2"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.b2F1dGgyX2xvZ291dF91cmw.display_name": {
+          "source": "OAuth2 Logout URL",
+          "message": "URL виходу OAuth2"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.option.b2F1dGgyX2xvZ291dF91cmw.short_desc": {
+          "source": "The logout / deauthorize URL for OAuth2 tokens",
+          "message": "URL виходу / скасування авторизації для токенів OAuth2"
+        },
+        "connection.TmV0U3VpdGVSZXN0Q2xpZW50.scheme.TmV0U3VpdGVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Oracle NetSuite REST API",
+          "message": "З'єднання з REST API Oracle NetSuite"
+        }
+      }
+    }
+  }
+}

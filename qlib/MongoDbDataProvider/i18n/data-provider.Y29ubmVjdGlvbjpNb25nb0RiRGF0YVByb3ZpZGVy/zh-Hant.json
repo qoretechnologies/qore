@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.desc": {
+          "source": "A connection to a [MongoDB](https://www.mongodb.com) server or a [MongoDB Atlas](https://www.mongodb.com/atlas) cluster, for document storage, retrieval, aggregation and Atlas Vector Search.\n\nUse a `mongodb://` URL for a server or replica set whose hosts are known, and a `mongodb+srv://` URL for Atlas, where the hosts are discovered from DNS and TLS is implied.  An Atlas connection string looks like `mongodb+srv://cluster0.abcde.mongodb.net`.\n\nSupply the credentials as the `username` and `password` options rather than in the URL: they are then stored as connection options - the password as a password - and are URL-encoded when the client is created, so a password containing `@`, `:` or `/` works without the caller having to encode it.",
+          "message": "連接到 [MongoDB](https://www.mongodb.com) 伺服器或 [MongoDB Atlas](https://www.mongodb.com/atlas) 群集的連接，用於文件儲存、檢索、聚合及 Atlas 向量搜尋。\n\n使用 `mongodb://` URL 連接主機已知的伺服器或複製集，使用 `mongodb+srv://` URL 連接 Atlas，其中主機由 DNS 探測，且 TLS 隱含啟用。Atlas 連接字串的格式為 `mongodb+srv://cluster0.abcde.mongodb.net`。\n\n請以 `username` 與 `password` 選項提供憑證，而非置於 URL 中：憑證將作為連接選項儲存——密碼以密碼形式儲存，並在建立用戶端時進行 URL 編碼，因此包含 `@`、`:` 或 `/` 的密碼無需呼叫者自行編碼即可正常運作。"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.display_name": {
+          "source": "MongoDB Connection",
+          "message": "MongoDB 連接"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "How long to wait for a connection to be established, sent as the `connectTimeoutMS` URI option.",
+          "message": "建立連接時等待的時間，以 `connectTimeoutMS` URI 選項傳遞。"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "連線逾時"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "How long to wait for a connection to be established",
+          "message": "建立連接時等待的時間"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXBwbmFtZQ.desc": {
+          "source": "The name this client reports to the server, sent as the `appName` URI option.\n\nAtlas shows it against every operation in the cluster's monitoring, which is what makes one application's load distinguishable from another's.  Defaults to `qore-mongodb` when neither this option nor the URL sets one.",
+          "message": "此用戶端向伺服器報告的名稱，以 `appName` URI 選項傳遞。\n\nAtlas 會在群集監控中顯示此名稱，使不同應用程式的負載可相互區分。若未設定此選項，也未在 URL 中指定，則預設為 `qore-mongodb`。"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXBwbmFtZQ.display_name": {
+          "source": "Application Name",
+          "message": "應用程式名稱"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXBwbmFtZQ.short_desc": {
+          "source": "The name this client reports to the server",
+          "message": "此用戶端向伺服器報告的名稱"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXV0aHNvdXJjZQ.desc": {
+          "source": "The database holding the user's credentials, sent as the `authSource` URI option.\n\nAtlas keeps database users in `admin`, which is also what the server assumes when this is not set; set it only where the credentials live elsewhere.",
+          "message": "儲存使用者憑證的資料庫，以 `authSource` URI 選項傳送。\n\nAtlas 將資料庫使用者儲存在 `admin` 中，若未設定此項，伺服器亦會假設為此值；僅在憑證位於其他位置時才需設定。"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXV0aHNvdXJjZQ.display_name": {
+          "source": "Authentication Database",
+          "message": "驗證資料庫"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXV0aHNvdXJjZQ.short_desc": {
+          "source": "The database holding the user's credentials",
+          "message": "儲存使用者憑證的資料庫"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.ZGF0YWJhc2U.desc": {
+          "source": "The database used when an action does not name one, and the default authentication database when `authsource` is not set.",
+          "message": "當動作未指定資料庫時所使用的資料庫，以及當 `authsource` 未設定時的預設驗證資料庫。"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.ZGF0YWJhc2U.display_name": {
+          "source": "Default Database",
+          "message": "預設資料庫"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.ZGF0YWJhc2U.short_desc": {
+          "source": "The database used when an action does not name one",
+          "message": "當動作未指定資料庫時所使用的資料庫"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c29ja2V0X3RpbWVvdXQ.desc": {
+          "source": "How long to wait for a reply on an established connection, sent as the `socketTimeoutMS` URI option.\n\nThis is the only timeout that bounds a server which completes the TCP handshake and then stops answering - a hung `mongod`, a firewall dropping an established flow, a stale NAT mapping, a suspended container - because `connect_timeout` and `server_selection_timeout` have both finished by the time a reply is awaited.\n\n**It applies to every operation on the client**, so it has to be longer than the slowest query the connection is expected to run; to bound an unattended monitor ping, set `ping_timeout` rather than lowering this.",
+          "message": "在已建立的連接上等待回應的時間，以 `socketTimeoutMS` URI 選項傳送。\n\n這是唯一能限制伺服器完成 TCP 握手後停止回應的情況——例如，已掛起的 `mongod`、防火牆中斷已建立的流量、過期的 NAT 映射、暫停的容器——因為在等待回應時，`connect_timeout` 和 `server_selection_timeout` 均已完成。\n\n**此設定適用於客戶端上的每一項作業**，因此必須長於預期連接上最慢的查詢；若要限制未經監控的監測 ping，應設定 `ping_timeout`，而非降低此值。"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c29ja2V0X3RpbWVvdXQ.display_name": {
+          "source": "Socket Timeout",
+          "message": "Socket Timeout"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c29ja2V0X3RpbWVvdXQ.short_desc": {
+          "source": "How long to wait for a reply on an established connection",
+          "message": "在已建立的連接上等待回應的時間"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c2VydmVyX3NlbGVjdGlvbl90aW1lb3V0.desc": {
+          "source": "How long to wait for a suitable server to be found, sent as the `serverSelectionTimeoutMS` URI option.\n\nThis is the timeout a connection to an unreachable cluster actually waits on, because the driver selects a server before it connects to one.",
+          "message": "等待找到合適伺服器的時間，以 `serverSelectionTimeoutMS` URI 選項傳送。\n\n當連接到無法存取的叢集時，實際上連接會等待此超時時間，因為驅動程式在連接前會先選擇伺服器。"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c2VydmVyX3NlbGVjdGlvbl90aW1lb3V0.display_name": {
+          "source": "Server Selection Timeout",
+          "message": "伺服器選擇超時"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c2VydmVyX3NlbGVjdGlvbl90aW1lb3V0.short_desc": {
+          "source": "How long to wait for a suitable server to be found",
+          "message": "等待找到合適伺服器的時間"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database user.\n\nGiven here rather than in the URL, it is stored as a password and is URL-encoded when the client is created, so a password containing `@`, `:`, `/` or `?` works without the caller having to encode it.",
+          "message": "資料庫使用者的密碼。\n\n在此處提供而非在 URL 中，密碼會被儲存為密碼並在建立用戶端時進行 URL 編碼，因此包含 `@`、`:`、`/` 或 `?` 的密碼無需呼叫者自行編碼。"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "密碼"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for the database user",
+          "message": "資料庫使用者的密碼"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGluZ190aW1lb3V0.desc": {
+          "source": "The upper bound on a single connection ping.\n\nA ping runs unattended, on a timer, in a thread that something else waits on, so it is bounded independently of the timeouts that apply to data operations: the client the ping uses caps `connectTimeoutMS`, `serverSelectionTimeoutMS` and `socketTimeoutMS` at this value, whatever the URL or the other options say, and the client returned for data operations is left alone.",
+          "message": "單一連接 ping 的上限時間。\n\nPing 在計時器上非同步執行，由另一個執行緒等待，因此其超時時間獨立於資料操作的超時時間：使用者端會將 `connectTimeoutMS`、`serverSelectionTimeoutMS` 和 `socketTimeoutMS` 限制在此值，無論 URL 或其他選項如何設定，資料操作所使用的用戶端則不受影響。"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGluZ190aW1lb3V0.display_name": {
+          "source": "Ping Timeout",
+          "message": "Ping 超時"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGluZ190aW1lb3V0.short_desc": {
+          "source": "The upper bound on a single connection ping",
+          "message": "單一連接 ping 的上限"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dGxz.desc": {
+          "source": "Encrypt the connection with TLS.\n\nAtlas requires TLS and a `mongodb+srv://` URL implies it, so this is only needed for a `mongodb://` server that requires TLS without advertising it.",
+          "message": "使用 TLS 加密連接。\n\nAtlas 需要 TLS，且 `mongodb+srv://` URL 已暗示此要求，因此此選項僅適用於需 TLS 但未宣告的 `mongodb://` 伺服器。"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dGxz.display_name": {
+          "source": "Use TLS",
+          "message": "使用 TLS"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dGxz.short_desc": {
+          "source": "Encrypt the connection with TLS",
+          "message": "使用 TLS 加密連接"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The database user to authenticate as.\n\nFor Atlas this is a database user, created under **Database Access** in the Atlas UI - not the Atlas account itself.\n\nGiven here rather than in the URL, the value is URL-encoded when the client is created, so it needs no encoding of its own.",
+          "message": "用於驗證的資料庫使用者。\n\n對於 Atlas，這是指在 Atlas UI 的 **資料庫存取** 中建立的資料庫使用者，而非 Atlas 帳戶本身。\n\n此值在此處提供，而非在 URL 中，因此在建立用戶端時會進行 URL 編碼，無需自行編碼。"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "使用者名稱"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "The database user to authenticate as",
+          "message": "用於驗證的資料庫使用者"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a MongoDB server or an Atlas cluster",
+          "message": "連接到 MongoDB 伺服器或 Atlas 集群的連接"
+        }
+      }
+    }
+  }
+}

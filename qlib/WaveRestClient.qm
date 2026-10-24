@@ -275,7 +275,8 @@ public class WaveRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "wave://gql.waveapps.com/graphql/public";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("WaveRestClient",
+            "WaveRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Wave REST Connection",
             "short_desc": "A connection to the Wave GraphQL API",
             "desc": "A connection to the Wave GraphQL API for accounting and invoicing",
@@ -325,7 +326,7 @@ public class WaveRestConnection inherits RestClient::RestConnection {
             },
             "required_options": "token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
                 "oauth2_client_id,oauth2_client_secret",
-        };
+        });
     }
 
     #! creates the WaveRestConnection object

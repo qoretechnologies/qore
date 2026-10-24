@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [Mistral AI](https://mistral.ai) REST API for chat (Mistral Large/Small/Nemo), embeddings (mistral-embed), and document OCR (`mistral-ocr`).\n\nRequires an API key for Bearer authentication.  Get your API key from the [Mistral Console](https://console.mistral.ai/api-keys/).",
+          "message": "連接到 [Mistral AI](https://mistral.ai) 的 REST API，用於聊天（Mistral Large/Small/Nemo）、嵌入（mistral-embed）及文件 OCR (`mistral-ocr`)。\n\n需要 API 金鑰進行 Bearer 驗證。請至 [Mistral Console](https://console.mistral.ai/api-keys/) 取得您的 API 金鑰。"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Mistral AI REST Connection",
+          "message": "Mistral AI REST 連接"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Mistral chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `mistral-large-latest` (the default)",
+          "message": "當此連接被選取用於聊天時，LLM 客戶端所使用的 Mistral 聊天模型。\n\n聊天模型與嵌入模型屬於不同系列，無法互相替代。\n\n範例值：`mistral-large-latest`（預設）"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "對話模型"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Mistral chat model name",
+          "message": "Mistral 聊天模型名稱"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1",
+          "message": "V1"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.allowed_values.c3RyaW5nOnYy.display_name": {
+          "source": "V2",
+          "message": "V2"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "The default API version for direct REST calls. App actions select their documented version; connection pings always use `v1`.",
+          "message": "直接 REST 呼叫的預設 API 版本。應用程式動作會選擇其文件中定義的版本；連線 ping 始終使用 `v1`。"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "要使用的 API 版本"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Mistral AI API key used for Bearer authentication.",
+          "message": "用於 Bearer 驗證的 Mistral AI API 金鑰。"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Mistral AI API key for authentication",
+          "message": "用於驗證的 Mistral AI API 金鑰"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Mistral AI REST API",
+          "message": "連線至 Mistral AI REST API"
+        }
+      }
+    }
+  }
+}

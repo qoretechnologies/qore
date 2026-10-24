@@ -251,7 +251,8 @@ public class SGLangRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "sglang://localhost:30000";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("SGLangRestClient",
+            "SGLangRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "SGLang REST Connection",
             "short_desc": "A connection to an SGLang model server",
             "desc": "A connection to an [SGLang](https://github.com/sgl-project/sglang) "
@@ -323,7 +324,7 @@ public class SGLangRestConnection inherits RestClient::RestConnection {
                 }),
             },
             "required_options": "model",
-        };
+        });
     }
 
     #! creates the SGLangRestConnection object

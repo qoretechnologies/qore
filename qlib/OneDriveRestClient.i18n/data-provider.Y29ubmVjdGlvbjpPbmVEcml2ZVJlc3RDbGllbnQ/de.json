@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Microsoft OneDrive REST API via Microsoft Graph for cloud file storage and management.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from your [Azure app registration](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps). The connection uses the `onedrive://` URL scheme",
+          "message": "Eine Verbindung zur Microsoft OneDrive REST-API über Microsoft Graph für Cloud-Dateispeicher und -verwaltung.\n\nErfordert OAuth2-Anmeldeinformationen (`oauth2_client_id` und `oauth2_client_secret`) aus Ihrer [Azure-App-Registrierung](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps). Die Verbindung verwendet das `onedrive://`-URL-Schema"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Microsoft OneDrive",
+          "message": "Microsoft OneDrive"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.allowed_values.c3RyaW5nOm9yZ2FuaXphdGlvbnM.display_name": {
+          "source": "Organizations (Work/School Only)",
+          "message": "Organisationen (Nur Arbeits-/Schulkonten)"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.allowed_values.c3RyaW5nOmNvbW1vbg.display_name": {
+          "source": "Common (All Account Types)",
+          "message": "Allgemein (Alle Kontotypen)"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.allowed_values.c3RyaW5nOmNvbnN1bWVycw.display_name": {
+          "source": "Consumers (Personal Only)",
+          "message": "Verbraucher (Nur persönliche Konten)"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.desc": {
+          "source": "Azure AD tenant ID for authentication; use `common` for multi-tenant apps, `organizations` for work/school accounts only, `consumers` for personal accounts only, or provide a specific tenant ID or domain name",
+          "message": "Azure AD-Mandanten-ID für die Authentifizierung; verwenden Sie `common` für mehrere Mandanten, `organizations` für Arbeits- und Schulkonten nur, `consumers` für persönliche Konten nur oder geben Sie eine spezifische Mandanten-ID oder Domänenname an"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.display_name": {
+          "source": "Tenant ID",
+          "message": "Mandanten-ID"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.short_desc": {
+          "source": "Azure AD tenant ID",
+          "message": "Azure AD-Mandanten-ID"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Microsoft OneDrive REST API via Microsoft Graph",
+          "message": "Eine Verbindung zur Microsoft OneDrive REST-API über Microsoft Graph"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.U2hhcmVQb2ludFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to Microsoft SharePoint via the Microsoft Graph API, for document libraries and lists.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from your [Azure app registration](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps). The connection uses the `sharepoint://` URL scheme",
+          "message": "Eine Verbindung zu Microsoft SharePoint über die Microsoft Graph-API für Dokumentbibliotheken und Listen.\n\nErfordert OAuth2-Anmeldeinformationen (`oauth2_client_id` und `oauth2_client_secret`) aus Ihrer [Azure-App-Registrierung](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps). Die Verbindung verwendet das `sharepoint://`-URL-Schema"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.U2hhcmVQb2ludFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Microsoft SharePoint",
+          "message": "Microsoft SharePoint"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.U2hhcmVQb2ludFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to Microsoft SharePoint via the Microsoft Graph API",
+          "message": "Eine Verbindung zu Microsoft SharePoint über die Microsoft Graph-API"
+        }
+      }
+    }
+  }
+}

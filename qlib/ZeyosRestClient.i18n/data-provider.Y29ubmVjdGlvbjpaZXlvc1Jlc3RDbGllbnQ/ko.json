@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to a ZeyOS instance with the REST API",
+          "message": "ZeyOS 인스턴스의 REST API에 연결합니다"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "ZeyOS Connection",
+          "message": "ZeyOS 연결"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.YXBwc2VjcmV0.desc": {
+          "source": "Sets the Zeyos application secret",
+          "message": "Zeyos 애플리케이션 비밀을 설정합니다"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.YXBwc2VjcmV0.display_name": {
+          "source": "Zeyos App Secret",
+          "message": "ZeyOS 앱 비밀"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.YXBwc2VjcmV0.short_desc": {
+          "source": "Sets the Zeyos application secret",
+          "message": "Zeyos 애플리케이션 비밀을 설정합니다"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aW5zdGFuY2U.desc": {
+          "source": "Sets the Zeyos instance name (first segment of URI path)",
+          "message": "ZeyOS 인스턴스 이름을 설정합니다 (URI 경로의 첫 번째 세그먼트)"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aW5zdGFuY2U.display_name": {
+          "source": "Zeyos Instance",
+          "message": "ZeyOS 인스턴스"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aW5zdGFuY2U.short_desc": {
+          "source": "Sets the Zeyos instance name",
+          "message": "ZeyOS 인스턴스 이름을 설정합니다"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aWRlbnRpZmllcg.desc": {
+          "source": "Sets the Zeyos identifier; if none is provided, a random identifier string is used",
+          "message": "ZeyOS 식별자를 설정합니다; 제공되지 않으면 무작위 식별자 문자열이 사용됩니다"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aWRlbnRpZmllcg.display_name": {
+          "source": "Zeyos Identifier",
+          "message": "Zeyos 식별자"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.option.aWRlbnRpZmllcg.short_desc": {
+          "source": "Sets the Zeyos identifier",
+          "message": "Zeyos 식별자 설정"
+        },
+        "connection.WmV5b3NSZXN0Q2xpZW50.scheme.WmV5b3NSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a ZeyOS instance with the REST API",
+          "message": "ZeyOS 인스턴스의 REST API에 연결합니다"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [GitHub](https://github.com) for repositories, issues, pull requests, releases and Actions secrets.\n\n**Authentication** is either:\n- a **personal access token** in `token`, fine-grained or classic, sent as a bearer token. A fine-grained token can be scoped to a single repository, which is the narrowest option; or\n- the **OAuth2 authorization code flow** with `oauth2_client_id` and `oauth2_client_secret` from an OAuth app registered on GitHub.\n\nEvery request sends `X-GitHub-Api-Version: 2022-11-28`, because GitHub versions its REST API by date and sending no version means accepting whatever it currently defaults to.\n\nGitHub is a trademark of GitHub, Inc.",
+          "message": "Eine Verbindung zu [GitHub](https://github.com) für Repositories, Issues, Pull Requests, Releases und Actions-Geheimnisse.\n\n**Authentifizierung** ist entweder:\n- ein **persönlicher Zugriffstoken** in `token`, feingranular oder klassisch, gesendet als Bearer-Token. Ein feingranularer Token kann auf ein einzelnes Repository beschränkt werden, was die engste Option ist; oder\n- der **OAuth2-Autorisierungscode-Fluss** mit `oauth2_client_id` und `oauth2_client_secret` aus einer auf GitHub registrierten OAuth-Anwendung.\n\nJede Anfrage sendet `X-GitHub-Api-Version: 2022-11-28`, da GitHub seine REST-API nach Datum versioniert und das Senden keiner Version bedeutet, die aktuelle Standardeinstellung zu akzeptieren.\n\nGitHub ist ein Warenzeichen von GitHub, Inc."
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "GitHub REST Connection",
+          "message": "GitHub REST-Verbindung"
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.option.aGVhZGVycw.desc": {
+          "source": "Headers sent with every request.\n\n`X-GitHub-Api-Version` pins the REST API version and should be left alone unless you mean to move to a different one: this application's actions describe the fields and responses of **that** version.",
+          "message": "Kopfzeilen, die mit jeder Anfrage gesendet werden.\n\n`X-GitHub-Api-Version` fixiert die REST-API-Version und sollte nur belassen werden, wenn keine andere Version gewünscht ist: die Aktionen dieser Anwendung beschreiben die Felder und Antworten **dieser** Version."
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A GitHub personal access token, sent as a bearer token.\n\n**To obtain one:** **Settings > Developer settings > Personal access tokens**. A fine-grained token is scoped to chosen repositories and permissions and is the narrower choice; a classic token uses scopes such as `repo`.\n\nLeave this unset to use the OAuth2 flow instead.",
+          "message": "Ein GitHub-Personal Access Token, gesendet als Bearer-Token.\n\n**Zum Erhalten:** **Einstellungen > Entwicklereinstellungen > Persönliche Zugriffstoken**. Ein feingranularer Token ist auf ausgewählte Repositories und Berechtigungen beschränkt und ist die engere Wahl; ein klassischer Token verwendet Berechtigungen wie `repo`.\n\nLassen Sie dies leer, um stattdessen den OAuth2-Fluss zu verwenden."
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "Zugriffstoken"
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A GitHub personal access token",
+          "message": "Ein GitHub-Personal Access Token"
+        },
+        "connection.R2l0SHViUmVzdENsaWVudA.scheme.R2l0SHViUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the GitHub REST API",
+          "message": "Eine Verbindung zur GitHub REST-API"
+        }
+      }
+    }
+  }
+}

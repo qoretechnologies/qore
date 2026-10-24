@@ -1,0 +1,135 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# NonblockingStdio.qr <data-pipe> <message-pipe> <stdout|stderr> <method> <size>: run by nonblocking-io.qtest
+#
+# Makes its standard output or standard error the write end of the named pipe <data-pipe>, opened with O_NONBLOCK,
+# so that the stream shares the nonblocking open file description, as the standard streams of a process that embeds
+# Node.js do, and writes <size> bytes to it with the method.  Writes these lines to <message-pipe>:
+# - "waiting" when the output waits for room (reported in a debug build of the library by dbg_fd_wait_notify()); a
+#   build without the report writes it before the output, unless it is a debug build;
+# - then "OK", or "ERR <error code>" if the output raised an exception.
+# The "unhandled" method writes the message of an unhandled exception and writes no result; the "printf-cancel"
+# method writes no "waiting" line: it cancels the thread whose printf() waits for room.
+
+const Line = strmul("x", 621) + "\n";
+
+#! returns text of the given size in which every 8 characters differ from the 8 before them (as the test makes it)
+string sub make_text(int size) {
+    string s = "";
+    for (int i = 0; s.size() < size; ++i) {
+        s += sprintf("%07x\n", i);
+    }
+    return s.substr(0, size);
+}
+
+string data_path = ARGV[0];
+string sync_path = ARGV[1];
+string stream = ARGV[2];
+string method = ARGV[3];
+int size = ARGV[4].toInt();
+
+File sync();
+sync.open2(sync_path, O_WRONLY);
+
+File out = stream == "stderr" ? stderr : stdout;
+int fd = stream == "stderr" ? 2 : 1;
+{
+    File w();
+    w.open2(data_path, O_WRONLY | O_NONBLOCK);
+    out.redirect(w);
+}
+
+string text = make_text(size);
+int lines = size / Line.size() + 1;
+code<nothing()> write;
+switch (method) {
+    case "print": write = sub () { print(text); }; break;
+    case "printf": write = sub () { printf("%s", text); }; break;
+    case "printf-cancel": write = sub () { printf("%s", text); }; break;
+    case "printf-lines": write = sub () {
+        for (int i = 0; i < lines; ++i) {
+            printf("%s", Line);
+        }
+    };
+    break;
+    case "vprintf": write = sub () { vprintf("%s", (text,)); }; break;
+    case "f_printf": write = sub () { f_printf("%s", text); }; break;
+    case "f_vprintf": write = sub () { f_vprintf("%s", (text,)); }; break;
+    case "file-print": write = sub () { out.print(text); }; break;
+    case "file-printf-lines": write = sub () {
+        for (int i = 0; i < lines; ++i) {
+            out.printf("%s", Line);
+        }
+    };
+    break;
+    case "stream-write": write = sub () {
+        (stream == "stderr" ? stderr_stream : stdout_stream).write(binary(text));
+    };
+    break;
+    case "StreamWriter": write = sub () {
+        StreamWriter sw(stream == "stderr" ? stderr_stream : stdout_stream);
+        for (int i = 0; i < lines; ++i) {
+            sw.print(Line);
+        }
+    };
+    break;
+    case "unhandled": write = sub () { throw "NONBLOCKING-TEST-ERROR", "<" + text + ">"; }; break;
+    default:
+        sync.write(sprintf("ERR unknown method %y\n", method));
+        exit(1);
+}
+
+# the output is written by the main thread, as the stream constants (stdout_stream, stderr_stream) can only be used
+# in the thread that made them; a background thread reports the wait of the output, or cancels the main thread then
+int main_tid = gettid();
+Queue q();
+bool notify = exists_function("dbg_fd_wait_notify");
+if (notify) {
+    call_function("dbg_fd_wait_notify", fd, q, "waiting");
+}
+Counter reported(1);
+code<nothing()> start_reporter = sub () {
+    background sub () {
+        on_exit reported.dec();
+        *string m;
+        if (notify) {
+            m = q.get();
+        } else {
+%ifndef QoreDebug
+            # without the report, the other end reads at once, or the main thread is cancelled at once
+            m = "waiting";
+%endif
+            # a debug library without the report: the other end reads once the output has ended
+        }
+        if (m == "waiting") {
+            if (method == "printf-cancel") {
+                cancel_thread(main_tid, "nonblocking stdio test");
+            } else {
+                sync.write("waiting\n");
+            }
+        }
+    }();
+};
+
+if (method == "unhandled") {
+    start_reporter();
+    # the exception is not caught: its message is written to standard error when the program ends
+    write();
+}
+
+string result;
+try {
+    start_reporter();
+    write();
+    result = "OK";
+} catch (hash<ExceptionInfo> ex) {
+    # the request to cancel the thread stays until it is cleared; the result is written to the other pipe then
+    clear_thread_cancel();
+    result = "ERR " + ex.err;
+}
+# the reporter waits for the report unless the output has waited
+q.push("done");
+reported.waitForZero();
+sync.write(result + "\n");

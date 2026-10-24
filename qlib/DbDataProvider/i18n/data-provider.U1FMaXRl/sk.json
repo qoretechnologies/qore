@@ -3,6 +3,106 @@
   "locales": {
     "sk": {
       "messages": {
+        "app.U1FMaXRl.connection.option.Y2hhcnNldA.desc": {
+          "source": "The character set to use for the connection (e.g. utf8)",
+          "message": "Znaková sada použitá pre pripojenie (napr. utf8)"
+        },
+        "app.U1FMaXRl.connection.option.Y2hhcnNldA.display_name": {
+          "source": "Character Set",
+          "message": "Znaková sada"
+        },
+        "app.U1FMaXRl.connection.option.Y2hhcnNldA.short_desc": {
+          "source": "Connection character set",
+          "message": "Znaková sada pripojenia"
+        },
+        "app.U1FMaXRl.connection.option.ZGI.desc": {
+          "source": "The name of the database to connect to",
+          "message": "Názov databázy, ku ktorej sa pripája"
+        },
+        "app.U1FMaXRl.connection.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "Databáza"
+        },
+        "app.U1FMaXRl.connection.option.ZGI.short_desc": {
+          "source": "Database name",
+          "message": "Názov databázy"
+        },
+        "app.U1FMaXRl.connection.option.aG9zdA.desc": {
+          "source": "The hostname or IP address of the database server",
+          "message": "Názov hostiteľa alebo IP adresa databázového servera"
+        },
+        "app.U1FMaXRl.connection.option.aG9zdA.display_name": {
+          "source": "Host",
+          "message": "Hostiteľ"
+        },
+        "app.U1FMaXRl.connection.option.aG9zdA.short_desc": {
+          "source": "Database server hostname",
+          "message": "Názov hostiteľa databázového servera"
+        },
+        "app.U1FMaXRl.connection.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Maximálny počet spojení v zásobníku"
+        },
+        "app.U1FMaXRl.connection.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Maximálna veľkosť zásobníka"
+        },
+        "app.U1FMaXRl.connection.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Maximálny počet spojení v zásobníku"
+        },
+        "app.U1FMaXRl.connection.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Minimálny počet spojení v zásobníku"
+        },
+        "app.U1FMaXRl.connection.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Minimálna veľkosť zásobníka"
+        },
+        "app.U1FMaXRl.connection.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Minimálne počet spojení v zásobníku"
+        },
+        "app.U1FMaXRl.connection.option.cG9ydA.desc": {
+          "source": "The port number of the database server",
+          "message": "Číslo portu databázového servera"
+        },
+        "app.U1FMaXRl.connection.option.cG9ydA.display_name": {
+          "source": "Port",
+          "message": "Prístav"
+        },
+        "app.U1FMaXRl.connection.option.cG9ydA.short_desc": {
+          "source": "Database server port",
+          "message": "Port databázového servera"
+        },
+        "app.U1FMaXRl.connection.option.cGFzcw.desc": {
+          "source": "The password for database authentication",
+          "message": "Heslo pre overenie databázy"
+        },
+        "app.U1FMaXRl.connection.option.cGFzcw.display_name": {
+          "source": "Password",
+          "message": "Heslo"
+        },
+        "app.U1FMaXRl.connection.option.cGFzcw.short_desc": {
+          "source": "Database password",
+          "message": "Heslo databázy"
+        },
+        "app.U1FMaXRl.connection.option.dXNlcg.desc": {
+          "source": "The database user name for authentication",
+          "message": "Meno užívateľa databázy pre overenie totožnosti"
+        },
+        "app.U1FMaXRl.connection.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Užívateľ"
+        },
+        "app.U1FMaXRl.connection.option.dXNlcg.short_desc": {
+          "source": "Database user",
+          "message": "Užívateľ databázy"
+        },
+        "app.U1FMaXRl.desc": {
+          "source": "Create and manage connections to a SQLite embedded database",
+          "message": "Vytvárajte a spravujte pripojenia k vstavanej databáze SQLite"
+        },
         "app.U1FMaXRl.display_name": {
           "source": "SQLite",
           "message": "SQLite"
@@ -10,10 +110,6 @@
         "app.U1FMaXRl.short_desc": {
           "source": "SQLite embedded database",
           "message": "Vstavaná databáza SQLite"
-        },
-        "app.U1FMaXRl.desc": {
-          "source": "Create and manage connections to a SQLite embedded database",
-          "message": "Vytvárajte a spravujte pripojenia k vstavanej databáze SQLite"
         }
       }
     }

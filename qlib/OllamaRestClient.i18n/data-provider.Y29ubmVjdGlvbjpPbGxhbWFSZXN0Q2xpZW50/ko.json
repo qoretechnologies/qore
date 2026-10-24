@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a local [Ollama](https://ollama.com) runtime serving open-weight LLMs from the local machine.\n\nOllama runs locally by default at `http://localhost:11434`.  No authentication is required for local deployments; pass an `apikey` only for hosted Ollama Cloud or reverse-proxied deployments.\n\nThe connection uses the `ollama://` URL scheme for plain HTTP and `ollamas://` for servers behind TLS.",
+          "message": "로컬 머신에서 오픈웨이트 LLM을 제공하는 로컬 [Ollama](https://ollama.com) 런타임과의 연결.\n\nOllama는 기본적으로 `http://localhost:11434` 에서 로컬에서 실행됩니다. 로컬 배포에는 인증이 필요하지 않습니다. 호스팅된 Ollama 클라우드 또는 역프록시 배포에만 `apikey` 을 전달하세요.\n\n이 연결은 평문 HTTP에 대해 `ollama://` URL 스킴을, TLS 뒤의 서버에 대해 `ollamas://` 을 사용합니다."
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Ollama Local LLM Connection",
+          "message": "Ollama 로컬 LLM 연결"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Ollama chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nOllama serves whichever models have been pulled on the target host, so this option has no default; set it to a model that host provides",
+          "message": "이 연결이 채팅에 선택되었을 때 LLM 클라이언트가 사용하는 Ollama 채팅 모델입니다.\n\n채팅 모델은 임베딩 모델과 별개의 계열이며, 상호 교환할 수 없습니다.\n\nOllama는 대상 호스트에 다운로드된 모델만 제공하므로, 이 옵션에는 기본값이 없습니다. 호스트가 제공하는 모델로 설정하세요."
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "채팅 모델"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Ollama chat model name",
+          "message": "Ollama 채팅 모델 이름"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Optional Bearer token.  Local Ollama deployments do not require authentication; supply only for hosted Ollama Cloud or reverse-proxied deployments.",
+          "message": "선택적 Bearer 토큰. 로컬 Ollama 배포에는 인증이 필요하지 않습니다. 호스팅된 Ollama 클라우드 또는 역프록시 배포에만 제공하세요."
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Optional Bearer token (Ollama Cloud / proxied deployments)",
+          "message": "선택적 Bearer 토큰 (Ollama 클라우드 / 프록시 배포)"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a local Ollama runtime",
+          "message": "로컬 Ollama 런타임에 연결"
+        }
+      }
+    }
+  }
+}

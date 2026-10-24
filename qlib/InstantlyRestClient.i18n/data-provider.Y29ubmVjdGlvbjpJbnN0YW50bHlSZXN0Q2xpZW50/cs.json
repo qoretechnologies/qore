@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Instantly REST API for email outreach and sales automation.\n\nInstantly is a platform for cold email outreach that enables managing campaigns, leads, email accounts, and tracking engagement metrics.\n\n**API Version:** v2\n**Authentication:** Bearer token (API key)",
+          "message": "Připojení k REST API Instantly pro chladné emailové outreach a automatizaci prodeje.\n\nInstantly je platforma pro chladné emailové outreach umožňující správu kampaní, kontaktů, emailových účtů a sledování metrik zapojení.\n\n**Verze API:** v2\n**Autentizace:** Bearer token (API klíč)"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Instantly REST Connection",
+          "message": "Připojení k Instantly REST"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to Instantly at https://app.instantly.ai\n2. Navigate to **Settings > Integrations > API**\n3. Click **Create API Key**\n4. Select the required scopes for your use case\n5. Copy the generated API key\n\n**Important:**\n- API access requires a Growth plan or higher\n- Store your API key securely\n- You can create multiple keys with different scopes",
+          "message": "1. Přihlaste se do Instantly na https://app.instantly.ai\n2. Přejděte na **Nastavení > Integrace > API**\n3. Klikněte na **Vytvořit klíč API**\n4. Vyberte požadovaná oprávnění pro váš případ použití\n5. Zkopírujte vygenerovaný klíč API\n\n**Důležité:**\n- Přístup k API vyžaduje plán Growth nebo vyšší\n- Uchovávejte váš klíč API bezpečně\n- Můžete vytvořit více klíčů s různými oprávněními"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "Jak získat svůj klíč API"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Instantly API key used for Bearer token authentication.\n\n**To obtain your API key:**\n1. Log in to your Instantly account at https://app.instantly.ai\n2. Go to Settings > Integrations > API\n3. Create a new API key with the required scopes\n\n**Note:** API access requires a Growth plan or higher.",
+          "message": "Klíč API pro Instantly používaný pro ověření pomocí Bearer tokenu.\n\n**Jak získat svůj klíč API:**\n1. Přihlaste se do svého účtu Instantly na https://app.instantly.ai\n2. Přejděte na Nastavení > Integrace > API\n3. Vytvořte nový klíč API s požadovanými oprávněními\n\n**Poznámka:** Přístup k API vyžaduje plán Growth nebo vyšší."
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klíč API"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Instantly API key for Bearer token authentication",
+          "message": "Klíč API pro Instantly pro ověření pomocí Bearer tokenu"
+        },
+        "connection.SW5zdGFudGx5UmVzdENsaWVudA.scheme.SW5zdGFudGx5UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Instantly REST API",
+          "message": "Připojení k REST API Instantly"
+        }
+      }
+    }
+  }
+}

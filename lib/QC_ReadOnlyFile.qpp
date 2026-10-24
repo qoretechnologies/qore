@@ -185,7 +185,18 @@ const S_ISVTX = S_ISVTX;
     This class supports posting read events to a @ref Qore::Thread::Queue "Queue". See @ref event_handling for more
     information.
 
+    @anchor file_blocking_io
+    Reads wait for data, also when the file's descriptor is nonblocking: \c O_NONBLOCK is a flag of the open file
+    description, which all of its holders share, so it can be set by another holder, such as a runtime embedded in the
+    process (the event loop of Node.js sets it on the standard streams of the process), a parent process that passes
+    a nonblocking pipe, or a file opened with @ref file_open_constants "O_NONBLOCK".  The wait ends at once when the
+    thread is cancelled or its @ref Qore::Program "Program" is interrupted, with a \c THREAD-CANCELLED or
+    \c PROGRAM-INTERRUPTED exception.
+
     @see @ref file_events for a list of I/O events raised by this object
+
+    @since %Qore 3.0 reads of lines, characters and binary integers wait for data on a nonblocking descriptor instead
+    of returning @ref nothing
 
     @since %Qore 0.8.6 this class was split from the @ref Qore::File class and added as a base class of
     @ref Qore::File

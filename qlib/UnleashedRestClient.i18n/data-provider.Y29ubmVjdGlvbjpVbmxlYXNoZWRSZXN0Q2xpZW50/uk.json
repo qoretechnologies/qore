@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Unleashed Software REST API for inventory management.\n\nUnleashed is a powerful cloud-based inventory management platform that enables you to manage products, sales orders, purchase orders, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and customer contacts\n- Create and track sales orders\n- Process credit notes\n- Manage products and inventory\n- Track stock levels across warehouses\n\n**Authentication:**\nUnleashed uses HMAC-SHA256 signature authentication. Both API ID and API Key are required.",
+          "message": "Підключення до REST API Unleashed Software для управління запасами.\n\nUnleashed — потужна хмарна платформа для управління запасами, яка дозволяє керувати товарами, замовленнями на продаж, замовленнями на закупівлю, клієнтами, постачальниками та рівнем запасів.\n\n**Функції:**\n- Керування клієнтами та контактами клієнтів\n- Створення та відстеження замовлень на продаж\n- Обробка кредитних нотаток\n- Управління товарами та запасами\n- Відстеження рівня запасів у різних складах\n\n**Аутентифікація:**\nUnleashed використовує автентифікацію за допомогою підпису HMAC-SHA256. Потрібні як API ID, так і API Key."
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Unleashed REST Connection",
+          "message": "Підключення до REST API Unleashed"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Unleashed Software, you need your API ID and API Key:\n\n1. Log in to Unleashed as the **Account Owner**\n2. Go to **Settings > Integration > API Access**\n3. Copy your **API ID** and **API Key**\n\n**Important:**\n- Only the account owner can access API credentials\n- Keep your credentials secure - they provide full API access\n- Never share your API Key publicly",
+          "message": "Щоб підключитися до Unleashed Software, вам потрібен ваш API ID та API Key:\n\n1. Увійдіть до Unleashed як **Власник облікового запису**\n2. Перейдіть до **Налаштування > Інтеграція > Доступ до API**\n3. Скопіюйте ваш **API ID** та **API Key**\n\n**Важливо:**\n- Тільки власник облікового запису може отримати доступ до API-ключів\n- Зберігайте свої облікові дані в безпеці — вони надають повний доступ до API\n- Ніколи не публікуйте свій API Key"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Credentials",
+          "message": "Як отримати ваші ключі API"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.desc": {
+          "source": "Your Unleashed API ID used for API authentication.\n\n**To obtain your API ID:**\n1. Log in to Unleashed as the Account Owner\n2. Go to Settings > Integration > API Access\n3. Copy your **API ID**\n\n**Note:** Only the account owner can access API credentials.",
+          "message": "Ваш API ID Unleashed, що використовується для автентифікації API.\n\n**Як отримати API ID:**\n1. Увійдіть до Unleashed як власник облікового запису\n2. Перейдіть до Налаштування > Інтеграція > Доступ до API\n3. Скопіюйте ваш **API ID**\n\n**Примітка:** Тільки власник облікового запису може отримати доступ до API-ключів."
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.display_name": {
+          "source": "API ID",
+          "message": "API ID"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.short_desc": {
+          "source": "Unleashed API ID for authentication",
+          "message": "API ID Unleashed для автентифікації"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Your Unleashed API Key used for computing HMAC-SHA256 signatures.\n\n**To obtain your API Key:**\n1. Log in to Unleashed as the Account Owner\n2. Go to Settings > Integration > API Access\n3. Copy your **API Key**\n\n**Note:** Only the account owner can access API credentials.\nKeep your API Key secure - it provides full API access to your account.",
+          "message": "Ваш ключ API Unleashed, який використовується для обчислення підписів HMAC-SHA256.\n\n**Щоб отримати свій ключ API:**\n1. Увійдіть до Unleashed як власник облікового запису\n2. Перейдіть до Налаштування > Інтеграція > Доступ до API\n3. Скопіюйте свій **ключ API**\n\n**Примітка:** Тільки власник облікового запису може отримати доступ до ключів API.\nЗберігайте свій ключ API в безпеці — він надає повний доступ до API вашого облікового запису."
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Unleashed API Key for HMAC signature",
+          "message": "Ключ API Unleashed для підпису HMAC"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Unleashed Software API",
+          "message": "З’єднання з API програмного забезпечення Unleashed"
+        }
+      }
+    }
+  }
+}

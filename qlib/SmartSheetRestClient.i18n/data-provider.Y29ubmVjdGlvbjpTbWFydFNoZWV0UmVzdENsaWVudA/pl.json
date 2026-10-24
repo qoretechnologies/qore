@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Smartsheet REST API for spreadsheet and work management, including sheets, rows, columns, workspaces, folders, reports, users, and groups",
+          "message": "Połączenie z API REST Smartsheet do zarządzania arkuszami i pracą, w tym arkuszami, wierszami, kolumnami, przestrzeniami roboczymi, folderami, raportami, użytkownikami i grupami"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Smartsheet REST Connection",
+          "message": "Połączenie REST Smartsheet"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5hdQ.desc": {
+          "source": "Australia (api.smartsheet.au)",
+          "message": "Australia (api.smartsheet.au)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5hdQ.display_name": {
+          "source": "AU",
+          "message": "AU"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.desc": {
+          "source": "United States (api.smartsheet.com)",
+          "message": "Stany Zjednoczone (api.smartsheet.com)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.display_name": {
+          "source": "US",
+          "message": "US"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.desc": {
+          "source": "European Union (api.smartsheet.eu)",
+          "message": "Unia Europejska (api.smartsheet.eu)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.display_name": {
+          "source": "EU",
+          "message": "UE"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5nb3Y.desc": {
+          "source": "US Government (api.smartsheetgov.com)",
+          "message": "rząd USA (api.smartsheetgov.com)"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5nb3Y.display_name": {
+          "source": "Gov",
+          "message": "Rząd"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.desc": {
+          "source": "Select the Smartsheet data center region for your account.\n\n**Available regions:**\n- `.com` — United States\n- `.eu` — European Union\n- `.au` — Australia\n- `.gov` — US Government\n\n**Note:** Tokens are region-specific. A token from one region cannot be used with another region's API endpoint",
+          "message": "Wybierz region centrum danych Smartsheet dla swojego konta.\n\n**Dostępne regiony:**\n- `.com` — Stany Zjednoczone\n- `.eu` — Unia Europejska\n- `.au` — Australia\n- `.gov` — rząd USA\n\n**Uwaga:** Tokeny są specyficzne dla regionu. Token z jednego regionu nie może być używany z punktem końcowym interfejsu API innego regionu"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.display_name": {
+          "source": "Region",
+          "message": "Region"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.option.ZG9tYWlu.short_desc": {
+          "source": "Smartsheet data center region",
+          "message": "Region centrum danych Smartsheet"
+        },
+        "connection.U21hcnRTaGVldFJlc3RDbGllbnQ.scheme.U21hcnRTaGVldFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Smartsheet REST API",
+          "message": "Połączenie z interfejsem REST Smartsheet"
+        }
+      }
+    }
+  }
+}

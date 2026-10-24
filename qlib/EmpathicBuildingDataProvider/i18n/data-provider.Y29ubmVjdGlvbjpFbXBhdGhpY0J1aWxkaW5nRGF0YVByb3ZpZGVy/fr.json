@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a Haltian Empathic Building REST server",
+          "message": "Une connexion à un serveur REST Haltian Empathic Building"
+        },
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Haltian Empathic Building REST Connection",
+          "message": "Connexion REST Haltian Empathic Building"
+        },
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.option.cmVmcmVzaF90b2tlbg.desc": {
+          "source": "Sets the Haltian refresh token, if any (complements option `token`)",
+          "message": "Définit le jeton de rafraîchissement Haltian, le cas échéant (complète l’option `token`)"
+        },
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.option.cmVmcmVzaF90b2tlbg.display_name": {
+          "source": "Refresh Token",
+          "message": "Jeton de rafraîchissement"
+        },
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.option.cmVmcmVzaF90b2tlbg.short_desc": {
+          "source": "Sets the Haltian refresh token",
+          "message": "Définit le jeton de rafraîchissement Haltian"
+        },
+        "connection.RW1wYXRoaWNCdWlsZGluZ0RhdGFQcm92aWRlcg.scheme.RW1wYXRoaWNCdWlsZGluZ1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a Haltian Empathic Building REST server",
+          "message": "Une connexion à un serveur REST Haltian Empathic Building"
+        }
+      }
+    }
+  }
+}

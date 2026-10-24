@@ -39,7 +39,8 @@ public class YamlRpcIoConnection inherits ConnectionProvider::HttpBasedConnectio
         hash<auto> real_opts;
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("YamlRpcClientIo",
+            "YamlRpcIoConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "YAML-RPC (Async I/O) Connection",
             "short_desc": "A connection to a YAML-RPC server using async I/O",
             "desc": "A connection to a YAML-RPC server using async I/O via HttpClientIo with automatic "
@@ -54,7 +55,7 @@ public class YamlRpcIoConnection inherits ConnectionProvider::HttpBasedConnectio
                 "https": "yamlrpcios",
                 "http": "yamlrpcio",
             },
-        };
+        });
     }
 
     #! Creates the YamlRpcIoConnection object

@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "ServiceNow REST Connection",
+          "message": "ServiceNow REST Connection"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a ServiceNow instance using the REST API",
+          "message": "A connection to a ServiceNow instance using the REST API"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a ServiceNow instance using the REST API",
+          "message": "A connection to a ServiceNow instance using the REST API"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "The API version to use"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "the API version for ServiceNow; if not set the latest version is used",
+          "message": "the API version for ServiceNow; if not set the latest version is used"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API Key"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "The REST API key",
+          "message": "The REST API key"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "the REST API key",
+          "message": "the REST API key"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5X2hlYWRlcg.display_name": {
+          "source": "API Key Header",
+          "message": "API Key Header"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5X2hlYWRlcg.short_desc": {
+          "source": "The REST API key header",
+          "message": "The REST API key header"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5X2hlYWRlcg.desc": {
+          "source": "the REST API key header",
+          "message": "the REST API key header"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "the ServiceNow OAuth2 client ID",
+          "message": "the ServiceNow OAuth2 client ID"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "the ServiceNow OAuth2 client secret",
+          "message": "the ServiceNow OAuth2 client secret"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.cGFzc3dvcmQ.desc": {
+          "source": "the ServiceNow password",
+          "message": "the ServiceNow password"
+        },
+        "connection.U2VydmljZU5vd1Jlc3RDbGllbnQ.scheme.U2VydmljZU5vd1Jlc3RDb25uZWN0aW9u.option.dXNlcm5hbWU.desc": {
+          "source": "the ServiceNow username",
+          "message": "the ServiceNow username"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Hugging Face REST API.\n\nRequires an API key (set as `apikey`) from [Hugging Face Settings](https://huggingface.co/settings/tokens). The connection uses the `huggingface://` URL scheme and provides access to the Hub API for models, datasets, and spaces",
+          "message": "Připojení k REST rozhraní API Hugging Face.\n\nVyžaduje klíč rozhraní API (nastavte jako `apikey`) z [Nastavení Hugging Face](https://huggingface.co/settings/tokens). Připojení používá schéma URL `huggingface://` a poskytuje přístup k rozhraní API Hubu pro modely, datové sady a prostory"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Hugging Face REST Connection",
+          "message": "Připojení k REST rozhraní Hugging Face"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBp.desc": {
+          "source": "The API base path to use",
+          "message": "Základní cesta rozhraní API"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBp.display_name": {
+          "source": "API Path",
+          "message": "Cesta rozhraní API"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBp.short_desc": {
+          "source": "The API base path",
+          "message": "Základní cesta rozhraní API"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Hugging Face API token used for authentication; sent as the `Authorization: Bearer` header.\n\nGet your token from [Hugging Face Settings](https://huggingface.co/settings/tokens)",
+          "message": "Hugging Face token rozhraní API používaný pro ověření; odesílán jako hlavička `Authorization: Bearer`.\n\nZískejte svůj token na [nastavení Hugging Face](https://huggingface.co/settings/tokens"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klíč API"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Hugging Face API token for authentication",
+          "message": "Hugging Face token rozhraní API pro ověření"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Hugging Face REST API",
+          "message": "Připojení k REST rozhraní Hugging Face"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the JotForm REST API for form and submission management.\n\n**To obtain your API key:**\n1. Log in to your JotForm account\n2. Go to Settings > API\n3. Click 'Create New Key' or copy your existing key\n\n**Domain Selection:**\n- **Standard**: For global users (api.jotform.com)\n- **EU**: For European Union data residency/GDPR compliance (eu-api.jotform.com)\n- **HIPAA**: For HIPAA-compliant healthcare data (hipaa-api.jotform.com)",
+          "message": "Spojenie s JotForm REST API pre správu formulárov a odoslaní.\n\n**Na získanie vášho kľúča API:**\n1. Prihláste sa do svojho účtu JotForm\n2. Prejdite na Nastavenia > API\n3. Kliknite na 'Vytvoriť nový kľúč' alebo skopírujte existujúci kľúč\n\n**Výber domény:**\n- **Štandardné**: Pre globálne používateľov (api.jotform.com)\n- **EÚ**: Pre úložisko dát v Európskej únii a dodržiavanie GDPR (eu-api.jotform.com)\n- **HIPAA**: Pre zdravotnícke údaje s dodržaním HIPAA (hipaa-api.jotform.com)"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "JotForm REST Connection",
+          "message": "JotForm REST spojenie"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your JotForm account\n2. Go to [Account > API](https://www.jotform.com/myaccount/api)\n3. Click **Create New Key**\n4. Label your key for easy identification\n5. Set **Full Access** permission for read/write operations, or **Read Access** for read-only\n\n**Note:** Keep your API key secure and never share it publicly.",
+          "message": "1. Prihláste sa do svojho účtu JotForm\n2. Prejdite na [Účet > API](https://www.jotform.com/myaccount/api)\n3. Kliknite na **Vytvoriť nový kľúč**\n4. Označte svoj kľúč pre jednoduché identifikáciu\n5. Nastavte oprávnenie **Plný prístup** pre čítanie a zapisovanie, alebo **Len čítanie** pre čítanie\n\n**Poznámka:** Uchovávajte svoj kľúč API v bezpečí a nikdy ho nezdieľajte verejne."
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Key",
+          "message": "Ako získať váš kľúč API"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "Choose your API domain based on your data residency requirements:\n\n- **Standard (api.jotform.com)**: Default for most users worldwide\n- **EU (eu-api.jotform.com)**: For European Union data residency and GDPR compliance\n- **HIPAA (hipaa-api.jotform.com)**: For HIPAA-compliant healthcare data in the US\n\nSelect the domain that matches where your JotForm account data is stored.",
+          "message": "Vyberte svoju doménu API podľa požiadaviek na úložisko údajov:\n\n- **Štandardné (api.jotform.com)**: Predvolené pre väčšinu používateľov po celom svete\n- **EÚ (eu-api.jotform.com)**: Pre úložisko údajov v Európskej únii a dodržiavanie GDPR\n- **HIPAA (hipaa-api.jotform.com)**: Pre zdravotnícke údaje s dodržaním HIPAA v USA\n\nVyberte doménu, ktorá zodpovedá miestu, kde je uložený váš účet JotForm."
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Selecting the Right API Domain",
+          "message": "Vyberanie správnej domény API"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmFwaS5qb3Rmb3JtLmNvbQ.desc": {
+          "source": "Standard JotForm API for global users - api.jotform.com",
+          "message": "Štandardné JotForm API pre globálne používateľov - api.jotform.com"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmFwaS5qb3Rmb3JtLmNvbQ.display_name": {
+          "source": "Standard (Global)",
+          "message": "Štandardné (Globálne)"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmFwaS5qb3Rmb3JtLmNvbQ.short_desc": {
+          "source": "Standard JotForm API",
+          "message": "Štandardný JotForm API"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmV1LWFwaS5qb3Rmb3JtLmNvbQ.desc": {
+          "source": "EU-based API for GDPR compliance - eu-api.jotform.com",
+          "message": "EU založený API pre dodržiavanie GDPR - eu-api.jotform.com"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmV1LWFwaS5qb3Rmb3JtLmNvbQ.display_name": {
+          "source": "European Union (EU)",
+          "message": "Európska únia (EU)"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmV1LWFwaS5qb3Rmb3JtLmNvbQ.short_desc": {
+          "source": "EU-based API for GDPR",
+          "message": "EU založený API pre dodržiavanie GDPR"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmhpcGFhLWFwaS5qb3Rmb3JtLmNvbQ.desc": {
+          "source": "HIPAA-compliant API for healthcare data - hipaa-api.jotform.com",
+          "message": "HIPAA kompatibilný API pre zdravotné údaje - hipaa-api.jotform.com"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmhpcGFhLWFwaS5qb3Rmb3JtLmNvbQ.display_name": {
+          "source": "HIPAA Compliant",
+          "message": "HIPAA kompatibilný"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.allowed_values.c3RyaW5nOmhpcGFhLWFwaS5qb3Rmb3JtLmNvbQ.short_desc": {
+          "source": "HIPAA-compliant API",
+          "message": "HIPAA kompatibilný API"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the JotForm API domain based on your account location or compliance requirements:\n\n- **Standard**: For global users (default)\n- **EU**: For European Union data residency (GDPR compliance)\n- **HIPAA**: For HIPAA-compliant healthcare data",
+          "message": "Vyberte doménu JotForm API podľa polohy vášho účtu alebo požiadaviek na dodržiavanie predpisov:\n\n- **Štandardné**: Pre svetových používateľov (predvolené)\n- **EU**: Pre údaje umiestnené v Európskej únii (dodržiavanie GDPR)\n- **HIPAA**: Pre HIPAA kompatibilné zdravotné údaje"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "API Domain",
+          "message": "API doména"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "JotForm API domain/region",
+          "message": "Doména/oblasť JotForm API"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The JotForm API key for authentication.\n\n**To obtain your API key:**\n1. Log in to your JotForm account at https://www.jotform.com\n2. Go to Settings (gear icon) > API\n3. Click 'Create New Key' or copy your existing key\n\n**Note:** Keep your API key secure and never share it publicly.",
+          "message": "Kľúč JotForm API na overenie.\n\n**Ak získate svoj kľúč:**\n1. Prihláste sa do svojho účtu JotForm na https://www.jotform.com\n2. Prejdite na Nastavenia (ikona kolesa) > API\n3. Kliknite na 'Vytvoriť nový kľúč' alebo skopírujte svoj existujúci kľúč\n\n**Poznámka:** Uchovávajte svoj kľúč bezpečne a nikdy ho nezdieľajte verejne."
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "JotForm API key for authentication",
+          "message": "Kľúč JotForm API na overenie"
+        },
+        "connection.Sm90Zm9ybVJlc3RDbGllbnQ.scheme.Sm90Zm9ybVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the JotForm REST API",
+          "message": "Spojenie s REST API JotForm"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to [Klaviyo](https://www.klaviyo.com) for profiles, lists, segments, tags, campaigns, events and subscriptions.\n\n**Authentication** is the OAuth2 authorization code flow with `oauth2_client_id` and `oauth2_client_secret` from an app registered in Klaviyo's developer portal. Klaviyo requires PKCE and takes the client credentials as HTTP basic authentication on the token endpoint, both of which are set by default. The scopes requested are the ones the registered app holds; asking for one outside that set fails authorization before a user sees a consent screen.\n\nA **private API key** works as an alternative for an integration that only ever serves one account: set `token` to the key and `token_type` to `Klaviyo-API-Key`, which is how Klaviyo spells that credential. It carries the account's full permissions and cannot be scoped, so prefer OAuth2 where both are available.\n\n**The API revision is sent on every call** as `revision: 2026-07-15`, matching the description the actions are generated from. Klaviyo declares that header required on almost every operation, and a revision is removed two years after it ships, so it is never left to a default.\n\nKlaviyo is a trademark of Klaviyo, Inc.",
+          "message": "[Klaviyo](https://www.klaviyo.com)로 프로필, 리스트, 세그먼트, 태그, 캠페인, 이벤트 및 구독에 연결합니다.\n\n**인증**은 Klaviyo 개발자 포털에서 등록된 앱에서 사용하는 OAuth2 인증 코드 흐름이며, `oauth2_client_id`과 `oauth2_client_secret`을 사용합니다. Klaviyo는 PKCE를 요구하며, 토큰 엔드포인트에서 클라이언트 자격 증명을 HTTP 기본 인증으로 처리하며, 이는 기본적으로 설정되어 있습니다. 요청하는 범위는 등록된 앱이 보유한 범위이며, 그 범위 외의 범위를 요청하면 사용자가 동의 화면을 보기에 앞서 인증이 실패합니다.\n\n**개인용 API 키**는 한 계정에만 사용되는 통합의 대안으로 작동합니다. `token`에 키를 설정하고 `token_type`을 `Klaviyo-API-Key`로 설정하면 됩니다. Klaviyo는 이 자격 증명을 이렇게 표기합니다. 이 키는 계정의 모든 권한을 가진 상태로, 범위를 제한할 수 없으므로 둘 다 사용 가능한 경우 OAuth2를 우선적으로 사용하세요.\n\n**API 버전은 모든 호출에서 전송됩니다**. `revision: 2026-07-15`로 전송되며, 작업이 생성된 설명과 일치합니다. Klaviyo는 거의 모든 작업에서 이 헤더를 필수로 선언하며, 버전은 출시 후 2년이 지나면 제거되므로 기본값으로 남겨두지 않습니다.\n\nKlaviyo는 Klaviyo, Inc.의 상표입니다."
+        },
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Klaviyo REST Connection",
+          "message": "Klaviyo REST 연결"
+        },
+        "connection.S2xhdml5b1Jlc3RDbGllbnQ.scheme.S2xhdml5b1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Klaviyo REST API",
+          "message": "Klaviyo REST API에 연결"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the EasyPost REST API for shipping label generation, tracking, address verification, rate shopping, and multi-carrier fulfillment.\n\nEasyPost provides a unified API across 100+ carriers (USPS, UPS, FedEx, DHL, and more).\n\n**Authentication:** A single API key is used as the HTTP Basic Auth username (with an empty password).\n\n**Test vs. production keys:**\n- Test keys (prefixed `EZTK...`) only return mocked label/tracker data and are free\n- Production keys (prefixed `EZAK...`) bill the EasyPost wallet for real shipments",
+          "message": "Połączenie z interfejsem REST EasyPost do generowania etykiet przesyłek, śledzenia, weryfikacji adresów, porównywania cen i realizacji przesyłek wielokarierowych.\n\nEasyPost oferuje jednolity interfejs dla ponad 100 operatorów (USPS, UPS, FedEx, DHL i więcej).\n\n**Uwierzytelnianie:** Do uwierzytelniania HTTP Basic Auth używany jest pojedynczy klucz API (z pustym hasłem).\n\n**Klucze testowe vs. produkcyjne:**\n- Klucze testowe (z prefiksem `EZTK...`) zwracają tylko symulowane dane etykiet i śledzenia i są darmowe\n- Klucze produkcyjne (z prefiksem `EZAK...`) rozliczają koszty rzeczywistych przesyłek z portfela EasyPost"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "EasyPost REST Connection",
+          "message": "Połączenie REST EasyPost"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your EasyPost account at https://www.easypost.com/account/api-keys\n2. You will see two sets of keys:\n   - **Test keys** (prefixed `EZTK...`): free, return mocked label/tracker data; use these for development and integration testing\n   - **Production keys** (prefixed `EZAK...`): bill the EasyPost wallet for real shipments; use these only when you are ready to ship live\n3. Copy the appropriate key for your environment\n\n**Important:**\n- Production keys incur real charges; treat them as secrets\n- Test keys cannot purchase real labels or generate real tracking numbers\n- The API key is used as the HTTP Basic Auth username with an empty password",
+          "message": "1. Zaloguj się do swojego konta EasyPost pod adresem https://www.easypost.com/account/api-keys\n2. Zobaczysz dwa zestawy kluczy:\n   - **Klucze testowe** (z prefiksem `EZTK...`): darmowe, zwracają symulowane dane etykiet/trackerów; używaj ich podczas rozwoju i testów integracji\n   - **Klucze produkcyjne** (z prefiksem `EZAK...`): rozliczane z portfela EasyPost za rzeczywiste przesyłki; używaj tylko wtedy, gdy jesteś gotów wysłać rzeczywiste przesyłki\n3. Skopiuj odpowiedni klucz dla swojego środowiska\n\n**Uwaga ważna:**\n- Klucze produkcyjne generują rzeczywiste koszty; traktuj je jak tajemnice\n- Klucze testowe nie mogą zakupić rzeczywistych etykiet ani wygenerować rzeczywistych numerów śledzenia\n- Klucz API jest używany jako nazwa użytkownika w uwierzytelnianiu HTTP Basic z pustym hasłem"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your EasyPost API Key",
+          "message": "Jak uzyskać klucz API EasyPost"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Your EasyPost API key. Test keys are prefixed `EZTK...` and only return mocked label/tracker data; production keys are prefixed `EZAK...` and bill the wallet for real shipments. Obtain a key at https://www.easypost.com/account/api-keys.",
+          "message": "Twój klucz API EasyPost. Klucze testowe mają prefiks `EZTK...` i zwracają tylko symulowane dane etykiet/trackerów; klucze produkcyjne mają prefiks `EZAK...` i rozliczane są z portfela za rzeczywiste przesyłki. Uzyskaj klucz pod adresem https://www.easypost.com/account/api-keys."
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Klucz API"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "EasyPost API key for HTTP Basic Auth",
+          "message": "Klucz API EasyPost do uwierzytelniania HTTP Basic"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the EasyPost REST API",
+          "message": "Połączenie z REST API EasyPost"
+        }
+      }
+    }
+  }
+}

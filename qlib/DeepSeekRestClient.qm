@@ -248,7 +248,8 @@ public class DeepSeekRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "deepseek://api.deepseek.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("DeepSeekRestClient",
+            "DeepSeekRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "DeepSeek REST Connection",
             "short_desc": "A connection to the DeepSeek REST API",
             "desc": "A connection to the [DeepSeek](https://platform.deepseek.com) REST API.\n\n"
@@ -308,7 +309,7 @@ public class DeepSeekRestConnection inherits RestClient::RestConnection {
                 }),
             },
             "required_options": "apikey",
-        };
+        });
 
         #! Default DeepSeek ping method
         const DefaultPingMethod = "GET";

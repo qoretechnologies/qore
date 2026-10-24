@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Deel REST API for global workforce management.\n\nDeel is a global HR platform for hiring, managing, and paying contractors and full-time employees worldwide. This integration supports contracts, timesheets, invoice adjustments, workers, time-off, legal entities, invoices, and event triggers.",
+          "message": "Підключення до REST API Deel для управління глобальною робочою силою.\n\nDeel — це глобальна HR-платформа для найму, управління та виплати заробітної плати фрілансерам та повночасним співробітникам у світі. Це інтеграція підтримує контракти, табелі обліку робочого часу, корекції рахунків, працівників, відпустки, юридичні особи, рахунки та події-тригери."
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Deel REST Connection",
+          "message": "Підключення до REST API Deel"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to Deel at https://app.deel.com\n2. Go to the **Developer Center**: https://app.deel.com/developer-center\n3. Click **Create Token** and choose the token type:\n   - **Personal Token**: Linked to your user account and inherits your permissions\n   - **Organization Token**: Service-level access not tied to a specific user\n4. Copy the token value and paste it into the **API Token** field\n\n**Important:**\n- Only Org Admins or IT Developer Admins can create tokens\n- Store your token securely; treat it like a password",
+          "message": "1. Увійдіть до Deel за адресою https://app.deel.com\n2. Перейдіть до **Центр розробників**: https://app.deel.com/developer-center\n3. Натисніть **Створити токен** і виберіть тип токена:\n   - **Персональний токен**: пов’язаний з вашим обліковим записом і успадковує ваші дозволи\n   - **Організаційний токен**: доступ рівня служби, не пов’язаний з конкретною особою\n4. Скопіюйте значення токена і вставте його в поле **API-токен**\n\n**Важливо:**\n- Тільки адміністратори організації або адміністратори розробників IT можуть створювати токени\n- Зберігайте токен безпечно; ставте його на рівень пароля"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Generate Your API Token",
+          "message": "Як створити свій API-токен"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "**Sandbox environment** is available for safe testing without affecting real data.\n\n- Enable **Use Sandbox** to connect to `https://api-sandbox.demo.deel.com/rest/v2`\n- Sandbox tokens are separate from production tokens — generate one at https://app.deel.com/developer-center\n- Leave **Use Sandbox** disabled for production use",
+          "message": "**Середовище тестування** доступне для безпечного тестування без впливу на реальні дані.\n\n- Увімкніть **Використовувати середовище тестування**, щоб підключитися до `https://api-sandbox.demo.deel.com/rest/v2`\n- Токени середовища тестування відрізняються від токенів продукції — створіть один на https://app.deel.com/developer-center\n- Залиште **Використовувати середовище тестування** вимкненим для використання в продукції"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Sandbox vs Production",
+          "message": "Середовище тестування проти продукції"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Deel API access token used for authentication.\n\nGenerate a token in the **Developer Center** at https://app.deel.com/developer-center\n\nBoth **personal tokens** (linked to a user account) and **organization tokens** (service-level access) are supported.",
+          "message": "Токен доступу до API Deel, що використовується для автентифікації.\n\nЗгенеруйте токен у **Центрі розробників** за адресою https://app.deel.com/developer-center\n\nПідтримуються як **особисті токени** (пов’язані з обліковим записом користувача), так і **організаційні токени** (доступ на рівні служби)."
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API-токен"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Deel API access token",
+          "message": "Токен доступу до API Deel"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.desc": {
+          "source": "If `True`, API calls target the Deel sandbox environment (`https://api-sandbox.demo.deel.com/rest/v2`) for safe testing.\n\nIf `False` (default), API calls target the production environment (`https://api.letsdeel.com/rest/v2`).\n\n**Note:** Sandbox and production use separate API tokens. Generate a sandbox token from the Developer Center when using this option.",
+          "message": "Якщо `True`, виклики API спрямовані до середовища тестування Deel (`https://api-sandbox.demo.deel.com/rest/v2`) для безпечного тестування.\n\nЯкщо `False` (за замовчуванням), виклики API спрямовані до продукційного середовища (`https://api.letsdeel.com/rest/v2`).\n\n**Зауваження:** середовища тестування та продукції використовують окремі токени доступу. Згенеруйте токен для тестування у Центрі розробників, коли використовуєте цю опцію."
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.display_name": {
+          "source": "Use Sandbox",
+          "message": "Використовувати середовище тестування"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.short_desc": {
+          "source": "Use Deel sandbox environment for testing",
+          "message": "Використовувати середовище тестування Deel для тестування"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Deel REST API",
+          "message": "З’єднання з REST API Deel"
+        }
+      }
+    }
+  }
+}

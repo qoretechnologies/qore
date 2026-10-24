@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R21haWxSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Gmail cloud REST API",
+          "message": "Gmail 雲端 REST API 的連接"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R21haWxSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Gmail REST Connection",
+          "message": "Gmail REST 連接"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R21haWxSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmdtYWls.desc": {
+          "source": "Set REST client options for the Gmail API",
+          "message": "設定 Gmail API 的 REST 用戶端選項"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R21haWxSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Gmail cloud REST API",
+          "message": "Gmail 雲端 REST API 的連接"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlQ2FsZW5kYXJSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Google Calendar cloud REST API",
+          "message": "連接到 Google 日曆雲端 REST API"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlQ2FsZW5kYXJSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Google Calendar REST Connection",
+          "message": "Google 日曆 REST 連接"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlQ2FsZW5kYXJSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Google Calendar cloud REST API",
+          "message": "連接到 Google 日曆雲端 REST API"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [Google Drive](https://www.google.com/drive/) cloud REST API",
+          "message": "連接到 [Google Drive](https://www.google.com/drive/) 雲端 REST API"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Google Drive REST Connection",
+          "message": "Google Drive REST 連接"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZl.desc": {
+          "source": "Set client options for the Google Drive API with access to all of the user's Drive content; required to reach files the application did not create",
+          "message": "設定 Google Drive API 的客戶端選項，以存取使用者所有 Drive 內容；若要存取應用程式未建立的檔案，此選項為必要"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZl.display_name": {
+          "source": "Full Drive Access",
+          "message": "完整 Drive 存取權"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZl.short_desc": {
+          "source": "Access to all of the user's Drive content",
+          "message": "存取使用者所有 Drive 內容"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZlLWZpbGU.desc": {
+          "source": "Set client options for the Google Drive API with access only to files this application created, or that the user explicitly opened with it; **prefer this scope** where the integration only reads back what it wrote",
+          "message": "設定 Google Drive API 的客戶端選項，僅存取此應用程式建立的檔案，或使用者明確以該應用程式開啟的檔案；若整合僅需讀取自身寫入的內容，**建議使用此範圍**"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZlLWZpbGU.display_name": {
+          "source": "Application Files Only",
+          "message": "僅限應用程式檔案"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZlLWZpbGU.short_desc": {
+          "source": "Access only to files this application created or the user opened with it",
+          "message": "僅可存取此應用程式建立的檔案或使用者以該應用程式開啟的檔案"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Google Drive cloud REST API",
+          "message": "連線至 Google Drive 雲端 REST API"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to Google cloud REST API services",
+          "message": "連線至 Google 雲端 REST API 服務"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Google REST Connection",
+          "message": "Google REST 連接"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "No options are set",
+          "message": "未設定任何選項"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmNhbGVuZGFy.desc": {
+          "source": "Set REST client options for the Google calendar API",
+          "message": "設定 Google 日曆 API 的 REST 用戶端選項"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.desc": {
+          "source": "Sets the API profile according to the Google API in use; this option will set the REST options if they are not already set (`oauth2_scopes`, `ping_body`, `ping_headers`, and `ping_method`); valid values:\n- `none`: no options configured (default)\n- `calendar`: set options for the Google calendar API",
+          "message": "根據所使用的 Google API 設定 API 配置；若尚未設定，此選項將設定 REST 選項 (`oauth2_scopes`, `ping_body`, `ping_headers`, 和 `ping_method`)；有效值：\n- `none`：未設定任何選項（預設）\n- `calendar`：為 Google 日曆 API 設定選項"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.display_name": {
+          "source": "API Profile",
+          "message": "API 配置檔"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.short_desc": {
+          "source": "Sets the Google service API profile",
+          "message": "設定 Google 服務 API 配置"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to Google cloud REST API services",
+          "message": "連線至 Google 雲端 REST API 服務"
+        }
+      }
+    }
+  }
+}

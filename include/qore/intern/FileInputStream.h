@@ -65,19 +65,58 @@ public:
 
     DLLLOCAL int64 read(void *ptr, int64 limit, ExceptionSink *xsink) override {
         assert(limit > 0);
+        if (peeked >= 0) {
+            return readPeeked(ptr, limit);
+        }
         return f.read(ptr, limit, timeout, xsink);
     }
 
+    //! Returns the next byte without reading it
+    /** A regular file or a block device is read again from the position before the byte.  Other descriptors (a
+        pipe, a FIFO, a terminal, a socket) cannot be repositioned: the byte is kept by the stream and returned by
+        the next read, as the first byte of the data read.
+
+        @return the next byte, -1 at the end of the stream, or -2 if an exception was raised (\c FILE-READ-ERROR,
+        \c FILE-READ-TIMEOUT-ERROR after the stream's timeout)
+    */
     DLLLOCAL int64 peek(ExceptionSink *xsink) override {
-        size_t pos = f.getPos(); // Save initial position.
-        unsigned char c;
-        size_t rc = f.read(&c, 1, -1, xsink);
-        if (*xsink)
+        if (peeked >= 0) {
+            return peeked;
+        }
+        if (!f.isOpen()) {
+            xsink->raiseException("FILE-READ-ERROR", "file is not open");
             return -2;
-        if (rc == 0)
+        }
+        unsigned char c;
+        if (qore_file_stream_fd_kind(f.getFD()) == QFSFK_DIRECT) {
+            size_t pos = f.getPos(); // Save initial position.
+            size_t rc = f.read(&c, 1, timeout, xsink);
+            if (*xsink) {
+                return -2;
+            }
+            if (rc == 0) {
+                return -1;
+            }
+            f.setPos(pos); // Restore initial position.
+            return c;
+        }
+        size_t rc = f.read(&c, 1, timeout, xsink);
+        if (*xsink) {
+            return -2;
+        }
+        if (rc == 0) {
             return -1;
-        f.setPos(pos); // Restore initial position.
+        }
+        peeked = c;
         return c;
+    }
+
+    //! Reads with a timeout; the byte that peek() kept is returned at once
+    DLLLOCAL int64 readWithTimeout(void* ptr, int64 limit, int64 timeout_ms, ExceptionSink* xsink) override {
+        if (peeked >= 0 && limit > 0) {
+            return readPeeked(ptr, limit);
+        }
+        return InputStream::readWithTimeout(ptr, limit, timeout_ms, xsink);
     }
 
     DLLLOCAL QoreFile& getFile() { return f; }
@@ -103,6 +142,9 @@ public:
         if (fd < 0) {
             xsink->raiseException("FILE-READ-ERROR", "file is not open");
             return -1;
+        }
+        if (peeked >= 0 && limit > 0) {
+            return readPeeked(ptr, limit);
         }
 #ifdef DARWIN
         // at the end of a named pipe that a read has returned, the waits report the pipe readable at once, so a read
@@ -135,6 +177,33 @@ public:
 private:
     QoreFile f;
     int64 timeout;
+    //! the byte that peek() read from a descriptor that cannot be repositioned, or -1
+    /** Returned by the next read.  A wait for the stream's descriptor does not see it (for example a wait of the
+        I/O thread before a read with readNonBlock()), so the byte is returned with the next data or at the end of the
+        input
+    */
+    int peeked = -1;
+
+    //! returns the byte that peek() kept, followed by the data that can be read at once, without waiting
+    /** An error of the read after the byte is returned by the next read
+    */
+    DLLLOCAL int64 readPeeked(void* ptr, int64 limit) {
+        assert(peeked >= 0 && limit > 0);
+        unsigned char* p = static_cast<unsigned char*>(ptr);
+        p[0] = static_cast<unsigned char>(peeked);
+        peeked = -1;
+        if (limit == 1 || !f.isOpen()) {
+            return 1;
+        }
+        int err;
+        bool read_done;
+        ssize_t rc = qore_file_stream_read_now(f.getFD(), p + 1, static_cast<size_t>(limit - 1), err, &read_done);
+        if (read_done) {
+            // the end of a named pipe is recorded for the waits on the stream's descriptor
+            f.priv->noteReadResult(rc, static_cast<size_t>(limit - 1));
+        }
+        return rc > 0 ? 1 + rc : 1;
+    }
 };
 
 #endif // _QORE_FILEINPUTSTREAM_H

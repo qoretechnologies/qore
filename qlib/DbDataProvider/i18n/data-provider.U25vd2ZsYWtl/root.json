@@ -14,6 +14,114 @@
         "app.U25vd2ZsYWtl.desc": {
           "source": "Create and manage connections to a Snowflake cloud data warehouse",
           "message": "Create and manage connections to a Snowflake cloud data warehouse"
+        },
+        "app.U25vd2ZsYWtl.connection.option.aG9zdA.display_name": {
+          "source": "Host",
+          "message": "Host"
+        },
+        "app.U25vd2ZsYWtl.connection.option.aG9zdA.short_desc": {
+          "source": "Database server hostname",
+          "message": "Database server hostname"
+        },
+        "app.U25vd2ZsYWtl.connection.option.aG9zdA.desc": {
+          "source": "The hostname or IP address of the database server",
+          "message": "The hostname or IP address of the database server"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cG9ydA.display_name": {
+          "source": "Port",
+          "message": "Port"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cG9ydA.short_desc": {
+          "source": "Database server port",
+          "message": "Database server port"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cG9ydA.desc": {
+          "source": "The port number of the database server",
+          "message": "The port number of the database server"
+        },
+        "app.U25vd2ZsYWtl.connection.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "Database"
+        },
+        "app.U25vd2ZsYWtl.connection.option.ZGI.short_desc": {
+          "source": "Database name",
+          "message": "Database name"
+        },
+        "app.U25vd2ZsYWtl.connection.option.ZGI.desc": {
+          "source": "The name of the database to connect to",
+          "message": "The name of the database to connect to"
+        },
+        "app.U25vd2ZsYWtl.connection.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "User"
+        },
+        "app.U25vd2ZsYWtl.connection.option.dXNlcg.short_desc": {
+          "source": "Database user",
+          "message": "Database user"
+        },
+        "app.U25vd2ZsYWtl.connection.option.dXNlcg.desc": {
+          "source": "The database user name for authentication",
+          "message": "The database user name for authentication"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cGFzcw.display_name": {
+          "source": "Password",
+          "message": "Password"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cGFzcw.short_desc": {
+          "source": "Database password",
+          "message": "Database password"
+        },
+        "app.U25vd2ZsYWtl.connection.option.cGFzcw.desc": {
+          "source": "The password for database authentication",
+          "message": "The password for database authentication"
+        },
+        "app.U25vd2ZsYWtl.connection.option.Y2hhcnNldA.display_name": {
+          "source": "Character Set",
+          "message": "Character Set"
+        },
+        "app.U25vd2ZsYWtl.connection.option.Y2hhcnNldA.short_desc": {
+          "source": "Connection character set",
+          "message": "Connection character set"
+        },
+        "app.U25vd2ZsYWtl.connection.option.Y2hhcnNldA.desc": {
+          "source": "The character set to use for the connection (e.g. utf8)",
+          "message": "The character set to use for the connection (e.g. utf8)"
+        },
+        "app.U25vd2ZsYWtl.connection.option.Y2xhc3NwYXRo.display_name": {
+          "source": "JDBC Classpath",
+          "message": "JDBC Classpath"
+        },
+        "app.U25vd2ZsYWtl.connection.option.Y2xhc3NwYXRo.short_desc": {
+          "source": "JDBC driver classpath",
+          "message": "JDBC driver classpath"
+        },
+        "app.U25vd2ZsYWtl.connection.option.Y2xhc3NwYXRo.desc": {
+          "source": "The path to the JDBC driver JAR file(s)",
+          "message": "The path to the JDBC driver JAR file(s)"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Min Pool Size"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Minimum pool connections"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Minimum number of connections in the pool"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Max Pool Size"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Maximum pool connections"
+        },
+        "app.U25vd2ZsYWtl.connection.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Maximum number of connections in the pool"
         }
       }
     }

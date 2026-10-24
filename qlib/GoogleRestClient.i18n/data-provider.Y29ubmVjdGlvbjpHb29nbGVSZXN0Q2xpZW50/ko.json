@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R21haWxSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Gmail cloud REST API",
+          "message": "Gmail 클라우드 REST API에 연결"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R21haWxSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Gmail REST Connection",
+          "message": "Gmail REST 연결"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R21haWxSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmdtYWls.desc": {
+          "source": "Set REST client options for the Gmail API",
+          "message": "Gmail API용 REST 클라이언트 옵션 설정"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R21haWxSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Gmail cloud REST API",
+          "message": "Gmail 클라우드 REST API에 연결"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlQ2FsZW5kYXJSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Google Calendar cloud REST API",
+          "message": "Google Calendar 클라우드 REST API에 연결"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlQ2FsZW5kYXJSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Google Calendar REST Connection",
+          "message": "Google Calendar REST 연결"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlQ2FsZW5kYXJSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Google Calendar cloud REST API",
+          "message": "Google Calendar 클라우드 REST API에 연결"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [Google Drive](https://www.google.com/drive/) cloud REST API",
+          "message": "[Google Drive](https://www.google.com/drive/) 클라우드 REST API에 연결"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Google Drive REST Connection",
+          "message": "Google Drive REST 연결"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZl.desc": {
+          "source": "Set client options for the Google Drive API with access to all of the user's Drive content; required to reach files the application did not create",
+          "message": "애플리케이션이 생성하지 않은 파일에 접근하기 위해 사용자 전체 드라이브 콘텐츠에 대한 액세스 권한을 가진 Google Drive API용 클라이언트 옵션 설정"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZl.display_name": {
+          "source": "Full Drive Access",
+          "message": "Google 드라이브 전체 액세스"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZl.short_desc": {
+          "source": "Access to all of the user's Drive content",
+          "message": "사용자의 드라이브 콘텐츠 전체에 대한 액세스"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZlLWZpbGU.desc": {
+          "source": "Set client options for the Google Drive API with access only to files this application created, or that the user explicitly opened with it; **prefer this scope** where the integration only reads back what it wrote",
+          "message": "이 애플리케이션에서 생성한 파일 또는 사용자가 명시적으로 열어준 파일에만 액세스할 수 있도록 Google 드라이브 API용 클라이언트 옵션을 설정하세요; 통합이 쓴 내용만 읽어오는 경우 **이 범위를 우선 선택하세요**"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZlLWZpbGU.display_name": {
+          "source": "Application Files Only",
+          "message": "애플리케이션 파일만"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZlLWZpbGU.short_desc": {
+          "source": "Access only to files this application created or the user opened with it",
+          "message": "이 애플리케이션에서 생성한 파일 또는 사용자가 열어준 파일에만 액세스"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Google Drive cloud REST API",
+          "message": "Google 드라이브 클라우드 REST API에 연결"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to Google cloud REST API services",
+          "message": "Google 클라우드 REST API 서비스에 연결"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Google REST Connection",
+          "message": "Google REST 연결"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "No options are set",
+          "message": "옵션이 설정되지 않음"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmNhbGVuZGFy.desc": {
+          "source": "Set REST client options for the Google calendar API",
+          "message": "Google 캘린더 API용 REST 클라이언트 옵션 설정"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.desc": {
+          "source": "Sets the API profile according to the Google API in use; this option will set the REST options if they are not already set (`oauth2_scopes`, `ping_body`, `ping_headers`, and `ping_method`); valid values:\n- `none`: no options configured (default)\n- `calendar`: set options for the Google calendar API",
+          "message": "사용 중인 Google API에 따라 API 프로파일을 설정합니다. 이 옵션은 REST 옵션이 이미 설정되지 않은 경우 REST 옵션을 설정합니다 (`oauth2_scopes`, `ping_body`, `ping_headers`, `ping_method`); 유효한 값:\n- `none`: 옵션 미설정 (기본값)\n- `calendar`: Google 캘린더 API용 옵션 설정"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.display_name": {
+          "source": "API Profile",
+          "message": "API 프로필"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.short_desc": {
+          "source": "Sets the Google service API profile",
+          "message": "Google 서비스 API 프로파일 설정"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to Google cloud REST API services",
+          "message": "Google 클라우드 REST API 서비스에 연결"
+        }
+      }
+    }
+  }
+}

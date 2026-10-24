@@ -121,7 +121,8 @@ public class WeaviateRestConnection inherits RestClient::RestConnection {
     public {
         const DefaultUrl = "weaviate://localhost:8080";
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("WeaviateRestClient",
+            "WeaviateRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Weaviate Vector DB Connection",
             "short_desc": "A connection to a Weaviate vector database",
             "desc": "A connection to [Weaviate](https://weaviate.io) — an open-source "
@@ -149,7 +150,7 @@ public class WeaviateRestConnection inherits RestClient::RestConnection {
                     "preselected": True,
                 },
             },
-        };
+        });
     }
 
     constructor(string name, string description, string url = DefaultUrl,

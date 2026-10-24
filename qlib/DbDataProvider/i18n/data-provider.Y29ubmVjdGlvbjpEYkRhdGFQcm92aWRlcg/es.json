@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.desc": {
+          "source": "Connection to a database server using a datasource connection string",
+          "message": "Conexión a un servidor de base de datos mediante una cadena de conexión de origen de datos"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.display_name": {
+          "source": "Database Connection",
+          "message": "Conexión a base de datos"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Número máximo de conexiones en el grupo"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Tamaño máximo del grupo"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Conexiones máximas del grupo"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Número mínimo de conexiones en el grupo"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Tamaño mínimo del grupo"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Conexiones mínimas del grupo"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.short_desc": {
+          "source": "Connection to a database server",
+          "message": "Conexión a un servidor de base de datos"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.display_name": {
+          "source": "ServerSentEvent Connection",
+          "message": "ServerSentEvent Connection"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a ServerSentEvent server service",
+          "message": "A connection to a ServerSentEvent server service"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to a ServerSentEvent server service",
+          "message": "A connection to a ServerSentEvent server service"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGk.display_name": {
+          "source": "AsyncAPI Schema",
+          "message": "AsyncAPI Schema"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGk.short_desc": {
+          "source": "AsyncAPI schema URL or file path",
+          "message": "AsyncAPI schema URL or file path"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGk.desc": {
+          "source": "AsyncAPI schema URL or file path used to validate received SSE event data",
+          "message": "AsyncAPI schema URL or file path used to validate received SSE event data"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGlfY2hhbm5lbA.display_name": {
+          "source": "AsyncAPI Channel",
+          "message": "AsyncAPI Channel"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGlfY2hhbm5lbA.short_desc": {
+          "source": "AsyncAPI channel for validation",
+          "message": "AsyncAPI channel for validation"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGlfY2hhbm5lbA.desc": {
+          "source": "AsyncAPI channel name to use when `asyncapi` is configured",
+          "message": "AsyncAPI channel name to use when `asyncapi` is configured"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.Ym9keQ.display_name": {
+          "source": "Request Body",
+          "message": "Request Body"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.Ym9keQ.short_desc": {
+          "source": "Request body for non-GET SSE requests",
+          "message": "Request body for non-GET SSE requests"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.Ym9keQ.desc": {
+          "source": "The request body to send with the SSE connection request; only valid with non-GET methods. The body is resent on each reconnection attempt",
+          "message": "The request body to send with the SSE connection request; only valid with non-GET methods. The body is resent on each reconnection attempt"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Data Serialization"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.short_desc": {
+          "source": "Sets the data serialization option",
+          "message": "Sets the data serialization option"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.desc": {
+          "source": "Sets the data serialization option",
+          "message": "Sets the data serialization option"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "use JSON serialization"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "no serialization is used",
+          "message": "no serialization is used"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bGFzdF9ldmVudF9pZA.display_name": {
+          "source": "Last Event ID",
+          "message": "Last Event ID"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bGFzdF9ldmVudF9pZA.short_desc": {
+          "source": "Request the server restart sending events from this ID",
+          "message": "Request the server restart sending events from this ID"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bGFzdF9ldmVudF9pZA.desc": {
+          "source": "Request the server restart sending events from this ID. This will be send in the `Last-Event-ID` header in the connection request to the SSE server",
+          "message": "Request the server restart sending events from this ID. This will be send in the `Last-Event-ID` header in the connection request to the SSE server"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP Method"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bWV0aG9k.short_desc": {
+          "source": "HTTP method for the SSE connection request",
+          "message": "HTTP method for the SSE connection request"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the SSE connection request; default: GET. Use POST for APIs that require a request body (e.g., OpenAI, Anthropic streaming APIs)",
+          "message": "The HTTP method to use for the SSE connection request; default: GET. Use POST for APIs that require a request body (e.g., OpenAI, Anthropic streaming APIs)"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.cmVjb25uZWN0.display_name": {
+          "source": "Reconnect?",
+          "message": "Reconnect?"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.cmVjb25uZWN0.short_desc": {
+          "source": "Try to reconnect when the connection is closed or lost",
+          "message": "Try to reconnect when the connection is closed or lost"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.cmVjb25uZWN0.desc": {
+          "source": "Try to reconnect when the connection is closed or lost",
+          "message": "Try to reconnect when the connection is closed or lost"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Authorization Token"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token",
+          "message": "Set an authorization token"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW4.desc": {
+          "source": "Any token to use for the initial HTTP request to authenticate with the server",
+          "message": "Any token to use for the initial HTTP request to authenticate with the server"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "Authorization Token Type"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "The type of authorization token"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.display_name": {
+          "source": "ServerSentEvent Version",
+          "message": "ServerSentEvent Version"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.short_desc": {
+          "source": "Sets the ServerSentEvent protocol version",
+          "message": "Sets the ServerSentEvent protocol version"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.desc": {
+          "source": "The ServerSentEvent protocol version to use in the client",
+          "message": "The ServerSentEvent protocol version to use in the client"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.allowed_values.aW50Ojg.desc": {
+          "source": "Version 8",
+          "message": "Version 8"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.allowed_values.aW50OjEz.desc": {
+          "source": "Version 13",
+          "message": "Version 13"
+        }
+      }
+    }
+  }
+}

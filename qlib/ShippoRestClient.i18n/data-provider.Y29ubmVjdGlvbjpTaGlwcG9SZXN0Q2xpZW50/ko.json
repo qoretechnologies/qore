@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Shippo REST API for shipping, label creation, and order management.\n\nShippo is a multi-carrier shipping API that enables you to connect with multiple shipping carriers (USPS, UPS, FedEx, DHL, and 85+ more) through a single integration.\n\n**Features:**\n- Compare shipping rates across carriers\n- Create shipping labels\n- Track shipments\n- Validate addresses\n- Manage orders\n\n**Authentication:**\nYou can authenticate using either:\n- **API Token**: Recommended for server-to-server integrations\n- **OAuth2**: For user-authorized access",
+          "message": "Shippo REST API를 통한 배송, 라벨 생성 및 주문 관리 연결.\n\nShippo는 단일 통합을 통해 여러 운송사(USPS, UPS, FedEx, DHL 및 85개 이상)에 연결할 수 있는 다중 운송사 배송 API입니다.\n\n**기능:**\n- 운송사 간 배송 요금 비교\n- 배송 라벨 생성\n- 배송 추적\n- 주소 검증\n- 주문 관리\n\n**인증:**\n다음 중 하나로 인증할 수 있습니다:\n- **API 토큰**: 서버 간 통합에 권장\n- **OAuth2**: 사용자 권한 접근용"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Shippo REST Connection",
+          "message": "Shippo REST 연결"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "Shippo supports two authentication methods:\n\n**Option 1: OAuth2 (Recommended)**\nSimply click the authorize button to connect your Shippo account.\nNo additional configuration needed.\n\n**Option 2: API Token**\nEnter your Shippo API token in the 'API Token' field.\nUse this if you prefer to authenticate with a token directly.",
+          "message": "Shippo는 두 가지 인증 방법을 지원합니다:\n\n**옵션 1: OAuth2 (권장)**\n간단히 인증 버튼을 클릭하여 Shippo 계정을 연결하세요.\n추가 구성이 필요 없습니다.\n\n**옵션 2: API 토큰**\n'API 토큰' 필드에 Shippo API 토큰을 입력하세요.\n직접 토큰으로 인증하고 싶을 경우에 사용하세요."
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "Authentication Options",
+          "message": "인증 옵션"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
+          "source": "If using API Token authentication:\n\n1. Log in to https://apps.goshippo.com/\n2. Navigate to **Settings > API**\n3. Copy your **Live Token** for production\n4. Use **Test Token** for development/testing\n\n**Token formats:**\n- Live: `shippo_live_xxxxx`\n- Test: `shippo_test_xxxxx`\n\nKeep your tokens secure and never share them publicly.",
+          "message": "API 토큰 인증을 사용하는 경우:\n\n1. https://apps.goshippo.com/ 에 로그인하세요\n2. **설정 > API**로 이동하세요\n3. 프로덕션용으로 **라이브 토큰**을 복사하세요\n4. 개발용/테스트용으로 **테스트 토큰**을 사용하세요\n\n**토큰 형식:**\n- 라이브: `shippo_live_xxxxx`\n- 테스트: `shippo_test_xxxxx`\n\n토큰을 안전하게 보관하고 공개하지 마세요."
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
+          "source": "How to Get Your API Token",
+          "message": "API 토큰 받는 방법"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Your Shippo API token used for authentication.\n\n**To obtain your API token:**\n1. Log in to https://apps.goshippo.com/\n2. Navigate to **Settings > API**\n3. Copy your **Live Token** for production use\n4. Use **Test Token** for development/testing\n\n**Token format:** `shippo_live_xxxxx` or `shippo_test_xxxxx`\n\n**Note:** Use either API Token OR OAuth2 authentication - not both.",
+          "message": "인증용 Shippo API 토큰입니다.\n\n**API 토큰을 얻는 방법:**\n1. https://apps.goshippo.com/ 에 로그인하세요\n2. **설정 > API**로 이동하세요\n3. 프로덕션용으로 **라이브 토큰**을 복사하세요\n4. 개발용/테스트용으로 **테스트 토큰**을 사용하세요\n\n**토큰 형식:** `shippo_live_xxxxx` 또는 `shippo_test_xxxxx`\n\n**참고:** API 토큰 또는 OAuth2 인증 중 하나만 사용하세요 - 둘 다 사용하지 마세요."
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API 토큰"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Shippo API token for authentication",
+          "message": "인증용 Shippo API 토큰"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Shippo shipping API",
+          "message": "Shippo 배송 API에 연결"
+        }
+      }
+    }
+  }
+}

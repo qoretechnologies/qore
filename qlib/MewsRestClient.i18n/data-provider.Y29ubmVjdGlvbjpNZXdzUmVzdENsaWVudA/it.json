@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Mews REST API",
+          "message": "Una connessione all'API REST di Mews"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Mews REST Connection",
+          "message": "Connessione REST di Mews"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50.desc": {
+          "source": "The Mews client value for requests",
+          "message": "Il valore del client Mews per le richieste"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50.display_name": {
+          "source": "Mews Client",
+          "message": "Client Mews"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50.short_desc": {
+          "source": "The Mews client value for requests",
+          "message": "Il valore del client Mews per le richieste"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50X3Rva2Vu.desc": {
+          "source": "The Mews client token for access to the given Mews instance",
+          "message": "Il token del client Mews per l'accesso all'istanza Mews specificata"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50X3Rva2Vu.display_name": {
+          "source": "Mews Client Token",
+          "message": "Token Client Mews"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50X3Rva2Vu.short_desc": {
+          "source": "The Mews client token for access to the given Mews instance",
+          "message": "Il token del client Mews per l'accesso all'istanza Mews specificata"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.YWNjZXNzX3Rva2Vu.desc": {
+          "source": "The Mews account token for access to the given Mews instance",
+          "message": "Il token del conto Mews per l'accesso all'istanza Mews specificata"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.YWNjZXNzX3Rva2Vu.display_name": {
+          "source": "Mews Account Token",
+          "message": "Token Conto Mews"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.YWNjZXNzX3Rva2Vu.short_desc": {
+          "source": "The Mews account token for access to the given Mews instance",
+          "message": "Il token del conto Mews per l'accesso all'istanza Mews specificata"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Mews REST API",
+          "message": "Una connessione all'API REST di Mews"
+        }
+      }
+    }
+  }
+}

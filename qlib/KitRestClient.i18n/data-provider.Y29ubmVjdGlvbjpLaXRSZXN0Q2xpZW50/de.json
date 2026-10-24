@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Kit REST API for email marketing including subscribers, tags, custom fields, broadcasts, forms, sequences, and purchases",
+          "message": "Eine Verbindung zur Kit REST-API für E-Mail-Marketing inklusive Abonnenten, Tags, benutzerdefinierten Feldern, Broadcasts, Formularen, Sequenzen und Käufen"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Kit REST Connection",
+          "message": "Kit REST-Verbindung"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Kit API key used for API key authentication via the `X-Kit-Api-Key` header.\n\n**To obtain your API key:**\n1. Log in to your Kit account\n2. Go to **Settings** > **Developer**\n3. Create a new V4 API key\n\nRate limit: 120 requests per 60 seconds with API key authentication",
+          "message": "Der Kit-API-Schlüssel für die API-Schlüssel-Authentifizierung über den `X-Kit-Api-Key`-Header.\n\n**So erhalten Sie Ihren API-Schlüssel:**\n1. Melden Sie sich bei Ihrem Kit-Konto an\n2. Gehen Sie zu **Einstellungen** > **Entwickler**\n3. Erstellen Sie einen neuen V4-API-Schlüssel\n\nGeschwindigkeitsbegrenzung: 120 Anfragen pro 60 Sekunden mit API-Schlüssel-Authentifizierung"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API-Schlüssel"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Kit API key for authentication",
+          "message": "Kit-API-Schlüssel zur Authentifizierung"
+        },
+        "connection.S2l0UmVzdENsaWVudA.scheme.S2l0UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Kit REST API",
+          "message": "Eine Verbindung zur Kit-REST-API"
+        }
+      }
+    }
+  }
+}

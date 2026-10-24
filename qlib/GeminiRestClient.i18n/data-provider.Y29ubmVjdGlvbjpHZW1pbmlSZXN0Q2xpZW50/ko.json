@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Google Gemini](https://ai.google.dev) REST API for generative AI services including text generation, embeddings, and multimodal content.\n\nAn API key is required for authentication. To obtain one, visit the [Google AI Studio](https://aistudio.google.com/apikey) and create a new API key",
+          "message": "[Google Gemini](https://ai.google.dev) REST API에 대한 연결로, 텍스트 생성, 임베딩 및 멀티모달 콘텐츠를 포함한 생성형 AI 서비스를 제공합니다.\n\n인증을 위해 API 키가 필요합니다. 키를 얻으려면 [Google AI Studio](https://aistudio.google.com/apikey)에 방문하여 새 API 키를 생성하세요"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Google Gemini REST Connection",
+          "message": "Google Gemini REST 연결"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Google Gemini, you need an API key:\n\n1. Go to [Google AI Studio](https://aistudio.google.com/apikey)\n2. Sign in with your Google account\n3. Click **Create API Key**\n4. Copy the generated key\n\nKeep your API key secure and never share it publicly.",
+          "message": "Google Gemini에 연결하려면 API 키가 필요합니다:\n\n1. [Google AI Studio](https://aistudio.google.com/apikey)로 이동하세요\n2. Google 계정으로 로그인하세요\n3. **API 키 생성**을 클릭하세요\n4. 생성된 키를 복사하세요\n\nAPI 키를 안전하게 보관하고 공개하지 마세요."
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Google Gemini API Key",
+          "message": "Google Gemini API 키를 얻는 방법"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Google Gemini chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `gemini-2.5-flash` (the default), `gemini-2.5-pro`",
+          "message": "LLM 클라이언트가 이 연결을 채팅에 선택할 때 사용하는 Google Gemini 채팅 모델입니다.\n\n채팅 모델은 임베딩 모델과 별개의 계열이며, 상호 교환 사용이 불가능합니다.\n\n예시 값: `gemini-2.5-flash` (기본값), `gemini-2.5-pro`"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "채팅 모델"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Google Gemini chat model name",
+          "message": "Google Gemini 채팅 모델 이름"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Google Gemini API key used for authentication; sent as the `x-goog-api-key` header. To obtain a key, visit [Google AI Studio](https://aistudio.google.com/apikey)",
+          "message": "인증에 사용되는 Google Gemini API 키; `x-goog-api-key` 헤더로 전송됩니다. 키를 얻으려면 [Google AI Studio](https://aistudio.google.com/apikey)를 방문하세요"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Google Gemini API key for authentication",
+          "message": "인증용 Google Gemini API 키"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Google Gemini REST API",
+          "message": "Google Gemini REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

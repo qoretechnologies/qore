@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "Connect to an Azure OpenAI resource for model inference, files, batches, and retrieval. Authenticate with a resource API key or Microsoft Entra ID. Connection pings verify authentication without generating content.",
+          "message": "Pripojenie k prostriedku Azure OpenAI pre inferenciu modelov, súbory, dávky a získavanie. Overte autentifikáciu pomocou kľúča API prostriedku alebo Microsoft Entra ID. Skúšobné pings spojenia overia autentifikáciu bez generovania obsahu."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Azure OpenAI Connection",
+          "message": "Spojenie Azure OpenAI"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.desc": {
+          "source": "Key 1 or Key 2 from the Azure resource Keys and Endpoint page. Either key works.",
+          "message": "Kľúč 1 alebo Kľúč 2 z stránky Kľúče a koncové body prostriedku Azure. Obe kľúče fungujú."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.short_desc": {
+          "source": "Azure OpenAI resource api-key",
+          "message": "Kľúč API prostriedku Azure OpenAI"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X2lk.desc": {
+          "source": "Application (client) ID of the Entra application. Assign it access to this Azure OpenAI resource.",
+          "message": "ID aplikácie (klienta) aplikácie Entra. Priradte mu prístup k tomuto prostriedku Azure OpenAI."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X2lk.display_name": {
+          "source": "Entra Client ID",
+          "message": "ID klienta Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X2lk.short_desc": {
+          "source": "Client ID for Entra auth",
+          "message": "ID klienta pre autentifikáciu cez Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X3NlY3JldA.desc": {
+          "source": "Client secret value of the Entra application, not the secret identifier.",
+          "message": "Hodnota tajného kľúča aplikácie Entra, nie identifikátor tajného kľúča."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X3NlY3JldA.display_name": {
+          "source": "Entra Client Secret",
+          "message": "Tajný kľúč Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfY2xpZW50X3NlY3JldA.short_desc": {
+          "source": "Client secret for Entra auth",
+          "message": "Tajný kľúč pre overenie Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXBpX3ZlcnNpb24.allowed_values.c3RyaW5nOjIwMjQtMTAtMjE.display_name": {
+          "source": "2024-10-21 (Stable)",
+          "message": "2024-10-21 (stabilná)"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXBpX3ZlcnNpb24.desc": {
+          "source": "API version for the LLM provider and legacy deployment URLs. The v1 actions do not require an API version. Use a supported date or preview version.",
+          "message": "Verzia rozhrania API pre poskytovateľa LLM a staršie adresy URL pre nasadenie. Akcie v základnej verzii nepožadujú verziu rozhrania API. Použite podporovaný dátum alebo verziu prehliadania."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXBpX3ZlcnNpb24.display_name": {
+          "source": "Legacy API Version",
+          "message": "Staršia verzia rozhrania API"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXBpX3ZlcnNpb24.short_desc": {
+          "source": "Azure OpenAI REST API version",
+          "message": "Verzia rozhrania API Azure OpenAI REST"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmFwaV9rZXk.desc": {
+          "source": "Azure resource api-key header",
+          "message": "Hlavička api-key prostriedku Azure"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmFwaV9rZXk.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmVudHJhX21hbmFnZWRfaWRlbnRpdHk.desc": {
+          "source": "Azure managed-identity (IMDS-for-Azure)",
+          "message": "Správa identít Azure (IMDS pre Azure)"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmVudHJhX21hbmFnZWRfaWRlbnRpdHk.display_name": {
+          "source": "Entra Managed Identity",
+          "message": "Správa identít Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmVudHJhX2NsaWVudF9jcmVkZW50aWFscw.desc": {
+          "source": "Entra (Azure AD) client_credentials grant",
+          "message": "Grant client_credentials Entra (Azure AD)"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.allowed_values.c3RyaW5nOmVudHJhX2NsaWVudF9jcmVkZW50aWFscw.display_name": {
+          "source": "Entra Client Credentials",
+          "message": "Klientské povolenia Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.desc": {
+          "source": "Use a resource API key for development, a registered Entra application for a service, or the identity assigned to an Azure host.",
+          "message": "Použite kľúč prostriedku pre vývoj, zaregistrovanú aplikáciu Entra pre službu alebo identitu priradenú hostiteľovi Azure."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.display_name": {
+          "source": "Authentication",
+          "message": "Overenie"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfYXV0aF9tb2Rl.short_desc": {
+          "source": "Authentication mode",
+          "message": "Režim overenia"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZGVwbG95bWVudA.desc": {
+          "source": "Deployment used by the LLM provider. In the Azure Foundry portal, open Models and endpoints and copy the deployment name. Actions can choose another deployment.",
+          "message": "Nastavenie používané poskytovateľom LLM. V portáli Azure Foundry otvorte Možnosti modelov a koncové body a skopírujte názov nasadenia. Akcie môžu vybrať iné nasadenie."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZGVwbG95bWVudA.display_name": {
+          "source": "Default Model Deployment",
+          "message": "Predvolené nasadenie modelu"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZGVwbG95bWVudA.short_desc": {
+          "source": "Azure OpenAI deployment name",
+          "message": "Názov nasadenia Azure OpenAI"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZW50cmFfc2NvcGU.desc": {
+          "source": "Leave empty to select the token scope for this endpoint automatically. Foundry projects use `https://ai.azure.com/.default`; Azure OpenAI resources use `https://cognitiveservices.azure.com/.default`.",
+          "message": "Nechajte prázdne, aby sa automaticky vybrala oblasť tokenu pre tento koncový bod. Projektové prostredia Foundry používajú `https://ai.azure.com/.default`; prostriedky Azure OpenAI používajú `https://cognitiveservices.azure.com/.default`."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZW50cmFfc2NvcGU.display_name": {
+          "source": "Entra Scope",
+          "message": "Oblasť Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfZW50cmFfc2NvcGU.short_desc": {
+          "source": "OAuth2 scope to request",
+          "message": "OAuth2 oblasť pre požiadavku"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfbWFuYWdlZF9pZGVudGl0eV9jbGllbnRfaWQ.desc": {
+          "source": "Leave empty to use the host's system-assigned identity. For a user-assigned identity, supply its client ID. The host must provide Azure managed identity access.",
+          "message": "Nechajte prázdne, aby sa použila systémovo pridelená identita hostiteľa. Pre identitu pridelenú užívateľovi zadajte jej ID klienta. Hostiteľ musí poskytnúť prístup k spravovanej identite Azure."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfbWFuYWdlZF9pZGVudGl0eV9jbGllbnRfaWQ.display_name": {
+          "source": "Managed Identity Client ID",
+          "message": "ID klienta spravovaného identity"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfbWFuYWdlZF9pZGVudGl0eV9jbGllbnRfaWQ.short_desc": {
+          "source": "Optional client ID of a user-assigned managed identity",
+          "message": "Voliteľné ID klienta spravovanej identity pridanej užívateľom"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfdGVuYW50X2lk.desc": {
+          "source": "Tenant ID or domain of the Entra application used for authentication.",
+          "message": "ID tenanta alebo doména aplikácie Entra používaná na overenie."
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfdGVuYW50X2lk.display_name": {
+          "source": "Entra Tenant ID",
+          "message": "ID klienta Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.option.YXp1cmVfdGVuYW50X2lk.short_desc": {
+          "source": "Tenant ID for Entra auth",
+          "message": "ID klienta pre overenie identity v Entra"
+        },
+        "connection.QXp1cmVPcGVuQWlSZXN0Q2xpZW50.scheme.QXp1cmVPcGVuQWlSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to an Azure OpenAI Service resource",
+          "message": "Spojenie s prostriedkom Azure OpenAI Service"
+        }
+      }
+    }
+  }
+}

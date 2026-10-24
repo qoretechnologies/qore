@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.QmlsbHdlcmtSZXN0Q2xpZW50.scheme.QmlsbHdlcmtSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to Billwerk with the REST API",
+          "message": "Billwerk REST API를 사용한 연결"
+        },
+        "connection.QmlsbHdlcmtSZXN0Q2xpZW50.scheme.QmlsbHdlcmtSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Billwerk Connection",
+          "message": "Billwerk 연결"
+        },
+        "connection.QmlsbHdlcmtSZXN0Q2xpZW50.scheme.QmlsbHdlcmtSZXN0Q29ubmVjdGlvbg.option.Y2xpZW50X2lk.desc": {
+          "source": "the Billwerk OAuth2 client ID",
+          "message": "Billwerk OAuth2 클라이언트 ID"
+        },
+        "connection.QmlsbHdlcmtSZXN0Q2xpZW50.scheme.QmlsbHdlcmtSZXN0Q29ubmVjdGlvbg.option.Y2xpZW50X3NlY3JldA.desc": {
+          "source": "the Billwerk OAuth2 client secret",
+          "message": "Billwerk OAuth2 클라이언트 시크릿"
+        },
+        "connection.QmlsbHdlcmtSZXN0Q2xpZW50.scheme.QmlsbHdlcmtSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to Billwerk with the REST API",
+          "message": "Billwerk REST API를 사용한 연결"
+        }
+      }
+    }
+  }
+}

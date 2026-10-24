@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Cin7Core REST API for inventory management, sales, and order processing.\n\nCin7Core (formerly DEAR Inventory) is a comprehensive inventory management and ERP platform that enables you to manage products, sales, purchases, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and suppliers\n- Create and track sales orders\n- Process payments and invoices\n- Monitor inventory and stock levels\n- Handle stock adjustments\n- Track shipments and fulfillment\n\n**Authentication:**\nCin7Core uses Account ID and API Key authentication. Both credentials are required.",
+          "message": "Une connexion à l’API REST Cin7Core pour la gestion des stocks, les ventes et le traitement des commandes.\n\nCin7Core (anciennement DEAR Inventory) est une plateforme complète de gestion des stocks et de gestion de production (ERP) qui vous permet de gérer les produits, les ventes, les achats, les clients, les fournisseurs et les niveaux de stock.\n\n**Fonctionnalités :**\n- Gérer les clients et les fournisseurs\n- Créer et suivre les commandes de vente\n- Traiter les paiements et les factures\n- Surveiller les stocks et les niveaux de stock\n- Gérer les ajustements de stock\n- Suivre les expéditions et la livraison\n\n**Authentification :**\nCin7Core utilise l’authentification par ID de compte et clé API. Les deux identifiants sont requis."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Cin7Core REST Connection",
+          "message": "Connexion REST Cin7Core"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Cin7Core, you need both an Account ID and API Key:\n\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Open the **Setup** tab for the Application\n4. Copy both credentials:\n   - **Account ID** - Your unique account identifier\n   - **Application Key** - Your API authentication key\n\nKeep your credentials secure and never share them publicly.",
+          "message": "Pour vous connecter à Cin7Core, vous avez besoin à la fois d’un ID de compte et d’une clé API :\n\n1. Allez sur https://inventory.dearsystems.com/ExternalApi\n2. Créez une nouvelle application ou sélectionnez-en une existante\n3. Ouvrez l’onglet **Configuration** de l’application\n4. Copiez les deux identifiants :\n   - **ID de compte** - Votre identifiant unique\n   - **Clé d’application** - Votre clé d’authentification API\n\nGardez vos identifiants sécurisés et ne les partagez jamais publiquement."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Credentials",
+          "message": "Comment obtenir vos identifiants API"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.desc": {
+          "source": "Your Cin7Core Account ID used for API authentication.\n\n**To obtain your Account ID:**\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Find your **Account ID** on the **Setup** tab\n\n**Note:** Both Account ID and API Key are required for authentication.",
+          "message": "Votre ID de compte Cin7Core utilisé pour l’authentification API.\n\n**Pour obtenir votre ID de compte :**\n1. Allez sur https://inventory.dearsystems.com/ExternalApi\n2. Créez une nouvelle application ou sélectionnez-en une existante\n3. Trouvez votre **ID de compte** dans l’onglet **Configuration**\n\n**Remarque :** Les deux identifiants, ID de compte et clé API, sont requis pour l’authentification."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID du compte"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Cin7Core Account ID for authentication",
+          "message": "ID de compte Cin7Core pour l’authentification"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Your Cin7Core Application/API Key for authentication.\n\n**To obtain your API Key:**\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Find your **Application Key** on the **Setup** tab\n\n**Note:** Both Account ID and API Key are required for authentication.",
+          "message": "Votre clé API/Application Cin7Core utilisée pour l’authentification.\n\n**Pour obtenir votre clé API :**\n1. Allez sur https://inventory.dearsystems.com/ExternalApi\n2. Créez une nouvelle application ou sélectionnez-en une existante\n3. Trouvez votre **Clé d’application** dans l’onglet **Configuration**\n\n**Remarque :** Les deux identifiants, ID de compte et clé API, sont requis pour l’authentification."
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clé d'API"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Cin7Core Application/API Key",
+          "message": "Clé API/Application Cin7Core"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Cin7Core (DEAR Inventory) API",
+          "message": "Une connexion à l’API Cin7Core (DEAR Inventory)"
+        }
+      }
+    }
+  }
+}

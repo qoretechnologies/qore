@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Zoho Books REST API for accounting and invoicing",
+          "message": "Spojenie s REST rozhraním Zoho Books pre účtovníctvo a fakturáciu"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Zoho Books REST Connection",
+          "message": "Spojenie Zoho Books REST"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "Select the subdomain and domain that match your Zoho account:\n- **Sub Domain**: 'zoho' (standard) or 'zohocloud' (cloud accounts)\n- **Domain**: Based on your data center region (.com for US/Global, .eu for Europe, .in for India, .com.au for Australia, .ca for Canada, .sa for Saudi Arabia, .jp for Japan)",
+          "message": "Vyberte poddoménu a doménu, ktoré zodpovedajú vášmu účtu Zoho:\n- **Poddoména**: 'zoho' (štandardné) alebo 'zohocloud' (cloud účty)\n- **Doména**: Podľa regiónu vašej centrálnej úložiska (.com pre USA/Svet, .eu pre Európu, .in pre Írsko, .com.au pre Austráliu, .ca pre Kanadu, .sa pre Saudskú Arábiu, .jp pre Japonsko)"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "Select Your Zoho Region",
+          "message": "Vyberte svoj región Zoho"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jYQ.desc": {
+          "source": "Canada data center",
+          "message": "Úložisko dát pre Kanadu"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jYQ.display_name": {
+          "source": ".ca",
+          "message": ".ca"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jYQ.short_desc": {
+          "source": "Canada",
+          "message": "Kanada"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.desc": {
+          "source": "United States / Global data center",
+          "message": "Úložisko dát pre USA/Svet"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.display_name": {
+          "source": ".com",
+          "message": ".com"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20.short_desc": {
+          "source": "US/Global",
+          "message": "USA/Svet"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20uYXU.desc": {
+          "source": "Australia data center",
+          "message": "Úložisko dát pre Austráliu"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20uYXU.display_name": {
+          "source": ".com.au",
+          "message": ".com.au"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5jb20uYXU.short_desc": {
+          "source": "Australia",
+          "message": "Austrália"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.desc": {
+          "source": "European Union data center",
+          "message": "Centrum údajov Európskej únie"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.display_name": {
+          "source": ".eu",
+          "message": ".eu"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5ldQ.short_desc": {
+          "source": "Europe",
+          "message": "Európa"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5pbg.desc": {
+          "source": "India data center",
+          "message": "Centrum údajov v Indii"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5pbg.display_name": {
+          "source": ".in",
+          "message": ".in"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5pbg.short_desc": {
+          "source": "India",
+          "message": "India"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5qcA.desc": {
+          "source": "Japan data center",
+          "message": "Centrum údajov v Japonsku"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5qcA.display_name": {
+          "source": ".jp",
+          "message": ".jp"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5qcA.short_desc": {
+          "source": "Japan",
+          "message": "Japonsko"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5zYQ.desc": {
+          "source": "Saudi Arabia data center",
+          "message": "Centrum údajov v Saudskej Arábii"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5zYQ.display_name": {
+          "source": ".sa",
+          "message": ".sa"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.allowed_values.c3RyaW5nOi5zYQ.short_desc": {
+          "source": "Saudi Arabia",
+          "message": "Saudská Arábia"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.desc": {
+          "source": "Select the Zoho domain for your account based on your data center region.",
+          "message": "Vyberte zónu Zoho pre váš účet podľa regiónu vašej dátovej centrálne."
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Doména"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.ZG9tYWlu.short_desc": {
+          "source": "Zoho domain",
+          "message": "Zoho doména"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG8.desc": {
+          "source": "Standard Zoho subdomain (accounts.zoho.{domain})",
+          "message": "Štandardný poddoména Zoho (accounts.zoho.{domain})"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG8.display_name": {
+          "source": "zoho",
+          "message": "zoho"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG8.short_desc": {
+          "source": "Standard Zoho",
+          "message": "Štandardný Zoho"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG9jbG91ZA.desc": {
+          "source": "Zoho Cloud subdomain (accounts.zohocloud.{domain})",
+          "message": "Poddoména Zoho Cloud (accounts.zohocloud.{domain})"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG9jbG91ZA.display_name": {
+          "source": "zohocloud",
+          "message": "zohocloud"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.allowed_values.c3RyaW5nOnpvaG9jbG91ZA.short_desc": {
+          "source": "Zoho Cloud",
+          "message": "Zoho Cloud"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.desc": {
+          "source": "Select the Zoho subdomain for your account.",
+          "message": "Vyberte poddoménu Zoho pre váš účet."
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.display_name": {
+          "source": "Sub Domain",
+          "message": "Poddoména"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.option.c3ViZG9tYWlu.short_desc": {
+          "source": "Zoho subdomain",
+          "message": "Poddoména Zoho"
+        },
+        "connection.Wm9ob0Jvb2tzUmVzdENsaWVudA.scheme.Wm9ob0Jvb2tzUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Zoho Books REST API",
+          "message": "Pripojenie k Zoho Books REST API"
+        }
+      }
+    }
+  }
+}

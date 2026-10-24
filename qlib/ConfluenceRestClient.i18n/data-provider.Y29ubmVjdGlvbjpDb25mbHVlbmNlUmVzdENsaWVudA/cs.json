@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a [Confluence Cloud](https://www.atlassian.com/software/confluence) site for pages, blog posts, spaces and tasks.\n\n**The site is the connection.** With the OAuth2 authorization code flow the site fills itself in - `cloud_id` is read back from the credential once it is issued - and with an API token it is `site` (ex: `example.atlassian.net`). The target URL is derived from whichever is set, and a stored URL that disagrees is ignored rather than allowed to decide which site is reached.\n\n**Authentication** is either:\n- an **API token** in `password` with the account email in `username`, sent as basic authentication - created at **id.atlassian.com > Security > API tokens**; or\n- the **OAuth2 authorization code flow** with `oauth2_client_id` and `oauth2_client_secret` from an app created in the Atlassian developer console.\n\nThis connection targets Confluence **Cloud**; Confluence Data Center has a different API.\n\nConfluence is a trademark of Atlassian Pty Ltd.",
+          "message": "Připojení k síti [Confluence Cloud](https://www.atlassian.com/software/confluence) pro stránky, blogové příspěvky, prostory a úkoly.\n\n**Síť je připojení.** Při toku autorizace OAuth2 se síť vyplní automaticky – `cloud_id` se načte z přihlašovacích údajů po jejich vydání – a při použití přístupového tokenu je `site` (např. `example.atlassian.net`). Cílová adresa je odvozena z toho, co je nastaveno, a uložená adresa, která se liší, je ignorována namísto toho, aby určovala, ke které síti se přistupuje.\n\n**Autentizace** je buď:\n- **přístupový token** v `password` s e-mailovou adresou účtu v `username`, odeslaný jako základní autentizace – vytvořený na **id.atlassian.com > Zabezpečení > Přístupové tokeny**; nebo\n- **tok autorizace OAuth2** s `oauth2_client_id` a `oauth2_client_secret` z aplikace vytvořené v konzoli vývojářů Atlassian.\n\nToto připojení cílí na Confluence **Cloud**; Confluence Data Center má jiné rozhraní.\n\nConfluence je ochranná známka společnosti Atlassian Pty Ltd."
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Confluence REST Connection",
+          "message": "Připojení REST Confluence"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.desc": {
+          "source": "The Confluence site's cloud ID, used with the OAuth2 authorization code flow; the site is then reached through Atlassian's API gateway.\n\n**This is filled in automatically** when the connection is authorized, so it normally needs no attention: a credential is issued against the gateway rather than against a site, and the site it reaches is read back from it afterwards. Where a credential reaches several sites the first one is used and the others are logged; set this to work on one of those instead - a value set here is never overwritten.\n\nSet this **or** `site`, not both.",
+          "message": "Cloudový ID síťe Confluence, používaný s tokem OAuth2; síť se pak dosáhne přes API bránu Atlassian.\n\n**Toto se vyplní automaticky** při autorizaci připojení, takže obvykle nemusí být upravováno: přihlašovací údaje jsou vydány proti bráně, nikoli proti síti, a síť, ke které se přistupuje, se načte z nich později. Pokud přihlašovací údaje dosáhnou několika sítí, použije se první a ostatní jsou zaznamenány; nastavte tuto hodnotu, pokud chcete pracovat s jednou z nich – hodnota zde nastavená nikdy nebude přepsána.\n\nNastavte **nebo** `site`, ne obě."
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.display_name": {
+          "source": "Cloud ID",
+          "message": "ID cloudu"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.short_desc": {
+          "source": "The site's cloud ID, used with the OAuth2 flow",
+          "message": "Cloudový ID síťe, používaný s tokem OAuth2"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.desc": {
+          "source": "The Confluence site host, ex: `example.atlassian.net`, used with an API token.\n\nSet this **or** `cloud_id`, not both.",
+          "message": "Hostitel síťe Confluence, např. `example.atlassian.net`, používaný s přístupovým tokenem.\n\nNastavte **nebo** `cloud_id`, ne obě."
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.short_desc": {
+          "source": "The site host, ex: \"example.atlassian.net\"",
+          "message": "Hostitel síťe, např. \"example.atlassian.net\""
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.cGFzc3dvcmQ.desc": {
+          "source": "An API token created at **id.atlassian.com > Security > API tokens**, used with the account email in `username`.\n\nThis is not the account password, which Confluence Cloud does not accept.",
+          "message": "Přístupový token vytvořený na **id.atlassian.com > Zabezpečení > Přístupové tokeny**, používaný s e-mailovou adresou účtu v `username`.\n\nToto není heslo účtu, které Confluence Cloud nepřijímá."
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.dXNlcm5hbWU.desc": {
+          "source": "The Atlassian account email address, used with an API token in `password`",
+          "message": "E-mailová adresa účtu Atlassian, používaná s tokenem API v `password`"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a Confluence Cloud site",
+          "message": "Připojení k síti Confluence Cloud"
+        }
+      }
+    }
+  }
+}

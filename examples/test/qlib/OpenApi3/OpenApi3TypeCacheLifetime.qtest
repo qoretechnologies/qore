@@ -1,0 +1,330 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-weak-references
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/OpenApi3.qm
+%requires json
+
+%exec-class OpenApi3TypeCacheLifetimeTest
+
+#! A type that a document did not build, and that refers to the document
+class DocumentHolderType inherits HashDataType {
+    public {
+        OpenApi3Schema doc;
+    }
+
+    constructor(OpenApi3Schema doc) : HashDataType("DocumentHolder") {
+        self.doc = doc;
+        addField(new QoreDataField("id", "the identifier", AbstractDataProviderType::get(StringType)));
+    }
+}
+
+#! A REST client stand-in giving a request body default that refers to the document
+class DefaultBodyRest {
+    private {
+        DocumentHolderType holder;
+    }
+
+    constructor(OpenApi3Schema doc) {
+        holder = new DocumentHolderType(doc);
+    }
+
+    *hash<auto> preprocessRequestBody() {
+        return {"card": {"holder": holder}};
+    }
+}
+
+#! Verifies that the types a document caches are released with the document, and that a type build does not walk it
+/** The schema objects of a parsed document hold the types they cache through references that the garbage collector
+    does not follow, because the union alternatives of those types refer back to them (see
+    RestSchemaValidator::AbstractRestSchemaValidator::holdTypeCacheOpaquely()).  The collector cannot release a cycle
+    running through such a reference, so the document releases the caches when it is destroyed.  Every object is
+    checked through a weak reference, which gives no object once it has been destroyed.
+*/
+class OpenApi3TypeCacheLifetimeTest inherits QUnit::Test {
+    constructor() : Test("OpenAPI type cache lifetime", "1.0", \ARGV) {
+        addTestCase("the types of a document whose schemas refer back to each other are released with it",
+            \releaseTest());
+        addTestCase("a type outliving its document validates values, and is released with its last reference",
+            \outlivesDocumentTest());
+        addTestCase("a type that the document did not build does not keep it alive", \replacedTypeTest());
+        addTestCase("a build that fails leaves the document to be released", \failedBuildTest());
+        addTestCase("request body defaults referring to the document do not keep it alive", \defaultBodyTest());
+        addTestCase("a copy of a schema object builds its own types", \copyTest());
+        addTestCase("a restored type and the document it owns are released", \restoredTest());
+        addTestCase("a type build walks the types being built and not the document", \scanTest());
+        set_return_value(main());
+    }
+
+    #! Returns a document whose schemas refer back to each other through "anyOf" alternatives, as Stripe's do
+    private static OpenApi3Schema document() {
+        return OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3",
+            "info": {"title": "Type cache lifetime", "version": "1"},
+            "paths": {},
+            "components": {"schemas": {
+                "Customer": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string", "description": "Unique identifier for the object."},
+                        "name": {"type": "string"},
+                        "subscriptions": {"type": "array", "items": {"\$ref": "#/components/schemas/Subscription"}},
+                        "default_source": {"anyOf": (
+                            {"type": "string", "maxLength": 5000},
+                            {"\$ref": "#/components/schemas/Card"},
+                        )},
+                    },
+                    "required": ("id",),
+                },
+                "Subscription": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "customer": {"anyOf": (
+                            {"type": "string", "maxLength": 5000},
+                            {"\$ref": "#/components/schemas/Customer"},
+                        )},
+                    },
+                    "required": ("id",),
+                },
+                "Card": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "customer": {"anyOf": (
+                            {"type": "string", "maxLength": 5000},
+                            {"\$ref": "#/components/schemas/Customer"},
+                        )},
+                    },
+                    "required": ("id",),
+                },
+                "Wallet": {
+                    "type": "object",
+                    "properties": {
+                        "card": {"\$ref": "#/components/schemas/Card"},
+                    },
+                },
+                "BadNode": {
+                    "type": "object",
+                    "properties": {
+                        "customer": {"\$ref": "#/components/schemas/Customer"},
+                        "self": {"\$ref": "#/components/schemas/BadNode"},
+                        "flag": {"type": "boolean", "enum": ("maybe",)},
+                    },
+                },
+            }},
+        }), True);
+    }
+
+    #! Returns @ref True if the weak reference stored under the given key still gives an object that exists
+    /** An object that has been destroyed is no value for a parameter requiring an object, in every execution mode.
+    */
+    private static bool alive(hash<auto> weak, string key) {
+        try {
+            return OpenApi3TypeCacheLifetimeTest::isObject(weak{key});
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "RUNTIME-TYPE-ERROR" || ex.err == "RUNTIME-OVERLOAD-ERROR") {
+                return False;
+            }
+            rethrow;
+        }
+    }
+
+    #! Returns @ref True; only accepts an object that exists
+    private static bool isObject(object o) {
+        return True;
+    }
+
+    #! Returns the keys whose weak references still give an object
+    private static list<string> aliveKeys(hash<auto> weak) {
+        return sort(map $1, keys weak, OpenApi3TypeCacheLifetimeTest::alive(weak, $1));
+    }
+
+    #! Returns the union type of the given property of the given component's type
+    private static AbstractDataProviderType unionOf(AbstractDataProviderType t, string property) {
+        return t.getFields(){property}.getType();
+    }
+
+    releaseTest() {
+        hash<auto> weak = {};
+        {
+            OpenApi3Schema doc = document();
+            SchemaObject customer = doc.components.schemas.Customer;
+            AbstractDataProviderType mandatory = customer.getDataType();
+            AbstractDataProviderType optional = customer.getDataType(False);
+            AbstractDataField body = doc.getFieldFromSchema("body", "the body", doc.components.schemas.Subscription);
+            AbstractDataProviderType union = OpenApi3TypeCacheLifetimeTest::unionOf(body.getType(), "customer");
+            assertTrue(union instanceof OpenApi3UnionDataType, "the expandable property is a union");
+            weak.doc := doc;
+            weak.customer := customer;
+            weak.mandatory := mandatory;
+            weak.optional := optional;
+            weak.body := body;
+            weak.union := union;
+            assertEq(sort(keys weak), OpenApi3TypeCacheLifetimeTest::aliveKeys(weak), "everything lives while it is held");
+        }
+        assertEq((), OpenApi3TypeCacheLifetimeTest::aliveKeys(weak),
+            "the document, its schema objects and the types they cache are released together");
+    }
+
+    outlivesDocumentTest() {
+        hash<auto> weak = {};
+        AbstractDataProviderType subscription;
+        {
+            OpenApi3Schema doc = document();
+            subscription = cast<SchemaObject>(doc.components.schemas.Subscription).getDataType();
+            weak.doc := doc;
+            weak.customer := doc.components.schemas.Customer;
+        }
+        assertFalse(OpenApi3TypeCacheLifetimeTest::alive(weak, "doc"), "the document is destroyed");
+        assertTrue(OpenApi3TypeCacheLifetimeTest::alive(weak, "customer"),
+            "the schema object that a union alternative validates with lives with the type");
+
+        # the union validates each alternative with its schema object
+        assertEq({"id": "sub_1", "customer": "cus_1"}, subscription.acceptsValue({"id": "sub_1",
+            "customer": "cus_1"}), "an identifier is accepted");
+        assertEq("cus_1", subscription.acceptsValue({"id": "sub_1", "customer": {"id": "cus_1", "name": "Ann"}})
+            .customer.id, "an expanded object is accepted");
+        assertThrows("RUNTIME-TYPE-ERROR", \subscription.acceptsValue(), {"id": "sub_1", "customer": {"name": "Ann"}},
+            "an object that the schema of no alternative accepts is rejected");
+
+        weak.subscription := subscription;
+        remove subscription;
+        assertEq((), OpenApi3TypeCacheLifetimeTest::aliveKeys(weak),
+            "the type and the schema objects it kept are released with its last reference");
+    }
+
+    replacedTypeTest() {
+        hash<auto> weak = {};
+        {
+            OpenApi3Schema doc = document();
+            # the types of Customer, and of Card through its "default_source" alternative, are cached
+            AbstractDataProviderType customer = cast<SchemaObject>(doc.components.schemas.Customer).getDataType();
+            DocumentHolderType replacement(doc);
+            doc.replaceTypeForReference("Card", replacement);
+            # a type built afterwards refers to the replacement, which refers to the document
+            AbstractDataProviderType wallet = cast<SchemaObject>(doc.components.schemas.Wallet).getDataType();
+            assertTrue(wallet.getFields().card.getType().getFields().id instanceof AbstractDataField,
+                "the replacement is used");
+            weak.doc := doc;
+            weak.replacement := replacement;
+            weak.wallet := wallet;
+            weak.customer := customer;
+        }
+        assertEq((), OpenApi3TypeCacheLifetimeTest::aliveKeys(weak),
+            "the document, the replacement referring to it and the types built from it are released");
+    }
+
+    failedBuildTest() {
+        hash<auto> weak = {};
+        {
+            OpenApi3Schema doc = document();
+            AbstractDataProviderType customer = cast<SchemaObject>(doc.components.schemas.Customer).getDataType();
+            *hash<ExceptionInfo> ex;
+            try {
+                doc.getFieldFromSchema("body", "the body", doc.components.schemas.BadNode);
+            } catch (hash<ExceptionInfo> ex0) {
+                ex = ex0;
+            }
+            assertEq("RUNTIME-TYPE-ERROR", ex.err, "the build fails");
+            weak.doc := doc;
+            weak.customer := customer;
+            weak.bad := doc.components.schemas.BadNode;
+        }
+        assertEq((), OpenApi3TypeCacheLifetimeTest::aliveKeys(weak),
+            "the document and the types of the builds before and after the failure are released");
+    }
+
+    defaultBodyTest() {
+        hash<auto> weak = {};
+        {
+            OpenApi3Schema doc = document();
+            AbstractDataProviderType customer = cast<SchemaObject>(doc.components.schemas.Customer).getDataType();
+            # a REST client giving a request body default that refers to the document
+            DefaultBodyRest rest(doc);
+            AbstractDataField body = doc.getFieldFromSchema("body", "the body", doc.components.schemas.Wallet, True,
+                rest);
+            assertTrue(body.getType().getFields().card.getDefaultValue().holder instanceof DocumentHolderType,
+                "the default value refers to the document");
+            weak.doc := doc;
+            weak.customer := customer;
+            weak.body := body;
+        }
+        assertEq((), OpenApi3TypeCacheLifetimeTest::aliveKeys(weak),
+            "the document and the field whose default refers to it are released");
+    }
+
+    copyTest() {
+        hash<auto> weak = {};
+        {
+            OpenApi3Schema doc = document();
+            SchemaObject customer = doc.components.schemas.Customer;
+            AbstractDataProviderType t = customer.getDataType();
+            SchemaObject copy = customer.copy();
+            AbstractDataProviderType copy_type = copy.getDataType();
+            assertFalse(copy_type === t, "the copy builds its own type");
+            assertTrue(customer.getDataType() === t, "the original keeps its type");
+            weak.doc := doc;
+            weak.type := t;
+            weak.copy := copy;
+            weak.copy_type := copy_type;
+        }
+        assertEq((), OpenApi3TypeCacheLifetimeTest::aliveKeys(weak),
+            "the copy and the types it built are released with the document");
+    }
+
+    restoredTest() {
+        hash<auto> weak = {};
+        {
+            OpenApi3Schema doc = document();
+            AbstractDataProviderType union = OpenApi3TypeCacheLifetimeTest::unionOf(
+                cast<SchemaObject>(doc.components.schemas.Subscription).getDataType(), "customer");
+            # a restored type owns the document it was serialized with
+            AbstractDataProviderType restored = Serializable::deserialize(union.serialize());
+            assertEq("cus_1", restored.acceptsValue("cus_1"), "the restored union accepts an identifier");
+            assertEq("cus_1", restored.acceptsValue({"id": "cus_1"}).id, "the restored union accepts an object");
+            weak.doc := doc;
+            weak.union := union;
+            weak.restored := restored;
+        }
+        assertEq((), OpenApi3TypeCacheLifetimeTest::aliveKeys(weak),
+            "the document, the restored type and the document it owns are released");
+    }
+
+    #! Returns the graph nodes walked by the garbage collector while the type of a hub of n components is built
+    private hash<auto> getHubScans(int n) {
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string cmd = sprintf("QORE_SCAN_STATS=%s %s %s %d 2>&1", dir + DirSep + "scan-stats", qore,
+            get_script_dir() + DirSep + "OpenApi3HubScans.q", n);
+        string output = backquote(cmd);
+        *string json = (output =~ x/^(\{.*\})$/m)[0];
+        if (!json) {
+            throw "TEST-ERROR", sprintf("%s did not report its scans: %s", cmd, output);
+        }
+        return parse_json(json);
+    }
+
+    scanTest() {
+        hash<auto> small = getHubScans(40);
+        hash<auto> large = getHubScans(80);
+        assertEq(41, small.fields, "the hub type is built");
+        assertEq(81, large.fields, "the hub type is built");
+        # every component refers back to the hub and to other components through union alternatives, whose schema
+        # objects cache the types they build; scanning the document with each cache write made the work grow with
+        # the square of the number of components
+        assertLt(3.0, large.nodes / float(small.nodes),
+            sprintf("the scans of a type build grow with the size of the graph (%d nodes for 40 components, %d for "
+                "80)", small.nodes, large.nodes));
+        assertLt(2000 * 40, small.nodes, "the scans walk the types being built");
+    }
+}

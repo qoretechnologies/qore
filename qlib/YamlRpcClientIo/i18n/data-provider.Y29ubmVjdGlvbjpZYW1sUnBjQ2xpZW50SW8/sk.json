@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.WWFtbFJwY0NsaWVudElv.scheme.WWFtbFJwY0lvQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to a YAML-RPC server using async I/O via HttpClientIo with automatic protocol negotiation (HTTP/3, HTTP/2, HTTP/1.1)",
+          "message": "Spojenie s YAML-RPC serverom pomocou asynchrónneho I/O cez HttpClientIo s automatickým vyhodnocovaním protokolu (HTTP/3, HTTP/2, HTTP/1.1)"
+        },
+        "connection.WWFtbFJwY0NsaWVudElv.scheme.WWFtbFJwY0lvQ29ubmVjdGlvbg.display_name": {
+          "source": "YAML-RPC (Async I/O) Connection",
+          "message": "Spojenie YAML-RPC (asynchrónne I/O)"
+        },
+        "connection.WWFtbFJwY0NsaWVudElv.scheme.WWFtbFJwY0lvQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a YAML-RPC server using async I/O",
+          "message": "Spojenie s YAML-RPC serverom pomocou asynchrónneho I/O"
+        }
+      }
+    }
+  }
+}

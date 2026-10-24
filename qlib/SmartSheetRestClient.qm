@@ -234,7 +234,8 @@ public class SmartSheetRestClient inherits RestClient::RestClient, SmartSheetRes
 public class SmartSheetRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("SmartSheetRestClient",
+            "SmartSheetRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Smartsheet REST Connection",
             "short_desc": "A connection to the Smartsheet REST API",
             "desc": "A connection to the Smartsheet REST API for spreadsheet and work management, "
@@ -318,7 +319,7 @@ public class SmartSheetRestConnection inherits RestClient::RestConnection {
                     "default_value": SmartSheetRestClientBase::DefaultScopes,
                 }),
             },
-        };
+        });
     }
 
     #! creates the SmartSheetRestConnection object

@@ -308,7 +308,8 @@ public class GoogleCloudStorageRestConnection inherits RestClient::RestConnectio
         const DefaultConnectionUrl = DefaultUrl;
 
         #! The connection scheme information
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("GoogleCloudStorageRestClient",
+            "GoogleCloudStorageRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Google Cloud Storage Connection",
             "short_desc": "A connection to Google Cloud Storage",
             "desc": "A connection to [Google Cloud Storage](https://cloud.google.com/storage) — "
@@ -403,7 +404,7 @@ public class GoogleCloudStorageRestConnection inherits RestClient::RestConnectio
                 },
             },
             "required_options": "gcp_project_id",
-        };
+        });
     }
 
     #! creates the GoogleCloudStorageRestConnection object

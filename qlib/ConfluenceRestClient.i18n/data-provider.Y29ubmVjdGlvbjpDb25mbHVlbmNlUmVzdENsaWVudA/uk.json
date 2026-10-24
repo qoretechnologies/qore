@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a [Confluence Cloud](https://www.atlassian.com/software/confluence) site for pages, blog posts, spaces and tasks.\n\n**The site is the connection.** With the OAuth2 authorization code flow the site fills itself in - `cloud_id` is read back from the credential once it is issued - and with an API token it is `site` (ex: `example.atlassian.net`). The target URL is derived from whichever is set, and a stored URL that disagrees is ignored rather than allowed to decide which site is reached.\n\n**Authentication** is either:\n- an **API token** in `password` with the account email in `username`, sent as basic authentication - created at **id.atlassian.com > Security > API tokens**; or\n- the **OAuth2 authorization code flow** with `oauth2_client_id` and `oauth2_client_secret` from an app created in the Atlassian developer console.\n\nThis connection targets Confluence **Cloud**; Confluence Data Center has a different API.\n\nConfluence is a trademark of Atlassian Pty Ltd.",
+          "message": "З'єднання з сайтом [Confluence Cloud](https://www.atlassian.com/software/confluence) для сторінок, блогів, просторів та завдань.\n\n**Сайт є з'єднанням.** При використанні потоку автентифікації OAuth2 сайт заповнюється автоматично — `cloud_id` читається з облікових даних після їх видачі — а при використанні API-токена він становить `site` (наприклад, `example.atlassian.net`). Цільовий URL визначається на основі того, що встановлено, і збережений URL, що не збігається, ігнорується замість того, щоб вирішувати, який сайт досягається.\n\n**Автентифікація** здійснюється одним із двох способів:\n- **API-токен** у `password` із електронною адресою облікового запису у `username`, надсилається як базова автентифікація — створюється на **id.atlassian.com > Безпека > API-токени**; або\n- **потік коду авторизації OAuth2** із `oauth2_client_id` та `oauth2_client_secret` з додатку, створеного в консолі розробників Atlassian.\n\nЦе з'єднання спрямоване на Confluence **Cloud**; Confluence Data Center має інший API.\n\nConfluence — товарний знак компанії Atlassian Pty Ltd."
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Confluence REST Connection",
+          "message": "З’єднання з REST-інтерфейсом Confluence"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.desc": {
+          "source": "The Confluence site's cloud ID, used with the OAuth2 authorization code flow; the site is then reached through Atlassian's API gateway.\n\n**This is filled in automatically** when the connection is authorized, so it normally needs no attention: a credential is issued against the gateway rather than against a site, and the site it reaches is read back from it afterwards. Where a credential reaches several sites the first one is used and the others are logged; set this to work on one of those instead - a value set here is never overwritten.\n\nSet this **or** `site`, not both.",
+          "message": "Ідентифікатор хмарної платформи Confluence, що використовується з потоком авторизації OAuth2; сайт досягається через шлюз API Atlassian.\n\n**Це заповнюється автоматично** після авторизації з’єднання, тому зазвичай не потребує уваги: на шлюзі видається сертифікат, а не на сайті, і сайт, до якого він звертається, читається з нього після цього. Якщо сертифікат дозволяє доступ до кількох сайтів, використовується перший, інші — записуються в журнал; встановіть це, щоб працювати з одним із них замість іншого — значення, встановлене тут, ніколи не перезаписується.\n\nВстановіть **або** `site`, але не обидва."
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.display_name": {
+          "source": "Cloud ID",
+          "message": "Ідентифікатор хмарного сервісу"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.short_desc": {
+          "source": "The site's cloud ID, used with the OAuth2 flow",
+          "message": "Ідентифікатор хмарної платформи сайту, що використовується з потоком OAuth2"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.desc": {
+          "source": "The Confluence site host, ex: `example.atlassian.net`, used with an API token.\n\nSet this **or** `cloud_id`, not both.",
+          "message": "Хост сайту Confluence, наприклад: `example.atlassian.net`, що використовується з токеном API.\n\nВстановіть **або** `cloud_id`, але не обидва."
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.display_name": {
+          "source": "Site",
+          "message": "Сайт"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.short_desc": {
+          "source": "The site host, ex: \"example.atlassian.net\"",
+          "message": "Хост сайту, наприклад: \"example.atlassian.net\""
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.cGFzc3dvcmQ.desc": {
+          "source": "An API token created at **id.atlassian.com > Security > API tokens**, used with the account email in `username`.\n\nThis is not the account password, which Confluence Cloud does not accept.",
+          "message": "Токен API, створений на **id.atlassian.com > Безпека > Токени API**, що використовується разом з електронною адресою облікового запису в `username`.\n\nЦе не пароль облікового запису, який Confluence Cloud не приймає."
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.dXNlcm5hbWU.desc": {
+          "source": "The Atlassian account email address, used with an API token in `password`",
+          "message": "Електронна адреса облікового запису Atlassian, що використовується разом з токеном API в `password`"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a Confluence Cloud site",
+          "message": "З’єднання з сайтом Confluence Cloud"
+        }
+      }
+    }
+  }
+}

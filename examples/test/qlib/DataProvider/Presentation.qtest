@@ -94,6 +94,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \catalogSearchPathShadowingTest());
         addTestCase("composable catalog files are parsed exactly once",
             \catalogParseCountTest());
+        addTestCase("large provider catalogs share a bounded loader policy",
+            \largeCatalogTest());
         addTestCase("a discovery index is reused across catalogs",
             \catalogDiscoveryIndexTest());
         addTestCase("domain catalogs share parsed catalog files",
@@ -536,6 +538,32 @@ class DataProviderPresentationTest inherits QUnit::Test {
             "provider prose treats JSON and path braces as literal text");
         assertEq(Source, projected.producer_presentation.desc,
             "literal producer prose is retained without escaping");
+    }
+
+    largeCatalogTest() {
+        string root = make_tmp_dir("data-provider-presentation-large-");
+        on_exit remove_tree(root);
+        mkdir(root + DirSep + Domain);
+        string path = root + DirSep + Domain + DirSep + "de.json";
+        string id = DataProviderPresentation::actionMessageId(App, Action, "desc");
+        # Two copies of an 8 MiB string plus JSON metadata exceed the generic loader's 16 MiB bound.
+        string source = strmul("help", 2 * 1024 * 1024);
+        hash<auto> messages = {id: {"source": source, "message": source}};
+        writeJson(path, {"schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"de": {"messages": messages}}});
+        # The general-purpose native loader retains its size bound.
+        assertThrows("I18N-CATALOG-ERROR", sub () { I18n::load_native_catalog(path); });
+        hash<auto> opts = {"search_path": (root,)};
+        DataProviderPresentationCatalog catalog(Domain, "de", opts);
+        assertEq(source.size(), catalog.lookupSourceMessage(id, source).size(),
+            "provider projection accepts large schema catalogs within its explicit bound");
+        auto inspection = DataProviderPresentation::inspectTranslationCatalogs(Domain, messages, opts);
+        assertEq((), inspection.issues,
+            "strict provider validation uses the same size bound as projection");
+        auto catalogs = DataProviderPresentationCatalog::buildDomainCatalogs(Domain, ("de", "de-DE"), opts);
+        assertEq(2, catalogs.size());
+        assertEq(source.size(), catalogs[1].lookupSourceMessage(id, source).size(),
+            "shared locale catalog construction accepts the same large file");
     }
 
     ownerFragmentConflictTest() {

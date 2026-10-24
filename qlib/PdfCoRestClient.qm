@@ -187,7 +187,8 @@ public class PdfCoRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "pdfco://api.pdf.co/v1";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("PdfCoRestClient",
+            "PdfCoRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "PDF.co REST Connection",
             "short_desc": "A connection to the PDF.co REST API",
             "desc": "A connection to the PDF.co REST API for document processing.\n\n"
@@ -228,6 +229,7 @@ public class PdfCoRestConnection inherits RestClient::RestConnection {
             "required_options": "apikey",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Get Your API Key",
                     "intent": "info",
                     "content": "1. Sign up or log in at https://app.pdf.co/\n"
@@ -237,7 +239,7 @@ public class PdfCoRestConnection inherits RestClient::RestConnection {
                         "Check your remaining credits in the dashboard.",
                 },
             ),
-        };
+        });
     }
 
     #! creates the PdfCoRestConnection object

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the [Google Gemini](https://ai.google.dev) REST API for generative AI services including text generation, embeddings, and multimodal content.\n\nAn API key is required for authentication. To obtain one, visit the [Google AI Studio](https://aistudio.google.com/apikey) and create a new API key",
+          "message": "Une connexion à l'API REST [Google Gemini](https://ai.google.dev) pour les services d'IA générative, y compris la génération de texte, les embeddings et le contenu multimodal.\n\nUne clé d'API est requise pour l'authentification. Pour en obtenir une, rendez-vous sur [Google AI Studio](https://aistudio.google.com/apikey) et créez une nouvelle clé d'API"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Google Gemini REST Connection",
+          "message": "Connexion REST Google Gemini"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Google Gemini, you need an API key:\n\n1. Go to [Google AI Studio](https://aistudio.google.com/apikey)\n2. Sign in with your Google account\n3. Click **Create API Key**\n4. Copy the generated key\n\nKeep your API key secure and never share it publicly.",
+          "message": "Pour vous connecter à Google Gemini, vous avez besoin d'une clé d'API :\n\n1. Allez sur [Google AI Studio](https://aistudio.google.com/apikey)\n2. Connectez-vous avec votre compte Google\n3. Cliquez sur **Créer une clé d'API**\n4. Copiez la clé générée\n\nGardez votre clé d'API sécurisée et ne la partagez jamais publiquement"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your Google Gemini API Key",
+          "message": "Comment obtenir votre clé d'API Google Gemini"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Google Gemini chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `gemini-2.5-flash` (the default), `gemini-2.5-pro`",
+          "message": "Le modèle de conversation Google Gemini utilisé par les clients LLM lorsque cette connexion est sélectionnée pour la conversation.\n\nLes modèles de conversation forment une famille distincte des modèles d'encodage et ne peuvent pas être utilisés de manière interchangeable.\n\nExemples : `gemini-2.5-flash` (par défaut), `gemini-2.5-pro`"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Modèle de conversation"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Google Gemini chat model name",
+          "message": "Nom du modèle de conversation Google Gemini"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Google Gemini API key used for authentication; sent as the `x-goog-api-key` header. To obtain a key, visit [Google AI Studio](https://aistudio.google.com/apikey)",
+          "message": "La clé d'API Google Gemini utilisée pour l'authentification ; envoyée sous la forme de l'en-tête `x-goog-api-key`. Pour obtenir une clé, rendez-vous sur [Google AI Studio](https://aistudio.google.com/apikey)"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clé d'API"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Google Gemini API key for authentication",
+          "message": "Clé d'authentification API Google Gemini"
+        },
+        "connection.R2VtaW5pUmVzdENsaWVudA.scheme.R2VtaW5pUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Google Gemini REST API",
+          "message": "Une connexion à l'API REST Google Gemini"
+        }
+      }
+    }
+  }
+}

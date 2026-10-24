@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Google REST Connection",
+          "message": "Google REST Connection"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to Google cloud REST API services",
+          "message": "A connection to Google cloud REST API services"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to Google cloud REST API services",
+          "message": "A connection to Google cloud REST API services"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.display_name": {
+          "source": "API Profile",
+          "message": "API Profile"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.short_desc": {
+          "source": "Sets the Google service API profile",
+          "message": "Sets the Google service API profile"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.desc": {
+          "source": "Sets the API profile according to the Google API in use; this option will set the REST options if they are not already set (`oauth2_scopes`, `ping_body`, `ping_headers`, and `ping_method`); valid values:\n- `none`: no options configured (default)\n- `calendar`: set options for the Google calendar API",
+          "message": "Sets the API profile according to the Google API in use; this option will set the REST options if they are not already set (`oauth2_scopes`, `ping_body`, `ping_headers`, and `ping_method`); valid values:\n- `none`: no options configured (default)\n- `calendar`: set options for the Google calendar API"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "No options are set",
+          "message": "No options are set"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlUmVzdENvbm5lY3Rpb24.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmNhbGVuZGFy.desc": {
+          "source": "Set REST client options for the Google calendar API",
+          "message": "Set REST client options for the Google calendar API"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlQ2FsZW5kYXJSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Google Calendar REST Connection",
+          "message": "Google Calendar REST Connection"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlQ2FsZW5kYXJSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Google Calendar cloud REST API",
+          "message": "A connection to the Google Calendar cloud REST API"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlQ2FsZW5kYXJSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Google Calendar cloud REST API",
+          "message": "A connection to the Google Calendar cloud REST API"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R21haWxSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Gmail REST Connection",
+          "message": "Gmail REST Connection"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R21haWxSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Gmail cloud REST API",
+          "message": "A connection to the Gmail cloud REST API"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R21haWxSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Gmail cloud REST API",
+          "message": "A connection to the Gmail cloud REST API"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R21haWxSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmdtYWls.desc": {
+          "source": "Set REST client options for the Gmail API",
+          "message": "Set REST client options for the Gmail API"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Google Drive REST Connection",
+          "message": "Google Drive REST Connection"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Google Drive cloud REST API",
+          "message": "A connection to the Google Drive cloud REST API"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [Google Drive](https://www.google.com/drive/) cloud REST API",
+          "message": "A connection to the [Google Drive](https://www.google.com/drive/) cloud REST API"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZl.display_name": {
+          "source": "Full Drive Access",
+          "message": "Full Drive Access"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZl.short_desc": {
+          "source": "Access to all of the user's Drive content",
+          "message": "Access to all of the user's Drive content"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZl.desc": {
+          "source": "Set client options for the Google Drive API with access to all of the user's Drive content; required to reach files the application did not create",
+          "message": "Set client options for the Google Drive API with access to all of the user's Drive content; required to reach files the application did not create"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZlLWZpbGU.display_name": {
+          "source": "Application Files Only",
+          "message": "Application Files Only"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZlLWZpbGU.short_desc": {
+          "source": "Access only to files this application created or the user opened with it",
+          "message": "Access only to files this application created or the user opened with it"
+        },
+        "connection.R29vZ2xlUmVzdENsaWVudA.scheme.R29vZ2xlRHJpdmVSZXN0Q29ubmVjdGlvbg.option.YXBpX3Byb2ZpbGU.allowed_values.c3RyaW5nOmRyaXZlLWZpbGU.desc": {
+          "source": "Set client options for the Google Drive API with access only to files this application created, or that the user explicitly opened with it; **prefer this scope** where the integration only reads back what it wrote",
+          "message": "Set client options for the Google Drive API with access only to files this application created, or that the user explicitly opened with it; **prefer this scope** where the integration only reads back what it wrote"
+        }
+      }
+    }
+  }
+}

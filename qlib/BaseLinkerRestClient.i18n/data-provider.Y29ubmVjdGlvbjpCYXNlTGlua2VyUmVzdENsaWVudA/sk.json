@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the BaseLinker REST API for managing orders, products, inventories, couriers, and external storage integrations.\n\nBaseLinker exposes an RPC-over-HTTP API: every operation is a POST to a single endpoint (`https://api.baselinker.com/connector.php`) with a form-encoded body of the form `method=<name>&parameters=<URL-encoded JSON>`.\n\nAuthentication is performed by sending the raw API token in the `X-BLToken` HTTP header (no `Bearer` prefix).\n\n**To obtain your API token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Generate a new token and copy its value\n\n**Note:** The token is sent on every request as the `X-BLToken` header.",
+          "message": "Spojenie s REST rozhraním BaseLinker na správu objednávok, produktov, zásob, kurýrskych služieb a integrácií s externým úložiskom.\n\nBaseLinker poskytuje RPC pre HTTP: každá operácia je POST požiadavka na jediný koncový bod (`https://api.baselinker.com/connector.php`) s form-encoded telesom vo forme `method=<name>&parameters=<URL-encoded JSON>`.\n\nOverenie identity sa vykonáva odoslaním hrubého API tokenu v hlavičke `X-BLToken` HTTP (bez predpony `Bearer`).\n\n**Ako získať váš API token:**\n1. Prihláste sa do vášho panelu BaseLinker\n2. Otvorte **Účet a iné** → **Môj účet**\n3. Otvorte kartu **API**\n4. Vygenerujte nový token a skopírujte jeho hodnotu\n\n**Poznámka:** Token sa odosiela na každú požiadavku ako hlavička `X-BLToken`."
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "BaseLinker REST Connection",
+          "message": "Spojenie s BaseLinker REST"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires a **BaseLinker API token**.\n\n**Steps to generate a token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Click to generate a new token and copy its value\n\n**How it is used:**\n- The token is sent on every request as the `X-BLToken` HTTP header\n- No `Bearer` prefix is used — the token is sent raw\n- Every BaseLinker call is a POST to a single RPC endpoint (`/connector.php`) with a form-encoded body",
+          "message": "Táto integrácia vyžaduje **API token BaseLinker**.\n\n**Kroky na vygenerovanie tokenu:**\n1. Prihláste sa do vášho panelu BaseLinker\n2. Otvorte **Účet a iné** → **Môj účet**\n3. Otvorte kartu **API**\n4. Kliknite na generovanie nového tokenu a skopírujte jeho hodnotu\n\n**Ako sa používa:**\n- Token sa odosiela na každú požiadavku ako hlavička `X-BLToken`\n- Predpona `Bearer` sa nepoužíva — token sa odosiela hrubý\n- Každá požiadavka do BaseLinker je POST na jediný koncový bod RPC (`/connector.php`) s form-encoded telesom"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Token",
+          "message": "Ako získať váš API token"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The BaseLinker API token used for authentication. It is sent on every request as the `X-BLToken` HTTP header (raw token, no `Bearer` prefix).\n\n**To obtain your API token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Generate a new token and copy its value",
+          "message": "API token BaseLinker používaný na overenie identity. Odosiela sa na každú požiadavku ako hlavička `X-BLToken` (hrubý token, bez predpony `Bearer`).\n\n**Ako získať váš API token:**\n1. Prihláste sa do vášho panelu BaseLinker\n2. Otvorte **Účet a iné** → **Môj účet**\n3. Otvorte kartu **API**\n4. Vygenerujte nový token a skopírujte jeho hodnotu"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API token"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "BaseLinker API token for authentication",
+          "message": "API token BaseLinker pre autentizáciu"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the BaseLinker REST API",
+          "message": "Spojenie s REST API BaseLinker"
+        }
+      }
+    }
+  }
+}

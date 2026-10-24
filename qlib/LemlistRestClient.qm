@@ -222,7 +222,8 @@ public class LemlistRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "lemlist://api.lemlist.com/api";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("LemlistRestClient",
+            "LemlistRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Lemlist REST Connection",
             "short_desc": "A connection to the Lemlist REST API",
             "desc": "A connection to the Lemlist REST API for sales outreach and email campaign management.\n\n"
@@ -266,6 +267,7 @@ public class LemlistRestConnection inherits RestClient::RestConnection {
             "required_options": "apikey",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "Where to find your API key",
                     "intent": "info",
                     "content": "1. Log in to Lemlist\n"
@@ -274,6 +276,7 @@ public class LemlistRestConnection inherits RestClient::RestConnection {
                         "4. Click **Generate Key** and copy the key",
                 },
                 <UiMessageInfo>{
+                    "presentation_id": "setup-2",
                     "title": "Rate Limits",
                     "intent": "warning",
                     "content": "Lemlist enforces a rate limit of **20 requests per 2 seconds** per API key.\n\n"
@@ -281,7 +284,7 @@ public class LemlistRestConnection inherits RestClient::RestConnection {
                         "Wait briefly before retrying if you encounter rate limit errors.",
                 },
             ),
-        };
+        });
     }
 
     #! creates the LemlistRestConnection object

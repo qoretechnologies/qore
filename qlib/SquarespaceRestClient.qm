@@ -236,7 +236,8 @@ public class SquarespaceRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "squarespaceres://api.squarespace.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("SquarespaceRestClient",
+            "SquarespaceRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Squarespace REST Connection",
             "short_desc": "A connection to the Squarespace Commerce REST API",
             "desc": "A connection to the Squarespace Commerce REST API for orders, products, "
@@ -291,7 +292,7 @@ public class SquarespaceRestConnection inherits RestClient::RestConnection {
                     }),
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
-        };
+        });
     }
 
     #! creates the SquarespaceRestConnection object

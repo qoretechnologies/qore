@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Bitbucket Cloud](https://bitbucket.org) for repositories, commits, pull requests, deployments and code search.\n\n**Authentication** is any one of three credentials:\n- an **access token** in `token` - a repository, project or workspace access token, created under the relevant **Settings > Access tokens**. The narrowest option, and the one to prefer;\n- an **app password** in `username` and `password`, sent as basic authentication. The username is the Atlassian account username, **not** the email address;\n- the **OAuth2 authorization code flow**, with `oauth2_client_id` and `oauth2_client_secret` from an OAuth consumer created in workspace settings.\n\nThis connection targets Bitbucket **Cloud**. Bitbucket Data Center is a different product with a different API and is not supported.\n\nBitbucket is a trademark of Atlassian Pty Ltd.",
+          "message": "[Bitbucket Cloud](https://bitbucket.org) への接続。リポジトリ、コミット、プルリクエスト、デプロイ、コード検索に対応。\n\n**認証**は以下の3つの資格情報のいずれかです：\n- **アクセストークン** は `token` に設定。リポジトリ、プロジェクト、またはワークスペースのアクセストークンで、関連する **設定 > アクセストークン** で作成されます。最も限定的な選択肢であり、推奨されます。\n- **アプリパスワード** は `username` と `password` に設定され、基本認証として送信されます。ユーザー名は Atlassian アカウントのユーザー名（**メールアドレスではありません**）です。\n- **OAuth2 認可コードフロー** は、ワークスペース設定で作成された OAuth コンシューマーからの `oauth2_client_id` と `oauth2_client_secret` を使用します。\n\nこの接続は Bitbucket **クラウド** を対象としています。Bitbucket Data Center は別製品であり、異なる API を持ち、サポートされていません。\n\nBitbucket は Atlassian Pty Ltd. の商標です。"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Bitbucket REST Connection",
+          "message": "Bitbucket REST 接続"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "An app password created under **Personal settings > App passwords**, used with `username`.\n\nThis is not the account password, which Bitbucket does not accept for API access.",
+          "message": "**個人設定 > アプリパスワード** で作成されたアプリパスワードで、`username` と併用します。\n\nこれはアカウントパスワードではなく、Bitbucket は API アクセスにアカウントパスワードを受け付けません。"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dG9rZW4.desc": {
+          "source": "A Bitbucket access token, sent as a bearer token.\n\n**To obtain one:** open the repository, project or workspace **Settings > Access tokens**, create a token, and grant it only the scopes the integration needs.\n\nLeave this unset to authenticate with an app password or the OAuth2 flow instead.",
+          "message": "Bitbucket アクセス トークン。Bearer トークンとして送信されます。\n\n**取得方法：** リポジトリ、プロジェクト、またはワークスペースを開き、**Settings > Access tokens** に移動してトークンを作成し、統合に必要なスコープのみを付与します。\n\nアプリパスワードまたは OAuth2 フローで認証する場合は、未設定のままにしてください。"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "アクセストークン"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dG9rZW4.short_desc": {
+          "source": "A Bitbucket repository, project or workspace access token",
+          "message": "Bitbucket リポジトリ、プロジェクト、またはワークスペースのアクセス トークン"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The Atlassian account username to use with an app password.\n\n**Not** the email address: Bitbucket rejects an email address here. The username is shown under **Personal settings > Account settings**.",
+          "message": "アプリパスワードと併用する Atlassian アカウントのユーザー名。\n\n**メールアドレスではありません**：Bitbucket はここにメールアドレスを拒否します。ユーザー名は **Personal settings > Account settings** に表示されます。"
+        },
+        "connection.Qml0YnVja2V0UmVzdENsaWVudA.scheme.Qml0YnVja2V0UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Bitbucket Cloud REST API",
+          "message": "Bitbucket Cloud REST API への接続"
+        }
+      }
+    }
+  }
+}

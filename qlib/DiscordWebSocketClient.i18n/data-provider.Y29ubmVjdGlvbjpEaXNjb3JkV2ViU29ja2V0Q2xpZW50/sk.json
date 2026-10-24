@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.RGlzY29yZFdlYlNvY2tldENsaWVudA.scheme.RGlzY29yZFdlYlNvY2tldENvbm5lY3Rpb24.desc": {
+          "source": "A connection to Discord WebSocket server services",
+          "message": "Spojenie s WebSocket serverovými službami Discordu"
+        },
+        "connection.RGlzY29yZFdlYlNvY2tldENsaWVudA.scheme.RGlzY29yZFdlYlNvY2tldENvbm5lY3Rpb24.display_name": {
+          "source": "Discord WebSocket Connection",
+          "message": "Spojenie WebSocket Discordu"
+        },
+        "connection.RGlzY29yZFdlYlNvY2tldENsaWVudA.scheme.RGlzY29yZFdlYlNvY2tldENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to Discord WebSocket server services",
+          "message": "Spojenie s WebSocket serverovými službami Discordu"
+        }
+      }
+    }
+  }
+}

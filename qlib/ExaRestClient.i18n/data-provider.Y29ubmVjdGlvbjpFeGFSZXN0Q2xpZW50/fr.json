@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Exa](https://exa.ai) (formerly Metaphor) — a neural web-search API providing embedding-based semantic retrieval alongside keyword search, plus answers with citations, an autonomous research agent, and websets: structured, verified lists of things found on the web.\n\nRequires an API key sent as the `x-api-key` header (NOT `Authorization: Bearer`).  Get your API key from the [Exa dashboard](https://dashboard.exa.ai/).",
+          "message": "Une connexion à [Exa](https://exa.ai) (anciennement Metaphor) — une API de recherche web neuronale offrant une récupération sémantique basée sur des embeddings, en complément de la recherche par mots-clés, ainsi que des réponses avec citations, un agent de recherche autonome et des websets : des listes structurées et vérifiées d’éléments trouvés sur le web.\n\nNécessite une clé API envoyée dans l’en-tête `x-api-key` (ET NON `Authorization: Bearer`). Obtenez votre clé API depuis le [tableau de bord Exa](https://dashboard.exa.ai/)."
+        },
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Exa Connection",
+          "message": "Connexion Exa"
+        },
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The Exa API key — sent as the `x-api-key` header.",
+          "message": "La clé API Exa — envoyée sous la forme de l’en-tête `x-api-key`."
+        },
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clé d'API"
+        },
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Exa API key (x-api-key header)",
+          "message": "Clé API Exa (en-tête x-api-key)"
+        },
+        "connection.RXhhUmVzdENsaWVudA.scheme.RXhhUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Exa web search and research API",
+          "message": "Une connexion à l’API de recherche et d’analyse web Exa"
+        }
+      }
+    }
+  }
+}

@@ -3,6 +3,118 @@
   "locales": {
     "zh-Hant": {
       "messages": {
+        "app.SDI.connection.option.Y2hhcnNldA.desc": {
+          "source": "The character set to use for the connection (e.g. utf8)",
+          "message": "用於連接的字元集（例如 utf8）"
+        },
+        "app.SDI.connection.option.Y2hhcnNldA.display_name": {
+          "source": "Character Set",
+          "message": "字元集"
+        },
+        "app.SDI.connection.option.Y2hhcnNldA.short_desc": {
+          "source": "Connection character set",
+          "message": "連接字元集"
+        },
+        "app.SDI.connection.option.Y2xhc3NwYXRo.desc": {
+          "source": "The path to the JDBC driver JAR file(s)",
+          "message": "JDBC 驅動程式 JAR 檔案的路徑"
+        },
+        "app.SDI.connection.option.Y2xhc3NwYXRo.display_name": {
+          "source": "JDBC Classpath",
+          "message": "JDBC 類別路徑"
+        },
+        "app.SDI.connection.option.Y2xhc3NwYXRo.short_desc": {
+          "source": "JDBC driver classpath",
+          "message": "JDBC 驅動程式類別路徑"
+        },
+        "app.SDI.connection.option.ZGI.desc": {
+          "source": "The name of the database to connect to",
+          "message": "要連接的資料庫名稱"
+        },
+        "app.SDI.connection.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "資料庫"
+        },
+        "app.SDI.connection.option.ZGI.short_desc": {
+          "source": "Database name",
+          "message": "資料庫名稱"
+        },
+        "app.SDI.connection.option.aG9zdA.desc": {
+          "source": "The hostname or IP address of the database server",
+          "message": "資料庫伺服器的主機名稱或 IP 位址"
+        },
+        "app.SDI.connection.option.aG9zdA.display_name": {
+          "source": "Host",
+          "message": "主機"
+        },
+        "app.SDI.connection.option.aG9zdA.short_desc": {
+          "source": "Database server hostname",
+          "message": "資料庫伺服器主機名稱"
+        },
+        "app.SDI.connection.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "連接池中的最大連接數"
+        },
+        "app.SDI.connection.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "最大連接池大小"
+        },
+        "app.SDI.connection.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "最大連接池連接數"
+        },
+        "app.SDI.connection.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "連接池中的最小連接數"
+        },
+        "app.SDI.connection.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "最小連接池大小"
+        },
+        "app.SDI.connection.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "最小連接池連接數"
+        },
+        "app.SDI.connection.option.cG9ydA.desc": {
+          "source": "The port number of the database server",
+          "message": "資料庫伺服器的通訊埠號碼"
+        },
+        "app.SDI.connection.option.cG9ydA.display_name": {
+          "source": "Port",
+          "message": "埠"
+        },
+        "app.SDI.connection.option.cG9ydA.short_desc": {
+          "source": "Database server port",
+          "message": "資料庫伺服器連接埠"
+        },
+        "app.SDI.connection.option.cGFzcw.desc": {
+          "source": "The password for database authentication",
+          "message": "資料庫驗證用密碼"
+        },
+        "app.SDI.connection.option.cGFzcw.display_name": {
+          "source": "Password",
+          "message": "密碼"
+        },
+        "app.SDI.connection.option.cGFzcw.short_desc": {
+          "source": "Database password",
+          "message": "資料庫密碼"
+        },
+        "app.SDI.connection.option.dXNlcg.desc": {
+          "source": "The database user name for authentication",
+          "message": "用於驗證的資料庫使用者名稱"
+        },
+        "app.SDI.connection.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "使用者"
+        },
+        "app.SDI.connection.option.dXNlcg.short_desc": {
+          "source": "Database user",
+          "message": "資料庫使用者"
+        },
+        "app.SDI.desc": {
+          "source": "Create and manage connections to a H2 embedded Java SQL database",
+          "message": "建立並管理與 H2 嵌入式 Java SQL 資料庫的連線"
+        },
         "app.SDI.display_name": {
           "source": "H2",
           "message": "H2"
@@ -10,10 +122,6 @@
         "app.SDI.short_desc": {
           "source": "H2 embedded Java SQL database",
           "message": "H2 嵌入式 Java SQL 資料庫"
-        },
-        "app.SDI.desc": {
-          "source": "Create and manage connections to a H2 embedded Java SQL database",
-          "message": "建立並管理與 H2 嵌入式 Java SQL 資料庫的連線"
         }
       }
     }

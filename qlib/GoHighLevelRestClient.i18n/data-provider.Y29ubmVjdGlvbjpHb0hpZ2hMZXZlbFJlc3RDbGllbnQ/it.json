@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the GoHighLevel REST API for CRM, contacts, opportunities, calendars, conversations, and marketing automation",
+          "message": "Una connessione all'API REST di GoHighLevel per CRM, contatti, opportunità, calendari, conversazioni e automazione del marketing"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "GoHighLevel REST Connection",
+          "message": "Connessione REST GoHighLevel"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.option.bG9jYXRpb25faWQ.desc": {
+          "source": "The GoHighLevel location (sub-account) ID for scoping API requests. Automatically extracted from the OAuth2 token response after the user selects their location during authorization.",
+          "message": "L'ID della posizione (sott-account) di GoHighLevel per il raggruppamento delle richieste API. Estratto automaticamente dalla risposta del token OAuth2 dopo che l'utente ha selezionato la propria posizione durante l'autorizzazione."
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID sede"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "GoHighLevel location/sub-account ID",
+          "message": "ID posizione/sott-account GoHighLevel"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the GoHighLevel REST API",
+          "message": "Una connessione all'API REST di GoHighLevel"
+        }
+      }
+    }
+  }
+}

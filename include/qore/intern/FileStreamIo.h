@@ -150,6 +150,8 @@ DLLLOCAL inline ssize_t qore_file_stream_read_now(int fd, void* ptr, size_t limi
     if (read_done) {
         *read_done = false;
     }
+    // a longer read is made in parts (see QORE_FD_IO_MAX_SIZE in QoreLibIntern.h)
+    limit = std::min(limit, QORE_FD_IO_MAX_SIZE);
     int fl = fcntl(fd, F_GETFL);
     if (fl == -1) {
         err = errno;
@@ -201,6 +203,8 @@ DLLLOCAL inline ssize_t qore_file_stream_write_now(int fd, const void* ptr, size
     if (!count) {
         return 0;
     }
+    // a longer write is made in parts (see QORE_FD_IO_MAX_SIZE in QoreLibIntern.h)
+    count = std::min(count, QORE_FD_IO_MAX_SIZE);
     int fl = fcntl(fd, F_GETFL);
     if (fl == -1) {
         err = errno;

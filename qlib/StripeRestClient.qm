@@ -305,7 +305,8 @@ public class StripeRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "stripe://api.stripe.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("StripeRestClient",
+            "StripeRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Stripe REST Connection",
             "short_desc": "A connection to the Stripe REST API",
             "desc": "A connection to the [Stripe](https://stripe.com) REST API for payments, billing "
@@ -410,7 +411,7 @@ public class StripeRestConnection inherits RestClient::RestConnection {
                         "returns.",
                 },
             },
-        };
+        });
     }
 
     #! Creates the StripeRestConnection object

@@ -204,7 +204,8 @@ FreshsalesRestClient freshsales({
 public class FreshsalesRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("FreshsalesRestClient",
+            "FreshsalesRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Freshsales REST Connection",
             "short_desc": "A connection to the Freshsales CRM REST API",
             "desc": "A connection to the Freshsales CRM REST API for managing contacts, accounts, "
@@ -266,7 +267,7 @@ public class FreshsalesRestConnection inherits RestClient::RestConnection {
                     "default_value": FreshsalesRestClientBase::DefaultPingPath,
                 }),
             },
-        };
+        });
     }
 
     #! creates the FreshsalesRestConnection object

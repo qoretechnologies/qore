@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the ShipStation REST API for shipping and fulfillment management.\n\nShipStation is a web-based shipping software that streamlines order fulfillment for e-commerce businesses. This integration enables managing orders, shipments, carriers, products, stores, and warehouses.\n\n**Important:** This integration uses the ShipStation **V1 API** and requires V1 API credentials (API Key + API Secret pair). ShipStation V2 API keys are not compatible.",
+          "message": "Připojení k REST API ShipStation pro správu doručování a plnění objednávek.\n\nShipStation je webový software pro doručování, který zjednodušuje plnění objednávek pro e-commerce podniky. Tato integrace umožňuje spravovat objednávky, zásilky, dopravce, produkty, obchody a skladové prostory.\n\n**Důležité:** Tato integrace používá ShipStation **rozhraní API V1** a vyžaduje přihlašovací údaje V1 (pár klíčů API + tajný klíč API). Klíče API V2 nejsou kompatibilní."
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "ShipStation REST Connection",
+          "message": "Připojení REST ShipStation"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires **ShipStation V1 API credentials** (an API Key + API Secret pair).\n\n**Steps to generate V1 API credentials:**\n1. Log in to ShipStation at https://app.shipstation.com\n2. Click the **gear icon** (Settings) in the top right corner\n3. Navigate to **Account > API Settings**\n4. Make sure **V1** is selected (not V2)\n5. Click **Generate API Keys** if you don't have existing credentials\n6. Copy both your **API Key** and **API Secret**\n\n**Important:**\n- The API Secret is only displayed once when generated; store your credentials securely\n- V1 API credentials are available on ShipStation **Gold, Scale, or higher-tier** plans\n- ShipStation also offers **V2 API keys** (a single token); these are **not compatible** with this integration",
+          "message": "Tato integrace vyžaduje **přihlašovací údaje API V1 ShipStation** (pár klíčů API + tajný klíč API).\n\n**Kroky pro vytvoření přihlašovacích údajů V1:**\n1. Přihlaste se do ShipStation na https://app.shipstation.com\n2. Klikněte na **ikonu kolečka** (Nastavení) v pravém horním rohu\n3. Přejděte na **Účet > Nastavení API**\n4. Ujistěte se, že je vybráno **V1** (ne V2)\n5. Pokud nemáte existující přihlašovací údaje, klikněte na **Vygenerovat klíče API**\n6. Zkopírujte oba své **klíče API** a **tajný klíč API**\n\n**Důležité:**\n- Tajný klíč se zobrazí pouze jednou při generování; uložte své přihlašovací údaje bezpečně\n- Přihlašovací údaje V1 jsou dostupné na plánech ShipStation **Gold, Scale nebo vyšších**\n- ShipStation nabízí také **klíče API V2** (jeden token); tyto nejsou **kompatibilní** s touto integrací"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Credentials",
+          "message": "Jak získat své přihlašovací údaje API"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.desc": {
+          "source": "The ShipStation **V1** API key used as the username for HTTP Basic Auth.\n\n**To obtain your V1 API credentials:**\n1. Log in to ShipStation at https://app.shipstation.com\n2. Click the gear icon (Settings) in the top right\n3. Go to **Account > API Settings**\n4. Click 'Generate API Keys' if you don't have any\n5. Copy your API Key\n\n**Important:** This must be a V1 API key (part of an API Key + API Secret pair). ShipStation V2 API keys (single token) are not compatible with this integration. V1 API keys are available on ShipStation Gold, Scale, or higher-tier plans.",
+          "message": "Klíč ShipStation **V1** API používaný jako uživatelské jméno pro HTTP Basic Auth.\n\n**Chcete-li získat své přihlašovací údaje V1:**\n1. Přihlaste se do ShipStation na https://app.shipstation.com\n2. Klikněte na ikonu kolečka (Nastavení) v pravém horním rohu\n3. Přejděte na **Účet > Nastavení API**\n4. Pokud nemáte žádné klíče, klikněte na 'Vygenerovat klíče API'\n5. Zkopírujte svůj klíč API\n\n**Důležité:** Toto musí být klíč V1 API (část páru klíč + tajný klíč). Klíče API ShipStation V2 (jeden token) nejsou kompatibilní s touto integrací. Klíče V1 API jsou dostupné na plánech ShipStation Gold, Scale nebo vyšších."
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.display_name": {
+          "source": "API Key",
+          "message": "Klíč API"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX2tleQ.short_desc": {
+          "source": "ShipStation V1 API key for authentication",
+          "message": "ShipStation V1 API klíč pro ověření"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX3NlY3JldA.desc": {
+          "source": "The ShipStation **V1** API secret used as the password for HTTP Basic Auth.\n\n**To obtain your V1 API credentials:**\n1. Log in to ShipStation at https://app.shipstation.com\n2. Click the gear icon (Settings) in the top right\n3. Go to **Account > API Settings**\n4. Your API Secret is shown alongside your API Key\n\n**Note:** The API Secret is only shown once when generated. If you lose it, you'll need to generate new credentials.",
+          "message": "Tajný klíč ShipStation **V1** API používaný jako heslo pro HTTP Basic Auth.\n\n**Chcete-li získat své přihlašovací údaje V1:**\n1. Přihlaste se do ShipStation na https://app.shipstation.com\n2. Klikněte na ikonu kolečka (Nastavení) v pravém horním rohu\n3. Přejděte na **Účet > Nastavení API**\n4. Váš tajný klíč je uveden vedle vašeho klíče API\n\n**Poznámka:** Tajný klíč se zobrazí pouze jednou při generování. Pokud jej ztratíte, budete muset vygenerovat nové přihlašovací údaje."
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX3NlY3JldA.display_name": {
+          "source": "API Secret",
+          "message": "Tajný klíč API"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.option.YXBpX3NlY3JldA.short_desc": {
+          "source": "ShipStation V1 API secret for authentication",
+          "message": "ShipStation V1 API tajný klíč pro ověření"
+        },
+        "connection.U2hpcFN0YXRpb25SZXN0Q2xpZW50.scheme.U2hpcFN0YXRpb25SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the ShipStation REST API",
+          "message": "Připojení k REST API ShipStation"
+        }
+      }
+    }
+  }
+}

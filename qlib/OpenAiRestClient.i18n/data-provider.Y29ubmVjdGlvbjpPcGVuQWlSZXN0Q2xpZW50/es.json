@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the OpenAi REST API",
+          "message": "Una conexión a la API REST de OpenAI"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "OpenAi REST Connection",
+          "message": "Conexión REST de OpenAI"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The OpenAI chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `gpt-4o-mini` (the default), `gpt-4o`, `o3-mini`",
+          "message": "El modelo de chat de OpenAI utilizado por los clientes LLM cuando se selecciona esta conexión para chats.\n\nLos modelos de chat forman una familia separada de los modelos de embeddings y no son intercambiables.\n\nValores de ejemplo: `gpt-4o-mini` (el predeterminado), `gpt-4o`, `o3-mini`"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Modelo de chat"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "OpenAI chat model name",
+          "message": "Nombre del modelo de chat de OpenAI"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.YXBp.desc": {
+          "source": "The API version to use",
+          "message": "La versión de la API a utilizar"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "Versión de API"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "La versión de la API a utilizar"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.desc": {
+          "source": "The OpenAI embedding model used by embedding clients when this connection is selected for embeddings",
+          "message": "El modelo de embeddings de OpenAI utilizado por los clientes de embeddings cuando se selecciona esta conexión para embeddings"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.display_name": {
+          "source": "Embedding Model",
+          "message": "Modelo de incrustación"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.ZW1iZWRkaW5nLW1vZGVs.short_desc": {
+          "source": "OpenAI embedding model name",
+          "message": "Nombre del modelo de embeddings de OpenAI"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.dXNlX3NjaGVtYQ.desc": {
+          "source": "Use the OpenAPI schema for API validation; OpenAI can change the schema at any time, so the schema may be out of date and may cause valid API calls to fail",
+          "message": "Utilice la especificación OpenAPI para la validación de la API; OpenAI puede cambiar la especificación en cualquier momento, por lo que esta puede estar desactualizada y provocar que llamadas API válidas fallen"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.dXNlX3NjaGVtYQ.display_name": {
+          "source": "Use OpenAPI Schema",
+          "message": "Usar el esquema OpenAPI"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.option.dXNlX3NjaGVtYQ.short_desc": {
+          "source": "Use the OpenAPI schema for API validation",
+          "message": "Usar el esquema OpenAPI para la validación de la API"
+        },
+        "connection.T3BlbkFpUmVzdENsaWVudA.scheme.T3BlbkFpUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the OpenAi REST API",
+          "message": "Una conexión a la API REST de OpenAI"
+        }
+      }
+    }
+  }
+}

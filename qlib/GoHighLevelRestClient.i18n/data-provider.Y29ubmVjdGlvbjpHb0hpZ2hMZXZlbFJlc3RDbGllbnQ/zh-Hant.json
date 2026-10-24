@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the GoHighLevel REST API for CRM, contacts, opportunities, calendars, conversations, and marketing automation",
+          "message": "連線至 GoHighLevel REST API，用於 CRM、聯絡人、商機、日曆、對話及行銷自動化"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "GoHighLevel REST Connection",
+          "message": "GoHighLevel REST 連線"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.option.bG9jYXRpb25faWQ.desc": {
+          "source": "The GoHighLevel location (sub-account) ID for scoping API requests. Automatically extracted from the OAuth2 token response after the user selects their location during authorization.",
+          "message": "用於範圍 API 請求的 GoHighLevel 位置（子帳戶）ID。在使用者於授權期間選擇其位置後，自動從 OAuth2 權杖回應中提取。"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "地點 ID"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "GoHighLevel location/sub-account ID",
+          "message": "GoHighLevel 位置/子帳戶 ID"
+        },
+        "connection.R29IaWdoTGV2ZWxSZXN0Q2xpZW50.scheme.R29IaWdoTGV2ZWxSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the GoHighLevel REST API",
+          "message": "連線至 GoHighLevel REST API"
+        }
+      }
+    }
+  }
+}

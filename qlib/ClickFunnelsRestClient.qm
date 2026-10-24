@@ -199,7 +199,8 @@ public class ClickFunnelsRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "clickfunnelsrest://myclickfunnels.com/api/v2";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ClickFunnelsRestClient",
+            "ClickFunnelsRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "ClickFunnels REST Connection",
             "short_desc": "A connection to the ClickFunnels REST API",
             "desc": "A connection to the ClickFunnels REST API for managing contacts, orders, "
@@ -248,6 +249,7 @@ public class ClickFunnelsRestConnection inherits RestClient::RestConnection {
             "required_options": "team,apikey",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Find Your Team Subdomain",
                     "intent": "warning",
                     "content": "The **Team Subdomain** is required to connect to your "
@@ -259,6 +261,7 @@ public class ClickFunnelsRestConnection inherits RestClient::RestConnection {
                         "3. The team subdomain is the part before `.myclickfunnels.com`",
                 },
                 <UiMessageInfo>{
+                    "presentation_id": "setup-2",
                     "title": "How to Generate an API Token",
                     "intent": "info",
                     "content": "An **API Token** is required for authentication.\n\n"
@@ -274,7 +277,7 @@ public class ClickFunnelsRestConnection inherits RestClient::RestConnection {
                         "or Dominate plan",
                 },
             ),
-        };
+        });
     }
 
     #! creates the ClickFunnelsRestConnection object

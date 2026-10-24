@@ -221,7 +221,8 @@ public class Cin7CoreRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "cin7core://inventory.dearsystems.com/ExternalApi/v2";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("Cin7CoreRestClient",
+            "Cin7CoreRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Cin7Core REST Connection",
             "short_desc": "A connection to the Cin7Core (DEAR Inventory) API",
             "desc": "A connection to the Cin7Core REST API for inventory management, sales, and order processing.\n\n"
@@ -286,6 +287,7 @@ public class Cin7CoreRestConnection inherits RestClient::RestConnection {
             },
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Get Your API Credentials",
                     "intent": "info",
                     "content": "To connect to Cin7Core, you need both an Account ID and API Key:\n\n"
@@ -299,7 +301,7 @@ public class Cin7CoreRestConnection inherits RestClient::RestConnection {
                 },
             ),
             "required_options": "account_id,apikey",
-        };
+        });
     }
 
     #! creates the Cin7CoreRestConnection object

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the EasyPost REST API for shipping label generation, tracking, address verification, rate shopping, and multi-carrier fulfillment.\n\nEasyPost provides a unified API across 100+ carriers (USPS, UPS, FedEx, DHL, and more).\n\n**Authentication:** A single API key is used as the HTTP Basic Auth username (with an empty password).\n\n**Test vs. production keys:**\n- Test keys (prefixed `EZTK...`) only return mocked label/tracker data and are free\n- Production keys (prefixed `EZAK...`) bill the EasyPost wallet for real shipments",
+          "message": "用於寄送標籤生成、追蹤、地址驗證、價格比對及多運輸商履行的 EasyPost REST API 連接。\n\nEasyPost 提供跨 100 多家運輸商（如 USPS、UPS、FedEx、DHL 等）的統一 API。\n\n**驗證方式：** 單一 API 金鑰作為 HTTP Basic Auth 的使用者名稱（密碼為空）。\n\n**測試與生產金鑰：**\n- 測試金鑰（以 `EZTK...` 開頭）僅返回模擬的標籤/追蹤資料，且免費\n- 生產金鑰（以 `EZAK...` 開頭）會從 EasyPost 錢包計費真實運送"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "EasyPost REST Connection",
+          "message": "EasyPost REST 連接"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your EasyPost account at https://www.easypost.com/account/api-keys\n2. You will see two sets of keys:\n   - **Test keys** (prefixed `EZTK...`): free, return mocked label/tracker data; use these for development and integration testing\n   - **Production keys** (prefixed `EZAK...`): bill the EasyPost wallet for real shipments; use these only when you are ready to ship live\n3. Copy the appropriate key for your environment\n\n**Important:**\n- Production keys incur real charges; treat them as secrets\n- Test keys cannot purchase real labels or generate real tracking numbers\n- The API key is used as the HTTP Basic Auth username with an empty password",
+          "message": "1. 登入您的 EasyPost 帳戶至 https://www.easypost.com/account/api-keys\n2. 您將看到兩組金鑰：\n   - **測試金鑰**（以 `EZTK...` 開頭）：免費，返回模擬的標籤/追蹤資料；請用於開發與整合測試\n   - **生產金鑰**（以 `EZAK...` 開頭）：會從 EasyPost 錢包計費真實運送；僅在準備實際出貨時使用\n3. 複製您環境所需的適當金鑰\n\n**重要：**\n- 生產金鑰會產生真實費用；請視同機密處理\n- 測試金鑰無法購買真實標籤或生成真實追蹤編號\n- API 金鑰作為 HTTP Basic Auth 的使用者名稱，密碼為空"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your EasyPost API Key",
+          "message": "如何取得您的 EasyPost API 金鑰"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Your EasyPost API key. Test keys are prefixed `EZTK...` and only return mocked label/tracker data; production keys are prefixed `EZAK...` and bill the wallet for real shipments. Obtain a key at https://www.easypost.com/account/api-keys.",
+          "message": "您的 EasyPost API 金鑰。測試金鑰以 `EZTK...` 開頭，僅返回模擬的標籤/追蹤資料；生產金鑰以 `EZAK...` 開頭，會計費真實運送。請至 https://www.easypost.com/account/api-keys 取得金鑰。"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "EasyPost API key for HTTP Basic Auth",
+          "message": "用於 HTTP Basic Auth 的 EasyPost API 金鑰"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the EasyPost REST API",
+          "message": "與 EasyPost REST API 的連接"
+        }
+      }
+    }
+  }
+}

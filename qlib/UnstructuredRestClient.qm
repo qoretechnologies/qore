@@ -330,7 +330,8 @@ public class UnstructuredRestConnection inherits RestClient::RestConnection {
             "unstructured://api.unstructuredapp.io",
         );
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("UnstructuredRestClient",
+            "UnstructuredRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Unstructured.io Connection",
             "short_desc": "A connection to the Unstructured.io REST APIs",
             "desc": "A connection to [Unstructured.io](https://unstructured.io), which turns "
@@ -373,7 +374,7 @@ public class UnstructuredRestConnection inherits RestClient::RestConnection {
                 },
             },
             "required_options": "apikey",
-        };
+        });
 
         #! Filename sent for the empty document submitted by the default ping
         const PingFilename = "ping.txt";

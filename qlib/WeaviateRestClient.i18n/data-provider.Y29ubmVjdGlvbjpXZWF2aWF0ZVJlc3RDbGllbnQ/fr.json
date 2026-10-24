@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [Weaviate](https://weaviate.io) — an open-source vector database supporting hybrid search (vector + keyword), multi-tenancy, and a wide range of vectorizer modules.\n\nAuthentication: optional Bearer token (Weaviate Cloud Services / WCD) or anonymous (local deployments).\n\nThe connection uses the `weaviate://` URL scheme for plain HTTP and `weaviates://` for servers behind TLS.",
+          "message": "Une connexion à [Weaviate](https://weaviate.io) — une base de données vectorielle open-source prenant en charge la recherche hybride (vecteur + mot-clé), le multi-locataire et une large gamme de modules vectoriseurs.\n\nAuthentification : jeton Bearer facultatif (Weaviate Cloud Services / WCD) ou anonyme (déploiements locaux).\n\nLa connexion utilise le schéma `weaviate://` pour HTTP simple et `weaviates://` pour les serveurs derrière TLS."
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Weaviate Vector DB Connection",
+          "message": "Connexion à la base de données vectorielle Weaviate"
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Optional Bearer token.  Local Weaviate servers don't require authentication.",
+          "message": "Jetons Bearer facultatifs. Les serveurs Weaviate locaux n’ont pas besoin d’authentification."
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clé d'API"
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Optional Bearer token (WCD / proxied)",
+          "message": "Jetons Bearer facultatifs (WCD / proxy)"
+        },
+        "connection.V2VhdmlhdGVSZXN0Q2xpZW50.scheme.V2VhdmlhdGVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a Weaviate vector database",
+          "message": "Une connexion à une base de données vectorielle Weaviate"
+        }
+      }
+    }
+  }
+}

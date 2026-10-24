@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the FreshBooks REST API for accounting, invoicing, and time tracking",
+          "message": "회계, 송장 발행 및 시간 추적을 위한 FreshBooks REST API에 대한 연결"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "FreshBooks REST Connection",
+          "message": "FreshBooks REST 연결"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID, used for accounting API endpoints (clients, invoices, expenses, estimates, items). Find this by calling GET /auth/api/v1/users/me after authentication - it appears as 'account_id' in the business_memberships array, or in your FreshBooks URL (e.g. https://my.freshbooks.com/service/ACCOUNT_ID/...).",
+          "message": "계정 API 엔드포인트(고객, 송장, 지출, 견적, 품목)에 사용되는 FreshBooks 계정 ID입니다. 인증 후 GET /auth/api/v1/users/me를 호출하면 'account_id'가 business_memberships 배열에 나타납니다. 또는 FreshBooks URL에서 확인할 수 있습니다 (예: https://my.freshbooks.com/service/ACCOUNT_ID/...)."
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID, used for time tracking API endpoints (services, time entries, projects). Find this by calling GET /auth/api/v1/users/me after authentication - it appears as 'business.id' in the business_memberships array.",
+          "message": "시간 추적 API 엔드포인트(서비스, 시간 기록, 프로젝트)에 사용되는 FreshBooks 비즈니스 ID입니다. 인증 후 GET /auth/api/v1/users/me를 호출하면 business_memberships 배열의 'business.id'에서 확인할 수 있습니다."
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "비즈니스 ID"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "FreshBooks 비즈니스 ID"
+        },
+        "connection.RnJlc2hCb29rc1Jlc3RDbGllbnQ.scheme.RnJlc2hCb29rc1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the FreshBooks REST API",
+          "message": "FreshBooks REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

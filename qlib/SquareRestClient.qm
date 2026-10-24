@@ -237,7 +237,8 @@ public class SquareRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "squareres://connect.squareup.com/v2";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("SquareRestClient",
+            "SquareRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Square REST Connection",
             "short_desc": "A connection to the Square REST API",
             "desc": "A connection to the Square REST API for payments, orders, invoices, "
@@ -284,7 +285,7 @@ public class SquareRestConnection inherits RestClient::RestConnection {
                     }),
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
-        };
+        });
     }
 
     #! creates the SquareRestConnection object

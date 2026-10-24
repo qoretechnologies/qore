@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Hugging Face REST API.\n\nRequires an API key (set as `apikey`) from [Hugging Face Settings](https://huggingface.co/settings/tokens). The connection uses the `huggingface://` URL scheme and provides access to the Hub API for models, datasets, and spaces",
+          "message": "Une connexion à l'API REST Hugging Face.\n\nNécessite une clé API (définie comme `apikey`) depuis les [paramètres Hugging Face](https://huggingface.co/settings/tokens). La connexion utilise le schéma d'URL `huggingface://` et donne accès à l'API Hub pour les modèles, les jeux de données et les espaces"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Hugging Face REST Connection",
+          "message": "Connexion REST Hugging Face"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBp.desc": {
+          "source": "The API base path to use",
+          "message": "Le chemin de base de l'API à utiliser"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBp.display_name": {
+          "source": "API Path",
+          "message": "Chemin de l’API"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBp.short_desc": {
+          "source": "The API base path",
+          "message": "Chemin d’accès de base de l’API"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Hugging Face API token used for authentication; sent as the `Authorization: Bearer` header.\n\nGet your token from [Hugging Face Settings](https://huggingface.co/settings/tokens)",
+          "message": "Le jeton d’authentification Hugging Face utilisé pour l’authentification ; envoyé dans l’en-tête `Authorization: Bearer`.\n\nObtenez votre jeton dans [Paramètres Hugging Face](https://huggingface.co/settings/tokens)"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clé d'API"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Hugging Face API token for authentication",
+          "message": "Jeton d’API Hugging Face pour l’authentification"
+        },
+        "connection.SHVnZ2luZ0ZhY2VSZXN0Q2xpZW50.scheme.SHVnZ2luZ0ZhY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Hugging Face REST API",
+          "message": "Une connexion à l’API REST Hugging Face"
+        }
+      }
+    }
+  }
+}

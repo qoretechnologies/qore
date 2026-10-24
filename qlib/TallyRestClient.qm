@@ -161,7 +161,8 @@ public class TallyRestConnection inherits RestClient::RestConnection {
         const DefaultUrl = "tally://api.tally.so";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("TallyRestClient",
+            "TallyRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Tally REST Connection",
             "short_desc": "A connection to the Tally.so REST API",
             "desc": "A connection to the Tally.so REST API for form building and management.\n\n"
@@ -200,6 +201,7 @@ public class TallyRestConnection inherits RestClient::RestConnection {
             "required_options": "apikey",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Get Your Tally API Key",
                     "intent": "info",
                     "content": "To connect to Tally, you need an API key:\n\n"
@@ -210,7 +212,7 @@ public class TallyRestConnection inherits RestClient::RestConnection {
                         "**Note**: API access requires a Tally Pro or Business plan",
                 },
             ),
-        };
+        });
     }
 
     #! creates the TallyRestConnection object

@@ -1173,7 +1173,8 @@ rest.setContentEncoding("gzip");
 public class DataStreamConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("DataStreamClient",
+            "DataStreamConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "DataStream REST Connection",
             "short_desc": "A connection to a DataStream API server",
             "desc": "A connection to a DataStream API server",
@@ -1188,7 +1189,7 @@ public class DataStreamConnection inherits RestClient::RestConnection {
                 "http": "ds",
             },
             "options": RestConnection::ConnectionScheme.options - ("data", "allow_any_response"),
-        };
+        });
     }
 
     #! creates the DataStreamConnection object

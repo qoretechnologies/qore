@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.V2F2ZVJlc3RDbGllbnQ.scheme.V2F2ZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Wave GraphQL API for accounting and invoicing",
+          "message": "会計および請求用の Wave GraphQL API への接続"
+        },
+        "connection.V2F2ZVJlc3RDbGllbnQ.scheme.V2F2ZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Wave REST Connection",
+          "message": "Wave REST 接続"
+        },
+        "connection.V2F2ZVJlc3RDbGllbnQ.scheme.V2F2ZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Wave GraphQL API",
+          "message": "Wave GraphQL API への接続"
+        }
+      }
+    }
+  }
+}

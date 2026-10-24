@@ -210,7 +210,8 @@ public class PineconeRestConnection inherits RestClient::RestConnection {
         */
         const PingPath = "/indexes";
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("PineconeRestClient",
+            "PineconeRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Pinecone Vector Database Connection",
             "short_desc": "A connection to the Pinecone managed vector database",
             "desc": "A connection to [Pinecone](https://www.pinecone.io) — a managed vector database "
@@ -246,7 +247,7 @@ public class PineconeRestConnection inherits RestClient::RestConnection {
                 },
             },
             "required_options": "apikey",
-        };
+        });
     }
 
     constructor(string name, string description, string url = DefaultUrl,
@@ -412,7 +413,8 @@ public class PineconeAdminRestConnection inherits RestClient::RestConnection {
         const PingPath = "/admin/projects";
 
         #! Connection options and discovery metadata
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("PineconeRestClient",
+            "PineconeAdminRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Pinecone Admin Connection",
             "short_desc": "Manage Pinecone organizations with a service account",
             "desc": "Connect to [Pinecone Admin](https://docs.pinecone.io/guides/organizations/manage-service-accounts) "
@@ -457,7 +459,7 @@ public class PineconeAdminRestConnection inherits RestClient::RestConnection {
                 "ping_path": connection_option_override(RestConnection::ConnectionScheme.options.ping_path,
                     {"default_value": PingPath}),
             },
-        };
+        });
     }
 
     #! Creates a named service-account connection

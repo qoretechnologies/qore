@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.desc": {
+          "source": "Connect to [Pinecone Admin](https://docs.pinecone.io/guides/organizations/manage-service-accounts) to provision projects and manage access.\n\n- Uses the service account's **Client ID** and **Client Secret**\n- Acquires and renews OAuth2 bearer tokens automatically\n- Verifies credentials by listing accessible projects\n\nCreate the service account in your Pinecone organization and grant the roles its workflows need.",
+          "message": "프로젝트를 프로비저닝하고 접근을 관리하기 위해 [Pinecone Admin](https://docs.pinecone.io/guides/organizations/manage-service-accounts)에 연결하세요.\n\n- 서비스 계정의 **클라이언트 ID**와 **클라이언트 시크릿** 사용\n- OAuth2 Bearer 토큰을 자동으로 획득하고 갱신\n- 접근 가능한 프로젝트를 나열하여 자격 증명을 검증\n\nPinecone 조직 내에서 서비스 계정을 생성하고, 워크플로우에 필요한 역할을 부여하세요"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Pinecone Admin Connection",
+          "message": "Pinecone Admin 연결"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "The OAuth2 client ID of a service account in your Pinecone organization. This differs from the service account's resource ID.",
+          "message": "Pinecone 조직 내 서비스 계정의 OAuth2 클라이언트 ID입니다. 이는 서비스 계정의 리소스 ID와 다릅니다"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9pZA.display_name": {
+          "source": "Client ID",
+          "message": "클라이언트 ID"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "The secret issued when the service account is created or rotated.",
+          "message": "서비스 계정이 생성되거나 회전될 때 발급되는 비밀번호입니다."
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.display_name": {
+          "source": "Client Secret",
+          "message": "클라이언트 시크릿"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOmNsaWVudF9jcmVkZW50aWFscw.display_name": {
+          "source": "Client Credentials",
+          "message": "클라이언트 자격 증명"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "Manage Pinecone organizations with a service account",
+          "message": "서비스 계정으로 Pinecone 조직을 관리합니다."
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [Pinecone](https://www.pinecone.io) — a managed vector database for semantic search, hybrid search and retrieval-augmented generation.\n\nRequires an API key, sent as the `Api-Key` header (NOT `Authorization: Bearer`).  Create one in the [Pinecone console](https://app.pinecone.io/); a key is scoped to a single project, so the connection reaches the indexes of that project only.\n\nPinecone has a **two-plane architecture**, and this connection addresses both.  The control plane at `https://api.pinecone.io` creates and describes indexes, backups and collections.  The data plane — searching, upserting and fetching, which is to say the operations that *are* Pinecone — lives on a **separate host per index**, which only the control plane knows.  Actions that reach it take the index as an option and the host is resolved and cached automatically, so nothing here has to be configured per index.\n\nThe dated API version is pinned by this module and sent on every call, so a change to the server-side default cannot alter the behaviour of a flow that is already running.",
+          "message": "[Pinecone](https://www.pinecone.io)에 연결 — 의미적 검색, 하이브리드 검색 및 검색 기반 생성을 위한 관리형 벡터 데이터베이스입니다.\n\nAPI 키가 필요하며, `Api-Key` 헤더로 전송됩니다 (NOT `Authorization: Bearer`). [Pinecone 콘솔](https://app.pinecone.io/)에서 생성하세요. 키는 단일 프로젝트에 한정되므로, 연결은 해당 프로젝트의 인덱스만 접근합니다.\n\nPinecone는 **이중 평면 아키텍처**를 사용하며, 이 연결은 두 평면 모두에 접근합니다. 제어 평면은 `https://api.pinecone.io`에서 인덱스, 백업 및 컬렉션을 생성하고 설명합니다. 데이터 평면 — 검색, 삽입 및 검색을 포함한 Pinecone의 핵심 작업 — 는 각 인덱스마다 별도의 호스트에서 운영되며, 제어 평면만 이를 알고 있습니다. 이 평면에 도달하는 작업은 인덱스를 선택 사항으로 지정하며, 호스트는 자동으로 해석되고 캐시되므로 인덱스별로 구성할 필요가 없습니다.\n\n이 모듈은 고정된 API 버전을 사용하며 모든 호출에 전송하므로, 서버 측 기본값이 변경되어도 이미 실행 중인 흐름의 동작은 변경되지 않습니다."
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Pinecone Vector Database Connection",
+          "message": "Pinecone 벡터 데이터베이스 연결"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Pinecone API key, sent as the `Api-Key` header (NOT `Authorization: Bearer`).\n\nCreate one in the [Pinecone console](https://app.pinecone.io/) under **API keys**.  A key belongs to one project and carries its own permissions, so a key that can read may not be able to create or delete an index.",
+          "message": "Pinecone API 키는 `Api-Key` 헤더로 전송됩니다 (NOT `Authorization: Bearer`).\n\n[Pinecone 콘솔](https://app.pinecone.io/)에서 **API 키** 아래에서 생성하세요. 키는 하나의 프로젝트에 속하며, 해당 프로젝트의 권한을 가집니다. 읽기 권한이 있는 키는 인덱스를 생성하거나 삭제할 수 없습니다."
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "The Pinecone API key",
+          "message": "Pinecone API 키"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Pinecone managed vector database",
+          "message": "Pinecone 관리형 벡터 데이터베이스에 연결합니다."
+        }
+      }
+    }
+  }
+}

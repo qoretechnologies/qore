@@ -288,7 +288,8 @@ public class ChargebeeRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "chargebee://localhost";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ChargebeeRestClient",
+            "ChargebeeRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Chargebee REST Connection",
             "short_desc": "A connection to the Chargebee REST API",
             "desc": "A connection to the Chargebee REST API for subscription billing and revenue management.\n\n"
@@ -346,6 +347,7 @@ public class ChargebeeRestConnection inherits RestClient::RestConnection {
             "required_options": "api_key,site",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Obtain Your API Key",
                     "intent": "info",
                     "content": "1. Log in to your Chargebee site (e.g., https://your-site.chargebee.com)\n"
@@ -359,7 +361,7 @@ public class ChargebeeRestConnection inherits RestClient::RestConnection {
                         "- Read-only keys can only read data",
                 },
             ),
-        };
+        });
     }
 
     #! creates the ChargebeeRestConnection object

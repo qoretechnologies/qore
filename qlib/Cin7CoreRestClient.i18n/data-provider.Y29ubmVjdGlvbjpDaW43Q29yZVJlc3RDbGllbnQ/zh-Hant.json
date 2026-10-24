@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Cin7Core REST API for inventory management, sales, and order processing.\n\nCin7Core (formerly DEAR Inventory) is a comprehensive inventory management and ERP platform that enables you to manage products, sales, purchases, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and suppliers\n- Create and track sales orders\n- Process payments and invoices\n- Monitor inventory and stock levels\n- Handle stock adjustments\n- Track shipments and fulfillment\n\n**Authentication:**\nCin7Core uses Account ID and API Key authentication. Both credentials are required.",
+          "message": "連接到 Cin7Core REST API，用於庫存管理、銷售和訂單處理。\n\nCin7Core（前稱 DEAR Inventory）是一個全面的庫存管理與 ERP 平台，可協助您管理產品、銷售、採購、客戶、供應商及庫存水準。\n\n**功能：**\n- 管理客戶與供應商\n- 建立並追蹤銷售訂單\n- 處理付款與發票\n- 監控庫存與庫存水準\n- 處理庫存調整\n- 追蹤運送與履行\n\n**驗證：**\nCin7Core 使用 Account ID 與 API Key 驗證。兩者皆為必要憑證。"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Cin7Core REST Connection",
+          "message": "Cin7Core REST 連接"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Cin7Core, you need both an Account ID and API Key:\n\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Open the **Setup** tab for the Application\n4. Copy both credentials:\n   - **Account ID** - Your unique account identifier\n   - **Application Key** - Your API authentication key\n\nKeep your credentials secure and never share them publicly.",
+          "message": "要連接到 Cin7Core，您需要同時擁有 Account ID 與 API Key：\n\n1. 前往 https://inventory.dearsystems.com/ExternalApi\n2. 建立新應用程式或選擇現有應用程式\n3. 開啟應用程式的 **設定** 區段\n4. 複製兩項憑證：\n   - **Account ID** - 您的唯一帳戶識別碼\n   - **Application Key** - 您的 API 驗證金鑰\n\n請妥善保管您的憑證，切勿公開分享。"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Credentials",
+          "message": "如何取得您的 API 憑證"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.desc": {
+          "source": "Your Cin7Core Account ID used for API authentication.\n\n**To obtain your Account ID:**\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Find your **Account ID** on the **Setup** tab\n\n**Note:** Both Account ID and API Key are required for authentication.",
+          "message": "用於 API 驗證的 Cin7Core 帳戶 ID。\n\n**取得帳戶 ID 的方法：**\n1. 前往 https://inventory.dearsystems.com/ExternalApi\n2. 建立新應用程式或選擇現有應用程式\n3. 在 **設定** 區段中尋找您的 **帳戶 ID**\n\n**注意：** 驗證需要同時提供帳戶 ID 與 API 金鑰。"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "帳戶 ID"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Cin7Core Account ID for authentication",
+          "message": "用於驗證的 Cin7Core 帳戶 ID"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Your Cin7Core Application/API Key for authentication.\n\n**To obtain your API Key:**\n1. Go to https://inventory.dearsystems.com/ExternalApi\n2. Create a New Application or select an existing one\n3. Find your **Application Key** on the **Setup** tab\n\n**Note:** Both Account ID and API Key are required for authentication.",
+          "message": "您的 Cin7Core 應用程式/API 金鑰，用於驗證。\n\n**取得您的 API 金鑰：**\n1. 前往 https://inventory.dearsystems.com/ExternalApi\n2. 建立新應用程式或選擇現有應用程式\n3. 在 **設定** 标籤中找到您的 **應用程式金鑰**\n\n**注意：** 驗證需要同時提供帳戶 ID 和 API 金鑰。"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "Cin7Core Application/API Key",
+          "message": "Cin7Core 應用程式/API 金鑰"
+        },
+        "connection.Q2luN0NvcmVSZXN0Q2xpZW50.scheme.Q2luN0NvcmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Cin7Core (DEAR Inventory) API",
+          "message": "連接到 Cin7Core (DEAR Inventory) API"
+        }
+      }
+    }
+  }
+}

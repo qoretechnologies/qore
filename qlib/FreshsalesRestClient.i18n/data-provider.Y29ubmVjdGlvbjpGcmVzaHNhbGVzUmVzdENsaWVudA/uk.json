@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Freshsales CRM REST API for managing contacts, accounts, deals, tasks, appointments, and notes.\n\n**To obtain your API key:**\n1. Log in to your Freshsales account\n2. Click your profile picture in the top-right corner\n3. Go to **Settings** > **API Settings**\n4. Copy your API key\n\n**To find your subdomain:**\nYour subdomain is the part before `.myfreshworks.com` in your Freshsales URL (e.g., `mycompany` from `https://mycompany.myfreshworks.com`)",
+          "message": "Підключення до REST API Freshsales CRM для керування контактами, рахунками, угодами, завданнями, прийомами та нотатками.\n\n**Щоб отримати свій ключ API:**\n1. Увійдіть у свій обліковий запис Freshsales\n2. Натисніть свою фотографію профілю у верхньому правому куті\n3. Перейдіть до **Налаштувань** > **Налаштування API**\n4. Скопіюйте свій ключ API\n\n**Щоб знайти свій піддомен:**\nПіддомен — це частина перед `.myfreshworks.com` у вашому URL Freshsales (наприклад, `mycompany` з `https://mycompany.myfreshworks.com`)"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Freshsales REST Connection",
+          "message": "Підключення до REST API Freshsales"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Freshsales API key used for token authentication.\n\n**To obtain your API key:**\n1. Log in to your Freshsales account\n2. Click your profile picture in the top-right corner\n3. Go to **Settings** > **API Settings**\n4. Copy your API key\n\nRate limit: 1,000 API requests per hour per account",
+          "message": "Ключ API Freshsales, що використовується для автентифікації за допомогою токенів.\n\n**Щоб отримати свій ключ API:**\n1. Увійдіть у свій обліковий запис Freshsales\n2. Натисніть на свою фотографію профілю у верхньому правому куті\n3. Перейдіть до **Налаштувань** > **Налаштування API**\n4. Скопіюйте свій ключ API\n\nЛіміт швидкості: 1 000 запитів API на годину на обліковий запис"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Freshsales API key for authentication",
+          "message": "Ключ API Freshsales для автентифікації"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.desc": {
+          "source": "The domain of your Freshsales account.\n\nYou can provide either:\n- Just the subdomain (e.g., `mycompany`)\n- The full domain (e.g., `mycompany-org.myfreshworks.com`)\n- A full URL (e.g., `https://mycompany-org.myfreshworks.com/crm/sales`)\n\nThe subdomain or domain is extracted automatically",
+          "message": "Домен вашого облікового запису Freshsales.\n\nВи можете надати:\n- Лише піддомен (наприклад, `mycompany`)\n- Повний домен (наприклад, `mycompany-org.myfreshworks.com`)\n- Повну URL-адресу (наприклад, `https://mycompany-org.myfreshworks.com/crm/sales`)\n\nПіддомен або домен витягується автоматично"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.display_name": {
+          "source": "Freshsales Domain",
+          "message": "Домен Freshsales"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.option.ZG9tYWlu.short_desc": {
+          "source": "Your Freshsales subdomain or full domain",
+          "message": "Ваш піддомен або повний домен Freshsales"
+        },
+        "connection.RnJlc2hzYWxlc1Jlc3RDbGllbnQ.scheme.RnJlc2hzYWxlc1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Freshsales CRM REST API",
+          "message": "З’єднання з REST API CRM Freshsales"
+        }
+      }
+    }
+  }
+}

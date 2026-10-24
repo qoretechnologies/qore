@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a [Confluence Cloud](https://www.atlassian.com/software/confluence) site for pages, blog posts, spaces and tasks.\n\n**The site is the connection.** With the OAuth2 authorization code flow the site fills itself in - `cloud_id` is read back from the credential once it is issued - and with an API token it is `site` (ex: `example.atlassian.net`). The target URL is derived from whichever is set, and a stored URL that disagrees is ignored rather than allowed to decide which site is reached.\n\n**Authentication** is either:\n- an **API token** in `password` with the account email in `username`, sent as basic authentication - created at **id.atlassian.com > Security > API tokens**; or\n- the **OAuth2 authorization code flow** with `oauth2_client_id` and `oauth2_client_secret` from an app created in the Atlassian developer console.\n\nThis connection targets Confluence **Cloud**; Confluence Data Center has a different API.\n\nConfluence is a trademark of Atlassian Pty Ltd.",
+          "message": "[Confluence Cloud](https://www.atlassian.com/software/confluence) 사이트에 대한 페이지, 블로그 게시물, 스페이스 및 작업 연결입니다.\n\n**사이트가 연결입니다.** OAuth2 인증 코드 흐름에서는 사이트가 자동으로 채워집니다 - `cloud_id`은 발급된 자격 증명에서 읽어옵니다 - API 토큰 사용 시에는 `site` (예: `example.atlassian.net`)입니다. 대상 URL은 설정된 값에 따라 유도되며, 저장된 URL이 일치하지 않으면 허용되지 않고 무시됩니다.\n\n**인증**은 다음 중 하나입니다:\n- **API 토큰**을 `password`에, 계정 이메일을 `username`에 넣어 기본 인증으로 전송 - **id.atlassian.com > 보안 > API 토큰**에서 생성; 또는\n- **OAuth2 인증 코드 흐름**으로 Atlassian 개발자 콘솔에서 생성한 앱의 `oauth2_client_id`와 `oauth2_client_secret` 사용.\n\n이 연결은 Confluence **클라우드**를 대상으로 합니다; Confluence Data Center는 별도의 API를 사용합니다.\n\nConfluence는 Atlassian Pty Ltd의 상표입니다."
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Confluence REST Connection",
+          "message": "Confluence REST 연결"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.desc": {
+          "source": "The Confluence site's cloud ID, used with the OAuth2 authorization code flow; the site is then reached through Atlassian's API gateway.\n\n**This is filled in automatically** when the connection is authorized, so it normally needs no attention: a credential is issued against the gateway rather than against a site, and the site it reaches is read back from it afterwards. Where a credential reaches several sites the first one is used and the others are logged; set this to work on one of those instead - a value set here is never overwritten.\n\nSet this **or** `site`, not both.",
+          "message": "OAuth2 인증 코드 흐름과 함께 사용되는 Confluence 사이트의 클라우드 ID입니다. 사이트는 Atlassian의 API 게이트웨이를 통해 접근됩니다.\n\n**이 값은 연결이 인증될 때 자동으로 채워집니다.** 일반적으로 수동 조작이 필요하지 않습니다. 게이트웨이에 대해 인증서가 발급되며, 이후 사이트는 그 인증서에서 다시 읽어옵니다. 여러 사이트에 접근할 수 있는 인증서가 있는 경우 첫 번째 사이트가 사용되며, 나머지 사이트는 로그에 기록됩니다. 다른 사이트를 작업하려면 여기에 값을 설정하세요. 이 값은 절대 덮어쓰지 않습니다.\n\n이것 **또는** `site` 둘 중 하나만 설정하세요."
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.display_name": {
+          "source": "Cloud ID",
+          "message": "클라우드 ID"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.short_desc": {
+          "source": "The site's cloud ID, used with the OAuth2 flow",
+          "message": "OAuth2 흐름과 함께 사용되는 사이트의 클라우드 ID"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.desc": {
+          "source": "The Confluence site host, ex: `example.atlassian.net`, used with an API token.\n\nSet this **or** `cloud_id`, not both.",
+          "message": "Confluence 사이트 호스트 (예: `example.atlassian.net`) API 토큰과 함께 사용됩니다.\n\n이것 **또는** `cloud_id` 둘 중 하나만 설정하세요."
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.short_desc": {
+          "source": "The site host, ex: \"example.atlassian.net\"",
+          "message": "사이트 호스트, 예: \"example.atlassian.net\""
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.cGFzc3dvcmQ.desc": {
+          "source": "An API token created at **id.atlassian.com > Security > API tokens**, used with the account email in `username`.\n\nThis is not the account password, which Confluence Cloud does not accept.",
+          "message": "**id.atlassian.com > 보안 > API 토큰**에서 생성된 API 토큰입니다. `username`에서 계정 이메일과 함께 사용됩니다.\n\n이 값은 계정 비밀번호가 아니며, Confluence 클라우드는 비밀번호를 수락하지 않습니다."
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.dXNlcm5hbWU.desc": {
+          "source": "The Atlassian account email address, used with an API token in `password`",
+          "message": "API 토큰과 함께 사용되는 Atlassian 계정 이메일 주소, `password`"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a Confluence Cloud site",
+          "message": "Confluence 클라우드 사이트에 대한 연결"
+        }
+      }
+    }
+  }
+}

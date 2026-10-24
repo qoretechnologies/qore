@@ -3,6 +3,154 @@
   "locales": {
     "cs": {
       "messages": {
+        "app.U1FMLVNlcnZlcg.connection.option.Y2hhcnNldA.desc": {
+          "source": "The character set to use for the connection (e.g. utf8)",
+          "message": "Znaková sada pro připojení (např. utf8)"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.Y2hhcnNldA.display_name": {
+          "source": "Character Set",
+          "message": "Znaková sada"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.Y2hhcnNldA.short_desc": {
+          "source": "Connection character set",
+          "message": "Znaková sada připojení"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.Y2xhc3NwYXRo.desc": {
+          "source": "The path to the JDBC driver JAR file(s)",
+          "message": "Cesta k souboru JAR s JDBC ovladačem"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.Y2xhc3NwYXRo.display_name": {
+          "source": "JDBC Classpath",
+          "message": "JDBC classpath"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.Y2xhc3NwYXRo.short_desc": {
+          "source": "JDBC driver classpath",
+          "message": "Classpath ovladače JDBC"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.ZGI.desc": {
+          "source": "The name of the database to connect to",
+          "message": "Název databáze, ke které se připojujete"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "Databáze"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.ZGI.short_desc": {
+          "source": "Database name",
+          "message": "Název databáze"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOm9kYmM.display_name": {
+          "source": "odbc",
+          "message": "odbc"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOm9kYmM.short_desc": {
+          "source": "ODBC driver",
+          "message": "ODBC ovladač"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOmZyZWV0ZHM.display_name": {
+          "source": "freetds",
+          "message": "freetds"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOmZyZWV0ZHM.short_desc": {
+          "source": "Native freetds driver",
+          "message": "Nativní ovladač freetds"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOmpkYmM.display_name": {
+          "source": "jdbc",
+          "message": "jdbc"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOmpkYmM.short_desc": {
+          "source": "JDBC driver",
+          "message": "Ovládací program JDBC"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.ZHJpdmVy.desc": {
+          "source": "The database driver to use for the connection",
+          "message": "Ovládací program databáze pro použití při připojení"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.ZHJpdmVy.display_name": {
+          "source": "Driver",
+          "message": "Ovládací program"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.ZHJpdmVy.short_desc": {
+          "source": "Database driver",
+          "message": "Ovládací program databáze"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.aG9zdA.desc": {
+          "source": "The hostname or IP address of the database server",
+          "message": "Název hostitele nebo IP adresa databázového serveru"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.aG9zdA.display_name": {
+          "source": "Host",
+          "message": "Hostitel"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.aG9zdA.short_desc": {
+          "source": "Database server hostname",
+          "message": "Název hostitele databázového serveru"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Maximální počet připojení v fondu"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Maximální velikost fondu"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Maximální počet spojení fondu"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Minimální počet připojení v fondu"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Minimální velikost fondu"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Minimální počet spojení fondu"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.cG9ydA.desc": {
+          "source": "The port number of the database server",
+          "message": "Číslo portu databázového serveru"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.cG9ydA.display_name": {
+          "source": "Port",
+          "message": "Přístav"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.cG9ydA.short_desc": {
+          "source": "Database server port",
+          "message": "Port databázového serveru"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.cGFzcw.desc": {
+          "source": "The password for database authentication",
+          "message": "Heslo pro ověření přístupu k databázi"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.cGFzcw.display_name": {
+          "source": "Password",
+          "message": "Heslo"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.cGFzcw.short_desc": {
+          "source": "Database password",
+          "message": "Heslo databáze"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.dXNlcg.desc": {
+          "source": "The database user name for authentication",
+          "message": "Uživatelské jméno databáze pro ověření přístupu"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Uživatel"
+        },
+        "app.U1FMLVNlcnZlcg.connection.option.dXNlcg.short_desc": {
+          "source": "Database user",
+          "message": "Uživatel databáze"
+        },
+        "app.U1FMLVNlcnZlcg.desc": {
+          "source": "Create and manage connections to a Microsoft SQL Server database",
+          "message": "Vytvářejte a spravujte připojení k databázi Microsoft SQL Server"
+        },
         "app.U1FMLVNlcnZlcg.display_name": {
           "source": "SQL-Server",
           "message": "SQL-Server"
@@ -10,10 +158,6 @@
         "app.U1FMLVNlcnZlcg.short_desc": {
           "source": "Microsoft SQL Server database",
           "message": "Databáze Microsoft SQL Server"
-        },
-        "app.U1FMLVNlcnZlcg.desc": {
-          "source": "Create and manage connections to a Microsoft SQL Server database",
-          "message": "Vytvářejte a spravujte připojení k databázi Microsoft SQL Server"
         }
       }
     }

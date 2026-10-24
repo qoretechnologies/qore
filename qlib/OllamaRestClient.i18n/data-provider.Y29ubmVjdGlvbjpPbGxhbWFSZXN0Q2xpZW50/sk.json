@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to a local [Ollama](https://ollama.com) runtime serving open-weight LLMs from the local machine.\n\nOllama runs locally by default at `http://localhost:11434`.  No authentication is required for local deployments; pass an `apikey` only for hosted Ollama Cloud or reverse-proxied deployments.\n\nThe connection uses the `ollama://` URL scheme for plain HTTP and `ollamas://` for servers behind TLS.",
+          "message": "Spojenie s lokálnym [Ollama](https://ollama.com) behom poskytujúcim otvorené modely LLM z lokálneho počítača.\n\nOllama beží prednastavené lokálne na `http://localhost:11434`. Pre lokálne nasadenia nie je vyžadované žiadne overenie; poskytnite `apikey` iba pre hostované nasadenia Ollama Cloud alebo pre reverzné proxy.\n\nSpojenie používa schému URL `ollama://` pre bežný HTTP a `ollamas://` pre servery za TLS."
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Ollama Local LLM Connection",
+          "message": "Lokálne spojenie Ollama s LLM"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Ollama chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nOllama serves whichever models have been pulled on the target host, so this option has no default; set it to a model that host provides",
+          "message": "Ollama chatový model používaný klientmi LLM, keď je toto spojenie vybrané pre chat.\n\nChatové modely tvoria samostatnú skupinu od modelov pre vektorizáciu a nemôžu byť navzájom nahrádzané.\n\nOllama poskytuje všetky modely, ktoré boli stiahnuté na cieľovom hostiteľovi, preto táto voľba nemá prednastavenú hodnotu; nastavte ju na model, ktorý hostiteľ poskytuje"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "Chatovací model"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Ollama chat model name",
+          "message": "Meno chatového modelu Ollama"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Optional Bearer token.  Local Ollama deployments do not require authentication; supply only for hosted Ollama Cloud or reverse-proxied deployments.",
+          "message": "Voliteľný Bearer token. Lokálne nasadenia Ollama nepotrebujú overenie; poskytnite len pre hostované Ollama Cloud alebo pre proxy nasadenia."
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Optional Bearer token (Ollama Cloud / proxied deployments)",
+          "message": "Voliteľný Bearer token (Ollama Cloud / proxy nasadenia)"
+        },
+        "connection.T2xsYW1hUmVzdENsaWVudA.scheme.T2xsYW1hUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a local Ollama runtime",
+          "message": "Pripojenie k lokálnej runtime Ollama"
+        }
+      }
+    }
+  }
+}

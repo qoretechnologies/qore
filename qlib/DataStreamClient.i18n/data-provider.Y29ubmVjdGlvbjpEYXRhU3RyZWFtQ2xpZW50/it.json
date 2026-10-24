@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.RGF0YVN0cmVhbUNsaWVudA.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb24.desc": {
+          "source": "A connection to a DataStream API server",
+          "message": "Una connessione a un server API DataStream"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudA.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb24.display_name": {
+          "source": "DataStream REST Connection",
+          "message": "Connessione REST DataStream"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudA.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a DataStream API server",
+          "message": "Una connessione a un server API DataStream"
+        }
+      }
+    }
+  }
+}

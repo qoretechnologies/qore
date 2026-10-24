@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the EasyPost REST API for shipping label generation, tracking, address verification, rate shopping, and multi-carrier fulfillment.\n\nEasyPost provides a unified API across 100+ carriers (USPS, UPS, FedEx, DHL, and more).\n\n**Authentication:** A single API key is used as the HTTP Basic Auth username (with an empty password).\n\n**Test vs. production keys:**\n- Test keys (prefixed `EZTK...`) only return mocked label/tracker data and are free\n- Production keys (prefixed `EZAK...`) bill the EasyPost wallet for real shipments",
+          "message": "Spojenie s REST rozhraním EasyPost pre generovanie štítkov, sledovanie, overovanie adries, porovnávanie cien a plnenie cez viac ako 100 dopravcov.\n\nEasyPost poskytuje jednotné rozhranie pre viac ako 100 dopravcov (USPS, UPS, FedEx, DHL a ďalší).\n\n**Autentizácia:** Používa sa jediný API kľúč ako používateľské meno pre HTTP Basic Auth (s prázdnym heslom).\n\n**Testovacie vs. produkčné kľúče:**\n- Testovacie kľúče (s predponou `EZTK...`) vracajú len simulované údaje o štítkoch/sledovaní a sú zadarmo\n- Produkčné kľúče (s predponou `EZAK...`) účtujú poplatky z EasyPost peňaženky za skutočné doručenia"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "EasyPost REST Connection",
+          "message": "Spojenie EasyPost REST"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your EasyPost account at https://www.easypost.com/account/api-keys\n2. You will see two sets of keys:\n   - **Test keys** (prefixed `EZTK...`): free, return mocked label/tracker data; use these for development and integration testing\n   - **Production keys** (prefixed `EZAK...`): bill the EasyPost wallet for real shipments; use these only when you are ready to ship live\n3. Copy the appropriate key for your environment\n\n**Important:**\n- Production keys incur real charges; treat them as secrets\n- Test keys cannot purchase real labels or generate real tracking numbers\n- The API key is used as the HTTP Basic Auth username with an empty password",
+          "message": "1. Prihláste sa do svojho účtu EasyPost na https://www.easypost.com/account/api-keys\n2. Uvidíte dve sady kľúčov:\n   - **Testovacie kľúče** (s predponou `EZTK...`): bezplatné, vrátia náhodné štítky/stopovacie údaje; použite ich na vývoj a testovanie integrácie\n   - **Produkčné kľúče** (s predponou `EZAK...`): účtujú poplatky z EasyPost peňaženky za skutočné doručenia; použite ich len, keď ste pripravení doručovať skutočné zásilky\n3. Skopírujte príslušný kľúč pre váš prostredie\n\n**Dôležité:**\n- Produkčné kľúče spôsobia skutočné poplatky; správajte sa s nimi ako s tajnými údajmi\n- Testovacie kľúče nemôžu kúpiť skutočné štítky ani generovať skutočné sledovacie čísla\n- Kľúč API sa používa ako používateľské meno pre HTTP Basic Auth s prázdnym heslom"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your EasyPost API Key",
+          "message": "Ako získať svoj kľúč API EasyPost"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "Your EasyPost API key. Test keys are prefixed `EZTK...` and only return mocked label/tracker data; production keys are prefixed `EZAK...` and bill the wallet for real shipments. Obtain a key at https://www.easypost.com/account/api-keys.",
+          "message": "Váš kľúč API EasyPost. Testovacie kľúče majú predponu `EZTK...` a vrátia len náhodné údaje o štítkoch/sledovaní; produkčné kľúče majú predponu `EZAK...` a účtujú poplatky z peňaženky za skutočné doručenia. Získajte kľúč na https://www.easypost.com/account/api-keys."
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "EasyPost API key for HTTP Basic Auth",
+          "message": "EasyPost kľúč API pre HTTP Basic Auth"
+        },
+        "connection.RWFzeVBvc3RSZXN0Q2xpZW50.scheme.RWFzeVBvc3RSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the EasyPost REST API",
+          "message": "Spojenie s REST API EasyPost"
+        }
+      }
+    }
+  }
+}

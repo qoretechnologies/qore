@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "connection.U2FwNEhhbmFSZXN0Q2xpZW50.scheme.U2FwNEhhbmFSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to SAP S/4 Hana REST API services",
+          "message": "Una conexión a los servicios REST de SAP S/4 Hana"
+        },
+        "connection.U2FwNEhhbmFSZXN0Q2xpZW50.scheme.U2FwNEhhbmFSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "SAP S/4 Hana REST Connection",
+          "message": "Conexión REST de SAP S/4 Hana"
+        },
+        "connection.U2FwNEhhbmFSZXN0Q2xpZW50.scheme.U2FwNEhhbmFSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The SAP S/4 Hana API key",
+          "message": "La clave de API de SAP S/4 Hana"
+        },
+        "connection.U2FwNEhhbmFSZXN0Q2xpZW50.scheme.U2FwNEhhbmFSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Clave de API"
+        },
+        "connection.U2FwNEhhbmFSZXN0Q2xpZW50.scheme.U2FwNEhhbmFSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "The SAP S/4 Hana API key",
+          "message": "La clave de API de SAP S/4 Hana"
+        },
+        "connection.U2FwNEhhbmFSZXN0Q2xpZW50.scheme.U2FwNEhhbmFSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to SAP S/4 Hana REST API services",
+          "message": "Una conexión a los servicios REST de SAP S/4 Hana"
+        }
+      }
+    }
+  }
+}

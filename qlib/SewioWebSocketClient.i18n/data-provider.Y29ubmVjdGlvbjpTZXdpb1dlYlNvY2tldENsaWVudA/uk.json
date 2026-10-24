@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.desc": {
+          "source": "A connection to Sewio WebSocket services",
+          "message": "Підключення до служб Sewio WebSocket"
+        },
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.display_name": {
+          "source": "Sewio WebSocket Connection",
+          "message": "Підключення Sewio WebSocket"
+        },
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Sewio RTLS Studio API key",
+          "message": "Ключ API Sewio RTLS Studio"
+        },
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "The Sewio RTLS Studio API key",
+          "message": "Ключ API Sewio RTLS Studio"
+        },
+        "connection.U2V3aW9XZWJTb2NrZXRDbGllbnQ.scheme.U2V3aW9XZWJTb2NrZXRDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to Sewio WebSocket services",
+          "message": "Підключення до служб Sewio WebSocket"
+        }
+      }
+    }
+  }
+}

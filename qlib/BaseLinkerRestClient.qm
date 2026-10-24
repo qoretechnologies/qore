@@ -214,7 +214,8 @@ BaseLinkerRestClient baselinker({"apikey": ENV.BASELINKER_API_KEY});
 public class BaseLinkerRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("BaseLinkerRestClient",
+            "BaseLinkerRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "BaseLinker REST Connection",
             "short_desc": "A connection to the BaseLinker REST API",
             "desc": "A connection to the BaseLinker REST API for managing orders, products, "
@@ -273,6 +274,7 @@ public class BaseLinkerRestConnection inherits RestClient::RestConnection {
             },
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Obtain Your API Token",
                     "intent": "info",
                     "content": "This integration requires a **BaseLinker API token**.\n\n"
@@ -288,7 +290,7 @@ public class BaseLinkerRestConnection inherits RestClient::RestConnection {
                         "(`/connector.php`) with a form-encoded body",
                 },
             ),
-        };
+        });
     }
 
     #! creates the BaseLinkerRestConnection object

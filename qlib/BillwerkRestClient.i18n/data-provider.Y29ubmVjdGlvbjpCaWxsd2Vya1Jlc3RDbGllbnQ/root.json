@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.QmlsbHdlcmtSZXN0Q2xpZW50.scheme.QmlsbHdlcmtSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Billwerk Connection",
+          "message": "Billwerk Connection"
+        },
+        "connection.QmlsbHdlcmtSZXN0Q2xpZW50.scheme.QmlsbHdlcmtSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to Billwerk with the REST API",
+          "message": "A connection to Billwerk with the REST API"
+        },
+        "connection.QmlsbHdlcmtSZXN0Q2xpZW50.scheme.QmlsbHdlcmtSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to Billwerk with the REST API",
+          "message": "A connection to Billwerk with the REST API"
+        },
+        "connection.QmlsbHdlcmtSZXN0Q2xpZW50.scheme.QmlsbHdlcmtSZXN0Q29ubmVjdGlvbg.option.Y2xpZW50X2lk.desc": {
+          "source": "the Billwerk OAuth2 client ID",
+          "message": "the Billwerk OAuth2 client ID"
+        },
+        "connection.QmlsbHdlcmtSZXN0Q2xpZW50.scheme.QmlsbHdlcmtSZXN0Q29ubmVjdGlvbg.option.Y2xpZW50X3NlY3JldA.desc": {
+          "source": "the Billwerk OAuth2 client secret",
+          "message": "the Billwerk OAuth2 client secret"
+        }
+      }
+    }
+  }
+}

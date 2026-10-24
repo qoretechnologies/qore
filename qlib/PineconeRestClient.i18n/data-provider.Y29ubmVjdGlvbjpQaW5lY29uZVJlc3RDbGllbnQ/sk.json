@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.desc": {
+          "source": "Connect to [Pinecone Admin](https://docs.pinecone.io/guides/organizations/manage-service-accounts) to provision projects and manage access.\n\n- Uses the service account's **Client ID** and **Client Secret**\n- Acquires and renews OAuth2 bearer tokens automatically\n- Verifies credentials by listing accessible projects\n\nCreate the service account in your Pinecone organization and grant the roles its workflows need.",
+          "message": "Pripojte sa k [Pinecone Admin](https://docs.pinecone.io/guides/organizations/manage-service-accounts) na zriadenie projektov a správu prístupu.\n\n- Používa **ID klienta** a **tajný kľúč klienta** účtu služby\n- Automaticky získava a obnovuje nosné tokeny OAuth2\n- Overuje povolenia výpisom prístupných projektov\n\nVytvorte účet služby vo vašej organizácii Pinecone a pridajte mu právomoci potrebné pre jeho pracovné postupy."
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Pinecone Admin Connection",
+          "message": "Pripojenie k správcom Pinecone"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "The OAuth2 client ID of a service account in your Pinecone organization. This differs from the service account's resource ID.",
+          "message": "ID klienta OAuth2 pre službový účet v organizácii Pinecone. Odlišuje sa od ID prostriedku službového účtu."
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9pZA.display_name": {
+          "source": "Client ID",
+          "message": "ID klienta"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "The secret issued when the service account is created or rotated.",
+          "message": "Tajný kľúč vydaný pri vytváraní alebo obnove službového účtu."
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.display_name": {
+          "source": "Client Secret",
+          "message": "Klientský tajný kľúč"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.option.b2F1dGgyX2dyYW50X3R5cGU.allowed_values.c3RyaW5nOmNsaWVudF9jcmVkZW50aWFscw.display_name": {
+          "source": "Client Credentials",
+          "message": "Poverenie klienta"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVBZG1pblJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "Manage Pinecone organizations with a service account",
+          "message": "Spravujte organizácie Pinecone pomocou službového účtu"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to [Pinecone](https://www.pinecone.io) — a managed vector database for semantic search, hybrid search and retrieval-augmented generation.\n\nRequires an API key, sent as the `Api-Key` header (NOT `Authorization: Bearer`).  Create one in the [Pinecone console](https://app.pinecone.io/); a key is scoped to a single project, so the connection reaches the indexes of that project only.\n\nPinecone has a **two-plane architecture**, and this connection addresses both.  The control plane at `https://api.pinecone.io` creates and describes indexes, backups and collections.  The data plane — searching, upserting and fetching, which is to say the operations that *are* Pinecone — lives on a **separate host per index**, which only the control plane knows.  Actions that reach it take the index as an option and the host is resolved and cached automatically, so nothing here has to be configured per index.\n\nThe dated API version is pinned by this module and sent on every call, so a change to the server-side default cannot alter the behaviour of a flow that is already running.",
+          "message": "Pripojenie k [Pinecone](https://www.pinecone.io) — spravovanému databázovému systému vektorov pre semantické vyhľadávanie, hybridné vyhľadávanie a generáciu založenú na získaných údajoch.\n\nVyžaduje API kľúč, ktorý sa pošle ako hlavička `Api-Key` (NIKOLÍ `Authorization: Bearer`). Vytvorte ho v [konzole Pinecone](https://app.pinecone.io/); kľúč je obmedzený na jeden projekt, takže pripojenie má prístup len k indexom tohto projektu.\n\nPinecone má **dvojrovinovú architektúru**, a toto pripojenie zasahuje do oboch. Riadiaca rovina na `https://api.pinecone.io` vytvára a popisuje indexy, zálohy a kolekcie. Dátová rovina — vyhľadávanie, vkladanie a načítanie, čo je vlastne to, čo je Pinecone — sa nachádza na **samostatnom hostiteľovi pre každý index**, ktorý pozná len riadiaca rovina. Akcie, ktoré k nemu smerujú, majú index ako voliteľný parameter a hostiteľ sa automaticky vyrieši a uloží do vyrovnávacej pamäte, takže tu nič nemusí byť nastavené pre každý index.\n\nStaršia verzia API je pevne stanovená touto modulom a odosielaná pri každom volaní, takže zmena prednastavenej verzie na strane servera nemôže ovplyvniť správanie bežiaceho toku."
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Pinecone Vector Database Connection",
+          "message": "Pripojenie k databáze Pinecone pre vektory"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Pinecone API key, sent as the `Api-Key` header (NOT `Authorization: Bearer`).\n\nCreate one in the [Pinecone console](https://app.pinecone.io/) under **API keys**.  A key belongs to one project and carries its own permissions, so a key that can read may not be able to create or delete an index.",
+          "message": "API kľúč Pinecone, ktorý sa pošle ako hlavička `Api-Key` (NIKOLÍ `Authorization: Bearer`).\n\nVytvorte ho v [konzole Pinecone](https://app.pinecone.io/) v časti **API kľúče**. Kľúč patrí jednému projektu a má svoje vlastné oprávnenia, takže kľúč, ktorý môže čítať, nemusí byť schopný vytvárať alebo mazať index."
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Kľúč API"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "The Pinecone API key",
+          "message": "Kľúč API pre Pinecone"
+        },
+        "connection.UGluZWNvbmVSZXN0Q2xpZW50.scheme.UGluZWNvbmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Pinecone managed vector database",
+          "message": "Pripojenie k spravovanému vektorovému databázovému systému Pinecone"
+        }
+      }
+    }
+  }
+}

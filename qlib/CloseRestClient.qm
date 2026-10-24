@@ -231,7 +231,8 @@ public class CloseRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "closerest://api.close.com/api/v1";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("CloseRestClient",
+            "CloseRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Close CRM REST Connection",
             "short_desc": "A connection to the Close CRM REST API",
             "desc": "A connection to the Close CRM REST API for managing leads, contacts, "
@@ -282,7 +283,7 @@ public class CloseRestConnection inherits RestClient::RestConnection {
                     }),
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
-        };
+        });
     }
 
     #! creates the CloseRestConnection object

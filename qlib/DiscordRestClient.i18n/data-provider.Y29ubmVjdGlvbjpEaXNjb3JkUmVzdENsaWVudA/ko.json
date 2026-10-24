@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Discord REST API",
+          "message": "Discord REST API에 대한 연결"
+        },
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Discord REST Connection",
+          "message": "Discord REST 연결"
+        },
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "The default API version to use",
+          "message": "사용할 기본 API 버전"
+        },
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API 버전"
+        },
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "사용할 API 버전"
+        },
+        "connection.RGlzY29yZFJlc3RDbGllbnQ.scheme.RGlzY29yZFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Discord REST API",
+          "message": "Discord REST API에 대한 연결"
+        }
+      }
+    }
+  }
+}

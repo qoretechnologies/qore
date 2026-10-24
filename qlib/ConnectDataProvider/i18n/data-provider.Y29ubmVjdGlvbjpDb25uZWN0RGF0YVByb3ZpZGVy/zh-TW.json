@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.desc": {
+          "source": "Connect RPC protocol connection for DataStream 2.0",
+          "message": "DataStream 2.0 的 Connect RPC 協定連線"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.display_name": {
+          "source": "Connect RPC",
+          "message": "Connect RPC"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOmNib3I.desc": {
+          "source": "CBOR binary codec (`json` module >= 1.12 required)",
+          "message": "CBOR 二進位編碼 (`json` 模組需 >= 1.12)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOmNib3I.display_name": {
+          "source": "CBOR",
+          "message": "CBOR"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "JSON codec (`json` module required)",
+          "message": "JSON 編碼 (`json` 模組需安裝)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOnlhbWw.desc": {
+          "source": "YAML codec with full Qore type fidelity",
+          "message": "支援完整 Qore 類型保真度的 YAML 編碼"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.allowed_values.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.desc": {
+          "source": "The codec for message serialization: `yaml` (default), `json`, or `cbor`",
+          "message": "訊息序列化使用的編碼：`yaml`（預設）、`json`，或 `cbor`"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.display_name": {
+          "source": "Codec",
+          "message": "編碼"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.Y29kZWM.short_desc": {
+          "source": "Serialization codec",
+          "message": "序列化編碼"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.YWNjZXB0X2FsbF9jZXJ0cw.desc": {
+          "source": "Accept all server TLS certificates without validation (for testing only; default: True)",
+          "message": "接受所有伺服器 TLS 憑證而不進行驗證（僅供測試使用；預設：True）"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.YWNjZXB0X2FsbF9jZXJ0cw.display_name": {
+          "source": "Accept All Certs",
+          "message": "接受所有憑證"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.YWNjZXB0X2FsbF9jZXJ0cw.short_desc": {
+          "source": "Accept all TLS certificates",
+          "message": "接受所有 TLS 憑證"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.allowed_values.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "Raw `deflate` compression (RFC 1951)",
+          "message": "原始 `deflate` 壓縮（RFC 1951）"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.allowed_values.c3RyaW5nOmRlZmxhdGU.display_name": {
+          "source": "Deflate",
+          "message": "Deflate"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.allowed_values.c3RyaW5nOmd6aXA.desc": {
+          "source": "Standard `gzip` compression (RFC 1952)",
+          "message": "標準 `gzip` 壓縮 (RFC 1952)"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.allowed_values.c3RyaW5nOmd6aXA.display_name": {
+          "source": "Gzip",
+          "message": "Gzip"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.desc": {
+          "source": "Per-message compression encoding: `gzip` or `deflate`",
+          "message": "每訊息壓縮編碼：`gzip` 或 `deflate`"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Compression",
+          "message": "壓縮"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Compression encoding",
+          "message": "壓縮編碼"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmF1dG8.desc": {
+          "source": "Auto-detect protocol (tries HTTP/3, falls back to HTTP/2)",
+          "message": "自動偵測協定（嘗試 HTTP/3，失敗則回退至 HTTP/2）"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmgy.desc": {
+          "source": "HTTP/2 over TLS (`h2` ALPN negotiation)",
+          "message": "HTTP/2 over TLS (`h2` ALPN 欺騙）"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmgy.display_name": {
+          "source": "HTTP/2",
+          "message": "HTTP/2"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmgz.desc": {
+          "source": "HTTP/3 over QUIC (requires QUIC support in the Qore runtime)",
+          "message": "HTTP/3 over QUIC（需 Qore 執行時支援 QUIC）"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.allowed_values.c3RyaW5nOmgz.display_name": {
+          "source": "HTTP/3",
+          "message": "HTTP/3"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.desc": {
+          "source": "HTTP protocol: `auto` (default), `h2` (HTTP/2), or `h3` (HTTP/3)",
+          "message": "HTTP 協定：`auto`（預設）、`h2`（HTTP/2），或 `h3`（HTTP/3）"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.display_name": {
+          "source": "Protocol",
+          "message": "協定"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.cHJvdG9jb2w.short_desc": {
+          "source": "HTTP protocol version",
+          "message": "HTTP 協定版本"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dGltZW91dF9tcw.desc": {
+          "source": "Default request timeout in milliseconds",
+          "message": "預設要求逾時時間（毫秒）"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dGltZW91dF9tcw.display_name": {
+          "source": "Timeout",
+          "message": "逾時"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dGltZW91dF9tcw.short_desc": {
+          "source": "Default timeout (ms)",
+          "message": "預設逾時時間（毫秒）"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dXNlX2Rpc2NvdmVyeQ.desc": {
+          "source": "Enable automatic service discovery via Connect reflection (default: True)",
+          "message": "啟用透過 Connect 反射的自動服務發掘（預設：True）"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dXNlX2Rpc2NvdmVyeQ.display_name": {
+          "source": "Use Discovery",
+          "message": "使用發掘"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.option.dXNlX2Rpc2NvdmVyeQ.short_desc": {
+          "source": "Enable service discovery",
+          "message": "啟用服務發掘"
+        },
+        "connection.Q29ubmVjdERhdGFQcm92aWRlcg.scheme.Q29ubmVjdENvbm5lY3Rpb24.short_desc": {
+          "source": "Connect RPC connection",
+          "message": "連接 RPC 連線"
+        }
+      }
+    }
+  }
+}

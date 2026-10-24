@@ -4,6 +4,14 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Connection schemes, their setup messages, connection options and allowed values now have source-owned
+    translation catalogs. Unchanged HTTP options reused by REST and other schemes share their original
+    identities; changing a default preserves the identity, while changing a field's wording gives it a new
+    producer identity. Hosts can project connection forms through
+    @ref DataProvider::ConnectionPresentationCatalog "ConnectionPresentationCatalog". Missing translations are
+    marked incomplete and retain their source in producer metadata
+    (<a href="https://github.com/qoretechnologies/qore/issues/5513">issue 5513</a>).
+
     Builtin classes can register QoreClass::setMemberWriteGate() to handle assignment, compound and nested writes,
     removal and deletion of undeclared members held in external storage. Builtin read gates and the new write
     gate are inherited by Qore subclasses, including accesses through <tt>self</tt>. Declared members retain
@@ -19,6 +27,12 @@
     raise \c OBJECT-ALREADY-DELETED. Dynamic dispatch now checks the receiver before falling back to
     pseudo-methods such as <tt>val()</tt>, including calls through closure-bound variables
     (<a href="https://github.com/qoretechnologies/qore/issues/5509">issue 5509</a>).
+
+    A @ref weak_assignment_operator "weak reference" to a destroyed object that is held by a hash or by an object
+    member consistently reads as no value. Code run by the AST interpreter read it as the destroyed object, so that
+    \c exists returned @ref True for it and it could be assigned or passed as an argument; this affected AST
+    execution and code that the other execution modes run with the AST interpreter. Method calls through such a
+    reference raise \c OBJECT-ALREADY-DELETED as before.
 
     @ref Qore::seconds() "seconds()", numeric @ref Qore::date() "date()" conversions and the C++ relative-date
     factories preserve durations larger than 2^31 seconds without overflowing intermediate 32-bit arithmetic.
@@ -684,6 +698,14 @@
     nothing), and the descriptor is closed when the object is destroyed (it was never closed).  Code that destroys or
     closes one end while it still uses the descriptor elsewhere, for example through a descriptor number given to
     another API, must keep the object open as long as the descriptor is used.
+
+    @par Writes to a Nonblocking File Wait for Room
+    A write of a @ref Qore::File "File" whose descriptor is nonblocking, because the file was opened with
+    @ref file_open_constants "O_NONBLOCK" or because another holder of the descriptor made it nonblocking, now waits
+    for room when the descriptor is full, as a write to a blocking descriptor does; it raised \c FILE-WRITE-ERROR
+    (<tt>Resource temporarily unavailable</tt>).  Code that filled a pipe by writing until this error can write while
+    @ref Qore::Socket::poll() "Socket::poll()" reports room for a write.  The wait ends at once when the thread is
+    cancelled or its Program is interrupted.
 
     @par Child Processes Do Not Use the Database Connections of Their Parent
     A child process created with @ref Qore::fork() "fork()" gives up the connections of the
@@ -1598,6 +1620,20 @@ val = "string";      # OK
 
     <b>Workarounds:</b>
     - None needed: a value returned with an exception was never meant to be used; use the exception
+    @endparblock
+
+    @par C++ API: QoreFile::write() Returns a 64-Bit Integer
+    @parblock
+    The three \c QoreFile::write() variants (for a \c QoreString, a \c BinaryNode, and a buffer with a length) now
+    return \c int64 instead of \c int, so that the number of bytes of a write of 2 GiB or more is returned; it was
+    truncated to 32 bits.  The return type is not part of the exported symbol, so a module compiled with the earlier
+    header still loads and calls the same function: on x86-64 and arm64 it reads the lower 32 bits of the result,
+    as it did before, and only a write of 2 GiB or more returns a truncated number to it.  Code that compares the
+    result with 0 compiles unchanged; code that stores it in an \c int or takes the address of the method with the
+    earlier type must be changed.
+
+    <b>Workarounds:</b>
+    - Store the result in an \c int64, and rebuild the module to get the number of bytes of large writes
     @endparblock
 
     @par qget Command-Line Changes
@@ -4914,6 +4950,38 @@ while (*binary chunk = input.read(65536)) {
       call leaked two descriptors for the life of the process, @ref Qore::ReadOnlyFile::close() "close()" on an end
       did nothing, and the reading end never got the end of the input; the ends now close their descriptors with
       \c close() and when they are destroyed
+    - Fixed the reads and writes of a @ref Qore::File "File" on a descriptor that another holder has made
+      nonblocking, as the event loop of an embedded Node.js runtime does with the standard streams of the process, or
+      that was opened with @ref file_open_constants "O_NONBLOCK": a write that found the descriptor full, for example
+      <tt>stderr.printf()</tt> to a pipe whose reader was slow, failed with \c FILE-WRITE-ERROR
+      (<tt>Resource temporarily unavailable</tt>), and @ref Qore::ReadOnlyFile::readLine() "readLine()",
+      @ref Qore::ReadOnlyFile::getchar() "getchar()" and the reads of binary integers returned @ref nothing, as at
+      the end of the file, when no data had arrived yet.  These reads and writes now wait for data or room; the wait
+      ends at once when the thread is cancelled or its Program is interrupted
+    - Fixed the output of @ref Qore::print() "print()", @ref Qore::printf() "printf()" and the other output
+      functions, and the message of an unhandled exception, on a nonblocking standard output or standard error: the
+      part of the output that the descriptor did not take at once was dropped without an error; it is now written
+      whole
+    - Fixed the reads of binary integers, such as @ref Qore::ReadOnlyFile::readi4() "ReadOnlyFile::readi4()", from
+      a pipe that returned the bytes of a value in parts: the value was made of the first part, and the rest was read
+      as the start of the next value; the value is now read whole, and a value that the end of the file cuts short
+      is not returned
+    - Fixed @ref Qore::File::writei8() "File::writei8()" and @ref Qore::File::writei8LSB() "File::writei8LSB()",
+      which wrote only 4 of the 8 bytes of the integer (and returned 4), so that
+      @ref Qore::ReadOnlyFile::readi8() "readi8()" and @ref Qore::ReadOnlyFile::readi8LSB() "readi8LSB()" could not
+      read the value back; all 8 bytes are now written
+    - Fixed @ref Qore::FileInputStream::peek() "FileInputStream::peek()" on a pipe, a named pipe, a terminal or a
+      socket, such as @ref Qore::stdin_stream "stdin_stream" reading a pipe: the byte peeked was lost and a second
+      peek returned the byte after it, so @ref Qore::StreamReader::readLine() "StreamReader::readLine()" lost the
+      first byte of the line after a line that ends with a carriage return and a line feed; the stream now keeps the
+      byte and returns it with the next read.  A peek also ends with \c FILE-READ-TIMEOUT-ERROR after the timeout
+      of the stream, as documented; it waited without a limit
+    - Fixed writes of 2 GiB or more with @ref Qore::File "File" and @ref Qore::FileOutputStream "FileOutputStream":
+      @ref Qore::File::write() "File::write()" and the other write methods of File returned a wrong number of bytes
+      written, @ref Qore::FileOutputStream::write() "FileOutputStream::write()" raised \c FILE-WRITE-ERROR after
+      it had written all of the data, and on macOS, which refuses a read or write of more than 2 GiB at once, such
+      writes and reads failed with \c EINVAL; reads and writes of files and of the standard streams are now made in
+      parts of at most 1 GiB
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module, not those the \c .qm file sets, so a warning that the \c .qm file
       enables, for example with @ref enable-all-warnings "%enable-all-warnings", was not raised in the other files.
@@ -5880,8 +5948,8 @@ while (*binary chunk = input.read(65536)) {
         bounded yield back to the poll loop
       - fixed synchronous @ref Qore::ReadOnlyFile "ReadOnlyFile" and @ref Qore::FileInputStream
         "FileInputStream" reads on descriptors opened with \c O_NONBLOCK: transient \c EAGAIN / \c EWOULDBLOCK
-        results now return to a cancellation-aware readiness wait with a bounded backoff and one monotonic timeout
-        deadline, without changing the descriptor's file-status flags
+        results now return to a cancellation-aware readiness wait with one monotonic timeout deadline, without
+        changing the descriptor's file-status flags
       - fixed scheduling of closure values created in object scope with the @ref background "background operator" so
         stale captured objects are rejected before thread creation and valid captured objects stay alive until the
         background expression finishes

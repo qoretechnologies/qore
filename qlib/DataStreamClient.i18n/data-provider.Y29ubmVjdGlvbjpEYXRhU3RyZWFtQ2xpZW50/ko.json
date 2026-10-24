@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.RGF0YVN0cmVhbUNsaWVudA.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb24.desc": {
+          "source": "A connection to a DataStream API server",
+          "message": "DataStream API 서버로의 연결"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudA.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb24.display_name": {
+          "source": "DataStream REST Connection",
+          "message": "DataStream REST 연결"
+        },
+        "connection.RGF0YVN0cmVhbUNsaWVudA.scheme.RGF0YVN0cmVhbUNvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a DataStream API server",
+          "message": "DataStream API 서버로의 연결"
+        }
+      }
+    }
+  }
+}

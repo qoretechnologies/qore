@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Mews REST API",
+          "message": "Mews REST API에 연결"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Mews REST Connection",
+          "message": "Mews REST 연결"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50.desc": {
+          "source": "The Mews client value for requests",
+          "message": "요청에 대한 Mews 클라이언트 값"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50.display_name": {
+          "source": "Mews Client",
+          "message": "Mews 클라이언트"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50.short_desc": {
+          "source": "The Mews client value for requests",
+          "message": "요청에 대한 Mews 클라이언트 값"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50X3Rva2Vu.desc": {
+          "source": "The Mews client token for access to the given Mews instance",
+          "message": "지정된 Mews 인스턴스에 대한 액세스를 위한 Mews 클라이언트 토큰"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50X3Rva2Vu.display_name": {
+          "source": "Mews Client Token",
+          "message": "Mews 클라이언트 토큰"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.Y2xpZW50X3Rva2Vu.short_desc": {
+          "source": "The Mews client token for access to the given Mews instance",
+          "message": "지정된 Mews 인스턴스에 대한 액세스를 위한 Mews 클라이언트 토큰"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.YWNjZXNzX3Rva2Vu.desc": {
+          "source": "The Mews account token for access to the given Mews instance",
+          "message": "지정된 Mews 인스턴스에 대한 액세스를 위한 Mews 계정 토큰"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.YWNjZXNzX3Rva2Vu.display_name": {
+          "source": "Mews Account Token",
+          "message": "Mews 계정 토큰"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.option.YWNjZXNzX3Rva2Vu.short_desc": {
+          "source": "The Mews account token for access to the given Mews instance",
+          "message": "지정된 Mews 인스턴스에 대한 액세스를 위한 Mews 계정 토큰"
+        },
+        "connection.TWV3c1Jlc3RDbGllbnQ.scheme.TWV3c1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Mews REST API",
+          "message": "Mews REST API에 연결"
+        }
+      }
+    }
+  }
+}

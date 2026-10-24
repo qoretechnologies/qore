@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to a ServerSentEvent server service",
+          "message": "ServerSentEvent サーバーサービスへの接続"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.display_name": {
+          "source": "ServerSentEvent Connection",
+          "message": "ServerSentEvent 接続"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGk.desc": {
+          "source": "AsyncAPI schema URL or file path used to validate received SSE event data",
+          "message": "受信した SSE イベントデータの検証に使用される AsyncAPI スキーマ URL またはファイルパス"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGk.display_name": {
+          "source": "AsyncAPI Schema",
+          "message": "AsyncAPI スキーマ"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGk.short_desc": {
+          "source": "AsyncAPI schema URL or file path",
+          "message": "AsyncAPI スキーマ URL またはファイルパス"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGlfY2hhbm5lbA.desc": {
+          "source": "AsyncAPI channel name to use when `asyncapi` is configured",
+          "message": "`asyncapi` が設定されている場合に使用する AsyncAPI チャネル名"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGlfY2hhbm5lbA.display_name": {
+          "source": "AsyncAPI Channel",
+          "message": "AsyncAPI チャネル"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.YXN5bmNhcGlfY2hhbm5lbA.short_desc": {
+          "source": "AsyncAPI channel for validation",
+          "message": "検証用 AsyncAPI チャネル"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.Ym9keQ.desc": {
+          "source": "The request body to send with the SSE connection request; only valid with non-GET methods. The body is resent on each reconnection attempt",
+          "message": "SSE 接続リクエストに送信するリクエスト本文；非 GET メソッドでのみ有効。再接続試行時に本文は再送信される"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.Ym9keQ.display_name": {
+          "source": "Request Body",
+          "message": "リクエストボディ"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.Ym9keQ.short_desc": {
+          "source": "Request body for non-GET SSE requests",
+          "message": "GET 以外の SSE リクエストのリクエストボディ"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.allowed_values.c3RyaW5nOm5vbmU.desc": {
+          "source": "no serialization is used",
+          "message": "シリアル化は使用しない"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "JSONシリアライズを使用"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.desc": {
+          "source": "Sets the data serialization option",
+          "message": "データのシリアル化オプションを設定"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "データシリアライズ"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.ZGF0YQ.short_desc": {
+          "source": "Sets the data serialization option",
+          "message": "データのシリアル化オプションを設定"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bGFzdF9ldmVudF9pZA.desc": {
+          "source": "Request the server restart sending events from this ID. This will be send in the `Last-Event-ID` header in the connection request to the SSE server",
+          "message": "この ID からイベントの送信を再開するようサーバーに要求します。これは SSE サーバーへの接続リクエスト内の `Last-Event-ID` ヘッダーで送信されます"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bGFzdF9ldmVudF9pZA.display_name": {
+          "source": "Last Event ID",
+          "message": "最終イベント ID"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bGFzdF9ldmVudF9pZA.short_desc": {
+          "source": "Request the server restart sending events from this ID",
+          "message": "この ID からイベントの送信を再開するようサーバーに要求"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the SSE connection request; default: GET. Use POST for APIs that require a request body (e.g., OpenAI, Anthropic streaming APIs)",
+          "message": "SSE 接続リクエストに使用する HTTP メソッド。デフォルト: GET。リクエストボディが必要な API（OpenAI や Anthropic のストリーミング API など）には POST を使用します"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.bWV0aG9k.short_desc": {
+          "source": "HTTP method for the SSE connection request",
+          "message": "SSE 接続リクエスト用の HTTP メソッド"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.cmVjb25uZWN0.desc": {
+          "source": "Try to reconnect when the connection is closed or lost",
+          "message": "接続が閉じられたり失われたときに再接続を試みます"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.cmVjb25uZWN0.display_name": {
+          "source": "Reconnect?",
+          "message": "再接続しますか？"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.cmVjb25uZWN0.short_desc": {
+          "source": "Try to reconnect when the connection is closed or lost",
+          "message": "接続が閉じられたり失われたときに再接続を試みます"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW4.desc": {
+          "source": "Any token to use for the initial HTTP request to authenticate with the server",
+          "message": "サーバーとの認証に初期HTTPリクエストで使用するトークン"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "認証トークン"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token",
+          "message": "認証トークンを設定します"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "`Authorization` ヘッダーに使用する `token` のタイプ。`token` オプションが設定されていない場合は無視されます"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "認証トークンタイプ"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "認証トークンのタイプ"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.allowed_values.aW50OjEz.desc": {
+          "source": "Version 13",
+          "message": "バージョン13"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.allowed_values.aW50Ojg.desc": {
+          "source": "Version 8",
+          "message": "バージョン8"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.desc": {
+          "source": "The ServerSentEvent protocol version to use in the client",
+          "message": "クライアントで使用するServerSentEventプロトコルのバージョン"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.display_name": {
+          "source": "ServerSentEvent Version",
+          "message": "ServerSentEvent バージョン"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.option.dmVyc2lvbg.short_desc": {
+          "source": "Sets the ServerSentEvent protocol version",
+          "message": "ServerSentEventプロトコルのバージョンを設定します"
+        },
+        "connection.U2VydmVyU2VudEV2ZW50Q2xpZW50.scheme.U2VydmVyU2VudEV2ZW50Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a ServerSentEvent server service",
+          "message": "ServerSentEvent サーバーサービスへの接続"
+        }
+      }
+    }
+  }
+}

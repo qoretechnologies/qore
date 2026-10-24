@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "root": {
+      "messages": {
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.display_name": {
+          "source": "Database Connection",
+          "message": "Database Connection"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.short_desc": {
+          "source": "Connection to a database server",
+          "message": "Connection to a database server"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.desc": {
+          "source": "Connection to a database server using a datasource connection string",
+          "message": "Connection to a database server using a datasource connection string"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Max Pool Size"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Maximum pool connections"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Maximum number of connections in the pool"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Min Pool Size"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Minimum pool connections"
+        },
+        "connection.RGJEYXRhUHJvdmlkZXI.scheme.RGF0YXNvdXJjZUNvbm5lY3Rpb24.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Minimum number of connections in the pool"
+        }
+      }
+    }
+  }
+}

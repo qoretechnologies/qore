@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a FHIR REST server using JSON resources",
+          "message": "Połączenie z serwerem REST FHIR przy użyciu zasobów JSON"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "FHIR REST Connection",
+          "message": "Połączenie REST FHIR"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.option.bm9fY2hhcnNldA.desc": {
+          "source": "If `True`, no charset parameter is appended to request Content-Type headers",
+          "message": "Jeśli `True`, parametr charset nie jest dołączany do nagłówków Content-Type żądań"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.option.bm9fY2hhcnNldA.display_name": {
+          "source": "No Charset in Content-Type?",
+          "message": "Brak kodowania znaków w Content-Type?"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.option.bm9fY2hhcnNldA.short_desc": {
+          "source": "Do not append a charset parameter to request Content-Type headers",
+          "message": "Nie dołączaj parametru charset do nagłówków Content-Type żądań"
+        },
+        "connection.RmhpclJlc3RDbGllbnQ.scheme.RmhpclJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a FHIR REST server",
+          "message": "Połączenie z serwerem REST FHIR"
+        }
+      }
+    }
+  }
+}

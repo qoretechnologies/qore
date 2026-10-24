@@ -172,7 +172,10 @@ const O_EXCL = O_EXCL;
 #endif
 //! don't allocate controlling tty (0 on platforms where this is not available)
 const O_NOCTTY = O_NOCTTY;
-//! non-blocking I/O (untested with Qore; 0 on platforms where this is not available)
+//! nonblocking open (0 on platforms where this is not available)
+/** A named pipe, for example, is opened without waiting for the other end; reads and writes of the file still wait
+    for data and room (see @ref file_blocking_io "ReadOnlyFile")
+*/
 const O_NONBLOCK = O_NONBLOCK;
 //! synonym for O_NONBLOCK (untested with Qore; 0 on platforms where this is not available)
 const O_NDELAY = O_NDELAY;
@@ -220,6 +223,10 @@ const SEEK_END = SEEK_END;
 
     This class supports posting events to a @ref Qore::Thread::Queue "Queue". See @ref event_handling for more information.
 
+    Writes wait for room and are made whole, also when the file's descriptor is nonblocking, as reads wait for data
+    (see @ref file_blocking_io "ReadOnlyFile"); this includes @ref Qore::stdout "stdout" and
+    @ref Qore::stderr "stderr" when another holder of the process's standard streams has made them nonblocking.
+
     The events raised by this object are listed in the following table:
 
     @anchor file_events
@@ -231,6 +238,9 @@ const SEEK_END = SEEK_END;
     |@ref EVENT_DELETED|Raised when the object being monitored is deleted
     |@ref EVENT_OPEN_FILE|Raised right before an attempt to open a file is made
     |@ref EVENT_FILE_OPENED|Raised when the file has been successfully opened
+
+    @since %Qore 3.0 writes to a nonblocking descriptor wait for room instead of failing with a
+    \c FILE-WRITE-ERROR exception (\c EAGAIN)
  */
 qclass File [system_constructor=FILE_system_constructor; arg=File* f; vparent=ReadOnlyFile; dom=FILESYSTEM];
 
@@ -477,7 +487,7 @@ f.writei1(val);
 
     @param value the integer to write; only the least-significant 8 bits will be written to the file
 
-    @return 0 for success
+    @return 1, the number of bytes written
 
     @throw FILE-WRITE-ERROR %File is not open or an I/O error occurred writing data to the File
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
@@ -502,7 +512,7 @@ f.writei2(val);
 
     @param value the integer to write in binary big-endian format; only the least-significant 16 bits of the integer will be written to the file
 
-    @return 0 for success
+    @return 2, the number of bytes written
 
     @throw FILE-WRITE-ERROR %File is not open or an I/O error occurred writing data to the File
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
@@ -527,7 +537,7 @@ f.writei4(val);
 
     @param value the integer to write in binary big-endian format; only the least-significant 32 bits of the integer will be written to the file
 
-    @return 0 for success
+    @return 4, the number of bytes written
 
     @throw FILE-WRITE-ERROR %File is not open or an I/O error occurred writing data to the File
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
@@ -552,12 +562,13 @@ f.writei8(val);
 
     @param value the integer to write in binary big-endian format; only the least-significant 64 bits of the integer will be written to the file
 
-    @return 0 for success
+    @return 8, the number of bytes written
 
     @throw FILE-WRITE-ERROR %File is not open or an I/O error occurred writing data to the File
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
+    @since %Qore 3.0 all 8 bytes of the integer are written; before, only 4 bytes were written
  */
 int File::writei8(int value) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::writei8", xsink))
@@ -577,7 +588,7 @@ f.writei2LSB(val);
 
     @param value the integer to write in binary little-endian format; only the least-significant 16 bits of the integer will be written to the file
 
-    @return 0 for success
+    @return 2, the number of bytes written
 
     @throw FILE-WRITE-ERROR %File is not open or an I/O error occurred writing data to the File
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
@@ -602,7 +613,7 @@ f.writei4LSB(val);
 
     @param value the integer to write in binary little-endian format; only the least-significant 32 bits of the integer will be written to the file
 
-    @return 0 for success
+    @return 4, the number of bytes written
 
     @throw FILE-WRITE-ERROR %File is not open or an I/O error occurred writing data to the File
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
@@ -627,12 +638,13 @@ f.writei8LSB(val);
 
     @param value the integer to write in binary little-endian format; only the least-significant 64 bits of the integer will be written to the file
 
-    @return 0 for success
+    @return 8, the number of bytes written
 
     @throw FILE-WRITE-ERROR %File is not open or an I/O error occurred writing data to the File
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
+    @since %Qore 3.0 all 8 bytes of the integer are written; before, only 4 bytes were written
  */
 int File::writei8LSB(int value) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::writei8LSB", xsink))

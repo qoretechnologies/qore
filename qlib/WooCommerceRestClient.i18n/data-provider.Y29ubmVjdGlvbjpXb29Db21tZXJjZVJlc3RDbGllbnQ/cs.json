@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the WooCommerce REST API v3 for e-commerce management.\n\nWooCommerce is the most popular open-source e-commerce platform built on WordPress. This integration enables managing orders, products, customers, coupons, webhooks, reports, shipping, taxes, and store settings.\n\n**Authentication:**\n- Uses HTTP Basic Auth with Consumer Key and Consumer Secret\n- Generate API credentials in WordPress admin: WooCommerce > Settings > Advanced > REST API\n\n**Pagination:**\n- Page-based with `page` and `per_page` parameters (max `100` per page)\n- Total counts available in `X-WP-Total` and `X-WP-TotalPages` response headers",
+          "message": "Připojení k REST API WooCommerce v3 pro správu e-shopu.\n\nWooCommerce je nejpopulárnější open-source platforma pro e-commerce postavená na WordPressu. Tato integrace umožňuje spravovat objednávky, produkty, zákazníky, kupóny, webhooky, sestavy, dopravu, daně a nastavení obchodu.\n\n**Autentizace:**\n- Používá HTTP Basic Auth s klíčem spotřebitele a tajným klíčem\n- Generujte přístupové údaje v administraci WordPressu: WooCommerce > Nastavení > Pokročilé > REST API\n\n**Stránkování:**\n- Stránkování podle stránky s parametry `page` a `per_page` (maximálně `100` na stránku)\n- Celkový počet k dispozici v hlavičkách odpovědi `X-WP-Total` a `X-WP-TotalPages`"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "WooCommerce REST Connection",
+          "message": "Připojení k REST API WooCommerce"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to your **WordPress admin panel**\n2. Navigate to **WooCommerce > Settings > Advanced > REST API**\n3. Click **Add key**\n4. Enter a description (e.g., \"Qorus Integration\")\n5. Select a WordPress user and choose **Read/Write** permissions\n6. Click **Generate API key**\n7. Copy both the **Consumer key** (`ck_...`) and **Consumer secret** (`cs_...`)\n\n**Important:**\n- The Consumer secret is only displayed once when generated\n- Store your credentials securely\n- HTTPS is required for Basic Auth (HTTP requires OAuth 1.0a)",
+          "message": "1. Přihlaste se do **administrace WordPressu**\n2. Přejděte na **WooCommerce > Nastavení > Pokročilé > REST API**\n3. Klikněte na **Přidat klíč**\n4. Zadejte popis (např. \"Integrace Qorus\")\n5. Vyberte uživatele WordPressu a zvolte oprávnění **Čtení/Zápis**\n6. Klikněte na **Vygenerovat klíč API**\n7. Zkopírujte oba **klíče spotřebitele** (`ck_...`) a **tajný klíč** (`cs_...`)\n\n**Důležité:**\n- Tajný klíč se zobrazí pouze jednou při generování\n- Uchovávejte své přístupové údaje bezpečně\n- Pro Basic Auth je vyžadováno HTTPS (pro HTTP je vyžadován OAuth 1.0a)"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Credentials",
+          "message": "Jak získat své přihlašovací údaje API"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfa2V5.desc": {
+          "source": "The WooCommerce REST API consumer key used as the username for HTTP Basic Auth.\n\n**To obtain your API credentials:**\n1. Log in to your WordPress admin panel\n2. Go to **WooCommerce > Settings > Advanced > REST API**\n3. Click **Add key**\n4. Enter a description, select a user, and choose **Read/Write** permissions\n5. Click **Generate API key**\n6. Copy the **Consumer key** (starts with `ck_`)",
+          "message": "Klíč spotřebitele REST API WooCommerce používaný jako uživatelské jméno pro HTTP Basic Auth.\n\n**Jak získat přístupové údaje:**\n1. Přihlaste se do administrace WordPressu\n2. Přejděte na **WooCommerce > Nastavení > Pokročilé > REST API**\n3. Klikněte na **Přidat klíč**\n4. Zadejte popis, vyberte uživatele a zvolte oprávnění **Čtení/Zápis**\n5. Klikněte na **Vygenerovat klíč API**\n6. Zkopírujte **klíč spotřebitele** (začíná na `ck_`)"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfa2V5.display_name": {
+          "source": "Consumer Key",
+          "message": "Klíč spotřebitele"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfa2V5.short_desc": {
+          "source": "WooCommerce consumer key for authentication",
+          "message": "Klíč spotřebitele WooCommerce pro autentizaci"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfc2VjcmV0.desc": {
+          "source": "The WooCommerce REST API consumer secret used as the password for HTTP Basic Auth.\n\n**To obtain your API credentials:**\n1. Follow the same steps as for the Consumer Key above\n2. Copy the **Consumer secret** (starts with `cs_`)\n\n**Note:** The consumer secret is only shown once when generated. If you lose it, you will need to generate new credentials.",
+          "message": "Tajný klíč REST API WooCommerce používaný jako heslo pro HTTP Basic Auth.\n\n**Jak získat přístupové údaje:**\n1. Postupujte stejně jako u klíče spotřebitele výše\n2. Zkopírujte **tajný klíč** (začíná na `cs_`)\n\n**Poznámka:** Tajný klíč se zobrazí pouze jednou při generování. Pokud jej ztratíte, budete muset vygenerovat nové přístupové údaje."
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfc2VjcmV0.display_name": {
+          "source": "Consumer Secret",
+          "message": "Tajemný klíč"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.Y29uc3VtZXJfc2VjcmV0.short_desc": {
+          "source": "WooCommerce consumer secret for authentication",
+          "message": "Tajný klíč WooCommerce pro ověření"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfdXJs.desc": {
+          "source": "The full URL of your WooCommerce store (e.g., `https://mystore.com`).\n\nThis is the base URL of your WordPress site where WooCommerce is installed. The API path `/wp-json/wc/v3/` will be appended automatically.\n\n**Examples:**\n- `https://mystore.com`\n- `https://shop.example.com`\n- `https://example.com/shop` (if WordPress is in a subdirectory)",
+          "message": "Plná adresa URL vašeho obchodu WooCommerce (např. `https://mystore.com`).\n\nToto je základní adresa vašeho webu s WordPressem, kde je nainstalován WooCommerce. Cesta k rozhraní API `/wp-json/wc/v3/` bude automaticky připojena.\n\n**Příklady:**\n- `https://mystore.com`\n- `https://shop.example.com`\n- `https://example.com/shop` (pokud je WordPress v podsložce)"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfdXJs.display_name": {
+          "source": "Store URL",
+          "message": "Adresa obchodu"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.option.c3RvcmVfdXJs.short_desc": {
+          "source": "WooCommerce store URL",
+          "message": "Adresa obchodu WooCommerce"
+        },
+        "connection.V29vQ29tbWVyY2VSZXN0Q2xpZW50.scheme.V29vQ29tbWVyY2VSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the WooCommerce REST API",
+          "message": "Připojení k REST rozhraní WooCommerce"
+        }
+      }
+    }
+  }
+}

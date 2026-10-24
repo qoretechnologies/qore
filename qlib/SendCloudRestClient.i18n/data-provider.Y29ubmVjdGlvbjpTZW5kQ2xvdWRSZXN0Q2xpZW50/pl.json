@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the SendCloud REST API for shipping automation.\n\nSendCloud is a shipping platform used by European e-commerce merchants to manage parcels, carriers, shipping labels, returns and tracking.  The SendCloud Public API is authenticated with **HTTP Basic Auth**, where the username is your integration's **public_key** and the password is the associated **secret_key**.\n\n**Important:** SendCloud does **not** provide a sandbox environment.  When writing integration tests, use shipment method ID `8` (*Unstamped letter*) so that no real parcel is produced or billed.",
+          "message": "Połączenie z REST API SendCloud do automatyzacji wysyłek.\n\nSendCloud to platforma do wysyłek używana przez e-commerce w Europie do zarządzania przesyłkami, kurierami, etykietami, zwrotami i śledzeniem. Publiczne API SendCloud jest uwierzytelniane za pomocą **HTTP Basic Auth**, gdzie nazwa użytkownika to **public_key** Twojej integracji, a hasło to **secret_key**.\n\n**Uwaga:** SendCloud **nie oferuje** środowiska testowego. Podczas pisania testów integracji użyj identyfikatora metody wysyłki `8` (*List bez znaczka*) — nie spowoduje to wytworzenia rzeczywistej przesyłki ani rozliczenia."
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "SendCloud REST Connection",
+          "message": "Połączenie REST SendCloud"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "This integration uses the **SendCloud Public API** with HTTP Basic Auth.\n\n**Steps to generate API credentials:**\n1. Log in to the [Sendcloud Panel](https://panel.sendcloud.sc)\n2. Navigate to **Settings > Integrations**\n3. Click **+ Add Integration** and select **Sendcloud API**\n4. Copy the **Public key** and **Secret key** shown on the integration detail page\n\nBoth keys are required: the public key is sent as the Basic Auth username and the secret key as the password.\n\n**No sandbox:** SendCloud does not offer a test environment, so all API calls run against live data.  When writing integration tests, use shipment method ID `8` (*Unstamped letter*) — it is the safe test method because it does not produce a real parcel or generate billing.",
+          "message": "Ta integracja używa **Publicznego API SendCloud** z uwierzytelnieniem HTTP Basic Auth.\n\n**Kroki tworzenia poświadczeń API:**\n1. Zaloguj się do [Panelu Sendcloud](https://panel.sendcloud.sc)\n2. Przejdź do **Ustawienia > Integracje**\n3. Kliknij **+ Dodaj integrację** i wybierz **API Sendcloud**\n4. Skopiuj pokazane **Klucze publiczne** i **Klucze tajne** na stronie szczegółów integracji\n\nOba klucze są wymagane: klucz publiczny jest wysyłany jako nazwa użytkownika w Basic Auth, a klucz tajny jako hasło.\n\n**Brak środowiska testowego:** SendCloud nie oferuje środowiska testowego, więc wszystkie wywołania API działają na danych rzeczywistych. Podczas pisania testów integracji użyj identyfikatora metody wysyłki `8` (*List bez znaczka*) — jest to bezpieczna metoda testowa, ponieważ nie generuje rzeczywistej przesyłki ani rozliczenia."
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your SendCloud API Credentials",
+          "message": "Jak uzyskać swoje poświadczenia API SendCloud"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.c2VjcmV0X2tleQ.desc": {
+          "source": "The SendCloud **secret API key** used as the password for HTTP Basic Auth.\n\n**To obtain your API credentials:**\n1. Log in to the [Sendcloud Panel](https://panel.sendcloud.sc)\n2. Navigate to **Settings > Integrations**\n3. Click **+ Add Integration** and select **Sendcloud API**\n4. After creating the integration, copy the **Public key** and **Secret key** shown on the integration detail page\n\nStore this value securely; it is only visible on the integration detail page.",
+          "message": "Klucz tajny API SendCloud używany jako hasło dla uwierzytelniania HTTP Basic Auth.\n\n**Aby uzyskać dane uwierzytelniające:**\n1. Zaloguj się do [Panelu Sendcloud](https://panel.sendcloud.sc)\n2. Przejdź do **Ustawienia > Integracje**\n3. Kliknij **+ Dodaj integrację** i wybierz **API Sendcloud**\n4. Po utworzeniu integracji skopiuj **Klucz publiczny** i **Klucz tajny** widoczne na stronie szczegółów integracji\n\nPrzechowuj tę wartość bezpiecznie; jest ona widoczna tylko na stronie szczegółów integracji."
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.c2VjcmV0X2tleQ.display_name": {
+          "source": "Secret Key",
+          "message": "Klucz tajny"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.c2VjcmV0X2tleQ.short_desc": {
+          "source": "SendCloud secret API key (Basic Auth password)",
+          "message": "Klucz tajny API SendCloud (hasło dla Basic Auth)"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.cHVibGljX2tleQ.desc": {
+          "source": "The SendCloud **public API key** used as the username for HTTP Basic Auth.\n\n**To obtain your API credentials:**\n1. Log in to the [Sendcloud Panel](https://panel.sendcloud.sc)\n2. Navigate to **Settings > Integrations**\n3. Click **+ Add Integration** and select **Sendcloud API**\n4. After creating the integration, copy the **Public key** and **Secret key** shown on the integration detail page\n\nBoth the public key and the secret key are required to authenticate every request.",
+          "message": "Klucz publiczny API SendCloud używany jako nazwa użytkownika dla uwierzytelniania HTTP Basic Auth.\n\n**Aby uzyskać dane uwierzytelniające:**\n1. Zaloguj się do [Panelu Sendcloud](https://panel.sendcloud.sc)\n2. Przejdź do **Ustawienia > Integracje**\n3. Kliknij **+ Dodaj integrację** i wybierz **API Sendcloud**\n4. Po utworzeniu integracji skopiuj **Klucz publiczny** i **Klucz tajny** widoczne na stronie szczegółów integracji\n\nDo uwierzytelnienia każdego żądania wymagane są zarówno klucz publiczny, jak i tajny."
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.cHVibGljX2tleQ.display_name": {
+          "source": "Public Key",
+          "message": "Klucz publiczny"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.cHVibGljX2tleQ.short_desc": {
+          "source": "SendCloud public API key (Basic Auth username)",
+          "message": "Klucz publiczny API SendCloud (nazwa użytkownika dla Basic Auth)"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.dmVyc2lvbg.allowed_values.c3RyaW5nOnYy.desc": {
+          "source": "v2 (stable)",
+          "message": "v2 (stabilna)"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.dmVyc2lvbg.allowed_values.c3RyaW5nOnYz.desc": {
+          "source": "v3 (future — not yet implemented)",
+          "message": "v3 (przyszłość — jeszcze nie zaimplementowana)"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.dmVyc2lvbg.desc": {
+          "source": "The SendCloud API version used in the base URL.\n\n- `v2` — **stable**; this is the only version currently wired in this integration.\n- `v3` — reserved for a future update and **not yet implemented**; selecting it will cause requests to fail with a `SENDCLOUD-UNSUPPORTED-VERSION` error.",
+          "message": "Wersja API SendCloud używana w adresie URL podstawowym.\n\n- `v2` — **stabilna**; jest to jedyna wersja obecnie skonfigurowana w tej integracji.\n- `v3` — zarezerwowana na przyszłą aktualizację i **jeszcze nie zaimplementowana**; wybór jej spowoduje niepowodzenie żądań z błędem `SENDCLOUD-UNSUPPORTED-VERSION`."
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.dmVyc2lvbg.display_name": {
+          "source": "API Version",
+          "message": "Wersja API"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.option.dmVyc2lvbg.short_desc": {
+          "source": "SendCloud API version",
+          "message": "Wersja interfejsu API SendCloud"
+        },
+        "connection.U2VuZENsb3VkUmVzdENsaWVudA.scheme.U2VuZENsb3VkUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "Connect to SendCloud shipping with HTTP Basic authentication",
+          "message": "Połącz się z usługą wysyłki SendCloud przy użyciu uwierzytelniania HTTP Basic"
+        }
+      }
+    }
+  }
+}

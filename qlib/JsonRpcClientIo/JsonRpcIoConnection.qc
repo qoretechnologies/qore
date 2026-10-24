@@ -40,7 +40,8 @@ public class JsonRpcIoConnection inherits ConnectionProvider::HttpBasedConnectio
         hash<auto> real_opts;
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("JsonRpcClientIo",
+            "JsonRpcIoConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "JSON-RPC (Async I/O) Connection",
             "short_desc": "A connection to a JSON-RPC server using async I/O",
             "desc": "A connection to a JSON-RPC server using async I/O via HttpClientIo with automatic "
@@ -63,7 +64,7 @@ public class JsonRpcIoConnection inherits ConnectionProvider::HttpBasedConnectio
                 "https": "jsonrpcios",
                 "http": "jsonrpcio",
             },
-        };
+        });
     }
 
     #! Creates the JsonRpcIoConnection object

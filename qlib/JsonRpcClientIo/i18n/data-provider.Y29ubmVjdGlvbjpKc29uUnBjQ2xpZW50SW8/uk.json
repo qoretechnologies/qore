@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.desc": {
+          "source": "A connection to a JSON-RPC server using async I/O via HttpClientIo with automatic protocol negotiation (HTTP/3, HTTP/2, HTTP/1.1)",
+          "message": "З’єднання з сервером JSON-RPC за допомогою асинхронного введення/виведення через HttpClientIo з автоматичною діагностика протоколу (HTTP/3, HTTP/2, HTTP/1.1)"
+        },
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.display_name": {
+          "source": "JSON-RPC (Async I/O) Connection",
+          "message": "З’єднання JSON-RPC (асинхронне введення/виведення)"
+        },
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.option.dmVyc2lvbg.desc": {
+          "source": "The JSON-RPC protocol version to use (\"1.0\", \"1.1\", or \"2.0\")",
+          "message": "Версія протоколу JSON-RPC для використання (\"1.0\", \"1.1\" або \"2.0\")"
+        },
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.option.dmVyc2lvbg.display_name": {
+          "source": "JSON-RPC Version",
+          "message": "Версія JSON-RPC"
+        },
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.option.dmVyc2lvbg.short_desc": {
+          "source": "The JSON-RPC protocol version",
+          "message": "Версія протоколу JSON-RPC"
+        },
+        "connection.SnNvblJwY0NsaWVudElv.scheme.SnNvblJwY0lvQ29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a JSON-RPC server using async I/O",
+          "message": "Підключення до сервера JSON-RPC за допомогою асинхронного вводу-виводу"
+        }
+      }
+    }
+  }
+}

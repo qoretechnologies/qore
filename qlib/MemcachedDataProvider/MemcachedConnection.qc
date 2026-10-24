@@ -29,7 +29,8 @@ public namespace MemcachedDataProvider {
 public class MemcachedConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {
         #! Connection scheme information
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("MemcachedDataProvider",
+            "MemcachedConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Memcached Connection",
             "short_desc": "Connection to a memcached server",
             "desc": "Connection to a memcached server for caching data using the memcached binary protocol",
@@ -44,7 +45,7 @@ public class MemcachedConnection inherits ConnectionProvider::AbstractConnection
                 "ssl": "memcacheds",
             },
             "options": ConnectionOptions,
-        };
+        });
 
         #! Connection options
         const ConnectionOptions = {

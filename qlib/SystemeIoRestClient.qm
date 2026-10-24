@@ -185,7 +185,8 @@ SystemeIoRestClient systemeio({"apikey": ENV.SYSTEMEIO_API_KEY});
 public class SystemeIoRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("SystemeIoRestClient",
+            "SystemeIoRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Systeme.io REST Connection",
             "short_desc": "A connection to the Systeme.io REST API",
             "desc": "A connection to the Systeme.io REST API for managing contacts, tags, courses, "
@@ -243,6 +244,7 @@ public class SystemeIoRestConnection inherits RestClient::RestConnection {
             },
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Obtain Your API Key",
                     "intent": "info",
                     "content": "This integration requires a **Systeme.io API key**.\n\n"
@@ -258,7 +260,7 @@ public class SystemeIoRestConnection inherits RestClient::RestConnection {
                         "- Rate limits are plan-based and shared across all keys",
                 },
             ),
-        };
+        });
     }
 
     #! creates the SystemeIoRestConnection object

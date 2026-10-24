@@ -1804,11 +1804,13 @@ char* make_class_name(const char* str) {
    return cn;
 }
 
-void print_node(FILE* fp, const QoreValue qv) {
-   printd(5, "print_node() node: %s\n", qv.getTypeName());
-   QoreStringValueHelper str(qv);
-   fputs(str->getBuffer(), fp);
-   fflush(fp);
+void print_node(FILE* fp, const QoreValue qv, ExceptionSink* xsink) {
+    printd(5, "print_node() node: %s\n", qv.getTypeName());
+    QoreStringValueHelper str(qv);
+    // the text is written up to its first NUL character, as fputs(3) wrote it before; write errors are ignored as
+    // they were then
+    const char* buf = str->c_str();
+    qore_stdio_write(fp, buf, strlen(buf), xsink, "print");
 }
 
 void qore_setup_argv(int pos, int argc, char* argv[]) {

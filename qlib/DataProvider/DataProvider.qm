@@ -1563,6 +1563,12 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_11 DataProvider v3.11
+    - provider catalog extraction, validation, and projection use a shared 64 MiB file bound so large static API
+      schemas, including NetSuite, can be localized without exceeding the general-purpose i18n loader's 16 MiB default
+    - added @ref DataProvider::ConnectionPresentation "ConnectionPresentation" and
+      @ref DataProvider::ConnectionPresentationCatalog "ConnectionPresentationCatalog" for static extraction
+      and source-bound projection of shared connection options, allowed values, and scheme setup messages;
+      app connection overrides are included in app catalogs and app presentation projection
     - added @ref DataProvider::AbstractDataProviderType::getConfigInfo() "AbstractDataProviderType::getConfigInfo()",
       which describes a type itself (its name, path, base type, options, default value, whether it is mandatory, its
       tags and, for a hash type that declares no fields, the type of its other fields) without its fields, element

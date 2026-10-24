@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.desc": {
+          "source": "A connection to a [MongoDB](https://www.mongodb.com) server or a [MongoDB Atlas](https://www.mongodb.com/atlas) cluster, for document storage, retrieval, aggregation and Atlas Vector Search.\n\nUse a `mongodb://` URL for a server or replica set whose hosts are known, and a `mongodb+srv://` URL for Atlas, where the hosts are discovered from DNS and TLS is implied.  An Atlas connection string looks like `mongodb+srv://cluster0.abcde.mongodb.net`.\n\nSupply the credentials as the `username` and `password` options rather than in the URL: they are then stored as connection options - the password as a password - and are URL-encoded when the client is created, so a password containing `@`, `:` or `/` works without the caller having to encode it.",
+          "message": "Pripojenie k serveru [MongoDB](https://www.mongodb.com) alebo k klastru [MongoDB Atlas](https://www.mongodb.com/atlas) pre ukladanie, načítanie, agregáciu a vyhľadávanie vektora v Atlas.\n\nPoužite `mongodb://` URL pre server alebo replikovú množinu s známymi hostiteľmi a `mongodb+srv://` URL pre Atlas, kde sa hostitelia objavujú cez DNS a TLS je implicitný. Pripojací reťazec Atlas má tvar `mongodb+srv://cluster0.abcde.mongodb.net`.\n\nPoužite možnosti `username` a `password` na poskytnutie prihlasovacích údajov namiesto URL: budú uložené ako možnosti pripojenia – heslo ako heslo – a budú URL-encodingované pri vytváraní klienta, takže heslo obsahujúce `@`, `:` alebo `/` bude fungovať bez nutnosti, aby volajúci ho kódovanie vykonal."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.display_name": {
+          "source": "MongoDB Connection",
+          "message": "Pripojenie k MongoDB"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "How long to wait for a connection to be established, sent as the `connectTimeoutMS` URI option.",
+          "message": "Čas, po ktorý čakať na vytvorenie pripojenia, posielaný ako možnosť URI `connectTimeoutMS`."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Časový limit pripojenia"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "How long to wait for a connection to be established",
+          "message": "Čas, po ktorý čakať na vytvorenie pripojenia"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXBwbmFtZQ.desc": {
+          "source": "The name this client reports to the server, sent as the `appName` URI option.\n\nAtlas shows it against every operation in the cluster's monitoring, which is what makes one application's load distinguishable from another's.  Defaults to `qore-mongodb` when neither this option nor the URL sets one.",
+          "message": "Názov, ktorý tento klient hlási serveru, posielaný ako možnosť URI `appName`.\n\nAtlas zobrazuje ho pri každej operácii v monitorovaní klastra, čo umožňuje rozlíšiť záťaž jednej aplikácie od inej. Predvolená hodnota je `qore-mongodb`, ak táto možnosť ani URL nezadajú inú."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXBwbmFtZQ.display_name": {
+          "source": "Application Name",
+          "message": "Názov aplikácie"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXBwbmFtZQ.short_desc": {
+          "source": "The name this client reports to the server",
+          "message": "Názov, ktorý tento klient hlási serveru"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXV0aHNvdXJjZQ.desc": {
+          "source": "The database holding the user's credentials, sent as the `authSource` URI option.\n\nAtlas keeps database users in `admin`, which is also what the server assumes when this is not set; set it only where the credentials live elsewhere.",
+          "message": "Databáza obsahujúca prihlasovacie údaje používateľa, posielaná ako možnosť URI `authSource`.\n\nAtlas uchováva užívateľov databázy v `admin`, čo je tiež to, čo server predpokladá, ak táto možnosť nie je nastavená; nastavte ju len v prípade, že sú údaje uložené inde."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXV0aHNvdXJjZQ.display_name": {
+          "source": "Authentication Database",
+          "message": "Autentifikačná databáza"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXV0aHNvdXJjZQ.short_desc": {
+          "source": "The database holding the user's credentials",
+          "message": "Databáza uchovávajúca prihlasovacie údaje používateľa"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.ZGF0YWJhc2U.desc": {
+          "source": "The database used when an action does not name one, and the default authentication database when `authsource` is not set.",
+          "message": "Databáza používaná, keď akcia nemá názov, a predvolená databáza pre overenie, keď nie je nastavené `authsource`."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.ZGF0YWJhc2U.display_name": {
+          "source": "Default Database",
+          "message": "Predvolená databáza"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.ZGF0YWJhc2U.short_desc": {
+          "source": "The database used when an action does not name one",
+          "message": "Databáza používaná, keď akcia nemá názov"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c29ja2V0X3RpbWVvdXQ.desc": {
+          "source": "How long to wait for a reply on an established connection, sent as the `socketTimeoutMS` URI option.\n\nThis is the only timeout that bounds a server which completes the TCP handshake and then stops answering - a hung `mongod`, a firewall dropping an established flow, a stale NAT mapping, a suspended container - because `connect_timeout` and `server_selection_timeout` have both finished by the time a reply is awaited.\n\n**It applies to every operation on the client**, so it has to be longer than the slowest query the connection is expected to run; to bound an unattended monitor ping, set `ping_timeout` rather than lowering this.",
+          "message": "Čas, po ktorý čakať na odpoveď na uzatvorené pripojenie, odoslaný ako možnosť URI `socketTimeoutMS`.\n\nToto je jediný časový limit, ktorý obmedzuje server, ktorý dokončil TCP handshake a potom prestane odpovedať – zastavený `mongod`, firewall, ktorý zničí pripojenie, starý NAT záznam, pozastavený kontajner – pretože `connect_timeout` a `server_selection_timeout` už skončili, keď sa čaká na odpoveď.\n\n**Platí pre každú operáciu klienta**, preto musí byť dlhší ako najpomalší dotaz, ktorý sa očakáva, že bude spustený; ak má byť ohraničený monitorovací ping, nastavte `ping_timeout` namiesto zníženia tohto času."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c29ja2V0X3RpbWVvdXQ.display_name": {
+          "source": "Socket Timeout",
+          "message": "Časový limit pripojenia"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c29ja2V0X3RpbWVvdXQ.short_desc": {
+          "source": "How long to wait for a reply on an established connection",
+          "message": "Čas, po ktorý čakať na odpoveď na uzatvorené pripojenie"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c2VydmVyX3NlbGVjdGlvbl90aW1lb3V0.desc": {
+          "source": "How long to wait for a suitable server to be found, sent as the `serverSelectionTimeoutMS` URI option.\n\nThis is the timeout a connection to an unreachable cluster actually waits on, because the driver selects a server before it connects to one.",
+          "message": "Čas, po ktorý čakať na nájdenie vhodného servera, odoslaný ako možnosť URI `serverSelectionTimeoutMS`.\n\nToto je časový limit, ktorý pripojenie k nedostupnému klastru skutočne čaká, pretože ovládač vyberie server predtým, ako sa pripojí k nemu."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c2VydmVyX3NlbGVjdGlvbl90aW1lb3V0.display_name": {
+          "source": "Server Selection Timeout",
+          "message": "Časový limit výberu servera"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c2VydmVyX3NlbGVjdGlvbl90aW1lb3V0.short_desc": {
+          "source": "How long to wait for a suitable server to be found",
+          "message": "Čas, po ktorý čakať na nájdenie vhodného servera"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database user.\n\nGiven here rather than in the URL, it is stored as a password and is URL-encoded when the client is created, so a password containing `@`, `:`, `/` or `?` works without the caller having to encode it.",
+          "message": "Heslo pre užívateľa databázy.\n\nZadáva sa tu namiesto URL, uloží sa ako heslo a je URL-kódované pri vytváraní klienta, takže heslo obsahujúce `@`, `:`, `/` alebo `?` funguje bez nutnosti jeho kódovania od volajúceho."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Heslo"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for the database user",
+          "message": "Heslo pre užívateľa databázy"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGluZ190aW1lb3V0.desc": {
+          "source": "The upper bound on a single connection ping.\n\nA ping runs unattended, on a timer, in a thread that something else waits on, so it is bounded independently of the timeouts that apply to data operations: the client the ping uses caps `connectTimeoutMS`, `serverSelectionTimeoutMS` and `socketTimeoutMS` at this value, whatever the URL or the other options say, and the client returned for data operations is left alone.",
+          "message": "Horná hranica jedného pingu spojenia.\n\nPing beží bez dohľadu, na časovači, v thread-e, ktorý niečo iné čaká, takže je obmedzený nezávisle od časových limitov pre operácie s dátami: klient, ktorý používa ping, obmedzuje `connectTimeoutMS`, `serverSelectionTimeoutMS` a `socketTimeoutMS` na túto hodnotu, bez ohľadu na URL alebo iné možnosti, a klient vrátený pre operácie s dátami zostáva nezmenený."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGluZ190aW1lb3V0.display_name": {
+          "source": "Ping Timeout",
+          "message": "Časový limit pre ping"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGluZ190aW1lb3V0.short_desc": {
+          "source": "The upper bound on a single connection ping",
+          "message": "Horná hranica jedného pingu spojenia"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dGxz.desc": {
+          "source": "Encrypt the connection with TLS.\n\nAtlas requires TLS and a `mongodb+srv://` URL implies it, so this is only needed for a `mongodb://` server that requires TLS without advertising it.",
+          "message": "Šifrovanie spojenia pomocou TLS.\n\nAtlas vyžaduje TLS a `mongodb+srv://` URL to implikuje, takže je potrebné len pre `mongodb://` server, ktorý vyžaduje TLS, ale neoznamuje to."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dGxz.display_name": {
+          "source": "Use TLS",
+          "message": "Použiť TLS"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dGxz.short_desc": {
+          "source": "Encrypt the connection with TLS",
+          "message": "Šifrovať spojenie pomocou TLS"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The database user to authenticate as.\n\nFor Atlas this is a database user, created under **Database Access** in the Atlas UI - not the Atlas account itself.\n\nGiven here rather than in the URL, the value is URL-encoded when the client is created, so it needs no encoding of its own.",
+          "message": "Užívateľ databázy, ktorého sa má overiť.\n\nPre Atlas ide o užívateľa databázy, ktorého vytvoríte v časti **Prístup k databáze** v rozhraní Atlas – nie o samotný účet Atlas.\n\nUvedené tu namiesto URL, hodnota je URL-encodingovaná pri vytváraní klienta, takže nemusí byť sama o sebe zakódovaná."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Používateľské meno"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "The database user to authenticate as",
+          "message": "Užívateľ databázy, ktorého sa má overiť"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a MongoDB server or an Atlas cluster",
+          "message": "Spojenie s serverom MongoDB alebo klastrom Atlas"
+        }
+      }
+    }
+  }
+}

@@ -147,7 +147,8 @@ public class ExaRestConnection inherits RestClient::RestConnection {
         */
         const PingPath = "/monitors?limit=1";
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ExaRestClient",
+            "ExaRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Exa Connection",
             "short_desc": "A connection to the Exa web search and research API",
             "desc": "A connection to [Exa](https://exa.ai) (formerly Metaphor) — a neural web-search "
@@ -172,7 +173,7 @@ public class ExaRestConnection inherits RestClient::RestConnection {
                 },
             },
             "required_options": "apikey",
-        };
+        });
     }
 
     constructor(string name, string description, string url = DefaultUrl,

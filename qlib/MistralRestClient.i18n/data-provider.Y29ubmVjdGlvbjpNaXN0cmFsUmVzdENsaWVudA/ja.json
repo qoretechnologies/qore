@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [Mistral AI](https://mistral.ai) REST API for chat (Mistral Large/Small/Nemo), embeddings (mistral-embed), and document OCR (`mistral-ocr`).\n\nRequires an API key for Bearer authentication.  Get your API key from the [Mistral Console](https://console.mistral.ai/api-keys/).",
+          "message": "[Mistral AI](https://mistral.ai) のチャット（Mistral Large/Small/Nemo）、埋め込み（mistral-embed）、ドキュメント OCR (`mistral-ocr`) 用 REST API への接続。\n\nBearer 認証には API キーが必要です。[Mistral Console](https://console.mistral.ai/api-keys/) から API キーを取得してください。"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Mistral AI REST Connection",
+          "message": "Mistral AI REST 接続"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.desc": {
+          "source": "The Mistral chat model used by LLM clients when this connection is selected for chat.\n\nChat models are a separate family from embedding models and cannot be used interchangeably.\n\nExample values: `mistral-large-latest` (the default)",
+          "message": "この接続がチャットに選択された場合、LLM クライアントで使用される Mistral チャットモデル。\n\nチャットモデルは埋め込みモデルとは別系列であり、互換性がありません。\n\n例: `mistral-large-latest`（デフォルト）"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.display_name": {
+          "source": "Chat Model",
+          "message": "チャットモデル"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.Y2hhdC1tb2RlbA.short_desc": {
+          "source": "Mistral chat model name",
+          "message": "Mistral チャットモデル名"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.allowed_values.c3RyaW5nOnYx.display_name": {
+          "source": "V1",
+          "message": "V1"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.allowed_values.c3RyaW5nOnYy.display_name": {
+          "source": "V2",
+          "message": "V2"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.desc": {
+          "source": "The default API version for direct REST calls. App actions select their documented version; connection pings always use `v1`.",
+          "message": "直接REST呼び出しのデフォルトAPIバージョン。アプリケーションアクションはドキュメントに記載されたバージョンを選択します。接続のピングは常に`v1`を使用します。"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBp.short_desc": {
+          "source": "The API version to use",
+          "message": "使用するAPIバージョン"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Mistral AI API key used for Bearer authentication.",
+          "message": "Bearer認証に使用されるMistral AI APIキー。"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API キー"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Mistral AI API key for authentication",
+          "message": "認証用のMistral AI APIキー"
+        },
+        "connection.TWlzdHJhbFJlc3RDbGllbnQ.scheme.TWlzdHJhbFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Mistral AI REST API",
+          "message": "Mistral AI REST APIへの接続"
+        }
+      }
+    }
+  }
+}

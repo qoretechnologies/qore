@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Unleashed Software REST API for inventory management.\n\nUnleashed is a powerful cloud-based inventory management platform that enables you to manage products, sales orders, purchase orders, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and customer contacts\n- Create and track sales orders\n- Process credit notes\n- Manage products and inventory\n- Track stock levels across warehouses\n\n**Authentication:**\nUnleashed uses HMAC-SHA256 signature authentication. Both API ID and API Key are required.",
+          "message": "재고 관리용 Unleashed 소프트웨어 REST API에 대한 연결입니다.\n\nUnleashed는 제품, 영업 주문, 구매 주문, 고객, 공급업체 및 재고 수준을 관리할 수 있는 강력한 클라우드 기반 재고 관리 플랫폼입니다.\n\n**기능:**\n- 고객 및 고객 연락처 관리\n- 영업 주문 생성 및 추적\n- 신용 증빙 처리\n- 제품 및 재고 관리\n- 창고 간 재고 수준 추적\n\n**인증:**\nUnleashed는 HMAC-SHA256 서명 인증을 사용합니다. API ID와 API 키 모두 필요합니다."
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Unleashed REST Connection",
+          "message": "Unleashed REST 연결"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "To connect to Unleashed Software, you need your API ID and API Key:\n\n1. Log in to Unleashed as the **Account Owner**\n2. Go to **Settings > Integration > API Access**\n3. Copy your **API ID** and **API Key**\n\n**Important:**\n- Only the account owner can access API credentials\n- Keep your credentials secure - they provide full API access\n- Never share your API Key publicly",
+          "message": "Unleashed 소프트웨어에 연결하려면 API ID와 API 키가 필요합니다:\n\n1. **계정 소유자**로 Unleashed에 로그인합니다\n2. **설정 > 통합 > API 액세스**로 이동합니다\n3. **API ID**와 **API 키**를 복사합니다\n\n**중요:**\n- API 자격 증명은 계정 소유자만 접근할 수 있습니다\n- 자격 증명을 안전하게 보관하세요 - 전체 API 접근 권한을 제공합니다\n- 공개적으로 API 키를 공유하지 마세요"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Credentials",
+          "message": "API 자격 증명 획득 방법"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.desc": {
+          "source": "Your Unleashed API ID used for API authentication.\n\n**To obtain your API ID:**\n1. Log in to Unleashed as the Account Owner\n2. Go to Settings > Integration > API Access\n3. Copy your **API ID**\n\n**Note:** Only the account owner can access API credentials.",
+          "message": "API 인증에 사용되는 Unleashed API ID입니다.\n\n**API ID를 얻는 방법:**\n1. 계정 소유자로 Unleashed에 로그인합니다\n2. 설정 > 통합 > API 액세스로 이동합니다\n3. **API ID**를 복사합니다\n\n**참고:** 계정 소유자만 API 자격 증명에 접근할 수 있습니다."
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.display_name": {
+          "source": "API ID",
+          "message": "API ID"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpX2lk.short_desc": {
+          "source": "Unleashed API ID for authentication",
+          "message": "인증용 Unleashed API ID"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Your Unleashed API Key used for computing HMAC-SHA256 signatures.\n\n**To obtain your API Key:**\n1. Log in to Unleashed as the Account Owner\n2. Go to Settings > Integration > API Access\n3. Copy your **API Key**\n\n**Note:** Only the account owner can access API credentials.\nKeep your API Key secure - it provides full API access to your account.",
+          "message": "HMAC-SHA256 서명을 계산하는 데 사용되는 Unleashed API 키입니다.\n\n**API 키를 얻는 방법:**\n1. 계정 소유자로 Unleashed에 로그인합니다\n2. 설정 > 통합 > API 액세스로 이동합니다\n3. **API 키**를 복사합니다\n\n**참고:** 계정 소유자만 API 자격 증명에 접근할 수 있습니다.\nAPI 키를 안전하게 보관하세요 - 계정 전체 API 접근 권한을 제공합니다."
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 키"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Unleashed API Key for HMAC signature",
+          "message": "HMAC 서명용 Unleashed API 키"
+        },
+        "connection.VW5sZWFzaGVkUmVzdENsaWVudA.scheme.VW5sZWFzaGVkUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Unleashed Software API",
+          "message": "Unleashed 소프트웨어 API에 대한 연결"
+        }
+      }
+    }
+  }
+}

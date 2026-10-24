@@ -114,7 +114,8 @@ public class MilvusRestConnection inherits RestClient::RestConnection {
     public {
         const DefaultUrl = "milvus://localhost:19530";
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("MilvusRestClient",
+            "MilvusRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Milvus Vector DB Connection",
             "short_desc": "A connection to a Milvus / Zilliz Cloud vector database",
             "desc": "A connection to a [Milvus](https://milvus.io) or "
@@ -141,7 +142,7 @@ public class MilvusRestConnection inherits RestClient::RestConnection {
                     "preselected": True,
                 },
             },
-        };
+        });
     }
 
     constructor(string name, string description, string url = DefaultUrl,

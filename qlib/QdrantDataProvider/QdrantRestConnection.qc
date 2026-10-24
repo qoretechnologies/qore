@@ -51,7 +51,8 @@ public class QdrantRestConnection inherits RestClient::RestConnection {
         const DefaultPingHeaders = {"Connection": "close"};
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("QdrantDataProvider",
+            "QdrantRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Qdrant REST Connection",
             "short_desc": "A connection to a Qdrant vector database server",
             "desc": "A connection to a Qdrant vector database server",
@@ -92,7 +93,7 @@ public class QdrantRestConnection inherits RestClient::RestConnection {
                         "after a short timeout)",
                 }),
             },
-        };
+        });
     }
 
     #! Creates the QdrantRestConnection object

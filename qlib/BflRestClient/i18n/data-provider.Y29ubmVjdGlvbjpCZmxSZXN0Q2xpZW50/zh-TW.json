@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to [Black Forest Labs](https://bfl.ai) — the company behind FLUX image and video generation models.\n\nRequires an API key sent via the `x-key` header.  Get your API key from the [BFL portal](https://api.bfl.ai).",
+          "message": "連線至 [Black Forest Labs](https://bfl.ai) — FLUX 圖像與影片生成模型的開發公司。\n\n需透過 `x-key` 標頭傳送 API 金鑰。請至 [BFL 儀表板](https://api.bfl.ai) 取得您的 API 金鑰。"
+        },
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Black Forest Labs Connection",
+          "message": "黑森林實驗室連接"
+        },
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "The BFL API key — sent as the `x-key` header.",
+          "message": "BFL API 金鑰 — 以 `x-key` 標頭傳送。"
+        },
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API 金鑰"
+        },
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "BFL API key (sent as x-key header)",
+          "message": "BFL API 金鑰（以 x-key 標頭傳送）"
+        },
+        "connection.QmZsUmVzdENsaWVudA.scheme.QmZsUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to Black Forest Labs (FLUX models)",
+          "message": "連接到黑森林實驗室（FLUX 模型）"
+        }
+      }
+    }
+  }
+}

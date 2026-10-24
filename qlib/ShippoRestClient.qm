@@ -222,7 +222,8 @@ public class ShippoRestConnection inherits RestClient::RestConnection {
         const DefaultConnectionUrl = "shippo://api.goshippo.com";
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ShippoRestClient",
+            "ShippoRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Shippo REST Connection",
             "short_desc": "A connection to the Shippo shipping API",
             "desc": "A connection to the Shippo REST API for shipping, label creation, and order management.\n\n"
@@ -289,6 +290,7 @@ public class ShippoRestConnection inherits RestClient::RestConnection {
             },
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "Authentication Options",
                     "intent": "info",
                     "content": "Shippo supports two authentication methods:\n\n"
@@ -300,6 +302,7 @@ public class ShippoRestConnection inherits RestClient::RestConnection {
                         "Use this if you prefer to authenticate with a token directly.",
                 },
                 <UiMessageInfo>{
+                    "presentation_id": "setup-2",
                     "title": "How to Get Your API Token",
                     "intent": "info",
                     "content": "If using API Token authentication:\n\n"
@@ -313,7 +316,7 @@ public class ShippoRestConnection inherits RestClient::RestConnection {
                         "Keep your tokens secure and never share them publicly.",
                 },
             ),
-        };
+        });
     }
 
     #! creates the ShippoRestConnection object

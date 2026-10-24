@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Microsoft OneDrive REST API via Microsoft Graph for cloud file storage and management.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from your [Azure app registration](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps). The connection uses the `onedrive://` URL scheme",
+          "message": "Připojení k REST API Microsoft OneDrive prostřednictvím Microsoft Graphu pro správu cloudových souborů.\n\nVyžaduje přihlašovací údaje OAuth2 (`oauth2_client_id` a `oauth2_client_secret`) z vašeho [registrace aplikace v Azure](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps). Připojení používá schéma adresy URL `onedrive://`"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Microsoft OneDrive",
+          "message": "Microsoft OneDrive"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.allowed_values.c3RyaW5nOm9yZ2FuaXphdGlvbnM.display_name": {
+          "source": "Organizations (Work/School Only)",
+          "message": "Organizace (pouze pracovní/školní účty)"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.allowed_values.c3RyaW5nOmNvbW1vbg.display_name": {
+          "source": "Common (All Account Types)",
+          "message": "Společné (všechny typy účtů)"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.allowed_values.c3RyaW5nOmNvbnN1bWVycw.display_name": {
+          "source": "Consumers (Personal Only)",
+          "message": "Spotřebitelské (pouze osobní účty)"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.desc": {
+          "source": "Azure AD tenant ID for authentication; use `common` for multi-tenant apps, `organizations` for work/school accounts only, `consumers` for personal accounts only, or provide a specific tenant ID or domain name",
+          "message": "ID tenantu Azure AD pro ověření; použijte `common` pro aplikace s více klienty, `organizations` pro účty pracovní/scholární, `consumers` pro osobní účty nebo zadejte konkrétní ID tenantu nebo název domény"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.display_name": {
+          "source": "Tenant ID",
+          "message": "ID tenanta"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.option.dGVuYW50.short_desc": {
+          "source": "Azure AD tenant ID",
+          "message": "ID tenanta Azure AD"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.T25lRHJpdmVSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Microsoft OneDrive REST API via Microsoft Graph",
+          "message": "Připojení k REST API Microsoft OneDrive prostřednictvím Microsoft Graph"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.U2hhcmVQb2ludFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to Microsoft SharePoint via the Microsoft Graph API, for document libraries and lists.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from your [Azure app registration](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps). The connection uses the `sharepoint://` URL scheme",
+          "message": "Připojení k Microsoft SharePoint prostřednictvím rozhraní API Microsoft Graph pro knihovny dokumentů a seznamy.\n\nVyžaduje přihlašovací údaje OAuth2 (`oauth2_client_id` a `oauth2_client_secret`) z vašeho [registrace aplikace v Azure](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps). Připojení používá schéma URL `sharepoint://`"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.U2hhcmVQb2ludFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Microsoft SharePoint",
+          "message": "Microsoft SharePoint"
+        },
+        "connection.T25lRHJpdmVSZXN0Q2xpZW50.scheme.U2hhcmVQb2ludFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to Microsoft SharePoint via the Microsoft Graph API",
+          "message": "Připojení k Microsoft SharePoint prostřednictvím rozhraní API Microsoft Graph"
+        }
+      }
+    }
+  }
+}

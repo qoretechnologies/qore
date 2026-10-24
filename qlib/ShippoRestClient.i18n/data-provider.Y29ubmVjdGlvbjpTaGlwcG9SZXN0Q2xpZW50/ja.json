@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Shippo REST API for shipping, label creation, and order management.\n\nShippo is a multi-carrier shipping API that enables you to connect with multiple shipping carriers (USPS, UPS, FedEx, DHL, and 85+ more) through a single integration.\n\n**Features:**\n- Compare shipping rates across carriers\n- Create shipping labels\n- Track shipments\n- Validate addresses\n- Manage orders\n\n**Authentication:**\nYou can authenticate using either:\n- **API Token**: Recommended for server-to-server integrations\n- **OAuth2**: For user-authorized access",
+          "message": "配送、ラベル作成、注文管理用の Shippo REST API への接続。\n\nShippo は、1 つの統合で複数の配送業者（USPS、UPS、FedEx、DHL および 85 以上）に接続できるマルチキャリア配送 API です。\n\n**機能：**\n- 配送業者間で配送料金を比較\n- 配送ラベルの作成\n- 配送状況の追跡\n- 住所の検証\n- 注文の管理\n\n**認証：**\n以下のいずれかで認証できます：\n- **API トークン**：サーバー間統合に推奨\n- **OAuth2**：ユーザー承認付きアクセス用"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Shippo REST Connection",
+          "message": "Shippo REST 接続"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
+          "source": "Shippo supports two authentication methods:\n\n**Option 1: OAuth2 (Recommended)**\nSimply click the authorize button to connect your Shippo account.\nNo additional configuration needed.\n\n**Option 2: API Token**\nEnter your Shippo API token in the 'API Token' field.\nUse this if you prefer to authenticate with a token directly.",
+          "message": "Shippo は 2 つの認証方法をサポートしています：\n\n**オプション 1：OAuth2（推奨）**\n認証ボタンをクリックするだけで、Shippo アカウントに接続できます。\n追加の設定は不要です。\n\n**オプション 2：API トークン**\n「API トークン」フィールドに Shippo API トークンを入力します。\nトークンで直接認証したい場合に使用してください。"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
+          "source": "Authentication Options",
+          "message": "認証オプション"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
+          "source": "If using API Token authentication:\n\n1. Log in to https://apps.goshippo.com/\n2. Navigate to **Settings > API**\n3. Copy your **Live Token** for production\n4. Use **Test Token** for development/testing\n\n**Token formats:**\n- Live: `shippo_live_xxxxx`\n- Test: `shippo_test_xxxxx`\n\nKeep your tokens secure and never share them publicly.",
+          "message": "APIトークン認証を使用する場合：\n\n1. https://apps.goshippo.com/ にログインする\n2. **設定 > API** に移動する\n3. 本番環境用に **ライブトークン** をコピーする\n4. 開発／テスト用に **テストトークン** を使用する\n\n**トークン形式：**\n- ライブ: `shippo_live_xxxxx`\n- テスト: `shippo_test_xxxxx`\n\nトークンは安全に保管し、公開しないでください。"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
+          "source": "How to Get Your API Token",
+          "message": "APIトークンの取得方法"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "Your Shippo API token used for authentication.\n\n**To obtain your API token:**\n1. Log in to https://apps.goshippo.com/\n2. Navigate to **Settings > API**\n3. Copy your **Live Token** for production use\n4. Use **Test Token** for development/testing\n\n**Token format:** `shippo_live_xxxxx` or `shippo_test_xxxxx`\n\n**Note:** Use either API Token OR OAuth2 authentication - not both.",
+          "message": "認証に使用するShippo APIトークン。\n\n**APIトークンを取得するには：**\n1. https://apps.goshippo.com/ にログインする\n2. **設定 > API** に移動する\n3. 本番環境用に **ライブトークン** をコピーする\n4. 開発／テスト用に **テストトークン** を使用する\n\n**トークン形式：** `shippo_live_xxxxx` または `shippo_test_xxxxx`\n\n**注意：** APIトークンとOAuth2認証のどちらか一方を使用してください。両方を同時に使用しないでください。"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "APIトークン"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "Shippo API token for authentication",
+          "message": "認証用のShippo APIトークン"
+        },
+        "connection.U2hpcHBvUmVzdENsaWVudA.scheme.U2hpcHBvUmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Shippo shipping API",
+          "message": "Shippo配送APIへの接続"
+        }
+      }
+    }
+  }
+}

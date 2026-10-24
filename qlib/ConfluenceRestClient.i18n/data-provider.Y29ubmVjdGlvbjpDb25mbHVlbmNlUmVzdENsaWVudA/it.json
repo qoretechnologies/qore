@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to a [Confluence Cloud](https://www.atlassian.com/software/confluence) site for pages, blog posts, spaces and tasks.\n\n**The site is the connection.** With the OAuth2 authorization code flow the site fills itself in - `cloud_id` is read back from the credential once it is issued - and with an API token it is `site` (ex: `example.atlassian.net`). The target URL is derived from whichever is set, and a stored URL that disagrees is ignored rather than allowed to decide which site is reached.\n\n**Authentication** is either:\n- an **API token** in `password` with the account email in `username`, sent as basic authentication - created at **id.atlassian.com > Security > API tokens**; or\n- the **OAuth2 authorization code flow** with `oauth2_client_id` and `oauth2_client_secret` from an app created in the Atlassian developer console.\n\nThis connection targets Confluence **Cloud**; Confluence Data Center has a different API.\n\nConfluence is a trademark of Atlassian Pty Ltd.",
+          "message": "Una connessione a un sito [Confluence Cloud](https://www.atlassian.com/software/confluence) per pagine, blog, spazi e attività.\n\n**Il sito è la connessione.** Con il flusso di autorizzazione OAuth2 il sito viene compilato automaticamente - `cloud_id` viene letto dal credenziale una volta emesso - e con un token API è `site` (es: `example.atlassian.net`). L'URL di destinazione viene derivato da quello impostato, e un URL memorizzato in disaccordo viene ignorato invece di decidere quale sito raggiungere.\n\n**Autenticazione** è uno dei seguenti:\n- un **token API** in `password` con l'email del conto in `username`, inviato come autenticazione di base - creato su **id.atlassian.com > Sicurezza > Token API**; o\n- il flusso di autorizzazione OAuth2 con `oauth2_client_id` e `oauth2_client_secret` da un'app creata nel console sviluppatore Atlassian.\n\nQuesta connessione punta a Confluence **Cloud**; Confluence Data Center ha un'API diversa.\n\nConfluence è un marchio di Atlassian Pty Ltd."
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Confluence REST Connection",
+          "message": "Connessione REST di Confluence"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.desc": {
+          "source": "The Confluence site's cloud ID, used with the OAuth2 authorization code flow; the site is then reached through Atlassian's API gateway.\n\n**This is filled in automatically** when the connection is authorized, so it normally needs no attention: a credential is issued against the gateway rather than against a site, and the site it reaches is read back from it afterwards. Where a credential reaches several sites the first one is used and the others are logged; set this to work on one of those instead - a value set here is never overwritten.\n\nSet this **or** `site`, not both.",
+          "message": "L'ID cloud del sito Confluence, usato con il flusso OAuth2; il sito viene quindi raggiunto tramite la gateway API di Atlassian.\n\n**Viene compilato automaticamente** quando la connessione viene autorizzata, quindi di solito non richiede attenzione: un credenziale viene emesso rispetto alla gateway piuttosto che rispetto a un sito, e il sito raggiunto viene letto dal credenziale successivamente. Quando un credenziale raggiunge più siti, viene usato il primo e gli altri vengono registrati; impostalo per lavorare su uno di questi invece - un valore impostato qui non viene mai sovrascritto.\n\nImposta questo **o** `site`, non entrambi."
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.display_name": {
+          "source": "Cloud ID",
+          "message": "ID cloud"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.Y2xvdWRfaWQ.short_desc": {
+          "source": "The site's cloud ID, used with the OAuth2 flow",
+          "message": "L'ID cloud del sito, usato con il flusso OAuth2"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.desc": {
+          "source": "The Confluence site host, ex: `example.atlassian.net`, used with an API token.\n\nSet this **or** `cloud_id`, not both.",
+          "message": "L'host del sito Confluence, es: `example.atlassian.net`, usato con un token API.\n\nImposta questo **o** `cloud_id`, non entrambi."
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.display_name": {
+          "source": "Site",
+          "message": "Sito"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.c2l0ZQ.short_desc": {
+          "source": "The site host, ex: \"example.atlassian.net\"",
+          "message": "L'host del sito, es: \"example.atlassian.net\""
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.cGFzc3dvcmQ.desc": {
+          "source": "An API token created at **id.atlassian.com > Security > API tokens**, used with the account email in `username`.\n\nThis is not the account password, which Confluence Cloud does not accept.",
+          "message": "Un token API creato su **id.atlassian.com > Sicurezza > Token API**, usato con l'email del conto in `username`.\n\nQuesto non è la password del conto, che Confluence Cloud non accetta."
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.option.dXNlcm5hbWU.desc": {
+          "source": "The Atlassian account email address, used with an API token in `password`",
+          "message": "L'indirizzo email del account Atlassian, utilizzato con un token API in `password`"
+        },
+        "connection.Q29uZmx1ZW5jZVJlc3RDbGllbnQ.scheme.Q29uZmx1ZW5jZVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to a Confluence Cloud site",
+          "message": "Una connessione a un sito Confluence Cloud"
+        }
+      }
+    }
+  }
+}

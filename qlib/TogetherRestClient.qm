@@ -174,7 +174,8 @@ public class TogetherRestConnection inherits RestClient::RestConnection {
     public {
         const DefaultUrl = "together://api.together.xyz";
 
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("TogetherRestClient",
+            "TogetherRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Together AI REST Connection",
             "short_desc": "A connection to the Together AI REST API",
             "desc": "A connection to the [Together AI](https://www.together.ai) REST API.\n\n"
@@ -231,7 +232,7 @@ public class TogetherRestConnection inherits RestClient::RestConnection {
                 }),
             },
             "required_options": "apikey",
-        };
+        });
 
         const DefaultPingMethod = "GET";
         const DefaultPingHeaders = {"Accept": MimeTypeJson};

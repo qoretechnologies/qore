@@ -271,6 +271,10 @@ namespace Init {
 public namespace Util {
 #! Message information for display to the user
 public hashdecl UiMessageInfo {
+    #! Optional stable producer identity; required for translated connection-scheme messages
+    /** This identity is independent of the message's text and position in a list. */
+    *string presentation_id;
+
     #! The title of the message
     string title;
 

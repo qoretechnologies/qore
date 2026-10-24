@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the Deel REST API for global workforce management.\n\nDeel is a global HR platform for hiring, managing, and paying contractors and full-time employees worldwide. This integration supports contracts, timesheets, invoice adjustments, workers, time-off, legal entities, invoices, and event triggers.",
+          "message": "Une connexion à l'API REST Deel pour la gestion du personnel mondial.\n\nDeel est une plateforme RH mondiale pour embaucher, gérer et payer des prestataires et des employés à temps plein dans le monde entier. Cette intégration prend en charge les contrats, les feuilles de temps, les ajustements de factures, les travailleurs, les congés, les entités juridiques, les factures et les déclencheurs d'événements."
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "Deel REST Connection",
+          "message": "Connexion REST Deel"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Log in to Deel at https://app.deel.com\n2. Go to the **Developer Center**: https://app.deel.com/developer-center\n3. Click **Create Token** and choose the token type:\n   - **Personal Token**: Linked to your user account and inherits your permissions\n   - **Organization Token**: Service-level access not tied to a specific user\n4. Copy the token value and paste it into the **API Token** field\n\n**Important:**\n- Only Org Admins or IT Developer Admins can create tokens\n- Store your token securely; treat it like a password",
+          "message": "1. Connectez-vous à Deel via https://app.deel.com\n2. Accédez au **Centre développeur** : https://app.deel.com/developer-center\n3. Cliquez sur **Créer un jeton** et sélectionnez le type de jeton :\n   - **Jeton personnel** : lié à votre compte utilisateur et hérite de vos autorisations\n   - **Jeton organisationnel** : accès au niveau du service, non lié à un utilisateur spécifique\n4. Copiez la valeur du jeton et collez-la dans le champ **Jeton API**\n\n**Important :**\n- Seuls les administrateurs organisationnels ou les administrateurs développeurs IT peuvent créer des jetons\n- Stockez votre jeton en sécurité ; traitez-le comme un mot de passe"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Generate Your API Token",
+          "message": "Comment générer votre jeton API"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.content": {
+          "source": "**Sandbox environment** is available for safe testing without affecting real data.\n\n- Enable **Use Sandbox** to connect to `https://api-sandbox.demo.deel.com/rest/v2`\n- Sandbox tokens are separate from production tokens — generate one at https://app.deel.com/developer-center\n- Leave **Use Sandbox** disabled for production use",
+          "message": "**Environnement de test** est disponible pour effectuer des tests en toute sécurité sans affecter les données réelles.\n\n- Activez **Utiliser l’environnement de test** pour vous connecter à `https://api-sandbox.demo.deel.com/rest/v2`\n- Les jetons de test sont distincts des jetons de production — générez-en un sur https://app.deel.com/developer-center\n- Laissez **Utiliser l’environnement de test** désactivé pour une utilisation en production"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.message.c2V0dXAtMg.title": {
+          "source": "Sandbox vs Production",
+          "message": "Sandbox versus production"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The Deel API access token used for authentication.\n\nGenerate a token in the **Developer Center** at https://app.deel.com/developer-center\n\nBoth **personal tokens** (linked to a user account) and **organization tokens** (service-level access) are supported.",
+          "message": "Le jeton d'accès à l'API Deel utilisé pour l'authentification.\n\nGénérez un jeton dans le **Centre développeur** à https://app.deel.com/developer-center\n\nLes jetons **personnels** (liés à un compte utilisateur) et les jetons **d'organisation** (accès au niveau du service) sont tous deux pris en charge."
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "Jeton API"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "Deel API access token",
+          "message": "Jeton d'accès à l'API Deel"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.desc": {
+          "source": "If `True`, API calls target the Deel sandbox environment (`https://api-sandbox.demo.deel.com/rest/v2`) for safe testing.\n\nIf `False` (default), API calls target the production environment (`https://api.letsdeel.com/rest/v2`).\n\n**Note:** Sandbox and production use separate API tokens. Generate a sandbox token from the Developer Center when using this option.",
+          "message": "Si `True`, les appels API ciblent l'environnement de test Deel (`https://api-sandbox.demo.deel.com/rest/v2`) pour des tests sécurisés.\n\nSi `False` (par défaut), les appels API ciblent l'environnement de production (`https://api.letsdeel.com/rest/v2`).\n\n**Remarque :** Les environnements de test et de production utilisent des jetons API séparés. Générez un jeton de test depuis le Centre développeur lorsque vous utilisez cette option."
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.display_name": {
+          "source": "Use Sandbox",
+          "message": "Utiliser le sandbox"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.option.dXNlX3NhbmRib3g.short_desc": {
+          "source": "Use Deel sandbox environment for testing",
+          "message": "Utiliser l'environnement de test Deel pour les tests"
+        },
+        "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the Deel REST API",
+          "message": "Une connexion à l'API REST Deel"
+        }
+      }
+    }
+  }
+}

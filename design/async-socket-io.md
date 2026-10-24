@@ -194,13 +194,12 @@ and keep `QORE_MODULE_DIR=qlib` set so tests load the in-tree qlib sources being
 
 Commands are members of the `IoCommand` enum:
 
-| Command       | Description                                    |
-|---------------|------------------------------------------------|
-| `Add`         | Add a new SocketPollOperation                  |
-| `Cancel`      | Cancel a specific operation by key             |
-| `CancelOwner` | Cancel all operations for a given owner       |
-| `Quit`        | Stop the I/O thread                            |
-| `Wake`        | Wake the I/O thread to re-poll (e.g., flush HTTP/2 frames) |
+|!Command|!Description
+|`Add`|Add a new SocketPollOperation
+|`Cancel`|Cancel a specific operation by key
+|`CancelOwner`|Cancel all operations for a given owner
+|`Quit`|Stop the I/O thread
+|`Wake`|Wake the I/O thread to re-poll (e.g., flush HTTP/2 frames)
 
 ## Integration Guidelines
 
@@ -212,20 +211,19 @@ Commands are members of the `IoCommand` enum:
 
 Submits an operation to the controller. The `SocketPollOperationInfo` hashdecl:
 
-| Field         | Type                       | Description                                             |
-|---------------|----------------------------|---------------------------------------------------------|
-| `sock`        | `Socket`                   | Required. The socket to poll.                           |
-| `spop`        | `AbstractPollOperation`    | Required. The poll operation to drive.                  |
-| `poll_info`   | `*hash<SocketPollInfo>`    | Last poll info (normally omitted on first submit).      |
-| `to`          | `date`                     | Timeout (default: 30s). Negative = no timeout.          |
-| `owner`       | `string`                   | Required. Owner ID for `cancelByOwner()`.               |
-| `other`       | `*hash<auto>`              | Free-form data returned with the result.                |
-| `resultQueue` | `*Queue`                   | Optional shared result Queue; must not have a maximum size. |
-| `stateQueue`  | `*Queue<hash<SocketPollStateInfo>>` | Optional Queue for the operation's state events (see [State Events](#state-events)); must not have a maximum size. |
-| `notifyStates`| `*softlist<string>`        | The states to report on `stateQueue` (default: every change); requires `stateQueue`. |
-| `key`         | `*string`                  | Optional custom cache key (default: `sock.uniqueHash()`). |
-| `thread_key`  | `*string`                  | Accepted for source compatibility and ignored: an operation always runs on the I/O thread of its `sock` (see [I/O Thread Routing](#io-thread-routing)). |
-| `has_on_complete` | `bool`                 | Forces `onComplete()` dispatch when the override cannot be detected. |
+|!Field|!Type|!Description
+|`sock`|`Socket`|Required. The socket to poll.
+|`spop`|`AbstractPollOperation`|Required. The poll operation to drive.
+|`poll_info`|`*hash<SocketPollInfo>`|Last poll info (normally omitted on first submit).
+|`to`|`date`|Timeout (default: 30s). Negative = no timeout.
+|`owner`|`string`|Required. Owner ID for `cancelByOwner()`.
+|`other`|`*hash<auto>`|Free-form data returned with the result.
+|`resultQueue`|`*Queue`|Optional shared result Queue; must not have a maximum size.
+|`stateQueue`|`*Queue<hash<SocketPollStateInfo>>`|Optional Queue for the operation's state events (see [State Events](#state-events)); must not have a maximum size.
+|`notifyStates`|`*softlist<string>`|The states to report on `stateQueue` (default: every change); requires `stateQueue`.
+|`key`|`*string`|Optional custom cache key (default: `sock.uniqueHash()`).
+|`thread_key`|`*string`|Accepted for source compatibility and ignored: an operation always runs on the I/O thread of its `sock` (see [I/O Thread Routing](#io-thread-routing)).
+|`has_on_complete`|`bool`|Forces `onComplete()` dispatch when the override cannot be detected.
 
 When the operation's class overrides `AbstractPollOperation::onComplete()`, the result is passed to it on a callback
 dispatcher worker.  When `resultQueue` is provided, results are pushed to that Queue (as well).  Otherwise a new
@@ -771,13 +769,12 @@ Qore-level state machine wrapping the C++ multiplex poll operation.
 CONNECTING → SSL_UPGRADE → READING ⇄ WAIT_READ → CLOSED
 ```
 
-| State           | Description                                                         |
-|-----------------|---------------------------------------------------------------------|
-| `connecting`    | TCP connection in progress (inner op: SocketPollOperationConnect)    |
-| `ssl_upgrade`   | SSL/TLS handshake with ALPN for h2 negotiation                     |
-| `reading`       | HTTP/2 connection active; reading frames and dispatching responses   |
-| `wait_read`     | Paused after callback dispatch; `continueReading()` transitions back to `reading` |
-| `closed`        | Connection closed (GOAWAY, error, or max empty reads)               |
+|!State|!Description
+|`connecting`|TCP connection in progress (inner op: SocketPollOperationConnect)
+|`ssl_upgrade`|SSL/TLS handshake with ALPN for h2 negotiation
+|`reading`|HTTP/2 connection active; reading frames and dispatching responses
+|`wait_read`|Paused after callback dispatch; `continueReading()` transitions back to `reading`
+|`closed`|Connection closed (GOAWAY, error, or max empty reads)
 
 **Callback dispatch pattern:**
 
@@ -805,13 +802,12 @@ Low-level C++ poll operation for HTTP/2 client multiplexing.
 
 **States (C++):**
 
-| Constant           | Description                              |
-|--------------------|------------------------------------------|
-| `H2C_NONE`         | Initial state                            |
-| `H2C_SEND_PREFACE` | Sending connection preface (SETTINGS)    |
-| `H2C_RECV_PREFACE` | Receiving preface response               |
-| `H2C_READING`      | Reading HTTP/2 frames                    |
-| `H2C_CLOSED`       | Connection closed                        |
+|!Constant|!Description
+|`H2C_NONE`|Initial state
+|`H2C_SEND_PREFACE`|Sending connection preface (SETTINGS)
+|`H2C_RECV_PREFACE`|Receiving preface response
+|`H2C_READING`|Reading HTTP/2 frames
+|`H2C_CLOSED`|Connection closed
 
 **Response queue**: `std::deque<QoreHashNode*> completed_responses` protected by `response_lock`.
 `getOutput()` pops the front; `goalReached()` checks non-empty.
@@ -1557,7 +1553,18 @@ The three-state model:
 
 1. Peer announced no `max_idle_timeout`            → keepalive disabled (`UINT64_MAX`)
 2. No active streams (`streams_.empty()`)          → keepalive disabled (`UINT64_MAX`)
-3. Streams in flight                               → keepalive = `peer.max_idle_timeout / 2`
+3. Streams in flight                               → keepalive = `min(effective_idle / 2, 15 s)`
+
+`effective_idle` is the lesser of the two advertised idle timeouts (RFC 9000 §10.1.2), so half of it refreshes
+both endpoints' idle timers.  The 15 s cap (`QORE_QUIC_ACTIVE_STREAM_KEEP_ALIVE_NS`,
+`qore_quic_active_stream_keep_alive_ns()` in `include/qore/intern/QuicKeepAlive.h`) refreshes the path's UDP flow
+state as well: a NAT, or Linux conntrack with its default `nf_conntrack_udp_timeout` of 30 s, forgets a flow after
+30 s of silence, and drops a response the server sends later until the client sends again.  With Qore's 75 s idle
+timeout the first PING came at 37.5 s, so a request a server answered after 30 s waited for it, and one with a
+shorter deadline failed (Vertex AI requests answered in 30 to 37.5 s, 2026-10-24: their durations had a hole at 31 to
+36 s and a peak at 38 s).  The cap applies only while streams are active; the cooldown after the last stream keeps
+`effective_idle / 2`.  `HttpServerQuicKeepAlive.qtest` checks the policy (`qore-quic-keep-alive-test`) and, in debug
+builds, the interval an HTTP/3 client sets (its `QORE_ASYNC_IO_TRACE` lines).
 
 State (2) is the critical case: an idle client connection with no streams must let the **peer's**
 idle timer close it.  If we keep pinging the peer ourselves we reset the peer's idle timer on every
@@ -1786,10 +1793,9 @@ dispatch entirely:
 
 There are two supported close-notification mechanisms:
 
-| Layer | Close-notification mechanism |
-|-------|------------------------------|
-| Qore `HttpClientIo::HttpClientConnectionManager` | `onComplete` MRO override → worker pool dispatch → `handleConnectionResult` |
-| C++ `HttpClientConnectionManagerBase` | `onClosedHook` virtual → direct manager call from `setClosed()` |
+|!Layer|!Close-notification mechanism
+|Qore `HttpClientIo::HttpClientConnectionManager`|`onComplete` MRO override → worker pool dispatch → `handleConnectionResult`
+|C++ `HttpClientConnectionManagerBase`|`onClosedHook` virtual → direct manager call from `setClosed()`
 
 Both paths rely on the same `setClosed()` invariant: state transitions to CLOSED on the
 first call, the broadcast and notifier signaling run, and (with the new addition) the

@@ -3,6 +3,154 @@
   "locales": {
     "it": {
       "messages": {
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.Y2hhcnNldA.desc": {
+          "source": "The character set to use for the connection (e.g. utf8)",
+          "message": "Il set di caratteri da utilizzare per la connessione (ad esempio utf8)"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.Y2hhcnNldA.display_name": {
+          "source": "Character Set",
+          "message": "Set di caratteri"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.Y2hhcnNldA.short_desc": {
+          "source": "Connection character set",
+          "message": "Set di caratteri della connessione"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.Y2xhc3NwYXRo.desc": {
+          "source": "The path to the JDBC driver JAR file(s)",
+          "message": "Il percorso del file JAR del driver JDBC"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.Y2xhc3NwYXRo.display_name": {
+          "source": "JDBC Classpath",
+          "message": "Classpath JDBC"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.Y2xhc3NwYXRo.short_desc": {
+          "source": "JDBC driver classpath",
+          "message": "Classpath del driver JDBC"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.ZGI.desc": {
+          "source": "The name of the database to connect to",
+          "message": "Nome del database a cui connettersi"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.ZGI.display_name": {
+          "source": "Database",
+          "message": "Database"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.ZGI.short_desc": {
+          "source": "Database name",
+          "message": "Nome del database"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOm9kYmM.display_name": {
+          "source": "odbc",
+          "message": "odbc"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOm9kYmM.short_desc": {
+          "source": "ODBC driver",
+          "message": "Driver ODBC"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOmpkYmM.display_name": {
+          "source": "jdbc",
+          "message": "jdbc"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOmpkYmM.short_desc": {
+          "source": "JDBC driver",
+          "message": "Driver JDBC"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOnBnc3Fs.display_name": {
+          "source": "pgsql",
+          "message": "pgsql"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.ZHJpdmVy.allowed_values.c3RyaW5nOnBnc3Fs.short_desc": {
+          "source": "Native pgsql driver",
+          "message": "Driver pgsql nativo"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.ZHJpdmVy.desc": {
+          "source": "The database driver to use for the connection",
+          "message": "Il driver del database da utilizzare per la connessione"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.ZHJpdmVy.display_name": {
+          "source": "Driver",
+          "message": "Driver"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.ZHJpdmVy.short_desc": {
+          "source": "Database driver",
+          "message": "Driver del database"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.aG9zdA.desc": {
+          "source": "The hostname or IP address of the database server",
+          "message": "L'indirizzo host o l'indirizzo IP del server del database"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.aG9zdA.display_name": {
+          "source": "Host",
+          "message": "Host"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.aG9zdA.short_desc": {
+          "source": "Database server hostname",
+          "message": "Nome host del server del database"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.bWF4.desc": {
+          "source": "Maximum number of connections in the pool",
+          "message": "Numero massimo di connessioni nel pool"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.bWF4.display_name": {
+          "source": "Max Pool Size",
+          "message": "Dimensione massima del pool"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.bWF4.short_desc": {
+          "source": "Maximum pool connections",
+          "message": "Connessioni massime nel pool"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.bWlu.desc": {
+          "source": "Minimum number of connections in the pool",
+          "message": "Numero minimo di connessioni nel pool"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.bWlu.display_name": {
+          "source": "Min Pool Size",
+          "message": "Dimensione minima del pool"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.bWlu.short_desc": {
+          "source": "Minimum pool connections",
+          "message": "Connessioni minime nel pool"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.cG9ydA.desc": {
+          "source": "The port number of the database server",
+          "message": "Numero di porta del server del database"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.cG9ydA.display_name": {
+          "source": "Port",
+          "message": "Porto di Porto"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.cG9ydA.short_desc": {
+          "source": "Database server port",
+          "message": "Porta del server del database"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.cGFzcw.desc": {
+          "source": "The password for database authentication",
+          "message": "La password per l'autenticazione del database"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.cGFzcw.display_name": {
+          "source": "Password",
+          "message": "Password"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.cGFzcw.short_desc": {
+          "source": "Database password",
+          "message": "Password del database"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.dXNlcg.desc": {
+          "source": "The database user name for authentication",
+          "message": "Nome utente del database per l'autenticazione"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Utente"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.connection.option.dXNlcg.short_desc": {
+          "source": "Database user",
+          "message": "Utente del database"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.desc": {
+          "source": "Create and manage connections to a Amazon Redshift data warehouse",
+          "message": "Crea e gestisci connessioni a un data warehouse Amazon Redshift"
+        },
         "app.QW1hem9uLVJlZHNoaWZ0.display_name": {
           "source": "Amazon-Redshift",
           "message": "Amazon-Redshift"
@@ -10,10 +158,6 @@
         "app.QW1hem9uLVJlZHNoaWZ0.short_desc": {
           "source": "Amazon Redshift data warehouse",
           "message": "Data warehouse Amazon Redshift"
-        },
-        "app.QW1hem9uLVJlZHNoaWZ0.desc": {
-          "source": "Create and manage connections to a Amazon Redshift data warehouse",
-          "message": "Crea e gestisci connessioni a un data warehouse Amazon Redshift"
         }
       }
     }

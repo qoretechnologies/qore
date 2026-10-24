@@ -68,8 +68,10 @@ int printe(const char* fmt, ...) {
         break;
     }
 
-    fputs(buf.c_str(), stderr);
-    fflush(stderr);
+    // the message is written whole, also when standard error is nonblocking; the wait for room cannot be cancelled,
+    // as the message of a thread's unhandled THREAD-CANCELLED exception is written while the cancellation is pending
+    const char* p = buf.c_str();
+    qore_stdio_write(stderr, p, strlen(p), nullptr, "printe");
     return 0;
 }
 
@@ -116,13 +118,14 @@ int print_debug(int level, const char *fmt, ...) {
     }
 
     int tid = (threads_initialized && is_valid_qore_thread()) ? q_gettid() : -1;
+    QoreString line;
 #ifdef QORE_QUICK_TIMESTAMP_LOG
     int secs, us;
     get_timestamp(secs, us);
 #ifdef QORE_SERIALIZE_DEBUGGING_OUTPUT
     AutoLocker al(debug_output_lock);
 #endif
-    fprintf(stderr, "%d.%d: TID %d: %s", secs, us, tid, buf.c_str());
+    line.sprintf("%d.%d: TID %d: %s", secs, us, tid, buf.c_str());
 #else
     QoreString ts;
     get_timestamp(ts);
@@ -130,9 +133,11 @@ int print_debug(int level, const char *fmt, ...) {
 #ifdef QORE_SERIALIZE_DEBUGGING_OUTPUT
     AutoLocker al(debug_output_lock);
 #endif
-    fprintf(stderr, "%s: TID %d: %s", ts.c_str(), tid, buf.c_str());
+    line.sprintf("%s: TID %d: %s", ts.c_str(), tid, buf.c_str());
 #endif
-    fflush(stderr);
+    // written whole, also when standard error is nonblocking (see printe())
+    const char* p = line.c_str();
+    qore_stdio_write(stderr, p, strlen(p), nullptr, "print_debug");
     return 0;
 }
 

@@ -44,6 +44,9 @@
 %requires(reexport) DataProvider >= 3.5.1
 
 %allow-weak-references
+# a schema object holds the type it caches as a union alternative through an opaque reference while its document
+# lives, as RestSchemaValidator does for the other types it caches
+%allow-opaque-references
 
 module OpenApi3 {
     version = "1.0";
@@ -1181,6 +1184,12 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             }
             if (directional_properties) { break; }
         }
+
+        # the types of a parsed document refer to its schema objects but never to the document itself, so its schema
+        # objects can hold the types they cache through references that the garbage collector does not follow, and
+        # the document releases them when it is destroyed; see
+        # RestSchemaValidator::AbstractRestSchemaValidator::holdTypeCacheOpaquely()
+        enableOpaqueTypeCaches();
     }
 
     *int getParseFlags() {
@@ -5989,14 +5998,31 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         if (!alternativeDataType) {
             AbstractDataProviderType t = openapi3.getType("/", type, format, items, !nullable, True)
                 .copyWithConstraints(getConstraintInfo());
+            bool opaque;
             if (schema) {
+                opaque = schema.isTypeBuildActive() && holdCacheEntryOpaquely(schema);
                 schema.recordTypeBuildWrite(sub () {
                     remove alternativeDataType;
                 });
             }
-            alternativeDataType = t;
+            if (opaque) {
+                alternativeDataType @= t;
+            } else {
+                alternativeDataType = t;
+            }
         }
         return alternativeDataType;
+    }
+
+    #! Releases the types and fields that this object caches
+    /** Called by the document when it is destroyed; see
+        @ref RestSchemaValidator::AbstractRestSchemaObject::releaseTypeCaches() "AbstractRestSchemaObject::releaseTypeCaches()"
+
+        @since %OpenApi3 1.0
+    */
+    releaseTypeCaches() {
+        RestSchemaValidator::AbstractRestSchemaObject::releaseTypeCaches();
+        remove alternativeDataType;
     }
 
     AbstractDataProviderType getSchemaType(string path, string typestr, *string format,

@@ -216,7 +216,8 @@ KatanaRestClient katana({
 public class KatanaRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("KatanaRestClient",
+            "KatanaRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Katana MRP REST Connection",
             "short_desc": "A connection to the Katana MRP REST API",
             "desc": "A connection to the **Katana MRP** REST API for managing products, "
@@ -234,6 +235,7 @@ public class KatanaRestConnection inherits RestClient::RestConnection {
                 "share it publicly.",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Obtain Your API Key",
                     "intent": "info",
                     "content": "This integration requires a **Katana MRP API key**.\n\n"
@@ -295,7 +297,7 @@ public class KatanaRestConnection inherits RestClient::RestConnection {
                     "default_value": KatanaRestClientBase::DefaultPingPath,
                 }),
             },
-        };
+        });
     }
 
     #! creates the KatanaRestConnection object

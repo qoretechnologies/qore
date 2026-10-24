@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.VGVsbmV0Q2xpZW50.scheme.VGVsbmV0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to a telnet server",
+          "message": "Połączenie z serwerem telnet"
+        },
+        "connection.VGVsbmV0Q2xpZW50.scheme.VGVsbmV0Q29ubmVjdGlvbg.display_name": {
+          "source": "Telnet Connection",
+          "message": "Połączenie Telnet"
+        },
+        "connection.VGVsbmV0Q2xpZW50.scheme.VGVsbmV0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to a telnet server",
+          "message": "Połączenie z serwerem telnet"
+        }
+      }
+    }
+  }
+}

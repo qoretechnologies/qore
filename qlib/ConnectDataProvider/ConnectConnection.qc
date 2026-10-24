@@ -41,7 +41,8 @@ auto provider = conn.getDataProvider();
 public class ConnectConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {
         #! Connection scheme definition
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ConnectDataProvider",
+            "ConnectConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Connect RPC",
             "short_desc": "Connect RPC connection",
             "desc": "Connect RPC protocol connection for DataStream 2.0",
@@ -55,7 +56,7 @@ public class ConnectConnection inherits ConnectionProvider::AbstractConnectionWi
                 "connects": "https",
             },
             "options": ConnectionOptions,
-        };
+        });
 
         #! Connection options
         const ConnectionOptions = {

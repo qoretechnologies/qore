@@ -244,7 +244,8 @@ InsightlyRestClient insightly({
 public class InsightlyRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("InsightlyRestClient",
+            "InsightlyRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "Insightly CRM REST Connection",
             "short_desc": "A connection to the Insightly CRM REST API",
             "desc": "A connection to the Insightly CRM REST API for managing contacts, organizations, "
@@ -263,6 +264,7 @@ public class InsightlyRestConnection inherits RestClient::RestConnection {
                 "response headers.",
             "messages": (
                 <UiMessageInfo>{
+                    "presentation_id": "setup-1",
                     "title": "How to Obtain Your API Key",
                     "intent": "info",
                     "content": "1. Log in to your Insightly account\n"
@@ -273,6 +275,7 @@ public class InsightlyRestConnection inherits RestClient::RestConnection {
                         "data. Keep it secure and never share it publicly.",
                 },
                 <UiMessageInfo>{
+                    "presentation_id": "setup-2",
                     "title": "Select Your Pod/Region",
                     "intent": "info",
                     "content": "Your Insightly pod determines the API endpoint URL. It is "
@@ -354,7 +357,7 @@ public class InsightlyRestConnection inherits RestClient::RestConnection {
                     "preselected": True,
                 },
             },
-        };
+        });
     }
 
     #! creates the InsightlyRestConnection object

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the BaseLinker REST API for managing orders, products, inventories, couriers, and external storage integrations.\n\nBaseLinker exposes an RPC-over-HTTP API: every operation is a POST to a single endpoint (`https://api.baselinker.com/connector.php`) with a form-encoded body of the form `method=<name>&parameters=<URL-encoded JSON>`.\n\nAuthentication is performed by sending the raw API token in the `X-BLToken` HTTP header (no `Bearer` prefix).\n\n**To obtain your API token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Generate a new token and copy its value\n\n**Note:** The token is sent on every request as the `X-BLToken` header.",
+          "message": "Une connexion à l’API REST de BaseLinker pour la gestion des commandes, produits, stocks, transporteurs et intégrations de stockage externes.\n\nBaseLinker expose une API RPC sur HTTP : chaque opération est une requête POST vers un seul point d’entrée (`https://api.baselinker.com/connector.php`) avec un corps encodé en forme (`method=<name>&parameters=<URL-encoded JSON>`).\n\nL’authentification se fait en envoyant le jeton API brut dans l’en-tête HTTP `X-BLToken` (sans préfixe `Bearer`).\n\n**Pour obtenir votre jeton API :**\n1. Connectez-vous à votre tableau de bord BaseLinker\n2. Ouvrez **Compte et autres** → **Mon compte**\n3. Allez dans l’onglet **API**\n4. Générez un nouveau jeton et copiez sa valeur\n\n**Remarque :** Le jeton est envoyé à chaque requête dans l’en-tête `X-BLToken`."
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "BaseLinker REST Connection",
+          "message": "Connexion REST BaseLinker"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "This integration requires a **BaseLinker API token**.\n\n**Steps to generate a token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Click to generate a new token and copy its value\n\n**How it is used:**\n- The token is sent on every request as the `X-BLToken` HTTP header\n- No `Bearer` prefix is used — the token is sent raw\n- Every BaseLinker call is a POST to a single RPC endpoint (`/connector.php`) with a form-encoded body",
+          "message": "Cette intégration nécessite un **jeton API BaseLinker**.\n\n**Étapes pour générer un jeton :**\n1. Connectez-vous à votre tableau de bord BaseLinker\n2. Ouvrez **Compte et autres** → **Mon compte**\n3. Allez dans l’onglet **API**\n4. Cliquez pour générer un nouveau jeton et copiez sa valeur\n\n**Utilisation :**\n- Le jeton est envoyé à chaque requête dans l’en-tête HTTP `X-BLToken`\n- Aucun préfixe `Bearer` n’est utilisé — le jeton est envoyé brut\n- Toute requête BaseLinker est une requête POST vers un seul point d’entrée RPC (`/connector.php`) avec un corps encodé en forme"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Obtain Your API Token",
+          "message": "Comment obtenir votre jeton API"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The BaseLinker API token used for authentication. It is sent on every request as the `X-BLToken` HTTP header (raw token, no `Bearer` prefix).\n\n**To obtain your API token:**\n1. Log in to your BaseLinker panel\n2. Open **Account and other** → **My account**\n3. Open the **API** tab\n4. Generate a new token and copy its value",
+          "message": "Le jeton d’API BaseLinker utilisé pour l’authentification. Il est envoyé à chaque requête sous la forme de l’en-tête HTTP `X-BLToken` (jeton brut, sans préfixe `Bearer`).\n\n**Pour obtenir votre jeton d’API :**\n1. Connectez-vous à votre tableau de bord BaseLinker\n2. Ouvrez **Compte et autres** → **Mon compte**\n3. Ouvrez l’onglet **API**\n4. Générez un nouveau jeton et copiez sa valeur"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "Jeton API"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "BaseLinker API token for authentication",
+          "message": "Jeton d’API BaseLinker pour l’authentification"
+        },
+        "connection.QmFzZUxpbmtlclJlc3RDbGllbnQ.scheme.QmFzZUxpbmtlclJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the BaseLinker REST API",
+          "message": "Une connexion à l’API REST de BaseLinker"
+        }
+      }
+    }
+  }
+}

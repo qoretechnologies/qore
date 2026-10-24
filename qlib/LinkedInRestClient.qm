@@ -684,7 +684,8 @@ public class LinkedInRestConnection inherits LinkedInRestConnectionBase {
         const DefaultConnectionUrl = DefaultUrl;
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("LinkedInRestClient",
+            "LinkedInRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "LinkedIn",
             "short_desc": "A connection to the LinkedIn member REST API",
             "desc": "A connection to the [LinkedIn](https://www.linkedin.com) REST API for posting "
@@ -738,7 +739,7 @@ public class LinkedInRestConnection inherits LinkedInRestConnectionBase {
                 }),
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
-        };
+        });
     }
 
     #! creates the LinkedInRestConnection object
@@ -804,7 +805,8 @@ public class LinkedInDmaRestConnection inherits LinkedInRestConnectionBase {
         const DefaultConnectionUrl = DefaultUrl;
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("LinkedInRestClient",
+            "LinkedInDmaRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "LinkedIn Organizations",
             "short_desc": "A connection to the LinkedIn Pages Data Portability (DMA) REST API",
             "desc": "A connection to the [LinkedIn](https://www.linkedin.com) Pages Data "
@@ -856,7 +858,7 @@ public class LinkedInDmaRestConnection inherits LinkedInRestConnectionBase {
                 }),
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
-        };
+        });
     }
 
     #! creates the LinkedInDmaRestConnection object

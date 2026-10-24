@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [LinkedIn](https://www.linkedin.com) Pages Data Portability API product, which gives a LinkedIn Page administrator access to the organization's posts, comments, reactions, followers and page analytics.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from a [LinkedIn developer application](https://www.linkedin.com/developers/apps) that has been **approved for the Pages Data Portability API product** — a separate LinkedIn approval that grants the `r_dma_admin_pages_content` permission and takes several business days. The connection uses the `linkedindma://` URL scheme",
+          "message": "Підключення до продукту API для переносу даних сторінок LinkedIn [LinkedIn](https://www.linkedin.com), який надає адміністратору сторінки LinkedIn доступ до постів, коментарів, реакцій, підписників та аналітики сторінки.\n\nВимагає облікових даних OAuth2 (`oauth2_client_id` та `oauth2_client_secret`) з [додатку розробника LinkedIn](https://www.linkedin.com/developers/apps), який був **схвалений для продукту API для переносу даних сторінок** — окреме схвалення LinkedIn, що надає дозвіл `r_dma_admin_pages_content` і займає кілька робочих днів. Підключення використовує схему URL `linkedindma://`"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "LinkedIn Organizations",
+          "message": "LinkedIn Organizations"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.desc": {
+          "source": "The LinkedIn API version in `YYYYMM` form, sent in the `LinkedIn-Version` header with every versioned request.  LinkedIn never defaults to the latest version: a missing or sunset version is an error, and each version is supported for a limited time, so this must be moved forward periodically.\n\nNote that LinkedIn's Marketing APIs and its Pages Data Portability (DMA) APIs have **separate** version series; a value from one series is not valid in the other.",
+          "message": "Версія API LinkedIn у форматі `YYYYMM`, яка надсилається у заголовку `LinkedIn-Version` з кожним запитом із версією. LinkedIn ніколи не використовує останню версію за замовчуванням: відсутність або застаріла версія є помилкою, і кожна версія підтримується обмежений час, тому її необхідно періодично оновлювати.\n\nЗауважте, що маркетингові API LinkedIn та їхні API для переносу даних сторінок (DMA) мають **окремі** серії версій; значення однієї серії недійсне в іншій."
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.display_name": {
+          "source": "LinkedIn API Version",
+          "message": "Версія API LinkedIn"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.short_desc": {
+          "source": "The LinkedIn API version to send in the LinkedIn-Version header",
+          "message": "Версія API LinkedIn, яку слід надсилати у заголовку LinkedIn-Version"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5EbWFSZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the LinkedIn Pages Data Portability (DMA) REST API",
+          "message": "Підключення до REST API LinkedIn для переносу даних сторінок (DMA)"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the [LinkedIn](https://www.linkedin.com) REST API for posting and managing content as the authenticated member.\n\nRequires OAuth2 credentials (`oauth2_client_id` and `oauth2_client_secret`) from a [LinkedIn developer application](https://www.linkedin.com/developers/apps) with the **Sign In with LinkedIn using OpenID Connect** and **Share on LinkedIn** products enabled. The connection uses the `linkedin://` URL scheme",
+          "message": "Підключення до REST API [LinkedIn](https://www.linkedin.com) для публікації та керування контентом від імені автентифікованого користувача.\n\nВимагає облікових даних OAuth2 (`oauth2_client_id` та `oauth2_client_secret`) з [додатку розробника LinkedIn](https://www.linkedin.com/developers/apps), у якому увімкнено продукти **Увійти за допомогою LinkedIn через OpenID Connect** та **Публікувати на LinkedIn**. Підключення використовує схему URL `linkedin://`"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.desc": {
+          "source": "The LinkedIn API version in `YYYYMM` form, sent in the `LinkedIn-Version` header with every versioned request.  LinkedIn never defaults to the latest version: a missing or sunset version is an error, and each version is supported for a limited time, so this must be moved forward periodically.\n\nNote that LinkedIn's Marketing APIs and its Pages Data Portability (DMA) APIs have **separate** version series; a value from one series is not valid in the other.",
+          "message": "Версія API LinkedIn у форматі `YYYYMM`, яка надсилається у заголовку `LinkedIn-Version` з кожним запитом із версією. LinkedIn ніколи не використовує останню версію за замовчуванням: відсутність або застаріла версія є помилкою, і кожна версія підтримується обмежений час, тому її необхідно періодично оновлювати.\n\nЗауважте, що маркетингові API LinkedIn та їхні API для переносу даних сторінок (DMA) мають **окремі** серії версій; значення однієї серії недійсне в іншій."
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.display_name": {
+          "source": "LinkedIn API Version",
+          "message": "Версія API LinkedIn"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.option.bGlua2VkaW5fdmVyc2lvbg.short_desc": {
+          "source": "The LinkedIn API version to send in the LinkedIn-Version header",
+          "message": "Версія API LinkedIn, яку слід надсилати у заголовку LinkedIn-Version"
+        },
+        "connection.TGlua2VkSW5SZXN0Q2xpZW50.scheme.TGlua2VkSW5SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the LinkedIn member REST API",
+          "message": "Підключення до REST API LinkedIn для користувачів"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.desc": {
+          "source": "A connection to the Sewio REST API",
+          "message": "Підключення до REST API Sewio"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.display_name": {
+          "source": "Sewio REST Connection",
+          "message": "Підключення до REST Sewio"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.desc": {
+          "source": "The Sewio RTLS Studio API key",
+          "message": "Ключ API Sewio RTLS Studio"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "Ключ API"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.YXBpa2V5.short_desc": {
+          "source": "The Sewio RTLS Studio API key",
+          "message": "Ключ API Sewio RTLS Studio"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.allowed_values.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "використовувати серіалізацію JSON"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.desc": {
+          "source": "Data serialization options are limited to `json` with this object",
+          "message": "Опції серіалізації даних обмежені `json` для цього об’єкта"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Серіалізація даних"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.ZGF0YQ.short_desc": {
+          "source": "Data serialization can only be 'json'",
+          "message": "Серіалізація даних може бути лише 'json'"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "використовувати кодування bzip2"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "використовувати алгоритм deflate ([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "використовувати кодування GNU zip ([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.allowed_values.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "не використовувати кодування вмісту"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "Встановлює алгоритм стиснення для відправки повідомлень"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.display_name": {
+          "source": "Send Compression",
+          "message": "Стиснення під час надсилання"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.option.c2VuZF9lbmNvZGluZw.short_desc": {
+          "source": "The compression algorithm to use when sending messages",
+          "message": "Алгоритм стиснення, що використовується при надсиланні повідомлень"
+        },
+        "connection.U2V3aW9SZXN0Q2xpZW50.scheme.U2V3aW9SZXN0Q29ubmVjdGlvbg.short_desc": {
+          "source": "A connection to the Sewio REST API",
+          "message": "Підключення до REST API Sewio"
+        }
+      }
+    }
+  }
+}

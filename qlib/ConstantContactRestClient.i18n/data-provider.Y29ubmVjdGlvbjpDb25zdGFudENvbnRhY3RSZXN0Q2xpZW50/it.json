@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.desc": {
+          "source": "A connection to the Constant Contact REST API for email marketing, contacts, lists, campaigns, and segments",
+          "message": "Una connessione all'API REST di Constant Contact per la marketing via email, contatti, liste, campagne e segmenti"
+        },
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.display_name": {
+          "source": "Constant Contact REST Connection",
+          "message": "Connessione REST di Constant Contact"
+        },
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.desc": {
+          "source": "A Constant Contact API key or access token used for Bearer token authentication as an alternative to OAuth2",
+          "message": "Una chiave API o token di accesso di Constant Contact utilizzata per l'autenticazione con token Bearer, alternativa a OAuth2"
+        },
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.display_name": {
+          "source": "API Key / Access Token",
+          "message": "Chiave API / Token di accesso"
+        },
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.option.YXBpa2V5.short_desc": {
+          "source": "A Constant Contact API key or access token for Bearer auth",
+          "message": "Chiave API o token per l'autenticazione Bearer"
+        },
+        "connection.Q29uc3RhbnRDb250YWN0UmVzdENsaWVudA.scheme.Q29uc3RhbnRDb250YWN0UmVzdENvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to the Constant Contact REST API",
+          "message": "Una connessione all'API REST di Constant Contact"
+        }
+      }
+    }
+  }
+}

@@ -662,17 +662,14 @@ class FileFifoTest inherits QUnit::Test {
         return {"path": path, "r": r, "w": w};
     }
 
-    #! fills a pipe opened with O_NONBLOCK
+    #! fills a pipe until it reports no room for a write
+    /** A write to a full pipe waits for room, also when the pipe is nonblocking, so the pipe is written only while it
+        reports room: a write of up to PIPE_BUF bytes (512 on macOS) is then taken whole on Linux and macOS
+    */
     private static fill(File w) {
-        binary chunk = binary(strmul("x", 4096));
-        try {
-            while (True) {
-                w.write(chunk);
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "FILE-WRITE-ERROR" || ex.desc !~ /Resource temporarily unavailable/) {
-                rethrow;
-            }
+        binary chunk = binary(strmul("x", 512));
+        while (Socket::poll((<SocketPollInfo>{"events": SOCK_POLLOUT, "socket": w},), 0)) {
+            w.write(chunk);
         }
     }
 

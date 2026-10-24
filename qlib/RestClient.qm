@@ -4492,7 +4492,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         bool needs_auth;
 
         #! Connection entry info
-        const hash<ConnectionSchemeInfo> ConnectionScheme = <ConnectionSchemeInfo>{
+        const hash<ConnectionSchemeInfo> ConnectionScheme = ConnectionProvider::connection_scheme_presentation("RestClient",
+            "RestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "REST Connection",
             "short_desc": "A connection to a REST server",
             "desc": "A connection to a REST server",
@@ -4991,7 +4992,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                         "`openapi3` and `swagger`",
                 },
             },
-        };
+        });
 
         #! object connection options
         const hash<string, bool> Options = map {$1: True}, keys ConnectionScheme.options;

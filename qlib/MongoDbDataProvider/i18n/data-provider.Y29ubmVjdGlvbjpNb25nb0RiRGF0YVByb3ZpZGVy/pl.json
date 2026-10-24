@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.desc": {
+          "source": "A connection to a [MongoDB](https://www.mongodb.com) server or a [MongoDB Atlas](https://www.mongodb.com/atlas) cluster, for document storage, retrieval, aggregation and Atlas Vector Search.\n\nUse a `mongodb://` URL for a server or replica set whose hosts are known, and a `mongodb+srv://` URL for Atlas, where the hosts are discovered from DNS and TLS is implied.  An Atlas connection string looks like `mongodb+srv://cluster0.abcde.mongodb.net`.\n\nSupply the credentials as the `username` and `password` options rather than in the URL: they are then stored as connection options - the password as a password - and are URL-encoded when the client is created, so a password containing `@`, `:` or `/` works without the caller having to encode it.",
+          "message": "Połączenie z serwerem [MongoDB](https://www.mongodb.com) lub klastrem [MongoDB Atlas](https://www.mongodb.com/atlas), do przechowywania, pobierania, agregowania dokumentów oraz wyszukiwania wektorowego w Atlas.\n\nUżyj adresu URL `mongodb://` dla serwera lub zestawu replik, których hosty są znane, oraz adresu URL `mongodb+srv://` dla Atlas, gdzie hosty są odkrywane przez DNS, a TLS jest domyślne. Adres połączenia Atlas ma postać `mongodb+srv://cluster0.abcde.mongodb.net`.\n\nDane uwierzytelniające podaj jako opcje `username` i `password`, a nie w adresie URL: są one przechowywane jako opcje połączenia — hasło jako hasło — i kodowane w formacie URL podczas tworzenia klienta, więc hasło zawierające `@`, `:` lub `/` działa bez konieczności kodowania przez wywołującego."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.display_name": {
+          "source": "MongoDB Connection",
+          "message": "Połączenie z MongoDB"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "How long to wait for a connection to be established, sent as the `connectTimeoutMS` URI option.",
+          "message": "Czas oczekiwania na ustanowienie połączenia, przekazywany jako opcja URI `connectTimeoutMS`."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Limit czasu połączenia"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "How long to wait for a connection to be established",
+          "message": "Czas oczekiwania na ustanowienie połączenia"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXBwbmFtZQ.desc": {
+          "source": "The name this client reports to the server, sent as the `appName` URI option.\n\nAtlas shows it against every operation in the cluster's monitoring, which is what makes one application's load distinguishable from another's.  Defaults to `qore-mongodb` when neither this option nor the URL sets one.",
+          "message": "Nazwa, którą ten klient zgłasza serwerowi, przekazywana jako opcja URI `appName`.\n\nAtlas wyświetla ją obok każdej operacji w monitorowaniu klastra, co pozwala odróżnić obciążenie jednej aplikacji od innej. Domyślnie ustawiona na `qore-mongodb`, jeśli ta opcja ani URL nie ustawia wartości."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXBwbmFtZQ.display_name": {
+          "source": "Application Name",
+          "message": "Nazwa aplikacji"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXBwbmFtZQ.short_desc": {
+          "source": "The name this client reports to the server",
+          "message": "Nazwa, którą ten klient zgłasza serwerowi"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXV0aHNvdXJjZQ.desc": {
+          "source": "The database holding the user's credentials, sent as the `authSource` URI option.\n\nAtlas keeps database users in `admin`, which is also what the server assumes when this is not set; set it only where the credentials live elsewhere.",
+          "message": "Baza danych przechowująca dane uwierzytelniające użytkownika, przekazywana jako opcja URI `authSource`.\n\nAtlas przechowuje użytkowników baz danych w `admin`, co również jest domyślną wartością, gdy ta opcja nie jest ustawiona; ustaw ją tylko wtedy, gdy dane uwierzytelniające znajdują się gdzie indziej."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXV0aHNvdXJjZQ.display_name": {
+          "source": "Authentication Database",
+          "message": "Baza uwierzytelniania"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.YXV0aHNvdXJjZQ.short_desc": {
+          "source": "The database holding the user's credentials",
+          "message": "Baza danych przechowująca dane uwierzytelniające"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.ZGF0YWJhc2U.desc": {
+          "source": "The database used when an action does not name one, and the default authentication database when `authsource` is not set.",
+          "message": "Baza danych używana, gdy działanie nie określa jednej, oraz domyślna baza uwierzytelniania, gdy `authsource` nie jest ustawione."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.ZGF0YWJhc2U.display_name": {
+          "source": "Default Database",
+          "message": "Domyślna baza danych"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.ZGF0YWJhc2U.short_desc": {
+          "source": "The database used when an action does not name one",
+          "message": "Baza danych używana, gdy działanie nie określa jednej"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c29ja2V0X3RpbWVvdXQ.desc": {
+          "source": "How long to wait for a reply on an established connection, sent as the `socketTimeoutMS` URI option.\n\nThis is the only timeout that bounds a server which completes the TCP handshake and then stops answering - a hung `mongod`, a firewall dropping an established flow, a stale NAT mapping, a suspended container - because `connect_timeout` and `server_selection_timeout` have both finished by the time a reply is awaited.\n\n**It applies to every operation on the client**, so it has to be longer than the slowest query the connection is expected to run; to bound an unattended monitor ping, set `ping_timeout` rather than lowering this.",
+          "message": "Czas oczekiwania na odpowiedź po nawiązaniu połączenia, przekazywany jako opcja URI `socketTimeoutMS`.\n\nJest to jedyny limit czasu, który ogranicza serwer, który ukończył handshake TCP i przestał odpowiadać – zawieszony `mongod`, zapora blokująca aktywne połączenie, przestarzała mapa NAT, zawieszony kontener – ponieważ `connect_timeout` i `server_selection_timeout` zostały już ukończone w momencie oczekiwania na odpowiedź.\n\n**Dotyczy każdej operacji na kliencie**, więc musi być dłuższy niż najdłuższe zapytanie oczekiwane na połączeniu; aby ograniczyć ping monitora bez nadzoru, ustaw `ping_timeout` zamiast zmniejszania tego parametru."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c29ja2V0X3RpbWVvdXQ.display_name": {
+          "source": "Socket Timeout",
+          "message": "Limit czasu połączenia"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c29ja2V0X3RpbWVvdXQ.short_desc": {
+          "source": "How long to wait for a reply on an established connection",
+          "message": "Czas oczekiwania na odpowiedź po nawiązaniu połączenia"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c2VydmVyX3NlbGVjdGlvbl90aW1lb3V0.desc": {
+          "source": "How long to wait for a suitable server to be found, sent as the `serverSelectionTimeoutMS` URI option.\n\nThis is the timeout a connection to an unreachable cluster actually waits on, because the driver selects a server before it connects to one.",
+          "message": "Czas oczekiwania na znalezienie odpowiedniego serwera, przekazywany jako opcja URI `serverSelectionTimeoutMS`.\n\nJest to limit czasu, na który połączenie z niedostępnym klastrem naprawdę czeka, ponieważ sterownik wybiera serwer przed nawiązaniem połączenia z nim."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c2VydmVyX3NlbGVjdGlvbl90aW1lb3V0.display_name": {
+          "source": "Server Selection Timeout",
+          "message": "Limit czasu wyboru serwera"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.c2VydmVyX3NlbGVjdGlvbl90aW1lb3V0.short_desc": {
+          "source": "How long to wait for a suitable server to be found",
+          "message": "Czas oczekiwania na znalezienie odpowiedniego serwera"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database user.\n\nGiven here rather than in the URL, it is stored as a password and is URL-encoded when the client is created, so a password containing `@`, `:`, `/` or `?` works without the caller having to encode it.",
+          "message": "Hasło użytkownika bazy danych.\n\nPodane tutaj zamiast w URL, jest przechowywane jako hasło i kodowane w formacie URL podczas tworzenia klienta, więc hasło zawierające `@`, `:`, `/` lub `?` działa bez konieczności kodowania przez wywołującego."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Hasło"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for the database user",
+          "message": "Hasło użytkownika bazy danych"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGluZ190aW1lb3V0.desc": {
+          "source": "The upper bound on a single connection ping.\n\nA ping runs unattended, on a timer, in a thread that something else waits on, so it is bounded independently of the timeouts that apply to data operations: the client the ping uses caps `connectTimeoutMS`, `serverSelectionTimeoutMS` and `socketTimeoutMS` at this value, whatever the URL or the other options say, and the client returned for data operations is left alone.",
+          "message": "Górny limit czasu jednego pinga połączenia.\n\nPing działa bez nadzoru, na zegarze, w wątku, na którym coś innego czeka, więc jest ograniczony niezależnie od limitów czasu stosowanych do operacji danych: klient używany do pinga ogranicza `connectTimeoutMS`, `serverSelectionTimeoutMS` i `socketTimeoutMS` do tej wartości, niezależnie od URL lub innych opcji, a klient zwracany do operacji danych pozostaje niezmieniony."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGluZ190aW1lb3V0.display_name": {
+          "source": "Ping Timeout",
+          "message": "Limit czasu pinga"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.cGluZ190aW1lb3V0.short_desc": {
+          "source": "The upper bound on a single connection ping",
+          "message": "Górny limit czasu jednego pinga połączenia"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dGxz.desc": {
+          "source": "Encrypt the connection with TLS.\n\nAtlas requires TLS and a `mongodb+srv://` URL implies it, so this is only needed for a `mongodb://` server that requires TLS without advertising it.",
+          "message": "Szyfrowanie połączenia przy użyciu TLS.\n\nAtlas wymaga TLS i URL z `mongodb+srv://` implikuje to, więc to ustawienie jest potrzebne tylko dla serwera `mongodb://`, który wymaga TLS, ale nie deklaruje tego."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dGxz.display_name": {
+          "source": "Use TLS",
+          "message": "Użyj TLS"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dGxz.short_desc": {
+          "source": "Encrypt the connection with TLS",
+          "message": "Szyfrowanie połączenia przy użyciu TLS"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dXNlcm5hbWU.desc": {
+          "source": "The database user to authenticate as.\n\nFor Atlas this is a database user, created under **Database Access** in the Atlas UI - not the Atlas account itself.\n\nGiven here rather than in the URL, the value is URL-encoded when the client is created, so it needs no encoding of its own.",
+          "message": "Użytkownik bazy danych, jako którego należy się uwierzytelnić.\n\nW przypadku Atlas jest to użytkownik bazy danych, utworzony w sekcji **Dostęp do bazy danych** w interfejsie Atlas – nie konto Atlas.\n\nWartość podawana tutaj, a nie w adresie URL, zostanie zakodowana w formacie URL podczas tworzenia klienta, więc nie wymaga własnego kodowania."
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Nazwa użytkownika"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.option.dXNlcm5hbWU.short_desc": {
+          "source": "The database user to authenticate as",
+          "message": "Użytkownik bazy danych, jako którego należy się uwierzytelnić"
+        },
+        "connection.TW9uZ29EYkRhdGFQcm92aWRlcg.scheme.TW9uZ29EYkNvbm5lY3Rpb24.short_desc": {
+          "source": "A connection to a MongoDB server or an Atlas cluster",
+          "message": "Połączenie z serwerem MongoDB lub klastrem Atlas"
+        }
+      }
+    }
+  }
+}

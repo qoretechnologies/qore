@@ -331,7 +331,8 @@ ServiceNowRestClient rest({
 public class ServiceNowRestConnection inherits RestClient::RestConnection {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ServiceNowRestClient",
+            "ServiceNowRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "ServiceNow REST Connection",
             "short_desc": "A connection to a ServiceNow instance using the REST API",
             "desc": "A connection to a ServiceNow instance using the REST API",
@@ -404,7 +405,7 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
                 }),
             },
             "required_options": "apikey|token|oauth2_client_id,oauth2_client_secret",
-        };
+        });
 
         #! Default ServiceNow ping method
         const DefaultServiceNowPingMethod= "GET";

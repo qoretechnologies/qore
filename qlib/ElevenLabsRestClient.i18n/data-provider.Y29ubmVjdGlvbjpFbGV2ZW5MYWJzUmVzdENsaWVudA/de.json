@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [ElevenLabs](https://elevenlabs.io) REST API for AI voice synthesis, text-to-speech, and audio processing services.\n\nAn API key is required for authentication. To obtain one, sign in to your ElevenLabs account and navigate to **Profile + API Key** in the bottom-left menu at [elevenlabs.io](https://elevenlabs.io)",
+          "message": "Eine Verbindung zur [ElevenLabs](https://elevenlabs.io) REST-API für KI-Sprachsynthese, Text-zu-Sprache und Audioverarbeitungsdienste.\n\nEin API-Schlüssel ist zur Authentifizierung erforderlich. Um einen zu erhalten, melden Sie sich bei Ihrem ElevenLabs-Konto an und navigieren Sie im Menü unten links zu **Profil + API-Schlüssel** auf [elevenlabs.io](https://elevenlabs.io)"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.display_name": {
+          "source": "ElevenLabs REST Connection",
+          "message": "ElevenLabs REST-Verbindung"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "To connect to ElevenLabs, you need an API key:\n\n1. Sign in to your account at [elevenlabs.io](https://elevenlabs.io)\n2. Click your **profile icon** in the bottom-left corner\n3. Select **Profile + API Key**\n4. Click the **eye icon** to reveal your API key, then copy it\n\nKeep your API key secure and never share it publicly.",
+          "message": "Um eine Verbindung zu ElevenLabs herzustellen, benötigen Sie einen API-Schlüssel:\n\n1. Melden Sie sich bei Ihrem Konto auf [elevenlabs.io](https://elevenlabs.io) an\n2. Klicken Sie auf Ihr **Profil-Symbol** in der unteren linken Ecke\n3. Wählen Sie **Profil + API-Schlüssel**\n4. Klicken Sie auf das **Auge-Symbol**, um Ihren API-Schlüssel sichtbar zu machen, und kopieren Sie ihn\n\nBehalten Sie Ihren API-Schlüssel sicher und teilen Sie ihn niemals öffentlich."
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your ElevenLabs API Key",
+          "message": "So erhalten Sie Ihren ElevenLabs-API-Schlüssel"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The ElevenLabs API key used for authentication; sent as the `xi-api-key` header. To obtain a key, sign in at [elevenlabs.io](https://elevenlabs.io) and navigate to **Profile + API Key** in the bottom-left menu",
+          "message": "Der ElevenLabs-API-Schlüssel zur Authentifizierung; wird als `xi-api-key`-Header gesendet. Um einen Schlüssel zu erhalten, melden Sie sich auf [elevenlabs.io](https://elevenlabs.io) an und navigieren Sie im Menü in der unteren linken Ecke zu **Profil + API-Schlüssel**"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Key",
+          "message": "API-Schlüssel"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "ElevenLabs API key for authentication",
+          "message": "ElevenLabs-API-Schlüssel zur Authentifizierung"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "Use the EU data residency endpoint (api.eu.residency.elevenlabs.io)",
+          "message": "Verwenden Sie den EU-Datenresidenz-Endpunkt (api.eu.residency.elevenlabs.io)"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "EU",
+          "message": "EU"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "Use the global API endpoint (api.elevenlabs.io)",
+          "message": "Verwenden Sie den globalen API-Endpunkt (api.elevenlabs.io)"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "US (Global)",
+          "message": "USA (Global)"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "The API region to use; `us` (default) uses the global endpoint, `eu` uses the EU data residency endpoint",
+          "message": "Die API-Region, die verwendet werden soll; `us` (Standard) verwendet den globalen Endpunkt, `eu` verwendet den EU-Data-Residency-Endpunkt"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Region"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "The API region to use",
+          "message": "Die API-Region, die verwendet werden soll"
+        },
+        "connection.RWxldmVuTGFic1Jlc3RDbGllbnQ.scheme.RWxldmVuTGFic1Jlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the ElevenLabs REST API",
+          "message": "Eine Verbindung zur ElevenLabs REST-API"
+        }
+      }
+    }
+  }
+}
