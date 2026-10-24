@@ -215,7 +215,6 @@ private:
     const AbstractStatement* old_stmt;
     const QoreProgramLocation* old_loc;
     QoreParseOptions old_po;
-    uintptr_t old_sp;
     bool swapped;
 };
 
@@ -355,13 +354,12 @@ private:
     };
     RuntimeConfigNativeLeafCallHelper* previous;
     const QoreStackLocation* old_stack;
-    // Read/written only by materialize() and the matching restoration path.
+    // Location and statement are saved on entry; other fields are materialized only on demand.
     QoreProgram* old_call_pgm;
     const QoreClosureBase* old_closure;
     const AbstractStatement* old_stmt;
     const QoreProgramLocation* old_loc;
     QoreParseOptions old_po;
-    uintptr_t old_sp;
     enum class ContextState : uint8_t { EagerMarkers, DeferredMarkers, Materialized };
     ContextState state;
     enum class TargetKind : uint8_t { Callback, Method, Closure, ClosureV2 };
@@ -570,7 +568,6 @@ private:
     const QoreProgramLocation* tls_old_loc;
     const AbstractStatement* tls_old_stmt;
     QoreParseOptions tls_old_po;
-    uintptr_t tls_old_sp;   //!< saved runtime_loc_sp (innermost non-AOT frame marker)
     bool restore_po;
     bool used_swap;
 };

@@ -4,8 +4,9 @@ A local variable that is passed by reference (`\var`) or captured by a closure i
 live in the frame but in a heap-allocated `ClosureVarValue` (`include/qore/intern/LocalVar.h`), so that the reference
 or the closure can use it after the expression that took it, and from other threads. A local variable used in a
 `background` expression is not: the background operator takes its value when the thread starts (AST:
-`copy_value_and_resolve_lvar_refs()`; IR: the call's operands), so it stays an ordinary frame local (`store.local` and
-`load.local` in `--ir-dump`), and a closure in the expression captures only what that closure itself uses. The parser decides this for the variable as a whole
+`copy_value_and_resolve_lvar_refs()`; IR, JIT and AOT: the operands of the instruction starting the thread, see
+`background-helpers.md`), so it stays an ordinary frame local (`store.local` and `load.local` in `--ir-dump`), and a
+closure in the expression captures only what that closure itself uses. The parser decides this for the variable as a whole
 (`ParseReferenceNode::parseInit()` and the closure parser call `VarRefNode::setThreadSafe()`), so the variable is
 closure-bound in every execution of the function, whether or not the reference or closure is ever shared.
 

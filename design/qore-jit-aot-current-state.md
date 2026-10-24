@@ -44,7 +44,7 @@ ordinary call path. No externally visible state is changed before fallback.
 
 Closure runtime shortcuts reject attached debuggers, and leaf execution is
 limited to the same Program. Normal closure dispatch selects AST or debug IR
-when attached. QORD version 20 preserves each closure's entry file/source label,
+when attached. QORD version 22 preserves each closure's entry file/source label,
 offset, line range and lexical parse options in a fixed 40-byte payload after
 its varargs flags and before captures. Both expression and expression-slot
 readers attach an immutable, variant-owned entry statement before publishing the
@@ -56,15 +56,47 @@ physical build paths after other source metadata has been mapped.
 
 Older supported QORD versions remain readable without that payload; recompiling
 is required to supply missing closure entry metadata. Older runtimes reject
-version-20 artifacts. No prepared scalar callback helper ABI changes. Compiler
+version-22 artifacts. No prepared scalar callback helper ABI changes. Compiler
 comparisons must use separate before/after AOT compilation, not a newly compiled
 executable against the older runtime. `IRComposedIntLeaf.qtest` covers full-width
 compositions, effects and exception fallback, concurrent first calls, Program
 churn/crossings, and warmed/cold debugger attachment through source-stripped AOT.
 
+### Develop integration: eager locations and slot allocation
+
+The integration of develop `b7e1367f5f` removes lazy native-PC maps and preserves
+the branch's exact normal-body guards with `QoreAOTContext::native_body_fn`.
+Receiver forwarding publishes one immutable image-owned v3 descriptor containing
+the companion, slot and direct source location. Its release/acquire publication
+prevents readers from observing a partially initialized proof. Legacy companions
+that require a PC map are not admitted. Receiver and dynamic-closure lowering use
+`qore_rt_get_native_entry_slots_v2` to obtain location slots from the explicit
+`RuntimeConfig`, without another TLS lookup.
+
+Deferred scalar frames save the caller's statement and location on every entry,
+install the callee's image-owned body location, and restore the caller on every
+exit, including an unmaterialized successful call and a null parse location.
+They retain the stack-reader publication handshake and live admission guards.
+Native call-name interning participates in the fork lock protocol.
+
+QORD 22 combines the branch's closure-entry/default-constructor payloads with
+develop's v20 background/block-exit helpers and v21 removal of location tables.
+Earlier performance-branch v20/v21 artifacts must be rebuilt against the matching
+runtime; those experimental payload versions are not aliases for develop's
+versions. Historical benchmark results below describe their recorded revisions,
+not the merged runtime. A fresh runtime checkpoint remains pending.
+
+AOT local-slot allocation keeps a cached next index and recomputes it once after
+bulk IR-slot seeding, preserving sparse identities and replacement of the highest
+seed. This removes the per-insertion maximum scan. In an isolated optimized
+macOS arm64 benchmark (seven independent forks per size, median), 128/1024/8192
+slots take 2.62/25.2/257 microseconds versus 8.23/409/69994 microseconds with the
+merged pre-optimization header. Exact assignments and checksums match. These are
+slot-table construction costs, not whole-compiler or runtime-call speedups.
+
 ### Constructor defaults
 
-QORD version 21 retains the exact parser-selected constructor signature in
+QORD version 22 retains the exact parser-selected constructor signature in
 `VT_NEW_OBJECT` member, static-member and hashdecl defaults. This includes the
 empty signature of a zero-argument constructor. The loader binds an available
 constructor before publishing the default, so ordinary evaluation uses the
@@ -82,7 +114,7 @@ execution. No caller parse options or dynamic-call checks are relaxed.
 `-O0`/`-O3` modules, including inherited, static and hashdecl defaults, forward
 constructor declarations and overloaded constructors. Supported older artifacts
 remain readable with their previous unbound behavior; recompile them to obtain
-the binding. Older runtimes reject version-21 artifacts.
+the binding. Older runtimes reject version-22 artifacts.
 
 ### Dynamic native integer closures
 
@@ -660,7 +692,7 @@ disabled-cache/context controls. No method entry or serialized ABI changes.
 A whole-body-proven, context-independent, non-throwing `int(int)` instance method
 can publish its existing typed native companion through
 `qore_rt_bind_method_int_unary_v1` when its normal AOT entry first executes.
-The binding checks the normal body's identity against the context's `pc_loc_fn`.
+The binding checks the normal body's identity against the context's immutable `native_body_fn`.
 An append-only context field holds the acquire/release-published entry; repeated
 generic calls use a relaxed already-bound check before attempting publication.
 No `QoreAOTFunc` table stride or serialized symbol-index format changes, and old
@@ -668,7 +700,7 @@ native artifacts have no binding and retain their existing path.
 
 A polymorphic cache hit still validates the resolved override, receiver validity,
 dispatch epoch/access key, exact integer argument and actual `int(int)` signature.
-The native path additionally requires a ready context/PC map, unchanged normal
+The native path additionally requires a published context, unchanged normal
 body, matching caller/object/execution/context Programs, no debugger and no
 generic receiver. Imported/specialized/capturing bodies, self/argv users, optional
 or changed return contracts and potentially throwing expressions are excluded.
@@ -722,12 +754,11 @@ it showed no improvement at 1024 iterations and a 2.02% nullable regression at
 4096; the descriptor/helper/emitter are not retained. Existing scalar callback
 preparation is unaffected. See
 `bench/runtime-comparison/results-prepared-method-rejected-macos-arm64.json`.
-The experiment's stress tests exposed an independent diagnostic lifetime bug:
-the native-PC registry now owns interned immutable location/string snapshots,
-rather than borrowing from destructible Program contexts. Its locked ordered
-map replaces repeated registrations at the same native function base; old
-snapshot pointers remain valid after readers release the lock. The cache owns
-no Program and deduplicates equal values for the process lifetime.
+The experiment's stress tests exposed an independent diagnostic lifetime bug.
+The earlier fix made the native-PC registry own immutable location snapshots.
+The develop integration replaces that registry with image-owned constant
+locations. The regression still checks location lifetime across Program teardown
+and registration on foreign threads.
 
 Separating cold stack-overflow construction from native limit checks was also
 measured and rejected. Automatic inlining removed the standalone check's hot
@@ -952,7 +983,7 @@ same retained-entry lifetime as the existing method/variant pointers; there is
 no additional allocation or serialized ABI change.
 
 The full PIC key, actual integer value, receiver validity, native-body identity,
-context/PC-map readiness, current Program and debugger state remain live guards.
+context readiness, current Program and debugger state remain live guards.
 If the PIC is populated before companion publication (for example, on its first
 call under a debugger), it retains the ordinary native-admission path, which can
 discover the entry after debugger detachment. Regressions cover this order and
@@ -1205,11 +1236,11 @@ entries, specializations, and closures are excluded. Integer/float boxing uses
 the full-width helpers, not a truncated inline encoding. Other eligible
 references still avoid argument-list binding through the runtime fast path.
 
-The scalar-only proof is required because the lazy PC location registry does
-not yet describe adapter symbols. Bodies that can raise ordinary Qore
-exceptions must enter their registered normal function, preserving exact
-throwing locations. Expanding eligibility requires location-map registration
-for adapters first; the explicit context argument alone is not sufficient.
+The scalar-only proof limits the adapter's context and exception requirements.
+Bodies that can raise ordinary Qore exceptions retain the normal entry and its
+full context setup. With eager image-owned locations, widening eligibility still
+requires proving the body's context, ownership and diagnostic contracts; an
+explicit context argument alone is not sufficient.
 
 The compiler attaches the adapter to a newly created reference before it can
 escape. Attachment and each invocation compare the registered normal AOT
@@ -1221,7 +1252,7 @@ changes. Previously compiled artifacts use the guarded runtime path without
 an adapter. Newly compiled artifacts require the new runtime helper.
 
 Native reference calls retain stack checks, the caller Program context,
-diagnostic frames, runtime parse options/location, lazy PC maps, and the C++
+diagnostic frames, runtime parse options/location, and the C++
 exception boundary. They omit TLS parameter/body-local/argv instantiation only
 under the existing context-independence proof. An attached debugger forces the
 generic path. Argument cleanup occurs after the borrowed call has completed,
@@ -1337,13 +1368,10 @@ is `QORE_DISABLE_AOT_FUNCREF_NATIVE_CONTINUATION`; the focused
 source stripping, split codegen, wide values, NaNs, owned rejected returns,
 cleanup reuse, foreign Programs, and captured callbacks.
 
-Parallel AOT code generation recovers native PC/source-location maps from
-each partition before the partial link. This matters on Mach-O, where `ld -r`
-drops the DWARF line tables. Function-relative maps and literal inlined-callee
-locations accumulate on the compiler thread and are serialized into the final
-object's linker-surviving section and trailer. Single-part fallback still
-recovers maps after emission. Forced-split, source-stripped regression tests
-check exact exception lines; compiler cancellation propagates during recovery.
+Parallel AOT code generation carries image-owned location constants with each
+partition. Locations do not depend on DWARF or a separate native PC map, so the
+Mach-O partial link and stripped-debug builds retain exact exception locations.
+Forced-split, source-stripped regression tests check those lines.
 
 `QORE_DISABLE_AOT_TYPED_FUNCREF_CALL` suppresses both typed-entry attachment and
 typed caller lowering at compile time, leaving the boxed adapter available.
@@ -1369,7 +1397,7 @@ call it retains the exact FunctionCallReferenceNode and caches only immutable
 binding, signature, name and source-metadata pointers. A positive hit bypasses
 boxed type decoding, exact RTTI and repeated metadata extraction. Current
 Program identity, debugger attachment, normal compiled-entry identity, context
-readiness and PC-map readiness remain live checks on every call. No body is
+readiness remain live checks on every call. No body is
 materialized merely to prepare a reference.
 
 Each slot belongs to one native signature. Population validates that the actual
@@ -1422,7 +1450,7 @@ explicit context. It does not call the old fast entry, whose guard would still
 look up TLS. Boolean carriers are normalized; summary-disable controls retain
 the old adapter. No reference/capture, generic reentry, allocating expression
 or throwing expression is newly admitted. Adapters do not inherit the creating
-caller's debug scope; the existing published frame and lazy callee PC context
+caller's debug scope; the existing published frame and image-owned callee body location
 remain responsible for observation and stack-failure diagnostics.
 `QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG` suppresses the new binding as
 an independent compilation control. On these eager callee-v2 paths, all
@@ -1591,7 +1619,7 @@ existing whole-body scalar-expression admission proof; widening native-entry
 eligibility must revisit this contract. The diagnostic frame is unpublished and
 stack readers finish before either marker is popped, as before.
 
-Context and PC-map readiness use their existing acquire-published state before
+Context readiness uses its existing acquire-published state before
 calling the slow materialization helpers. Materialization remains lazy: an
 unused reference cannot start failing earlier just because its target was
 prepared. Initial materialization retains the normal Program-call context.
@@ -1780,6 +1808,28 @@ AOT artifacts require complete serialized metadata. Source text can be embedded
 for diagnostics or inspection, but it is not a runtime fallback for missing AOT
 metadata.
 
+### Lvalues
+
+Every lvalue that `check_lvalue()` accepts is lowered to an lvalue path
+(`extractLValuePath()` in `lib/QoreIRLowering.cpp`, executed by
+`LValueHelper::navigatePath()`): a root (local, closure-bound, global, thread-local
+or static variable, or a member of `self`), then navigation steps (a hash key or object
+member, a list index) and `Cast` steps, which check the value navigated to so far as the
+AST checks `cast<T>(lvalue)` and keep the position. Every operator that modifies an
+lvalue, apart from the fast paths for plain locals and their subscripts, emits an
+`LValuePath*` instruction; if the path cannot be built, lowering fails. Lowering emits no
+AST-evaluated lvalue operation (`StoreLValue`, `AddAssignLValue`, ...): those only
+evaluated the lvalue's AST, keys included, at runtime.
+
+A slice (a hash slice, a list slice or a range) is an lvalue only as the whole lvalue of
+`remove` and `delete`, which take it as the terminal step of the path; `check_lvalue()`
+rejects any other slice lvalue at parse time, and a key or index that is a list only at
+runtime raises `ILLEGAL-SLICE` in every engine (`qore_check_lvalue_key_not_slice()`).
+
+An expression statement is lowered as any other expression, also in a try block: the
+operators that can raise an exception there are lowered with their own opcodes by
+`lowerExprOpOrInvoke()`.
+
 ## Variables Other Threads Can Change
 
 A global variable, and a local variable that is passed by reference or captured by a
@@ -1790,7 +1840,7 @@ read the variable again for every access. Every engine must give the same guaran
 
 - IR lowering never lowers such an operation on such a variable as a load followed by a
   store (`isSharedVar()` in `lib/QoreIRLowering.cpp`). The compound assignment operators
-  take the lvalue path (`LValuePathCompound`, or the AST-evaluated lvalue operation),
+  take the lvalue path (`LValuePathCompound`),
   typed integer pre- and post-increments and decrements take `IncrementLocalInt` (for a
   captured local, which every engine applies under the variable's lock) or
   `LValuePathUnary`, and the subscript fast paths (`isConstKeyHashSubscript()`,
@@ -1934,18 +1984,17 @@ The current implementation relies on explicit registries for extension safety:
 
 ## Exception Source Locations
 
-AOT-compiled code reports real per-frame source file and line numbers in
-exceptions, matching interpreted execution. The throwing location and full
-backtrace are reconstructed lazily at throw from line-number tables embedded in
-the artifact (emitted by default with debug info), so non-throwing code carries
-no per-statement location-updater cost. `--strip-debug-info` emits no line
-tables and retains the per-statement updater instead. Source text is not
-required: stripped-source artifacts still report file and line from the line
-tables.
-
-For the innermost-frame detection mechanism that decides, at throw, whether the
-innermost user frame is AOT (and therefore whether to resolve lazily), see
-[`aot-lazy-loc-innermost-frame.md`](aot-lazy-loc-innermost-frame.md).
+AOT-compiled code reports the source file and line of an exception and of each
+call stack frame as AST execution does, with or without debug info and source
+text. Each source location is a constant `QoreProgramLocation` in the image,
+one per distinct location of the module (`QoreIRToLLVM::getAotLocationConstant()`),
+and the code stores its address in the thread's runtime location when the line
+changes, as JIT code stores its location pointer; the location does not depend
+on the AOT context the code runs with, so code that runs with its caller's
+context (a context-independent fast entry) reports its own lines. Every direct
+call of user code and every call that the code runs inline as a summary of the
+callee's body pushes the callee's frame; see "Frames of native calls" in
+[`call-stack-publication.md`](call-stack-publication.md).
 
 ## Exception Cleanup Dominance
 
@@ -4098,3 +4147,28 @@ set; literals already belong to a subset accepted unchanged by ordinary
 binding. Preserve binding semantics without inferring stronger callable
 signatures, and reuse existing exact-callref specialization where applicable.
 Treat this as a new hypothesis with separate before/disabled measurements.
+
+## Develop integration through b7e1367f5f (2026-10-24)
+
+Eager locations replace lazy PC recovery. Fast contexts retain exact native-body
+identity and caller location restoration; receiver forwarding uses an immutable
+image-owned descriptor. Receiver/closure entry-slot setup takes RuntimeConfig
+explicitly. Live Program/debugger/stack/ownership and reader guards remain.
+
+This integration changes the native QoreAOTFunc layout by adding body location.
+Rebuild all native artifacts with the matching runtime. Earlier experiment
+statements about unchanged layouts or compatible artifacts are historical and
+do not apply across this integration. Binary format 22 preserves develop 20/21
+meanings; experimental performance-branch20/21 payloads require recompilation.
+
+Compiler local-slot insertion now uses a cached bound with one linear seed
+refresh, avoiding repeated scans. Optimized isolated measurements and selected
+Release/Debug qualification, including a later compiler error-lifetime fix and
+its separate focused checks, are in RESULTS and
+`bench/runtime-comparison/results-merge-b7e1367f5f-macos-arm64.json`.
+The known socket-bind platform failure and Linux packaging limitation remain
+explicit. No runtime-speed gain is inferred from slot assignment timings.
+
+Next run the planned matched optimized feature/develop/premerge/Java checkpoint,
+then measure the callable-input subset candidate. Java parity and a global
+performance ceiling remain unestablished.

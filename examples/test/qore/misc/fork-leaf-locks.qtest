@@ -20,6 +20,10 @@ class ForkLeafLocksTest inherits QUnit::Test {
             \testQuicIdleCloseHook());
         addTestCase("fork() while another thread holds the lock of the AOT module source hashes",
             \testAotModuleSourceHashes());
+        addTestCase("fork() while another thread holds the native call-name cache lock",
+            \testNativeCallNames());
+        addTestCase("fork() while another thread holds the variant call-name lock",
+            \testVariantCallNames());
         set_return_value(main());
     }
 
@@ -29,6 +33,14 @@ class ForkLeafLocksTest inherits QUnit::Test {
 
     testAotModuleSourceHashes() {
         forkWhileHeld("aot_module_source_hashes");
+    }
+
+    testNativeCallNames() {
+        forkWhileHeld("native_call_names");
+    }
+
+    testVariantCallNames() {
+        forkWhileHeld("variant_call_names");
     }
 
     private forkWhileHeld(string name) {

@@ -55,8 +55,6 @@ if [ "$(uname -s)" = "Darwin" ]; then
         SEGS=$(otool -l "${qo}" | grep -c "cmd LC_SEGMENT_64" || true)
         echo "  $(basename "${qo}"): ${SEGS} LC_SEGMENT_64 (expect 1)"
         [ "${SEGS}" -eq 1 ] || { echo "FAIL: ${qo} has ${SEGS} segment load commands"; exit 1; }
-        otool -s __QORE __pcloc "${qo}" | grep -q "Contents of (__QORE,__pcloc) section" \
-            || { echo "FAIL: ${qo} has no (__QORE,__pcloc) section"; exit 1; }
     done
 fi
 

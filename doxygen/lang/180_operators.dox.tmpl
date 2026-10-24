@@ -180,6 +180,12 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     |<em>@ref expressions "expression"</em>|- @ref list "list": if the expression evaluates to a list, then a slice of the hash or object is returned as a hash containing keys given in the list that are present in the hash or object. If the key as given in the list (converted to a string if necessary) is not present in the hash or object, then it is also not present in the hash returned; if none of the given keys exist in the hash, an empty hash is returned.\n- anything other than @ref list "list": the expression is converted to a string (if necessary); the value of the hash key corresponding to this string will be returned; if the key or member does not exist, then no value is returned
 
     @throw PRIVATE-MEMBER Attempt to access a private member outside the class
+    @throw ILLEGAL-SLICE the key expression of an lvalue that is not the whole lvalue of the @ref remove "remove" or
+    @ref delete "delete" operators evaluates to a list
+
+    @note a slice is not an lvalue: it can be the whole lvalue of the @ref remove "remove" and
+    @ref delete "delete" operators, and using it with any other operator that modifies an lvalue is a parse error,
+    or raises an \c ILLEGAL-SLICE exception when the key expression is a list only at runtime
 
     <hr>
     @subsection dot_operator Hash Element or Object Member Literal Dereference Operator (.)
@@ -267,7 +273,10 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
 
     This operator does not throw any exceptions; if the first expression does not evaluate to either a list, string, binary, or buffer, then no value (@ref nothing) is returned.
 
-    @note this operator cannot be used on the left-hand side of an assignment expression with multiple values between square brackets
+    @note a slice (several values or a range between the square brackets, or a list given by an expression) is not an
+    lvalue: it can be the whole lvalue of the @ref remove "remove" and @ref delete "delete" operators, and using it
+    with any other operator that modifies an lvalue is a parse error, or raises an \c ILLEGAL-SLICE exception when
+    the expression is a list only at runtime
 
     @note The @ref no-string-index-char "%no-string-index-char" parse directive preserves the historical single-index string behavior where \c string[i] returns \c *string instead of \c *char.
 
@@ -424,25 +433,23 @@ list<int> l1 = new list<int>(2);
 
     @note
     - expressions that have no effect cannot be used with the background operator (a parse exception will be thrown)
-    - it is illegal to make changes to a local variable anywhere in a background expression (a parse exception will be thrown)
-    - in every @ref exec_mode_intro "execution mode", local variables, find expressions and the
-      @ref implicit_arguments "implicit arguments" (<tt>$1</tt>, <tt>$$</tt> and <tt>$#</tt>) of the code that starts the thread are
-      evaluated before the new thread is started, and the results are used in the expression in the new thread; so
-      <tt>map <b>background</b> f($1), list</tt> starts a thread for each element of \a list with the element as the argument; an
-      implicit argument of an operator in the background expression that iterates, such as the <tt>$1</tt> of
-      <tt><b>background</b> f(map $1 * 2, list)</tt>, is that operator's
-    - where the rest of the expression is evaluated depends on the execution mode; this is planned to change so that the whole
-      expression is evaluated in the new thread in every mode:
-      - with @ref exec_mode_ast "AST execution", in the new thread: the arguments of the call and its target (the object of a
-        method call, such as the <tt><b>new</b> T()</tt> of <tt><b>background</b> (<b>new</b> T()).method()</tt>, or the
-        expression that gives the call reference to call) are evaluated there, so <tt><b>background</b> f(gettid())</tt> passes
-        the TID of the new thread, and an exception raised evaluating them is an exception of the new thread
-      - with @ref exec_mode_ir "IR", @ref exec_mode_jit "JIT" and @ref exec_mode_tiered "tiered" execution and in
-        @ref exec_mode_aot "AOT-compiled" code, in the starting thread: the arguments and the target are evaluated before the
-        new thread is started, so <tt><b>background</b> f(gettid())</tt> passes the TID of the starting thread, and an exception
-        raised evaluating them is raised to the code that starts the thread, which can catch it; only a call (of a function,
-        a method, a static method or a call reference) can be started this way: any other background expression raises an
-        \c IR-AST-FALLBACK-ERROR exception, and \c qcc cannot compile it
+    - it is illegal to make changes to a local variable anywhere in a background expression, or to assign or modify a member
+      of the object of the code that starts the thread directly (such as <tt><b>background</b> (x = 1)</tt> in a method of a
+      class with member \c x); a parse exception will be thrown
+    - the whole expression is evaluated in the new thread, in every @ref exec_mode_intro "execution mode": the arguments of a
+      call and its target (the object of a method call, such as the <tt><b>new</b> T()</tt> of
+      <tt><b>background</b> (<b>new</b> T()).method()</tt>, or the expression that gives the call reference to call) are
+      evaluated there, so <tt><b>background</b> f(gettid())</tt> passes the TID of the new thread and an argument that blocks
+      does not block the code that starts the thread; an exception raised evaluating the expression is an exception of the new
+      thread, which the code that starts the thread cannot catch; any expression can be started, not only a call, for example
+      <tt><b>background</b> (g = gettid())</tt>
+    - the values that the expression takes from the code that starts the thread are evaluated before the new thread is
+      started, and the results are used in the expression in the new thread: its local and thread-local variables, the
+      members of its object that the expression reads, find expressions, closures, references and its
+      @ref implicit_arguments "implicit arguments" (<tt>$1</tt>, <tt>$$</tt> and <tt>$#</tt>); a later change to a local variable
+      by the code that starts the thread is not seen by the expression, and <tt>map <b>background</b> f($1), list</tt> starts a
+      thread for each element of \a list with the element as the argument; an implicit argument of an operator in the background
+      expression that iterates, such as the <tt>$1</tt> of <tt><b>background</b> f(map $1 * 2, list)</tt>, is that operator's
     - it is not possible to pass local variables by reference anywhere in a background expression (a parse exception will be thrown)
     - closure values created in object scope are checked before the new thread is started; if the captured object is valid,
       its scope is prolonged until the background expression has finished executing
@@ -1341,7 +1348,7 @@ foreach string key in (keys hash)
     |!Argument|!Processing
     |@ref number_type "number"|Gives the result of dividing its arguments; @ref integer "ints" and @ref float "floats" are converted to @ref number "numbers" if at least one of the arguments is a @ref number "number"
     |@ref float_type "float"|Gives the result of dividing its arguments; @ref integer "ints" are converted to @ref float "floats" if at least one of the arguments is a @ref float "float"
-    |@ref int_type "int"|Gives the result of dividing its arguments
+    |@ref int_type "int"|Gives the result of dividing its arguments, rounded toward zero; as integer arithmetic wraps, the smallest integer divided by \c -1 gives the smallest integer
     |any other type|Converts argument to a @ref float_type "float" and performs the division
 
     @throw DIVISION-BY-ZERO division by zero error
@@ -1363,9 +1370,9 @@ foreach string key in (keys hash)
 
     <b>Arguments Processed by %</b>
     |!Argument|!Processing
-    |@ref int_type "int"|Gives \a expression1 modulo \a expression2 (ex: <tt>12 % 10</tt> result in \c 2). Arguments are converted to integers if necessary.
+    |@ref int_type "int"|Gives \a expression1 modulo \a expression2 (ex: <tt>12 % 10</tt> result in \c 2), with the sign of \a expression1; the remainder of a division by \c -1 is \c 0. Arguments are converted to integers if necessary.
 
-    This operator does not throw any exceptions.
+    @throw DIVISION-BY-ZERO \a expression2 is zero
 
     <hr>
     @subsection plus_operator Plus (Addition and Concatenation) Operator (+)
@@ -2430,7 +2437,7 @@ if (x || y)
 
     <b>Arguments Processed by %=</b>
     |!Argument|!Processing
-    |All|the \a lvalue's type will be converted to an integer if necessary, and the \a expression will be evaluated and converted to an integer as well if necessary, and then the result will be used to divide the \a lvalue's value and the remainder will be saved to the \a lvalue
+    |All|the \a lvalue's type will be converted to an integer if necessary, and the \a expression will be evaluated and converted to an integer as well if necessary, and then the result will be used to divide the \a lvalue's value and the remainder will be saved to the \a lvalue, as by the @ref modulo_operator "modulo operator"; if the \a expression is zero, \c 0 is saved to the \a lvalue and no exception is raised
 
     <hr>
     @subsection multiply_equals_operator Multiply Equals Operator (*=)
@@ -2468,7 +2475,7 @@ if (x || y)
 
     <b>Arguments Processed by /=</b>
     |!Argument|!Processing
-    |All|The type precedence from highest to lowest is @ref number "number", @ref float "float" float, and @ref integer "int", other types are converted to @ref integer "int"; The \a expression will be evaluated and multiplied by the \a lvalue, and the result will be saved to the \a lvalue. The \a expression will be evaluated and used to divide the \a lvalue, and the result will be saved to the \a lvalue.
+    |All|The type precedence from highest to lowest is @ref number "number", @ref float "float", and @ref integer "int", other types are converted to @ref integer "int"; the \a expression will be evaluated and used to divide the \a lvalue, and the result will be saved to the \a lvalue, as by the @ref division_operator "divide operator".
 
     @throw DIVISION-BY-ZERO If the divisor expression evaluates to zero, this exception is thrown
 

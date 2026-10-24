@@ -914,6 +914,9 @@ nothing minutes() [flags=RUNTIME_NOOP] {
 date rd = seconds(100);
     @endcode
 
+    @note Elapsed hours are preserved across timezone transitions. The normalized hour component must fit a
+    signed 32-bit integer; hours are not converted to calendar days to extend that range.
+
     @see
     - years(softint)
     - months(softint)
@@ -924,7 +927,7 @@ date rd = seconds(100);
     - microseconds(softint)
 */
 date seconds(softint seconds) [flags=CONSTANT,NAMED_ARGS] {
-    return new DateTimeNode(0, 0, 0, 0, 0, (int)seconds, 0, true);
+    return DateTimeNode::makeRelativeFromSeconds(seconds);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1922,7 +1925,9 @@ date d = date(f);
     @since %Qore 0.8.13 the return value is a @ref relative_dates "relative date/time value" in seconds
  */
 date date(softfloat seconds) [flags=CONSTANT,NAMED_ARGS] {
-    return DateTimeNode::makeRelativeFromSeconds((int64)seconds, (int)((seconds - (double)((int)seconds)) * 1000000));
+    int64 whole_seconds = static_cast<int64>(seconds);
+    return DateTimeNode::makeRelativeFromSeconds(whole_seconds,
+        static_cast<int>((seconds - whole_seconds) * 1000000));
 }
 
 //! The argument is assumed to be the number of seconds

@@ -1,0 +1,253 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+module LvChecks {
+    version = "1.0";
+    desc = "native lvalue checks";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace LvChecks {
+our hash<auto> gh;
+thread_local hash<auto> th;
+
+class A {
+    public {
+        string s = " a ";
+        list<auto> l = (1, 2, 3);
+        hash<auto> h = {"a": " x ", "b": " y ", "c": 1};
+        int x = 1;
+    }
+}
+
+class B {}
+
+hashdecl H {
+    int i = 1;
+    string s = "abc";
+}
+
+class C {
+    public {
+        hash<auto> m = {"a": {"n": 1, "l": (1, 2), "s": " x "}};
+        static hash<auto> sh = {"a": {"n": 1, "l": (1, 2), "s": " x "}};
+    }
+
+    string run() {
+        list<string> out;
+        out += ops("member", \m);
+        out += ops("static", \C::sh);
+        try {
+            m.a.n += 2; m.a.n -= 1; m.a.n *= 3; m.a.n /= 2; m.a.n %= 5; m.a.n |= 8; m.a.n &= 12; m.a.n ^= 1;
+            m.a.n <<= 1; m.a.n >>= 1; m.a.n++; ++m.a.n; m.a.n--; --m.a.n; push m.a.l, 3; unshift m.a.l, 0;
+            shift m.a.l; pop m.a.l; trim m.a.s; m.a.s =~ s/x/y/; m.a.s =~ tr/y/z/;
+            C::sh.a.n += 2; C::sh.a.n++; push C::sh.a.l, 9;
+        } catch (hash<ExceptionInfo> ex) {
+            out += "try " + ex.err;
+        }
+        out += sprintf("try member %y static %y", m.a, C::sh.a);
+        return out.join("|");
+    }
+}
+
+string sub ops(string label, reference<hash<auto>> r) {
+    r.a.n += 2; r.a.n -= 1; r.a.n *= 3; r.a.n /= 2; r.a.n %= 5; r.a.n |= 8; r.a.n &= 12; r.a.n ^= 1;
+    r.a.n <<= 1; r.a.n >>= 1; r.a.n++; ++r.a.n; r.a.n--; --r.a.n; push r.a.l, 3; unshift r.a.l, 0;
+    shift r.a.l; pop r.a.l; trim r.a.s;
+    return sprintf("%s %y", label, r.a);
+}
+
+# global, thread-local and closure-bound roots, in a try block
+string sub roots() {
+    list<string> out;
+    gh = {"a": {"n": 1, "l": (1, 2), "s": " x "}};
+    th = {"a": {"n": 1, "l": (1, 2), "s": " x "}};
+    hash<auto> lh = {"a": {"n": 1, "l": (1, 2), "s": " x "}};
+    code c = sub () {
+        try {
+            lh.a.n += 5; lh.a.n++; lh.a.n <<= 1; push lh.a.l, 7; trim lh.a.s;
+        } catch (hash<ExceptionInfo> ex) {
+            out += "closure " + ex.err;
+        }
+    };
+    c();
+    try {
+        gh.a.n += 2; gh.a.n++; ++gh.a.n; gh.a.n--; gh.a.n <<= 1; gh.a.n >>= 1; push gh.a.l, 3; trim gh.a.s;
+        th.a.n += 2; th.a.n++; ++th.a.n; th.a.n--; th.a.n <<= 1; th.a.n >>= 1; push th.a.l, 3; trim th.a.s;
+    } catch (hash<ExceptionInfo> ex) {
+        out += "try " + ex.err;
+    }
+    out += sprintf("closure %y global %y thread %y", lh.a, gh.a, th.a);
+    return out.join("|");
+}
+
+string sub key(reference<list<string>> log, string k) {
+    log += "key " + k;
+    return k;
+}
+
+# cast<T>(lvalue) with every operator that modifies an lvalue; a dynamic key is evaluated once
+string sub casts() {
+    list<string> out;
+    list<string> log;
+    object o = new A();
+    trim cast<A>(o).s;
+    push cast<A>(o).l, 4;
+    unshift cast<A>(o).l, 0;
+    pop cast<A>(o).l;
+    shift cast<A>(o).l;
+    extract cast<A>(o).l, 0, 1;
+    splice cast<A>(o).l, 0, 0, (9,);
+    cast<A>(o).s =~ s/a/b/;
+    cast<A>(o).s =~ tr/b/c/;
+    chomp cast<A>(o).s;
+    cast<A>(o).x += 5;
+    cast<A>(o).x *= 2;
+    cast<A>(o).x <<= 1;
+    cast<A>(o).x >>= 1;
+    cast<A>(o).x++;
+    ++cast<A>(o).x;
+    cast<A>(o).x--;
+    cast<A>(o).h{key(\log, "c")} = 7;
+    trim cast<A>(o).h.a;
+    remove cast<A>(o).h.b;
+    delete cast<A>(o).h{key(\log, "a")};
+    out += sprintf("A s=%y l=%y h=%y x=%d", o.s, o.l, o.h, o.x);
+    hash<auto> hh = {"o": new A()};
+    cast<A>(hh.o).x = 10;
+    cast<A>(hh{key(\log, "o")}).x += 1;
+    out += sprintf("nested %d", hh.o.x);
+    hash<H> hd();
+    cast<hash<H>>(hd).i += 2;
+    out += sprintf("hashdecl %y", hd);
+    *object n;
+    cast<*A>(n) = n;
+    out += sprintf("or-nothing %y", n);
+    object b = new B();
+    try {
+        cast<A>(b).x = 1;
+    } catch (hash<ExceptionInfo> ex) {
+        out += sprintf("bad cast assign %s: %s", ex.err, ex.desc);
+    }
+    try {
+        trim cast<A>(b).s;
+    } catch (hash<ExceptionInfo> ex) {
+        out += "bad cast trim " + ex.err;
+    }
+    try {
+        cast<A>(b).x <<= 1;
+    } catch (hash<ExceptionInfo> ex) {
+        out += "bad cast shift " + ex.err;
+    }
+    # in a try block
+    try {
+        cast<A>(o).x++;
+        pop cast<A>(o).l;
+        remove cast<A>(o).h.c;
+        cast<A>(b).x += 1;
+    } catch (hash<ExceptionInfo> ex) {
+        out += sprintf("try %s x=%d l=%y h=%y", ex.err, o.x, o.l, o.h);
+    }
+    out += sprintf("log %y", log);
+    return out.join("|");
+}
+
+auto sub keys_of() {
+    return ("a", "b");
+}
+
+auto sub indexes() {
+    return (0, 1);
+}
+
+# a key or index that is a list at runtime is a slice: only remove and delete take one
+string sub slices() {
+    list<string> out;
+    hash<auto!> h = {"a": 1, "b": 2};
+    try {
+        h{keys_of()} = 5;
+    } catch (hash<ExceptionInfo> ex) {
+        out += "assign " + ex.err;
+    }
+    try {
+        h{keys_of()} += 1;
+    } catch (hash<ExceptionInfo> ex) {
+        out += "add " + ex.err;
+    }
+    list<auto> l = (1, 2, 3);
+    try {
+        l[indexes()] = 5;
+    } catch (hash<ExceptionInfo> ex) {
+        out += "list assign " + ex.err;
+    }
+    hash<auto> hn = {"a": {"x": 1}, "b": 2};
+    try {
+        remove hn{keys_of()}.x;
+    } catch (hash<ExceptionInfo> ex) {
+        out += "nested remove " + ex.err;
+    }
+    list<auto> ll = ((1, 2), (3, 4));
+    try {
+        remove ll[indexes()][0];
+    } catch (hash<ExceptionInfo> ex) {
+        out += "nested list remove " + ex.err;
+    }
+    out += sprintf("h=%y l=%y hn=%y ll=%y", h, l, hn, ll);
+    h = {"a": 1, "b": 2, "c": 3};
+    out += sprintf("remove hash %y %y", remove h{keys_of()}, h);
+    l = (1, 2, 3);
+    out += sprintf("remove list %y %y", remove l[indexes()], l);
+    l = (1, 2, 3);
+    delete l[indexes()];
+    out += sprintf("delete list %y", l);
+    return out.join("|");
+}
+
+# the loop variable is a reference, or a ref-foreach writes the list back
+sub ref_loop(reference<int> r) {
+    foreach r in (7, 8) {
+    }
+}
+
+sub ref_loop_try(reference<int> r) {
+    try {
+        foreach r in (9, 10) {
+            if (r == 10) {
+                throw "ERR";
+            }
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        r += 100;
+    }
+}
+
+string sub foreach_vars() {
+    int v;
+    ref_loop(\v);
+    int w;
+    ref_loop_try(\w);
+    list<int> l = (1, 2);
+    foreach int i in (\l) {
+        i *= 10;
+    }
+    list<int> l2 = (1, 2);
+    try {
+        foreach int i in (\l2) {
+            i += 1;
+            if (i == 3) {
+                throw "ERR";
+            }
+        }
+    } catch (hash<ExceptionInfo> ex) {
+    }
+    return sprintf("foreach %d %d %y %y", v, w, l, l2);
+}
+
+public list<string> sub run() {
+    C::sh = {"a": {"n": 1, "l": (1, 2), "s": " x "}};
+    return (roots(), new C().run(), casts(), slices(), foreach_vars());
+}
+}

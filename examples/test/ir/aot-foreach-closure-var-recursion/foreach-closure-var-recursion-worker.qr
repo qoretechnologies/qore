@@ -1,0 +1,9 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%requires ForeachClosureVarRecursion
+
+list<auto> input = (1, (2, (3, 4)), 5);
+printf("%y\n", (new RefWrapper()).wrap(input));
+printf("%y\n", value_foreach(input));
+printf("%y\n", pipeline_foreach(input));

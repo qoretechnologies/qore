@@ -109,8 +109,6 @@ enum QoreForkLockRank : int {
     QFLR_COND_WAKER = 510,
     //! the thread stack lock (stack_lck): held only while a thread is created and its stack size set
     QFLR_STACK = 520,
-    //! the AOT PC map attach lock: takes the AOT PC map lock
-    QFLR_AOT_PC_ATTACH = 900,
     //! leaf locks: caches and registries whose critical sections take no other registered lock (but the ones below),
     //! also the leaf locks of modules (QFR_MODULE_LEAF)
     QFLR_LEAF = 1000,

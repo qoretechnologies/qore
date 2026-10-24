@@ -1418,7 +1418,7 @@ public:
                     assigned = true;
                     return v.i = 0;
                 }
-                return i ? v.i %= i : v.i = 0;
+                return v.i = i ? qore_int_mod(v.i, i) : 0;
 
                 // to avoid warnings about missing enum values
             default:
@@ -1459,7 +1459,7 @@ public:
                     assigned = true;
                     return v.i = 0;
                 }
-                return v.i /= i;
+                return v.i = qore_int_div(v.i, i);
 
             // to avoid warnings about missing enum values
             default:

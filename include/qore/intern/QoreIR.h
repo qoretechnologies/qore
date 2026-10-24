@@ -67,6 +67,7 @@ class QoreMethod;
 class QoreClass;
 class qore_class_private;
 class QoreVarInfo;
+class QoreCastOperatorNode;
 class AbstractQoreFunctionVariant;
 class QoreClosureParseNode;
 class RuntimeConstantRefNode;
@@ -1594,6 +1595,7 @@ enum class LVPathStepKind : uint8_t {
     HashKeySlice   = 9,  //!< Multi-key hash slice h{"a","b",...} — terminal step only
     ListIndexSlice = 10, //!< Multi-index list/string/binary slice l[1,3,5,...] — terminal step only
     ListRangeSlice = 11, //!< Range list/string/binary slice l[1..3] — terminal step only
+    Cast           = 12, //!< cast<T>(lvalue): checks the value navigated to so far against the cast's type
 };
 
 //! A single step in an lvalue navigation path
@@ -1644,6 +1646,13 @@ struct LVPathStep {
 
     // Type info for type checking at this step
     const QoreTypeInfo* type_info = nullptr;
+
+    //! Cast steps: the cast operator whose type the value navigated to so far must have
+    /** The value is checked as the AST checks a cast in an lvalue (QoreCastOperatorNode::checkValue() with
+        \a lvalue = true); the position in the lvalue does not change.  The node belongs to the parsed code, to
+        the AOT context (an expression slot) or to the instruction (QoreIRLValuePathInstruction::owned_cast_nodes).
+    */
+    const QoreCastOperatorNode* cast_node = nullptr;
 };
 
 //! Sub-operation type for LValuePathCompound
@@ -1690,6 +1699,14 @@ public:
         for (auto* node : owned_static_var_refs) {
             node->deref(nullptr);
         }
+        size_t cast_count = 0;
+        for (auto* node : owned_cast_nodes) {
+            if (++cast_count % 100 == 0) {
+                // Cleanup must release every owned node even when cancellation is pending.
+                (void)qore_check_cancel(nullptr, "IR lvalue cast cleanup");
+            }
+            node->deref(nullptr);
+        }
     }
 
     std::vector<LVPathStep> path;  //!< Root step + navigation steps
@@ -1715,6 +1732,9 @@ public:
 
     //! StaticClassVarRefNode objects reconstructed while deserializing AOT LValuePath roots.
     std::vector<AbstractQoreNode*> owned_static_var_refs;
+
+    //! Cast operator nodes of Cast steps reconstructed while deserializing serialized IR
+    std::vector<AbstractQoreNode*> owned_cast_nodes;
 
     //! Whether the return value of the operation is used (from QoreOperatorNode::ref_rv)
     bool ref_rv = true;
@@ -2200,9 +2220,26 @@ public:
 enum class QoreIRBackgroundKind : uint8_t {
     DotEval = 1,  //!< background obj.method(args), receiver in operand 0
     StaticMethod = 2,  //!< background Class::method(args), args in operands
+    //! the whole expression is evaluated by a helper function in the new thread; see QoreIRBackgroundInstruction
+    Helper = 3,
+};
+
+//! Deletes a local variable that an IR instruction owns
+/** Defined where LocalVar is complete, so that QoreIR.h does not need its definition.
+*/
+struct QoreIROwnedLocalVarDeleter {
+    DLLLOCAL void operator()(LocalVar* lv) const;
 };
 
 //! Native background-call instruction metadata.
+/** With QoreIRBackgroundKind::Helper, the expression given to \c background is evaluated in the new thread by
+    \a helper_ir, a compiler-private IR function lowered from the expression.  The values that the expression takes
+    when the thread starts - the local variables, implicit arguments, member reads, find expressions, closures and
+    references it uses - are the instruction's operands, evaluated by the starting code; operand \a i is the value of
+    \a helper_params[i], a local variable of the helper that the new thread instantiates before calling it, as a
+    call instantiates its parameters.  A local variable of the starting code is its own parameter; any other value is
+    held by one of \a owned_params.
+*/
 class QoreIRBackgroundInstruction : public QoreIRExprInstruction {
 public:
     QoreIRBackgroundInstruction(QoreIRBackgroundKind n_kind, std::string n_name,
@@ -2214,6 +2251,17 @@ public:
 
     QoreIRBackgroundKind kind;
     std::string name;
+
+    //! Helper only: the function that evaluates the expression in the new thread
+    std::unique_ptr<QoreIRFunction> helper_ir;
+    //! Helper only: the local variables of the helper that the new thread instantiates with the operands
+    std::vector<LocalVar*> helper_params;
+    //! Helper only: the parameters that hold values other than the starting code's local variables
+    std::vector<std::unique_ptr<LocalVar, QoreIROwnedLocalVarDeleter>> owned_params;
+    //! Helper only: true if the new thread runs with the object of the starting code, for calls of its methods
+    /** The object is held for the thread's duration, as with a background call of a method of the object.
+    */
+    bool helper_uses_self = false;
 };
 
 //! @name Inline call-state cache publication
@@ -3477,6 +3525,13 @@ public:
         excluded from that block-local kill and are released by the normal
         end-of-function value cleanup instead. */
     mutable std::vector<uint8_t> interpreter_cross_block_slots;
+    //! Slots of native scalars (NativeInt or NativeFloat facts), which own their value in the interpreter.
+    /** Native code keeps such values in registers, so the optimizer forwards them from one statement to the
+        next and around loops; in the interpreter an integer outside the inline range or a double whose bits
+        collide with a value tag is a boxed node, which the slot owns until the value is overwritten or the
+        function's values are cleaned up instead of the temp scope of the statement that computed it (see
+        IRCleanupSlots in QoreIRInterpreter.cpp). */
+    mutable std::vector<uint8_t> interpreter_slot_owned_values;
     mutable std::vector<uint32_t> interpreter_return_value_slot_ids;
     mutable std::vector<uint32_t> interpreter_return_preserve_slot_ids;
     mutable std::vector<const QoreIRCallDirectInstruction*> interpreter_direct_calls;

@@ -44,6 +44,7 @@
 #include <list>
 #include <mutex>
 #include <string>
+#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -87,6 +88,7 @@ struct QoreAOTDebugMetadata;
 struct QoreAOTLazyClosureIR;
 struct QoreAOTLazyFunctionIR;
 class StatementBlock;
+struct QoreAOTReceiverIntForwardEntryV3;
 class TypedHashDecl;
 class UserVariantBase;
 
@@ -285,7 +287,7 @@ struct QoreAOTContext {
     std::mutex global_resolution_mutex; //!< Guards lazy global slot resolution
     uint64_t* exprs = nullptr;      //!< NaN-boxed QoreValue for Invoke/Call/CallMethod/CallStatic/LValue
     int num_exprs = 0;
-    const AbstractStatement** stmts = nullptr;  //!< OnBlockExit/Foreach statement pointers
+    //! Always 0: kept in the native function descriptor layout; see QORE_AOT_BACKGROUND_HELPER_VERSION
     int num_stmts = 0;
     CaseNodeRegex** regex_cases = nullptr;       //!< Regex case objects for SwitchRegexMatch
     int num_regex_cases = 0;
@@ -323,35 +325,10 @@ struct QoreAOTContext {
     std::unordered_map<QoreAOTHashDeclPathCacheKey, const QoreTypeInfo*, QoreAOTHashDeclPathCacheKeyHash>
         type_path_cache;
 
-    //! Source locations for per-line runtime_loc tracking in AOT mode.
-    //! Indexed by location slot assigned during LLVM codegen. Populated from serialized
-    //! location table at load time. Used by the AOT runtime-location helpers.
-    const QoreProgramLocation** locs = nullptr;
-    int num_locs = 0;
-
-    //! Native function whose PC-to-source map is attached on first execution.
-    using PcLocFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
-    PcLocFunctionPtr pc_loc_fn = nullptr;
-    //! Published after the global PC map contains this function's complete range.
-    std::atomic<bool> pc_loc_map_attached{false};
-
-    //! Locations referenced only by the lazy PC->loc map, for code inlined into this function
-    /** LLVM inlines AOT functions into one another, and an inlined body's locations belong to the
-        callee's table, not this function's.  The PC map carries such locations literally and
-        addresses them with indices at or above num_locs; they are materialized here at attach time
-        as inputs to the registry's independently owned, interned snapshots. Owned by this context
-        (the destructor deletes them) together with the file strings they point at; registry readers
-        never borrow these descriptors or strings after attachment returns.
-    */
-    std::vector<const QoreProgramLocation*> pc_extra_locs;
-    //! Backing store for pc_extra_locs file names; QoreProgramLocation::file is a raw pointer that
-    //! must outlive the location, and std::list never invalidates the strings it holds.
-    std::list<std::string> pc_extra_files;
-
-    //! Deserialized handler IR functions for on_exit/on_success/on_error handlers.
-    //! Indexed by statement slot index. Non-null entries can be executed by the IR interpreter.
-    //! Used in strip-source mode where AST-based stmts[] are not available.
-    std::vector<std::unique_ptr<QoreIRFunction>> handler_irs;
+    //! Immutable identity of the normal native body, set before this context is published.
+    //! Companions may bind only from this body; no source-location registry is involved.
+    using NativeBodyFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
+    NativeBodyFunctionPtr native_body_fn = nullptr;
 
     //! Shared serialized AOT metadata used to lazily materialize debug IR.
     std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata;
@@ -394,7 +371,7 @@ struct QoreAOTContext {
 
     //! Optional whole-body-proven scalar method entry, published by its normal entry.
     //! Appended to preserve existing generated-code field offsets; no serialized ABI change.
-    //! pc_loc_fn identifies the same body; Program/context lifetime bounds the borrowed pointer.
+    //! native_body_fn identifies the same body; Program/context lifetime bounds the borrowed pointer.
     using NativeIntUnaryMethodEntry = int64_t (*)(int64_t, QoreAOTContext*, ExceptionSink*);
     std::atomic<NativeIntUnaryMethodEntry> native_int_unary_method_entry{nullptr};
 
@@ -433,11 +410,9 @@ struct QoreAOTContext {
         QoreAOTContext*, ExceptionSink*);
     std::atomic<ReceiverIntMethodEntryV1> receiver_int_method_entry_v1{nullptr};
 
-    //! Whole-body forwarding proof, immutable after receiver_int_forward_ready's release publication.
+    //! Immutable image-owned forwarding proof, published atomically by the exact normal body.
     //! A live matching inner pure-leaf entry is still required before eliding outer signature slots.
-    int32_t receiver_int_forward_slot = -1;
-    int32_t receiver_int_forward_loc = -1;
-    std::atomic<bool> receiver_int_forward_ready{false};
+    std::atomic<const QoreAOTReceiverIntForwardEntryV3*> receiver_int_forward_entry{nullptr};
 
     //! Whole-body-proven scalar companions. Receiver and defining class are borrowed;
     //! each source member operation is synchronized. accepted starts at one for success;
@@ -495,9 +470,6 @@ struct QoreAOTContext {
             exprs = static_cast<uint64_t*>(calloc(num_exprs, sizeof(uint64_t)));
             call_targets = new QoreAOTCallTarget[num_exprs]();
         }
-        if (num_stmts > 0) {
-            stmts = static_cast<const AbstractStatement**>(calloc(num_stmts, sizeof(const AbstractStatement*)));
-        }
         if (num_regex_cases > 0) {
             regex_cases = static_cast<CaseNodeRegex**>(calloc(num_regex_cases, sizeof(CaseNodeRegex*)));
         }
@@ -508,8 +480,12 @@ struct QoreAOTContext {
     }
 };
 
-//! Attach a context's deferred native PC-to-source map before its function executes.
-DLLLOCAL void qore_aot_ensure_pc_loc_map(QoreAOTContext* ctx);
+//! Immutable forwarding descriptor emitted in native image storage; its location has image lifetime.
+struct QoreAOTReceiverIntForwardEntryV3 {
+    QoreAOTContext::ReceiverIntMethodEntryV1 entry;
+    int32_t slot;
+    const QoreProgramLocation* loc;
+};
 
 //! Immutable versioned pair emitted in native module storage, never a per-call allocation.
 struct QoreAOTEffectMemberIntEntryV1 {
@@ -537,7 +513,6 @@ struct AOTSlotMap {
     std::unordered_map<const void*, int32_t> global_slots;  //!< Var* -> slot index
     std::unordered_map<uint64_t, int32_t> expr_slots;       //!< NaN-boxed expr bits -> slot index
     std::unordered_map<uint64_t, std::string> expr_slot_sources; //!< Expr bits -> originating IR opcode diagnostic
-    std::unordered_map<const void*, int32_t> stmt_slots;    //!< StatementBlock* -> slot index (OnBlockExit)
     std::unordered_map<const void*, int32_t> regex_case_slots;  //!< CaseNodeRegex* -> slot index
     std::unordered_map<const void*, int32_t> lv_path_slots;  //!< QoreIRLValuePathInstruction* -> slot
     std::unordered_set<uint64_t> dot_eval_direct_bits;  //!< expr bits from DotEvalMethodDirect (classify as DOT_EVAL_TARGET)
@@ -551,17 +526,37 @@ struct AOTSlotMap {
     }
 
     //! Get or assign a slot for a LocalVar*
+    //! @throw std::length_error if another slot cannot fit in the signed context size
     int32_t getLocalSlot(const void* local) {
         auto it = local_slots.find(local);
         if (it != local_slots.end()) {
             return it->second;
         }
-        int32_t slot = 0;
-        for (const auto& i : local_slots) {
-            slot = std::max(slot, i.second + 1);
+        if (next_local_slot == INT32_MAX) {
+            throw std::length_error("AOT local slot table exceeds the context size limit");
         }
+        int32_t slot = next_local_slot;
         local_slots[local] = slot;
+        ++next_local_slot;
         return slot;
+    }
+
+    //! Recompute the next free index after bulk seeding/replacing local_slots, before allocating more slots.
+    //! @return false on cancellation or an invalid seed; the previous bound is unchanged on failure
+    bool refreshLocalSlotBound() {
+        int32_t next = 0;
+        size_t count = 0;
+        for (const auto& [local, slot] : local_slots) {
+            if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT local slot bound")) {
+                return false;
+            }
+            if (slot < 0 || slot == INT32_MAX) {
+                return false;
+            }
+            next = std::max(next, slot + 1);
+        }
+        next_local_slot = next;
+        return true;
     }
 
     //! Get or assign a slot for a Var* (global or thread-local)
@@ -589,17 +584,6 @@ struct AOTSlotMap {
         return slot;
     }
 
-    //! Get or assign a slot for a StatementBlock* (OnBlockExit)
-    int32_t getStmtSlot(const void* stmt) {
-        auto it = stmt_slots.find(stmt);
-        if (it != stmt_slots.end()) {
-            return it->second;
-        }
-        int32_t slot = static_cast<int32_t>(stmt_slots.size());
-        stmt_slots[stmt] = slot;
-        return slot;
-    }
-
     //! Get or assign a slot for a QoreIRLValuePathInstruction*
     int32_t getLVPathSlot(const void* inst) {
         auto it = lv_path_slots.find(inst);
@@ -621,6 +605,9 @@ struct AOTSlotMap {
         regex_case_slots[regex_case] = slot;
         return slot;
     }
+
+private:
+    int32_t next_local_slot = 0;
 };
 
 //! AOT function pointer type: takes QoreAOTContext* and ExceptionSink*
@@ -635,6 +622,9 @@ struct QoreAOTFunc {
     int num_exprs;                              //!< number of expression slots
     int num_stmts;                              //!< number of statement slots (OnBlockExit)
     int num_regex_cases = 0;                    //!< number of regex case slots (SwitchRegexMatch)
+    //! the location of the function's body, held by the image; nullptr if unknown (see
+    //! UserVariantBase::getAOTBodyLocation())
+    const QoreProgramLocation* body_loc = nullptr;
 };
 
 //! QoreAOTFunc::num_regex_cases keeps its ABI-sized i32 while carrying context metadata.
@@ -1448,7 +1438,10 @@ public:
     @param func the IR function to walk
     @param slots output slot map
 */
-void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots);
+//! @param seed_ir_local_slots true to give the function's locals their IR slot ids; false for the helper of a
+//! background expression, which shares the slot table of the function containing it
+//! @return false on cancellation or invalid local slot numbering; the caller must discard the partial map
+bool buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir_local_slots = true);
 
 //! Build a QoreAOTContext by walking a freshly-lowered IR function in the same order.
 /** The fresh IR must have been produced from the same source as the compile-time IR,
@@ -1461,15 +1454,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
 
 class AbstractStatement;
 class StatementBlock;
-
-//! Collect statement pointers for AOT stmt_slots by walking the AST in depth-first order.
-/** Collects OnBlockExitStatement handler code blocks and reference ForEachStatement pointers
-    in the same order that buildAOTSlotMap() processes them in the IR.
-    @param block the statement block to walk
-    @param stmts output vector of statement pointers
-*/
-void collectStmtSlotStatements(const StatementBlock* block,
-        std::vector<const AbstractStatement*>& stmts);
 
 //! Serialize a QoreValue expression tree to a binary blob using the EXPR_TREE format.
 /** Used by AOT binary serialization to persist BCA (Base Class Constructor Argument) expressions.

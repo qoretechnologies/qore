@@ -1,0 +1,408 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file background-thread-eval-checks.qi checks for where the parts of a background expression are evaluated
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+/** The whole expression given to \c background is evaluated in the new thread, in every execution mode: the target
+    of a call (the object of a method call, the expression giving a call reference) and its arguments.  The local
+    variables and the implicit arguments of the code that starts the thread are taken as values when it starts.
+
+    Every check synchronizes with its thread through a Queue or a Counter; a timeout only guards against a hang, and a
+    check that times out reports it as its result.
+
+    The checks are included in the main program of the worker that runs them in each execution mode, and in
+    BackgroundThreadEvalChecks.qm for the compiled (AOT) run.
+*/
+public namespace BackgroundThreadEvalChecks {
+#! the hang guard for every wait
+const Timeout = 20s;
+
+#! a global variable set by a background expression that is not a call
+our int g_tid;
+
+#! a thread-local variable, which has no value in a new thread
+thread_local *int g_tl;
+
+#! An object that records the TID of the thread that created it
+public class Created {
+    public {
+        int tid = gettid();
+    }
+
+    #! pushes whether this method runs in the thread that created the object
+    m(Queue q) {
+        q.push(tid == gettid() ? "same-thread" : "other-thread");
+    }
+}
+
+#! An object that starts background calls of its own methods
+public class Starter {
+    public {
+        int n = 3;
+        hash<auto> hm = {"k": 4};
+    }
+
+    #! pushes the TID of the thread that runs it and the argument
+    report(Queue q, int arg_tid) {
+        q.push(arg_tid == gettid() ? "new-thread" : "starting-thread");
+    }
+
+    #! starts a call of a method of this object with an argument evaluated in the new thread
+    string selfCall() {
+        Queue q();
+        background report(q, gettid());
+        return get(q);
+    }
+
+    #! pushes the argument
+    push(Queue q, auto v) {
+        q.push(v);
+    }
+
+    #! starts a list of calls of a method of this object, one for each element; each is made with the object
+    string selfCallMap() {
+        Queue q();
+        background (map push(q, $1 * n), (1, 2, 3));
+        return get_sorted(q, 3);
+    }
+
+    #! starts a call with a value read through a member of this object, which is read when the thread starts
+    int memberPathSnapshot() {
+        Queue q();
+        Counter gate(1);
+        background record(q, wait_gate(gate) + hm.k * 10 + hm{"k"});
+        hm.k = 100;
+        gate.dec();
+        auto rv = q.get(Timeout);
+        hm.k = 4;
+        return rv;
+    }
+
+    #! returns a member read through self by a background expression
+    int selfPath() {
+        Queue q();
+        background record(q, self.n * 2);
+        return q.get(Timeout);
+    }
+
+    #! starts a call with a member of this object as the argument; the member is read when the thread starts
+    int memberSnapshot() {
+        Queue q();
+        Counter gate(1);
+        background record(q, wait_gate(gate) + n);
+        n = 100;
+        gate.dec();
+        auto rv = q.get(Timeout);
+        n = 3;
+        return rv;
+    }
+}
+
+#! returns the next value of the queue, or "timeout"
+string sub get(Queue q) {
+    try {
+        return q.get(Timeout);
+    } catch (hash<ExceptionInfo> ex) {
+        return "timeout";
+    }
+}
+
+#! pushes whether the argument is the TID of the thread running this function
+sub tid_check(Queue q, int arg_tid) {
+    q.push(arg_tid == gettid() ? "new-thread" : "starting-thread");
+}
+
+#! pushes a value
+sub record(Queue q, auto v) {
+    q.push(v);
+}
+
+#! waits for the gate; returns 0, or -1000 if the wait timed out
+int sub wait_gate(Counter gate) {
+    try {
+        gate.waitForZero(Timeout);
+        return 0;
+    } catch (hash<ExceptionInfo> ex) {
+        return -1000;
+    }
+}
+
+#! returns a call reference after pushing whether it runs in the thread that started the background call
+code sub get_ref(Queue q, int start_tid) {
+    q.push(start_tid == gettid() ? "starting-thread" : "new-thread");
+    return \tid_check();
+}
+
+#! the TIDs seen by the arguments of a function call, a call reference call and its expression, and a method call on
+#! an object created in the expression
+hash<string, string> sub tid_checks() {
+    hash<string, string> rv();
+
+    Queue q();
+    background tid_check(q, gettid());
+    rv."function-arg" = get(q);
+
+    int start_tid = gettid();
+    background get_ref(q, start_tid)(q, gettid());
+    rv."callref-expr" = get(q);
+    rv."callref-arg" = get(q);
+
+    background (new Created()).m(q);
+    rv."object-expr" = get(q);
+
+    Starter s();
+    rv."self-call-arg" = s.selfCall();
+    rv."self-call-map" = s.selfCallMap();
+
+    rv."static-method-arg" = StaticStarter::start();
+    return rv;
+}
+
+#! A class with a static method
+public class StaticStarter {
+    #! starts a static method call with an argument evaluated in the new thread
+    static string start() {
+        Queue q();
+        background StaticStarter::report(q, gettid());
+        return get(q);
+    }
+
+    static report(Queue q, int arg_tid) {
+        q.push(arg_tid == gettid() ? "new-thread" : "starting-thread");
+    }
+}
+
+#! an argument that blocks until the starting code has continued past the background operator
+string sub blocking_arg() {
+    Queue q();
+    Counter gate(1);
+    # wait_gate() returns -1000 if it timed out, which it does only if the starting thread evaluated it
+    background record(q, wait_gate(gate));
+    gate.dec();
+    auto v = q.get(Timeout);
+    return v == 0 ? "not-blocked" : "blocked";
+}
+
+#! local variables and implicit arguments are taken as values when the thread starts
+hash<string, string> sub snapshot_checks() {
+    hash<string, string> rv();
+
+    Queue q();
+    Counter gate(1);
+    int x = 1;
+    # the left operand waits until the starting code has changed x; the right one must see the value at start
+    background record(q, wait_gate(gate) + x);
+    x = 2;
+    gate.dec();
+    rv."local-snapshot" = get_str(q);
+
+    Starter s();
+    rv."member-snapshot" = s.memberSnapshot().toString();
+    rv."member-path-snapshot" = s.memberPathSnapshot().toString();
+
+    # implicit arguments of the code that starts the thread
+    list<auto> l = map background record(q, $1 * 10), (1, 2, 3);
+    rv."map-implicit-arg" = get_sorted(q, l.size());
+    l = map background record(q, $#), (7, 8, 9);
+    rv."map-implicit-index" = get_sorted(q, l.size());
+    variadic(q, 42, 43);
+    rv."function-implicit-arg" = get_str(q);
+
+    # an implicit argument of an operator in the expression is that operator's
+    background record(q, (map $1 + x, (1, 2)).join(","));
+    rv."bound-implicit-arg" = get_str(q);
+    background record(q, foldl $1 + $2, (1, 2, 3));
+    rv."bound-foldl" = get_str(q);
+
+    # the same local used twice is read once, as one value
+    int y = 5;
+    background record(q, y * y);
+    rv."local-twice" = get_str(q);
+
+    # a reference parameter is taken as the value it refers to
+    int v = 4;
+    reference_param(q, \v);
+    rv."reference-param" = get_str(q);
+
+    # a thread-local variable is read in the starting thread, as any variable that is not global
+    g_tl = 21;
+    background record(q, g_tl);
+    background record(q, g_tl * 2);
+    rv."thread-local" = get_sorted(q, 2);
+    remove g_tl;
+
+    # references are passed on as references
+    int w = 10;
+    reference_pass(q, \w);
+    rv."reference-pass" = w.toString();
+
+    # self, used through a member path
+    Starter s2();
+    rv."self-path" = s2.selfPath().toString();
+
+    # a background expression in a background expression takes the outer thread's values
+    int z = 7;
+    background (background record(q, z + 1));
+    z = 0;
+    rv."nested-background" = get_str(q);
+    return rv;
+}
+
+#! starts a background call with an expression of a reference parameter
+sub reference_param(Queue q, reference<int> r) {
+    background record(q, r + 1);
+}
+
+#! increments the referenced value and pushes it
+sub record_inc(Queue q, reference<int> r) {
+    q.push(++r);
+}
+
+#! increments the referenced value and returns it
+int sub inc_ref(reference<int> r) {
+    return ++r;
+}
+
+#! starts background expressions that pass a reference parameter on as a reference
+/** One is a call of its own (the reference is taken when the thread starts and passed to the call), the other an
+    expression evaluated by a helper in the new thread, where the reference is used by a nested call; each increments
+    the variable the reference refers to.
+*/
+sub reference_pass(Queue q, reference<int> r) {
+    background record_inc(q, \r);
+    q.get(Timeout);
+    background (record(q, inc_ref(\r)), record(q, 0));
+    q.get(Timeout);
+    q.get(Timeout);
+}
+
+#! starts a background call with the implicit arguments of this function (the arguments after \a q)
+sub variadic(Queue q) {
+    background record(q, $1 + $2);
+}
+
+#! returns the next value of the queue as a string
+string sub get_str(Queue q) {
+    try {
+        return q.get(Timeout).toString();
+    } catch (hash<ExceptionInfo> ex) {
+        return "timeout";
+    }
+}
+
+#! returns the next \a n values of the queue, sorted and joined
+string sub get_sorted(Queue q, int n) {
+    list<auto> vals = ();
+    for (int i = 0; i < n; ++i) {
+        try {
+            vals += q.get(Timeout);
+        } catch (hash<ExceptionInfo> ex) {
+            return "timeout";
+        }
+    }
+    return (map $1.toString(), sort(vals)).join(",");
+}
+
+#! background expressions that are not calls
+hash<string, string> sub expression_checks() {
+    hash<string, string> rv();
+
+    Counter done(1);
+    g_tid = 0;
+    int start_tid = gettid();
+    background (g_tid = gettid(), done.dec());
+    if (done.waitForZero(Timeout)) {
+        rv."assignment" = "timeout";
+    } else {
+        rv."assignment" = (g_tid && g_tid != start_tid) ? "new-thread" : "starting-thread";
+    }
+
+    Queue q();
+    background (map record(q, $1 + 1), (1, 2));
+    rv."map-expression" = get_sorted(q, 2);
+    list<int> l = (3, 4, 5);
+    background (map record(q, $1 * 2), l, $1 > 3);
+    rv."map-select-expression" = get_sorted(q, 2);
+
+    int base = 10;
+    background (base > 5 ? record(q, "big") : record(q, "small"));
+    rv."ternary" = get_str(q);
+
+    # background expressions in the body of a closure: in a compiled module, the closure's IR is serialized with them
+    int cbase = 100;
+    code cl = string sub (int cx) {
+        Queue cq();
+        background record(cq, cx + cbase + gettid() - gettid());
+        background (map record(cq, $1 * cx), (1, 2));
+        return get_sorted(cq, 3);
+    };
+    rv."closure-body" = cl(3);
+
+    # a closure in the expression is created when the thread starts and sees the value of the local then
+    int c = 1;
+    Counter gate(1);
+    background sub (int v) { wait_gate(gate); record(q, v + c); }(c);
+    c = 50;
+    gate.dec();
+    rv."closure" = get_str(q);
+    return rv;
+}
+
+#! returns all results
+public hash<string, string> sub get_results() {
+    return tid_checks() + {"blocking-arg": blocking_arg()} + snapshot_checks() + expression_checks();
+}
+
+#! raises an exception
+int sub bad() {
+    throw "ARG-ERROR", "raised by an argument";
+}
+
+#! returns a call reference after raising an exception
+code sub bad_ref() {
+    throw "TARGET-ERROR", "raised by the call target";
+}
+
+#! prints a line if called
+sub must_not_run(*int v) {
+    printf("must-not-run=%d\n", v ?? 0);
+}
+
+#! starts a background call whose argument (\a which = "arg") or call target (\a which = "target") raises an exception
+/** The exception is an exception of the new thread: the thread ends with an unhandled exception, which is reported on
+    stderr, the called code does not run, and the starting code catches nothing.  Each case runs in its own process,
+    since nothing can wait for a background thread to end, and the reports of two threads could be interleaved.
+*/
+public sub exception_check(string which) {
+    bool caught = False;
+    try {
+        if (which == "arg") {
+            background must_not_run(bad());
+        } else {
+            background bad_ref()(1);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        caught = True;
+    }
+    printf("%s-caught=%d\n", which, caught ? 1 : 0);
+}
+}

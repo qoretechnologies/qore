@@ -342,11 +342,8 @@ public:
 
     DLLLOCAL QoreHashNode* getAllCallStacks();
 
-    //! Build the callstack-element hash for a frame; when `override_loc` is non-null it
-    //! replaces the frame's own location (used to repair AOT call-site locations via the
-    //! lazy PC->loc registry when the eager value is stale/aggregate).
-    DLLLOCAL static QoreHashNode* getCallStackHash(const QoreStackLocation& loc,
-        const QoreProgramLocation* override_loc = nullptr);
+    //! Build the callstack-element hash for a frame
+    DLLLOCAL static QoreHashNode* getCallStackHash(const QoreStackLocation& loc);
 
     DLLLOCAL static QoreHashNode* getCallStackHash(qore_call_t type, const std::string& code,
         const QoreProgramLocation& loc);

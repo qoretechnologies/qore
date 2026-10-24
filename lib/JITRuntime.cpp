@@ -169,6 +169,11 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_background_static_method_name_call_aot) },
     { "qore_rt_background_static_method_name_call_aot_throwing",
         reinterpret_cast<void*>(&qore_rt_background_static_method_name_call_aot_throwing) },
+    { "qore_rt_background_helper", reinterpret_cast<void*>(&qore_rt_background_helper) },
+    { "qore_rt_background_helper_throwing", reinterpret_cast<void*>(&qore_rt_background_helper_throwing) },
+    { "qore_rt_background_helper_aot", reinterpret_cast<void*>(&qore_rt_background_helper_aot) },
+    { "qore_rt_background_helper_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_background_helper_aot_throwing) },
     { "qore_rt_background_call_ref_value_aot",
         reinterpret_cast<void*>(&qore_rt_background_call_ref_value_aot) },
     { "qore_rt_background_call_ref_value_aot_throwing",
@@ -500,6 +505,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_bind_receiver_int_method_v1) },
     { "qore_rt_bind_receiver_int_method_v2",
         reinterpret_cast<void*>(&qore_rt_bind_receiver_int_method_v2) },
+    { "qore_rt_bind_receiver_int_method_v3",
+        reinterpret_cast<void*>(&qore_rt_bind_receiver_int_method_v3) },
     { "qore_rt_bind_method_int_unary_v2",
         reinterpret_cast<void*>(&qore_rt_bind_method_int_unary_v2) },
     { "qore_rt_bind_method_int_unary_v3",
@@ -609,7 +616,18 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_lv_path_unary_aot", reinterpret_cast<void*>(&qore_rt_lv_path_unary_aot) },
     { "qore_rt_lv_path_binary_mut_aot", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut_aot) },
     { "qore_rt_lv_path_ternary_aot", reinterpret_cast<void*>(&qore_rt_lv_path_ternary_aot) },
-    { "qore_rt_push_on_block_exit_aot", reinterpret_cast<void*>(&qore_rt_push_on_block_exit_aot) },
+    { "qore_rt_push_compiled_handler_aot", reinterpret_cast<void*>(&qore_rt_push_compiled_handler_aot) },
+    { "qore_rt_get_native_entry_slots", reinterpret_cast<void*>(&qore_rt_get_native_entry_slots) },
+    { "qore_rt_get_native_entry_slots_v2", reinterpret_cast<void*>(&qore_rt_get_native_entry_slots_v2) },
+    { "qore_rt_push_native_call_frame", reinterpret_cast<void*>(&qore_rt_push_native_call_frame) },
+    { "qore_rt_push_native_call_frame_aot", reinterpret_cast<void*>(&qore_rt_push_native_call_frame_aot) },
+    { "qore_rt_push_native_inline_call_frame_aot",
+        reinterpret_cast<void*>(&qore_rt_push_native_inline_call_frame_aot) },
+    { "qore_rt_push_native_call_frame_aot_named",
+        reinterpret_cast<void*>(&qore_rt_push_native_call_frame_aot_named) },
+    { "qore_rt_push_native_closure_call_frame",
+        reinterpret_cast<void*>(&qore_rt_push_native_closure_call_frame) },
+    { "qore_rt_pop_native_call_frame", reinterpret_cast<void*>(&qore_rt_pop_native_call_frame) },
     { "qore_rt_call_fast_with_target", reinterpret_cast<void*>(&qore_rt_call_fast_with_target) },
     { "qore_rt_call_with_args", reinterpret_cast<void*>(&qore_rt_call_with_args) },
     { "qore_rt_call_function_with_base",
@@ -724,46 +742,13 @@ bool qore_jit_validate_runtime_symbols(std::string& error) {
 }
 
 // --- Runtime location tracking for LLVM-generated code ---
-// Returns pointer to the thread-local runtime_loc variable for per-line location updates.
-// Called once at function entry; the returned pointer is stored and reused for each line change.
-extern "C" DLLEXPORT const QoreProgramLocation** qore_rt_get_loc_ptr() {
+// Fills the thread's runtime location slots and data once at function entry; generated code stores the location
+// through them when the line changes.
+extern "C" DLLEXPORT void qore_rt_get_native_entry_slots(QoreNativeEntrySlots* slots) {
     RuntimeLocationCache cache = get_runtime_location_cache();
-    return cache.loc_ptr;
-}
-
-// Returns pointer to the thread-local runtime_statement variable.
-extern "C" DLLEXPORT const AbstractStatement** qore_rt_get_stmt_ptr() {
-    RuntimeLocationCache cache = get_runtime_location_cache();
-    return cache.stmt_ptr;
-}
-
-// Returns pointer to the thread-local runtime_loc_sp variable. JIT-compiled code stores
-// its current stack frame address here per line so the AOT lazy-throw resolver can tell
-// a JIT frame (eager-tracked) from an AOT frame.
-extern "C" DLLEXPORT uintptr_t* qore_rt_get_loc_frame_ptr() {
-    RuntimeLocationCache cache = get_runtime_location_cache();
-    return cache.sp_ptr;
-}
-
-// AOT mode: set runtime location from context location table.
-// Per-line update: loads location pointer from ctx->locs[loc_index] and stores to TLS.
-extern "C" DLLEXPORT void qore_rt_set_runtime_loc_aot(QoreAOTContext* ctx, int32_t loc_index) {
-    if (ctx && ctx->locs && loc_index >= 0 && loc_index < ctx->num_locs && ctx->locs[loc_index]) {
-        RuntimeLocationCache cache = get_runtime_location_cache();
-        *cache.stmt_ptr = nullptr;
-        *cache.loc_ptr = ctx->locs[loc_index];
-    }
-}
-
-// AOT mode: set runtime location through TLS slots cached by generated code at
-// function entry. Keep qore_rt_set_runtime_loc_aot() for existing AOT artifacts.
-extern "C" DLLEXPORT void qore_rt_set_runtime_loc_aot_cached(QoreAOTContext* ctx, int32_t loc_index,
-        const QoreProgramLocation** loc_ptr, const AbstractStatement** stmt_ptr) {
-    if (loc_ptr && stmt_ptr && ctx && ctx->locs && loc_index >= 0 && loc_index < ctx->num_locs
-            && ctx->locs[loc_index]) {
-        *stmt_ptr = nullptr;
-        *loc_ptr = ctx->locs[loc_index];
-    }
+    slots->thread_data = cache.thread_data;
+    slots->loc_ptr = cache.loc_ptr;
+    slots->stmt_ptr = cache.stmt_ptr;
 }
 
 // --- Outlined function-body return token ---
@@ -1019,7 +1004,7 @@ extern "C" DLLEXPORT int64_t qore_rt_div_int(int64_t left, int64_t right, Except
         }
         return 0;
     }
-    return left / right;
+    return qore_int_div(left, right);
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_mod_int(int64_t left, int64_t right, ExceptionSink* xsink) {
@@ -1029,7 +1014,7 @@ extern "C" DLLEXPORT int64_t qore_rt_mod_int(int64_t left, int64_t right, Except
         }
         return 0;
     }
-    return left % right;
+    return qore_int_mod(left, right);
 }
 
 extern "C" DLLEXPORT double qore_rt_div_float(double left, double right, ExceptionSink* xsink) {
@@ -1326,9 +1311,6 @@ extern "C" DLLEXPORT int64_t qore_rt_check_cancel_v2(ExceptionSink* xsink, const
 // Thread-local flag set by JIT guard failure to request deopt to AST.
 // evalTiered() checks this after JIT returns and re-executes via AST if set.
 static thread_local bool tl_jit_deopt_requested = false;
-
-// Empty string used as fallback call name when no cached IR function is available.
-static const std::string jit_empty_call_name;
 
 static LocalVar* findIRSelfLocal(const QoreIRFunction* ir) {
     if (!ir) {
@@ -6183,6 +6165,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_dynamic_cow(
         LocalVar* var, uint64_t hash_bits, uint64_t key_bits,
         uint64_t value_bits, ExceptionSink* xsink) {
     QoreValue key_val = fromBits(key_bits);
+    // a list is a slice, which is not an lvalue
+    if (qore_check_lvalue_key_not_slice(key_val, xsink)) {
+        return toBits(QoreValue());
+    }
     QoreHashKeyHelper key_str(key_val, xsink);
     if (*xsink) {
         return toBits(QoreValue());
@@ -6196,6 +6182,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_dynamic_cow_aot(
         uint64_t hash_bits, uint64_t key_bits,
         uint64_t value_bits, ExceptionSink* xsink) {
     QoreValue key_val = fromBits(key_bits);
+    // a list is a slice, which is not an lvalue
+    if (qore_check_lvalue_key_not_slice(key_val, xsink)) {
+        return toBits(QoreValue());
+    }
     QoreHashKeyHelper key_str(key_val, xsink);
     if (*xsink) {
         return toBits(QoreValue());
@@ -10216,19 +10206,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_function_with_base_aot(
 // can borrow the immutable function name: the active Program and reference
 // outlive the frame, including inspection by another thread while it is pushed.
 template <typename Name>
-class QoreJITStackLocationImpl : public QoreStackLocation, public QoreAOTStackFrameMarker {
+class QoreJITStackLocationImpl : public QoreStackLocation {
 public:
     DLLLOCAL QoreJITStackLocationImpl(const std::string& call_name, const QoreProgramLocation* loc,
-            const StatementBlock* statements, QoreProgram* pgm, bool is_aot = false)
-        : call_name(call_name), loc(loc), statements(statements), pgm(pgm), is_aot(is_aot) {
+            const StatementBlock* statements, QoreProgram* pgm)
+        : call_name(call_name), loc(loc), statements(statements), pgm(pgm) {
     }
 
     DLLLOCAL const QoreProgramLocation& getLocation() const override {
         return loc ? *loc : loc_builtin;
-    }
-
-    DLLLOCAL bool isAOTFrame() const override {
-        return is_aot;
     }
 
     DLLLOCAL const std::string& getCallName() const override {
@@ -10253,7 +10239,6 @@ private:
     const QoreProgramLocation* loc;
     const StatementBlock* statements;
     QoreProgram* pgm;
-    bool is_aot = false;  //!< true when this frame executes an AOT-compiled function natively
     // saved_stmt and saved_pgm receive the thread's current statement and program from stack_helper's
     // constructor via output references, so they take no initializers
     const AbstractStatement* saved_stmt;
@@ -10278,32 +10263,34 @@ static auto execFunctionRefNativeContext(const FunctionCallReferenceNode* ref,
     if (!uvb->ensureAOTContext(name.c_str(), xsink)) {
         return Result{};
     }
-    qore_aot_ensure_pc_loc_map(uvb->getCachedAOTContext());
     ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
     ThreadFrameBoundaryHelper frame_boundary(true);
     const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
     const QoreProgramLocation* call_loc = get_runtime_location();
     QoreFunctionRefStackLocation stack_loc(name, call_loc ? call_loc : parse_loc,
-        uvb->getStatementBlock(), ref->getProgram(), true);
+        uvb->getStatementBlock(), ref->getProgram());
     struct ContextGuard {
         ExceptionSink* xsink;
         const AbstractStatement* stmt = nullptr;
         const QoreProgramLocation* loc = nullptr;
         QoreParseOptions po;
-        uintptr_t sp = get_runtime_loc_sp();
         bool swapped;
 
         ContextGuard(ExceptionSink* xs, const QoreProgramLocation* parse_loc,
                 const QoreParseOptions& options) : xsink(xs), swapped(parse_loc != nullptr) {
             if (swapped) {
                 swap_runtime_statement_location(xsink, nullptr, parse_loc, options, stmt, loc, po);
+            } else {
+                stmt = get_runtime_statement();
+                loc = get_runtime_location();
             }
         }
         ~ContextGuard() {
             if (swapped) {
                 update_runtime_statement_location(stmt, loc, po);
+            } else {
+                update_runtime_statement_location(stmt, loc);
             }
-            set_runtime_loc_sp(sp);
         }
     } context(xsink, parse_loc, uvb->getParseOptions(ref->getProgram()->getParseOptions()));
     // Installing the runtime location can itself report stack exhaustion.
@@ -10369,7 +10356,7 @@ static int tryTypedFunctionRef(uint64_t ref_bits, Result* result, ExceptionSink*
 
 // All observable fields precede the publishing helper. In particular, call_loc
 // is filled by that helper before another thread can reach this frame.
-class QoreExplicitFunctionRefStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
+class QoreExplicitFunctionRefStackLocation : public QoreStackLocation {
 public:
     __attribute__((always_inline)) QoreExplicitFunctionRefStackLocation(RuntimeConfig& rc,
             const FunctionCallReferenceNode* ref,
@@ -10383,7 +10370,6 @@ public:
     // typed entry's register allocator. Destruction still waits for readers.
     __attribute__((always_inline)) ~QoreExplicitFunctionRefStackLocation() override = default;
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
-    bool isAOTFrame() const override { return true; }
     const std::string& getCallName() const override { return name; }
     qore_call_t getCallType() const override { return CT_USER; }
     QoreProgram* getProgram() const override { return pgm; }
@@ -10402,7 +10388,7 @@ private:
 // every call. This exact scalar leaf cannot reenter or replace its own cache;
 // popping the frame waits for observers before the caller can change/clear it.
 template <bool Deferred = false, bool DeferredMarkers = false>
-class QorePreparedFunctionRefStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
+class QorePreparedFunctionRefStackLocation : public QoreStackLocation {
 public:
     __attribute__((always_inline)) QorePreparedFunctionRefStackLocation(RuntimeConfig& rc,
             const QorePreparedFunctionRefV3& cache, ExceptionSink* xsink)
@@ -10418,7 +10404,6 @@ public:
     }
     __attribute__((always_inline)) ~QorePreparedFunctionRefStackLocation() override = default;
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
-    bool isAOTFrame() const override { return true; }
     const std::string& getCallName() const override { return *cache.name; }
     qore_call_t getCallType() const override { return CT_USER; }
     QoreProgram* getProgram() const override { return cache.pgm; }
@@ -10437,7 +10422,7 @@ static_assert(sizeof(QorePreparedFunctionRefStackLocation<>) < sizeof(QoreExplic
 // automatic stack location its vtables and invariant context survive successive
 // calls. Publication and the reader-completion handshake are still PER CALL:
 // neither the cache nor the caller location can change while a reader uses it.
-class QoreReusableFunctionRefFrame final : public QoreStackLocation, public QoreAOTStackFrameMarker {
+class QoreReusableFunctionRefFrame final : public QoreStackLocation {
 public:
     QoreReusableFunctionRefFrame(RuntimeConfig& rc, const QorePreparedFunctionRefV3& cache)
         : cache(cache), helper(rc, cache) {
@@ -10466,7 +10451,6 @@ public:
         QoreReusableFunctionRefFrame& frame;
     };
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
-    bool isAOTFrame() const override { return true; }
     const std::string& getCallName() const override { return *cache.name; }
     qore_call_t getCallType() const override { return CT_USER; }
     QoreProgram* getProgram() const override { return cache.pgm; }
@@ -10498,10 +10482,43 @@ extern "C" DLLEXPORT RuntimeConfig* qore_rt_get_fast_runtime_config() {
     return &RuntimeConfigNativeAccess::getCurrent();
 }
 
+extern "C" DLLEXPORT void qore_rt_bind_receiver_int_method_v1(QoreAOTContext* ctx,
+        AotFunctionPtr normal, QoreAOTContext::ReceiverIntMethodEntryV1 entry, int32_t requires_pc_map) {
+    // A legacy companion depending on the retired PC map cannot provide eager locations.
+    if (requires_pc_map || !ctx || !normal || !entry || ctx->native_body_fn != normal) {
+        return;
+    }
+    QoreAOTContext::ReceiverIntMethodEntryV1 expected = nullptr;
+    ctx->receiver_int_method_entry_v1.compare_exchange_strong(expected, entry, std::memory_order_release,
+        std::memory_order_relaxed);
+}
+
+extern "C" DLLEXPORT void qore_rt_bind_receiver_int_method_v2(QoreAOTContext* ctx,
+        AotFunctionPtr normal, QoreAOTContext::ReceiverIntMethodEntryV1 entry, int32_t requires_pc_map,
+        int32_t, int32_t) {
+    // Its indexed location cannot describe the new image-owned location. Keep ordinary companion dispatch.
+    qore_rt_bind_receiver_int_method_v1(ctx, normal, entry, requires_pc_map);
+}
+
+extern "C" DLLEXPORT void qore_rt_bind_receiver_int_method_v3(QoreAOTContext* ctx,
+        AotFunctionPtr normal, const QoreAOTReceiverIntForwardEntryV3* descriptor) {
+    if (!ctx || !normal || ctx->native_body_fn != normal || !descriptor || !descriptor->entry) {
+        return;
+    }
+    qore_rt_bind_receiver_int_method_v1(ctx, normal, descriptor->entry, 0);
+    if (descriptor->slot < 0 || descriptor->slot >= ctx->num_exprs || !descriptor->loc
+            || ctx->receiver_int_method_entry_v1.load(std::memory_order_acquire) != descriptor->entry) {
+        return;
+    }
+    const QoreAOTReceiverIntForwardEntryV3* expected = nullptr;
+    ctx->receiver_int_forward_entry.compare_exchange_strong(expected, descriptor, std::memory_order_release,
+        std::memory_order_relaxed);
+}
+
 extern "C" DLLEXPORT void qore_rt_bind_method_int_unary_v1(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
         int64_t (*entry)(int64_t, QoreAOTContext*, ExceptionSink*)) {
-    if (!ctx || !normal || !entry || ctx->pc_loc_fn != normal
+    if (!ctx || !normal || !entry || ctx->native_body_fn != normal
             || ctx->native_int_unary_method_entry.load(std::memory_order_relaxed)) {
         return;
     }
@@ -10515,7 +10532,7 @@ extern "C" DLLEXPORT void qore_rt_bind_method_int_unary_v1(QoreAOTContext* ctx,
 extern "C" DLLEXPORT void qore_rt_bind_method_int_unary_v2(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
         int64_t (*entry)(int64_t, QoreAOTContext*, ExceptionSink*, RuntimeConfig*)) {
-    if (!ctx || !normal || !entry || ctx->pc_loc_fn != normal) {
+    if (!ctx || !normal || !entry || ctx->native_body_fn != normal) {
         return;
     }
     QoreAOTContext::NativeIntUnaryMethodEntryV2 expected = nullptr;
@@ -10526,7 +10543,7 @@ extern "C" DLLEXPORT void qore_rt_bind_method_int_unary_v2(QoreAOTContext* ctx,
 extern "C" DLLEXPORT void qore_rt_bind_method_int_unary_v3(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
         int64_t (*entry)(int64_t, QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*)) {
-    if (!ctx || !normal || !entry || ctx->pc_loc_fn != normal) {
+    if (!ctx || !normal || !entry || ctx->native_body_fn != normal) {
         return;
     }
     QoreAOTContext::NativeIntUnaryMethodEntryV3 expected = nullptr;
@@ -10537,7 +10554,7 @@ extern "C" DLLEXPORT void qore_rt_bind_method_int_unary_v3(QoreAOTContext* ctx,
 extern "C" DLLEXPORT void qore_rt_bind_method_float_unary_v1(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
         double (*entry)(double, QoreAOTContext*, ExceptionSink*)) {
-    if (!ctx || !normal || !entry || ctx->pc_loc_fn != normal) {
+    if (!ctx || !normal || !entry || ctx->native_body_fn != normal) {
         return;
     }
     QoreAOTContext::NativeFloatUnaryMethodEntry expected = nullptr;
@@ -10548,7 +10565,7 @@ extern "C" DLLEXPORT void qore_rt_bind_method_float_unary_v1(QoreAOTContext* ctx
 extern "C" DLLEXPORT void qore_rt_bind_method_float_unary_v2(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
         double (*entry)(double, QoreAOTContext*, ExceptionSink*, RuntimeConfig*)) {
-    if (!ctx || !normal || !entry || ctx->pc_loc_fn != normal) {
+    if (!ctx || !normal || !entry || ctx->native_body_fn != normal) {
         return;
     }
     QoreAOTContext::NativeFloatUnaryMethodEntryV2 expected = nullptr;
@@ -10559,7 +10576,7 @@ extern "C" DLLEXPORT void qore_rt_bind_method_float_unary_v2(QoreAOTContext* ctx
 extern "C" DLLEXPORT void qore_rt_bind_method_float_unary_v3(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
         double (*entry)(double, QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*)) {
-    if (!ctx || !normal || !entry || ctx->pc_loc_fn != normal) {
+    if (!ctx || !normal || !entry || ctx->native_body_fn != normal) {
         return;
     }
     QoreAOTContext::NativeFloatUnaryMethodEntryV3 expected = nullptr;
@@ -10571,7 +10588,7 @@ extern "C" DLLEXPORT void qore_rt_bind_member_int_v1(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), QoreAOTContext::ScalarMemberIntEntry entry) {
     static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY");
     const bool enabled = !enabled_env.get();
-    if (enabled && ctx && normal && entry && ctx->pc_loc_fn == normal
+    if (enabled && ctx && normal && entry && ctx->native_body_fn == normal
             && !ctx->scalar_member_int_entry.load(std::memory_order_relaxed)) {
         QoreAOTContext::ScalarMemberIntEntry expected = nullptr;
         ctx->scalar_member_int_entry.compare_exchange_strong(expected, entry,
@@ -10583,7 +10600,7 @@ extern "C" DLLEXPORT void qore_rt_bind_member_float_v1(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), QoreAOTContext::ScalarMemberFloatEntry entry) {
     static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY");
     const bool enabled = !enabled_env.get();
-    if (enabled && ctx && normal && entry && ctx->pc_loc_fn == normal
+    if (enabled && ctx && normal && entry && ctx->native_body_fn == normal
             && !ctx->scalar_member_float_entry.load(std::memory_order_relaxed)) {
         QoreAOTContext::ScalarMemberFloatEntry expected = nullptr;
         ctx->scalar_member_float_entry.compare_exchange_strong(expected, entry,
@@ -10604,7 +10621,7 @@ extern "C" DLLEXPORT void qore_rt_bind_getter_int_v1(QoreAOTContext* ctx,
             && !q_env_is_set("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY");
     });
     const bool enabled = enabled_setting.get();
-    if (enabled && ctx && normal && entry && ctx->pc_loc_fn == normal
+    if (enabled && ctx && normal && entry && ctx->native_body_fn == normal
             && !ctx->scalar_getter_int_entry_v1.load(std::memory_order_relaxed)) {
         QoreAOTContext::ScalarGetterIntEntryV1 expected = nullptr;
         ctx->scalar_getter_int_entry_v1.compare_exchange_strong(expected, entry,
@@ -10619,7 +10636,7 @@ extern "C" DLLEXPORT void qore_rt_bind_getter_float_v1(QoreAOTContext* ctx,
             && !q_env_is_set("QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY");
     });
     const bool enabled = enabled_setting.get();
-    if (enabled && ctx && normal && entry && ctx->pc_loc_fn == normal
+    if (enabled && ctx && normal && entry && ctx->native_body_fn == normal
             && !ctx->scalar_getter_float_entry_v1.load(std::memory_order_relaxed)) {
         QoreAOTContext::ScalarGetterFloatEntryV1 expected = nullptr;
         ctx->scalar_getter_float_entry_v1.compare_exchange_strong(expected, entry,
@@ -10635,7 +10652,7 @@ extern "C" DLLEXPORT void qore_rt_bind_effect_member_int_v1(QoreAOTContext* ctx,
     });
     const bool enabled = enabled_setting.get();
     if (!enabled || !ctx || !normal || !entries || !entries->fast || !entries->resume
-            || !entries->updates || entries->updates > 21 || ctx->pc_loc_fn != normal) {
+            || !entries->updates || entries->updates > 21 || ctx->native_body_fn != normal) {
         return;
     }
     const QoreAOTEffectMemberIntEntryV1* expected = nullptr;
@@ -10735,7 +10752,7 @@ extern "C" DLLEXPORT int qore_rt_try_load_member_float_internal_prehashed_v1(Qor
 extern "C" DLLEXPORT void qore_rt_bind_closure_int_unary_v1(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
         QoreAOTContext::NativeIntUnaryClosureEntry entry) {
-    if (!ctx || !normal || !entry || ctx->pc_loc_fn != normal
+    if (!ctx || !normal || !entry || ctx->native_body_fn != normal
             || ctx->native_int_unary_closure_entry.load(std::memory_order_relaxed)) {
         return;
     }
@@ -10747,7 +10764,7 @@ extern "C" DLLEXPORT void qore_rt_bind_closure_int_unary_v1(QoreAOTContext* ctx,
 extern "C" DLLEXPORT void qore_rt_bind_closure_int_unary_v2(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
         QoreAOTContext::NativeIntUnaryClosureEntry entry) {
-    if (!ctx || !normal || !entry || ctx->pc_loc_fn != normal
+    if (!ctx || !normal || !entry || ctx->native_body_fn != normal
             || ctx->native_int_unary_closure_entry_v2.load(std::memory_order_relaxed)) {
         return;
     }
@@ -10767,7 +10784,7 @@ extern "C" DLLEXPORT int qore_rt_try_load_closure_int_v1(const QoreClosureBase* 
 
 // Only immutable metadata is visible to another thread's stack walker. The
 // final member unpublishes and waits before any earlier member is destroyed.
-class QoreNativeClosureStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
+class QoreNativeClosureStackLocation : public QoreStackLocation {
 public:
     QoreNativeClosureStackLocation(RuntimeConfig& rc, const UserVariantBase* uvb, ExceptionSink* xsink)
         : name(closureName()), statements(uvb->getStatementBlock()), pgm(uvb->pgm),
@@ -10775,7 +10792,6 @@ public:
               uvb->getParseOptions(pgm->getParseOptions()), pgm, xsink) {
     }
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
-    bool isAOTFrame() const override { return true; }
     const std::string& getCallName() const override { return name; }
     qore_call_t getCallType() const override { return CT_USER; }
     QoreProgram* getProgram() const override { return pgm; }
@@ -10793,14 +10809,13 @@ private:
     RuntimeConfigNativeCallHelper helper;
 };
 
-class QoreDeferredNativeClosureStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
+class QoreDeferredNativeClosureStackLocation : public QoreStackLocation {
 public:
     QoreDeferredNativeClosureStackLocation(RuntimeConfig& rc, const UserVariantBase* uvb)
         : name(closureName()), statements(uvb->getStatementBlock()), pgm(uvb->pgm),
           helper(rc, this, loc, uvb) {
     }
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
-    bool isAOTFrame() const override { return true; }
     const std::string& getCallName() const override { return name; }
     qore_call_t getCallType() const override { return CT_USER; }
     QoreProgram* getProgram() const override { return pgm; }
@@ -10818,7 +10833,7 @@ private:
     RuntimeConfigNativeClosureCallHelper helper;
 };
 
-class QoreDeferredNativeClosureStackLocationV2 : public QoreStackLocation, public QoreAOTStackFrameMarker {
+class QoreDeferredNativeClosureStackLocationV2 : public QoreStackLocation {
 public:
     QoreDeferredNativeClosureStackLocationV2(RuntimeConfig& rc, const UserVariantBase* uvb,
             const QoreClosureBase* closure)
@@ -10826,7 +10841,6 @@ public:
           context(rc, closure, uvb), helper(rc, this, loc, context) {
     }
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
-    bool isAOTFrame() const override { return true; }
     const std::string& getCallName() const override { return name; }
     qore_call_t getCallType() const override { return CT_USER; }
     QoreProgram* getProgram() const override { return pgm; }
@@ -10877,8 +10891,7 @@ static bool tryExecNativeIntClosureScalar(RuntimeConfig& rc, const QoreClosureBa
         const UserVariantBase* uvb, int64_t argument, int64_t& result, ExceptionSink* xsink) {
     QoreAOTContext* ctx = uvb ? uvb->getCachedAOTContext() : nullptr;
     if (!ctx || !uvb->hasCachedAOT()
-            || ctx->pc_loc_fn != uvb->getCachedAOTFunction()
-            || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)
+            || ctx->native_body_fn != uvb->getCachedAOTFunction()
             || ctx->uses_self || ctx->uses_argv) {
         return false;
     }
@@ -11026,8 +11039,8 @@ static int tryTypedFunctionRefExplicit(RuntimeConfig& rc, uint64_t ref_bits, Res
     const UserVariantBase* uvb = ref->getFastCallMetadata().uvb;
     QoreAOTContext* ctx = uvb->getCachedAOTContext();
     // Preserve lazy failure timing: constructing an unused reference must not
-    // materialize its body. Once ready, skip both out-of-line readiness helpers.
-    if (!ctx || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)) {
+    // materialize its body. Once published, reuse the fully reconstructed context.
+    if (!ctx) {
         ProgramCallContextHelper pcch(ref->getProgram());
         if (!ctx) {
             if (!uvb->ensureAOTContext(ref->getFunction()->getNameStr().c_str(), xsink)) {
@@ -11035,7 +11048,6 @@ static int tryTypedFunctionRefExplicit(RuntimeConfig& rc, uint64_t ref_bits, Res
             }
             ctx = uvb->getCachedAOTContext();
         }
-        qore_aot_ensure_pc_loc_map(ctx);
     }
     QoreExplicitFunctionRefStackLocation frame(rc, ref, uvb, xsink);
     if (*xsink) {
@@ -11092,7 +11104,7 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
     // Context readiness remains live; preserve v2's lazy failure timing and
     // Program context setup on first use, including stripped source artifacts.
     QoreAOTContext* ctx = cache.uvb->getCachedAOTContext();
-    if (!ctx || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)) {
+    if (!ctx) {
         ProgramCallContextHelper pcch(cache.pgm);
         if (!ctx) {
             if (!cache.uvb->ensureAOTContext(cache.name->c_str(), xsink)) {
@@ -11100,7 +11112,6 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
             }
             ctx = cache.uvb->getCachedAOTContext();
         }
-        qore_aot_ensure_pc_loc_map(ctx);
     }
     // Population validated this immutable signature; the slot belongs to one
     // signature and retains that exact reference. Mutable guards stay live above.
@@ -11201,7 +11212,7 @@ __attribute__((always_inline)) static int tryReusableFunctionRef(RuntimeConfig& 
     // of stack checking, lazy materialization and fallback when either is absent.
     QoreAOTContext* ctx = cache.uvb->getCachedAOTContext();
     auto inline_entry = cache.ref->getPreparedTypedInlineStackEntry(Signature);
-    if (!ctx || !ctx->pc_loc_map_attached.load(std::memory_order_acquire) || !inline_entry) {
+    if (!ctx || !inline_entry) {
         return Legacy(ref_bits, args..., result, xsink, &rc, &cache);
     }
     *result = Result{};
@@ -11244,7 +11255,7 @@ __attribute__((always_inline)) static int tryInvariantFunctionRef(RuntimeConfig&
     // of stack checking, lazy materialization and fallback when either is absent.
     QoreAOTContext* ctx = cache.uvb->getCachedAOTContext();
     auto inline_entry = cache.ref->getPreparedTypedInlineStackEntry(Signature);
-    if (!ctx || !ctx->pc_loc_map_attached.load(std::memory_order_acquire) || !inline_entry) {
+    if (!ctx || !inline_entry) {
         return Legacy(ref_bits, args..., result, xsink, &rc, &cache);
     }
     *result = Result{};
@@ -11303,6 +11314,153 @@ extern "C" DLLEXPORT __attribute__((aligned(64))) int qore_rt_try_funcref_int_in
         return qore_rt_try_funcref_int_int_v3(ref, arg, result, xsink, rc, cache);
     }
     return tryReusableIntUnary(ref, arg, result, xsink, rc, cache, frame);
+}
+
+//! The call stack frame of a call that native code makes directly to a native entry of user code
+/** Native code calls the fast entry of a function compiled with it without a runtime helper, so it pushes the
+    frame of the call itself, in storage of its own frame (qore_rt_push_native_call_frame() and
+    qore_rt_pop_native_call_frame()), as a runtime helper or an AST call pushes it: the frame's location is where
+    the call is made, the caller's current location when the frame is pushed.  The callee changes the thread's
+    runtime location; the frame restores the caller's when it is popped.  The caller gets the thread's data once
+    when it is entered, so pushing and popping, which happen on every such call, make no thread-local lookup.
+*/
+class QoreNativeCallStackLocation : public QoreStackLocation {
+public:
+    //! Pushes the frame
+    /** @param call_loc the location of the call, or nullptr for the caller's current location: the JIT keeps the
+        runtime location of the code it runs, while AOT-compiled code gives the location of each call
+        @param callee_loc the location of the callee's body, for AOT code that runs the callee inline (a summary of
+        its body), or nullptr if the callee keeps its own runtime location
+    */
+    DLLLOCAL QoreNativeCallStackLocation(void* thread_data, const std::string& call_name,
+            const StatementBlock* statements, const QoreProgramLocation* call_loc = nullptr,
+            const QoreProgramLocation* callee_loc = nullptr)
+            : thread_data(thread_data), call_name(call_name), statements(statements) {
+        prev = push_native_call_stack_location(thread_data, this, call_loc, loc, saved_stmt, saved_pgm, runtime_loc,
+            callee_loc);
+    }
+
+    //! Pops the frame and restores the caller's runtime location, which the callee changed
+    DLLLOCAL ~QoreNativeCallStackLocation() {
+        pop_native_call_stack_location(thread_data, prev, saved_stmt, runtime_loc);
+    }
+
+    DLLLOCAL const QoreProgramLocation& getLocation() const override {
+        return loc ? *loc : loc_builtin;
+    }
+
+    DLLLOCAL const std::string& getCallName() const override {
+        return call_name;
+    }
+
+    DLLLOCAL qore_call_t getCallType() const override {
+        return CT_USER;
+    }
+
+    DLLLOCAL QoreProgram* getProgram() const override {
+        return saved_pgm;
+    }
+
+    DLLLOCAL const AbstractStatement* getStatement() const override {
+        return statements;
+    }
+
+private:
+    //! the data of the thread, which the caller got once (QoreNativeEntrySlots::thread_data)
+    void* thread_data;
+    const std::string& call_name;
+    const StatementBlock* statements;
+    // the members below are written by push_native_call_stack_location() before the location is pushed
+    //! the location of the call: the location of the frame
+    const QoreProgramLocation* loc;
+    //! the caller's runtime location, restored when the frame is popped
+    const QoreProgramLocation* runtime_loc;
+    //! the caller's statement, restored when the frame is popped
+    const AbstractStatement* saved_stmt;
+    QoreProgram* saved_pgm;
+    //! the location that this one replaces on the thread's call stack
+    const QoreStackLocation* prev;
+};
+
+size_t qore_rt_native_call_frame_size() {
+    return sizeof(QoreNativeCallStackLocation);
+}
+
+size_t qore_rt_native_call_frame_align() {
+    return alignof(QoreNativeCallStackLocation);
+}
+
+extern "C" DLLEXPORT void qore_rt_push_native_call_frame(void* storage, void* thread_data,
+        const std::string* call_name, const StatementBlock* statements) {
+    assert(storage && thread_data && call_name);
+    new (storage) QoreNativeCallStackLocation(thread_data, *call_name, statements);
+}
+
+//! Pushes the frame of a call that AOT code makes to the call target of an expression slot
+/** @param inline_body true if the callee runs inline at the location of its body
+*/
+static void qore_rt_push_native_call_frame_aot_impl(void* storage, void* thread_data, QoreAOTContext* ctx,
+        int32_t target_slot, const QoreProgramLocation* call_loc, bool inline_body) {
+    assert(storage && thread_data && ctx);
+    // the callee is the call target of the call's expression slot, resolved when the caller's context was built
+    assert(target_slot >= 0 && target_slot < ctx->num_exprs);
+    const QoreAOTCallTarget& target = ctx->call_targets[target_slot];
+    const UserVariantBase* callee = target.uvb ? target.uvb
+        : (target.variant ? target.variant->getUserVariantBase() : nullptr);
+    static const std::string unknown_call_name;
+    new (storage) QoreNativeCallStackLocation(thread_data, callee ? callee->getCallName() : unknown_call_name,
+        callee ? callee->getStatementBlock() : nullptr, call_loc,
+        inline_body && callee ? callee->getAOTBodyLocation() : nullptr);
+}
+
+extern "C" DLLEXPORT void qore_rt_push_native_call_frame_aot(void* storage, void* thread_data,
+        QoreAOTContext* ctx, int32_t target_slot, const QoreProgramLocation* call_loc) {
+    qore_rt_push_native_call_frame_aot_impl(storage, thread_data, ctx, target_slot, call_loc, false);
+}
+
+extern "C" DLLEXPORT void qore_rt_push_native_inline_call_frame_aot(void* storage, void* thread_data,
+        QoreAOTContext* ctx, int32_t target_slot, const QoreProgramLocation* call_loc) {
+    qore_rt_push_native_call_frame_aot_impl(storage, thread_data, ctx, target_slot, call_loc, true);
+}
+
+// Register before application threads can fork, including before the first named native call.
+static std::mutex native_call_name_mutex;
+static std::unordered_map<std::string, std::unique_ptr<const std::string>> native_call_names;
+static QoreForkStdMutex native_call_names_fork_handler(native_call_name_mutex, QFLR_LEAF, "native_call_names");
+
+//! Returns the frame name for a name given by AOT-compiled code, which lives for the rest of the process
+static const std::string* qore_rt_intern_native_call_name(const char* name) {
+    std::lock_guard<std::mutex> lock(native_call_name_mutex);
+    std::unique_ptr<const std::string>& rv = native_call_names[name];
+    if (!rv) {
+        rv = std::make_unique<const std::string>(name);
+    }
+    return rv.get();
+}
+
+extern "C" DLLEXPORT void qore_rt_push_native_call_frame_aot_named(void* storage, void* thread_data,
+        const char* call_name, std::atomic<const std::string*>* call_name_cache,
+        const QoreProgramLocation* call_loc, const QoreProgramLocation* callee_loc) {
+    assert(storage && thread_data && call_name && call_name_cache);
+    // the name is interned on the first call of the site, which caches it
+    const std::string* name = call_name_cache->load(std::memory_order_acquire);
+    if (!name) {
+        name = qore_rt_intern_native_call_name(call_name);
+        call_name_cache->store(name, std::memory_order_release);
+    }
+    new (storage) QoreNativeCallStackLocation(thread_data, *name, nullptr, call_loc, callee_loc);
+}
+
+extern "C" DLLEXPORT void qore_rt_push_native_closure_call_frame(void* storage) {
+    assert(storage);
+    // the name of the frame of a closure call, as an AST call of a closure names it
+    static const std::string closure_call_name("<anonymous closure>");
+    new (storage) QoreNativeCallStackLocation(get_thread_data_for_native_calls(), closure_call_name, nullptr);
+}
+
+extern "C" DLLEXPORT void qore_rt_pop_native_call_frame(void* storage) {
+    assert(storage);
+    static_cast<QoreNativeCallStackLocation*>(storage)->~QoreNativeCallStackLocation();
 }
 
 /** Handle body local instantiation before JIT execution and deopt/cleanup after.
@@ -11383,10 +11541,8 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     // call; if not provided, we fall back to uvb->pgm (pre-existing behavior).
     const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
     const QoreProgramLocation* call_loc = get_runtime_location();
-    // Mark the frame as native-AOT (has_aot) so the exception machinery can repair its
-    // call-site location via the lazy PC->loc registry when the eager value is stale.
     QoreJITStackLocation jit_stack_loc(call_name, call_loc ? call_loc : parse_loc, uvb->getStatementBlock(),
-        caller_pgm ? caller_pgm : runtime_pgm, has_aot);
+        caller_pgm ? caller_pgm : runtime_pgm);
 
     struct ReceiverTypeInfoGuard {
         const QoreTypeInfo* old = nullptr;
@@ -11424,19 +11580,8 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         swapped_runtime_ctx = true;
     }
 
-    // Save/restore the innermost-non-AOT-frame marker across this native (JIT) call so an
-    // AOT caller that resumes after it sees its own outer marker, not this JIT frame's
-    // stale inner one. See design/aot-lazy-loc-innermost-frame.md.
-    struct SpGuard {
-        uintptr_t saved_sp;
-        ~SpGuard() { set_runtime_loc_sp(saved_sp); }
-    } sp_guard{get_runtime_loc_sp()};
-
     bool fn_invalidated = false;
     uint64_t result_bits = 0;
-    if (has_aot) {
-        qore_aot_ensure_pc_loc_map(uvb->getCachedAOTContext());
-    }
     try {
         result_bits = exec_fn(xsink, fn_invalidated);
     } catch (const QoreJITException&) {
@@ -11776,17 +11921,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
-    // Use cached IR name when available (zero allocation); fall back to building the name
-    std::string call_name_buf;
-    if (!ir) {
-        const char* class_name = func->className();
-        if (class_name) {
-            call_name_buf = class_name;
-            call_name_buf += "::";
-        }
-        call_name_buf += func->getName();
-    }
-    const std::string& call_name = ir ? ir->getDisplayName() : call_name_buf;
+    // the name of the frame, as an AST call names it
+    const std::string& call_name = uvb->getCallName();
 
     // Tiered promotion: this fast-call path bypasses evalTiered(), so account for
     // the execution here and promote the callee to native once it is hot (no-op
@@ -11993,9 +12129,12 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
         return toBits(QoreValue());
     }
 
-    // Get call name from cached IR if available, otherwise use static name
-    static const std::string closure_name("<anonymous closure>");
-    const std::string& call_name = ir ? ir->getDisplayName() : closure_name;
+    // the name of the frame, as an AST call of a closure names it
+    static const std::string call_name("<anonymous closure>");
+
+    // this fast-call path bypasses evalTiered(), so the call is counted here for the callee's promotion to
+    // native code, as qore_rt_call_fast() counts it (a no-op once the callee is native)
+    uvb->recordFastCallExecution();
 
     QoreValue val{};
     {
@@ -12213,9 +12352,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
-    // Get call name from cached IR function (always available for JIT-compiled functions)
-    const QoreIRFunction* ir = uvb->getCachedIR();
-    const std::string& call_name = ir ? ir->getDisplayName() : jit_empty_call_name;
+    // the name of the frame, as an AST call names it
+    const std::string& call_name = uvb->getCallName();
 
     QoreValue val{};
     {
@@ -12285,9 +12423,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
                 priv->pushIntern(val);
             }
         }
-        const QoreIRFunction* ir = uvb->getCachedIR();
-        const std::string& call_name = ir ? ir->getDisplayName() : jit_empty_call_name;
-        QoreValue result = uvb->callTieredPublic(call_name.c_str(), arg_list, nullptr, xsink);
+        // evalTiered() pushes no call stack frame (an AST call's CodeEvaluationHelper does), so the frame of the call
+        // is pushed here
+        QoreNativeCallStackLocation frame(get_thread_data_for_native_calls(), uvb->getCallName(),
+            uvb->getStatementBlock());
+        QoreValue result = uvb->callTieredPublic(uvb->getCallName().c_str(), arg_list, nullptr, xsink);
         return toBits(result);
     }
 
@@ -12341,9 +12481,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
-    // Use cached IR name when available (zero allocation)
-    const QoreIRFunction* ir = uvb->getCachedIR();
-    const std::string& call_name = ir ? ir->getDisplayName() : jit_empty_call_name;
+    // the name of the frame, as an AST call names it
+    const std::string& call_name = uvb->getCallName();
 
     // Call through execJITWithDeopt which handles body locals, stack location, and deopt
     QoreValue val{};
@@ -12630,17 +12769,12 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
-    // Use cached IR name when available (zero allocation); fall back to building the name
-    std::string call_name_buf;
-    if (!ir) {
-        const char* cls = method->getClass() ? method->getClass()->getName() : nullptr;
-        if (cls) {
-            call_name_buf = cls;
-            call_name_buf += "::";
-        }
-        call_name_buf += method->getName();
-    }
-    const std::string& call_name = ir ? ir->getDisplayName() : call_name_buf;
+    // the name of the frame, as an AST call names it
+    const std::string& call_name = uvb->getCallName();
+
+    // this fast-call path bypasses evalTiered(), so the call is counted here for the callee's promotion to
+    // native code, as qore_rt_call_fast() counts it (a no-op once the callee is native)
+    uvb->recordFastCallExecution();
 
     QoreValue val{};
     {
@@ -12783,12 +12917,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_ref_fast(uint64_t ref_bits, uint64_t*
 
 // --- On-block-exit handler support for JIT ---
 
+//! An on_block_exit handler registered by native code; its body is a native function
 struct JITOnBlockExitHandler {
     obe_type_e type;
-    StatementBlock* code;
-    const QoreIRFunction* handler_ir = nullptr;  //!< IR handler for IR interpreter execution
-    uint64_t (*compiled_fn)(ExceptionSink*) = nullptr;  //!< native compiled handler function
-    const QoreIRFunction* handler_func = nullptr;  //!< IR function for pre-instantiation of handler locals
+    uint64_t (*compiled_fn)(ExceptionSink*) = nullptr;  //!< handler compiled by the JIT
+    const QoreIRFunction* handler_func = nullptr;  //!< IR function for pre-instantiation of handler locals (JIT)
+    uint64_t (*aot_fn)(QoreAOTContext*, ExceptionSink*) = nullptr;  //!< handler in AOT-compiled code
+    QoreAOTContext* aot_ctx = nullptr;  //!< the AOT context that the AOT handler shares with its function
 };
 
 static thread_local std::vector<JITOnBlockExitHandler> jit_obe_handlers;
@@ -12897,18 +13032,16 @@ extern "C" DLLEXPORT void qore_rt_end_native_ir_slot_cache(void* guard_ptr, Exce
     delete guard;
 }
 
-extern "C" DLLEXPORT void qore_rt_push_on_block_exit(int type, StatementBlock* code) {
-    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), code, nullptr, nullptr, nullptr});
+extern "C" DLLEXPORT void qore_rt_push_compiled_handler(int type, uint64_t (*compiled_fn)(ExceptionSink*),
+        const QoreIRFunction* handler_func) {
+    assert(compiled_fn);
+    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), compiled_fn, handler_func, nullptr, nullptr});
 }
 
-extern "C" DLLEXPORT void qore_rt_push_on_block_exit_ir(int type, StatementBlock* code,
-        const QoreIRFunction* handler_ir) {
-    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), code, handler_ir, nullptr, nullptr});
-}
-
-extern "C" DLLEXPORT void qore_rt_push_compiled_handler(int type, StatementBlock* code,
-        uint64_t (*compiled_fn)(ExceptionSink*), const QoreIRFunction* handler_func) {
-    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), code, nullptr, compiled_fn, handler_func});
+extern "C" DLLEXPORT void qore_rt_push_compiled_handler_aot(QoreAOTContext* ctx, int type,
+        uint64_t (*aot_fn)(QoreAOTContext*, ExceptionSink*)) {
+    assert(ctx && aot_fn);
+    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), nullptr, nullptr, aot_fn, ctx});
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_get_on_block_exit_count() {
@@ -12970,74 +13103,77 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
         for (int i = static_cast<int>(jit_obe_handlers.size()) - 1; i >= static_cast<int>(start); --i) {
             obe_type_e type = jit_obe_handlers[i].type;
             if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
-                if (jit_obe_handlers[i].code || jit_obe_handlers[i].handler_ir
-                        || jit_obe_handlers[i].compiled_fn) {
-                    // Instantiate exception for on_error blocks as an implicit arg
-                    std::unique_ptr<SingleArgvContextHelper> argv_helper;
-                    std::unique_ptr<CatchExceptionHelper> ex_helper;
-                    if (type == OBE_Error && xsink) {
-                        QoreException* except = xsink->getException();
-                        if (except) {
-                            ex_helper.reset(new CatchExceptionHelper(except));
-                            argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
+                // Instantiate exception for on_error blocks as an implicit arg
+                std::unique_ptr<SingleArgvContextHelper> argv_helper;
+                std::unique_ptr<CatchExceptionHelper> ex_helper;
+                if (type == OBE_Error && xsink) {
+                    QoreException* except = xsink->getException();
+                    if (except) {
+                        ex_helper.reset(new CatchExceptionHelper(except));
+                        argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
+                    }
+                }
+                // native code reports an exception by unwinding to this boundary with the exception already in
+                // the sink
+                if (jit_obe_handlers[i].aot_fn) {
+                    // the handler runs with the AOT context of its function
+                    QoreAOTContext* aot_ctx = jit_obe_handlers[i].aot_ctx;
+                    uint64_t rv_bits = 0;
+                    try {
+                        rv_bits = jit_obe_handlers[i].aot_fn(aot_ctx, &obe_xsink);
+                    } catch (const QoreJITException&) {
+                        rv_bits = 0;
+                    }
+                    fromBits(rv_bits).discard(&obe_xsink);
+                } else {
+                    assert(jit_obe_handlers[i].compiled_fn);
+                    const QoreIRFunction* hf = jit_obe_handlers[i].handler_func;
+                    if (hf) {
+                        const QoreParseOptions& po = runtime_get_parse_options();
+                        size_t count = 0;
+                        for (LocalVar* lv : hf->all_body_locals) {
+                            if (++count % 100 == 0) {
+                                // Complete handler setup/cleanup; its body observes the pending cancellation.
+                                (void)qore_check_cancel(nullptr, "native block-exit local setup");
+                            }
+                            lv->instantiate(po);
                         }
                     }
-                    if (jit_obe_handlers[i].compiled_fn) {
-                        // Execute natively compiled handler
-                        const QoreIRFunction* hf = jit_obe_handlers[i].handler_func;
-                        if (hf) {
-                            const QoreParseOptions& po = runtime_get_parse_options();
-                            for (LocalVar* lv : hf->all_body_locals) {
-                                lv->instantiate(po);
+                    uint64_t rv_bits = 0;
+                    try {
+                        rv_bits = jit_obe_handlers[i].compiled_fn(&obe_xsink);
+                    } catch (const QoreJITException&) {
+                        rv_bits = 0;
+                    }
+                    fromBits(rv_bits).discard(&obe_xsink);
+                    if (hf) {
+                        for (int j = (int)hf->all_body_locals.size() - 1; j >= 0; --j) {
+                            if (!(j % 100)) {
+                                (void)qore_check_cancel(nullptr, "native block-exit local cleanup");
                             }
-                        }
-                        QoreValue rv(jit_obe_handlers[i].compiled_fn(&obe_xsink));
-                        rv.discard(nullptr);
-                        if (hf) {
-                            for (int j = (int)hf->all_body_locals.size() - 1; j >= 0; --j) {
-                                hf->all_body_locals[j]->uninstantiate(&obe_xsink);
-                            }
-                        }
-                    } else if (jit_obe_handlers[i].handler_ir) {
-                        // Execute compiled handler via IR interpreter
-                        // Phase 2, Fix 2c: Pass parent slot cache for handler access to parent scope
-                        QoreValue rv;
-                        QoreIRInterpreter::execute(*jit_obe_handlers[i].handler_ir, rv, &obe_xsink,
-                            nullptr, nullptr, nullptr,
-                            &jit_obe_handlers[i].handler_ir->pre_instantiated_cache,
-                            nullptr, nullptr, nullptr, false, nullptr,
-                            current_ir_slot_cache);
-                        rv.discard(nullptr);
-                    } else {
-                        StatementBlock* code = jit_obe_handlers[i].code;
-                        const QoreProgramLocation* loc = code ? code->loc : nullptr;
-                        if (loc) {
-                            obe_xsink.raiseException("IR-AST-FALLBACK-ERROR",
-                                "on-block-exit AST statement fallback is disabled: source=%s:%d; "
-                                "add native handler IR lowering instead",
-                                loc->getFileValue(), loc->start_line);
-                        } else {
-                            obe_xsink.raiseException("IR-AST-FALLBACK-ERROR",
-                                "on-block-exit AST statement fallback is disabled; "
-                                "add native handler IR lowering instead");
+                            hf->all_body_locals[j]->uninstantiate(&obe_xsink);
                         }
                     }
-                    if (type == OBE_Error) {
-                        if (qore_es_private::get(obe_xsink)->rethrown) {
-                            if (xsink) {
-                                xsink->clear();
-                            }
-                        }
-                    }
-                    if (obe_xsink) {
+                }
+                // restore td->catchException before xsink can be cleared below, which releases the exception it
+                // refers to; see executeOnBlockExitHandlers() in the IR interpreter
+                ex_helper.reset();
+                argv_helper.reset();
+                if (type == OBE_Error) {
+                    if (qore_es_private::get(obe_xsink)->rethrown) {
                         if (xsink) {
-                            xsink->assimilate(obe_xsink);
-                        } else {
-                            obe_xsink.clear();
+                            xsink->clear();
                         }
-                        if (!error) {
-                            error = true;
-                        }
+                    }
+                }
+                if (obe_xsink) {
+                    if (xsink) {
+                        xsink->assimilate(obe_xsink);
+                    } else {
+                        obe_xsink.clear();
+                    }
+                    if (!error) {
+                        error = true;
                     }
                 }
             }
@@ -13066,30 +13202,6 @@ extern "C" DLLEXPORT void qore_rt_discard_on_block_exit(int64_t saved_count) {
 
 // --- AOT context-based helpers (Phase 7b) ---
 
-extern "C" DLLEXPORT void qore_rt_push_on_block_exit_aot(QoreAOTContext* ctx, int32_t idx, int type,
-        ExceptionSink* xsink) {
-    assert(ctx && idx >= 0 && idx < ctx->num_stmts);
-    // Check if handler IR is available (strip-source mode or optimized path)
-    if (idx < static_cast<int32_t>(ctx->handler_irs.size()) && ctx->handler_irs[idx]) {
-        // Use handler IR for IR interpreter execution
-        qore_rt_push_on_block_exit_ir(type, nullptr, ctx->handler_irs[idx].get());
-    } else {
-        const AbstractStatement* stmt = ctx->stmts[idx];
-        const QoreProgramLocation* loc = stmt ? stmt->loc : nullptr;
-        if (xsink && !*xsink) {
-            if (loc) {
-                xsink->raiseException("IR-AST-FALLBACK-ERROR",
-                    "AOT on-block-exit handler has no compiled handler IR: source=%s:%d; "
-                    "AST statement fallback is disabled",
-                    loc->getFileValue(), loc->start_line);
-            } else {
-                xsink->raiseException("IR-AST-FALLBACK-ERROR",
-                    "AOT on-block-exit handler has no compiled handler IR; "
-                    "AST statement fallback is disabled");
-            }
-        }
-    }
-}
 
 extern "C" DLLEXPORT CaseNodeRegex* qore_rt_get_regex_case_aot(QoreAOTContext* ctx, int32_t slot) {
     assert(ctx && slot >= 0 && slot < ctx->num_regex_cases);
@@ -14508,6 +14620,9 @@ static int patchLVPath(std::vector<LVPathStep>& path_copy,
             step.name.assign(key_str.c_str(), key_str.size());
         } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
             QoreValue idx_val = fromBits(dyn_vals[dyn_idx++]);
+            // keep the value: a list is a slice, which only remove and delete accept
+            step.slice_values.clear();
+            step.slice_values.push_back(idx_val);
             step.index = idx_val.getAsBigInt();
         } else if (step.kind == LVPathStepKind::HashKeySlice
                 || step.kind == LVPathStepKind::ListIndexSlice
@@ -15427,7 +15542,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         bool last_is_hash_slice = (last_step.kind == LVPathStepKind::HashKeySlice);
         bool last_is_hash_list = last_is_hash && last_step.slice_values.size() == 1
                 && last_step.slice_values[0].getType() == NT_LIST;
-        bool last_is_list_slice = (last_step.kind == LVPathStepKind::ListIndexSlice);
+        // a list of indexes, given in the code or by the value of the index expression
+        bool last_is_list_slice = (last_step.kind == LVPathStepKind::ListIndexSlice)
+            || (last_is_list && last_step.slice_values.size() == 1
+                && last_step.slice_values[0].getType() == NT_LIST);
         bool last_is_list_range = (last_step.kind == LVPathStepKind::ListRangeSlice);
         if (last_is_hash || last_is_list || last_is_hash_slice || last_is_hash_list || last_is_list_slice
                 || last_is_list_range) {
@@ -15464,7 +15582,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     pending_delete_finish = true;
                 }
                 handled_multistep_remove = true;
-            } else if (last_is_list && ct == NT_LIST) {
+            } else if (last_is_list && !last_is_list_slice && ct == NT_LIST) {
                 lvh.ensureUnique();
                 QoreListNode* l = lvh.getValue().get<QoreListNode>();
                 int64_t idx = last_step.index;
@@ -16605,8 +16723,12 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
             return toBits(QoreValue());
         }
 
-        const QoreIRFunction* ir = uvb->getCachedIR();
-        const std::string& call_name = ir ? ir->getDisplayName() : jit_empty_call_name;
+        // the name of the frame, as an AST call names it
+        const std::string& call_name = uvb->getCallName();
+
+        // this fast-call path bypasses evalTiered(), so the call is counted here for the callee's promotion to
+        // native code, as qore_rt_call_fast() counts it (a no-op once the callee is native)
+        uvb->recordFastCallExecution();
 
         QoreValue val{};
         {
@@ -16720,7 +16842,6 @@ extern "C" DLLEXPORT QoreAOTContext* qore_rt_get_aot_call_target_context(
         return nullptr;
     }
     QoreAOTContext* target_ctx = uvb->getCachedAOTContext();
-    qore_aot_ensure_pc_loc_map(target_ctx);
     return target_ctx;
 }
 
@@ -17198,9 +17319,12 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
         }
     }
 
-    // Call AOT function directly — no deopt, no stack location
+    // Call AOT function directly — no deopt — with the call stack frame of the call, located at the caller's
+    // runtime location, as the frames that the other call helpers push
     uint64_t result_bits;
     {
+        QoreNativeCallStackLocation frame(get_thread_data_for_native_calls(), uvb->getCallName(),
+            uvb->getStatementBlock());
         ArgvContextHelper argv_helper(argv.release(), xsink);
         result_bits = self_fn(ctx, xsink);
     }
@@ -18195,8 +18319,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot_consume_args(
 // The name is owned by the immutable PIC entry. All observable members precede
 // the publishing helper, whose destructor waits for stack readers before return.
 template <bool Deferred = false, bool Logical = false>
-class QoreNativeMethodStackLocation : public QoreStackLocation,
-        public std::conditional_t<Logical, QoreAOTLogicalStackFrameMarker, QoreAOTStackFrameMarker> {
+class QoreNativeMethodStackLocation : public QoreStackLocation {
 public:
     __attribute__((always_inline)) QoreNativeMethodStackLocation(RuntimeConfig& rc,
             const QoreAOTMethodDispatchCacheEntry& cache,
@@ -18218,7 +18341,6 @@ public:
     // publication and reader synchronization remain unchanged.
     __attribute__((always_inline)) ~QoreNativeMethodStackLocation() override = default;
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
-    bool isAOTFrame() const override { return true; }
     const std::string& getCallName() const override { return name; }
     qore_call_t getCallType() const override { return CT_USER; }
     QoreProgram* getProgram() const override { return pgm; }
@@ -18236,7 +18358,7 @@ private:
 // field except the caller location. Borrow it rather than copying the name,
 // statement block and Program on each scalar call. The caller's AOT context
 // owns the entry, and the publishing helper waits for readers before exit.
-class QoreCompactNativeMethodStackLocation : public QoreStackLocation, public QoreAOTLogicalStackFrameMarker {
+class QoreCompactNativeMethodStackLocation : public QoreStackLocation {
 public:
     __attribute__((always_inline)) QoreCompactNativeMethodStackLocation(RuntimeConfig& rc,
             const QoreAOTMethodDispatchCacheEntry& cache, ExceptionSink* xsink,
@@ -18245,7 +18367,6 @@ public:
     }
     __attribute__((always_inline)) ~QoreCompactNativeMethodStackLocation() override = default;
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
-    bool isAOTFrame() const override { return true; }
     const std::string& getCallName() const override { return cache.call_name; }
     qore_call_t getCallType() const override { return CT_USER; }
     QoreProgram* getProgram() const override { return cache.native_scalar_program; }
@@ -18308,8 +18429,7 @@ static QORE_ALWAYS_INLINE bool try_dispatch_native_scalar_method(QoreObject* obj
     const bool enabled = enabled_setting.get();
     QoreAOTContext* ctx = uvb->getCachedAOTContext();
     if (!enabled || !ctx || !uvb->hasCachedAOT()
-            || ctx->pc_loc_fn != uvb->getCachedAOTFunction()
-            || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)) {
+            || ctx->native_body_fn != uvb->getCachedAOTFunction()) {
         return false;
     }
     auto entry = [&]() {
@@ -18464,8 +18584,7 @@ static __attribute__((noinline)) bool qore_rt_try_admitted_zero_arg_getter(
     });
     const bool enabled = enabled_setting.get();
     if (!enabled || !uvb->hasCachedAOT()
-            || ctx->pc_loc_fn != uvb->getCachedAOTFunction()
-            || !ctx->pc_loc_map_attached.load(std::memory_order_acquire) || ctx->uses_argv
+            || ctx->native_body_fn != uvb->getCachedAOTFunction() || ctx->uses_argv
             || (cached.receiver_type_info
                 && QoreTypeInfo::getParameterizedClassType(cached.receiver_type_info))) {
         return false;
@@ -18593,7 +18712,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     }
     if (native_cache && native_cache->native_scalar_uvb == uvb) {
         QoreAOTContext* outer_ctx = uvb->getCachedAOTContext();
-        if (outer_ctx && outer_ctx->receiver_int_forward_ready.load(std::memory_order_acquire)
+        if (outer_ctx && outer_ctx->receiver_int_forward_entry.load(std::memory_order_acquire)
                 && try_dispatch_forwarded_int_leaf(o, *native_cache, outer_ctx,
                     args, arg_cleanups, nargs, xsink, result)) {
             return true;
@@ -18706,16 +18825,12 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
-    // Keep the IR display name authoritative. A PIC entry already owns the
-    // identical declaring-class::method spelling used when IR is unavailable;
-    // reuse it instead of rebuilding a temporary string on every cache hit.
-    // execJITWithDeopt still copies this name into its ordinary owned frame.
-    std::string call_name_buf;
-    if (!ir && !native_cache) {
-        call_name_buf = std::string(method->getClass()->getName()) + "::" + method->getName();
-    }
-    const std::string& call_name = ir ? ir->getDisplayName()
-        : native_cache ? native_cache->call_name : call_name_buf;
+    // the name of the frame, as an AST call names it
+    const std::string& call_name = uvb->getCallName();
+
+    // this fast-call path bypasses evalTiered(), so the call is counted here for the callee's promotion to
+    // native code, as qore_rt_call_fast() counts it (a no-op once the callee is native)
+    uvb->recordFastCallExecution();
 
     QoreValue val{};
     {
@@ -18750,8 +18865,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
                     && caller_pgm == exec_pgm && caller_pgm == o->getProgram()) {
                 receiver_ctx = uvb->getCachedAOTContext();
                 if (receiver_ctx && uvb->hasCachedAOT() && receiver_ctx->pgm == caller_pgm
-                        && receiver_ctx->pc_loc_fn == uvb->getCachedAOTFunction()
-                        && receiver_ctx->pc_loc_map_attached.load(std::memory_order_acquire)) {
+                        && receiver_ctx->native_body_fn == uvb->getCachedAOTFunction()) {
                     receiver_entry = receiver_ctx->receiver_int_method_entry_v1.load(std::memory_order_acquire);
                 }
             }
@@ -19382,8 +19496,7 @@ static bool try_dispatch_forwarded_int_leaf_native(QoreObject* object,
     const bool enabled = enabled_setting.get();
     const auto* outer_uvb = outer.native_scalar_uvb;
     if (!enabled || outer.nargs != 1 || outer.arg_types[0] != bigIntTypeInfo || outer.arg_states[0]
-            || !outer_uvb->hasCachedAOT() || outer_ctx->pc_loc_fn != outer_uvb->getCachedAOTFunction()
-            || !outer_ctx->pc_loc_map_attached.load(std::memory_order_acquire) || outer_ctx->uses_argv) {
+            || !outer_uvb->hasCachedAOT() || outer_ctx->native_body_fn != outer_uvb->getCachedAOTFunction() || outer_ctx->uses_argv) {
         return false;
     }
     // Borrow the invocation's live view. Copying RuntimeConfig allocates its
@@ -19402,14 +19515,18 @@ static bool try_dispatch_forwarded_int_leaf_native(QoreObject* object,
     if (po != RuntimeConfigNativeAccess::getParseOptions(rc)) {
         return false;
     }
-    int32_t slot = outer_ctx->receiver_int_forward_slot;
-    int32_t loc = outer_ctx->receiver_int_forward_loc;
-    assert(slot >= 0 && slot < outer_ctx->num_exprs && loc >= 0 && loc < outer_ctx->num_locs);
+    const auto* forward = outer_ctx->receiver_int_forward_entry.load(std::memory_order_acquire);
+    if (!forward) {
+        return false;
+    }
+    int32_t slot = forward->slot;
+    const QoreProgramLocation* loc = forward->loc;
+    assert(slot >= 0 && slot < outer_ctx->num_exprs && loc);
     QoreAOTCallTarget& target = outer_ctx->call_targets[slot];
     auto* cache = target.method_dispatch_cache.load(std::memory_order_acquire);
     if (!cache || target.is_pseudo || target.is_static_method || (!target.method && !target.method_name)
             || target.explicit_type_param_instantiation
-            || qore_rt_get_dot_eval_explicit_type_instantiation(outer_ctx, slot) || !outer_ctx->locs[loc]) {
+            || qore_rt_get_dot_eval_explicit_type_instantiation(outer_ctx, slot) || !loc) {
         return false;
     }
     const QoreClass* receiver_class = object->getClass();
@@ -19459,8 +19576,7 @@ static bool try_dispatch_forwarded_int_leaf_native(QoreObject* object,
     const UserVariantBase* uvb = inner->native_scalar_uvb;
     assert(uvb && inner->nargs == 1 && inner->caller_program == pgm && inner->object_program == pgm);
     QoreAOTContext* ctx = uvb->getCachedAOTContext();
-    if (!ctx || !uvb->hasCachedAOT() || ctx->pc_loc_fn != uvb->getCachedAOTFunction()
-            || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)
+    if (!ctx || !uvb->hasCachedAOT() || ctx->native_body_fn != uvb->getCachedAOTFunction()
             || ctx->uses_self || ctx->uses_argv || ctx->pgm != pgm) {
         return false;
     }
@@ -19476,7 +19592,7 @@ static bool try_dispatch_forwarded_int_leaf_native(QoreObject* object,
         RuntimeConfigNativeMethodContext outer_context(rc, object, outer);
         QoreCompactNativeMethodStackLocation outer_frame(rc, outer, xsink, outer_context);
         RuntimeConfigNativeMethodContext inner_context(rc, object, *inner);
-        QoreCompactNativeMethodStackLocation inner_frame(rc, *inner, xsink, inner_context, outer_ctx->locs[loc]);
+        QoreCompactNativeMethodStackLocation inner_frame(rc, *inner, xsink, inner_context, loc);
         try {
             result = inline_entry
                 ? inline_entry(arg, ctx, xsink, &rc, qore_rt_get_stack_limit_v1(&rc))
@@ -19762,8 +19878,7 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
         return 0;
     };
     QoreAOTContext* ctx = uvb->getCachedAOTContext();
-    if (!ctx || !uvb->hasCachedAOT() || ctx->pc_loc_fn != uvb->getCachedAOTFunction()
-            || !ctx->pc_loc_map_attached.load(std::memory_order_acquire)
+    if (!ctx || !uvb->hasCachedAOT() || ctx->native_body_fn != uvb->getCachedAOTFunction()
             || ctx->uses_argv || pgm != ctx->pgm
             || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         return 0;
@@ -19775,7 +19890,7 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
         if constexpr (!floating) {
             static constinit QoreEnvFlag forward_enabled_env("QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF");
             const bool forward_enabled = !forward_enabled_env.get();
-            if (forward_enabled && ctx->receiver_int_forward_ready.load(std::memory_order_acquire)
+            if (forward_enabled && ctx->receiver_int_forward_entry.load(std::memory_order_acquire)
                     && try_dispatch_forwarded_int_leaf_native(object, *cached, ctx, arg, xsink, *result, rc)) {
                 return 1;
             }
@@ -20889,13 +21004,12 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
         return toBits(QoreValue());
     }
 
-    // Use cached IR name when available (zero allocation); fall back to building the name
-    const QoreIRFunction* ir = uvb->getCachedIR();
-    std::string call_name_buf;
-    if (!ir) {
-        call_name_buf = std::string(method->getClass()->getName()) + "::" + method->getName();
-    }
-    const std::string& call_name = ir ? ir->getDisplayName() : call_name_buf;
+    // the name of the frame, as an AST call names it
+    const std::string& call_name = uvb->getCallName();
+
+    // this fast-call path bypasses evalTiered(), so the call is counted here for the callee's promotion to
+    // native code, as qore_rt_call_fast() counts it (a no-op once the callee is native)
+    uvb->recordFastCallExecution();
 
     QoreValue val{};
     {
@@ -22205,6 +22319,122 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call_aot(
     QoreValue result = doBackgroundWithLocation(bg_op->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
+}
+
+// --- background helpers (QoreIRBackgroundInstruction with QoreIRBackgroundKind::Helper) ---
+
+QoreValue qore_run_background_helper(const QoreBackgroundHelperCode& code, ExceptionSink* xsink) {
+    if (code.aot_fn || code.jit_fn) {
+        uint64_t result_bits;
+        // native code reports an exception by unwinding to the boundary with the C++ caller; the exception is
+        // already in xsink
+        try {
+            if (code.aot_fn) {
+                assert(code.aot_ctx);
+                result_bits = code.aot_fn(code.aot_ctx, xsink);
+            } else {
+                result_bits = code.jit_fn(xsink);
+            }
+        } catch (const QoreJITException&) {
+            result_bits = 0;
+        }
+        // a helper is compiled without speculative guards, so it never requests a deoptimization; there is no other
+        // tier to run it on
+        if (qore_jit_deopt_requested() && !*xsink) {
+            xsink->raiseException("BACKGROUND-HELPER-ERROR", "internal error: the native code of a background "
+                "expression requested a deoptimization");
+        }
+        if (*xsink) {
+            return QoreValue();
+        }
+        return fromBits(result_bits);
+    }
+
+    assert(code.ir);
+    QoreValue rv;
+    QoreIRInterpreter::execute(*code.ir, rv, xsink, nullptr, nullptr, nullptr, &code.ir->pre_instantiated_cache);
+    return rv;
+}
+
+//! starts a background helper thread with the values given by native or interpreted starting code
+static uint64_t qore_background_helper_start(const QoreBackgroundHelperCode& code, LocalVar* const* params,
+        const uint64_t* values, int nvalues, bool uses_self, ExceptionSink* xsink) {
+    assert(nvalues >= 0);
+    std::vector<QoreValue> vals;
+    vals.reserve(nvalues);
+    for (int i = 0; i < nvalues; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "native background helper parameters")) {
+            return toBits(QoreValue());
+        }
+        vals.push_back(fromBits(values[i]));
+    }
+    // the thread records the location of the code that starts it
+    const QoreProgramLocation* loc = get_runtime_location();
+    QoreProgramLocationHelper loc_helper(loc ? loc : &loc_builtin);
+    return toBits(do_op_background_helper(code, params, vals.empty() ? nullptr : vals.data(), vals.size(),
+        uses_self, xsink));
+}
+
+QoreValue qore_ir_start_background_helper(const QoreIRBackgroundInstruction& inst, const QoreValue* values,
+        ExceptionSink* xsink) {
+    assert(inst.kind == QoreIRBackgroundKind::Helper && inst.helper_ir);
+    QoreBackgroundHelperCode code;
+    code.ir = inst.helper_ir.get();
+    return do_op_background_helper(code, inst.helper_params.data(), values, inst.helper_params.size(),
+        inst.helper_uses_self, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_background_helper(const QoreIRBackgroundInstruction* inst,
+        uint64_t (*helper_fn)(ExceptionSink*), uint64_t* values, int nvalues, ExceptionSink* xsink) {
+    assert(inst && inst->kind == QoreIRBackgroundKind::Helper && helper_fn);
+    assert(static_cast<size_t>(nvalues) == inst->helper_params.size());
+    QoreBackgroundHelperCode code;
+    code.ir = inst->helper_ir.get();
+    code.jit_fn = helper_fn;
+    return qore_background_helper_start(code, inst->helper_params.data(), values, nvalues, inst->helper_uses_self,
+        xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_background_helper_aot(QoreAOTContext* ctx,
+        uint64_t (*helper_fn)(QoreAOTContext*, ExceptionSink*), const int32_t* param_slots, uint64_t* values,
+        int nvalues, int uses_self, ExceptionSink* xsink) {
+    assert(ctx && helper_fn);
+    // the helper's parameters are local variables of the starting function's context, which the helper shares
+    std::vector<LocalVar*> params;
+    params.reserve(nvalues);
+    for (int i = 0; i < nvalues; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "native background helper parameters")) {
+            return toBits(QoreValue());
+        }
+        assert(param_slots[i] >= 0 && param_slots[i] < ctx->num_locals && ctx->locals[param_slots[i]]);
+        params.push_back(ctx->locals[param_slots[i]]);
+    }
+    QoreBackgroundHelperCode code;
+    code.aot_fn = helper_fn;
+    code.aot_ctx = ctx;
+    return qore_background_helper_start(code, params.empty() ? nullptr : params.data(), values, nvalues,
+        uses_self != 0, xsink);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_helper_throwing(
+        const QoreIRBackgroundInstruction* inst, uint64_t (*helper_fn)(ExceptionSink*), uint64_t* values,
+        int nvalues, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_helper(inst, helper_fn, values, nvalues, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_helper_aot_throwing(
+        QoreAOTContext* ctx, uint64_t (*helper_fn)(QoreAOTContext*, ExceptionSink*), const int32_t* param_slots,
+        uint64_t* values, int nvalues, int uses_self, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_helper_aot(ctx, helper_fn, param_slots, values, nvalues, uses_self,
+        xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
 }
 
 // --- Phase 2B Step 5: specialized helpers throwing wrappers ---

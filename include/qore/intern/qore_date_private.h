@@ -991,16 +991,16 @@ public:
     }
 
     DLLLOCAL void setSeconds(int64 s, int usecs = 0) {
+        // Normalize before narrowing hours: an opposite-sign fraction can bring an hour-boundary value in range.
+        normalize_units<int64, int>(s, usecs, 1000000);
         year = 0;
         month = 0;
         day = 0;
-        hour = s / 3600;
-        if (hour)
-            s -= hour * 3600;
-        minute = s / 60;
-        if (minute)
-            s -= minute * 60;
-        second = s;
+        // Keep elapsed hours: carrying them into calendar days changes arithmetic across timezone transitions.
+        // Take remainders before narrowing components, so the split never multiplies 32-bit hours by 3600.
+        hour = static_cast<int>(s / 3600);
+        minute = static_cast<int>((s % 3600) / 60);
+        second = static_cast<int>(s % 60);
         us = usecs;
     }
 
@@ -1184,16 +1184,9 @@ public:
     }
 
     DLLLOCAL void addSecondsTo(int64 secs, int n_us = 0) {
-        int h = secs / 3600;
-        if (h)
-            secs -= (h * 3600);
-        int m = secs / 60;
-        if (m)
-            secs -= (m * 60);
-
-        hour += h;
-        minute += m;
-        second += secs;
+        hour += static_cast<int>(secs / 3600);
+        minute += static_cast<int>((secs % 3600) / 60);
+        second += static_cast<int>(secs % 60);
         us += n_us;
     }
 };

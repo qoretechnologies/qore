@@ -38,11 +38,9 @@ class ReceiverEntryTest inherits QUnit::Test {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
                 string generated = run((qcc, level, "--strip-source", "-o", executable, source),
-                    prefix + "QORE_DUMP_LLVM_IR=1 QORE_AOT_LOC_DEBUG=1 ");
-                assertEq(-1, generated.find("ROUND-TRIP FAIL"), "source-map serialization");
-                assertEq(-1, generated.find("round-trip MISMATCH"), "source-map round trip");
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
                 bool enabled = !prefix.startsWith("QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY");
-                assertEq(enabled, generated.find("qore_rt_bind_receiver_int_method_v2") >= 0,
+                assertEq(enabled, generated.find("qore_rt_bind_receiver_int_method_v3") >= 0,
                     "separate receiver companion binding");
                 if (enabled) {
                     *list<*string> body = regex_extract(generated,
@@ -51,14 +49,12 @@ class ReceiverEntryTest inherits QUnit::Test {
                     assertEq(-1, (body[0] ?? "").find("qore_rt_load_local_aot"),
                         "callee does not reload its receiver or argument through TLS");
                     assertRegex("qore_rt_check_stack_v2", body[0] ?? "", "explicit runtime context stack guard");
-                    if (!prefix.startsWith("QORE_AOT_NO_DEBUG_INFO")) {
-                        assertRegex("AOT-LOC: func=ReceiverEntry__forward[^\\n]*_receiver_int_v1 entries=",
-                            generated, "separate native PC map for the companion");
-                        string diagnostic = run((executable,), "QORE_AOT_LOC_DEBUG=1 ");
-                        assertRegex("AOT-LOC: registered PC range[^\\n]*_receiver_int_v1 entries=",
-                            diagnostic, "companion map attached before publication");
-                        assertTrue(diagnostic.endsWith(expected), "source locations after companion warmup");
-                    }
+                    assertRegex("qore_rt_get_native_entry_slots_v2", body[0] ?? "",
+                        "location slots use the explicit runtime context");
+                    assertRegex("store ptr @[^\n]*qore_aot_loc", body[0] ?? "",
+                        "companion stores image-owned locations even without DWARF");
+                    assertRegex("_descriptor_v3 = internal constant", generated,
+                        "immutable forwarding entry, slot and location descriptor");
                 }
                 foreach string runtime in (("", "QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY=1 ",
                         "QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT=1 ",

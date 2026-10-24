@@ -1012,7 +1012,7 @@ static QoreValue qore_buffer_compute_arithmetic_value(QoreValue left, QoreValue 
                 xsink->raiseException("DIVISION-BY-ZERO", "division by zero found in buffer integer expression");
                 return QoreValue();
             }
-            return l / r;
+            return qore_int_div(l, r);
         default:
             assert(false);
             return QoreValue();

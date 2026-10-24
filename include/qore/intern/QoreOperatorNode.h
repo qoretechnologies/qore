@@ -159,9 +159,9 @@ public:
         return true;
     }
 
-    DLLLOCAL int checkLValue(QoreValue exp, int pflag, bool assignment = true) {
+    DLLLOCAL int checkLValue(QoreValue exp, int pflag, bool assignment = true, bool allow_slice = false) {
         if (exp) {
-            int lvalue_err = check_lvalue(exp, assignment);
+            int lvalue_err = check_lvalue(exp, assignment, allow_slice);
             if (lvalue_err) {
                 if (lvalue_err == -1) {
                     parse_error(*loc, "expecting lvalue for %s, got '%s' instead", getTypeName(),
@@ -174,6 +174,10 @@ public:
                 && exp.get<const VarRefNode>()->getType() == VT_LOCAL) {
                 parse_error(*loc, "illegal local variable modification with the background operator in %s",
                     getTypeName());
+                return -1;
+            } else if ((pflag & PF_BACKGROUND) && exp.getType() == NT_SELF_VARREF) {
+                // the expression takes the member's value when the thread starts, as it does for local variables
+                parse_error(*loc, "illegal member modification with the background operator in %s", getTypeName());
                 return -1;
             }
         }

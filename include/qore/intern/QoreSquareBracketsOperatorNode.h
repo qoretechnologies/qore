@@ -58,6 +58,11 @@ public:
         return rhs_list_range;
     }
 
+    //! Returns true if the offset operand is a list at parse time, so the expression is a slice (a list, not an element)
+    DLLLOCAL bool isSlice() const {
+        return slice;
+    }
+
     DLLLOCAL bool hasStringIndexChar() const {
         return string_index_char;
     }
@@ -70,6 +75,8 @@ protected:
     const QoreTypeInfo* typeInfo = nullptr;
     // is the RHS a list with a range?
     bool rhs_list_range = false;
+    // is the offset operand a list at parse time?
+    bool slice = false;
     bool string_index_char = true;
     bool negative_offsets = false;
 

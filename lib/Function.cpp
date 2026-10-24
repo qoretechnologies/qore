@@ -1270,14 +1270,6 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     rc.setRuntimeFlags(static_cast<q_rt_flags_t>(variant->getFlags()));
     restore_rtflags = true;
 
-    // Mark this frame as native-AOT when the called variant has a cached AOT function,
-    // so the exception machinery can repair its callstack call-site location via the
-    // lazy PC->loc registry. Set before the stack push so the visible frame reflects it.
-    {
-        const UserVariantBase* uvb = variant->getUserVariantBase();
-        is_aot = uvb && uvb->hasCachedAOT();
-    }
-
     // Cross-program calls execute with the target/source Program's TLPD, but caller-sensitive APIs walk stack
     // frame Programs, so the frame shows the caller's Program.  It is recorded as the location is pushed, not
     // assigned afterwards: other threads can read the location from then on.
@@ -4925,12 +4917,13 @@ QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) co
 }
 
 void UserVariantBase::registerPrecompiledAOTFunction(
-        AotFunctionPtr fn, QoreAOTContext* ctx) {
+        AotFunctionPtr fn, QoreAOTContext* ctx, const QoreProgramLocation* body_loc) {
     QoreAOTContext* old_ctx = cached_aot_ctx.exchange(ctx, std::memory_order_acq_rel);
     if (old_ctx != ctx) {
         delete old_ctx;
     }
     cached_aot_fn = fn;
+    aot_body_loc = body_loc;
     {
         std::lock_guard<std::mutex> lock(aot_lazy_function_ir_mutex);
         aot_lazy_function_ir.reset();
@@ -4950,12 +4943,13 @@ void UserVariantBase::registerPrecompiledAOTFunction(
     current_tier.store(TIER_JIT, std::memory_order_release);
 }
 
-void UserVariantBase::registerLazyPrecompiledAOTFunction(AotFunctionPtr fn,
+void UserVariantBase::registerLazyPrecompiledAOTFunction(AotFunctionPtr fn, const QoreProgramLocation* body_loc,
         std::shared_ptr<const QoreAOTLazyFunctionIR> lazy_ir,
         uint32_t entry_index, bool context_uses_argv, bool context_uses_self) {
     QoreAOTContext* old_ctx = cached_aot_ctx.exchange(nullptr, std::memory_order_acq_rel);
     delete old_ctx;
     cached_aot_fn = fn;
+    aot_body_loc = body_loc;
     {
         std::lock_guard<std::mutex> lock(aot_lazy_function_ir_mutex);
         aot_lazy_function_ir = std::move(lazy_ir);
@@ -5467,68 +5461,34 @@ void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::vector<Lo
         }), locals.end());
 }
 
-// Forward declaration for mutual recursion with collectStmtSlotFromStatement
-void collectStmtSlotStatements(const StatementBlock* block,
-        std::vector<const AbstractStatement*>& stmts);
-
-// helper: collect stmt_slot statements (OnBlockExit handler code + reference Foreach)
-// from a single statement, in depth-first order matching IR lowering
-static void collectStmtSlotFromStatement(const AbstractStatement* stmt,
-        std::vector<const AbstractStatement*>& stmts) {
-    if (!stmt) {
-        return;
-    }
-    if (auto* obe = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
-        stmts.push_back(obe->getCode());
-    } else if (auto* block = dynamic_cast<const StatementBlock*>(stmt)) {
-        collectStmtSlotStatements(block, stmts);
-    } else if (auto* if_stmt = dynamic_cast<const IfStatement*>(stmt)) {
-        collectStmtSlotStatements(if_stmt->getIfCode(), stmts);
-        collectStmtSlotStatements(if_stmt->getElseCode(), stmts);
-    } else if (auto* for_stmt = dynamic_cast<const ForStatement*>(stmt)) {
-        collectStmtSlotStatements(for_stmt->getCode(), stmts);
-    } else if (auto* while_stmt = dynamic_cast<const WhileStatement*>(stmt)) {
-        collectStmtSlotStatements(while_stmt->getCode(), stmts);
-    } else if (auto* try_stmt = dynamic_cast<const TryStatement*>(stmt)) {
-        collectStmtSlotStatements(try_stmt->getTryBlock(), stmts);
-        collectStmtSlotStatements(try_stmt->getCatchBlock(), stmts);
-    } else if (auto* sw_stmt = dynamic_cast<const SwitchStatement*>(stmt)) {
-        const CaseNode* cn = sw_stmt->getCases();
-        while (cn) {
-            collectStmtSlotStatements(cn->code, stmts);
-            cn = cn->next;
-        }
-    } else if (auto* foreach_stmt = dynamic_cast<const ForEachStatement*>(stmt)) {
-        if (foreach_stmt->isRef()) {
-            // Reference foreach: the whole ForEachStatement is a stmt_slot
-            stmts.push_back(foreach_stmt);
-        } else {
-            // Non-reference foreach: recurse into body for nested OBE handlers
-            collectStmtSlotStatements(foreach_stmt->getCode(), stmts);
-        }
-    } else if (auto* debug_stmt = dynamic_cast<const DebugStatement*>(stmt)) {
-        if (StatementBlock* block = debug_stmt->getBlock()) {
-            collectStmtSlotStatements(block, stmts);
-        }
-    }
-}
-
-void collectStmtSlotStatements(const StatementBlock* block,
-        std::vector<const AbstractStatement*>& stmts) {
-    if (!block) {
-        return;
-    }
-    for (auto it = block->getStatements().begin(); it != block->getStatements().end(); ++it) {
-        collectStmtSlotFromStatement(*it, stmts);
-    }
-}
-
 // helper: check if an IR basic block has a terminator instruction
 static bool irBlockHasTerminatorFunc(const QoreIRBasicBlock* block) {
     if (!block || block->instructions.empty()) {
         return false;
     }
     return isTerminator(block->instructions.back()->opcode);
+}
+
+// Register before application threads can fork, including before any variant name is requested.
+static std::mutex variant_call_name_mutex;
+static QoreForkStdMutex variant_call_name_fork_handler(variant_call_name_mutex, QFLR_LEAF, "variant_call_names");
+
+void UserVariantBase::buildCallName() const {
+    std::lock_guard<std::mutex> lock(variant_call_name_mutex);
+    if (call_name_ready.load(std::memory_order_relaxed)) {
+        return;
+    }
+    std::string name;
+    const AbstractQoreFunctionVariant* variant = getAbstractFunctionVariant();
+    if (const char* class_name = variant ? variant->className() : nullptr) {
+        name = class_name;
+        name += "::";
+    }
+    if (source_qf) {
+        name += source_qf->getName();
+    }
+    call_name = std::move(name);
+    call_name_ready.store(true, std::memory_order_release);
 }
 
 QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::string& unique_name,
@@ -5538,9 +5498,14 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     assert(pgm);
     assert(statements);
 
-    QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
+    // the display name is the name of the call stack frames of the code, as an AST call names them
+    // (CodeEvaluationHelper::setCallName()): a method is qualified with its class
+    const AbstractQoreFunctionVariant* variant = getAbstractFunctionVariant();
+    const char* class_name = variant ? variant->className() : nullptr;
+    QoreIRFunction* func = new QoreIRFunction(unique_name.c_str(),
+        class_name ? std::string(class_name) + "::" + name : std::string());
     func->source_qf = source_qf;
-    func->source_variant = getAbstractFunctionVariant();
+    func->source_variant = variant;
     // Owning program for the per-Program background-compile drain (set unconditionally).
     func->pgm = pgm;
     // Debug-step hook context (issue #5352): record the top-level StatementBlock and
@@ -6634,16 +6599,6 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         }
 
         QoreValue val{};
-        // Save/restore the innermost-non-AOT-frame marker across native (JIT/AOT)
-        // execution. JIT code sets runtime_loc_sp per line to its own (inner) frame; on
-        // return an AOT caller must see its own outer marker again, not the stale inner
-        // one, so the throw resolver still classifies the AOT caller as innermost. AOT
-        // code never sets the marker, so for it this is a no-op. See
-        // design/aot-lazy-loc-innermost-frame.md.
-        struct SpGuard {
-            uintptr_t saved_sp;
-            ~SpGuard() { set_runtime_loc_sp(saved_sp); }
-        } sp_guard{get_runtime_loc_sp()};
         {
             // Only create ArgvContextHelper if argv is used
             std::optional<ArgvContextHelper> argv_helper;
@@ -6703,7 +6658,6 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // through to the normal xsink-set path below.
                 try {
                     if (aot_ctx && cached_aot_fn) {
-                        qore_aot_ensure_pc_loc_map(aot_ctx);
                         result_bits = cached_aot_fn(aot_ctx, xsink);
                     } else {
                         assert(jit_fn);
@@ -7490,6 +7444,10 @@ int QoreFunction::addPendingVariant(AbstractQoreFunctionVariant* variant) {
         return -1;
     }
 
+    // a variant's parse initialization records the function owning it, which AOT-deserialized variants skip
+    if (UserVariantBase* uvb = variant->getUserVariantBase()) {
+        uvb->setSourceFunction(this);
+    }
     vlist.push_back(variant);
 
     return 0;

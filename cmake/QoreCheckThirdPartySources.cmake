@@ -54,7 +54,8 @@ function(_qore_tp_error)
     set(_errors "${_list}" PARENT_SCOPE)
 endfunction()
 
-# Adds the CMake files below <dir> to <var>
+# Adds the CMake files below <dir> to <var>; build trees and other checkouts below it (with a .git file or directory,
+# ex: a git worktree in .claude/worktrees) are not part of the source tree
 function(_qore_tp_collect dir var)
     set(_files "${${var}}")
     file(GLOB _children LIST_DIRECTORIES true "${dir}/*")
@@ -63,7 +64,8 @@ function(_qore_tp_collect dir var)
         if (IS_SYMLINK "${_child}")
             continue()
         elseif (IS_DIRECTORY "${_child}")
-            if (_leaf STREQUAL ".git" OR _leaf STREQUAL "_deps" OR EXISTS "${_child}/CMakeCache.txt")
+            if (_leaf STREQUAL ".git" OR _leaf STREQUAL "_deps" OR EXISTS "${_child}/CMakeCache.txt"
+                    OR EXISTS "${_child}/.git")
                 continue()
             endif()
             _qore_tp_collect("${_child}" _files)

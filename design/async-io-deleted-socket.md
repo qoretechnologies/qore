@@ -25,11 +25,10 @@ object), because the controller still holds a reference.
 
 Three controller functions resolve the socket's private data with
 `QoreObject::getReferencedPrivateData(CID_SOCKET, &xsink)`.  For an `OS_DELETED` object this **raises**
-`OBJECT-ALREADY-DELETED`, and constructing that exception collects a full backtrace
-(`qore_aot_collect_backtrace_locs()` → `_Unwind_Backtrace`).  The functions then clear the sink and return, so the
-exception is dropped — but the operation is never ended.  A deleted socket also never establishes a wait
-generation, so the existing stale-fd guard (`makeSocketWaitGenerationException()`, gated on
-`socket_wait_generation_valid`) never fired for it.
+`OBJECT-ALREADY-DELETED`, and constructing that exception collects the thread's call stack.  The functions then
+clear the sink and return, so the exception is dropped — but the operation is never ended.  A deleted socket also
+never establishes a wait generation, so the existing stale-fd guard (`makeSocketWaitGenerationException()`, gated
+on `socket_wait_generation_valid`) never fired for it.
 
 The result: the operation stays in the wait set, its (still-registered, still-firing) fd keeps the controller
 re-queuing it, and every iteration pays the cost of raising and dropping a backtrace exception in

@@ -1,0 +1,73 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module ForeachClosureVarRecursion {
+    version = "1.0";
+    desc = "foreach variables that a closure or a reference uses, in recursive calls";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+#! foreach variables that a closure or a reference uses, in recursive calls
+public namespace ForeachClosureVarRecursion {
+#! wraps every element of nested lists through a reference to the loop variable of a reference foreach
+public class RefWrapper {
+    list<auto> wrap(list<auto> value) {
+        wrapList(\value);
+        return value;
+    }
+
+    private wrapList(reference<list<auto>> value) {
+        foreach auto val in (\value) {
+            wrapValue(\val);
+        }
+    }
+
+    private wrapValue(reference<auto> v) {
+        if (v.typeCode() == NT_LIST) {
+            list<auto> l = v;
+            wrapList(\l);
+            v = l;
+        } else {
+            v = {"wrapped": v};
+        }
+    }
+}
+
+#! returns the elements of nested lists as strings, read directly and with closures that capture the loop variable of
+#! a value foreach
+public list<string> sub value_foreach(list<auto> l) {
+    list<code> getters;
+    list<string> rv;
+    foreach auto val in (l) {
+        getters += string sub () { return sprintf("%y", val); };
+        if (val.typeCode() == NT_LIST) {
+            rv += value_foreach(val);
+        }
+        # the variable of this call, after any recursive call
+        rv += sprintf("%y", val);
+    }
+    map rv += $1(), getters;
+    return rv;
+}
+
+#! returns the elements of nested lists as strings, read directly and with closures that capture the loop variable of
+#! a foreach over a pipeline
+public list<string> sub pipeline_foreach(list<auto> l) {
+    list<code> getters;
+    list<string> rv;
+    foreach auto val in (map $1, l) {
+        getters += string sub () { return sprintf("%y", val); };
+        if (val.typeCode() == NT_LIST) {
+            rv += pipeline_foreach(val);
+        }
+        # the variable of this call, after any recursive call
+        rv += sprintf("%y", val);
+    }
+    map rv += $1(), getters;
+    return rv;
+}
+}

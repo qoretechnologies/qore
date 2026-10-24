@@ -20700,3 +20700,61 @@ Preserve binding semantics without inferring stronger callable signatures, and
 reuse existing exact-callref specialization where applicable. A new optimization
 requires its own prospective measurements; these benchmarks already use typed
 locals, so no gain is assumed.
+
+## Develop b7e1367f5f integration and compiler slot assignment (2026-10-24)
+
+Merged develop removes lazy PC-location recovery and uses eager source locations.
+Fast contexts now preserve/restore caller locations, use immutable normal-body
+identity, and publish an immutable receiver-forwarding descriptor. Explicit
+RuntimeConfig remains available to receiver and closure entry-slot setup.
+The native QoreAOTFunc layout changes: rebuild native artifacts with this runtime;
+historical compatibility claims in earlier experiment sections do not cover this
+integration. Artifact format 22 keeps upstream 20/21 payload meanings distinct from
+old experimental performance-branch 20/21 objects, which must also be rebuilt.
+
+A merge-introduced per-local maximum scan is replaced with a cached slot bound
+and one linear seed refresh. Sparse/replaced seeds, overflow, cancellation and
+copy behavior retain correctness coverage. This benchmark measures the isolated
+compiler operation including map allocation; it does not measure call latency or
+whole compilation. Both variants use -O3 -DNDEBUG, the same final Release runtime,
+three predeclared sizes and seven shuffled fresh-process runs per size/variant,
+at least 300 ms each. No other task-owned CPU work runs during timing.
+
+|!Local slots|!Before (us/map)|!Cached bound (us/map)|!Speedup
+|128|8.562|2.650|3.23x
+|1024|409.467|25.710|15.93x
+|8192|70601.908|259.986|271.56x
+
+An earlier seven-fork screen and this final-runtime confirmation retain every
+raw timing, exit, assignment/checksum and median in the linked report. Host
+load/frequency are not controlled; ranges are descriptive, not confidence intervals.
+
+Full selected qualification: 76 fixtures per build, 75 successful exits each.
+Release passes 38860/38861 assertions; Debug 38883/38884. The established
+SocketSpecificBind otherProgramTest failure is explicit in both. Native checks
+pass 11756 assertions, with 1665 independent reference comparisons. All 252 qmods
+per build are rebuilt and 253 aliases restored to Release. Service/database/OS
+skips are recorded individually.
+
+Review then fixed eight compiler failure exits that could delete outlined IR
+before restoring it. This final source has a separate Release/Debug rebuild
+(including all 252 qmods) and targeted supplement: 18 fixtures, 43 executed QUnit cases and 2041 QUnit assertions; eight of the 18 fixtures use standalone output comparisons. Outlining, cancellation, generic fast entries and native guards
+pass; exact eight failure branches are not individually forced. The native
+relative-seconds test now runs in both builds. Linux ELF/RPM integration remains
+unexecuted on this macOS host. Earlier full-suite selections are not relabelled
+as tests of the later eight-line change.
+
+The full audit contains 20 Pass / 42 N/A /zero Fail, with all 62 checks and evidence.
+
+|!Audit group|!Status|!Evidence
+|Module/test conventions|Pass / N/A|Test-private modules; modern/executable fixtures; no shipped module added
+|Cancellation and ownership|Pass|Bounded polling, complete cleanup, restored outlining before IR deletion
+|Thread/fork safety|Pass|Immutable descriptors; real forks with both call-name locks held
+|Performance and correctness|Pass|Optimized raw measurement replay; independent references and focused regressions
+|Documentation|Pass|Eager-location/native ABI notes; strict Qore table validation
+|DataProvider and dependency registration|N/A|No such implementation changes
+
+Full evidence: [results-merge-b7e1367f5f-macos-arm64.json](results-merge-b7e1367f5f-macos-arm64.json). No new Java/develop execution comparison is claimed here.
+Next establish the planned optimized runtime checkpoint, then test a narrow
+callable-input subset proof for literal references passed to internal calls.
+Java parity and a global performance ceiling remain unestablished.

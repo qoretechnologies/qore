@@ -1,5 +1,6 @@
 #! /usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
 
@@ -11,6 +12,10 @@
 public class DateDurationsTest inherits QUnit::Test {
     constructor() : Test("DateDurationsTest", "1.0") {
         addTestCase("Duration constructor tests", \testDurationConstructors(), NOTHING);
+        addTestCase("Large seconds retain their elapsed components", \largeSeconds());
+        addTestCase("Large floating-point seconds retain fractions", \fractionalSeconds());
+        addTestCase("Elapsed seconds remain elapsed across DST", \elapsedSeconds());
+        addTestCase("Native relative-seconds APIs", \nativeSeconds());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -29,5 +34,59 @@ public class DateDurationsTest inherits QUnit::Test {
         foreach int v in ((0, 1, 59, 60, 3600, 86400, -61)) {
             assertEq(v * 1000000, get_duration_microseconds(seconds(v)), sprintf("seconds(%d)", v));
         }
+    }
+
+    private largeSeconds() {
+        # Cover narrowing at 2^31 seconds, the first overflowing hour product, and the existing hour limits.
+        foreach int value in (2147483647, 2147483648, 2147486400, 3600000000, 4294967296,
+                7730941129200, 7730941132799, -2147483647, -2147483648, -2147486400,
+                -3600000000, -4294967296, -7730941132800, -7730941136399) {
+            foreach date duration in (seconds(value), date(value)) {
+                assertEq(value * 1000000, duration.durationMicroseconds());
+                assertEq(value / 3600, get_hours(duration));
+                assertEq((value % 3600) / 60, get_minutes(duration));
+                assertEq(value % 60, get_seconds(duration));
+                assertEq(0, get_days(duration));
+                assertEq(0, get_months(duration));
+                assertEq(0, get_years(duration));
+            }
+        }
+        assertEq(PT1000000H, seconds(3600000000));
+        assertEq(-PT1000000H, seconds(-3600000000));
+    }
+
+    private fractionalSeconds() {
+        foreach float value in (2147483648.25, 3600000000.5, -2147483648.25, -3600000000.5) {
+            date duration = date(value);
+            assertEq(int(value * 1000000), duration.durationMicroseconds());
+            assertEq(0, get_days(duration));
+        }
+    }
+
+    private elapsedSeconds() {
+        TimeZone zone("Europe/Prague");
+        foreach string start_text in ("2026-03-28T12:00:00", "2026-10-24T12:00:00") {
+            date start = zone.date(start_text);
+            foreach int value in (86400, -86400, 3600000000, -3600000000) {
+                date end = start + seconds(value);
+                assertEq(value, end.getEpochSeconds() - start.getEpochSeconds());
+                date earlier = start - seconds(value);
+                assertEq(-value, earlier.getEpochSeconds() - start.getEpochSeconds());
+            }
+            assertTrue((start + days(1)).getEpochSeconds() != (start + seconds(86400)).getEpochSeconds());
+        }
+    }
+
+    private nativeSeconds() {
+        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string native = ENV.QORE_RELATIVE_SECONDS_TEST ?? dirname(qore) + "/qore-relative-seconds-test";
+        if (!is_file(native)) {
+            testSkip("the native relative-seconds test executable is not available");
+            return;
+        }
+        int rc;
+        string output = backquote("'" + replace(native, "'", "'\\''") + "' 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertTrue(output.startsWith("PASS: "), output);
     }
 }

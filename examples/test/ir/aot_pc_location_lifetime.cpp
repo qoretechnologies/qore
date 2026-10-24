@@ -10,7 +10,6 @@
 #ifdef NDEBUG
 #undef NDEBUG
 #endif
-#include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -19,9 +18,8 @@
 
 extern "C" void init_PC_LOCATION_LIFETIME_qo(QoreProgram*);
 
-static void check() {
+static const QoreProgramLocation* check() {
     ExceptionSink xsink;
-    std::string backing_file;
     QoreProgramHelper program(PO_MODERN, xsink);
     qore_aot_script_begin_batch(*program);
     init_PC_LOCATION_LIFETIME_qo(*program);
@@ -42,83 +40,37 @@ static void check() {
         }
         assert(actual_line > 0 && (!line || actual_line == line));
         assert(file && std::strstr(file->c_str(), "pc_location_lifetime.qr"));
-        if (backing_file.empty()) {
-            backing_file = file->c_str();
-        }
         return actual_line;
     };
     invoke("pcLifetimeDirect", 3);
-    // This test checks lifetime, including inlined extra descriptors, against
-    // the same artifact's initial location (not compiler-specific inlining).
-    int inline_line = invoke("pcLifetimeInline", 0);
+    invoke("pcLifetimeInline", 6);
     const auto* direct = reinterpret_cast<const QoreFunction*>(program->findFunction("pcLifetimeDirect"));
     assert(direct);
-    auto* direct_ctx = direct->first()->getUserVariantBase()->getCachedAOTContext();
-    assert(direct_ctx);
-    for (int i = 0; i < direct_ctx->num_locs; ++i) {
-        const_cast<QoreProgramLocation*>(direct_ctx->locs[i])->setFile(backing_file.c_str());
-        if (!(i % 100)) {
-            assert(!qore_check_cancel(&xsink, "PC location string lifetime test"));
-        }
-    }
-    // Reattachment snapshots a caller-owned string. Overwrite its live buffer
-    // without reallocating: copying only the descriptor would still fail.
-    direct_ctx->pc_loc_map_attached.store(false, std::memory_order_release);
-    invoke("pcLifetimeDirect", 3);
-    std::fill(backing_file.begin(), backing_file.end(), 'x');
-    invoke("pcLifetimeDirect", 3);
-    // Each Program owns its ordinary and inlined location descriptors. The
-    // process-wide native-PC registry must own independent snapshots. Poison
-    // while descriptors are still allocated so a borrowed pointer fails a
-    // deterministic assertion rather than relying on allocator reuse/UAF.
-    for (const char* name : {"pcLifetimeDirect", "pcLifetimeLeaf", "pcLifetimeInline"}) {
-        const auto* function = reinterpret_cast<const QoreFunction*>(program->findFunction(name));
-        assert(function);
-        const UserVariantBase* uvb = function->first()->getUserVariantBase();
-        assert(uvb);
-        QoreAOTContext* ctx = uvb->getCachedAOTContext();
-        if (!ctx) {
-            continue; // An inlined leaf need not materialize its own context.
-        }
-        auto poison = [](const QoreProgramLocation* loc) {
-            auto* owned = const_cast<QoreProgramLocation*>(loc);
-            owned->start_line = -321;
-            owned->setFile("retired-context");
-            owned->setSource("retired-source");
-            owned->setLanguage("retired-language");
-        };
-        for (int i = 0; i < ctx->num_locs; ++i) {
-            poison(ctx->locs[i]);
-            if (!(i % 100)) {
-                assert(!qore_check_cancel(&xsink, "PC location lifetime test"));
-            }
-        }
-        unsigned i = 0;
-        for (const auto* loc : ctx->pc_extra_locs) {
-            poison(loc);
-            if (!(i++ % 100)) {
-                assert(!qore_check_cancel(&xsink, "inlined PC location lifetime test"));
-            }
-        }
-    }
-    invoke("pcLifetimeDirect", 3);
-    invoke("pcLifetimeInline", inline_line);
+    const auto* uvb = direct->first()->getUserVariantBase();
+    assert(uvb && uvb->getCachedAOTContext());
+    const QoreProgramLocation* image_location = uvb->getAOTBodyLocation();
+    assert(image_location && image_location->start_line > 0 && image_location->getFile());
+    assert(std::strstr(image_location->getFile(), "pc_location_lifetime.qr"));
+    // The location is held by the linked native image. Return it across teardown
+    // of every Program-owned context and check it again from foreign threads.
+    return image_location;
 }
 
 int main() {
     qore_init(QL_MIT, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
-    check();
-    // Re-register the same native PCs after the original Program is gone;
-    // independent foreign threads also replace/read the shared registry.
-    auto worker = []() {
+    const auto* location = check();
+    int line = location->start_line;
+    std::string file(location->getFile());
+    auto worker = [location, line, file]() {
         for (unsigned i = 0; i < 8; ++i) {
             QoreForeignThreadHelper foreign;
-            check();
+            assert(check() == location);
+            assert(location->start_line == line && location->getFile() == file);
         }
     };
     std::thread first(worker), second(worker);
     first.join();
     second.join();
     qore_cleanup();
-    std::puts("aot-pc-location-lifetime: ok");
+    std::puts("aot-image-location-lifetime: ok");
 }

@@ -55,18 +55,26 @@ int QoreListAssignmentOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         const QoreTypeInfo* prototypeInfo = parse_context.typeInfo;
         //printd(5, "QoreListAssignmentOperatorNode::parseInitImpl() paI: '%s' (%s)\n", QoreTypeInfo::getName(prototypeInfo),
         //    v.getFullTypeName());
-        if (check_lvalue(v)) {
-            if (!li.hasError()) {
+        if (int lvalue_err = check_lvalue(v)) {
+            // -2: the error has been reported
+            if (lvalue_err == -1 && !li.hasError()) {
                 parse_error(*loc, "expecting lvalue in position %d of left-hand-side list in list assignment, got " \
                     "'%s' instead", li.index() + 1, v.getTypeName());
-                if (!err) {
-                    err = -1;
-                }
+            }
+            if (!err) {
+                err = -1;
             }
         } else if ((parse_context.pflag & PF_BACKGROUND) && v.getType() == NT_VARREF
             && v.get<const VarRefNode>()->getType() == VT_LOCAL) {
             parse_error(*loc, "illegal local variable modification with the background operator in position %d " \
                 "of left-hand-side list in list assignment", li.index() + 1);
+            if (!err) {
+                err = -1;
+            }
+        } else if ((parse_context.pflag & PF_BACKGROUND) && v.getType() == NT_SELF_VARREF) {
+            // the expression takes the member's value when the thread starts, as it does for local variables
+            parse_error(*loc, "illegal member modification with the background operator in position %d of " \
+                "left-hand-side list in list assignment", li.index() + 1);
             if (!err) {
                 err = -1;
             }

@@ -33,6 +33,128 @@ extern "C" void init_NATIVE_LEAF_CONTEXT_qo(QoreProgram*);
 #include <qore/macros-x86_64.h>
 #endif
 
+// The compiler may seed sparse IR identities, then overwrite a former highest seed during specialization.
+static void checkLocalSlots() {
+    std::array<int, 8> keys{};
+    AOTSlotMap slots;
+    assert(slots.getLocalSlot(&keys[0]) == 0);
+    assert(slots.getLocalSlot(&keys[0]) == 0);
+    slots.local_slots[&keys[1]] = 17;
+    assert(slots.refreshLocalSlotBound());
+    assert(slots.getLocalSlot(&keys[2]) == 18);
+    slots.local_slots[&keys[1]] = 1;
+    slots.local_slots[&keys[2]] = 2;
+    assert(slots.refreshLocalSlotBound());
+    assert(slots.getLocalSlot(&keys[3]) == 3);
+    AOTSlotMap copy = slots;
+    assert(copy.getLocalSlot(&keys[4]) == 4);
+    assert(!slots.hasLocalSlot(&keys[4]));
+    slots.local_slots[&keys[5]] = -1;
+    assert(!slots.refreshLocalSlotBound());
+    slots.local_slots[&keys[5]] = INT32_MAX;
+    assert(!slots.refreshLocalSlotBound());
+    slots.local_slots[&keys[5]] = INT32_MAX - 2;
+    assert(slots.refreshLocalSlotBound());
+    assert(slots.getLocalSlot(&keys[6]) == INT32_MAX - 1);
+    bool exhausted = false;
+    try {
+        slots.getLocalSlot(&keys[7]);
+    } catch (const std::length_error&) {
+        exhausted = true;
+    }
+    assert(exhausted && !slots.hasLocalSlot(&keys[7]));
+    assert(slots.getLocalSlot(&keys[6]) == INT32_MAX - 1);
+    slots.local_slots.clear();
+    assert(slots.refreshLocalSlotBound());
+    assert(slots.getLocalSlot(&keys[7]) == 0);
+    std::array<int, 128> cancellation_keys{};
+    for (size_t i = 0; i < cancellation_keys.size(); ++i) {
+        slots.local_slots[&cancellation_keys[i]] = static_cast<int32_t>(i + 1);
+    }
+    assert(!qore_cancel_thread(q_gettid(), "AOT local slot bounds regression"));
+    assert(!slots.refreshLocalSlotBound());
+    qore_clear_thread_cancel();
+    assert(slots.refreshLocalSlotBound());
+    assert(slots.getLocalSlot(&keys[0]) == 129);
+}
+
+static uint64_t mismatchedNormalBody(QoreAOTContext*, ExceptionSink*) { return 0; }
+static uint64_t mismatchedReceiverEntry(int64_t, uint64_t, RuntimeConfig*, QoreAOTContext*, ExceptionSink*) {
+    return 0;
+}
+
+static uint64_t cancelledBackgroundBody(QoreAOTContext*, ExceptionSink*) {
+    assert(false && "cancelled background preparation must not start a thread");
+    return 0;
+}
+
+static void checkCancelledBackgroundPreparation(QoreAOTContext* ctx) {
+    assert(ctx->num_locals > 0 && ctx->locals[0]);
+    std::array<int32_t, 256> slots{};
+    std::array<uint64_t, 256> values{};
+    ExceptionSink xsink;
+    assert(!qore_cancel_thread(q_gettid(), "native background preparation regression"));
+    uint64_t bits = qore_rt_background_helper_aot(ctx, cancelledBackgroundBody, slots.data(),
+        values.data(), static_cast<int>(values.size()), 0, &xsink);
+    qore_clear_thread_cancel();
+    QoreValue result;
+    std::memcpy(&result, &bits, sizeof(result));
+    assert(result.isNothing() && xsink);
+    const auto* description = xsink.getExceptionErr().get<const QoreStringNode>();
+    assert(description && !std::strcmp(description->c_str(), "THREAD-CANCELLED"));
+    xsink.clear();
+}
+
+static void checkForwardPublication(QoreAOTContext* ctx) {
+    // No Qore code runs while this private Program's binding is withdrawn. Descriptors outlive both publishers.
+    const auto* original = ctx->receiver_int_forward_entry.exchange(nullptr, std::memory_order_acq_rel);
+    assert(original && original->entry && original->loc);
+    const auto normal = ctx->native_body_fn;
+    auto absent = [&]() { assert(!ctx->receiver_int_forward_entry.load(std::memory_order_acquire)); };
+    qore_rt_bind_receiver_int_method_v3(nullptr, normal, original);
+    qore_rt_bind_receiver_int_method_v3(ctx, nullptr, original);
+    qore_rt_bind_receiver_int_method_v3(ctx, mismatchedNormalBody, original);
+    qore_rt_bind_receiver_int_method_v3(ctx, normal, nullptr);
+    absent();
+    const QoreAOTReceiverIntForwardEntryV3 invalid[] = {
+        {nullptr, original->slot, original->loc},
+        {original->entry, -1, original->loc},
+        {original->entry, ctx->num_exprs, original->loc},
+        {original->entry, original->slot, nullptr},
+        {mismatchedReceiverEntry, original->slot, original->loc},
+    };
+    for (const auto& descriptor : invalid) {
+        qore_rt_bind_receiver_int_method_v3(ctx, normal, &descriptor);
+        absent();
+    }
+    auto entry = ctx->receiver_int_method_entry_v1.exchange(nullptr, std::memory_order_acq_rel);
+    qore_rt_bind_receiver_int_method_v1(ctx, normal, entry, 1);
+    assert(!ctx->receiver_int_method_entry_v1.load(std::memory_order_acquire));
+    qore_rt_bind_receiver_int_method_v2(ctx, normal, entry, 0, original->slot, 0);
+    assert(ctx->receiver_int_method_entry_v1.load(std::memory_order_acquire) == entry);
+    absent();
+    const QoreAOTReceiverIntForwardEntryV3 candidates[] = {*original, *original};
+    std::atomic<bool> start{false};
+    auto publish = [&](unsigned index) {
+        start.wait(false, std::memory_order_acquire);
+        for (unsigned n = 0; n < 64; ++n) {
+            qore_rt_bind_receiver_int_method_v3(ctx, normal, &candidates[index]);
+            const auto* observed = ctx->receiver_int_forward_entry.load(std::memory_order_acquire);
+            assert(observed == &candidates[0] || observed == &candidates[1]);
+            assert(observed->entry == entry && observed->slot == original->slot && observed->loc == original->loc);
+        }
+    };
+    std::thread first(publish, 0), second(publish, 1);
+    start.store(true, std::memory_order_release);
+    start.notify_all();
+    first.join();
+    second.join();
+    const auto* winner = ctx->receiver_int_forward_entry.load(std::memory_order_acquire);
+    qore_rt_bind_receiver_int_method_v3(ctx, normal, original);
+    assert(ctx->receiver_int_forward_entry.load(std::memory_order_acquire) == winner);
+    ctx->receiver_int_forward_entry.store(original, std::memory_order_release);
+}
+
 struct LeafInvocation {
     uint64_t bits = 0;
     QorePreparedFunctionRefV3* cache = nullptr;
@@ -576,15 +698,12 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     const auto* admitted = cache->entries[0].load(std::memory_order_acquire);
     assert(admitted && admitted->native_scalar_uvb);
     auto* callee = admitted->native_scalar_uvb->getCachedAOTContext();
-    // Publication readiness remains live even after a successful lookup.
-    bool map_attached = callee->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
-    check(*object, false);
-    callee->pc_loc_map_attached.store(map_attached, std::memory_order_release);
+    // Exact body identity remains live even after a successful lookup.
     check(*object, true);
-    auto normal = callee->pc_loc_fn;
-    callee->pc_loc_fn = nullptr;
+    auto normal = callee->native_body_fn;
+    callee->native_body_fn = nullptr;
     check(*object, false);
-    callee->pc_loc_fn = normal;
+    callee->native_body_fn = normal;
     check(*object, true);
     // Publishing a real class invalidates the old dispatch epoch. The
     // continuation must miss until the ordinary path establishes a fresh key.
@@ -815,13 +934,10 @@ static void checkFloatMethodReceivers(QoreProgram* program, const char* caller_n
     assert(ctx && ctx->native_float_unary_method_entry_v2.load(std::memory_order_acquire));
     assert(static_cast<bool>(ctx->native_float_unary_method_entry_v3.load(std::memory_order_acquire))
         == inline_method);
-    bool ready = ctx->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
+    auto normal = ctx->native_body_fn;
+    ctx->native_body_fn = nullptr;
     call(*object, 1.25, false, -123.0);
-    ctx->pc_loc_map_attached.store(ready, std::memory_order_release);
-    auto normal = ctx->pc_loc_fn;
-    ctx->pc_loc_fn = nullptr;
-    call(*object, 1.25, false, -123.0);
-    ctx->pc_loc_fn = normal;
+    ctx->native_body_fn = normal;
     assert(!ctx->uses_self && !ctx->uses_argv);
     ctx->uses_self = true;
     call(*object, 1.25, false, -123.0);
@@ -1381,14 +1497,10 @@ static void checkMemberMethods(QoreProgram* program) {
     }
     set(QoreValue(initial));
     assert(!xsink);
-    bool ready = ctx->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
-    assert(ready);
+    auto normal = ctx->native_body_fn;
+    ctx->native_body_fn = nullptr;
     check(false, 0, -123);
-    ctx->pc_loc_map_attached.store(ready, std::memory_order_release);
-    auto normal = ctx->pc_loc_fn;
-    ctx->pc_loc_fn = nullptr;
-    check(false, 0, -123);
-    ctx->pc_loc_fn = normal;
+    ctx->native_body_fn = normal;
     if (enabled && qore_rt_get_stack_limit_v1(rc)) {
         {
             MemberEntryProbe<Scalar> probe(ctx, true, true);
@@ -1543,14 +1655,14 @@ static void checkEffectMethods(QoreProgram* program) {
             && descriptor->fast == ctx->scalar_member_int_entry.load(std::memory_order_acquire));
         // Wrong-body, malformed and conflicting publication must leave both
         // bindings intact, including when a matching normal body runs again.
-        qore_rt_bind_effect_member_int_v1(ctx, caller->pc_loc_fn, descriptor);
+        qore_rt_bind_effect_member_int_v1(ctx, caller->native_body_fn, descriptor);
         QoreAOTEffectMemberIntEntryV1 invalid = *descriptor;
         invalid.updates = 0;
-        qore_rt_bind_effect_member_int_v1(ctx, ctx->pc_loc_fn, &invalid);
+        qore_rt_bind_effect_member_int_v1(ctx, ctx->native_body_fn, &invalid);
         invalid.updates = 22;
-        qore_rt_bind_effect_member_int_v1(ctx, ctx->pc_loc_fn, &invalid);
+        qore_rt_bind_effect_member_int_v1(ctx, ctx->native_body_fn, &invalid);
         invalid = *descriptor;
-        qore_rt_bind_effect_member_int_v1(ctx, ctx->pc_loc_fn, &invalid);
+        qore_rt_bind_effect_member_int_v1(ctx, ctx->native_body_fn, &invalid);
         assert(ctx->effect_member_int_entry.load(std::memory_order_acquire) == descriptor);
         assert(ctx->scalar_member_int_entry.load(std::memory_order_acquire) == descriptor->fast);
     }
@@ -1672,13 +1784,10 @@ static void checkEffectMethods(QoreProgram* program) {
     set("second", QoreValue(int64_t{20}));
     set("delta", QoreValue(int64_t{17}));
     int64_t result = -123;
-    bool ready = ctx->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
-    assert(ready && !invoke(1, &result) && result == -123);
-    ctx->pc_loc_map_attached.store(ready, std::memory_order_release);
-    auto normal = ctx->pc_loc_fn;
-    ctx->pc_loc_fn = nullptr;
+    auto normal = ctx->native_body_fn;
+    ctx->native_body_fn = nullptr;
     assert(!invoke(1, &result) && result == -123);
-    ctx->pc_loc_fn = normal;
+    ctx->native_body_fn = normal;
     counters(0, 20);
     if (enabled && qore_rt_get_stack_limit_v1(rc)) {
         {
@@ -1797,7 +1906,7 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
     const UserVariantBase* uvb = qore_method_private::get(*method)->getFunction()->first()->getUserVariantBase();
     assert(uvb && uvb->hasCachedAOT());
     QoreAOTContext* ctx = uvb->getCachedAOTContext();
-    assert(ctx && ctx->pc_loc_fn == uvb->getCachedAOTFunction());
+    assert(ctx && ctx->native_body_fn == uvb->getCachedAOTFunction());
     assert(ctx->native_int_unary_method_entry_v2.load(std::memory_order_acquire));
     assert((ctx->native_int_unary_method_entry_v3.load(std::memory_order_acquire) != nullptr) == inline_method);
     int forward_line = -1;
@@ -1811,8 +1920,12 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
         assert(forward_method);
         const auto* forward_uvb = qore_method_private::get(*forward_method)->getFunction()->first()->getUserVariantBase();
         auto* forward_ctx = forward_uvb->getCachedAOTContext();
-        assert(forward_ctx && forward_ctx->receiver_int_forward_ready.load(std::memory_order_acquire));
-        forward_line = forward_ctx->locs[forward_ctx->receiver_int_forward_loc]->start_line;
+        assert(forward_ctx);
+        const auto* forward = forward_ctx->receiver_int_forward_entry.load(std::memory_order_acquire);
+        assert(forward && forward->loc);
+        checkForwardPublication(forward_ctx);
+        checkCancelledBackgroundPreparation(forward_ctx);
+        forward_line = forward->loc->start_line;
         if (!std::getenv("QORE_DISABLE_AOT_EARLY_NATIVE_METHOD_ADMISSION")) {
             ForwardEntryProbe probe(forward_ctx);
             ValueHolder result(program->callFunction(caller_name, *args, &xsink), &xsink);
@@ -1820,10 +1933,10 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
             bool enabled = !std::getenv("QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT")
                 && !std::getenv("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
             assert(probe.calls == (enabled ? 0u : 1u));
-            forward_ctx->receiver_int_forward_ready.store(false, std::memory_order_release);
+            forward_ctx->receiver_int_forward_entry.store(nullptr, std::memory_order_release);
             unsigned before = probe.calls;
             ValueHolder missed(program->callFunction(caller_name, *args, &xsink), &xsink);
-            forward_ctx->receiver_int_forward_ready.store(true, std::memory_order_release);
+            forward_ctx->receiver_int_forward_entry.store(forward, std::memory_order_release);
             assert(!xsink && missed->getAsBigInt() == 24 && probe.calls == before + 1);
         }
     }
@@ -2006,9 +2119,9 @@ static void checkFloat(QoreProgram* program, bool inline_entry) {
         }
         auto* leaf_ctx = cache.uvb->getCachedAOTContext();
         assert(leaf_ctx);
-        bool was_ready = leaf_ctx->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
+        const auto* saved_location = qore_rt_get_fast_runtime_config()->getLocation();
         assert(call(bits, 1.25, &result, &xsink, rc, &cache) == 1);
-        leaf_ctx->pc_loc_map_attached.store(was_ready, std::memory_order_release);
+        assert(qore_rt_get_fast_runtime_config()->getLocation() == saved_location);
         assert(!xsink && result == 1.75 && reusable.slot.frame == original_frame);
         checkPreparedMisses(program, "makeProbe", call,
             bits, cache, rc, 1.25, 1.75, 10, &xsink, version == 9);
@@ -2201,9 +2314,9 @@ static void check(bool inline_entry, bool inline_method) {
         assert(!xsink && result == 24 && reusable.slot.frame == original_frame);
         auto* leaf_ctx = cache.uvb->getCachedAOTContext();
         assert(leaf_ctx);
-        bool was_ready = leaf_ctx->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
+        const auto* saved_location = qore_rt_get_fast_runtime_config()->getLocation();
         assert(call(bits, 7, &result, &xsink, rc, &cache) == 1);
-        leaf_ctx->pc_loc_map_attached.store(was_ready, std::memory_order_release);
+        assert(qore_rt_get_fast_runtime_config()->getLocation() == saved_location);
         assert(!xsink && result == 24 && reusable.slot.frame == original_frame);
         QoreProgram* caller = qore_get_call_program_context();
         size_t* limit = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
@@ -2356,6 +2469,7 @@ int main(int argc, char** argv) {
     bool inline_method = !std::strcmp(argv[2], "inline");
     assert(inline_method || !std::strcmp(argv[2], "eager"));
     qore_init(QL_MIT, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
+    checkLocalSlots();
     check(inline_entry, inline_method);
     std::thread worker([inline_entry, inline_method]() {
         for (unsigned i = 0; i < 3; ++i) {

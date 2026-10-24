@@ -17,12 +17,11 @@ Relevant code:
 
 ## Artifact Types
 
-| Artifact | Produced by | Purpose |
-|---|---|---|
-| Executable | `qcc -o app script.qr` or `qcc -o app *.qo` | Native launcher for a Qore script/app |
-| `.qmod` | `qcc -m Module.qm` or `qcc -m qlib/Module` | Loadable binary user module |
-| `.qo` | `qcc -c file.qr` / `file.qc` / `file.qm` | Relocatable object containing native code and AOT metadata |
-| `.qoa` | `qcc -a --context=DIR *.qo` | Static archive exposing `qore_qoa_register_all()` |
+|!Artifact|!Produced by|!Purpose
+|Executable|`qcc -o app script.qr` or `qcc -o app *.qo`|Native launcher for a Qore script/app
+|`.qmod`|`qcc -m Module.qm` or `qcc -m qlib/Module`|Loadable binary user module
+|`.qo`|`qcc -c file.qr` / `file.qc` / `file.qm`|Relocatable object containing native code and AOT metadata
+|`.qoa`|`qcc -a --context=DIR *.qo`|Static archive exposing `qore_qoa_register_all()`
 
 `qcc -a` writes a `.qoa` with LLVM's archive writer, in the host linker's
 format (Darwin on Apple platforms, the big archive format on AIX, GNU
@@ -225,10 +224,9 @@ dependency, and the executable refuses to start without it.
 An embedded module is visible to the compiler through two namespace trees, and
 both must be walked:
 
-| Tree | Holds | `compile_module` | Symbol namespace |
-|---|---|---|---|
-| The main program's root namespace | the module's **exported** items, imported into the importing program | `""` | unprefixed |
-| The module program's own root namespace | **every** item, exported or not | the module name | `_qaot_<Mod>_` |
+|!Tree|!Holds|!`compile_module`|!Symbol namespace
+|The main program's root namespace|the module's **exported** items, imported into the importing program|`""`|unprefixed
+|The module program's own root namespace|**every** item, exported or not|the module name|`_qaot_<Mod>_`
 
 The two overlap: an exported item appears in both. It is one
 `AbstractQoreFunctionVariant`, because namespace import copies functions and
@@ -402,7 +400,7 @@ map with `RTLD_LAZY`, read the descriptor, load dependencies, unmap, then map ag
 with `RTLD_NOW`.
 
 Current qcc output appends a small, non-executing dependency trailer to the final
-`.qmod`. The trailer follows any PC→location EOF trailer and contains the module name
+`.qmod`. The trailer is the last one in the file and contains the module name
 and the descriptor's exact ordered dependency list, followed by a fixed 16-byte footer
 with payload length, `QAMD` magic, and format version. It is appended after the final
 link, including object aggregation, because arbitrary relinking does not preserve EOF
@@ -447,8 +445,8 @@ both in a build tree and in an installation (for example, `ProviderIndex` withou
 qcc therefore records every failed `%try-module` request in a `QAOM` EOF trailer: a
 count and the requests as written (a module name with an optional version
 constraint), with the same 16-byte footer shape as the other trailers. It is written
-right after the final link and before the PC→location and `QAMD` trailers, so readers
-that predate it find their trailers at the end of the file as before; it is only
+right after the final link and before the `QAMD` trailer, so readers that predate it
+find their trailer at the end of the file as before; it is only
 written when a `%try-module` failed. The recorded requests are collected by the
 scanner in `qore_program_private::unavailable_try_modules`; requests denied by
 `PO_NO_MODULES` are not recorded, since they do not depend on the installation.
@@ -546,31 +544,31 @@ Build tools should treat these hashes as a dependency-planning contract. Runtime
 loading still depends on the normal AOT metadata sections, not on the symbol
 index.
 
-## PC→Location Section (`qore_aot_pcloc`)
+## Source Locations
 
-To report real source locations in exceptions thrown from AOT-compiled native code,
-qcc emits a per-function PC→location map into a dedicated **object section** rather
-than into the QORD metadata blob. Unlike the metadata blob (which is consumed when a
-`.qmod`/`.qo`/executable is loaded), this section must survive *arbitrary downstream
-linking* — a `.qo` fragment gets `ld -r`-merged, aggregated into a `.qmod`, or linked
-into a host executable — so the map has to ride through relinking with no cooperation
-from the linker or the user.
+AOT-compiled code keeps the thread's runtime location as JIT code does: each
+distinct source location of a module is a constant `QoreProgramLocation` in the
+image (`QoreIRToLLVM::getAotLocationConstant()`, with its layout checked against
+the library's at code generation), and code stores its address as the runtime
+location when the line changes and at the start of every block. Exceptions and
+call stacks take their locations from the runtime location and the call stack
+frames as they are (see [`call-stack-publication.md`](call-stack-publication.md)),
+so artifacts carry no separate PC→location map, and stripping debug info
+(`--strip-debug-info`) does not change the locations reported. Debug info carries
+the line of each instruction with no column.
 
-- Both ELF and Mach-O linkers concatenate same-named input sections into the output
-  artifact, so qcc adds the map as its own section to every object it emits and the
-  data is preserved verbatim across relinks.
-  - ELF: a non-alloc section named `qore_aot_pcloc` (added with GNU `objcopy`).
-  - Mach-O: `__QORE,__pcloc` (segment/section pair; added with `llvm-objcopy`, since
-    GNU objcopy corrupts Mach-O).
-- The payload is a sequence of self-delimiting framed records
-  (`[uint32 magic 'QPCM'][uint32 payload_len][payload]`); each object contributes one
-  record, and the reader walks all concatenated records, accumulating per-function
-  entries. The framed-record and per-function payload format is identical on ELF and
-  Mach-O.
-- The section is non-alloc / not mapped at runtime; it is read from the artifact file
-  (via `dladdr`'s `dli_fname`) lazily at throw time, so it adds no steady-state cost.
-  See [`aot-lazy-loc-innermost-frame.md`](aot-lazy-loc-innermost-frame.md) for how the
-  map is consumed during exception construction.
+Format version 21 dropped the per-function location table from the function
+records of the metadata (a v9–v20 record's table is skipped when read), and qcc
+no longer writes the PC→location maps that earlier versions carried in a `QPCM`
+EOF trailer and in a `qore_aot_pcloc` (Mach-O `__QORE,__pcloc`) object section.
+
+Format version 22 additionally carries the performance branch's closure-entry
+locations/parse options and parser-selected constructor signatures for object
+defaults. It retains develop's v20 background/block-exit helper layout and v21
+removal of location tables. Earlier experimental performance-branch v20/v21
+artifacts used those numbers for different payloads and must be recompiled;
+they are not compatible aliases of develop's versions. Native artifacts must
+also match the runtime identity and helper/context ABI of their compiler.
 
 ## Inspection
 

@@ -136,7 +136,7 @@ static void checkGetter(QoreProgram* program, const char* factory) {
     const auto* function = reinterpret_cast<const QoreFunction*>(program->findFunction("zeroNativeCall"));
     assert(function);
     QoreAOTContext* caller = function->first()->getUserVariantBase()->getCachedAOTContext();
-    assert(caller && caller->pc_loc_fn != ctx->pc_loc_fn);
+    assert(caller && caller->native_body_fn != ctx->native_body_fn);
     auto bind = [&](auto normal, typename Probe::Entry entry) {
         if constexpr (floating) { qore_rt_bind_getter_float_v1(ctx, normal, entry); }
         else { qore_rt_bind_getter_int_v1(ctx, normal, entry); }
@@ -144,13 +144,13 @@ static void checkGetter(QoreProgram* program, const char* factory) {
     Probe probe(ctx, object);
     if (published) {
         Probe::binding(ctx).store(nullptr, std::memory_order_release);
-        bind(caller->pc_loc_fn, Probe::invoke);
+        bind(caller->native_body_fn, Probe::invoke);
         bind(nullptr, Probe::invoke);
-        bind(ctx->pc_loc_fn, nullptr);
+        bind(ctx->native_body_fn, nullptr);
         assert(!Probe::binding(ctx).load(std::memory_order_acquire));
-        bind(ctx->pc_loc_fn, Probe::invoke);
+        bind(ctx->native_body_fn, Probe::invoke);
         assert(Probe::binding(ctx).load(std::memory_order_acquire) == Probe::invoke);
-        bind(ctx->pc_loc_fn, probe.saved);
+        bind(ctx->native_body_fn, probe.saved);
         assert(Probe::binding(ctx).load(std::memory_order_acquire) == Probe::invoke);
     }
     const bool native = published && enabled("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY")
@@ -166,17 +166,12 @@ static void checkGetter(QoreProgram* program, const char* factory) {
     assert(probe.calls - before == (native ? 16u : 0u));
     // A null/mismatched/unready live entry must not be bypassed by the PIC proof.
     if (published) {
-        auto normal = ctx->pc_loc_fn;
-        ctx->pc_loc_fn = caller->pc_loc_fn;
+        auto normal = ctx->native_body_fn;
+        ctx->native_body_fn = caller->native_body_fn;
         before = probe.calls;
         call(initial);
         assert(probe.calls == before);
-        ctx->pc_loc_fn = normal;
-        bool ready = ctx->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
-        before = probe.calls;
-        call(initial);
-        assert(probe.calls == before);
-        ctx->pc_loc_map_attached.store(ready, std::memory_order_release);
+        ctx->native_body_fn = normal;
         Probe::binding(ctx).store(nullptr, std::memory_order_release);
         call(initial);
         assert(probe.calls == before);

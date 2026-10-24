@@ -32,13 +32,19 @@
 #ifndef _QORE_INTERN_JITRUNTIME_H
 #define _QORE_INTERN_JITRUNTIME_H
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <atomic>
 #include <string>
 
 class ExceptionSink;
+struct QoreProgramLocation;
 class QoreIRFunction;
+class AbstractStatement;
+class QoreIRBackgroundInstruction;
+struct QoreAOTContext;
+struct QoreAOTReceiverIntForwardEntryV3;
 class QoreIRLValuePathInstruction;
 class QoreValue;
 class QoreVarInfo;
@@ -312,6 +318,27 @@ uint64_t qore_rt_background_call_ref_value_aot(uint64_t callee_bits, uint64_t* a
 //! Throwing wrapper for EH paths.
 uint64_t qore_rt_background_call_ref_value_aot_throwing(uint64_t callee_bits,
     uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! Starts a thread running the native (JIT) helper of a background expression with its parameter values
+uint64_t qore_rt_background_helper(const QoreIRBackgroundInstruction* inst,
+    uint64_t (*helper_fn)(ExceptionSink*), uint64_t* values, int nvalues, ExceptionSink* xsink);
+
+//! Throwing wrapper for EH paths.
+uint64_t qore_rt_background_helper_throwing(const QoreIRBackgroundInstruction* inst,
+    uint64_t (*helper_fn)(ExceptionSink*), uint64_t* values, int nvalues, ExceptionSink* xsink);
+
+//! Starts a thread running the native (AOT) helper of a background expression with its parameter values
+/** The parameters are the local variables of \a ctx with the given slots; the helper shares the context of the
+    function that starts the thread.
+*/
+uint64_t qore_rt_background_helper_aot(QoreAOTContext* ctx,
+    uint64_t (*helper_fn)(QoreAOTContext*, ExceptionSink*), const int32_t* param_slots, uint64_t* values,
+    int nvalues, int uses_self, ExceptionSink* xsink);
+
+//! Throwing wrapper for EH paths.
+uint64_t qore_rt_background_helper_aot_throwing(QoreAOTContext* ctx,
+    uint64_t (*helper_fn)(QoreAOTContext*, ExceptionSink*), const int32_t* param_slots, uint64_t* values,
+    int nvalues, int uses_self, ExceptionSink* xsink);
 
 //! Returns 1 if the sink holds a thread_exit, else 0; CatchException branches past the catch block when it does.
 //! An exception pending with the thread_exit is caught and deleted, as TryStatement::execImpl() does when the
@@ -741,18 +768,12 @@ void qore_rt_thread_exit(ExceptionSink* xsink);
 
 class StatementBlock;
 
-//! Register an on_block_exit handler for deferred execution.
-//! type: OBE_Unconditional=0, OBE_Success=1, OBE_Error=2
-void qore_rt_push_on_block_exit(int type, StatementBlock* code);
-
-//! Register an on_block_exit handler with compiled IR for IR interpreter execution.
-void qore_rt_push_on_block_exit_ir(int type, StatementBlock* code, const QoreIRFunction* handler_ir);
-
 //! Register an on_block_exit handler with a natively compiled LLVM function.
+//! type: OBE_Unconditional=0, OBE_Success=1, OBE_Error=2
 //! compiled_fn is the native function pointer; handler_func provides all_body_locals
 //! for pre-instantiation/uninstantiation of handler locals.
-void qore_rt_push_compiled_handler(int type, StatementBlock* code,
-        uint64_t (*compiled_fn)(ExceptionSink*), const QoreIRFunction* handler_func);
+void qore_rt_push_compiled_handler(int type, uint64_t (*compiled_fn)(ExceptionSink*),
+        const QoreIRFunction* handler_func);
 
 //! Get current handler count (called at function entry to save base).
 int64_t qore_rt_get_on_block_exit_count();
@@ -768,8 +789,81 @@ void qore_rt_discard_on_block_exit(int64_t saved_count);
 
 struct QoreAOTContext;
 
-//! Register an on_block_exit handler via AOT context slot; raises if handler IR is missing.
-void qore_rt_push_on_block_exit_aot(QoreAOTContext* ctx, int32_t idx, int type, ExceptionSink* xsink);
+//! Register an on_block_exit handler of AOT-compiled code: its body is a native function sharing the AOT context of
+//! the function that registers it
+void qore_rt_push_compiled_handler_aot(QoreAOTContext* ctx, int type,
+        uint64_t (*aot_fn)(QoreAOTContext*, ExceptionSink*));
+
+//! Pushes the call stack frame of a call that native code makes directly to a native entry of user code
+/** @param storage storage of the size and alignment given by qore_rt_native_call_frame_size() and
+    qore_rt_native_call_frame_align() in the caller's native frame
+    @param thread_data the current thread's data, which the caller gets once when it is entered
+    (QoreNativeEntrySlots::thread_data)
+    @param call_name the name of the frame: the callee's UserVariantBase::getCallName(), which lives as long as the
+    native code
+    @param statements the callee's statement block
+
+    The frame's location is the caller's current location; qore_rt_pop_native_call_frame() pops the frame when the
+    call returns, with or without an exception, and restores the caller's runtime location.
+*/
+void qore_rt_push_native_call_frame(void* storage, void* thread_data, const std::string* call_name,
+        const StatementBlock* statements);
+
+//! Pushes the call stack frame of a call that AOT-compiled code makes directly to a native entry of user code
+/** As qore_rt_push_native_call_frame(); the callee is the call target of the call's expression slot in the caller's
+    context.
+
+    @param ctx the caller's AOT context
+    @param target_slot the expression slot of the call, whose call target is the callee
+    @param call_loc the location of the call, which the caller's image holds, or nullptr for the caller's current
+    location
+*/
+void qore_rt_push_native_call_frame_aot(void* storage, void* thread_data, QoreAOTContext* ctx, int32_t target_slot,
+        const QoreProgramLocation* call_loc);
+
+//! Pushes the frame of a call of user code that AOT-compiled code runs inline, as a summary of the callee's body
+/** As qore_rt_push_native_call_frame_aot(); the runtime location is then the location of the callee's body, which
+    the callee's image holds (UserVariantBase::getAOTBodyLocation()), until the frame is popped.
+*/
+void qore_rt_push_native_inline_call_frame_aot(void* storage, void* thread_data, QoreAOTContext* ctx,
+        int32_t target_slot, const QoreProgramLocation* call_loc);
+
+//! The thread's runtime location slots and data that native code gets once when a function is entered
+/** Native code accesses the fields by index (QoreIRToLLVM::lowerFunction()), so the order is fixed. */
+struct QoreNativeEntrySlots {
+    void* thread_data;                       //!< for qore_rt_push_native_call_frame() and friends
+    const QoreProgramLocation** loc_ptr;     //!< the thread's runtime location
+    const AbstractStatement** stmt_ptr;      //!< the thread's runtime statement
+};
+
+//! Fills the thread's runtime location slots and data for a native function being entered
+void qore_rt_get_native_entry_slots(QoreNativeEntrySlots* slots);
+
+//! Fills native location slots from a live same-thread RuntimeConfig, without a TLS lookup.
+//! @param slots caller-owned output storage
+//! @param rc live invocation context, valid until the native function returns
+void qore_rt_get_native_entry_slots_v2(QoreNativeEntrySlots* slots, RuntimeConfig* rc);
+
+//! Pushes the call stack frame of a call that AOT-compiled code makes directly to a callee it names
+/** As qore_rt_push_native_call_frame_aot(), for a call without a call target, such as a call of a known call
+    reference: the frame's name is \a call_name, interned on the first call of the site and cached in
+    \a call_name_cache, a global of the module initialized to nullptr; \a callee_loc is the location of the
+    callee's body if the code runs the callee inline (see qore_rt_push_native_inline_call_frame_aot()), or nullptr.
+*/
+void qore_rt_push_native_call_frame_aot_named(void* storage, void* thread_data, const char* call_name,
+        std::atomic<const std::string*>* call_name_cache, const QoreProgramLocation* call_loc,
+        const QoreProgramLocation* callee_loc);
+
+//! Pushes the call stack frame of a closure call that AOT-compiled code makes directly to the closure's native entry
+/** As qore_rt_push_native_call_frame(); the frame is named as an AST call of a closure names it and is located at the
+    caller's runtime location.  Pop it with qore_rt_pop_native_call_frame().
+*/
+void qore_rt_push_native_closure_call_frame(void* storage);
+
+
+
+//! Pops the call stack frame pushed by qore_rt_push_native_call_frame() in the same storage
+void qore_rt_pop_native_call_frame(void* storage);
 
 //! AOT slot-indexed variant of qore_rt_sync_local().
 void qore_rt_sync_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t value);
@@ -945,11 +1039,11 @@ void qore_rt_bind_method_int_unary_v1(QoreAOTContext* ctx,
     int64_t (*entry)(int64_t, QoreAOTContext*, ExceptionSink*));
 
 //! Publish a receiver-aware forwarding companion without removing observable signature slots.
-//! @param ctx runtime-owned AOT context, already identifying normal in its PC metadata
+//! @param ctx runtime-owned AOT context identifying the exact normal body
 //! @param normal immutable normal-body identity; publication must match this exact body
 //! @param entry native int argument, borrowed boxed receiver and live RuntimeConfig, context and sink;
 //! returns an owned boxed value after the ordinary declared-return filter
-//! @param requires_pc_map nonzero when this body relies on lazy native-PC source locations
+//! @param requires_pc_map legacy argument: a nonzero value refuses publication because PC maps are retired
 //! @note Thread-safe, idempotent publication. The caller must retain the normal frame and TLS signature slots.
 void qore_rt_bind_receiver_int_method_v1(QoreAOTContext* ctx,
     uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
@@ -961,12 +1055,20 @@ void qore_rt_bind_receiver_int_method_v1(QoreAOTContext* ctx,
 //! @param entry receiver-aware companion with the v1 calling convention
 //! @param requires_pc_map nonzero when the companion requires native-PC source locations
 //! @param slot call-target slot for the sole forwarded call
-//! @param loc location-table index for that call; a missing location disables forwarding preflight
-//! @note Idempotent publication does not prove the inner target pure; invocation must check it live.
+//! @param loc legacy location-table index, no longer used
+//! @note Only the companion can be published; legacy location indices cannot prove an eager forwarding location.
 void qore_rt_bind_receiver_int_method_v2(QoreAOTContext* ctx,
     uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
     uint64_t (*entry)(int64_t, uint64_t, RuntimeConfig*, QoreAOTContext*, ExceptionSink*),
     int32_t requires_pc_map, int32_t slot, int32_t loc);
+
+//! Publish a receiver companion and an immutable eager-location forwarding descriptor.
+//! @param ctx runtime-owned context identifying this exact normal body
+//! @param normal immutable normal-body identity
+//! @param descriptor image-owned entry, call-target slot and location, all immutable for the Program lifetime
+//! @note Publication is atomic and idempotent; the inner target and all mutable guards are checked per invocation.
+void qore_rt_bind_receiver_int_method_v3(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), const QoreAOTReceiverIntForwardEntryV3* descriptor);
 
 //! Publish an optional exact-body scalar method companion with an explicit live RuntimeConfig.
 //! @param ctx runtime-owned context whose normal body must match
@@ -2700,5 +2802,10 @@ uint64_t qore_rt_call_closure_fast_consume_args(uint64_t ref_bits, uint64_t* arg
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
 } // extern "C"
+
+//! Returns the size of the storage of a call stack frame for qore_rt_push_native_call_frame()
+DLLLOCAL size_t qore_rt_native_call_frame_size();
+//! Returns the alignment of the storage of a call stack frame for qore_rt_push_native_call_frame()
+DLLLOCAL size_t qore_rt_native_call_frame_align();
 
 #endif

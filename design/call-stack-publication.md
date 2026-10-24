@@ -81,6 +81,27 @@ afterwards, and `QoreJITStackLocation::getProgram()` chooses between its explici
 `CodeEvaluationHelper` pushes from `init()`, called in its constructor body, and pops in its destructor body, so it
 satisfies the rule without the member helper.
 
+### Frames of native calls
+
+Native code (JIT and AOT) pushes the frame of each call of user code that it makes directly, without a runtime
+helper: `QoreNativeCallStackLocation` (`lib/JITRuntime.cpp`), constructed in storage of the caller's native frame by
+`qore_rt_push_native_call_frame*()` and destroyed by `qore_rt_pop_native_call_frame()`. Its constructor pushes in its
+body, after its members are initialized, and `push_native_call_stack_location()` (`lib/thread.cpp`) writes the values
+it reports (the call's location, the caller's statement and program) before it publishes it; its destructor pops in
+its body. The caller gets the thread's data once, when it is entered (`qore_rt_get_native_entry_slots()`), so a push
+and a pop make no thread-local lookup.
+
+The frame's location is the location of the call. The frame saves the caller's runtime location, which the callee
+changes, and restores it when it is popped, so a line after a call that returned reports the caller's location. A
+call that AOT code runs inline (a summary of the callee's body) pushes the frame too, with
+`qore_rt_push_native_inline_call_frame_aot()`, which makes the location of the callee's body, held by the callee's
+image, the runtime location until the pop; a summary proven not to raise an exception has no frame, as nothing can
+see it.
+
+AOT code keeps its runtime location as JIT code does: it stores the address of a constant `QoreProgramLocation` of its
+image when the line changes (and at the start of every block), so every thread's stack, its own current line
+included, can be read at any time; an exception takes its location and its call stack from them as they are.
+
 ### Compact native-method frames
 
 The same-Program unary-integer AOT continuation uses
@@ -96,9 +117,13 @@ The frame still stores the caller location and publishes on every call, even
 when the compiler has proven the body pure. A concurrent stack reader can
 observe that call. Its publishing helper is the last member: construction
 initializes the borrowed entry and location before publishing, and destruction
-unpublishes and waits for readers before either becomes invalid. Cold overflow
-materialization and context restoration are unchanged. Eager/native-v1 calls
-keep their existing frame. No generated-code ABI or public layout changes.
+unpublishes and waits for readers before either becomes invalid. Deferred frame
+helpers save the caller's statement and location eagerly, install the immutable
+callee body location, and restore both on every exit, including successful calls
+that never materialize object/class context and calls with no parse location.
+Cold overflow materialization does not overwrite the saved caller location.
+Eager/native-v1 calls keep their existing frame. Receiver and closure bodies
+obtain location slots through the explicit RuntimeConfig helper.
 
 `AOTNativeMethodEntry.qtest` and `AOTNameMethodContinuation.qtest` exercise the
 default frame and the eager control selected at runtime by
@@ -115,6 +140,10 @@ constructed and after it has been destroyed. A walk that reaches such a frame in
 constructed or destroyed object. Fixing it needs an API addition that lets the module push after its constructor has
 run and pop before its destructor runs (the class is part of the binary ABI, so the base class cannot simply stop
 pushing), plus the corresponding change in each module.
+
+For the same reason, no virtual function or data member may be added to `QoreStackLocation` or to any public class
+derived from it (`QoreExternalStackLocation` and its subclasses): a module compiled against the previous header
+would have no vtable slot or member at the new position, and the library calling or reading it would crash.
 
 ## Thread teardown
 

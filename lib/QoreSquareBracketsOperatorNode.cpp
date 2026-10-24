@@ -140,6 +140,7 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
     }
 
     bool rti_is_list = QoreTypeInfo::isType(rti, NT_LIST);
+    slice = rti_is_list;
     bool rti_can_be_list = rti_is_list ? true : QoreTypeInfo::parseReturns(rti, NT_LIST);
 
     if (QoreTypeInfo::hasType(lti)) {

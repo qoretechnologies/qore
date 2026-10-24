@@ -54,7 +54,6 @@ struct QoreAOTLazyClosureIR;
 struct QoreAOTLazyFunctionIR;
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
-DLLLOCAL void qore_aot_ensure_pc_loc_map(QoreAOTContext* ctx);
 
 // these data structures are all private to the library
 
@@ -457,8 +456,7 @@ class RuntimeConfig;
 #define ARG_DEF   (1 << 0)
 #define ARG_OTHER (1 << 1)
 
-class CodeEvaluationHelper : public QoreStackLocation, public ProgramThreadCountContextHelper,
-        public QoreAOTStackFrameMarker {
+class CodeEvaluationHelper : public QoreStackLocation, public ProgramThreadCountContextHelper {
 public:
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
@@ -592,10 +590,6 @@ public:
         return stmt;
     }
 
-    DLLLOCAL bool isAOTFrame() const override {
-        return is_aot;
-    }
-
     //! Returns the method / function name only without any class
     DLLLOCAL const char* getName() const {
         return name;
@@ -636,9 +630,6 @@ protected:
     bool restore_type_param_instantiation = false;
     bool restore_rtflags = false;
     bool restore_call_program_context = false;
-    //! true when the called variant has a cached AOT function (frame executes natively),
-    //! so the exception machinery can repair its call-site location via the lazy registry
-    bool is_aot = false;
     // when true, defer switching the runtime parse options to the called Program until *after* argument
     // evaluation + variant resolution + the functional-domain (dom=...) check, so that a deliberate
     // cross-Program QoreProgram::callFunction() evaluates the dom check against the CALLER's parse
@@ -873,6 +864,14 @@ protected:
     const QoreFunction* source_qf = nullptr;
     // for "synchronized" functions
     VRMutex* gate;
+    //! the name of the call stack frame of a call of the variant; see getCallName()
+    mutable std::string call_name;
+    //! set (release) once call_name is built; native code pushes frames with it on every call, so the check is a
+    //! single load
+    mutable std::atomic<bool> call_name_ready{false};
+
+    //! Builds call_name; see getCallName()
+    DLLLOCAL void buildCallName() const;
 
 public:
     QoreProgram* pgm;
@@ -897,6 +896,8 @@ protected:
     mutable std::vector<std::shared_ptr<QoreIRFunction>> jit_owned_ir;
     mutable std::atomic<JitFunctionPtr> cached_jit_fn{nullptr};
     mutable AotFunctionPtr cached_aot_fn = nullptr;
+    //! the location of the body of the AOT-compiled function, which its image holds (QoreAOTFunc::body_loc)
+    const QoreProgramLocation* aot_body_loc = nullptr;
     mutable std::atomic<QoreAOTContext*> cached_aot_ctx{nullptr};
     mutable std::once_flag ir_lower_once;
     //! JIT compilation state: 0=not started, 1=submitted, 2=done (success or failure)
@@ -1031,6 +1032,24 @@ public:
         return const_cast<UserSignature*>(&signature);
     }
 
+    //! Records the function owning the variant, if it has not been recorded (UserFunctionVariant::parseInit())
+    DLLLOCAL void setSourceFunction(const QoreFunction* f) {
+        if (!source_qf) {
+            source_qf = f;
+        }
+    }
+
+    //! Returns the name of the call stack frame of a call of the variant, as an AST call names it
+    /** The name of the function, qualified with its class for a method (see CodeEvaluationHelper::setCallName());
+        built once, it is valid as long as the variant exists, so native code can push frames with it.
+    */
+    DLLLOCAL const std::string& getCallName() const {
+        if (!call_name_ready.load(std::memory_order_acquire)) {
+            buildCallName();
+        }
+        return call_name;
+    }
+
     DLLLOCAL void setTypeParameters(std::vector<QoreGenericTypeParam>&& type_params) {
         signature.setTypeParameters(std::move(type_params));
     }
@@ -1097,16 +1116,20 @@ public:
     }
 
     //! Register a pre-compiled AOT function pointer with context, promoting directly to JIT tier
-    DLLLOCAL void registerPrecompiledAOTFunction(AotFunctionPtr fn, QoreAOTContext* ctx);
+    /** @param body_loc the location of the function's body, which its image holds (QoreAOTFunc::body_loc)
+    */
+    DLLLOCAL void registerPrecompiledAOTFunction(AotFunctionPtr fn, QoreAOTContext* ctx,
+            const QoreProgramLocation* body_loc);
 
     /** Register a pre-compiled AOT function whose context is built on first execution.
         @param fn native function pointer
+        @param body_loc the location of the function's body, which its image holds (QoreAOTFunc::body_loc)
         @param lazy_ir immutable metadata needed to reconstruct the context
         @param entry_index descriptor-table entry for this function
         @param context_uses_argv true when the native body needs the implicit argv context
         @param context_uses_self true when the native body needs the implicit self context
     */
-    DLLLOCAL void registerLazyPrecompiledAOTFunction(AotFunctionPtr fn,
+    DLLLOCAL void registerLazyPrecompiledAOTFunction(AotFunctionPtr fn, const QoreProgramLocation* body_loc,
             std::shared_ptr<const QoreAOTLazyFunctionIR> lazy_ir,
             uint32_t entry_index, bool uses_argv, bool uses_self);
 
@@ -1135,7 +1158,6 @@ public:
                 return 0;
             }
             QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire);
-            qore_aot_ensure_pc_loc_map(ctx);
             // C++ EH prototype: the AOT code body is now emitted with
             // invoke/landingpad EH under QORE_AOT_EH=1. Per-function landing
             // pads resume the in-flight exception so it propagates up through
@@ -1181,6 +1203,14 @@ public:
     //! Identity guard for an optional native function-reference adapter.
     DLLLOCAL AotFunctionPtr getCachedAOTFunction() const {
         return cached_aot_fn;
+    }
+
+    //! Returns the location of the body of the AOT-compiled function, or nullptr if unknown
+    /** Where AOT code that a summary of the body takes the place of a call of the function runs
+        (qore_rt_push_native_inline_call_frame_aot()).
+    */
+    DLLLOCAL const QoreProgramLocation* getAOTBodyLocation() const {
+        return aot_body_loc;
     }
 
     //! Returns true if this variant's AOT context has already been materialized.

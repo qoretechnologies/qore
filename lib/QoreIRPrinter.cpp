@@ -500,6 +500,7 @@ static void printConstant(const QoreIRConstInstruction& inst, std::ostream& out)
 }
 
 void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
+    size_t background_count = 0;
     out << "func @" << func.name << "\n";
     for (const auto& block : func.blocks) {
         out << block->name << ":\n";
@@ -679,13 +680,29 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                 }
             } else if (auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get())) {
-                const char* kind = "unknown";
-                if (bg_inst->kind == QoreIRBackgroundKind::DotEval) {
-                    kind = "dot-eval";
-                } else if (bg_inst->kind == QoreIRBackgroundKind::StaticMethod) {
-                    kind = "static-method";
+                if (bg_inst->kind == QoreIRBackgroundKind::Helper) {
+                    // the helper is printed after this function
+                    out << " helper @" << (bg_inst->helper_ir ? bg_inst->helper_ir->name : std::string("<none>"))
+                        << " params(";
+                    for (size_t i = 0; i < bg_inst->helper_params.size(); ++i) {
+                        if (++background_count % 100 == 0 && qore_check_cancel(nullptr, "IR background printing")) {
+                            return;
+                        }
+                        out << (i ? ", @" : "@") << bg_inst->helper_params[i]->getName();
+                    }
+                    out << ")";
+                    if (bg_inst->helper_uses_self) {
+                        out << " uses-self";
+                    }
+                } else {
+                    const char* kind = "unknown";
+                    if (bg_inst->kind == QoreIRBackgroundKind::DotEval) {
+                        kind = "dot-eval";
+                    } else if (bg_inst->kind == QoreIRBackgroundKind::StaticMethod) {
+                        kind = "static-method";
+                    }
+                    out << " " << kind << " " << bg_inst->name;
                 }
-                out << " " << kind << " " << bg_inst->name;
             } else if (inst->opcode == QoreIROpcode::Call
                     || inst->opcode == QoreIROpcode::CallIndirect
                     || inst->opcode == QoreIROpcode::CallMethod
@@ -931,6 +948,22 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 }
             }
             out << "\n";
+        }
+    }
+
+    // the helpers of the background expressions of the function
+    for (const auto& block : func.blocks) {
+        if (++background_count % 100 == 0 && qore_check_cancel(nullptr, "IR background printing")) {
+            return;
+        }
+        for (const auto& inst : block->instructions) {
+            if (++background_count % 100 == 0 && qore_check_cancel(nullptr, "IR background printing")) {
+                return;
+            }
+            auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
+            if (bg_inst && bg_inst->helper_ir) {
+                print(*bg_inst->helper_ir, out);
+            }
         }
     }
 }

@@ -181,7 +181,7 @@ QoreValue QoreDivisionOperatorNode::bigIntDivision(ExceptionSink* xsink) const {
         return QoreValue();
     }
 
-    return lh->getAsBigInt() / r;
+    return qore_int_div(lh->getAsBigInt(), r);
 }
 
 QoreValue QoreDivisionOperatorNode::doDivision(QoreValue lh, QoreValue rh, ExceptionSink* xsink) {
@@ -219,7 +219,7 @@ QoreValue QoreDivisionOperatorNode::doDivision(QoreValue lh, QoreValue rh, Excep
             xsink->raiseException("DIVISION-BY-ZERO", "division by zero found in integer expression");
             return QoreValue();
         }
-        return lh.getAsBigInt() / r;
+        return qore_int_div(lh.getAsBigInt(), r);
     }
 
     double r = rh.getAsFloat();

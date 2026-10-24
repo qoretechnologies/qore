@@ -41,6 +41,8 @@ OP_COMMON
 protected:
     const QoreTypeInfo* typeInfo;
     const QoreTypeInfo* ownerTypeInfo = nullptr;
+    //! the key operand is a list at parse time, so the expression is a slice
+    bool slice = false;
 
     DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
@@ -58,6 +60,11 @@ public:
 
     DLLLOCAL const QoreTypeInfo* getOwnerTypeInfo() const {
         return ownerTypeInfo;
+    }
+
+    //! Returns true if the key operand is a list at parse time, so the expression is a slice (a hash, not a member)
+    DLLLOCAL bool isSlice() const {
+        return slice;
     }
 
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const {

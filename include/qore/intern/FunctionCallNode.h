@@ -187,8 +187,28 @@ protected:
     // set to true if the arg list is a temporary list and can be destroyed when evaluating
     // such as when the node was created during background operation execution
     bool tmp_args = false;
+    //! set to true for a background copy that is evaluated more than once
+    /** A call in an operand that an operator of a background expression evaluates for each element (map, select,
+        foldl, ...) is evaluated once per element; evaluating a temporary argument list consumes it, so each
+        evaluation of such a copy uses a copy of the list (see getEvalTmpArgs())
+    */
+    bool reusable_tmp_args = false;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const = 0;
+
+    //! returns the temporary argument list for one evaluation of the call
+    /** @param holder holds the copy made for a reusable copy, if any, until the evaluation is complete
+
+        @return the argument list to evaluate the call with
+    */
+    DLLLOCAL QoreListNode* getEvalTmpArgs(ReferenceHolder<QoreListNode>& holder) const {
+        assert(tmp_args);
+        if (!reusable_tmp_args || !args) {
+            return args;
+        }
+        holder = args->copy();
+        return *holder;
+    }
 
     DLLLOCAL void doFlags(int64 flags) {
         if (flags & QCF_RET_VALUE_ONLY) {
@@ -215,6 +235,12 @@ public:
 
     DLLLOCAL AbstractFunctionCallNode(const AbstractFunctionCallNode& old, QoreListNode* n_args) : ParseNode(old),
             FunctionCallBase(old, n_args), tmp_args(true) {
+    }
+
+    //! marks a background copy that is evaluated more than once; see reusable_tmp_args
+    DLLLOCAL void setReusableTmpArgs() {
+        assert(tmp_args);
+        reusable_tmp_args = true;
     }
 
     DLLLOCAL virtual ~AbstractFunctionCallNode() {
@@ -702,7 +728,8 @@ public:
 protected:
     QoreObject* self;
     const qore_class_private* cls;
-    //! true until the reference to \a self is released: by evalImpl() after the call, or by derefImpl()
+    //! true until the reference to \a self is released: by evalImpl() after the call (unless the copy is evaluated
+    //! more than once; see reusable_tmp_args), or by derefImpl()
     mutable bool deref_self = true;
 
     //! releases the reference to \a self if the call was not made

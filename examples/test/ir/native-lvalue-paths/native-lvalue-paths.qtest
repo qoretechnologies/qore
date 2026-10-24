@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class NativeLValuePathsTest
+
+#! Tests that every lvalue is modified by native code in the compiled tiers
+/** An lvalue that IR lowering could not express as an lvalue path was evaluated as an AST expression at runtime
+    by the IR interpreter and the JIT, or raised IR-AST-FALLBACK-ERROR, and qcc could not compile the function:
+
+    - a cast of an lvalue (\c cast<T>(lvalue)) with trim, chomp, push, pop, extract, the regex operators, remove
+      and delete, and with every operator in a try block
+    - \c <<= and \c >>= on any lvalue but a local variable, which also failed to compile in a try block
+    - the variable of a foreach loop when it is a reference, and of a foreach loop over a reference
+
+    A cast is now a step of the lvalue path that checks the value as the AST does.
+
+    A slice is not an lvalue: the remove and delete operators take a slice at the end of their lvalue, while any
+    other use of a slice as an lvalue, which the AST evaluated by modifying a member named after the slice's
+    selector, is a parse error, or \c ILLEGAL-SLICE when the key or index is a list only at runtime; the IR
+    interpreter and the JIT took the first element of a runtime list index instead, also for remove and delete.
+*/
+class NativeLValuePathsTest inherits QUnit::Test {
+    public {
+        #! the results of LvChecks::run(), as the AST computes them
+        const Expected = (
+            "closure {n: 14, l: [1, 2, 7], s: \"x\"} global {n: 4, l: [1, 2, 3], s: \"x\"} "
+                "thread {n: 4, l: [1, 2, 3], s: \"x\"}",
+            "member {n: 9, l: [1, 2], s: \"x\"}|static {n: 9, l: [1, 2], s: \"x\"}|"
+                "try member {n: 9, l: [1, 2], s: \"z\"} static {n: 12, l: [1, 2, 9], s: \"x\"}",
+            "A s=\"c\" l=[9, 2, 3] h={c: 7} x=13|nested 11|hashdecl {i: 3, s: \"abc\"}|or-nothing null|"
+                "bad cast assign RUNTIME-CAST-ERROR: cannot cast from class 'B' to class 'A'|"
+                "bad cast trim RUNTIME-CAST-ERROR|bad cast shift RUNTIME-CAST-ERROR|"
+                "try RUNTIME-CAST-ERROR x=14 l=[9, 2] h={}|log [\"key c\", \"key a\", \"key o\"]",
+            "assign ILLEGAL-SLICE|add ILLEGAL-SLICE|list assign ILLEGAL-SLICE|nested remove ILLEGAL-SLICE|"
+                "nested list remove ILLEGAL-SLICE|"
+                "h={a: 1, b: 2} l=[1, 2, 3] hn={a: {x: 1}, b: 2} ll=[[1, 2], [3, 4]]|"
+                "remove hash {a: 1, b: 2} {c: 3}|remove list [1, 2] [3]|delete list [3]",
+            "foreach 8 110 [10, 20] [1, 2]",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("NativeLValuePaths", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+        addTestCase("slice lvalues", \testSliceLValues());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b "
+                "--exec-mode=%s %s", libqore_dir, get_script_dir(), qore_bin, mode, getWorker())));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-native-lvalue-paths-");
+        string qmod = tmp.path + DirSep + "LvChecks.qmod";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod, get_script_dir() + DirSep + "LvChecks.qm"));
+        assertTrue(is_file(qmod), "compiled the module: " + out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkOutput("aot", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s",
+            libqore_dir, tmp.path, qore_bin, getWorker())));
+    }
+
+    #! a slice is an lvalue only of remove and delete
+    testSliceLValues() {
+        hash<string, string> errors = {
+            "trim": "hash<auto!> h = {\"a\": \" x \"}; trim h{\"a\", \"b\"};",
+            "nested": "hash<auto!> h = {\"a\": {\"x\": 1}}; h{\"a\", \"b\"}.x = 3;",
+            "list": "list<auto> l = (1, 2); trim l[0, 1];",
+            "range": "list<auto> l = (\" a\", \" b\"); trim l[0..1];",
+            "typed key": "hash<auto!> h = {\"a\": 1}; list<string> k = (\"a\",); h{k} += 1;",
+            "reference": "sub f(reference<auto> r) { r = 1; } hash<auto!> h = {\"a\": 1}; f(\\h{\"a\", \"b\"});",
+            "remove inner": "hash<auto> h = {\"a\": {\"x\": 1}}; remove h{\"a\", \"b\"}.x;",
+        };
+        foreach hash<auto> i in (errors.pairIterator()) {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+            assertThrows("PARSE-EXCEPTION", "a slice cannot be used as an lvalue", \p.parse(), (i.value, i.key),
+                i.key);
+        }
+
+        # remove and delete take a slice
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+        p.parse("hash<auto> sub f() { hash<auto> h = {\"a\": 1, \"b\": 2, \"c\": 3}; list<auto> l = (1, 2, 3, 4); "
+            "hash<auto> rh = remove h{\"a\", \"b\"}; delete l[1, 2]; return {\"rh\": rh, \"h\": h, "
+            "\"rl\": remove l[0..1], \"l\": l}; }", "remove-delete");
+        assertEq({"rh": {"a": 1, "b": 2}, "h": {"c": 3}, "rl": (1, 4), "l": ()},
+            p.callFunction("f"));
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "native-lvalue-paths-worker.q";
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (map $1, out.split("\n"), $1.val());
+        assertEq(3, lines.size(), label + ": rounds: " + out);
+        foreach string line in (lines) {
+            int round = $#;
+            list<string> results = line.split("#");
+            assertEq(Expected.size(), results.size(), sprintf("%s: round %d: results", label, round));
+            foreach string result in (results) {
+                assertEq(Expected[$#], result, sprintf("%s: round %d: result %d", label, round, $#));
+            }
+        }
+    }
+}

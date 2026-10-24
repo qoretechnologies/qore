@@ -122,9 +122,14 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
     fh.preserveFlags(PF_NARROWED_TYPE);
 
     bool for_assignment = parse_context.pflag & PF_FOR_ASSIGNMENT;
-    if (!err && for_assignment && check_lvalue(left)) {
-        parse_error(*loc, "expression used for assignment requires an lvalue, got '%s' instead", left.getTypeName());
-        if (!err) {
+    if (!err && for_assignment) {
+        int lvalue_err = check_lvalue(left);
+        if (lvalue_err) {
+            // -2: the error has been reported
+            if (lvalue_err == -1) {
+                parse_error(*loc, "expression used for assignment requires an lvalue, got '%s' instead",
+                    left.getTypeName());
+            }
             err = -1;
         }
     }
@@ -141,6 +146,7 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
     }
     const QoreTypeInfo* rti = parse_context.typeInfo;
     parse_context.typeInfo = nullptr;
+    slice = QoreTypeInfo::isType(rti, NT_LIST);
 
     printd(5, "QoreHashObjectDereferenceOperatorNode::parseInitImpl() l: %p %s r: %p %s\n", lti,
         QoreTypeInfo::getName(lti), rti, QoreTypeInfo::getName(rti));

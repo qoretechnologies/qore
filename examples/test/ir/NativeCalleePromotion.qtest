@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class NativeCalleePromotionTest
+
+#! Tests that static methods and methods called by native code or the IR interpreter are compiled to native code
+/** A call that native code or the IR interpreter makes to a function, method or static method that has no native
+    code yet runs the callee's IR directly, without evalTiered(), which counts the calls of a function for its
+    promotion to native code; the function call counted it, but a method or static method called this way never
+    reached the threshold, so it ran in the IR interpreter forever (a static method call of JIT code cost about
+    1.2 microseconds).  The IR interpreter also read an environment variable on every return of a function.
+*/
+class NativeCalleePromotionTest inherits QUnit::Test {
+    public {
+        const Script = "%modern
+class C {
+    int m(int x) {
+        return x + 2;
+    }
+    static int s(int x) {
+        return x + 1;
+    }
+}
+int sub run(int n) {
+    C c();
+    int t = 0;
+    for (int i = 0; i < n; ++i) {
+        t = C::s(t);
+        t = c.m(t);
+    }
+    return t;
+}
+for (int i = 0; i < 5; ++i) {
+    print(run(10) + \"\\n\");
+}
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("NativeCalleePromotion", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("callees are compiled to native code", \testPromotion());
+
+        set_return_value(main());
+    }
+
+    testPromotion() {
+        TmpDir tmp("qore-native-callee-promotion-");
+        string script = tmp.path + DirSep + "callees.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Script);
+        f.close();
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<auto> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, script));
+            ExecModeHarness::check_native(r);
+            assertEq(0, r.rc, mode + ": " + r.out);
+            assertEq((map "30", xrange(5)), (select r.stdout.split("\n"), $1), mode + ": results");
+            if (mode == "jit" || mode == "tiered") {
+                # the method and the static method that run() calls are compiled to native code
+                foreach string callee in ("m", "s") {
+                    string pattern = "^\\[BG-JIT\\] compiled '" + callee + "@[0-9_]+' and promoted to JIT tier$";
+                    assertTrue(boolean(select r.trace, regex($1, pattern)),
+                        sprintf("%s: %s() compiled to native code; trace: %y", mode, callee, r.trace));
+                }
+            }
+        }
+    }
+}

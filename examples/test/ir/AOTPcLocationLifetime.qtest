@@ -9,8 +9,8 @@
 %exec-class AOTPcLocationLifetimeTest
 
 class AOTPcLocationLifetimeTest inherits QUnit::Test {
-    constructor() : Test("AOT PC location lifetime", "1.0", \ARGV) {
-        addTestCase("registry owns locations beyond Program lifetime", \check());
+    constructor() : Test("AOT image location lifetime", "1.0", \ARGV) {
+        addTestCase("image owns locations beyond Program lifetime", \check());
         set_return_value(main());
     }
     private static string quote(string value) {
@@ -57,11 +57,9 @@ class AOTPcLocationLifetimeTest inherits QUnit::Test {
             output = backquote((map quote($1), args).join(" ") + " "
                 + (map quote($1), objects).join(" ") + " 2>&1", \status);
             assertEq(0, status, output);
-            foreach string attach in (("", "QORE_AOT_LOC_EAGER_ATTACH=1 ")) {
-                output = backquote(env + attach + quote(executable) + " 2>&1", \status);
-                assertEq(0, status, output);
-                assertEq("aot-pc-location-lifetime: ok\n", output);
-            }
+            output = backquote(env + quote(executable) + " 2>&1", \status);
+            assertEq(0, status, output);
+            assertEq("aot-image-location-lifetime: ok\n", output);
         }
     }
 }

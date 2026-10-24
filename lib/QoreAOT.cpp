@@ -795,6 +795,8 @@ extern void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::ve
 extern void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, const UserSignature* sig);
 extern void qoreAOTPruneClosureIRBodyLocals(QoreIRFunction* closure_ir, const UserSignature* sig,
         const LVarSet* vlist);
+extern bool qoreAOTPrepareClosureIRLocalSlots(QoreIRFunction* closure_ir, const UserSignature* sig,
+        const LVarSet* vlist);
 
 static constexpr const char* AOT_CLASS_REF_MODULE_PREFIX = "@qore-module:";
 
@@ -1226,7 +1228,6 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
 #include <llvm/Object/Binary.h>
 #include <llvm/Object/ObjectFile.h>
 #include <llvm/Object/ELFObjectFile.h>
-#include <llvm/Support/Endian.h>
 #include <llvm/Object/SymbolSize.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Mangler.h>
@@ -1241,6 +1242,7 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
 #include <fcntl.h>
 #include <unistd.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Dominators.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassInstrumentation.h>
 #include <llvm/IR/Verifier.h>
@@ -1256,10 +1258,6 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/TargetParser/Host.h>
 #include <llvm/TargetParser/Triple.h>
-// AOT exception source-location extraction: read the line table back from the
-// emitted object to build a per-function native-offset -> source-line map.
-#include <llvm/Object/ObjectFile.h>
-#include <llvm/DebugInfo/DWARF/DWARFContext.h>
 #include <llvm/Support/MemoryBuffer.h>
 
 #include <cstdlib>
@@ -1382,14 +1380,6 @@ QoreAOTContext::~QoreAOTContext() {
             delete regex_cases[i];
         }
     }
-    // Delete owned location objects (created by buildContextFromSlotMap)
-    for (int i = 0; i < num_locs; ++i) {
-        delete locs[i];
-    }
-    // Locations materialized for inlined code by the lazy PC->loc map (aotAttachPcLocMap)
-    for (const QoreProgramLocation* loc : pc_extra_locs) {
-        delete loc;
-    }
     // Deref owned StaticClassVarRefNode objects (created during LValuePath deserialization)
     for (auto* node : owned_static_var_refs) {
         node->deref(nullptr);
@@ -1409,10 +1399,8 @@ QoreAOTContext::~QoreAOTContext() {
     free(globals);
     free(exprs);
     delete[] call_targets;
-    free(stmts);
     free(regex_cases);
     free(lv_path_insts);
-    free(locs);
 }
 
 //! Descriptor for a function that was successfully compiled to LLVM IR
@@ -1429,15 +1417,36 @@ struct AOTCompiledFunc {
     //! Constant FQNs whose nested reverse-map paths must be ignored while serializing this function's slots.
     std::vector<std::string> const_reverse_map_exclude_fqns;
     uint64_t feature_flags = 0;     //!< QORE_AOT_FEAT_* bitset required by this function
-    //! Handler IR functions indexed by stmt slot; owned by debug_ir when present.
-    std::vector<const QoreIRFunction*> handler_irs;
     //! Owned full function IR for source-stripped debugging and handler IR lifetime.
     std::unique_ptr<QoreIRFunction> debug_ir;
-    //! AOT location table from LLVM codegen (owns data, safe after IR function deletion)
-    std::vector<AOTCompiledFuncWithSlots::AOTLocEntry> aot_locs;
-    //! Native companions sharing the owner's slots/locations, with separate PC maps.
-    std::vector<AOTPcLocFuncEntry> pc_companions;
+    //! the source file of the function's code (the file of its first location; see aotIRFunctionSourceFile())
+    std::string source_file;
 };
+
+//! Returns the source file of an IR function's code: the file of its first instruction with a location
+/** The symbol index attributes the imports of a compiled function to this file (its consumer source file). */
+static bool aotIRFunctionSourceFile(const QoreIRFunction& ir_func, std::string& file_name) {
+    size_t count = 0;
+    for (const auto& block : ir_func.blocks) {
+        if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT function source file")) {
+            return false;
+        }
+        for (const auto& inst : block->instructions) {
+            if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT function source file")) {
+                return false;
+            }
+            if (inst && inst->loc && inst->loc->start_line > 0) {
+                const char* file = inst->loc->getFile();
+                if (file && *file) {
+                    file_name = file;
+                    return true;
+                }
+            }
+        }
+    }
+    file_name.clear();
+    return true;
+}
 
 static uint32_t encodeAOTRegexCountAndContext(
         int num_regex_cases, const AOTSlotIdentities& slot_ids) {
@@ -2599,29 +2608,13 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
         int failed_count, const std::vector<AOTCompiledFunc>& compiled_funcs,
         const char* target_triple, bool metadata_only = false) {
     int unsupported_count = 0;
-    int handler_fallback_count = 0;
     for (auto& cf : compiled_funcs) {
-        bool has_unsup = cf.slot_ids.has_unsupported_exprs;
-        // Check handler IRs for statement slots
-        int non_null_handlers = 0;
-        for (auto& hir : cf.handler_irs) {
-            if (hir) {
-                ++non_null_handlers;
-            }
-        }
-        bool has_handler_issue = cf.num_stmts > 0
-            && ((int)cf.handler_irs.size() != cf.num_stmts || non_null_handlers != cf.num_stmts);
-        if (has_unsup) {
+        if (cf.slot_ids.has_unsupported_exprs) {
             ++unsupported_count;
-        }
-        if (has_handler_issue && !has_unsup) {
-            ++handler_fallback_count;
-        }
-        if ((has_unsup || has_handler_issue) && q_env_is_set("QORE_AOT_DEBUG")) {
-            fprintf(stderr, "AOT: function '%s' is missing required AOT metadata (%s%s)\n",
-                cf.name.c_str(),
-                has_unsup ? "unsupported exprs" : "",
-                has_handler_issue ? (has_unsup ? " + missing handler IRs" : "missing handler IRs") : "");
+            if (q_env_is_set("QORE_AOT_DEBUG")) {
+                fprintf(stderr, "AOT: function '%s' is missing required AOT metadata (unsupported exprs)\n",
+                    cf.name.c_str());
+            }
         }
     }
     std::string resolved_target = qccTargetTriple(target_triple);
@@ -2641,18 +2634,10 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
                 resolved_target.c_str());
         }
     }
-    int total_fallback = unsupported_count + handler_fallback_count;
-    if (total_fallback > 0) {
-        printf("%sincomplete compilation metadata: %d/%d %s complete, %d missing required metadata",
-            QCC_LOG_PREFIX, compiled_count - total_fallback, compiled_count,
-            QCC_CODE_BODY_DESC, total_fallback);
-        if (unsupported_count > 0 && handler_fallback_count > 0) {
-            printf(" (%d unsupported exprs, %d missing handlers)",
-                unsupported_count, handler_fallback_count);
-        } else if (handler_fallback_count > 0) {
-            printf(" (%d missing handlers)", handler_fallback_count);
-        }
-        printf("\n");
+    if (unsupported_count > 0) {
+        printf("%sincomplete compilation metadata: %d/%d %s complete, %d missing required metadata\n",
+            QCC_LOG_PREFIX, compiled_count - unsupported_count, compiled_count,
+            QCC_CODE_BODY_DESC, unsupported_count);
     } else if (qccAOTVerbose()) {
         printf("%scomplete compilation metadata generated for %d %s\n",
             QCC_LOG_PREFIX, compiled_count, QCC_CODE_BODY_DESC);
@@ -2723,25 +2708,6 @@ static bool getFallbackRequirementReason(const AOTCompiledFuncWithSlots& f, std:
             reason += ")";
         }
         needs_fallback = true;
-    }
-
-    if (f.num_stmts > 0) {
-        int non_null_handlers = 0;
-        for (auto* hir : f.handler_irs) {
-            if (hir) {
-                ++non_null_handlers;
-            }
-        }
-
-        if ((int)f.handler_irs.size() != f.num_stmts || non_null_handlers != f.num_stmts) {
-            reason += reason.empty() ? "" : "; ";
-            reason += "missing statement handler IRs (have ";
-            reason += std::to_string(non_null_handlers);
-            reason += "/";
-            reason += std::to_string(f.num_stmts);
-            reason += ")";
-            needs_fallback = true;
-        }
     }
 
     return needs_fallback;
@@ -3009,8 +2975,6 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
 static void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slots,
         UserVariantBase* uvb, AOTSlotIdentities& out,
         const AOTConstantReverseMap* const_reverse_map = nullptr, QoreProgram* pgm = nullptr);
-static std::vector<const QoreIRFunction*> extractHandlerIRs(
-        QoreIRFunction& func, const AOTSlotMap& slots);
 
 //! Lower a constant/static-var init expression to an IR function.
 /** The init function evaluates the expression and returns the result.
@@ -4948,16 +4912,12 @@ private:
 //! Lower every outlined function-body helper into the module before the
 //! coordinator (so the coordinator's CallAOTHelper call sites bind to
 //! defined functions), applying NoInline so LLVM cannot merge the helpers
-//! back into one giant function.  Appends the helpers' source-location
-//! tables to `aot_locs` so runtime stack traces inside outlined regions
-//! stay attributed.  On failure, erases any helper functions already
-//! emitted and returns false — the caller falls back to un-outlined
+//! back into one giant function.  On failure, erases any helper functions
+//! already emitted and returns false — the caller falls back to un-outlined
 //! lowering.
 static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
         llvm::LLVMContext& ctx, llvm::Module& module, const AOTSlotMap& slots,
-        llvm::DIBuilder* di_builder, llvm::DICompileUnit* di_cu,
-        std::vector<AOTCompiledFuncWithSlots::AOTLocEntry>& aot_locs,
-        std::string& error) {
+        llvm::DIBuilder* di_builder, llvm::DICompileUnit* di_cu, std::string& error) {
     const bool dbg = q_env_is_set("QORE_AOT_DEBUG");
     for (auto& h : helpers) {
         QoreIRFunction* helper = h.ir_func.get();
@@ -4971,9 +4931,6 @@ static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
         lowerer.setSharedDebugInfo(di_builder, di_cu);
         lowerer.setEmitDebugInfo(aotEmitDebugInfo());
         lowerer.setDeferredExceptionChecking(false);
-        // Helper location indices address the coordinator's merged
-        // ctx->locs table starting after all previously-emitted entries.
-        lowerer.setAOTLocTableBase(static_cast<int32_t>(aot_locs.size()));
         if (!lowerer.lowerFunction(*helper, module, error)) {
             if (dbg) {
                 fprintf(stderr, "AOT-OUTLINE-FN: helper '%s' lowering failed: %s\n",
@@ -4992,13 +4949,6 @@ static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
             // Keep the outline boundary through the backend: re-inlining the
             // helpers would recreate the pathological function.
             f->addFnAttr(llvm::Attribute::NoInline);
-        }
-        for (const auto& loc : lowerer.getAOTLocTable()) {
-            AOTCompiledFuncWithSlots::AOTLocEntry entry;
-            entry.start_line = loc.start_line;
-            entry.end_line = loc.end_line;
-            entry.file = loc.file;
-            aot_locs.push_back(std::move(entry));
         }
     }
     return true;
@@ -5236,7 +5186,11 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     // around the call.
 
     AOTSlotMap slots;
-    buildAOTSlotMap(*ir_func, slots);
+    if (!buildAOTSlotMap(*ir_func, slots)) {
+        error = "AOT slot map construction cancelled or contains invalid slot numbering";
+        delete ir_func;
+        return false;
+    }
 
     QoreIRToLLVM lowerer(ctx);
     lowerer.setAOTMode(&slots);
@@ -5268,7 +5222,6 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     cif.num_locals = static_cast<int>(slots.local_slots.size());
     cif.num_globals = static_cast<int>(slots.global_slots.size());
     cif.num_exprs = static_cast<int>(slots.expr_slots.size());
-    cif.num_stmts = static_cast<int>(slots.stmt_slots.size());
     cif.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
     cif.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
     extractAOTSlotIdentities(*ir_func, slots, uvb, cif.slot_ids, const_reverse_map, pgm);
@@ -6632,6 +6585,8 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                     }
                     break;
                 }
+                // the frame of such a call is named at compile time, as the function may run with the context of its
+                // caller (QoreIRToLLVM::emitPushAotInlineCallFrame())
                 case QoreIROpcode::CallDirect: {
                     const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
                     int arg_start = qore_aot_is_deferred_source_function_call(call->expr) ? 1 : 0;
@@ -13191,11 +13146,52 @@ static bool resolveAOTBatchBodyDependencyProvenance(
     return true;
 }
 
+const QoreProgramLocation* qore_ir_get_body_location(const QoreIRFunction& func) {
+    const QoreProgramLocation* first = nullptr;
+    size_t check_count = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr, "AOT function body location")) {
+                return nullptr;
+            }
+            if (!inst || !inst->loc || inst->loc->start_line <= 0) {
+                continue;
+            }
+            if (inst->opcode == QoreIROpcode::Return || inst->opcode == QoreIROpcode::ReturnNothing) {
+                return inst->loc;
+            }
+            if (!first) {
+                first = inst->loc;
+            }
+        }
+    }
+    return first;
+}
+
 bool qore_ir_resolve_batch_function_summaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*,
             const QoreIRFunction*>>& functions,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees,
         bool collect_body_dependency_provenance) {
+    // the location of each body, for the callers that a summary of the body takes the place of a call in
+    size_t body_loc_count = 0;
+    for (const auto& [variant, func] : functions) {
+        if (++body_loc_count % 100 == 0 && qore_check_cancel(nullptr, "AOT function body locations")) {
+            return false;
+        }
+        auto it = func ? batch_callees.find(variant) : batch_callees.end();
+        if (it == batch_callees.end()) {
+            continue;
+        }
+        if (const QoreProgramLocation* loc = qore_ir_get_body_location(*func)) {
+            it->second.body_loc_file = loc->getFileValue();
+            it->second.body_loc_start_line = loc->start_line;
+            it->second.body_loc_end_line = loc->end_line;
+        } else if (qore_check_cancel(nullptr, "AOT function body location")) {
+            return false;
+        }
+    }
     if (q_env_is_set("QORE_DISABLE_INTERPROCEDURAL_SUMMARIES")
             || q_env_is_set("QORE_DISABLE_AOT_FUNCTION_EFFECT_SUMMARY")) {
         return !collect_body_dependency_provenance
@@ -17657,7 +17653,16 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
         }
         fast_args.push_back(aot_ctx);
         fast_args.push_back(xsink);
+        // the call stack frame of the closure's call, which the fallbacks below push through their runtime helpers
+        llvm::IRBuilder<> frame_builder(entry, entry->getFirstInsertionPt());
+        llvm::AllocaInst* frame_storage = frame_builder.CreateAlloca(llvm::Type::getInt8Ty(ctx),
+            llvm::ConstantInt::get(i64_ty, qore_rt_native_call_frame_size()), "native_call_frame");
+        frame_storage->setAlignment(llvm::Align(qore_rt_native_call_frame_align()));
+        builder.CreateCall(module.getOrInsertFunction("qore_rt_push_native_closure_call_frame",
+            llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), {ptr_ty}, false)), {frame_storage});
         llvm::Value* fast_result = builder.CreateCall(fast_fn, fast_args);
+        builder.CreateCall(module.getOrInsertFunction("qore_rt_pop_native_call_frame",
+            llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), {ptr_ty}, false)), {frame_storage});
         if (!guarded) {
             builder.CreateRet(fast_result);
             if (!guarded_captures) {
@@ -17881,13 +17886,16 @@ static bool isAOTDynamicIntClosureEligible(const QoreIRFunction& ir,
 // The v1 IR proof permits cleanup/conversion lowering that could need implicit
 // context. Bind v2 only when the complete lowered body has no such helper or
 // indirect call. This deliberately fails closed as lowering gains new helpers.
-static bool isAOTDeferredClosureContextEligible(const llvm::Function& function, bool& cancelled) {
+static bool isAOTDeferredClosureContextEligible(llvm::Function& function, bool& cancelled) {
     cancelled = false;
     if (q_env_is_set("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2")) {
         return false;
     }
     size_t count = 0;
     bool stack_guard = false;
+    bool location_slots = false;
+    const llvm::CallBase* stack_guard_call = nullptr;
+    llvm::DominatorTree dominance(function);
     for (const auto& block : function) {
         for (const auto& inst : block) {
             if (++count > 1024) {
@@ -17917,6 +17925,19 @@ static bool isAOTDeferredClosureContextEligible(const llvm::Function& function, 
                     return false;
                 }
                 stack_guard = true;
+                stack_guard_call = call;
+            } else if (name == "qore_rt_get_native_entry_slots_v2") {
+                const auto* slots = call->arg_size() == 2
+                    ? llvm::dyn_cast<llvm::AllocaInst>(call->getArgOperand(0)) : nullptr;
+                const auto* type = slots ? llvm::dyn_cast<llvm::ArrayType>(slots->getAllocatedType()) : nullptr;
+                if (!stack_guard || location_slots || !dominance.dominates(stack_guard_call, call)
+                        || !slots || !slots->isStaticAlloca() || slots->isArrayAllocation()
+                        || !type || type->getNumElements() != 3 || !type->getElementType()->isPointerTy()
+                        || call->getArgOperand(1) != function.getArg(2)) {
+                    return false;
+                }
+                // This helper only borrows addresses in the supplied thread context; it cannot reenter Qore.
+                location_slots = true;
             } else if (!stack_guard || name != "qore_rt_try_load_closure_int_v1") {
                 return false;
             }
@@ -18125,6 +18146,17 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             continue;
         }
 
+        // the runtime binds this body's local slots to the variables of the closure's serialized IR by slot index
+        // (AOTClosureRuntimeBinding::local_slots), so the slots must be those of that IR: its own slot ids, then the
+        // parameters, argv and the captures in the order the serializer reserves them; a capture that only an
+        // on_block_exit handler of the closure uses has no IR slot id otherwise
+        if (!qoreAOTPrepareClosureIRLocalSlots(ir_func, sig,
+                const_cast<UserClosureFunction*>(ucf)->getVList())) {
+            delete ir_func;
+            setAOTCompileFatal(fatal_error, "closure", native_key, "native closure local slot preparation",
+                "cancelled");
+            return false;
+        }
         qoreAOTPruneClosureIRBodyLocals(ir_func, sig,
             const_cast<UserClosureFunction*>(ucf)->getVList());
         if (sig) {
@@ -18142,7 +18174,12 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         ir_func->name = llvm_symbol;
 
         AOTSlotMap slots;
-        buildAOTSlotMap(*ir_func, slots);
+        if (!buildAOTSlotMap(*ir_func, slots)) {
+            setAOTCompileFatal(fatal_error, "body", ir_func->name,
+                "slot map construction", "cancelled or invalid slot numbering");
+            delete ir_func;
+            return false;
+        }
         if (sig) {
             for (unsigned p = 0; p < sig->numParams(); ++p) {
                 if (p && !(p % 100)
@@ -18427,7 +18464,6 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
 
         bool lowered = true;
         std::string llvm_error;
-        std::vector<AOTCompiledFuncWithSlots::AOTLocEntry> aot_locs;
         if (metadata_only) {
             auto* i64_t = llvm::Type::getInt64Ty(ctx);
             auto* ptr_t = llvm::PointerType::get(ctx, 0);
@@ -18473,22 +18509,6 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                         bind_builder.CreateCall(bind_v2, {normal->getArg(0), normal, dynamic_fn});
                     }
                 }
-                const auto& loc_table = lowerer.getAOTLocTable();
-                for (size_t loc_index = 0; loc_index < loc_table.size(); ++loc_index) {
-                    if (loc_index && !(loc_index % 100)
-                            && qore_check_cancel(nullptr, "AOT native closure location collection")) {
-                        delete ir_func;
-                        setAOTCompileFatal(fatal_error, "closure", native_key,
-                            "native closure location collection", "cancelled");
-                        return false;
-                    }
-                    const auto& loc = loc_table[loc_index];
-                    AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                    entry.start_line = loc.start_line;
-                    entry.end_line = loc.end_line;
-                    entry.file = loc.file;
-                    aot_locs.push_back(std::move(entry));
-                }
             }
         }
 
@@ -18510,7 +18530,6 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         cf.num_locals = static_cast<int>(slots.local_slots.size());
         cf.num_globals = static_cast<int>(slots.global_slots.size());
         cf.num_exprs = static_cast<int>(slots.expr_slots.size());
-        cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
         cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
         cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
         cf.const_reverse_map_exclude_fqns =
@@ -18520,10 +18539,12 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         cf.num_exprs = static_cast<int>(cf.slot_ids.exprs.size());
         cf.num_locals = static_cast<int>(cf.slot_ids.locals.size());
         cf.num_globals = static_cast<int>(cf.slot_ids.globals.size());
-        if (!slots.stmt_slots.empty()) {
-            cf.handler_irs = extractHandlerIRs(*ir_func, slots);
+        if (!aotIRFunctionSourceFile(*ir_func, cf.source_file)) {
+            setAOTCompileFatal(fatal_error, "body", ir_func->name,
+                "source location collection", "cancelled or invalid slot numbering");
+            delete ir_func;
+            return false;
         }
-        cf.aot_locs = std::move(aot_locs);
         cf.feature_flags = scanIRFeatureFlags(*ir_func);
         ir_func->name = native_key;
         ir_func->display_name = "<anonymous closure>";
@@ -20567,7 +20588,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 // slot id assignment is identical in metadata-only compiles
                 // (function-body outlining only moves instructions).
                 AOTSlotMap slots;
-                buildAOTSlotMap(*ir_func, slots);
+                if (!buildAOTSlotMap(*ir_func, slots)) {
+                    setAOTCompileFatal(fatal_error, "body", ir_func->name,
+                        "slot map construction", "cancelled or invalid slot numbering");
+                    delete ir_func;
+                    return;
+                }
 
                 // Automatic function-body outlining for pathological
                 // functions (see design/aot-function-outlining.md).  The
@@ -20612,7 +20638,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         specialized_fast_ir.reset(specialized_ir);
                         specialized_fast_ir->name = ir_func->name;
                         refine_interprocedural(*specialized_fast_ir);
-                        buildAOTSlotMap(*specialized_fast_ir, slots);
+                        if (!buildAOTSlotMap(*specialized_fast_ir, slots)) {
+                            fn_outliner.undo();
+                            setAOTCompileFatal(fatal_error, "body", ir_func->name,
+                                "slot map construction", "cancelled or invalid slot numbering");
+                            delete ir_func;
+                            return;
+                        }
                         fast_ir_func = specialized_fast_ir.get();
                     } else {
                         delete specialized_ir;
@@ -20620,6 +20652,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         setAOTCompileFatal(fatal_error, "function",
                             variant_key, "generic fast-entry IR lowering",
                             specialization_error);
+                        fn_outliner.undo();
                         delete ir_func;
                         return;
                     }
@@ -20662,6 +20695,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             ++failed_count;
                             setAOTCompileFatal(fatal_error, "function", variant_key,
                                 "fast-entry parameter type setup", "cancelled");
+                            fn_outliner.undo();
                             delete ir_func;
                             return;
                         }
@@ -20720,7 +20754,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 // separately-compiled `.qo` file.
                 bool std_entry_ok;
                 std::string llvm_error;
-                std::vector<AOTCompiledFuncWithSlots::AOTLocEntry> aot_locs_local;
 
                 if (metadata_only) {
                     auto* i64_t = llvm::Type::getInt64Ty(ctx);
@@ -20786,21 +20819,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     // Lower outlined helpers first so the coordinator's
                     // CallAOTHelper call sites bind to defined functions; on
                     // helper failure fall back to un-outlined lowering.
-                    bool used_retry_lowering = false;
                     if (fn_outliner.active()) {
                         std::string helper_error;
                         if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, ctx,
-                                module, slots, &di_builder, di_cu, aot_locs_local,
-                                helper_error)) {
+                                module, slots, &di_builder, di_cu, helper_error)) {
                             fn_outliner.undo();
-                            aot_locs_local.clear();
                         }
-                    }
-                    if (fn_outliner.active()) {
-                        // Coordinator location indices follow the helpers' in
-                        // the merged ctx->locs table.
-                        lowerer.setAOTLocTableBase(
-                            static_cast<int32_t>(aot_locs_local.size()));
                     }
 
                     std_entry_ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
@@ -20819,7 +20843,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             }
                         }
                         fn_outliner.undo();
-                        aot_locs_local.clear();
                         QoreIRToLLVM retry_lowerer(ctx);
                         retry_lowerer.setAOTMode(&slots);
                         retry_lowerer.setSharedDebugInfo(&di_builder, di_cu);
@@ -20830,16 +20853,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         }
                         std_entry_ok = retry_lowerer.lowerFunction(*ir_func, module,
                             llvm_error);
-                        used_retry_lowering = true;
-                        if (std_entry_ok) {
-                            for (const auto& loc : retry_lowerer.getAOTLocTable()) {
-                                AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                                entry.start_line = loc.start_line;
-                                entry.end_line = loc.end_line;
-                                entry.file = loc.file;
-                                aot_locs_local.push_back(std::move(entry));
-                            }
-                        }
                     }
 
                     // Compile fast entry for AOT Approach B.
@@ -20860,6 +20873,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 ++failed_count;
                                 setAOTCompileFatal(fatal_error, "function", variant_key,
                                     "fast-entry parameter mapping", "cancelled");
+                                fn_outliner.undo();
                                 delete ir_func;
                                 return;
                             }
@@ -20914,23 +20928,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             ++failed_count;
                             setAOTCompileFatal(fatal_error, "function", variant_key,
                                 "fast-entry LLVM lowering", fast_error);
+                            fn_outliner.undo();
                             delete ir_func;
                             return;
-                        }
-                    }
-
-                    // Transfer owned location data from LLVM codegen directly.
-                    // The lowerer's AOTLocEntry already owns string copies — no raw
-                    // pointer dereference needed here (safe against corrupt inst->loc).
-                    // (The un-outlined retry path above already appended its own
-                    // table — `lowerer`'s table belongs to the failed attempt.)
-                    if (std_entry_ok && !used_retry_lowering) {
-                        for (const auto& loc : lowerer.getAOTLocTable()) {
-                            AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                            entry.start_line = loc.start_line;
-                            entry.end_line = loc.end_line;
-                            entry.file = loc.file;
-                            aot_locs_local.push_back(std::move(entry));
                         }
                     }
                 }
@@ -20947,7 +20947,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     cf.num_locals = static_cast<int>(slots.local_slots.size());
                     cf.num_globals = static_cast<int>(slots.global_slots.size());
                     cf.num_exprs = static_cast<int>(slots.expr_slots.size());
-                    cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                     cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                     cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
                     cf.const_reverse_map_exclude_fqns = pending_init_constant_fqn_list;
@@ -20958,11 +20957,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     cf.num_exprs = static_cast<int>(cf.slot_ids.exprs.size());
                     cf.num_locals = static_cast<int>(cf.slot_ids.locals.size());
                     cf.num_globals = static_cast<int>(cf.slot_ids.globals.size());
-                    // Extract handler IR from OnBlockExit instructions (moves ownership)
-                    if (!slots.stmt_slots.empty()) {
-                        cf.handler_irs = extractHandlerIRs(*ir_func, slots);
+                    if (!aotIRFunctionSourceFile(*ir_func, cf.source_file)) {
+                        setAOTCompileFatal(fatal_error, "body", ir_func->name,
+                            "source location collection", "cancelled or invalid slot numbering");
+                        delete ir_func;
+                        return;
                     }
-                    cf.aot_locs = std::move(aot_locs_local);
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
                     // Keep the serialized debug IR source-visible.  The LLVM
@@ -20982,9 +20982,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             aot_batch_callee_map, fatal_error)) {
                         return;
                     }
-                    printd(2, "AOT: compiled function '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
+                    printd(2, "AOT: compiled function '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d)\n",
                         variant_key.c_str(), (int)slots.local_slots.size(), (int)slots.global_slots.size(),
-                        (int)slots.expr_slots.size(), (int)slots.stmt_slots.size());
+                        (int)slots.expr_slots.size());
                 } else {
                     printd(2, "AOT: LLVM lowering failed for '%s': %s\n", variant_key.c_str(), llvm_error.c_str());
                     if (q_env_is_set("QORE_AOT_DEBUG")) {
@@ -21109,7 +21109,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     // NOTE: built from the un-outlined method so slot id
                     // assignment matches metadata-only compiles.
                     AOTSlotMap slots;
-                    buildAOTSlotMap(*ir_func, slots);
+                    if (!buildAOTSlotMap(*ir_func, slots)) {
+                        setAOTCompileFatal(fatal_error, "body", ir_func->name,
+                            "slot map construction", "cancelled or invalid slot numbering");
+                        delete ir_func;
+                        return;
+                    }
 
                     // Automatic function-body outlining for pathological
                     // methods (see design/aot-function-outlining.md); the
@@ -21154,7 +21159,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             specialized_fast_ir.reset(specialized_ir);
                             specialized_fast_ir->name = ir_func->name;
                             refine_interprocedural(*specialized_fast_ir);
-                            buildAOTSlotMap(*specialized_fast_ir, slots);
+                            if (!buildAOTSlotMap(*specialized_fast_ir, slots)) {
+                                fn_outliner.undo();
+                                setAOTCompileFatal(fatal_error, "body", ir_func->name,
+                                    "slot map construction", "cancelled or invalid slot numbering");
+                                delete ir_func;
+                                return;
+                            }
                             fast_ir_func = specialized_fast_ir.get();
                         } else {
                             delete specialized_ir;
@@ -21162,6 +21173,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             setAOTCompileFatal(fatal_error, "method",
                                 variant_key, "generic fast-entry IR lowering",
                                 specialization_error);
+                            fn_outliner.undo();
                             delete ir_func;
                             return;
                         }
@@ -21210,6 +21222,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 ++failed_count;
                                 setAOTCompileFatal(fatal_error, "method", variant_key,
                                     "fast-entry parameter type setup", "cancelled");
+                                fn_outliner.undo();
                                 delete ir_func;
                                 return;
                             }
@@ -21267,7 +21280,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
 
                     bool method_ok;
                     std::string llvm_error;
-                    std::vector<AOTCompiledFuncWithSlots::AOTLocEntry> aot_locs_local;
 
                     if (metadata_only) {
                         // Phase 4 slice 6: emit bare external declaration
@@ -21316,19 +21328,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         // Lower outlined helpers first (see the function path
                         // above); on any failure fall back to un-outlined
                         // lowering of the restored original method.
-                        bool used_retry_lowering = false;
                         if (fn_outliner.active()) {
                             std::string helper_error;
                             if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, ctx,
-                                    module, slots, &di_builder, di_cu, aot_locs_local,
-                                    helper_error)) {
+                                    module, slots, &di_builder, di_cu, helper_error)) {
                                 fn_outliner.undo();
-                                aot_locs_local.clear();
                             }
-                        }
-                        if (fn_outliner.active()) {
-                            lowerer.setAOTLocTableBase(
-                                static_cast<int32_t>(aot_locs_local.size()));
                         }
 
                         lowerer.setReceiverMethodBinding(receiver_entry_name, receiver_entry
@@ -21348,7 +21353,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 }
                             }
                             fn_outliner.undo();
-                            aot_locs_local.clear();
                             QoreIRToLLVM retry_lowerer(ctx);
                             retry_lowerer.setAOTMode(&slots);
                             retry_lowerer.setSharedDebugInfo(&di_builder, di_cu);
@@ -21359,16 +21363,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             }
                             method_ok = retry_lowerer.lowerFunction(*ir_func, module,
                                 llvm_error);
-                            used_retry_lowering = true;
-                            if (method_ok) {
-                                for (const auto& loc : retry_lowerer.getAOTLocTable()) {
-                                    AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                                    entry.start_line = loc.start_line;
-                                    entry.end_line = loc.end_line;
-                                    entry.file = loc.file;
-                                    aot_locs_local.push_back(std::move(entry));
-                                }
-                            }
                         }
 
                         if (method_ok && fast_entry_eligible) {
@@ -21387,6 +21381,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                     ++failed_count;
                                     setAOTCompileFatal(fatal_error, "method", variant_key,
                                         "fast-entry parameter mapping", "cancelled");
+                                    fn_outliner.undo();
                                     delete ir_func;
                                     return;
                                 }
@@ -21437,18 +21432,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 ++failed_count;
                                 setAOTCompileFatal(fatal_error, "method", variant_key,
                                     "fast-entry LLVM lowering", fast_error);
+                                fn_outliner.undo();
                                 delete ir_func;
                                 return;
-                            }
-                        }
-
-                        if (method_ok && !used_retry_lowering) {
-                            for (const auto& loc : lowerer.getAOTLocTable()) {
-                                AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                                entry.start_line = loc.start_line;
-                                entry.end_line = loc.end_line;
-                                entry.file = loc.file;
-                                aot_locs_local.push_back(std::move(entry));
                             }
                         }
                     }
@@ -21474,7 +21460,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         receiver_lowerer.setReceiverRuntimeConfig(receiver_entry->getArg(2));
                         // Companion instructions may have a different location order than the normal body.
                         // Append their own table rather than interpreting their indices through the normal one.
-                        receiver_lowerer.setAOTLocTableBase(static_cast<int32_t>(aot_locs_local.size()));
+
                         std::string receiver_error;
                         if (!receiver_lowerer.lowerFunction(*ir_func, module, receiver_error)) {
                             ++failed_count;
@@ -21482,13 +21468,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 "receiver-entry LLVM lowering", receiver_error);
                             delete ir_func;
                             return;
-                        }
-                        for (const auto& loc : receiver_lowerer.getAOTLocTable()) {
-                            AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                            entry.start_line = loc.start_line;
-                            entry.end_line = loc.end_line;
-                            entry.file = loc.file;
-                            aot_locs_local.push_back(std::move(entry));
                         }
                     }
 
@@ -21534,7 +21513,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             scalar_member_entry->getArg(receiver_arg + 1), scalar_member_entry->getArg(receiver_arg + 2),
                             scalar_member_entry->getArg(receiver_arg + 3), scalar_member_internal
                                 && !q_env_is_set("QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT"));
-                        member_lowerer.setAOTLocTableBase(static_cast<int32_t>(aot_locs_local.size()));
+
                         std::string member_error;
                         if (!member_lowerer.lowerFunction(*ir_func, module, member_error)) {
                             ++failed_count;
@@ -21542,13 +21521,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 "scalar-member LLVM lowering", member_error);
                             delete ir_func;
                             return;
-                        }
-                        for (const auto& loc : member_lowerer.getAOTLocTable()) {
-                            AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                            entry.start_line = loc.start_line;
-                            entry.end_line = loc.end_line;
-                            entry.file = loc.file;
-                            aot_locs_local.push_back(std::move(entry));
                         }
                         // Publish only from this exact normal body. Binding does not
                         // cache a receiver or a mutable member value in the context.
@@ -21614,7 +21586,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                         && !q_env_is_set("QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT"));
                                 effect_lowerer.setEffectMemberEntry(effect_updates);
                             }
-                            effect_lowerer.setAOTLocTableBase(static_cast<int32_t>(aot_locs_local.size()));
+
                             std::string effect_error;
                             if (!effect_lowerer.lowerFunction(*ir_func, module, effect_error)) {
                                 ++failed_count;
@@ -21622,13 +21594,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                     "effect-member LLVM lowering", effect_error);
                                 delete ir_func;
                                 return;
-                            }
-                            for (const auto& loc : effect_lowerer.getAOTLocTable()) {
-                                AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                                entry.start_line = loc.start_line;
-                                entry.end_line = loc.end_line;
-                                entry.file = loc.file;
-                                aot_locs_local.push_back(std::move(entry));
                             }
                         }
                         auto* descriptor_type = llvm::StructType::get(ctx, {ptr_ty, ptr_ty, count_ty});
@@ -21656,7 +21621,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         cf.num_locals = static_cast<int>(slots.local_slots.size());
                         cf.num_globals = static_cast<int>(slots.global_slots.size());
                         cf.num_exprs = static_cast<int>(slots.expr_slots.size());
-                        cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                         cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                         cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
                         cf.const_reverse_map_exclude_fqns = pending_init_constant_fqn_list;
@@ -21667,27 +21631,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         cf.num_exprs = static_cast<int>(cf.slot_ids.exprs.size());
                         cf.num_locals = static_cast<int>(cf.slot_ids.locals.size());
                         cf.num_globals = static_cast<int>(cf.slot_ids.globals.size());
-                        // Extract handler IR from OnBlockExit instructions (moves ownership)
-                        if (!slots.stmt_slots.empty()) {
-                            cf.handler_irs = extractHandlerIRs(*ir_func, slots);
-                        }
-                        cf.aot_locs = std::move(aot_locs_local);
-                        if (receiver_entry) {
-                            AOTPcLocFuncEntry pc;
-                            pc.symbol = receiver_entry_name;
-                            cf.pc_companions.push_back(std::move(pc));
-                        }
-                        if (scalar_member_entry) {
-                            AOTPcLocFuncEntry pc;
-                            pc.symbol = scalar_member_entry->getName().str();
-                            cf.pc_companions.push_back(std::move(pc));
-                        }
-                        if (effect_member_fast) {
-                            for (auto* function : {effect_member_fast, effect_member_resume}) {
-                                AOTPcLocFuncEntry pc;
-                                pc.symbol = function->getName().str();
-                                cf.pc_companions.push_back(std::move(pc));
-                            }
+                        if (!aotIRFunctionSourceFile(*ir_func, cf.source_file)) {
+                            setAOTCompileFatal(fatal_error, "body", ir_func->name,
+                                "source location collection", "cancelled or invalid slot numbering");
+                            delete ir_func;
+                            return;
                         }
                         // Scan IR function for required features
                         cf.feature_flags = scanIRFeatureFlags(*ir_func);
@@ -21709,15 +21657,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             return;
                         }
                         if (q_env_is_set("QORE_AOT_DEBUG")) {
-                            fprintf(stderr, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
+                            fprintf(stderr, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d)\n",
                                 variant_key.c_str(), (int)slots.local_slots.size(),
-                                (int)slots.global_slots.size(), (int)slots.expr_slots.size(),
-                                (int)slots.stmt_slots.size());
+                                (int)slots.global_slots.size(), (int)slots.expr_slots.size());
                         }
-                        printd(2, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
+                        printd(2, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d)\n",
                             variant_key.c_str(), (int)slots.local_slots.size(),
-                            (int)slots.global_slots.size(), (int)slots.expr_slots.size(),
-                            (int)slots.stmt_slots.size());
+                            (int)slots.global_slots.size(), (int)slots.expr_slots.size());
                     } else {
                         printd(2, "AOT: LLVM lowering failed for '%s': %s\n",
                             variant_key.c_str(), llvm_error.c_str());
@@ -21825,9 +21771,19 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         // builds) is the caller, the helpers' slot lookups resolve
         // correctly.
         AOTSlotMap slots;
-        buildAOTSlotMap(*ir_func, slots);
+        if (!buildAOTSlotMap(*ir_func, slots)) {
+            setAOTCompileFatal(fatal_error, "body", ir_func->name,
+                "slot map construction", "cancelled or invalid slot numbering");
+            delete ir_func;
+            return;
+        }
         for (auto& h : outlined_helpers) {
-            buildAOTSlotMap(*h.ir_func, slots);
+            if (!buildAOTSlotMap(*h.ir_func, slots)) {
+                setAOTCompileFatal(fatal_error, "body", ir_func->name,
+                    "slot map construction", "cancelled or invalid slot numbering");
+                delete ir_func;
+                return;
+            }
         }
 
         // Lower outer + every helper against the shared slot map.
@@ -21890,7 +21846,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             cif.num_locals = static_cast<int>(slots.local_slots.size());
             cif.num_globals = static_cast<int>(slots.global_slots.size());
             cif.num_exprs = static_cast<int>(slots.expr_slots.size());
-            cif.num_stmts = static_cast<int>(slots.stmt_slots.size());
             cif.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
             cif.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
             cif.const_reverse_map_exclude_direct_fqn = direct_exclude_fqn;
@@ -22252,580 +22207,6 @@ struct TimeTraceRAII {
     }
 };
 
-//! Read the emitted object's DWARF line table and populate each func's pc_loc_map
-//! (sorted function-relative native offset -> loc-index). The DWARF column carries
-//! loc-index+1 (see QoreIRToLLVM::setDebugLocation); EndSequence/col==0 rows are
-//! skipped, and consecutive rows with the same active loc-index are collapsed since
-//! lookup uses the largest offset <= pc.
-//! append retains maps from earlier codegen partitions (all offsets are function-relative).
-//! Returns false on cancellation; unreadable debug information retains the best-effort behavior.
-static bool buildAOTPcLocMaps(const std::string& path,
-        std::vector<AOTCompiledFuncWithSlots>& func_slots, std::string& error, bool append = false) {
-    size_t checked = 0;
-    auto cancelled = [&]() {
-        if (++checked % 100 == 0 && qore_check_cancel(nullptr, "AOT source-location recovery")) {
-            error = "operation cancelled during AOT source-location recovery";
-            return true;
-        }
-        return false;
-    };
-    bool dbg = q_env_is_set("QORE_AOT_LOC_DEBUG");
-    auto buf_or = llvm::MemoryBuffer::getFile(path);
-    if (!buf_or) {
-        if (dbg) {
-            fprintf(stderr, "AOT-LOC: cannot read object %s\n", path.c_str());
-        }
-        return true;
-    }
-    auto obj_or = llvm::object::ObjectFile::createObjectFile((*buf_or)->getMemBufferRef());
-    if (!obj_or) {
-        llvm::consumeError(obj_or.takeError());
-        if (dbg) {
-            fprintf(stderr, "AOT-LOC: createObjectFile failed for %s\n", path.c_str());
-        }
-        return true;
-    }
-
-    // Mach-O prefixes a leading '_' on every symbol, but func_slots[].llvm_symbol holds
-    // the LLVM-level name (no underscore), so the enclosing-function lookup below must
-    // strip it to match. Without this, sym_to_fws misses for every Mach-O function and
-    // pc_loc_map stays empty (no lazy locations on macOS).
-    const bool is_macho = (*obj_or)->isMachO();
-
-    // Function symbols (addr, name) sorted by addr for enclosing-function lookup.
-    std::vector<std::pair<uint64_t, std::string>> funcs;
-    for (const llvm::object::SymbolRef& sym : (*obj_or)->symbols()) {
-        if (cancelled()) {
-            return false;
-        }
-        auto ty = sym.getType();
-        if (!ty) { llvm::consumeError(ty.takeError()); continue; }
-        if (*ty != llvm::object::SymbolRef::ST_Function) { continue; }
-        if (is_macho) {
-            // Skip Mach-O local labels (e.g. `ltmp0`) that share a real function's address
-            // and would otherwise shadow the global symbol in the enclosing lookup.
-            auto fl = sym.getFlags();
-            if (!fl) { llvm::consumeError(fl.takeError()); continue; }
-            if (!(*fl & llvm::object::SymbolRef::SF_Global)) { continue; }
-        }
-        auto addr = sym.getAddress();
-        auto nm = sym.getName();
-        if (!addr) { llvm::consumeError(addr.takeError()); continue; }
-        if (!nm) { llvm::consumeError(nm.takeError()); continue; }
-        funcs.emplace_back(*addr, nm->str());
-    }
-    std::sort(funcs.begin(), funcs.end());
-    auto enclosing = [&funcs](uint64_t a) -> int {
-        size_t lo = 0, hi = funcs.size();
-        while (lo < hi) {
-            size_t mid = (lo + hi) / 2;
-            if (funcs[mid].first <= a) { lo = mid + 1; } else { hi = mid; }
-        }
-        return lo == 0 ? -1 : static_cast<int>(lo - 1);
-    };
-
-    // Native companions share their owner's serialized locations, but must have
-    // independent function-relative PC offsets. Never add them to callable slot maps.
-    struct PcTarget {
-        AOTCompiledFuncWithSlots* owner;
-        const std::string* symbol;
-        std::vector<std::pair<uint32_t, uint32_t>>* entries;
-        std::vector<AOTCompiledFuncWithSlots::AOTLocEntry>* extra_locs;
-    };
-    std::vector<PcTarget> targets;
-    for (auto& fws : func_slots) {
-        if (cancelled()) {
-            return false;
-        }
-        targets.push_back({&fws, &fws.llvm_symbol, &fws.pc_loc_map, &fws.pc_extra_locs});
-        for (auto& pc : fws.pc_companions) {
-            if (cancelled()) {
-                return false;
-            }
-            targets.push_back({&fws, &pc.symbol, &pc.entries, &pc.extra_locs});
-        }
-    }
-    // Map LLVM symbol name -> native PC target (ordinary body or companion).
-    std::unordered_map<std::string, size_t> sym_to_fws;
-    sym_to_fws.reserve(targets.size());
-    for (size_t i = 0; i < targets.size(); ++i) {
-        if (cancelled()) {
-            return false;
-        }
-        if (!targets[i].symbol->empty()) {
-            sym_to_fws[*targets[i].symbol] = i;
-        }
-        if (!append) {
-            targets[i].entries->clear();
-            targets[i].extra_locs->clear();
-        }
-    }
-
-    // Module-wide index of every function's serialized locations, keyed by start line.  Used to
-    // recover the exact location of a row whose DWARF column addresses another function's loc table
-    // (LLVM inlined that function's body here) — the callee's own table holds the entry, so the file
-    // and end line are recovered exactly instead of being approximated from the line table alone.
-    std::unordered_map<int32_t, std::vector<const AOTCompiledFuncWithSlots::AOTLocEntry*>> locs_by_line;
-    for (const auto& fws : func_slots) {
-        if (cancelled()) {
-            return false;
-        }
-        for (const auto& loc : fws.aot_locs) {
-            if (cancelled()) {
-                return false;
-            }
-            if (loc.start_line > 0) {
-                locs_by_line[loc.start_line].push_back(&loc);
-            }
-        }
-    }
-    // Per-function dedup of synthesized extra locations: key -> index into fws.pc_extra_locs.
-    std::unordered_map<size_t, std::unordered_map<std::string, uint32_t>> extra_index;
-
-    std::unique_ptr<llvm::DWARFContext> dctx = llvm::DWARFContext::create(**obj_or);
-    size_t rows = 0, mapped = 0, inlined = 0, units = 0;
-    for (const auto& unit : dctx->compile_units()) {
-        if (++units % 10 == 0 && qore_check_cancel(nullptr, "AOT DWARF line-table recovery")) {
-            error = "operation cancelled during AOT DWARF line-table recovery";
-            return false;
-        }
-        const llvm::DWARFDebugLine::LineTable* lt = dctx->getLineTableForUnit(unit.get());
-        if (!lt) {
-            continue;
-        }
-        for (const auto& row : lt->Rows) {
-            if (cancelled()) {
-                return false;
-            }
-            ++rows;
-            if (row.EndSequence || row.Column == 0) {
-                continue;
-            }
-            int fi = enclosing(row.Address.Address);
-            if (fi < 0) {
-                continue;
-            }
-            auto it = sym_to_fws.find(funcs[fi].second);
-            if (it == sym_to_fws.end() && is_macho && !funcs[fi].second.empty()
-                    && funcs[fi].second[0] == '_') {
-                it = sym_to_fws.find(funcs[fi].second.substr(1));
-            }
-            if (it == sym_to_fws.end()) {
-                continue;
-            }
-            auto& target = targets[it->second];
-            const auto& fws = *target.owner;
-            uint32_t offset = static_cast<uint32_t>(row.Address.Address - funcs[fi].first);
-            uint32_t loc_index = static_cast<uint32_t>(row.Column - 1);
-            // The column carries a loc-index that is local to the lowerer that emitted the
-            // instruction.  At -O3 LLVM inlines AOT functions into one another and the inliner copies
-            // the callee's DILocation — line AND column — into the caller's line table, so an inlined
-            // row's index addresses the CALLEE's table while the row itself sits inside the caller's
-            // symbol.  Resolving it against the caller's table yields an unrelated line (or is dropped
-            // when the caller's table is shorter).  The row's LINE is correct either way, so use it to
-            // detect the mismatch and carry the real location literally in the PC map.
-            if (loc_index >= fws.aot_locs.size()
-                    || fws.aot_locs[loc_index].start_line != static_cast<int32_t>(row.Line)) {
-                if (!row.Line) {
-                    continue;   // no source line to recover
-                }
-                std::string row_file;
-                lt->getFileNameByIndex(row.File, unit->getCompilationDir(),
-                    llvm::DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath, row_file);
-                // Prefer the callee's own serialized entry: it carries the canonical Qore file name
-                // and the exact end line, neither of which the line table can supply.  The DWARF path
-                // is rebuilt from the DIFile's (dir, name) split against the CU's compilation dir, so
-                // it does not string-compare equal to a relative source path — fall back to the base
-                // name, then to the only candidate, and only then give up and use the line table.
-                auto baseName = [](const std::string& f) -> std::string {
-                    size_t sl = f.rfind('/');
-                    return sl == std::string::npos ? f : f.substr(sl + 1);
-                };
-                const AOTCompiledFuncWithSlots::AOTLocEntry* match = nullptr;
-                auto li = locs_by_line.find(static_cast<int32_t>(row.Line));
-                if (li != locs_by_line.end() && !li->second.empty()) {
-                    if (!row_file.empty()) {
-                        for (const auto* cand : li->second) {
-                            if (cancelled()) {
-                                return false;
-                            }
-                            if (qore_aot_map_source_path(cand->file.c_str()) == row_file) {
-                                match = cand;
-                                break;
-                            }
-                        }
-                        if (!match) {
-                            const std::string row_base = baseName(row_file);
-                            for (const auto* cand : li->second) {
-                                if (cancelled()) {
-                                    return false;
-                                }
-                                if (baseName(cand->file) == row_base) {
-                                    match = cand;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (!match && li->second.size() == 1) {
-                        match = li->second.front();
-                    }
-                }
-                AOTCompiledFuncWithSlots::AOTLocEntry extra;
-                extra.start_line = static_cast<int32_t>(row.Line);
-                extra.end_line = match ? match->end_line : static_cast<int32_t>(row.Line);
-                extra.file = match ? qore_aot_map_source_path(match->file.c_str()) : row_file;
-                std::string key = extra.file + ":" + std::to_string(extra.start_line)
-                    + ":" + std::to_string(extra.end_line);
-                auto& per_func = extra_index[it->second];
-                auto ei = per_func.find(key);
-                if (ei == per_func.end()) {
-                    uint32_t idx = static_cast<uint32_t>(fws.aot_locs.size()
-                        + target.extra_locs->size());
-                    target.extra_locs->push_back(std::move(extra));
-                    ei = per_func.emplace(std::move(key), idx).first;
-                }
-                loc_index = ei->second;
-                ++inlined;
-                if (dbg) {
-                    fprintf(stderr, "AOT-LOC: inlined row %s off=0x%x col-loc=%u line=%llu -> extra %u\n",
-                        funcs[fi].second.c_str(), offset,
-                        static_cast<uint32_t>(row.Column - 1),
-                        static_cast<unsigned long long>(row.Line), loc_index);
-                }
-            }
-            target.entries->emplace_back(offset, loc_index);
-            ++mapped;
-        }
-    }
-
-    // Sort each map by offset and collapse consecutive entries sharing the same
-    // loc-index (lookup uses largest offset <= pc, so redundant runs add no info).
-    size_t total_entries = 0;
-    for (auto& target : targets) {
-        if (cancelled()) {
-            return false;
-        }
-        const auto& fws = *target.owner;
-        auto& m = *target.entries;
-        std::sort(m.begin(), m.end());
-        std::vector<std::pair<uint32_t, uint32_t>> compact;
-        for (const auto& e : m) {
-            if (cancelled()) {
-                return false;
-            }
-            if (!compact.empty() && compact.back().second == e.second) {
-                continue;
-            }
-            if (!compact.empty() && compact.back().first == e.first) {
-                // Same offset, different loc-index (multiple rows at one PC): keep
-                // the last one written (matches the eager updater's final store).
-                compact.back().second = e.second;
-                continue;
-            }
-            compact.push_back(e);
-        }
-        m.swap(compact);
-        total_entries += m.size();
-        if (dbg && !m.empty()) {
-            fprintf(stderr, "AOT-LOC: func=%s entries=%zu (locs=%zu)\n",
-                target.symbol->c_str(), m.size(), fws.aot_locs.size());
-            for (size_t k = 0; k < m.size() && k < 12; ++k) {
-                const uint32_t li = m[k].second;
-                const bool is_extra = li >= fws.aot_locs.size();
-                const size_t xi = is_extra ? li - fws.aot_locs.size() : 0;
-                if (is_extra && xi >= target.extra_locs->size()) {
-                    continue;
-                }
-                int32_t ln = is_extra ? (*target.extra_locs)[xi].start_line
-                    : fws.aot_locs[li].start_line;
-                fprintf(stderr, "AOT-LOC:   off=0x%x -> loc=%u%s line=%d\n",
-                    m[k].first, li, is_extra ? " (inlined)" : "", (int)ln);
-            }
-        }
-    }
-    if (dbg) {
-        fprintf(stderr, "AOT-LOC: %s: %zu rows, %zu mapped (%zu inlined), %zu compacted entries, "
-            "%zu funcs\n", path.c_str(), rows, mapped, inlined, total_entries, func_slots.size());
-    }
-    return true;
-}
-
-//! Serialize the per-function PC->loc maps from `func_slots` and append them as a
-//! trailer to the final artifact at `path`. Under QORE_AOT_LOC_DEBUG, immediately
-//! reads the trailer back and asserts a byte-for-byte round-trip. Safe to call on
-//! any final artifact (.qo/.qmod/exe) — dlopen and the ELF object reader both ignore
-//! trailing bytes.
-static bool writeAndVerifyPcLocTrailer(const std::string& path,
-        const std::vector<AOTCompiledFuncWithSlots>& func_slots, std::string& error) {
-    std::vector<uint8_t> payload;
-    int64_t n = qoreAOTSerializePcLocPayload(func_slots, payload, error);
-    if (n < 0) {
-        return false;
-    }
-    if (!n) {
-        return true;  // nothing to write (no DWARF / empty maps)
-    }
-    if (!qoreAOTAppendPcLocTrailer(path, payload, error)) {
-        return false;
-    }
-    if (q_env_is_set("QORE_AOT_LOC_DEBUG")) {
-        std::vector<AOTPcLocFuncEntry> rt;
-        if (!qoreAOTReadPcLocTrailer(path, rt)) {
-            fprintf(stderr, "AOT-LOC: ROUND-TRIP FAIL: trailer unreadable from %s\n", path.c_str());
-        } else {
-            // Build expected symbol->entries from func_slots and compare.
-            size_t mismatches = 0, checked = 0;
-            size_t cancel_checked = 0;
-            auto cancelled = [&]() {
-                if (!(++cancel_checked % 100)
-                        && qore_check_cancel(nullptr, "AOT PC-map round-trip verification")) {
-                    error = "operation cancelled during AOT PC-map round-trip verification";
-                    return true;
-                }
-                return false;
-            };
-            struct ExpectedPcMap {
-                const std::vector<std::pair<uint32_t, uint32_t>>* entries;
-                const std::vector<AOTCompiledFuncWithSlots::AOTLocEntry>* extra_locs;
-            };
-            std::unordered_map<std::string, ExpectedPcMap> want;
-            for (const auto& fws : func_slots) {
-                if (cancelled()) {
-                    return false;
-                }
-                if (!fws.pc_loc_map.empty() && !fws.llvm_symbol.empty()) {
-                    want.emplace(fws.llvm_symbol, ExpectedPcMap{&fws.pc_loc_map, &fws.pc_extra_locs});
-                }
-                for (const auto& pc : fws.pc_companions) {
-                    if (cancelled()) {
-                        return false;
-                    }
-                    if (!pc.entries.empty() && !pc.symbol.empty()) {
-                        want.emplace(pc.symbol, ExpectedPcMap{&pc.entries, &pc.extra_locs});
-                    }
-                }
-            }
-            if (rt.size() != want.size()) {
-                fprintf(stderr, "AOT-LOC: ROUND-TRIP FAIL: func count %zu != %zu\n",
-                    rt.size(), want.size());
-                ++mismatches;
-            }
-            for (const auto& fe : rt) {
-                if (cancelled()) {
-                    return false;
-                }
-                auto it = want.find(fe.symbol);
-                if (it == want.end()) {
-                    fprintf(stderr, "AOT-LOC: ROUND-TRIP FAIL: extra symbol %s\n", fe.symbol.c_str());
-                    ++mismatches;
-                    continue;
-                }
-                ++checked;
-                if (fe.entries != *it->second.entries) {
-                    fprintf(stderr, "AOT-LOC: ROUND-TRIP FAIL: %s entries differ (%zu vs %zu)\n",
-                        fe.symbol.c_str(), fe.entries.size(), it->second.entries->size());
-                    ++mismatches;
-                }
-                const auto& want_extra = *it->second.extra_locs;
-                bool extra_ok = fe.extra_locs.size() == want_extra.size();
-                for (size_t k = 0; extra_ok && k < want_extra.size(); ++k) {
-                    if (cancelled()) {
-                        return false;
-                    }
-                    extra_ok = fe.extra_locs[k].start_line == want_extra[k].start_line
-                        && fe.extra_locs[k].end_line == want_extra[k].end_line
-                        && fe.extra_locs[k].file == want_extra[k].file;
-                }
-                if (!extra_ok) {
-                    fprintf(stderr, "AOT-LOC: ROUND-TRIP FAIL: %s inlined locations differ "
-                        "(%zu vs %zu)\n", fe.symbol.c_str(), fe.extra_locs.size(),
-                        want_extra.size());
-                    ++mismatches;
-                }
-            }
-            fprintf(stderr, "AOT-LOC: trailer round-trip %s: %zu funcs, %zu verified, %zu mismatches, payload=%zu bytes\n",
-                mismatches ? "MISMATCH" : "OK", rt.size(), checked, mismatches, payload.size());
-        }
-    }
-    return true;
-}
-
-//! Reconstruct per-function (function-relative native offset -> loc-index) maps from an
-//! object/artifact's OWN DWARF. The DWARF column carries each row's loc-index
-//! (loc_index+1, per QoreIRToLLVM::setDebugLocation), so the map is recovered from the
-//! symbol table + line table alone — no func_slots / aot_locs needed (each function's
-//! loc-index indexes its own ctx->locs at load). Works on a freshly-emitted object AND
-//! on an already-linked aggregate. Output `fs` carries only llvm_symbol + pc_loc_map.
-static void collectPcLocMapsFromObjectDwarf(const std::string& path,
-        std::vector<AOTCompiledFuncWithSlots>& fs) {
-    fs.clear();
-    auto buf_or = llvm::MemoryBuffer::getFile(path);
-    if (!buf_or) {
-        return;
-    }
-    auto obj_or = llvm::object::ObjectFile::createObjectFile((*buf_or)->getMemBufferRef());
-    if (!obj_or) {
-        llvm::consumeError(obj_or.takeError());
-        return;
-    }
-    // Mach-O prefixes a leading '_' on every symbol; strip it so the emitted record key
-    // (f.llvm_symbol) matches the runtime dladdr name (macOS dladdr reports dli_sname
-    // without the underscore). Otherwise every Mach-O record key misses at throw time.
-    const bool is_macho = (*obj_or)->isMachO();
-    std::vector<std::pair<uint64_t, std::string>> funcs;
-    for (const llvm::object::SymbolRef& sym : (*obj_or)->symbols()) {
-        auto ty = sym.getType();
-        if (!ty) { llvm::consumeError(ty.takeError()); continue; }
-        if (*ty != llvm::object::SymbolRef::ST_Function) { continue; }
-        if (is_macho) {
-            // Skip Mach-O local labels (e.g. `ltmp0`) that share a real function's address
-            // and would otherwise shadow the global symbol, mis-keying the emitted record.
-            auto fl = sym.getFlags();
-            if (!fl) { llvm::consumeError(fl.takeError()); continue; }
-            if (!(*fl & llvm::object::SymbolRef::SF_Global)) { continue; }
-        }
-        auto addr = sym.getAddress();
-        auto nm = sym.getName();
-        if (!addr) { llvm::consumeError(addr.takeError()); continue; }
-        if (!nm) { llvm::consumeError(nm.takeError()); continue; }
-        std::string name = nm->str();
-        if (is_macho && !name.empty() && name[0] == '_') {
-            name.erase(0, 1);
-        }
-        funcs.emplace_back(*addr, std::move(name));
-    }
-    std::sort(funcs.begin(), funcs.end());
-    auto enclosing = [&funcs](uint64_t a) -> int {
-        size_t lo = 0, hi = funcs.size();
-        while (lo < hi) {
-            size_t mid = (lo + hi) / 2;
-            if (funcs[mid].first <= a) { lo = mid + 1; } else { hi = mid; }
-        }
-        return lo == 0 ? -1 : static_cast<int>(lo - 1);
-    };
-    std::unordered_map<std::string, std::vector<std::pair<uint32_t, uint32_t>>> by_sym;
-    std::unique_ptr<llvm::DWARFContext> dctx = llvm::DWARFContext::create(**obj_or);
-    for (const auto& unit : dctx->compile_units()) {
-        const llvm::DWARFDebugLine::LineTable* lt = dctx->getLineTableForUnit(unit.get());
-        if (!lt) {
-            continue;
-        }
-        for (const auto& row : lt->Rows) {
-            if (row.EndSequence || row.Column == 0) {
-                continue;
-            }
-            int fi = enclosing(row.Address.Address);
-            if (fi < 0) {
-                continue;
-            }
-            uint32_t offset = static_cast<uint32_t>(row.Address.Address - funcs[fi].first);
-            by_sym[funcs[fi].second].emplace_back(offset, static_cast<uint32_t>(row.Column - 1));
-        }
-    }
-    fs.reserve(by_sym.size());
-    for (auto& kv : by_sym) {
-        auto& m = kv.second;
-        std::sort(m.begin(), m.end());
-        AOTCompiledFuncWithSlots f;
-        f.llvm_symbol = kv.first;
-        for (const auto& e : m) {
-            if (!f.pc_loc_map.empty() && f.pc_loc_map.back().second == e.second) {
-                continue;
-            }
-            if (!f.pc_loc_map.empty() && f.pc_loc_map.back().first == e.first) {
-                f.pc_loc_map.back().second = e.second;
-                continue;
-            }
-            f.pc_loc_map.push_back(e);
-        }
-        fs.push_back(std::move(f));
-    }
-}
-
-// Mach-O header values; named here, since <mach-o/loader.h> defines the same names as macros on macOS, which
-// break llvm/BinaryFormat/MachO.h
-static constexpr uint32_t QORE_MACHO_MAGIC_64 = 0xfeedfacfu;
-static constexpr uint32_t QORE_MACHO_OBJECT = 0x1u;
-static constexpr uint32_t QORE_MACHO_LC_SEGMENT_64 = 0x19u;
-
-//! Returns true if the buffer holds a 64-bit Mach-O relocatable object (MH_OBJECT)
-static bool isMachoObject64(llvm::StringRef buf) {
-    // mach_header_64: magic@0, filetype@12
-    return buf.size() >= 32
-        && llvm::support::endian::read32le(buf.data()) == QORE_MACHO_MAGIC_64
-        && llvm::support::endian::read32le(buf.data() + 12) == QORE_MACHO_OBJECT;
-}
-
-//! Names the segment of the `__pcloc` section that llvm-objcopy added to a Mach-O relocatable object
-/** A relocatable object (MH_OBJECT) has a single unnamed segment load command holding every section, each of
-    which carries its own segment name; the linker places sections by that name.  llvm-objcopy adds a section
-    with a named segment as a second segment load command, which ld-classic (Xcode's linker for `ld -r` before
-    ld-prime handled it) rejects: "more than one LC_SEGMENT found in object file".  So the section is added to
-    the unnamed segment with an empty segment name, and this writes `__QORE` into its section header in place.
-
-    @return true if exactly one unnamed-segment `__pcloc` section was found and renamed
-*/
-static bool setMachoObjectPcLocSegment(const std::string& path) {
-    std::unique_ptr<FILE, int (*)(FILE*)> f(fopen(path.c_str(), "r+b"), fclose);
-    if (!f) {
-        return false;
-    }
-    // mach_header_64: magic@0, filetype@12, ncmds@16, sizeofcmds@20; 32 bytes
-    unsigned char mh[32];
-    if (fread(mh, 1, sizeof mh, f.get()) != sizeof mh
-            || !isMachoObject64(llvm::StringRef(reinterpret_cast<const char*>(mh), sizeof mh))) {
-        return false;
-    }
-    uint32_t ncmds = llvm::support::endian::read32le(mh + 16);
-    uint32_t sizeofcmds = llvm::support::endian::read32le(mh + 20);
-    if (!ncmds || !sizeofcmds || sizeofcmds > (64u << 20)) {
-        return false;
-    }
-    std::vector<unsigned char> cmds(sizeofcmds);
-    if (fread(cmds.data(), 1, sizeofcmds, f.get()) != sizeofcmds) {
-        return false;
-    }
-    static const char unnamed[16] = {};
-    long target = -1;
-    size_t p = 0;
-    for (uint32_t i = 0; i < ncmds && p + 8 <= sizeofcmds; ++i) {
-        uint32_t cmd = llvm::support::endian::read32le(cmds.data() + p);
-        uint32_t cmdsize = llvm::support::endian::read32le(cmds.data() + p + 4);
-        if (cmdsize < 8 || p + cmdsize > sizeofcmds) {
-            return false;
-        }
-        // segment_command_64 is 72 bytes, followed by nsects 80-byte section_64 records:
-        // sectname@0 (16), segname@16 (16)
-        if (cmd == QORE_MACHO_LC_SEGMENT_64 && cmdsize >= 72) {
-            uint32_t nsects = llvm::support::endian::read32le(cmds.data() + p + 64);
-            if (static_cast<uint64_t>(nsects) * 80 + 72 > cmdsize) {
-                return false;
-            }
-            for (uint32_t n = 0; n < nsects; ++n) {
-                size_t sp = p + 72 + static_cast<size_t>(n) * 80;
-                const char* sc = reinterpret_cast<const char*>(cmds.data() + sp);
-                if (!strncmp(sc, QORE_AOT_PCLOC_MACHO_SECT, 16) && !memcmp(sc + 16, unnamed, 16)) {
-                    if (target != -1) {
-                        return false;
-                    }
-                    target = static_cast<long>(sizeof mh + sp + 16);
-                }
-            }
-        }
-        p += cmdsize;
-    }
-    if (target == -1) {
-        return false;
-    }
-    char segname[16] = {};
-    strncpy(segname, QORE_AOT_PCLOC_MACHO_SEG, sizeof segname);
-    if (fseek(f.get(), target, SEEK_SET) || fwrite(segname, 1, sizeof segname, f.get()) != sizeof segname) {
-        return false;
-    }
-    return !fclose(f.release());
-}
-
 //! Runs a shell command with system() and returns its result.
 /** The command gets a copy of the process environment, which must not change while it is copied; system() copies
     it and then waits for the command, so the environment lock is held shared until the command exits (changes to
@@ -22834,144 +22215,6 @@ static bool setMachoObjectPcLocSegment(const std::string& path) {
 static int aotSystem(const std::string& cmd) {
     QoreEnvironmentReadLock env_lock;
     return system(cmd.c_str());
-}
-
-//! Add (or replace) the `qore_aot_pcloc` ELF section on the just-emitted object at
-//! `path`, carrying the framed PC->loc payload derived from the object's own DWARF.
-//! Unlike the EOF trailer, this SECTION survives arbitrary downstream linking (the
-//! linker concatenates same-named sections), so it rides into whatever final artifact
-//! the object is linked into — including qorus-core's executable, which links the
-//! per-file .qo's via the system linker. This is how qore owns lazy-location support
-//! across ALL build/link topologies with no work pushed onto qore's users. Best-effort:
-//! a failure logs and returns true (lazy just stays unavailable for this artifact), except cancellation.
-static bool addPcLocSectionFromObjectDwarf(const std::string& path, std::string& error,
-        const std::vector<AOTCompiledFuncWithSlots>* prebuilt = nullptr) {
-    bool dbg = q_env_is_set("QORE_AOT_LOC_DEBUG");
-    // The qore_aot_pcloc section rides into whatever final artifact this object is linked
-    // into (the linker concatenates same-named input sections), so lazy on-throw source
-    // locations survive arbitrary downstream linking. ELF uses GNU objcopy; Mach-O uses
-    // llvm-objcopy with the "__QORE,__pcloc" (segment,section) name — GNU objcopy corrupts
-    // Mach-O ("slice is not valid mach-o file") whereas LLVM's objcopy handles it. Any
-    // other format has no supported reader, so skip it.
-    bool is_macho = false;
-    // a relocatable Mach-O object, as opposed to a linked image such as an aggregated .qmod
-    bool is_macho_object = false;
-    {
-        auto buf_or = llvm::MemoryBuffer::getFile(path);
-        if (!buf_or) {
-            return true;
-        }
-        auto obj_or = llvm::object::ObjectFile::createObjectFile((*buf_or)->getMemBufferRef());
-        if (!obj_or) {
-            llvm::consumeError(obj_or.takeError());
-            return true;
-        }
-        if ((*obj_or)->isMachO()) {
-            is_macho = true;
-            is_macho_object = isMachoObject64((*buf_or)->getBuffer());
-        } else if (!(*obj_or)->isELF()) {
-            if (dbg) {
-                fprintf(stderr, "AOT-LOC: skipping qore_aot_pcloc section for unsupported "
-                    "object format %s\n", path.c_str());
-            }
-            return true;
-        }
-    }
-#ifdef QORE_LLVM_OBJCOPY
-    const char* llvm_objcopy = QORE_LLVM_OBJCOPY;
-#else
-    const char* llvm_objcopy = "llvm-objcopy";
-#endif
-    if (is_macho && !llvm_objcopy[0]) {
-        if (dbg) {
-            fprintf(stderr, "AOT-LOC: no llvm-objcopy available; skipping Mach-O pcloc "
-                "section for %s\n", path.c_str());
-        }
-        return true;
-    }
-    // Reuse the per-function PC->loc maps buildAOTPcLocMaps already computed for the EOF
-    // trailer when available (same DWARF columns, same llvm_symbol keys, same serializer),
-    // avoiding a second full DWARF parse of the just-emitted object. Fall back to parsing
-    // the object directly for callers with no prebuilt slots (e.g. already-linked aggregates).
-    std::vector<AOTCompiledFuncWithSlots> fs_local;
-    const std::vector<AOTCompiledFuncWithSlots>* fs = prebuilt;
-    if (!fs) {
-        collectPcLocMapsFromObjectDwarf(path, fs_local);
-        fs = &fs_local;
-    }
-    std::vector<uint8_t> payload;
-    int64_t n = qoreAOTSerializePcLocPayload(*fs, payload, error);
-    if (n < 0) {
-        return false;
-    }
-    if (!n || payload.empty()) {
-        return true;  // no DWARF / no mappable functions
-    }
-    std::vector<uint8_t> record;
-    qoreAOTFramePcLocSectionRecord(payload, record);
-
-    std::string tmp = path + ".pcloc." + std::to_string(getpid());
-    FILE* tf = fopen(tmp.c_str(), "wb");
-    if (!tf) {
-        printd(0, "AOT: cannot write pcloc section payload '%s': %s (continuing)\n",
-            tmp.c_str(), strerror(errno));
-        return true;
-    }
-    bool wok = fwrite(record.data(), 1, record.size(), tf) == record.size();
-    if (fclose(tf) != 0) {
-        wok = false;
-    }
-    if (!wok) {
-        remove(tmp.c_str());
-        printd(0, "AOT: failed writing pcloc payload to '%s' (continuing)\n", tmp.c_str());
-        return true;
-    }
-    std::string cmd;
-    if (is_macho) {
-        // llvm-objcopy needs distinct in/out for Mach-O; emit to a temp then rename over
-        // the original. Freshly emitted objects carry no prior section, so no remove is
-        // needed (and the runtime reader accumulates every matching section regardless).
-        // A relocatable object gets the section in its single unnamed segment, and the
-        // section's segment name is set afterwards (see setMachoObjectPcLocSegment()); a
-        // linked image gets a __QORE segment.
-        std::string outp = path + ".objcopy." + std::to_string(getpid());
-        cmd = std::string("'") + llvm_objcopy + "' --add-section "
-            + (is_macho_object ? std::string() : std::string(QORE_AOT_PCLOC_MACHO_SEG))
-            + "," QORE_AOT_PCLOC_MACHO_SECT "='" + tmp + "' '" + path + "' '" + outp + "'";
-        int rc = aotSystem(cmd);
-        remove(tmp.c_str());
-        if (rc == 0 && is_macho_object && !setMachoObjectPcLocSegment(outp)) {
-            remove(outp.c_str());
-            printd(0, "AOT: cannot name the pcloc section's segment in '%s' (continuing)\n", path.c_str());
-            return true;
-        }
-        if (rc != 0 || rename(outp.c_str(), path.c_str()) != 0) {
-            remove(outp.c_str());
-            printd(0, "AOT: llvm-objcopy add pcloc section failed (rc=%d) for '%s' "
-                "(continuing)\n", rc, path.c_str());
-            return true;
-        }
-    } else {
-        // GNU objcopy edits in place with one file arg: remove any pre-existing section
-        // (defensive for re-emits), then add the non-alloc readonly section.
-        cmd = "objcopy --remove-section " QORE_AOT_PCLOC_SECTION_NAME
-            " --add-section " QORE_AOT_PCLOC_SECTION_NAME "=" + tmp
-            + " --set-section-flags " QORE_AOT_PCLOC_SECTION_NAME "=readonly,contents "
-            + path + " " + path;
-        int rc = aotSystem(cmd);
-        remove(tmp.c_str());
-        if (rc != 0) {
-            printd(0, "AOT: objcopy add pcloc section failed (rc=%d) for '%s' (continuing)\n",
-                rc, path.c_str());
-            return true;
-        }
-    }
-    if (dbg) {
-        fprintf(stderr, "AOT-LOC: added %s section to %s (%zu funcs, %zu payload bytes)\n",
-            is_macho ? QORE_AOT_PCLOC_MACHO_SEG "," QORE_AOT_PCLOC_MACHO_SECT
-                     : QORE_AOT_PCLOC_SECTION_NAME, path.c_str(), static_cast<size_t>(n), payload.size());
-    }
-    return true;
 }
 
 // Codegen one already-optimized module to a relocatable object file via the supplied
@@ -23395,8 +22638,7 @@ DLLLOCAL int qore_aot_dbg_jobserver_admit(const char* makeflags, unsigned reques
 // controls symbol visibility, so the locals SplitModule externalizes do not leak into the
 // artifact's exported (dynamic) symbol table.
 static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string& triple,
-        const std::string& out_o, std::string& error, bool debug_opt,
-        std::vector<AOTCompiledFuncWithSlots>& func_slots, bool& pc_locs_built) {
+        const std::string& out_o, std::string& error, bool debug_opt) {
     auto makeTM = [&triple]() -> llvm::TargetMachine* {
         std::string terr;
 #if LLVM_VERSION_MAJOR >= 21
@@ -23540,27 +22782,8 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
         }
     }
     if (all) {
-        // ld64's relocatable link drops the partitions' DWARF line tables. Recover
-        // the maps BEFORE linking, using all functions' original location tables
-        // so inlined callees still resolve to their exact source locations. Native
-        // offsets are function-relative and remain valid after the partial link.
-        // Accumulate on this thread only; no worker mutates the shared descriptors.
-        for (size_t i = 0; i < objs.size(); ++i) {
-            if (i && !(i % 10) && qore_check_cancel(nullptr, "AOT split source locations")) {
-                all = false;
-                error = "operation cancelled during AOT split source-location recovery";
-                break;
-            }
-            if (!buildAOTPcLocMaps(objs[i], func_slots, error, i != 0)) {
-                all = false;
-                break;
-            }
-        }
-        pc_locs_built = all;
-    }
-    if (all) {
-        // Partial-link the parts into one relocatable object (sections, including
-        // qore_aot_pcloc, are concatenated; cross-part references resolve).
+        // Partial-link the parts into one relocatable object (sections are
+        // concatenated; cross-part references resolve).
         // ld64 normally demotes every private extern to a local during a
         // relocatable link. Original hidden fast entries must remain resolvable
         // from sibling .qo files; promoted SplitModule locals are selectively
@@ -23804,9 +23027,12 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
     return all;
 }
 
+//! Optimizes the module and emits it as an object file
+/** @param allow_split true if a large module may be split for parallel code generation (a module with compiled
+    functions)
+*/
 static bool emitObjectFile(llvm::Module& module, const std::string& path, std::string& error,
-        int opt_level = 3, const char* target_triple = nullptr,
-        std::vector<AOTCompiledFuncWithSlots>* func_slots = nullptr) {
+        int opt_level = 3, const char* target_triple = nullptr, bool allow_split = false) {
     // Phase 1 instrumentation: Chrome trace for opt + codegen.
     TimeTraceRAII time_trace;
 
@@ -23858,6 +23084,13 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         return false;
     }
     module.setDataLayout(tm->createDataLayout());
+    // the code holds its source locations as constant data in the layout of this library's locations, which is
+    // the layout of a target with pointers of the same size
+    if (module.getDataLayout().getPointerSize() == sizeof(void*)
+            && !QoreIRToLLVM::checkAotLocationLayout(module.getDataLayout(), error)) {
+        delete tm;
+        return false;
+    }
 
     // LLVM emits functions in module-list order. That list can inherit
     // unordered namespace traversal order even though symbol names and
@@ -24065,7 +23298,7 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     // Long-pole modules that gate the build tail clear the threshold and benefit from full
     // concurrency there. The size metric is CPU-speed-invariant; override via
     // QCC_SPLIT_THRESHOLD for tuning.
-    bool do_split = (func_slots && !func_slots->empty() && !target_triple);
+    bool do_split = allow_split && !target_triple;
     if (do_split) {
         size_t insts = 0;
         for (llvm::Function& f : module) {
@@ -24085,10 +23318,8 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
             do_split = false;
         }
     }
-    bool pc_locs_built = false;
     bool cg_ok = do_split
-        ? codegenModuleSplit(module, aot_jobs, triple, tmp_path, error, debug_opt,
-            *func_slots, pc_locs_built)
+        ? codegenModuleSplit(module, aot_jobs, triple, tmp_path, error, debug_opt)
         : codegenModuleToObject(module, tm, tmp_path, error, debug_opt);
     if (!cg_ok) {
         remove(tmp_path.c_str());
@@ -24107,32 +23338,6 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     if (debug_opt) {
         fprintf(stderr, "AOT: Object file emission completed successfully\n");
         fflush(stderr);
-    }
-
-    // Lazy-location support (Steps 2a/2b): read the just-emitted object's DWARF
-    // line table and build, per AOT function, a sorted (function-relative native
-    // offset -> loc-index) map. The DWARF column carries the exact active loc-index
-    // (encoded in QoreIRToLLVM::setDebugLocation), so recovery is exact rather than
-    // a fragile line-match. The map drives lazy on-throw source-location recovery,
-    // replacing the eager per-line updater. Only runs when func_slots is supplied
-    // (the main per-program emit site); a no-op for glue/cross-compile objects.
-    if (func_slots && !func_slots->empty() && !pc_locs_built
-            && !buildAOTPcLocMaps(path, *func_slots, error)) {
-        delete tm;
-        return false;
-    }
-
-    // Carry the PC->loc map in a linker-surviving ELF section on EVERY emitted object
-    // (native only). This rides through arbitrary downstream linking — including when
-    // qorus relinks per-file .qo's into the qorus-core executable via the system linker
-    // — so lazy on-throw source locations work for all build/link topologies with no
-    // work required of qore's users. (The EOF trailer the other emit paths append is
-    // dropped by any such relink; the section is the robust, universal mechanism. The
-    // runtime prefers the section and falls back to the trailer for legacy artifacts.)
-    if (!target_triple && !addPcLocSectionFromObjectDwarf(path, error,
-            (func_slots && !func_slots->empty()) ? func_slots : nullptr)) {
-        delete tm;
-        return false;
     }
 
     delete tm;
@@ -24377,7 +23582,7 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         label_data, "qore_aot_label");
 
     // Build the function table (same as v1)
-    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type, i32_type});
+    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type, i32_type, ptr_type});
 
     std::vector<llvm::Constant*> func_entries;
     for (auto& cf : compiled_funcs) {
@@ -24401,7 +23606,8 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
             llvm::ConstantInt::get(i32_type, cf.num_exprs),
             llvm::ConstantInt::get(i32_type, cf.num_stmts),
             llvm::ConstantInt::get(i32_type,
-                encodeAOTRegexCountAndContext(cf.num_regex_cases, cf.slot_ids))
+                encodeAOTRegexCountAndContext(cf.num_regex_cases, cf.slot_ids)),
+            QoreIRToLLVM::getAotBodyLocation(module, cf.llvm_symbol),
         });
         func_entries.push_back(entry);
     }
@@ -24426,7 +23632,8 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
             llvm::ConstantInt::get(i32_type, cif.num_exprs),
             llvm::ConstantInt::get(i32_type, cif.num_stmts),
             llvm::ConstantInt::get(i32_type,
-                encodeAOTRegexCountAndContext(cif.num_regex_cases, cif.slot_ids))
+                encodeAOTRegexCountAndContext(cif.num_regex_cases, cif.slot_ids)),
+            QoreIRToLLVM::getAotBodyLocation(module, cif.llvm_symbol),
         });
         func_entries.push_back(entry);
     }
@@ -24733,7 +23940,11 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
                 // Build slot map for AOT pointer indirection
                 AOTSlotMap slots;
-                buildAOTSlotMap(*ir_func, slots);
+                if (!buildAOTSlotMap(*ir_func, slots)) {
+                    error = "AOT slot map construction cancelled or contains invalid slot numbering";
+                    delete ir_func;
+                    return false;
+                }
 
                 QoreIRToLLVM llvm_lowerer(ctx);
                 llvm_lowerer.setAOTMode(&slots);
@@ -24751,7 +23962,6 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     cf.num_locals = static_cast<int>(slots.local_slots.size());
                     cf.num_globals = static_cast<int>(slots.global_slots.size());
                     cf.num_exprs = static_cast<int>(slots.expr_slots.size());
-                    cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                     cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                     cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
                     // Extract slot identities (no uvb for toplevel)
@@ -24763,21 +23973,10 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     cf.num_globals = static_cast<int>(cf.slot_ids.globals.size());
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
-                    // Copy the location table built during LLVM codegen, exactly as the
-                    // function/method/closure paths do.  Without it the top-level function
-                    // has no runtime location table at all: ctx->locs stays empty at load,
-                    // so the eager per-line updater no-ops, no PC->loc range is registered
-                    // for lazy on-throw recovery, and every DWARF row for _toplevel is
-                    // dropped post-emission ("col-loc=N >= aot_locs=0").  The visible
-                    // symptom is line -1 for any exception raised in top-level code — and,
-                    // because callees are inlined into _toplevel at -O3, for exceptions
-                    // raised in those callees too.
-                    for (const auto& loc : llvm_lowerer.getAOTLocTable()) {
-                        AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                        entry.start_line = loc.start_line;
-                        entry.end_line = loc.end_line;
-                        entry.file = loc.file;
-                        cf.aot_locs.push_back(std::move(entry));
+                    if (!aotIRFunctionSourceFile(*ir_func, cf.source_file)) {
+                        error = "AOT source location collection cancelled or contains invalid slot numbering";
+                        delete ir_func;
+                        return false;
                     }
                     const size_t owner_index = compiled_funcs.size();
                     compiled_funcs.push_back(std::move(cf));
@@ -24793,9 +23992,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
                         return false;
                     }
                     toplevel_ok = true;
-                    printd(2, "AOT: compiled _toplevel to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
+                    printd(2, "AOT: compiled _toplevel to LLVM IR (locals=%d, globals=%d, exprs=%d)\n",
                         (int)slots.local_slots.size(), (int)slots.global_slots.size(),
-                        (int)slots.expr_slots.size(), (int)slots.stmt_slots.size());
+                        (int)slots.expr_slots.size());
                 } else {
                     if (q_env_is_set("QORE_AOT_DEBUG")) {
                         fprintf(stderr, "AOT: LLVM lowering failed for _toplevel: %s\n",
@@ -24827,10 +24026,8 @@ bool QoreAOT::compile(QoreProgram* pgm,
         failed_count, compiled_funcs, target_triple);
 
     // Step 3: Build serialized metadata and generate main() + function registration table
-    // Hoisted out of the metadata block so the function descriptors survive to the
-    // post-emission DWARF pass (buildAOTPcLocMaps needs the emitted object, which only
-    // exists after emitObjectFile below).
-    std::vector<AOTCompiledFuncWithSlots> emitted_func_slots;
+    // whether the module has compiled functions, so its code generation can be split
+    bool split_codegen = false;
     {
         QoreAOTBinaryWriter writer;
         writer.emit_parse_constant_values = false;
@@ -24943,12 +24140,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
             fws.slot_ids = cf.slot_ids;
             setAOTFuncConstantExclusions(fws, cf);
             // Transfer handler IR pointers (non-owning: AOTCompiledFunc still owns them)
-            for (auto& hir : cf.handler_irs) {
-                fws.handler_irs.push_back(hir);
-            }
-            fws.aot_locs = cf.aot_locs;
-            fws.pc_companions = cf.pc_companions;
-            fws.llvm_symbol = cf.llvm_symbol;
+            fws.source_file = cf.source_file;
             fws.debug_ir = cf.debug_ir.get();
             func_slots.push_back(std::move(fws));
         }
@@ -24964,7 +24156,6 @@ bool QoreAOT::compile(QoreProgram* pgm,
             fws.num_lv_path_insts = cif.num_lv_path_insts;
             fws.slot_ids = cif.slot_ids;
             setAOTInitFuncConstantExclusions(fws, cif);
-            fws.llvm_symbol = cif.llvm_symbol;
             func_slots.push_back(std::move(fws));
         }
         if (!attachAOTProgramStatementLocs(pgm, func_slots, error)) {
@@ -25007,8 +24198,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         generateMainAndTableV2(ctx, *module, metadata, label, parse_options, compiled_funcs,
             compiled_init_funcs);
 
-        // Preserve the function descriptors for the post-emission PC->loc pass.
-        emitted_func_slots.swap(func_slots);
+        split_codegen = !func_slots.empty();
     }
 
     // Finalize shared debug info after all functions are lowered
@@ -25041,7 +24231,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         fprintf(stderr, "AOT: emitting object file (O%d, total IR insts: %zu)...\n",
             opt_level, total_ir_insts_all);
     }
-    if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple, &emitted_func_slots)) {
+    if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple, split_codegen)) {
         return false;
     }
     if (q_env_is_set("QORE_AOT_DEBUG")) {
@@ -25060,12 +24250,6 @@ bool QoreAOT::compile(QoreProgram* pgm,
     // Clean up object file (keep for cross-compilation since user needs it)
     if (!target_triple) {
         remove(obj_path.c_str());
-    }
-
-    // Append the lazy PC->loc trailer to the final executable.
-    if (!writeAndVerifyPcLocTrailer(target_triple ? obj_path : output_path,
-            emitted_func_slots, error)) {
-        return false;
     }
 
     reportAOTArtifactStats("compilation", opt_level, include_source,
@@ -26217,9 +25401,10 @@ static bool emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
     //       int num_exprs;                // i32
     //       int num_stmts;                // i32
     //       int num_regex_cases = 0;      // i32
+    //       const QoreProgramLocation* body_loc; // ptr
     //   };
     auto* func_entry_type = llvm::StructType::get(ctx,
-        {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type, i32_type});
+        {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type, i32_type, ptr_type});
 
     std::vector<llvm::Constant*> entries;
     for (size_t i = 0; i < compiled_funcs.size(); ++i) {
@@ -26253,6 +25438,7 @@ static bool emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
             llvm::ConstantInt::get(i32_type, cf.num_stmts),
             llvm::ConstantInt::get(i32_type,
                 encodeAOTRegexCountAndContext(cf.num_regex_cases, cf.slot_ids)),
+            QoreIRToLLVM::getAotBodyLocation(module, cf.llvm_symbol),
         });
         entries.push_back(entry);
     }
@@ -26597,7 +25783,7 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         modname_data, "qore_aot_mod_name");
 
     // Build function table (same format as executable AOT)
-    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type, i32_type});
+    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type, i32_type, ptr_type});
     std::vector<llvm::Constant*> func_entries;
     for (auto& cf : compiled_funcs) {
         llvm::Constant* name_str = llvm::ConstantDataArray::getString(ctx, cf.name, true);
@@ -26624,7 +25810,8 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
             llvm::ConstantInt::get(i32_type, cf.num_exprs),
             llvm::ConstantInt::get(i32_type, cf.num_stmts),
             llvm::ConstantInt::get(i32_type,
-                encodeAOTRegexCountAndContext(cf.num_regex_cases, cf.slot_ids))
+                encodeAOTRegexCountAndContext(cf.num_regex_cases, cf.slot_ids)),
+            QoreIRToLLVM::getAotBodyLocation(module, cf.llvm_symbol),
         });
         func_entries.push_back(entry);
     }
@@ -27142,8 +26329,8 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     reportAOTCompileStats("module compilation", compiled_count, total_funcs,
         failed_count, compiled_funcs, target_triple);
 
-    // Hoisted so the function descriptors survive to the post-emission DWARF pass.
-    std::vector<AOTCompiledFuncWithSlots> emitted_func_slots;
+    // whether the module has compiled functions, so its code generation can be split
+    bool split_codegen = false;
     // Step 4: Generate module ABI with serialized metadata
     {
         QoreAOTBinaryWriter writer;
@@ -27210,12 +26397,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             fws.slot_ids = cf.slot_ids;
             setAOTFuncConstantExclusions(fws, cf);
             // Transfer handler IR pointers (non-owning: AOTCompiledFunc still owns them)
-            for (auto& hir : cf.handler_irs) {
-                fws.handler_irs.push_back(hir);
-            }
-            fws.aot_locs = cf.aot_locs;
-            fws.pc_companions = cf.pc_companions;
-            fws.llvm_symbol = cf.llvm_symbol;
+            fws.source_file = cf.source_file;
             fws.debug_ir = cf.debug_ir.get();
             func_slots.push_back(std::move(fws));
         }
@@ -27231,7 +26413,6 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             fws.num_lv_path_insts = cif.num_lv_path_insts;
             fws.slot_ids = cif.slot_ids;
             setAOTInitFuncConstantExclusions(fws, cif);
-            fws.llvm_symbol = cif.llvm_symbol;
             func_slots.push_back(std::move(fws));
         }
         if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
@@ -27286,7 +26467,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         generateModuleABIV2(ctx, *module, metadata, label, qpgm->getParseOptions(),
             mod_info, compiled_funcs, compile_only);
 
-        emitted_func_slots.swap(func_slots);
+        split_codegen = !func_slots.empty();
     }
 
     // Finalize shared debug info after all functions are lowered
@@ -27309,7 +26490,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // file IS the final artifact; otherwise it's an intermediate that gets
     // linked into a .so.
     std::string obj_path = compile_only ? output_path : (output_path + ".o");
-    if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple, &emitted_func_slots)) {
+    if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple, split_codegen)) {
         return false;
     }
 
@@ -27326,16 +26507,11 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         }
     }
 
-    // The optional modules that were unavailable are recorded before the PC->loc and dependency trailers,
-    // which are read from the end of the file.
+    // The optional modules that were unavailable are recorded before the dependency trailer, which is read from
+    // the end of the file.
     if (!compile_only && !target_triple
             && !qoreAOTAppendOptionalModulesTrailer(output_path,
                 qore_program_private::get(**qpgm)->unavailable_try_modules, error)) {
-        return false;
-    }
-    // Append the lazy PC->loc trailer to the final loaded artifact (output_path is
-    // the .qo in compile_only mode, otherwise the just-linked .qmod).
-    if (!writeAndVerifyPcLocTrailer(output_path, emitted_func_slots, error)) {
         return false;
     }
     if (!compile_only && !target_triple
@@ -27651,8 +26827,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         reportAOTCompileStats("split module compilation", compiled_count, total_funcs,
             failed_count, compiled_funcs, target_triple);
 
-        // Hoisted so the function descriptors survive to the post-emission DWARF pass.
-        std::vector<AOTCompiledFuncWithSlots> emitted_func_slots;
+        // whether the module has compiled functions, so its code generation can be split
+        bool split_codegen = false;
         // Step 10: Generate module ABI with serialized metadata
         {
             QoreAOTBinaryWriter writer;
@@ -27716,12 +26892,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 fws.slot_ids = cf.slot_ids;
                 setAOTFuncConstantExclusions(fws, cf);
                 // Transfer handler IR pointers (non-owning: AOTCompiledFunc still owns them)
-                for (auto& hir : cf.handler_irs) {
-                    fws.handler_irs.push_back(hir);
-                }
-                fws.aot_locs = cf.aot_locs;
-                fws.pc_companions = cf.pc_companions;
-            fws.llvm_symbol = cf.llvm_symbol;
+                fws.source_file = cf.source_file;
                 fws.debug_ir = cf.debug_ir.get();
                 func_slots.push_back(std::move(fws));
             }
@@ -27737,7 +26908,6 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 fws.num_lv_path_insts = cif.num_lv_path_insts;
                 fws.slot_ids = cif.slot_ids;
                 setAOTInitFuncConstantExclusions(fws, cif);
-            fws.llvm_symbol = cif.llvm_symbol;
                 func_slots.push_back(std::move(fws));
             }
             if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
@@ -27791,7 +26961,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(),
                 qpgm->getParseOptions(), mod_info, compiled_funcs, compile_only);
 
-            emitted_func_slots.swap(func_slots);
+            split_codegen = !func_slots.empty();
         }
 
         // Finalize shared debug info after all functions are lowered
@@ -27814,7 +26984,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         // object file IS the final artifact; otherwise it's an intermediate
         // that gets linked into a .so.
         std::string obj_path = compile_only ? output_path : (output_path + ".o");
-        if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple, &emitted_func_slots)) {
+        if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple, split_codegen)) {
             return false;
         }
 
@@ -27831,15 +27001,11 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             }
         }
 
-        // The optional modules that were unavailable are recorded before the PC->loc and dependency
+        // The optional modules that were unavailable are recorded before the dependency
         // trailers, which are read from the end of the file.
         if (!compile_only && !target_triple
                 && !qoreAOTAppendOptionalModulesTrailer(output_path,
                     qore_program_private::get(**qpgm)->unavailable_try_modules, error)) {
-            return false;
-        }
-        // Append the lazy PC->loc trailer to the final loaded artifact.
-        if (!writeAndVerifyPcLocTrailer(output_path, emitted_func_slots, error)) {
             return false;
         }
         if (!compile_only && !target_triple
@@ -28316,8 +27482,8 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         phase_start = std::chrono::steady_clock::now();
     }
     std::vector<uint8_t> metadata_blob;
-    // Hoisted so the function descriptors survive to the post-emission DWARF pass.
-    std::vector<AOTCompiledFuncWithSlots> emitted_func_slots;
+    // whether the module has compiled functions, so its code generation can be split
+    bool split_codegen = false;
     {
         QoreAOTBinaryWriter writer;
         QoreAOTBinaryHeader hdr{};
@@ -28386,12 +27552,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
             fws.num_lv_path_insts = cf.num_lv_path_insts;
             fws.slot_ids = cf.slot_ids;
             setAOTFuncConstantExclusions(fws, cf);
-            for (auto& hir : cf.handler_irs) {
-                fws.handler_irs.push_back(hir);
-            }
-            fws.aot_locs = cf.aot_locs;
-            fws.pc_companions = cf.pc_companions;
-            fws.llvm_symbol = cf.llvm_symbol;
+            fws.source_file = cf.source_file;
             fws.debug_ir = cf.debug_ir.get();
             func_slots.push_back(std::move(fws));
         }
@@ -28406,7 +27567,6 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
             fws.num_lv_path_insts = cif.num_lv_path_insts;
             fws.slot_ids = cif.slot_ids;
             setAOTInitFuncConstantExclusions(fws, cif);
-            fws.llvm_symbol = cif.llvm_symbol;
             func_slots.push_back(std::move(fws));
         }
         if (!attachAOTProgramStatementLocs(qpgm, func_slots, error, target_canon.c_str(), nullptr,
@@ -28440,7 +27600,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
             error = "failed to finalize script metadata for " + target_canon;
             return false;
         }
-        emitted_func_slots.swap(func_slots);
+        split_codegen = !func_slots.empty();
     }
     if (batch_timing) {
         batch_timing->metadata_ns.fetch_add(aotElapsedNs(phase_start), std::memory_order_relaxed);
@@ -28513,7 +27673,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
     if (batch_timing) {
         phase_start = std::chrono::steady_clock::now();
     }
-    if (!emitObjectFile(*module, output_path, error, opt_level, target_triple, &emitted_func_slots)) {
+    if (!emitObjectFile(*module, output_path, error, opt_level, target_triple, split_codegen)) {
         return false;
     }
     if (batch_timing) {
@@ -30522,12 +29682,7 @@ bool QoreAOT::compileScriptAggregate(
                 fws.num_lv_path_insts = cf.num_lv_path_insts;
                 fws.slot_ids = cf.slot_ids;
                 setAOTFuncConstantExclusions(fws, cf);
-                for (auto& hir : cf.handler_irs) {
-                    fws.handler_irs.push_back(hir);
-                }
-                fws.aot_locs = cf.aot_locs;
-                fws.pc_companions = cf.pc_companions;
-                fws.llvm_symbol = cf.llvm_symbol;
+                fws.source_file = cf.source_file;
                 fws.debug_ir = cf.debug_ir.get();
                 func_slots.push_back(std::move(fws));
                 ++func_i;
@@ -30549,7 +29704,6 @@ bool QoreAOT::compileScriptAggregate(
                 fws.num_lv_path_insts = cif.num_lv_path_insts;
                 fws.slot_ids = cif.slot_ids;
                 setAOTInitFuncConstantExclusions(fws, cif);
-                fws.llvm_symbol = cif.llvm_symbol;
                 func_slots.push_back(std::move(fws));
                 ++init_slot_i;
             }
@@ -31158,8 +30312,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     // contributions (slice 5 format).  No module-info globals, no
     // register fn.
     std::vector<uint8_t> metadata_blob;
-    // Hoisted so the function descriptors survive to the post-emission DWARF pass.
-    std::vector<AOTCompiledFuncWithSlots> emitted_func_slots;
+    // whether the module has compiled functions, so its code generation can be split
+    bool split_codegen = false;
     {
         QoreAOTBinaryWriter writer;
         QoreAOTBinaryHeader hdr{};
@@ -31225,12 +30379,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             fws.num_lv_path_insts = cf.num_lv_path_insts;
             fws.slot_ids = cf.slot_ids;
             setAOTFuncConstantExclusions(fws, cf);
-            for (auto& hir : cf.handler_irs) {
-                fws.handler_irs.push_back(hir);
-            }
-            fws.aot_locs = cf.aot_locs;
-            fws.pc_companions = cf.pc_companions;
-            fws.llvm_symbol = cf.llvm_symbol;
+            fws.source_file = cf.source_file;
             fws.debug_ir = cf.debug_ir.get();
             func_slots.push_back(std::move(fws));
         }
@@ -31245,7 +30394,6 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             fws.num_lv_path_insts = cif.num_lv_path_insts;
             fws.slot_ids = cif.slot_ids;
             setAOTInitFuncConstantExclusions(fws, cif);
-            fws.llvm_symbol = cif.llvm_symbol;
             func_slots.push_back(std::move(fws));
         }
         if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error, target_canon.c_str())) {
@@ -31279,7 +30427,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             error = "failed to finalize script metadata";
             return false;
         }
-        emitted_func_slots.swap(func_slots);
+        split_codegen = !func_slots.empty();
     }
 
     if (qccAOTVerbose()) {
@@ -31369,12 +30517,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         module->print(llvm::errs(), nullptr);
     }
 
-    if (!emitObjectFile(*module, output_path, error, opt_level, target_triple, &emitted_func_slots)) {
-        return false;
-    }
-
-    // Append the lazy PC->loc trailer to the final .qo (no link step on this path).
-    if (!writeAndVerifyPcLocTrailer(output_path, emitted_func_slots, error)) {
+    if (!emitObjectFile(*module, output_path, error, opt_level, target_triple, split_codegen)) {
         return false;
     }
 
@@ -31820,12 +30963,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 fws.num_lv_path_insts = cf.num_lv_path_insts;
                 fws.slot_ids = cf.slot_ids;
                 setAOTFuncConstantExclusions(fws, cf);
-                for (auto& hir : cf.handler_irs) {
-                    fws.handler_irs.push_back(hir);
-                }
-                fws.aot_locs = cf.aot_locs;
-                fws.pc_companions = cf.pc_companions;
-            fws.llvm_symbol = cf.llvm_symbol;
+                fws.source_file = cf.source_file;
                 fws.debug_ir = cf.debug_ir.get();
                 func_slots.push_back(std::move(fws));
             }
@@ -31840,7 +30978,6 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 fws.num_lv_path_insts = cif.num_lv_path_insts;
                 fws.slot_ids = cif.slot_ids;
                 setAOTInitFuncConstantExclusions(fws, cif);
-            fws.llvm_symbol = cif.llvm_symbol;
                 func_slots.push_back(std::move(fws));
             }
             if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error, target_canon.c_str())) {
@@ -32333,12 +31470,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 fws.num_lv_path_insts = cf.num_lv_path_insts;
                 fws.slot_ids = cf.slot_ids;
                 setAOTFuncConstantExclusions(fws, cf);
-                for (auto& hir : cf.handler_irs) {
-                    fws.handler_irs.push_back(hir);
-                }
-                fws.aot_locs = cf.aot_locs;
-                fws.pc_companions = cf.pc_companions;
-            fws.llvm_symbol = cf.llvm_symbol;
+                fws.source_file = cf.source_file;
                 fws.debug_ir = cf.debug_ir.get();
                 func_slots.push_back(std::move(fws));
             }
@@ -32353,7 +31485,6 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 fws.num_lv_path_insts = cif.num_lv_path_insts;
                 fws.slot_ids = cif.slot_ids;
                 setAOTInitFuncConstantExclusions(fws, cif);
-            fws.llvm_symbol = cif.llvm_symbol;
                 func_slots.push_back(std::move(fws));
             }
             if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
@@ -32445,10 +31576,6 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             return false;
         }
 
-        // No post-link trailer needed for the aggregate: each input .qo already carries
-        // a `qore_aot_pcloc` ELF section (added in emitObjectFile), and the linker
-        // concatenates them into the linked artifact — so lazy on-throw locations work
-        // for aggregate-resident functions automatically.
         if (!target_triple
                 && (!qoreAOTAppendOptionalModulesTrailer(output_path,
                         qore_program_private::get(**qpgm)->unavailable_try_modules, error)
@@ -32880,12 +32007,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 fws.num_lv_path_insts = cf.num_lv_path_insts;
                 fws.slot_ids = cf.slot_ids;
                 setAOTFuncConstantExclusions(fws, cf);
-                for (auto& hir : cf.handler_irs) {
-                    fws.handler_irs.push_back(hir);
-                }
-                fws.aot_locs = cf.aot_locs;
-                fws.pc_companions = cf.pc_companions;
-            fws.llvm_symbol = cf.llvm_symbol;
+                fws.source_file = cf.source_file;
                 fws.debug_ir = cf.debug_ir.get();
                 func_slots.push_back(std::move(fws));
             }
@@ -32900,7 +32022,6 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 fws.num_lv_path_insts = cif.num_lv_path_insts;
                 fws.slot_ids = cif.slot_ids;
                 setAOTInitFuncConstantExclusions(fws, cif);
-            fws.llvm_symbol = cif.llvm_symbol;
                 func_slots.push_back(std::move(fws));
             }
             if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
@@ -33047,6 +32168,22 @@ static bool isNativelyLoweredAOTCallRef(const QoreValue& expr) {
     return fcr && fcr->getFunction();
 }
 
+//! Returns true if the native code of a decomposed background call refers to the background expression by its slot
+/** QoreIRToLLVM::tryEmitDecomposedBackground() passes the expression slot of a function, static method, object
+    method or call reference call to the runtime, which builds the call from the expression; a call of a method of the
+    object is made by name.  The slot must be assigned by the slot map walk, not on demand when the code is lowered:
+    a metadata-only compile (qcc -m --from-objects) assigns the slots without lowering the code.
+*/
+static bool qoreAOTDecomposedBackgroundUsesExprSlot(const QoreValue& expr) {
+    const auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(expr.getInternalNode());
+    if (!bg_op) {
+        return false;
+    }
+    const AbstractQoreNode* inner = bg_op->getExp().getInternalNode();
+    return dynamic_cast<const FunctionCallNode*>(inner) || dynamic_cast<const StaticMethodCallNode*>(inner)
+        || dynamic_cast<const QoreDotEvalOperatorNode*>(inner) || dynamic_cast<const CallReferenceCallNode*>(inner);
+}
+
 static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
     // Pure computation opcodes with pre-evaluated operands
     if ((!ii->operands.empty() && getOpcodeIsBinaryInvoke(
@@ -33096,9 +32233,9 @@ static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
             && dynamic_cast<const QoreCastOperatorNode*>(ii->expr.getInternalNode())) {
         return true;
     }
-    // BackgroundInt with pre-evaluated args (method name embedded as string constant)
+    // BackgroundInt with pre-evaluated args: only a call of a method of the object (by name) needs no slot
     if (ii->invoke_opcode == QoreIROpcode::BackgroundInt && !ii->operands.empty()) {
-        return true;
+        return !qoreAOTDecomposedBackgroundUsesExprSlot(ii->expr);
     }
     // Method references are emitted from the method name and the evaluated object context.
     if (ii->invoke_opcode == QoreIROpcode::CreateMethodRef
@@ -33150,6 +32287,9 @@ static bool shouldSkipExprInstructionExprSlot(const QoreIRExprInstruction* ei) {
     if (dynamic_cast<const QoreIRBackgroundInstruction*>(ei)) {
         return true;
     }
+    if (ei->opcode == QoreIROpcode::BackgroundInt && !ei->operands.empty()) {
+        return !qoreAOTDecomposedBackgroundUsesExprSlot(ei->expr);
+    }
     if (ei->opcode == QoreIROpcode::ListAssignAny && ei->operands.size() >= 2) {
         return true;
     }
@@ -33158,16 +32298,14 @@ static bool shouldSkipExprInstructionExprSlot(const QoreIRExprInstruction* ei) {
 }
 
 //! Registers the variables that an on_block_exit handler reaches from outside the function running it
-/** A compiled function's handlers run as IR through the interpreter, and when the handler IR is loaded, each
-    local variable it uses is bound to a LocalVar of the enclosing AOT context: the function's own locals by slot,
-    its body locals (which include every handler's own locals) by name.  A variable that the handler reaches from
-    outside the function - a top-level local, a variable captured by a closure, or a parameter - is in neither set
-    unless the function body itself uses it, so it was bound to a fresh LocalVar that no scope ever
-    instantiated: reads returned NOTHING, writes were lost, and a captured variable could not be found at all.
+/** A compiled function's handlers are native functions sharing its AOT context (see
+    design/native-block-exit-handlers.md), and the debug IR of a handler binds each local variable it uses to a
+    LocalVar of that context: the function's own locals by slot, its body locals (which include every handler's own
+    locals) by name.  A variable that the handler reaches from outside the function - a top-level local, a variable
+    captured by a closure, or a parameter - is in neither set unless the function body itself uses it.
 
-    Registering those variables in the function's local slot table gives them a slot identity that the runtime
-    resolves to the real variable exactly as for the function body's own references, and the handler IR loader
-    binds the handler's reference to that variable.
+    Registering those variables in the function's local slot table, in the handler's slot order, gives them a slot
+    identity that the runtime resolves to the real variable exactly as for the function body's own references.
 
     Nested handlers are walked too: their outer variables must be bound by the same context.
 
@@ -33175,11 +32313,15 @@ static bool shouldSkipExprInstructionExprSlot(const QoreIRExprInstruction* ei) {
     @param body_locals the body locals of the function that owns the handler
     @param slots the slot map of the function that owns the handler
 */
-static void registerHandlerOuterLocals(const QoreIRFunction& handler,
+static bool registerHandlerOuterLocals(const QoreIRFunction& handler,
         const std::unordered_set<const LocalVar*>& body_locals, AOTSlotMap& slots) {
+    size_t count = 0;
     // register in handler slot order so that the slot table is deterministic
     std::vector<std::pair<uint32_t, const LocalVar*>> outer;
     for (const auto& [lv, slot_id] : handler.local_var_slots) {
+        if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT handler outer locals")) {
+            return false;
+        }
         // slots below parent_slot_count are the parent's own locals, bound to the parent's slots directly
         if (lv && slot_id >= handler.parent_slot_count && !body_locals.count(lv)
                 && !slots.hasLocalSlot(static_cast<const void*>(lv))) {
@@ -33190,20 +32332,32 @@ static void registerHandlerOuterLocals(const QoreIRFunction& handler,
         return a.first < b.first;
     });
     for (const auto& i : outer) {
+        if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT handler outer locals")) {
+            return false;
+        }
         slots.getLocalSlot(static_cast<const void*>(i.second));
     }
 
     for (const auto& block : handler.blocks) {
+        if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT handler outer locals")) {
+            return false;
+        }
         for (const auto& inst : block->instructions) {
+            if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT handler outer locals")) {
+                return false;
+            }
             if (inst->opcode != QoreIROpcode::OnBlockExit) {
                 continue;
             }
             const auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
             if (obei->handler_ir) {
-                registerHandlerOuterLocals(*obei->handler_ir, body_locals, slots);
+                if (!registerHandlerOuterLocals(*obei->handler_ir, body_locals, slots)) {
+                    return false;
+                }
             }
         }
     }
+    return true;
 }
 
 // Walk a lvalue expression tree and register all inner VarRefNodes in the slot maps.
@@ -33238,7 +32392,11 @@ static void registerLValueBaseVars(const QoreValue& lvalue, AOTSlotMap& slots) {
     }
 }
 
-void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
+bool buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir_local_slots) {
+    size_t count = 0;
+    auto cancelled = [&]() {
+        return ++count % 100 == 0 && qore_check_cancel(nullptr, "AOT slot map construction");
+    };
     auto makeOpcodeSource = [](QoreIROpcode opcode) {
         std::string source = "IR opcode ";
         source += getOpcodeName(static_cast<int>(opcode));
@@ -33291,13 +32449,22 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
     };
 
     // Preserve the IR local slot identity in the AOT local table.  Handler IR
-    // inherits parent locals by IR slot ID, and AOT handler deserialization uses
-    // ctx->locals[slot_id] for those parent slots.  If AOT local slots are
-    // allocated by instruction-walk order instead, handlers can inherit the
-    // wrong parent value when the two orders diverge.
-    for (const auto& [lv, slot_id] : func.local_var_slots) {
-        if (lv) {
-            slots.local_slots[reinterpret_cast<const void*>(lv)] = static_cast<int32_t>(slot_id);
+    // inherits parent locals by IR slot ID, and the IR of a closure loaded with
+    // its native body binds the body's local slots by IR slot ID
+    // (AOTClosureRuntimeBinding::local_slots).  If AOT local slots are
+    // allocated by instruction-walk order instead, they bind the wrong variable
+    // when the two orders diverge.
+    if (seed_ir_local_slots) {
+        for (const auto& [lv, slot_id] : func.local_var_slots) {
+            if (cancelled()) {
+                return false;
+            }
+            if (lv) {
+                slots.local_slots[reinterpret_cast<const void*>(lv)] = static_cast<int32_t>(slot_id);
+            }
+        }
+        if (!slots.refreshLocalSlotBound()) {
+            return false;
         }
     }
 
@@ -33309,7 +32476,30 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
     // Walk blocks and instructions in deterministic order (same as LLVM lowering)
     // to assign slot indices for each unique process-specific pointer.
     for (auto& block : func.blocks) {
+        if (cancelled()) {
+            return false;
+        }
         for (auto& inst : block->instructions) {
+            if (cancelled()) {
+                return false;
+            }
+            // the helper of a background expression is native code that shares this function's context: its
+            // parameters and everything its code refers to take slots of this function, so that a metadata-only
+            // compile assigns the same slots without lowering it
+            if (inst->opcode == QoreIROpcode::BackgroundInt) {
+                auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                if (bg_inst && bg_inst->kind == QoreIRBackgroundKind::Helper && bg_inst->helper_ir) {
+                    for (LocalVar* lv : bg_inst->helper_params) {
+                        if (cancelled()) {
+                            return false;
+                        }
+                        slots.getLocalSlot(reinterpret_cast<const void*>(lv));
+                    }
+                    if (!buildAOTSlotMap(*bg_inst->helper_ir, slots, false)) {
+                        return false;
+                    }
+                }
+            }
             switch (inst->opcode) {
                 case QoreIROpcode::LoadLocal:
                 case QoreIROpcode::StoreLocal: {
@@ -33683,16 +32873,23 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 }
                 case QoreIROpcode::OnBlockExit: {
                     auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
-                    StatementBlock* code = obei->stmt->getCode();
-                    slots.getStmtSlot(reinterpret_cast<const void*>(code));
                     if (obei->handler_ir) {
                         if (!body_locals_built) {
                             for (const LocalVar* lv : func.all_body_locals) {
+                                if (cancelled()) {
+                                    return false;
+                                }
                                 body_locals.insert(lv);
                             }
                             body_locals_built = true;
                         }
-                        registerHandlerOuterLocals(*obei->handler_ir, body_locals, slots);
+                        if (!registerHandlerOuterLocals(*obei->handler_ir, body_locals, slots)) {
+                            return false;
+                        }
+                        // the handler is native code that shares this function's context, as a background helper is
+                        if (!buildAOTSlotMap(*obei->handler_ir, slots, false)) {
+                            return false;
+                        }
                     }
                     break;
                 }
@@ -33748,11 +32945,22 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     // Register local variable slots referenced in path steps
                     auto* pi = static_cast<QoreIRLValuePathInstruction*>(inst.get());
                     for (auto& step : pi->path) {
+                        if (cancelled()) {
+                            return false;
+                        }
                         if ((step.kind == LVPathStepKind::LocalVar
                                 || step.kind == LVPathStepKind::ClosureVar)
                                 && step.ref_ptr) {
                             int32_t sid = slots.getLocalSlot(step.ref_ptr);
                             step.slot_id = static_cast<uint32_t>(sid);
+                        } else if (step.kind == LVPathStepKind::Cast) {
+                            // the cast operator is an expression slot, which the runtime resolves to the operator
+                            assert(step.cast_node);
+                            QoreValue cast_val(const_cast<QoreCastOperatorNode*>(step.cast_node));
+                            uint64_t bits;
+                            memcpy(&bits, &cast_val, sizeof(bits));
+                            step.slot_id = static_cast<uint32_t>(slots.getExprSlot(bits,
+                                "lvalue path cast step"));
                         }
                     }
                     // Register LValuePath slot for AOT codegen
@@ -33772,6 +32980,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
             }
         }
     }
+    return true;
 }
 
 QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int num_globals, int num_exprs, int num_stmts, int num_regex_cases) {
@@ -33783,13 +32992,11 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
     int local_count = 0;
     int global_count = 0;
     int expr_count = 0;
-    int stmt_count = 0;
     int regex_count = 0;
     int lv_path_count = 0;
     std::unordered_set<const void*> seen_locals;
     std::unordered_set<const void*> seen_globals;
     std::unordered_set<uint64_t> seen_exprs;
-    std::unordered_set<const void*> seen_stmts;
     std::unordered_set<const void*> seen_regex_cases;
     std::unordered_set<const void*> seen_lv_paths;
 
@@ -34168,15 +33375,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     countExprSlot(ci->sort_exp);
                     break;
                 }
-                case QoreIROpcode::OnBlockExit: {
-                    auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
-                    StatementBlock* code = obei->stmt->getCode();
-                    const void* key = reinterpret_cast<const void*>(code);
-                    if (seen_stmts.insert(key).second) {
-                        ++stmt_count;
-                    }
-                    break;
-                }
                 case QoreIROpcode::SwitchRegexMatch: {
                     auto* ri = static_cast<QoreIRSwitchRegexMatchInstruction*>(inst.get());
                     if (ri->regex_case) {
@@ -34216,16 +33414,16 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
 
     // Check if counts match before taking any refs
     if (local_count != num_locals || global_count != num_globals ||
-            expr_count != num_exprs || stmt_count != num_stmts ||
+            expr_count != num_exprs || num_stmts ||
             regex_count != num_regex_cases) {
         // Slot count mismatch between compile time and runtime - this can happen due to
         // expression object sharing differences in the parser (e.g., ?? operator chains),
         // or (during Phase 6b transition) regex cases not being fully serialized/deserialized.
         // Return nullptr to fall back to AST interpretation for this function.
         printd(1, "buildAOTContext: slot mismatch for '%s' (expected l=%d g=%d e=%d s=%d r=%d, "
-            "actual l=%d g=%d e=%d s=%d r=%d) - falling back to AST\n",
+            "actual l=%d g=%d e=%d s=0 r=%d) - falling back to AST\n",
             func.name.c_str(), num_locals, num_globals, num_exprs, num_stmts, num_regex_cases,
-            local_count, global_count, expr_count, stmt_count, regex_count);
+            local_count, global_count, expr_count, regex_count);
         return nullptr;
     }
 
@@ -34250,13 +33448,11 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
     int local_idx = 0;
     int global_idx = 0;
     int expr_idx = 0;
-    int stmt_idx = 0;
     int regex_idx = 0;
     int lv_path_idx = 0;
     seen_locals.clear();
     seen_globals.clear();
     seen_exprs.clear();
-    seen_stmts.clear();
     seen_regex_cases.clear();
     seen_lv_paths.clear();
 
@@ -34703,15 +33899,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     fillExprSlot(ci->exp);
                     fillExprSlot(ci->where_exp);
                     fillExprSlot(ci->sort_exp);
-                    break;
-                }
-                case QoreIROpcode::OnBlockExit: {
-                    auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
-                    StatementBlock* code = obei->stmt->getCode();
-                    const void* key = reinterpret_cast<const void*>(code);
-                    if (seen_stmts.insert(key).second) {
-                        ctx->stmts[stmt_idx++] = code;
-                    }
                     break;
                 }
                 case QoreIROpcode::SwitchRegexMatch: {
@@ -37230,6 +36417,14 @@ static void collectAOTStaticVarRefs(const QoreIRFunction& func, std::vector<AOTS
                         }
                         break;
                     }
+                    case QoreIROpcode::BackgroundInt: {
+                        // the helper of a background expression is compiled with the function
+                        const auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                        if (bg_inst && bg_inst->helper_ir) {
+                            walk(*bg_inst->helper_ir);
+                        }
+                        break;
+                    }
                     default:
                         break;
                 }
@@ -37612,41 +36807,8 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
     }
 
     collectAOTStaticVarRefs(func, out.static_var_refs);
-
-    // stmt_slots (on_block_exit handlers) are resolved from the function's AST at
-    // runtime in buildContextFromSlotMap(), so they no longer require source fallback.
 }
 
-//! Extract handler IR pointers for each statement slot in the compiled function.
-/** Walks the IR function to find OnBlockExit instructions with handler_ir and maps them
-    to their statement slot indices. Foreach instructions have null handler_ir.
-    @param func the IR function
-    @param slots the slot map with stmt_slot indices
-    @return vector of handler IR pointers indexed by stmt slot (null = no handler IR)
-*/
-static std::vector<const QoreIRFunction*> extractHandlerIRs(
-        QoreIRFunction& func, const AOTSlotMap& slots) {
-    std::vector<const QoreIRFunction*> result(slots.stmt_slots.size());
-    std::unordered_set<const void*> seen;
-
-    for (auto& block : func.blocks) {
-        for (auto& inst : block->instructions) {
-            if (inst->opcode == QoreIROpcode::OnBlockExit) {
-                auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
-                StatementBlock* code = obei->stmt->getCode();
-                const void* key = reinterpret_cast<const void*>(code);
-                if (seen.insert(key).second) {
-                    auto it = slots.stmt_slots.find(key);
-                    if (it != slots.stmt_slots.end() && obei->handler_ir) {
-                        result[it->second] = obei->handler_ir.get();
-                    }
-                }
-            }
-            // Foreach instructions don't have handler_ir — null stays in result
-        }
-    }
-    return result;
-}
 
 void QoreAOT::printSupportedTargets() {
     llvm::InitializeAllTargets();

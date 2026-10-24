@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class IRScalarReplacementTemporaryLifetimeTest
+
+#! Regression coverage for the lifetime of the scalars that replace the members of fixed hashes and lists
+/** The IR optimizer replaces a local hash or list with a fixed layout by one scalar per member, and a member's
+    compound assignment by a native operation.  The interpreter keeps each native scalar in a QoreValue slot, where
+    an integer outside the inline range and a double whose bits collide with a value tag own a boxed node that the
+    temp scope of the statement computing it releases; such a scalar used by a later statement was read as NOTHING,
+    so the members read back as 0 or null.  The slot of a native scalar now owns its value in the interpreter, as a
+    register does in native code, so the scalars are forwarded across statements, around loops and through branches.
+    A list index held in a local that the loop increments is not a constant.  The scenario runs in every tier and as
+    a compiled executable, and must print what the AST tier prints; its functions must still be optimized.
+*/
+class IRScalarReplacementTemporaryLifetimeTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture;
+        #! the AST output that every other tier must reproduce
+        *string ast_output;
+
+        #! lines of the AST output, computed independently of Qore
+        const AstLines = (
+            "compound 1152921504606846976: {d: 576460752303423488, m: 2305843009213693952, p: 1152921504606846978, "
+                "x: 1152921504606846974}",
+            "compound -4611686018427387904: {d: -4611686018427387904, m: -4611686018427387904, "
+                "p: -4611686018427387903, x: -4611686018427387905}",
+            "product 10: {m: 20, c: 30}",
+            "product 1152921504606846976: {m: 2305843009213693952, c: 3458764513820540928}",
+            "productRead 1152921504606846976: 720575940379279360",
+            "chain 1152921504606846976: 2305843009213693953",
+            "increments 1152921504606846976: [1152921504606846976, 1152921504606846975, 1152921504606846977, "
+                "1152921504606846975]",
+            "readOnly 4611686018427387904: 4611686018427387905",
+            "typedList -2305843009213693952: [-2305843009213693950, -4611686018427387904]",
+            "typedHash 140737488355328: {a: 140737488355330}",
+            "computed 2305843009213693952: {x: 4611686018427387905}",
+            "reassigned 1152921504606846976: {x: 1152921504606846981}",
+            "loopSum 2305843009213693952: {x: 6917529027641081856}",
+            "branch 1152921504606846976: [{x: 2305843009213693952}, {x: 1152921504606846977}]",
+            "divisionByZero 1152921504606846976: [[{x: 1152921504606846976, y: 2305843009213693952}, "
+                "\"DIVISION-BY-ZERO\"], [{x: 576460752303423488, y: 2305843009213693952}, null]]",
+            "boxedFloat -4e+307: {d: -8e+307, e: -4e+307}",
+            "boxedFloatRead -4e+307: -4e+307",
+            "accumulator 10: {sum: 19, count: 3}",
+            "accumulator 1152921504606846976: {sum: 2017612633061982211, count: 3}",
+            "listLoop 1152921504606846976: [3458764513820540928, -2305843009213693952]",
+            "variableIndex 10: [10, 10, 10]",
+            "floatLoop -4e+307: {f: -4e+307}",
+            "floatBranch -4e+307: [{f: -8e+307}, {f: -4e+307}]",
+        );
+
+        #! the functions whose fixed hashes must still be replaced with scalars
+        const ScalarHashes = ("compound", "product", "productRead", "chain", "increments", "readOnly", "typedHash",
+            "computed", "computedTwo", "reassigned", "loopSum", "loopBody", "branch", "branchReturn", "accumulator",
+            "boxedFloat", "boxedFloatRead", "floatLoop", "floatBranch");
+
+        #! the functions whose fixed lists must still be replaced with scalars
+        const ScalarLists = ("typedList", "typedListRead", "boxedFloatList", "listLoop");
+    }
+
+    constructor() : QUnit::Test("IRScalarReplacementTemporaryLifetimeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        fixture = get_script_dir() + "/IRScalarReplacementTemporaryLifetimeScenario.qr";
+
+        addTestCase("ast", \testAst());
+        foreach string tier in (("ir", "jit", "tiered")) {
+            # a local of the loop body, so that each closure binds its own
+            string mode = tier;
+            addTestCase(mode, sub () {
+                assertEq(astOutput(), run(mode), sprintf("exec-mode=%s output matches AST", mode));
+            });
+        }
+        addTestCase("the members are still replaced with scalars", \testScalarized());
+        addTestCase("aot", \testAot());
+
+        set_return_value(main());
+    }
+
+    testAst() {
+        string output = astOutput();
+        list<string> lines = output.split("\n");
+        foreach string line in (AstLines) {
+            assertTrue(inlist(line, lines), "AST output has: " + line);
+        }
+        # every scenario call prints three times
+        assertEq(0, lines.size() % 3, "line count: " + output);
+    }
+
+    testScalarized() {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("QORE_IR_OPT_STATS=1 "
+            "LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=ir %s", shellQuote(libqore_dir),
+            shellQuote(qore_bin), shellQuote(fixture)));
+        assertEq(0, r.rc, "the scenario runs: " + r.out);
+        assertEq(astOutput(), r.stdout, "exec-mode=ir output with statistics matches AST");
+        foreach string function in (ScalarHashes) {
+            assertRegex(sprintf("\nIR-OPT: %s: [^\n]* scalar-hashes=1 ", function), "\n" + r.stderr,
+                function + " replaces its hash with scalars");
+        }
+        foreach string function in (ScalarLists) {
+            assertRegex(sprintf("\nIR-OPT: %s: [^\n]* scalar-lists=1 ", function), "\n" + r.stderr,
+                function + " replaces its list with scalars");
+        }
+    }
+
+    testAot() {
+        if (!is_file(qcc_bin) && !backquote("command -v " + qcc_bin + " 2>/dev/null")) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-ir-scalar-replacement-lifetime-");
+        foreach int level in ((0, 3)) {
+            string exe = sprintf("%s/scenario-O%d", tmp.path, level);
+            string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%d -o %s %s 2>&1",
+                shellQuote(libqore_dir), shellQuote(qcc_bin), level, shellQuote(exe), shellQuote(fixture)));
+            assertTrue(is_file(exe), sprintf("AOT -O%d compile produced an executable: %s", level, compile_out));
+            assertEq(astOutput(), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s",
+                shellQuote(libqore_dir), shellQuote(exe))), sprintf("AOT -O%d output matches AST", level));
+        }
+    }
+
+    private string run(string mode) {
+        # ExecModeHarness compiles synchronously, so tiered execution reaches native code deterministically
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+            shellQuote(libqore_dir), shellQuote(qore_bin), mode, shellQuote(fixture)));
+    }
+
+    private string astOutput() {
+        if (!exists ast_output) {
+            ast_output = run("ast");
+        }
+        return ast_output;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

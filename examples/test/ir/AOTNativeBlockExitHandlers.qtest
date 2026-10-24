@@ -1,0 +1,242 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class AOTNativeBlockExitHandlersTest
+
+#! Tests that the on_block_exit handlers of compiled code are native code
+/** The body of an on_exit, on_error or on_success handler is a native function of the function it belongs to
+    (<function>_obe_<n>), in JIT and AOT-compiled code alike; compiled code used to run the handlers it registers
+    (those that run on an exception, or at the end of a block whose handlers are not lowered inline) with the IR
+    interpreter, from IR serialized with the function.
+
+    The handlers here run on the normal and the exception path, are nested, declare locals of their own, create
+    closures, change a local of their function, start a background expression, rethrow and raise an exception, and
+    the handlers of a closure use variables it captures that its body does not use; the results are compared
+    with every execution mode and with a source-stripped compiled module.
+*/
+class AOTNativeBlockExitHandlersTest inherits QUnit::Test {
+    public {
+        const ModuleSource = "%modern
+module ObeChecks {
+    version = \"1.0\";
+    desc = \"on_block_exit handler checks\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace ObeChecks {
+class Log {
+    public {
+        static list<string> l = ();
+    }
+}
+
+sub log(string s) {
+    Log::l += s;
+}
+
+int sub thrower(int p) {
+    int parent = p * 10;
+    on_exit {
+        int own = 5;
+        log(sprintf(\"exit own=%d parent=%d\", own, parent));
+    }
+    on_error {
+        code c = int sub () { return parent + 1; };
+        log(sprintf(\"error closure=%d\", c()));
+        on_exit {
+            log(\"nested exit\");
+        }
+    }
+    on_success {
+        log(\"success\");
+        parent += 1;
+    }
+    if (p > 1) {
+        throw \"ERR\", \"thrown\";
+    }
+    return parent;
+}
+
+sub rethrower() {
+    on_error {
+        log(\"rethrow \" + $1.err);
+        rethrow;
+    }
+    throw \"ERR2\", \"thrown\";
+}
+
+int sub background_in_handler(int v) {
+    Queue q();
+    {
+        on_exit {
+            background q.push(v + gettid() - gettid());
+        }
+        if (v > 1) {
+            throw \"ERR3\", \"thrown\";
+        }
+    }
+    return q.get(20s);
+}
+
+int sub block_exit(int n) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        on_exit {
+            total += i;
+        }
+        if (i == n - 1) {
+            break;
+        }
+    }
+    return total;
+}
+
+# a handler with a local of its own raises an exception
+sub handler_throws() {
+    on_exit {
+        string own = \"handler\";
+        throw \"ERR5\", own;
+    }
+    log(\"body\");
+}
+
+# the closure's body does not use the variables its handlers use
+string sub closure_handlers(int v) {
+    int n = v;
+    string s = \"captured\";
+    *string got;
+    code c = sub () {
+        on_exit got = s;
+        on_error n += 100;
+        throw \"ERR4\", \"thrown\";
+    };
+    try {
+        c();
+    } catch (hash<ExceptionInfo> ex) {
+        log(\"caught \" + ex.err);
+    }
+    return sprintf(\"%d %s\", n, got);
+}
+
+public list<string> sub run() {
+    Log::l = ();
+    log(sprintf(\"thrower=%d\", thrower(1)));
+    try {
+        thrower(2);
+    } catch (hash<ExceptionInfo> ex) {
+        log(\"caught \" + ex.err);
+    }
+    try {
+        rethrower();
+    } catch (hash<ExceptionInfo> ex) {
+        log(\"caught \" + ex.err);
+    }
+    log(sprintf(\"background=%d\", background_in_handler(1)));
+    try {
+        background_in_handler(2);
+    } catch (hash<ExceptionInfo> ex) {
+        log(\"caught \" + ex.err);
+    }
+    log(sprintf(\"block=%d\", block_exit(4)));
+    log(\"closure=\" + closure_handlers(1));
+    try {
+        handler_throws();
+    } catch (hash<ExceptionInfo> ex) {
+        log(sprintf(\"caught %s %s\", ex.err, ex.desc));
+    }
+    return Log::l;
+}
+}
+";
+
+        #! the worker printing the results of the checks, three times so tiered execution runs native code
+        const Worker = "%modern
+%requires ObeChecks
+for (int i = 0; i < 3; ++i) {
+    print(ObeChecks::run().join(\"|\") + \"\\n\");
+}
+";
+
+        #! the handlers of a block run in the reverse order of registration, after the return value is taken
+        const Expected = "success|exit own=5 parent=11|thrower=10|error closure=21|nested exit|"
+            "exit own=5 parent=20|caught ERR|rethrow ERR2|caught ERR2|background=1|caught ERR3|block=6|caught ERR4|"
+            "closure=101 captured|body|caught ERR5 handler";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTNativeBlockExitHandlers", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        TmpDir tmp("qore-aot-native-obe-src-");
+        writeSources(tmp.path);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b "
+                "--exec-mode=%s %s", libqore_dir, tmp.path, qore_bin, mode, tmp.path + DirSep + "worker.q")));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-aot-native-obe-");
+        writeSources(tmp.path);
+        string mod_dir = tmp.path + DirSep + "modules";
+        mkdir(mod_dir);
+        string qmod = mod_dir + DirSep + "ObeChecks.qmod";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod, tmp.path + DirSep + "ObeChecks.qm"));
+        assertTrue(is_file(qmod), "compiled the module: " + out);
+
+        # each handler is a native function of the function it belongs to, the nested one too
+        string image = ReadOnlyFile::readTextFile(qmod, "ISO-8859-1");
+        assertRegex("ObeChecks__thrower[^\\x00]*_obe_0\\x00", image, "native on_exit handler");
+        assertRegex("ObeChecks__thrower[^\\x00]*_obe_1_obe_0\\x00", image, "native nested handler");
+        assertRegex("ObeChecks__background_in_handler[^\\x00]*_obe_0\\x00", image,
+            "native handler with a background expression");
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkOutput("aot", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s",
+            libqore_dir, mod_dir, qore_bin, tmp.path + DirSep + "worker.q")));
+    }
+
+    private writeSources(string dir) {
+        writeFile(dir + DirSep + "ObeChecks.qm", ModuleSource);
+        writeFile(dir + DirSep + "worker.q", Worker);
+    }
+
+    private writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (map $1, out.split("\n"), $1.val());
+        assertEq(3, lines.size(), label + ": rounds: " + out);
+        foreach string line in (lines) {
+            assertEq(Expected, line, sprintf("%s: round %d", label, $#));
+        }
+    }
+}

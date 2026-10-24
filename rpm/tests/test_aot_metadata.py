@@ -32,7 +32,7 @@ class AotMetadataTest(unittest.TestCase):
         # The packaging layer preserves payloads opaquely, in their original order.
         self.trailers = b"".join(
             payload + struct.pack("<Q4sI", len(payload), magic, 1)
-            for magic, payload in [(b"QAOM", b"optional"), (b"QPCM", b"locations"), (b"QAMD", b"dependencies")]
+            for magic, payload in [(b"QAOM", b"optional"), (b"QAMD", b"dependencies")]
         )
         with self.module.open("ab") as stream:
             stream.write(self.trailers)
@@ -71,7 +71,7 @@ class AotMetadataTest(unittest.TestCase):
         self.assertEqual(metadata.read_trailers(self.module), self.trailers)
 
     def test_invalid_footer_rejected_before_command(self):
-        for size, magic, version in [(2**64 - 1, b"QAMD", 1), (4, b"QAOM", 2), (0, b"QPCM", 1)]:
+        for size, magic, version in [(2**64 - 1, b"QAMD", 1), (4, b"QAOM", 2), (0, b"QAMD", 1)]:
             with self.subTest(size=size, magic=magic, version=version):
                 self.module.write_bytes(b"prefix" + struct.pack("<Q4sI", size, magic, version))
                 with self.assertRaises(ValueError):

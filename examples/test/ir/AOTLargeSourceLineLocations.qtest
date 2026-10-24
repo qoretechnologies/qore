@@ -33,9 +33,8 @@ class AOTLargeSourceLineLocationsTest inherits QUnit::Test {
             65536,  # first line past the legacy u16 wire field
         );
 
-        #! AOT resolves exception locations two different ways: through the eager per-line updater
-        #! when DWARF is stripped, and through the post-emission PC->loc map when it is kept.  Both
-        #! encode the line separately, so every AOT case runs in both modes.
+        #! AOT locations do not depend on debug info, which carries the line separately, so every AOT
+        #! case runs with and without it
         const AotModes = ("", "--strip-debug-info");
     }
 

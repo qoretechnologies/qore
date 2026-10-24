@@ -4,6 +4,13 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    @ref Qore::seconds() "seconds()", numeric @ref Qore::date() "date()" conversions and the C++ relative-date
+    factories preserve durations larger than 2^31 seconds without overflowing intermediate 32-bit arithmetic.
+    Fractional numeric conversions also retain their microseconds, and adding such durations to an absolute date
+    uses 64-bit elapsed-second arithmetic. Elapsed hours remain hours across timezone
+    transitions; the existing signed 32-bit hour-component range is unchanged
+    (<a href="https://github.com/qoretechnologies/qore/issues/5507">issue 5507</a>).
+
     The @ref restclientintro "RestClient" module adds explicit API-relative and origin-absolute request targets
     through @ref RestClient::RestRequestTarget "RestRequestTarget", also supported by the new
     @ref restclientiointro "RestClientIo" module. API-relative endpoints are appended to the configured API root;
@@ -721,6 +728,16 @@
     method, as they do now.  In a static method, a bare name of an instance member is a parse error even when a
     top-level local variable has the same name, as it is when a global variable has it; use a different name for the
     top-level local variable.
+
+    @par A Slice Is an Lvalue Only of remove and delete
+    A slice (\c h{"a", "b"}, \c l[1, 2], \c l[1..2], or a key or index expression whose type is a list) used as an
+    lvalue anywhere but as the whole lvalue of @ref remove "remove" or @ref delete "delete" is a parse error, also
+    inside a longer lvalue (\c h{"a", "b"}.x) and for a reference (\c \\h{"a", "b"}); a key or index that is a list
+    only at runtime raises an \c ILLEGAL-SLICE exception.  A slice is a new container, not a part of the lvalue: an
+    assignment, @ref trim "trim", @ref push "push", the regular expression operators and the other operators that
+    modify an lvalue modified a member named after the empty string when given a hash slice (\c trim h{"a", "b"}
+    added a key \c "" to \c h), and raised \c ILLEGAL-SLICE for a list slice and \c RUNTIME-TYPE-ERROR for a
+    range at runtime.
 
     @par Stream Conversions Raise an Error for a Character the Target Encoding Cannot Hold
     @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream" and
@@ -4932,6 +4949,19 @@ while (*binary chunk = input.read(65536)) {
       the values of the code that starts the thread
     - Fixed a crash when the @ref background "background operator" raises an exception preparing an expression of the
       @ref map "map", @ref select "select", @ref foldl "foldl" or @ref foldr "foldr" operator for the new thread
+    - Fixed a call in an expression of the @ref map "map", @ref select "select", @ref foldl "foldl" or
+      @ref foldr "foldr" operator in a @ref background "background" expression being made with no arguments for every
+      element after the first: for example <tt><b>background</b> (map f(q, $1), list)</tt> called <tt>f()</tt> with
+      @ref nothing for \a q from the second element on, and a call of a method of the object in such an expression
+      used the object after releasing its reference to it
+    - Fixed a crash when a @ref background "background" expression assigns or modifies a member of the object of the
+      code that starts the thread directly (such as <tt><b>background</b> (x = 1)</tt> in a method of a class with
+      member \c x); since the expression takes the member's value when the thread starts, as it does for a local
+      variable, such an expression now raises a parse exception, as the modification of a local variable does
+    - Fixed a crash (\c SIGFPE) when the smallest integer is divided by \c -1 with the
+      @ref division_operator "divide" (<tt>/</tt>, <tt>/=</tt>) or @ref modulo_operator "modulo" (<tt>%</tt>,
+      <tt>%=</tt>) operators: as integer arithmetic wraps, the quotient is the smallest integer and the remainder is
+      \c 0
     - Fixed calling the methods implemented by the abstract classes
       @ref Qore::SQL::AbstractDatasource "AbstractDatasource",
       @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement",

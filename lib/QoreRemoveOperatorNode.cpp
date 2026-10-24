@@ -67,7 +67,7 @@ int QoreRemoveOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
         operand_analysis = parse_context.analysis;
     }
     if (exp && !err) {
-        err = checkLValue(exp, parse_context.pflag);
+        err = checkLValue(exp, parse_context.pflag, true, true);
     }
 
     // If remove is applied to a simple variable reference, reset its assignment tracking

@@ -1,0 +1,72 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class IntegerDivisionOverflowTest
+
+#! Tests the division of the smallest integer by -1
+/** The quotient, 2^63, is not an integer, and the CPU's division instruction traps: the division (/, /=) and the
+    modulo (%, %=) of the smallest integer by -1 ended the process with SIGFPE in every execution mode.  Integer
+    arithmetic wraps, so the quotient is the smallest integer, and the remainder is 0.
+
+    The modulo-equals operator assigns 0 for a divisor of 0 in AST execution; the other execution modes raised
+    DIVISION-BY-ZERO instead.
+*/
+class IntegerDivisionOverflowTest inherits QUnit::Test {
+    public {
+        #! the line that the worker prints: the quotient and the remainder of each form of the operation, then the
+        #! results of the modulo-equals operator with a divisor of 0
+        const Expected = "-9223372036854775808 0 -9223372036854775808 0 -9223372036854775808 0 -9223372036854775808 0 "
+            "-9223372036854775808 0 0 0 0";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("IntegerDivisionOverflow", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        worker = get_script_dir() + DirSep + "integer-division-overflow-worker.q";
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled executable", \testCompiledExecutable());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=%s %s", libqore_dir,
+                qore_bin, mode, worker)));
+        }
+    }
+
+    testCompiledExecutable() {
+        TmpDir tmp("qore-integer-division-overflow-");
+        string exe = tmp.path + DirSep + "division";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe)));
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(3, lines.size(), label + ": rounds: " + out);
+        foreach string line in (lines) {
+            assertEq(Expected, line, sprintf("%s: round %d", label, $#));
+        }
+    }
+}

@@ -36,6 +36,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <type_traits>
 
 class MethodVariantBase;
 class RuntimeConfig;
@@ -408,6 +409,24 @@ DLLLOCAL void inc_container_obj(const AbstractQoreNode* n, int dt);
 
 DLLLOCAL AbstractQoreNode* missing_openssl_feature(const char* f, ExceptionSink* xsink);
 
+//! Returns the quotient of an integer division by a divisor that is not zero
+/** Integer arithmetic wraps: the quotient of the smallest integer and -1 is the smallest integer, where the CPU's
+    division instruction traps (SIGFPE)
+*/
+static inline int64 qore_int_div(int64 l, int64 r) {
+    assert(r);
+    return r == -1 ? static_cast<int64>(0 - static_cast<uint64_t>(l)) : l / r;
+}
+
+//! Returns the remainder of an integer division by a divisor that is not zero
+/** The remainder of a division by -1 is 0, also for the smallest integer, where the CPU's division instruction
+    traps (SIGFPE)
+*/
+static inline int64 qore_int_mod(int64 l, int64 r) {
+    assert(r);
+    return r == -1 ? 0 : l % r;
+}
+
 #include "qore/intern/ParseWarnOptions.h"
 
 struct QoreProgramLineLocation {
@@ -565,6 +584,22 @@ public:
         return !(*this == loc);
     }
 
+    //! The layout of a location, which AOT-compiled code holds as constant data of its image
+    struct Layout {
+        size_t size;
+        size_t start_line, end_line, start_column, end_column, file, source, lang, offset;
+    };
+
+    //! Returns the layout of a location
+    DLLLOCAL static Layout getLayout() {
+        const QoreProgramLocation l;
+        auto off = [&l](const void* member) -> size_t {
+            return static_cast<size_t>(static_cast<const char*>(member) - reinterpret_cast<const char*>(&l));
+        };
+        return {sizeof(l), off(&l.start_line), off(&l.end_line), off(&l.start_column), off(&l.end_column),
+            off(&l.file), off(&l.source), off(&l.lang), off(&l.offset)};
+    }
+
 protected:
     const char* file = nullptr;
     const char* source = nullptr;
@@ -575,6 +610,10 @@ public:
     // for source blocks embedded in a larger file, so a 16-bit field wrapped for sufficiently large sources
     int32_t offset = 0;
 };
+
+// AOT-compiled code holds locations as constant data, which no constructor or destructor runs for
+static_assert(std::is_trivially_copyable<QoreProgramLocation>::value
+    && std::is_trivially_destructible<QoreProgramLocation>::value);
 
 DLLLOCAL extern const QoreProgramLocation loc_builtin;
 
@@ -872,8 +911,11 @@ typedef std::list<qore_conditional_block_exit_statement_t> block_list_t;
 
 #define DAH_TEXT(d) (d == DAH_RELEASE ? "RELEASE" : (d == DAH_ACQUIRE ? "ACQUIRE" : "NOCHANGE"))
 
-DLLLOCAL int check_lvalue(QoreValue n, bool assign = true);
-DLLLOCAL int check_lvalue(AbstractQoreNode* n, bool assign = true);
+//! checks an lvalue expression; returns 0 for OK, -1 if it is not an lvalue, -2 for an error already reported
+/** @param allow_slice true if the expression may be a slice (the remove and delete operators)
+*/
+DLLLOCAL int check_lvalue(QoreValue n, bool assign = true, bool allow_slice = false);
+DLLLOCAL int check_lvalue(AbstractQoreNode* n, bool assign = true, bool allow_slice = false);
 DLLLOCAL bool parse_is_readonly_receiver_expression(QoreValue n, int pflag);
 DLLLOCAL int check_const_method_lvalue(const QoreProgramLocation* loc, QoreValue n);
 DLLLOCAL int check_readonly_receiver_method_call(const QoreProgramLocation* loc, const char* name,

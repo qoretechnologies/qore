@@ -14,7 +14,10 @@
   clean trees parse once while incremental rebuilds retain exact per-file
   recompilation. See
   `design/aot-object-files-and-module-artifacts.md`,
-  `design/aot-script-context.md`, `design/aot-lazy-loc-innermost-frame.md`.
+  `design/aot-script-context.md`.  (The `qore_aot_pcloc` section and the lazy
+  locations were later removed: AOT code keeps its runtime location from
+  constant locations in its image; see "Source Locations" in
+  `design/aot-object-files-and-module-artifacts.md`.)
 
 **2026-06-26 re-measurement + evaluation (16-core x86_64, Release qcc):**
 DataProvider.qm (137 files, 1907 variants, 13.8 MB qmod) is the critical-path
@@ -372,11 +375,10 @@ correct code.
 
 **Validation measurements (2026-04-18):**
 
-| Module     | Funcs | Baseline | threshold=200 | Speedup | Output   |
-|------------|-------|----------|---------------|---------|----------|
-| HttpServer | 198   | 623 s    | 13.6 s        | **46x** | 18 → 5.7 MB |
-| SqlUtil    | 747   | 293 s    | 172 s         | 1.70x   | 19.9 → 15.6 MB |
-| OpenApi3   | 201   | 29.2 s   | 29.2 s        | 1.00x   | identical |
+|!Module|!Funcs|!Baseline|!threshold=200|!Speedup|!Output
+|HttpServer|198|623 s|13.6 s|**46x**|18 → 5.7 MB
+|SqlUtil|747|293 s|172 s|1.70x|19.9 → 15.6 MB
+|OpenApi3|201|29.2 s|29.2 s|1.00x|identical
 
 - HttpServer is the pathological case (one 905-BB function) — 46x win.
 - SqlUtil has multiple medium-large functions but no single outlier —
@@ -506,12 +508,11 @@ Phase 4 (.qo/.qoa object files + linkage)                — SUBSTANTIALLY SHIPP
 
 Introduce three levels, selectable via qcc flags:
 
-| qcc invocation | Opt | Debug info | Analogy |
-|---|---|---|---|
-| `qcc -O0 -g`         | `-O0` | DWARF | `Debug` |
-| `qcc -O3`            | `-O3` | none | `Release` |
-| `qcc -O3 -g`         | `-O3` | DWARF | `RelWithDebInfo` |
-| `qcc -O1 --strip-debug` | `-O1` | none | minimal |
+|!qcc invocation|!Opt|!Debug info|!Analogy
+|`qcc -O0 -g`|`-O0`|DWARF|`Debug`
+|`qcc -O3`|`-O3`|none|`Release`
+|`qcc -O3 -g`|`-O3`|DWARF|`RelWithDebInfo`
+|`qcc -O1 --strip-debug`|`-O1`|none|minimal
 
 `-g` flag toggles `emit_debug_info` in `QoreIRToLLVM`. Mirrors clang/gcc.
 

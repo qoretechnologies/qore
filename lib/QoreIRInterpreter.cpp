@@ -454,6 +454,11 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include <qore/intern/QoreHashNodeIntern.h>
 #include <qore/intern/qore_list_private.h>
 
+// the trace switches, which the interpreter reads on every return of a function, read from the environment once
+static constinit QoreEnvFlag ir_trace_bg_fallback_env("QORE_IR_TRACE_BG_FALLBACK");
+static constinit QoreEnvFlag ir_trace_debug_env("QORE_IR_TRACE_DEBUG");
+static constinit QoreEnvFlag ir_trace_exceptions_env("QORE_IR_TRACE_EXCEPTIONS");
+
 // Helper: evaluate a node and ensure the caller owns a reference to the result.
 // Some operator eval() implementations return with needs_deref=false (borrowed reference).
 // This function ensures we always return an owned reference.
@@ -819,20 +824,38 @@ struct IROnBlockExitHandler {
     Out-of-range ids (the PushTempMark UINT32_MAX statement sentinel) are not
     counted and are always appended; they can only be removed by pop_back(),
     which matches how DiscardTemps drains the statement temp region.
+
+    A slot whose value has a native scalar representation (see
+    QoreIRFunction::interpreter_slot_owned_values) is not a statement temp: the
+    optimizer forwards such values from one statement to the next and around
+    loops, as native code keeps them in registers, but an integer outside the
+    inline range or a double whose bits collide with a value tag is a boxed node
+    in the interpreter.  Its entry is kept apart from the temp entries, so that no
+    temp scope drain releases it; the slot owns the value until the value is
+    overwritten (see setValueSlot()) or the function's values are cleaned up.
+    The value cannot have a destructor, so the longer life is not observable.
  */
 class IRCleanupSlots {
 public:
     //! clears all entries and resizes the per-slot counts to the value pool size
-    void reset(size_t slot_count) {
+    /** @param n_slot_owned the slots that own their value (indexed by value id), if any
+    */
+    void reset(size_t slot_count, const std::vector<uint8_t>* n_slot_owned = nullptr) {
         entries.clear();
+        slot_owned_entries.clear();
         counts.assign(slot_count, 0);
+        slot_owned = n_slot_owned;
     }
 
     void push_back(uint32_t id) {
         if (id < counts.size()) {
             uint32_t& count = counts[id];
             if (!count) {
-                entries.push_back(id);
+                if (isSlotOwned(id)) {
+                    slot_owned_entries.push_back(id);
+                } else {
+                    entries.push_back(id);
+                }
             }
             // saturate rather than wrap; a slot pushed 2^32 times without an
             // intervening remove is not a realistic ledger state
@@ -874,12 +897,25 @@ public:
         return id < counts.size() ? counts[id] : 0;
     }
 
+    //! returns true if there are no temp entries; slot-owned values are not counted
     bool empty() const {
         return entries.empty();
     }
 
+    //! returns the number of temp entries; slot-owned values are not counted
     size_t size() const {
         return entries.size();
+    }
+
+    //! sets the slots that own their value (indexed by value id); only valid before the first push
+    void setSlotOwned(const std::vector<uint8_t>* n_slot_owned) {
+        assert(entries.empty() && slot_owned_entries.empty());
+        slot_owned = n_slot_owned;
+    }
+
+    //! returns the slots that own their value; see the class description
+    const std::vector<uint32_t>& slotOwnedEntries() const {
+        return slot_owned_entries;
     }
 
     uint32_t back() const {
@@ -904,6 +940,14 @@ public:
             }
         }
         entries.clear();
+        size_t slot_cleanup_count = 0;
+        for (uint32_t id : slot_owned_entries) {
+            if (++slot_cleanup_count % 100 == 0) {
+                (void)qore_check_cancel(nullptr, "IR scalar slot cleanup registration");
+            }
+            counts[id] = 0;
+        }
+        slot_owned_entries.clear();
     }
 
     //! LIFO iteration for cleanup passes
@@ -918,13 +962,22 @@ public:
 private:
     //! insertion-ordered tracked slot ids (unique) and sentinels
     std::vector<uint32_t> entries;
+    //! tracked slots that own their value, which no temp scope drain releases
+    std::vector<uint32_t> slot_owned_entries;
     //! per-slot push counts indexed by slot id
     std::vector<uint32_t> counts;
+    //! the slots that own their value, indexed by value id; null if none
+    const std::vector<uint8_t>* slot_owned = nullptr;
+
+    bool isSlotOwned(uint32_t id) const {
+        return slot_owned && id < slot_owned->size() && (*slot_owned)[id];
+    }
 
     void eraseEntry(uint32_t id) {
-        auto it = std::find(entries.begin(), entries.end(), id);
-        assert(it != entries.end());
-        entries.erase(it);
+        std::vector<uint32_t>& list = isSlotOwned(id) ? slot_owned_entries : entries;
+        auto it = std::find(list.begin(), list.end(), id);
+        assert(it != list.end());
+        list.erase(it);
     }
 };
 
@@ -987,6 +1040,16 @@ struct IRCallFrame {
     void releaseReferences(ExceptionSink* xsink) {
         for (auto it = cleanup.rbegin(); it != cleanup.rend(); ++it) {
             uint32_t id = *it;
+            if (id < values.size()) {
+                values[id].discard(xsink);
+                values[id] = QoreValue();
+            }
+        }
+        size_t slot_cleanup_count = 0;
+        for (uint32_t id : cleanup.slotOwnedEntries()) {
+            if (++slot_cleanup_count % 100 == 0) {
+                (void)qore_check_cancel(nullptr, "IR frame scalar cleanup");
+            }
             if (id < values.size()) {
                 values[id].discard(xsink);
                 values[id] = QoreValue();
@@ -1377,6 +1440,17 @@ static void cleanupValues(IRValueSlots& values, IRCleanupSlots& cleanup,
         }
         slot.discard(eff_xsink);
         slot = QoreValue();
+    }
+    // slot-owned values are native scalars: there is nothing to log and no destructor to run
+    size_t slot_cleanup_count = 0;
+    for (uint32_t id : cleanup.slotOwnedEntries()) {
+        if (++slot_cleanup_count % 100 == 0) {
+            (void)qore_check_cancel(nullptr, "IR scalar value cleanup");
+        }
+        if (id < values.size()) {
+            values[id].discard(eff_xsink);
+            values[id] = QoreValue();
+        }
     }
     cleanup.clear();
 }
@@ -1990,6 +2064,17 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_locals_ir_only = std::move(locals_ir_only);
     func.interpreter_return_protected_slots = std::move(return_protected_slots);
     func.interpreter_cross_block_slots = std::move(cross_block_slots);
+    // the slots of native scalars own their value (see IRCleanupSlots)
+    std::vector<uint8_t> slot_owned_values(func.max_value_id + 1, 0);
+    for (size_t id = 0; id < slot_owned_values.size() && id < func.value_facts.size(); ++id) {
+        if (id && ((id % 100) == 0) && qore_check_cancel(xsink, "IR interpreter analysis")) {
+            return false;
+        }
+        QoreIRValueRepresentation representation = func.value_facts[id].representation;
+        slot_owned_values[id] = representation == QoreIRValueRepresentation::NativeInt
+            || representation == QoreIRValueRepresentation::NativeFloat;
+    }
+    func.interpreter_slot_owned_values = std::move(slot_owned_values);
     func.interpreter_return_value_slot_ids = std::move(return_value_slot_ids);
     func.interpreter_return_preserve_slot_ids = std::move(return_preserve_slot_ids);
     func.interpreter_direct_calls = std::move(direct_calls);
@@ -2434,7 +2519,15 @@ private:
     QoreProgramStackLocationHelper stack_helper{this, stmt, pgm};
 };
 
-static const QoreProgramLocation* qore_ir_user_variant_location(const UserVariantBase* uvb) {
+//! Returns the location of the call stack frame of an inline call: the call site, as for an AST call
+/** The location of a frame is where the code it belongs to was called from; the signature of the callee is the
+    location only of a call without a location of its own.
+*/
+static const QoreProgramLocation* qore_ir_call_frame_location(const QoreIRInstruction* inst,
+        const UserVariantBase* uvb) {
+    if (inst->loc) {
+        return inst->loc;
+    }
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
     return sig ? sig->getParseLocation() : nullptr;
 }
@@ -3815,7 +3908,7 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
 
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
-    QoreIRInlineCallStackLocation stack_loc(qore_ir_user_variant_location(uvb),
+    QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
         qore_ir_function_call_name(inst->func), inst->variant ? inst->variant->getCallType() : CT_USER);
     unsigned num_params = sig->numParams();
     bool use_direct_params = inline_state == QORE_IR_INLINE_DIRECT_PARAMS;
@@ -3897,7 +3990,7 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
 
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
-    QoreIRInlineCallStackLocation stack_loc(qore_ir_user_variant_location(uvb),
+    QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
         qore_ir_method_call_name(method), inst->variant ? inst->variant->getCallType() : CT_USER);
     unsigned num_params = sig->numParams();
     // Use the executing variant's class as the runtime class context (not
@@ -4122,6 +4215,9 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
+    // the static method runs in this interpreter instead of being called, so the call is counted here for its
+    // promotion to native code; once it is native, this inline path is no longer taken
+    uvb->recordFastCallExecution();
 
     QoreProgram* exec_pgm = qore_ir_method_execution_program(inst->method, uvb);
     if (!exec_pgm) {
@@ -4136,7 +4232,7 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
 
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
-    QoreIRInlineCallStackLocation stack_loc(qore_ir_user_variant_location(uvb),
+    QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
         qore_ir_method_call_name(inst->method), inst->variant ? inst->variant->getCallType() : CT_USER);
     unsigned num_params = sig->numParams();
     ClassOnlySubstitutionHelper cosh(qore_class_private::get(*inst->method->getClass()));
@@ -4187,7 +4283,7 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
 }
 
 static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram* caller_pgm,
-        uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
+        const QoreProgramLocation* call_loc, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
         bool* may_invalidate_external_caches = nullptr) {
     if (!ref_val.hasNode()) {
         return false;
@@ -4301,6 +4397,9 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         }
         return true;
     }
+    // the closure's call stack frame, from the call site, as an AST call of a closure pushes it
+    QoreIRInlineCallStackLocation stack_loc(call_loc ? call_loc : sig->getParseLocation(), "<anonymous closure>",
+        CT_USER);
     ClosureTlpdEnsureHelper tlpd_helper(xsink, uvb->pgm);
     if (xsink && *xsink) {
         result = QoreValue();
@@ -5268,7 +5367,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 uint64_t ref_bits = toBits(ref_val);
                 if (nargs == 0) {
                     QoreValue inline_result;
-                    if (tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), nullptr, 0,
+                    if (tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), inv->loc, nullptr, 0,
                             inline_result, xsink)) {
                         return inline_result;
                     }
@@ -5277,7 +5376,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 if (nargs == 1) {
                     uint64_t arg0 = toBits(getIRValue(values, inv->operands[1]));
                     QoreValue inline_result;
-                    if (tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), &arg0, 1,
+                    if (tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), inv->loc, &arg0, 1,
                             inline_result, xsink)) {
                         return inline_result;
                     }
@@ -5291,8 +5390,8 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     args[i] = toBits(getIRValue(values, inv->operands[i + 1]));
                 }
                 QoreValue inline_result;
-                bool inline_done = tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), args, nargs,
-                    inline_result, xsink);
+                bool inline_done = tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), inv->loc, args,
+                    nargs, inline_result, xsink);
                 uint64_t result_bits = inline_done ? 0 : qore_rt_call_closure_fast(ref_bits, args, nargs, xsink);
                 if (nargs > SMALL_BUF) {
                     delete[] args;
@@ -5611,25 +5710,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     size_t local_slot_count = func.local_var_slots.empty()
         ? 0 : static_cast<size_t>(func.max_local_slot_id) + 1;
     IRCallFrame& frame = tl_frame_pool.push(reserve_size, local_slot_count);
-    // RAII guard: return the frame to the pool on any exit path, and save/restore the
-    // innermost-non-AOT-frame marker (runtime_loc_sp) across this call so an AOT caller
-    // that resumes after this IR call sees its own (outer) marker, not this frame's
-    // stale inner one. See design/aot-lazy-loc-innermost-frame.md.
+    // RAII guard: return the frame to the pool on any exit path
     struct FrameGuard {
         IRCallFrame& frame;
-        uintptr_t saved_sp;
         ~FrameGuard() {
             // Pooled frames outlive the call.  Never let a dormant frame retain
             // refs from IR-only local caches or missed cleanup paths.
             frame.releaseReferences(nullptr);
             tl_frame_pool.pop();
-            set_runtime_loc_sp(saved_sp);
         }
-    } frame_guard{frame, get_runtime_loc_sp()};
-    // Mark this IR-interpreter frame as the innermost non-AOT owner of the runtime
-    // location for the duration of the call (the frame address is constant, so set it
-    // once here rather than per line); FrameGuard restores the caller's marker on exit.
-    set_runtime_loc_sp(reinterpret_cast<uintptr_t>(__builtin_frame_address(0)));
+    } frame_guard{frame};
 
     IRValueSlots values{frame.values};
     auto& cleanup = frame.cleanup;
@@ -5654,6 +5744,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     if (!ensureInterpreterAnalysis(func, xsink)) {
         return false;
     }
+    // nothing has been registered for cleanup yet
+    assert(cleanup.empty() && cleanup.slotOwnedEntries().empty());
+    cleanup.setSlotOwned(&func.interpreter_slot_owned_values);
     const std::vector<uint32_t>& value_use_counts = func.interpreter_value_use_counts;
     const std::vector<uint8_t>& dot_eval_only_bases = func.interpreter_dot_eval_only_bases;
     const std::vector<uint8_t>& consumed_method_call_bases = func.interpreter_consumed_method_call_bases;
@@ -6297,6 +6390,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 step.name.assign(key_str.c_str(), key_str.size());
             } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
                 QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
+                // keep the value: a list is a slice, which only remove and delete accept
+                step.slice_values.clear();
+                step.slice_values.push_back(idx_val);
                 step.index = idx_val.getAsBigInt();
             } else if (step.kind == LVPathStepKind::HashKeySlice
                     || step.kind == LVPathStepKind::ListIndexSlice
@@ -7015,7 +7111,7 @@ next_instruction:
                 && inst->cached_start_line != last_debug_line && !(xsink && *xsink)) {
             last_debug_line = inst->cached_start_line;
             AbstractStatement* dbg_stmt = getDebugStatement(inst);
-            if (q_env_is_set("QORE_IR_TRACE_DEBUG")) {
+            if (ir_trace_debug_env.get()) {
                 fprintf(stderr, "[ir-debug] func='%s' line=%d stmt=%p op=%d debug_active=%d\n",
                     func.name.c_str(), inst->cached_start_line + inst->loc->offset,
                     static_cast<void*>(dbg_stmt), static_cast<int>(inst->opcode), debug_active ? 1 : 0);
@@ -7023,7 +7119,7 @@ next_instruction:
             }
             if (dbg_stmt) {
                 int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
-                if (q_env_is_set("QORE_IR_TRACE_DEBUG")) {
+                if (ir_trace_debug_env.get()) {
                     fprintf(stderr, "[ir-debug] func='%s' line=%d dbg_rc=%d xsink=%d\n",
                         func.name.c_str(), inst->cached_start_line + inst->loc->offset, dbg_rc,
                         xsink && *xsink ? 1 : 0);
@@ -7639,15 +7735,15 @@ next_instruction:
                 bool inline_may_invalidate_external_caches = true;
                 bool used_inline_ir = false;
                 if (nargs == 0) {
-                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, nullptr, 0, result, xsink,
-                        &inline_may_invalidate_external_caches);
+                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, inst->loc, nullptr, 0, result,
+                        xsink, &inline_may_invalidate_external_caches);
                     if (!used_inline_ir) {
                         result = fromBits(qore_rt_call_closure_0(ref_bits, xsink));
                     }
                 } else if (nargs == 1) {
                     uint64_t arg0 = toBits(getIRValue(values, inst->operands[1]));
-                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, &arg0, 1, result, xsink,
-                        &inline_may_invalidate_external_caches);
+                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, inst->loc, &arg0, 1, result,
+                        xsink, &inline_may_invalidate_external_caches);
                     if (!used_inline_ir) {
                         result = fromBits(qore_rt_call_closure_1(ref_bits, arg0, xsink));
                     }
@@ -7658,8 +7754,8 @@ next_instruction:
                     for (int i = 0; i < nargs; ++i) {
                         args[i] = toBits(getIRValue(values, inst->operands[i + 1]));
                     }
-                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, args, nargs, result, xsink,
-                        &inline_may_invalidate_external_caches);
+                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, inst->loc, args, nargs, result,
+                        xsink, &inline_may_invalidate_external_caches);
                     if (!used_inline_ir) {
                         result = fromBits(qore_rt_call_closure_fast(ref_bits, args, nargs, xsink));
                     }
@@ -8820,6 +8916,8 @@ load_local_done:
                 QoreValue val      = getIRValue(values, hksd_inst->operands[1]);
                 QoreValue key_val  = getIRValue(values, hksd_inst->operands[2]);
                 ValueHolder val_holder(val.refSelf(), xsink);
+                // a list is a slice, which is not an lvalue; the store below then does nothing
+                qore_check_lvalue_key_not_slice(key_val, xsink);
                 // hash keys are stored in the default encoding
                 QoreHashKeyHelper key_str(key_val, xsink);
                 // every error exit of the store returns from this function, so that the exception is dispatched to an
@@ -13312,6 +13410,15 @@ load_local_done:
                                         lvh.removedValue(res);
                                         pending_delete_finish = true;
                                     }
+                                } else if ((last_step.kind == LVPathStepKind::ListIndexSlice
+                                        || (last_step.kind == LVPathStepKind::ListIndex
+                                            && last_step.slice_values.size() == 1
+                                            && last_step.slice_values[0].getType() == NT_LIST))
+                                        && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
+                                    // a list of indexes, given in the code or by the value of the index expression
+                                    res = executeLVListIndexSliceRemove(lvh, ct, last_step,
+                                            path_inst->unary_op, xsink);
+                                    pending_delete_finish = pending_delete_direct_list = true;
                                 } else if (last_step.kind == LVPathStepKind::ListIndex && ct == NT_LIST) {
                                     lvh.ensureUnique();
                                     QoreListNode* l = lvh.getValue().get<QoreListNode>();
@@ -13332,11 +13439,6 @@ load_local_done:
                                         && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
                                     res = executeLVHashKeySliceRemove(lvh, ct, last_step,
                                             path_inst->unary_op, xsink);
-                                } else if (last_step.kind == LVPathStepKind::ListIndexSlice
-                                        && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
-                                    res = executeLVListIndexSliceRemove(lvh, ct, last_step,
-                                            path_inst->unary_op, xsink);
-                                    pending_delete_finish = pending_delete_direct_list = true;
                                 } else if (last_step.kind == LVPathStepKind::ListRangeSlice
                                         && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
                                     res = executeLVListRangeSliceRemove(lvh, ct, last_step,
@@ -15538,15 +15640,34 @@ load_local_done:
                 auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst);
                 auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
                     expr_inst->expr.getInternalNode());
-                auto [matched, bg_result] = bg_inst && !bg_op
-                    ? runBackgroundMetadata(bg_inst, values, xsink)
-                    : runDecomposedBackground(bg_op, expr_inst->operands, values, xsink);
+                bool matched;
+                QoreValue bg_result;
+                if (bg_inst && bg_inst->kind == QoreIRBackgroundKind::Helper) {
+                    // the expression is evaluated by its helper in the new thread
+                    std::vector<QoreValue> helper_values;
+                    helper_values.reserve(bg_inst->operands.size());
+                    size_t operand_count = 0;
+                    for (const QoreIRValue& operand : bg_inst->operands) {
+                        if (++operand_count % 100 == 0
+                                && qore_check_cancel(xsink, "IR background helper arguments")) {
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            return false;
+                        }
+                        helper_values.push_back(getIRValue(values, operand));
+                    }
+                    bg_result = qore_ir_start_background_helper(*bg_inst, helper_values.data(), xsink);
+                    matched = true;
+                } else {
+                    std::tie(matched, bg_result) = bg_inst && !bg_op
+                        ? runBackgroundMetadata(bg_inst, values, xsink)
+                        : runDecomposedBackground(bg_op, expr_inst->operands, values, xsink);
+                }
                 if (matched) {
                     res = bg_result;
                 } else {
                     // The inner expression was not a decomposable call shape.
                     // Report it so native lowering can be added.
-                    if (q_env_is_set("QORE_IR_TRACE_BG_FALLBACK")) {
+                    if (ir_trace_bg_fallback_env.get()) {
                         const AbstractQoreNode* inner = bg_op ? bg_op->getExp().getInternalNode()
                                                               : nullptr;
                         const QoreProgramLocation* loc = inst->loc;
@@ -16139,7 +16260,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 }
                 return QoreValue();
             }
-            return QoreValue(left.getAsBigInt() / divisor);
+            return QoreValue(qore_int_div(left.getAsBigInt(), divisor));
         }
         case QoreIROpcode::DivFloat: {
             double divisor = right.getAsFloat();
@@ -16182,7 +16303,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 }
                 return QoreValue();
             }
-            return QoreValue(left.getAsBigInt() % divisor);
+            return QoreValue(qore_int_mod(left.getAsBigInt(), divisor));
         }
         case QoreIROpcode::AndInt:
             return QoreValue(left.getAsBigInt() & right.getAsBigInt());
@@ -16256,7 +16377,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 }
                 return QoreValue();
             }
-            return QoreValue(left.getAsBigInt() / divisor);
+            return QoreValue(qore_int_div(left.getAsBigInt(), divisor));
         }
         case QoreIROpcode::DivAssignFloat: {
             double divisor = right.getAsFloat();
@@ -16272,14 +16393,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreDivisionOperatorNode::doDivision(left, right, xsink);
         case QoreIROpcode::ModAssignInt:
         case QoreIROpcode::ModAssignAny: {
+            // the modulo-equals operator assigns 0 for a divisor of 0, as AST execution does
+            // (QoreModuloEqualsOperatorNode); only the modulo operator raises an exception
             int64_t divisor = right.getAsBigInt();
-            if (!divisor) {
-                if (xsink) {
-                    xsink->raiseException("DIVISION-BY-ZERO", "modula operand cannot be zero");
-                }
-                return QoreValue();
-            }
-            return QoreValue(left.getAsBigInt() % divisor);
+            return QoreValue(divisor ? qore_int_mod(left.getAsBigInt(), divisor) : 0ll);
         }
         case QoreIROpcode::AndAssignInt:
             return QoreValue(left.getAsBigInt() & right.getAsBigInt());

@@ -1121,6 +1121,10 @@ QoreIRBackgroundInstruction* QoreIRBuilder::createBackground(QoreIRBackgroundKin
     return inst;
 }
 
+void QoreIROwnedLocalVarDeleter::operator()(LocalVar* lv) const {
+    delete lv;
+}
+
 static bool checkRefArgs(const AbstractQoreFunctionVariant* variant) {
     if (!variant) return false;
     // Get the UserVariantBase to access parameter type information

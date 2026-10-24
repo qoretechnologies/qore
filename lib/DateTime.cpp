@@ -367,13 +367,9 @@ DateTime* DateTime::makeRelative(int y, int mo, int d, int h, int mi, int s, int
 }
 
 DateTime* DateTime::makeRelativeFromSeconds(int64 s, int u) {
-   int h = s / 3600;
-   if (h)
-      s -= (h * 3600);
-   int m = s / 60;
-   if (m)
-      s -= (m * 60);
-   return new DateTime(new qore_date_private(0, 0, 0, h, m, s, u, true));
+   std::unique_ptr<DateTime> rv(new DateTime(true));
+   rv->setRelativeDateSeconds(s, u);
+   return rv.release();
 }
 
 const AbstractQoreZoneInfo* DateTime::getZone() const {

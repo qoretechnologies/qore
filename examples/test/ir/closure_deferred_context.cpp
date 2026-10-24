@@ -230,11 +230,12 @@ static QoreValue sweep(const void* ptr, const QoreListNode*, RuntimeConfig&, Exc
     assert(*xsink && result == 0 && probe.calls == 8);
     xsink->clear();
     sameContext(before);
-    bool ready = invocation.ctx->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
-    assert(ready);
+    auto normal = invocation.ctx->native_body_fn;
+    assert(normal);
+    invocation.ctx->native_body_fn = nullptr;
     result = 123;
     int handled = invocation.call(&result, xsink, rc);
-    invocation.ctx->pc_loc_map_attached.store(ready, std::memory_order_release);
+    invocation.ctx->native_body_fn = normal;
     assert(!handled && !*xsink && result == 123 && probe.calls == 8);
     sameContext(before);
     rc->setObject(old_object);
@@ -313,7 +314,7 @@ static void check(unsigned helper_version) {
         assert(invocation.ctx && invocation.ctx->native_int_unary_closure_entry.load(std::memory_order_acquire));
         assert(invocation.ctx->native_int_unary_closure_entry_v2.load(std::memory_order_acquire));
         auto v2_entry = invocation.ctx->native_int_unary_closure_entry_v2.exchange(nullptr, std::memory_order_acq_rel);
-        auto normal = invocation.ctx->pc_loc_fn;
+        auto normal = invocation.ctx->native_body_fn;
         qore_rt_bind_closure_int_unary_v2(nullptr, normal, v2_entry);
         qore_rt_bind_closure_int_unary_v2(invocation.ctx, nullptr, v2_entry);
         qore_rt_bind_closure_int_unary_v2(invocation.ctx, normal, nullptr);

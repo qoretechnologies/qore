@@ -908,8 +908,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     if (*vl.xsink)
         return -1;
 
-    if (rh->getType() == NT_LIST) {
-        vl.xsink->raiseException("ILLEGAL-SLICE", "slices are not supported in internal lvalue expressions");
+    if (qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
         return -1;
     }
 
@@ -1044,8 +1043,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         return -1;
     }
 
-    if (rh->getType() == NT_LIST) {
-        vl.xsink->raiseException("ILLEGAL-SLICE", "slices are not supported in internal lvalue expressions");
+    if (qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
         return -1;
     }
 
@@ -1320,6 +1318,11 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
         return -1;
     }
 
+    // a list of keys is a slice, which is not an lvalue, as doListLValue() checks for a list of indexes
+    if (qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
+        return -1;
+    }
+
     // convert to default character encoding
     QoreHashKeyHelper mem(*rh, vl.xsink);
     if (*vl.xsink) {
@@ -1346,6 +1349,11 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
 int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove) {
     ValueEvalOptimizedRefHolder rh(op->getRight(), vl.xsink);
     if (*vl.xsink) {
+        return -1;
+    }
+
+    // a list of keys is a slice, which is not an lvalue, as doListLValue() checks for a list of indexes
+    if (qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
         return -1;
     }
 
@@ -1797,6 +1805,12 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
         switch (step.kind) {
             case LVPathStepKind::HashKeyConst:
             case LVPathStepKind::HashKey: {
+                // a list of keys is a slice, which is not an lvalue (remove and delete take a slice at the end of
+                // the path without navigating it), as doHashObjLValue() checks
+                if (step.slice_values.size() == 1
+                        && qore_check_lvalue_key_not_slice(step.slice_values[0], vl.xsink)) {
+                    return -1;
+                }
                 // Check if the target is an object — use doObjLValue instead of doHashLValue
                 QoreObject* o = nullptr;
                 if (t == NT_WEAKREF) {
@@ -1816,6 +1830,11 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                 break;
             }
             case LVPathStepKind::ListIndex: {
+                // a list of indexes is a slice, as doListLValue() checks
+                if (step.slice_values.size() == 1
+                        && qore_check_lvalue_key_not_slice(step.slice_values[0], vl.xsink)) {
+                    return -1;
+                }
                 int64_t idx = single_index ? *single_index : step.index;
                 int64_t original_idx = idx;
                 bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
@@ -1909,6 +1928,14 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                 }
                 break;
             }
+            case LVPathStepKind::Cast:
+                // the value so far must have the cast's type, as doLValue() checks a cast in an lvalue
+                assert(step.cast_node);
+                if (step.cast_node->checkValue(vl.xsink, val ? val->getValue() : *qv, true)) {
+                    clearPtr();
+                    return -1;
+                }
+                break;
             default:
                 vl.xsink->raiseException("LVALUE-ERROR",
                     "invalid navigation step kind %d in lvalue path", (int)step.kind);
@@ -2220,6 +2247,7 @@ int64 LValueHelper::plusEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() + va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2235,6 +2263,7 @@ int64 LValueHelper::minusEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() - va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2250,6 +2279,7 @@ int64 LValueHelper::multiplyEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() * va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2265,7 +2295,8 @@ int64 LValueHelper::divideEqualsBigInt(int64 va, const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    int64 newVal = qv->getAsBigInt() / va;
+    int64 newVal = qore_int_div(qv->getAsBigInt(), va);
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2281,6 +2312,7 @@ int64 LValueHelper::orEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() | va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2296,6 +2328,7 @@ int64 LValueHelper::xorEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() ^ va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2310,7 +2343,8 @@ int64 LValueHelper::modulaEqualsBigInt(int64 va, const char* desc) {
     if (makeIntQv(desc)) {
         return 0;
     }
-    int64 newVal = qv->getAsBigInt() % va;
+    int64 newVal = qore_int_mod(qv->getAsBigInt(), va);
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2326,6 +2360,7 @@ int64 LValueHelper::andEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() & va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2341,6 +2376,7 @@ int64 LValueHelper::shiftLeftEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() << va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2356,6 +2392,7 @@ int64 LValueHelper::shiftRightEqualsBigInt(int64 va, const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() >> va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2371,6 +2408,7 @@ int64 LValueHelper::preIncrementBigInt(const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() + 1;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2386,6 +2424,7 @@ int64 LValueHelper::preDecrementBigInt(const char* desc) {
         return 0;
     }
     int64 newVal = qv->getAsBigInt() - 1;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2402,6 +2441,7 @@ int64 LValueHelper::postIncrementBigInt(const char* desc) {
         return 0;
     }
     int64 oldVal = qv->getAsBigInt();
+    saveTemp(*qv);
     qv->set(oldVal + 1);
     return oldVal;
 }
@@ -2417,6 +2457,7 @@ int64 LValueHelper::postDecrementBigInt(const char* desc) {
         return 0;
     }
     int64 oldVal = qv->getAsBigInt();
+    saveTemp(*qv);
     qv->set(oldVal - 1);
     return oldVal;
 }
@@ -2430,6 +2471,7 @@ double LValueHelper::preIncrementFloat(const char* desc) {
     if (makeFloat(desc))
         return 0.0;
     double newVal = qv->getAsFloat() + 1.0;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2443,6 +2485,7 @@ double LValueHelper::preDecrementFloat(const char* desc) {
     if (makeFloat(desc))
         return 0.0;
     double newVal = qv->getAsFloat() - 1.0;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2456,6 +2499,7 @@ double LValueHelper::postIncrementFloat(const char* desc) {
     if (makeFloat(desc))
         return 0.0;
     double oldVal = qv->getAsFloat();
+    saveTemp(*qv);
     qv->set(oldVal + 1.0);
     return oldVal;
 }
@@ -2469,6 +2513,7 @@ double LValueHelper::postDecrementFloat(const char* desc) {
     if (makeFloat(desc))
         return 0.0;
     double oldVal = qv->getAsFloat();
+    saveTemp(*qv);
     qv->set(oldVal - 1.0);
     return oldVal;
 }
@@ -2482,6 +2527,7 @@ double LValueHelper::plusEqualsFloat(double va, const char* desc) {
     if (makeFloat(desc))
         return 0.0;
     double newVal = qv->getAsFloat() + va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2495,6 +2541,7 @@ double LValueHelper::minusEqualsFloat(double va, const char* desc) {
     if (makeFloat(desc))
         return 0.0;
     double newVal = qv->getAsFloat() - va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2508,6 +2555,7 @@ double LValueHelper::multiplyEqualsFloat(double va, const char* desc) {
     if (makeFloat(desc))
         return 0.0;
     double newVal = qv->getAsFloat() * va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
@@ -2522,6 +2570,7 @@ double LValueHelper::divideEqualsFloat(double va, const char* desc) {
     if (makeFloat(desc))
         return 0.0;
     double newVal = qv->getAsFloat() / va;
+    saveTemp(*qv);
     qv->set(newVal);
     return newVal;
 }
