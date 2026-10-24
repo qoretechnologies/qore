@@ -20758,3 +20758,83 @@ Full evidence: [results-merge-b7e1367f5f-macos-arm64.json](results-merge-b7e1367
 Next establish the planned optimized runtime checkpoint, then test a narrow
 callable-input subset proof for literal references passed to internal calls.
 Java parity and a global performance ceiling remain unestablished.
+
+## Optimized post-b7 execution checkpoint (2026-10-24)
+
+Feature `0f59428d8`, develop `b7e1367f5f` and premerge feature `23de678115`
+use -O3 -DNDEBUG runtimes, allocation tracking OFF and LLVM 22.1.8. AOT
+executables use qcc -O3. Feature reuses the final merge qualification's exact
+runtime bytes; develop has a fresh isolated build with matching flags. Frozen
+premerge production sources/binaries and actual dyld paths are verified.
+Java uses the recorded Temurin 25 JDK and JMH 1.37; see the report for exact
+version, binary/dependency hashes and flags. Direct/final Java inlining is
+allowed; dynamic/callback boundaries have verified DONT_INLINE compiler hints.
+
+All 980 interleaved runs and 2940 measurement windows are retained: 16 micro and
+4 mixed workloads, three Qore layouts, five fresh-process forks, three warmup
+and three sample windows of 300 ms, 4096 items and seed 7. Java has five fresh
+JVM forks per microbenchmark. Qore results are medians of the three layout
+medians of five fork means; Java uses the median of five fork means.
+No other task-owned builds, tests, analysis or profiles run during timing.
+
+These are whole-workload nanoseconds per item, including loop/computation and
+checksum. They are not bare call latency. Develop speedup above 1 means the
+branch is faster; branch/Java above 1 means Qore takes longer. Merge time change
+compares against frozen premerge production code; positive means slower.
+
+|!Workload|!Develop AOT ns/item|!Branch AOT ns/item|!Java JIT ns/item|!Develop speedup|!Branch / Java|!Merge time change
+|arithmetic|7.527|1.498|0.975|5.03x|1.54x|+0.60%
+|direct_call|7.353|1.453|0.894|5.06x|1.62x|+1.35%
+|method_call|7.294|1.549|0.886|4.71x|1.75x|+0.37%
+|indirect_call|218.185|7.449|1.667|29.29x|4.47x|+19.67%
+|indirect_float|221.259|8.052|1.648|27.48x|4.88x|+27.41%
+|indirect_int_result|192.900|7.495|1.900|25.74x|3.95x|+30.54%
+|indirect_float_result|198.201|7.827|3.099|25.32x|2.53x|+7.44%
+|monomorphic_call|12.024|3.752|1.679|3.20x|2.23x|+10.06%
+|polymorphic_call|283.209|23.481|2.547|12.06x|9.22x|+10.75%
+|polymorphic_expression_call|118.857|10.627|2.521|11.18x|4.21x|+1.82%
+|closure_call|134.291|17.036|1.659|7.88x|10.27x|+9.03%
+|closure_capture|155.872|22.535|1.758|6.92x|12.82x|+6.04%
+|list_build|103.084|25.205|2.593|4.09x|9.72x|+1.09%
+|list_mutate|216.784|179.638|4.078|1.21x|44.05x|+0.67%
+|temporary_hash|311.109|316.180|15.317|0.98x|20.64x|+1.42%
+|temporary_list|132.272|1.569|1.141|84.31x|1.37x|+3.52%
+
+Mixed workloads have no Java analogue in this campaign:
+
+|!Workload|!Develop AOT ns/item|!Branch AOT ns/item|!Develop speedup|!Merge time change
+|csv_report|1049.681|927.750|1.13x|+1.76%
+|object_orders|1952.752|1744.759|1.12x|+2.41%
+|callback_pipeline|287.087|81.703|3.51x|+0.62%
+|text_index|1610.424|1267.207|1.27x|-0.96%
+
+Direct/method workloads approach the same nanosecond scale as Java, but remain
+1.62x/1.75x slower. Integer callbacks are 29.29x faster than develop and 4.47x
+slower than Java. Captured closures remain 12.82x slower, list mutation 44.05x
+and temporary hashes 20.64x. Temporary hashes are 1.6% slower than develop;
+there is no universal speedup. The four mixed workloads improve 1.12x–3.51x
+versus develop; these synthetic workloads do not establish production throughput.
+
+The merge adds 19.67% to integer callbacks, 27.41% to float callbacks and 30.54%
+to native-integer-result callbacks. All three code layouts show disjoint fork
+ranges for those regressions; 23 layout flags across eight workloads are retained.
+These are descriptive observations, not confidence intervals or proof of a
+specific cause. The next step is to investigate changed callers/runtime setup
+and recover avoidable cost while preserving eager locations and frame semantics.
+Then return to the separately planned callable-input subset proof.
+
+Independent preflight verifies 6765 Qore and 555 Java reference rows; preparation
+adds 1110 develop IR/AOT reference comparisons. Every actual process exit, timing
+stream, schedule and aggregation is replayed independently. Runtime, source and
+dependency fingerprints remain unchanged. Timing checksums remain observable
+and are parsed; not every varying timed seed is independently recomputed.
+The lowercase CMake release-name preflight correction is preserved separately;
+no measurement was run in that failed attempt.
+
+The publication audit covers all 62 checks (6 Pass / 56 N/A), with evidence in
+[results-aot-post-b7-checkpoint-macos-arm64.json](results-aot-post-b7-checkpoint-macos-arm64.json). Every raw timing stream and Java result is embedded;
+large binaries and local build logs are fingerprinted. This is a documentation
+checkpoint: production code and qualified tests remain unchanged.
+Host load/frequency/thermals are not controlled; Java lacks Qore's Program,
+object deletion, observer and cancellation contracts. No Java parity or global
+performance ceiling is established.

@@ -4172,3 +4172,21 @@ explicit. No runtime-speed gain is inferred from slot assignment timings.
 Next run the planned matched optimized feature/develop/premerge/Java checkpoint,
 then measure the callable-input subset candidate. Java parity and a global
 performance ceiling remain unestablished.
+
+## Optimized execution after b7e1367f5f integration (2026-10-24)
+
+A fresh checkpoint compares feature 0f59428d8, develop b7e1367f5f, frozen
+premerge 23de678115 and Java/JMH, using optimized runtimes. Direct/method
+workloads measure 1.453/1.549 ns per item versus Java 0.894/0.886. Integer
+callbacks measure 7.449 ns versus develop 218.185 and Java 1.667; captured
+closures 22.535 versus 155.872/1.758. List mutation remains 179.638 versus
+Java 4.078. Mixed processing improves 1.12x–3.51x versus develop. These
+whole-workload numbers include loop/computation, not isolated call latency.
+
+The merge raises several callback workloads by 20–31% against the frozen
+premerge branch. Investigate the additional cost before the callable-input
+subset experiment; retain eager location/frame correctness. All 980 runs,
+2940 windows, code-layout/fork ranges, adverse outcomes and independent replay
+are recorded in RESULTS and
+`bench/runtime-comparison/results-aot-post-b7-checkpoint-macos-arm64.json`.
+No Java parity, universal speedup or global ceiling is established.
