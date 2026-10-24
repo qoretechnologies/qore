@@ -433,6 +433,13 @@ public:
 
     DLLLOCAL void setNamespace(qore_ns_private* n) {
         ns = n;
+        // C++ modules may instantiate a generic before attaching it to a namespace. Namespace
+        // publication (under parse ownership) must bind every cached instance as one operation;
+        // cancellation cannot leave only part of the declaration family attached.
+        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        for (auto& i : parameterized_hashdecl_cache) {
+            get(*i.second)->setNamespace(n);
+        }
     }
 
     DLLLOCAL const qore_ns_private* getNamespace() const {
@@ -449,6 +456,13 @@ public:
     DLLLOCAL void namespaceDeleted(const qore_ns_private* n) {
         if (ns == n) {
             ns = nullptr;
+        }
+        // Concrete generic declarations are owned by this cache, not by HashDeclList. They can
+        // also survive in hash values after namespace teardown. Cleanup must finish even when
+        // the Program has been cancelled, so this traversal is deliberately not cancellable.
+        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        for (auto& i : parameterized_hashdecl_cache) {
+            get(*i.second)->namespaceDeleted(n);
         }
     }
 

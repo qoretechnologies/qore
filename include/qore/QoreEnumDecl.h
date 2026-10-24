@@ -44,6 +44,7 @@ class QoreTypeInfo;
 class QoreValue;
 class ExceptionSink;
 class QoreEnumDecl;
+class QoreProgram;
 
 //! Represents an enum member with name and value
 /** @since %Qore 3.0
@@ -110,6 +111,25 @@ public:
 
     //! returns the source location of the enum definition
     DLLEXPORT const QoreExternalProgramLocation* getSourceLocation() const;
+
+    //! Returns the Program owning this declaration's namespace
+    /** @return the owning %Program, or @c nullptr for a declaration in the static system namespace,
+        one not yet assigned to a namespace, or one that outlived its namespace
+
+        A copied or imported declaration belongs to the receiving %Program. This includes copies of
+        builtin declarations; isSystem() does not imply a process-wide lifetime.
+
+        @note The returned pointer is borrowed. Call this while the declaration and its namespace are
+        alive, and synchronize cached uses with qore_register_program_cleanup_callback(). This method
+        neither retains the %Program nor makes a stale declaration pointer safe to dereference.
+
+        @par Example
+        A language bridge can associate a generated enum type with this %Program and invalidate its
+        declaration handle in the %Program cleanup callback, before the namespace data is freed.
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreProgram* getProgram() const;
 
     //! returns the full namespace path of the enum
     DLLEXPORT std::string getNamespacePath(bool anchored = false) const;

@@ -239,6 +239,13 @@ public:
         return ns;
     }
 
+    //! Clears the borrowed namespace pointer before its owner is destroyed
+    DLLLOCAL void namespaceDeleted(const qore_ns_private* n) {
+        if (ns == n) {
+            ns = nullptr;
+        }
+    }
+
     DLLLOCAL const char* getModuleName() const {
         return from_module.empty() ? nullptr : from_module.c_str();
     }

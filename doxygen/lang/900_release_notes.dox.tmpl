@@ -4,6 +4,12 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    The C++ API adds TypedHashDecl::getProgram() and QoreEnumDecl::getProgram(), matching
+    QoreClass::getProgram(). Modules can associate cached declarations with their owning %Program and
+    invalidate handles in qore_register_program_cleanup_callback() before namespace data is freed.
+    Copies of declarations report the receiving %Program, including copies of builtin declarations
+    (<a href="https://github.com/qoretechnologies/qore/issues/5517">issue 5517</a>).
+
     The webhook creation and deletion callbacks of
     @ref DataProvider::DataProviderWebhook "DataProviderWebhook" are no longer public members: they are set once
     with @ref DataProvider::DataProviderWebhook::registerWebhookApis() "registerWebhookApis()" and cannot be read

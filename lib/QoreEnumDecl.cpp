@@ -337,6 +337,10 @@ const QoreExternalProgramLocation* QoreEnumDecl::getSourceLocation() const {
     return reinterpret_cast<const QoreExternalProgramLocation*>(priv->getParseLocation());
 }
 
+QoreProgram* QoreEnumDecl::getProgram() const {
+    return priv->ns ? priv->ns->getProgram() : nullptr;
+}
+
 std::string QoreEnumDecl::getNamespacePath(bool anchored) const {
     if (!priv->getNamespace()) {
         return anchored ? std::string("::") + priv->getName() : priv->getName();

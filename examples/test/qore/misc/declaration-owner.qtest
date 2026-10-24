@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class DeclarationOwnerTest
+
+class DeclarationOwnerTest inherits QUnit::Test {
+    constructor() : Test("Declaration Program ownership", "1.0") {
+        addTestCase("C++ lifetime API and cleanup callbacks", \nativeOwners());
+        set_return_value(main());
+    }
+
+    private nativeOwners() {
+        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string native = ENV.QORE_DECLARATION_OWNER_TEST ?? dirname(qore) + "/qore-declaration-owner-test";
+        if (!is_file(native)) {
+            testSkip("the native declaration owner test executable is not available");
+            return;
+        }
+        int rc;
+        string output = backquote("'" + replace(native, "'", "'\\''") + "' 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertTrue(output.startsWith("PASS:"), output);
+    }
+}
