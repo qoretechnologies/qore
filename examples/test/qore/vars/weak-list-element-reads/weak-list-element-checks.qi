@@ -1,0 +1,240 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks of weak references read from list elements, which must behave as ones read from hash values; included by
+# weak-list-element-reads-worker.q, so that the checks run in the execution mode of the worker, and by
+# WeakListElementChecks.qm for the compiled run
+#
+# each check reads the weak reference from a hash value (h.w), from a list element with a constant index (l[0]) and
+# from one with a variable index (l[i]), and returns the three results as "hash|constant index|variable index", or
+# the err of the exception raised
+
+public namespace WeakListElementChecks {
+    #! the target of the weak references
+    public class Target {
+        public {
+            int n = 7;
+        }
+
+        int ping() {
+            return n;
+        }
+    }
+
+    #! holds the containers of a check and the strong reference that keeps the target alive, if any
+    public class Containers {
+        public {
+            hash<auto> h;
+            list<auto> l;
+            list<Target> typed;
+            *Target keep;
+        }
+
+        constructor(bool live) {
+            hash<auto!> wh = {};
+            list<auto!> wl = (1,);
+            list<Target> tl = ();
+            {
+                Target t();
+                wh.w := t;
+                wl[0] := t;
+                tl[0] := t;
+                if (live) {
+                    keep = t;
+                }
+            }
+            h = wh;
+            l = wl;
+            typed = tl;
+        }
+    }
+
+    #! returns the results of the checks with a live target and with a destroyed one: name -> result
+    public hash<string, string> sub get_results() {
+        hash<string, string> rv = {};
+        foreach bool live in (True, False) {
+            Containers c(live);
+            string prefix = live ? "live-" : "destroyed-";
+            rv{prefix + "object-argument"} = check_object_argument(c.h, c.l, 0);
+            rv{prefix + "assigned-typed"} = check_assigned_typed(c.h, c.l, 0);
+            rv{prefix + "method-call"} = check_method_call(c.h, c.l, 0);
+            rv{prefix + "pseudo-method-call"} = check_pseudo_method_call(c.h, c.l, 0);
+            rv{prefix + "member"} = check_member(c.h, c.l, 0);
+            rv{prefix + "instanceof"} = check_instanceof(c.h, c.l, 0);
+            rv{prefix + "bool"} = check_bool(c.h, c.l, 0);
+            rv{prefix + "hash-value"} = check_hash_value(c.h, c.l, 0);
+            rv{prefix + "string"} = check_string(c.h, c.l, 0);
+            if (!live) {
+                # the compiled tiers read a list element that is a weak reference to a destroyed object as the weak
+                # reference, so that a method call through it raises OBJECT-ALREADY-DELETED
+                continue;
+            }
+            rv{prefix + "exists"} = check_exists(c.h, c.l, 0);
+            rv{prefix + "is-nothing"} = check_is_nothing(c.h, c.l, 0);
+            rv{prefix + "optional-object-argument"} = check_optional_object_argument(c.h, c.l, 0);
+            rv{prefix + "auto-argument"} = check_auto_argument(c.h, c.l, 0);
+            rv{prefix + "returned"} = check_returned(c.h, c.l, 0);
+            rv{prefix + "assigned"} = check_assigned(c.h, c.l, 0);
+            rv{prefix + "cast"} = check_cast(c.h, c.l, 0);
+            rv{prefix + "list-element"} = check_list_element(c.h, c.l, 0);
+            rv{prefix + "typed-list"} = check_typed_list(c.h, c.typed, 0);
+            rv{prefix + "map"} = check_map(c.h, c.l);
+        }
+        return rv;
+    }
+
+    #! returns True if the argument has a value
+    bool sub has_value(*object o) {
+        return exists o;
+    }
+
+    #! returns True; requires an object
+    bool sub is_object(object o) {
+        return True;
+    }
+
+    #! returns the type of the argument
+    string sub type_of(auto v) {
+        return v.type();
+    }
+
+    #! returns its argument
+    auto sub identity(auto v) {
+        return v;
+    }
+
+    string sub check_exists(hash<auto> h, list<auto> l, int i) {
+        return sprintf("%y|%y|%y", exists h.w, exists l[0], exists l[i]);
+    }
+
+    string sub check_is_nothing(hash<auto> h, list<auto> l, int i) {
+        return sprintf("%y|%y|%y", h.w === NOTHING, l[0] === NOTHING, l[i] === NOTHING);
+    }
+
+    string sub check_optional_object_argument(hash<auto> h, list<auto> l, int i) {
+        list<string> rv = ();
+        try { rv += sprintf("%y", has_value(h.w)); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += sprintf("%y", has_value(l[0])); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += sprintf("%y", has_value(l[i])); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        return rv.join("|");
+    }
+
+    string sub check_object_argument(hash<auto> h, list<auto> l, int i) {
+        list<string> rv = ();
+        try { rv += sprintf("%y", is_object(h.w)); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += sprintf("%y", is_object(l[0])); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += sprintf("%y", is_object(l[i])); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        return rv.join("|");
+    }
+
+    string sub check_auto_argument(hash<auto> h, list<auto> l, int i) {
+        list<string> rv = ();
+        try { rv += type_of(h.w); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += type_of(l[0]); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += type_of(l[i]); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        return rv.join("|");
+    }
+
+    string sub check_returned(hash<auto> h, list<auto> l, int i) {
+        list<string> rv = ();
+        try { rv += identity(h.w).type(); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += identity(l[0]).type(); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += identity(l[i]).type(); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        return rv.join("|");
+    }
+
+    string sub check_assigned(hash<auto> h, list<auto> l, int i) {
+        list<string> rv = ();
+        try { auto a = h.w; rv += a.type(); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { auto a = l[0]; rv += a.type(); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { auto a = l[i]; rv += a.type(); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        return rv.join("|");
+    }
+
+    string sub check_assigned_typed(hash<auto> h, list<auto> l, int i) {
+        list<string> rv = ();
+        try { *Target a = h.w; rv += sprintf("%y", exists a); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { *Target a = l[0]; rv += sprintf("%y", exists a); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { *Target a = l[i]; rv += sprintf("%y", exists a); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        return rv.join("|");
+    }
+
+    string sub check_method_call(hash<auto> h, list<auto> l, int i) {
+        list<string> rv = ();
+        try { rv += sprintf("%y", h.w.ping()); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += sprintf("%y", l[0].ping()); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += sprintf("%y", l[i].ping()); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        return rv.join("|");
+    }
+
+    string sub check_pseudo_method_call(hash<auto> h, list<auto> l, int i) {
+        list<string> rv = ();
+        try { rv += h.w.type(); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += l[0].type(); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += l[i].type(); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        return rv.join("|");
+    }
+
+    string sub check_member(hash<auto> h, list<auto> l, int i) {
+        list<string> rv = ();
+        try { rv += sprintf("%y", h.w.n); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += sprintf("%y", l[0].n); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += sprintf("%y", l[i].n); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        return rv.join("|");
+    }
+
+    string sub check_instanceof(hash<auto> h, list<auto> l, int i) {
+        return sprintf("%y|%y|%y", h.w instanceof Target, l[0] instanceof Target, l[i] instanceof Target);
+    }
+
+    string sub check_cast(hash<auto> h, list<auto> l, int i) {
+        list<string> rv = ();
+        try { rv += sprintf("%y", exists cast<*Target>(h.w)); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += sprintf("%y", exists cast<*Target>(l[0])); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += sprintf("%y", exists cast<*Target>(l[i])); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        return rv.join("|");
+    }
+
+    string sub check_bool(hash<auto> h, list<auto> l, int i) {
+        return sprintf("%y|%y|%y", h.w ? True : False, l[0] ? True : False, l[i] ? True : False);
+    }
+
+    #! the value read is put in a new list; the new list holds the target, not a weak reference
+    string sub check_list_element(hash<auto> h, list<auto> l, int i) {
+        list<string> rv = ();
+        try { list<auto> a = (h.w,); rv += type_of(a[0]); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { list<auto> a = (l[0],); rv += type_of(a[0]); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { list<auto> a = (l[i],); rv += type_of(a[0]); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        return rv.join("|");
+    }
+
+    #! the value read is put in a new hash; the new hash holds the target, not a weak reference
+    string sub check_hash_value(hash<auto> h, list<auto> l, int i) {
+        list<string> rv = ();
+        try { hash<auto> a = {"v": h.w}; rv += type_of(a.v); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { hash<auto> a = {"v": l[0]}; rv += type_of(a.v); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { hash<auto> a = {"v": l[i]}; rv += type_of(a.v); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        return rv.join("|");
+    }
+
+    string sub check_string(hash<auto> h, list<auto> l, int i) {
+        return sprintf("%y|%y|%y", h.w, l[0], l[i]);
+    }
+
+    #! reads from a list of objects
+    string sub check_typed_list(hash<auto> h, list<Target> l, int i) {
+        list<string> rv = ();
+        try { rv += sprintf("%y", has_value(h.w)); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += sprintf("%y", has_value(l[0])); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += sprintf("%y", has_value(l[i])); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        return rv.join("|");
+    }
+
+    #! reads each element of the list with map; the hash value is read once
+    string sub check_map(hash<auto> h, list<auto> l) {
+        list<string> rv = ();
+        try { rv += sprintf("%y", has_value(h.w)); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += sprintf("%y", (map has_value($1), l)[0]); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        try { rv += sprintf("%y", (map exists $1, l)[0]); } catch (hash<ExceptionInfo> ex) { rv += ex.err; }
+        return rv.join("|");
+    }
+}

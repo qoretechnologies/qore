@@ -1546,6 +1546,34 @@ static bool qore_rt_evaluate_owned_weak_reference_result(QoreValue& val, Excepti
     return true;
 }
 
+// A weak reference read from a list element reads as its target, as one read from a hash value does; a weak
+// reference to an object that has been destroyed is kept, so that a method call through it raises
+// OBJECT-ALREADY-DELETED.  The value is owned by the caller.
+static void qore_rt_evaluate_owned_list_element(QoreValue& val, ExceptionSink* xsink) {
+    if (val.getType() == NT_WEAKREF && !val.get<const WeakReferenceNode>()->get()->isValid()) {
+        return;
+    }
+    qore_rt_evaluate_owned_weak_reference_result(val, xsink);
+}
+
+// As qore_rt_evaluate_owned_list_element() for a list element borrowed from its list; the target of a weak reference
+// is returned borrowed as well: the weak reference held by the list keeps it allocated
+static QoreValue qore_rt_get_borrowed_list_element(const QoreListNode* l, size_t i) {
+    QoreValue val = l->retrieveEntry(i);
+    switch (val.getType()) {
+        case NT_WEAKREF: {
+            QoreObject* obj = val.get<const WeakReferenceNode>()->get();
+            return obj->isValid() ? QoreValue(obj) : val;
+        }
+        case NT_WEAKREF_HASH:
+            return QoreValue(val.get<const WeakHashReferenceNode>()->get());
+        case NT_WEAKREF_LIST:
+            return QoreValue(val.get<const WeakListReferenceNode>()->get());
+        default:
+            return val;
+    }
+}
+
 static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSink* xsink,
         bool check_types, bool normalize_weak_refs) {
     if (!var || *xsink) {
@@ -1989,6 +2017,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_dynamic(uint64_t left, uint64_t
     bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
     QoreValue result = QoreSquareBracketsOperatorNode::doSquareBrackets(*lv, *rv, true, string_index_char != 0,
         negative_offsets, xsink);
+    if (lv->getType() == NT_LIST && !(xsink && *xsink)) {
+        qore_rt_evaluate_owned_list_element(result, xsink);
+    }
     return toBits(result);
 }
 
@@ -6079,7 +6110,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_access_compat(uint64_t list_val
         const QoreListNode* l = v.get<const QoreListNode>();
         if (QoreSquareBracketsOperatorNode::normalizeIndex(qindex, static_cast<int64>(l->size()),
                 negative_offsets)) {
-            return toBits(l->getReferencedEntry(static_cast<size_t>(qindex)));
+            QoreValue rv = l->getReferencedEntry(static_cast<size_t>(qindex));
+            qore_rt_evaluate_owned_list_element(rv, xsink);
+            return toBits(rv);
         }
     } else if (v.getType() == NT_STRING) {
         QoreStringNodeValueHelper s(v);
@@ -6454,7 +6487,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_get_value(uint64_t list_val, int64_t 
     if (v.getType() == NT_LIST) {
         const QoreListNode* l = v.get<const QoreListNode>();
         if (index >= 0 && static_cast<size_t>(index) < l->size()) {
-            return toBits(l->getReferencedEntry(static_cast<size_t>(index)));
+            QoreValue rv = l->getReferencedEntry(static_cast<size_t>(index));
+            qore_rt_evaluate_owned_list_element(rv, xsink);
+            return toBits(rv);
         }
     }
     return toBits(QoreValue());
@@ -6466,7 +6501,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_get_value_noref(uint64_t list_val, in
     if (v.getType() == NT_LIST) {
         const QoreListNode* l = v.get<const QoreListNode>();
         if (index >= 0 && static_cast<size_t>(index) < l->size()) {
-            return toBits(l->retrieveEntry(static_cast<size_t>(index)));
+            return toBits(qore_rt_get_borrowed_list_element(l, static_cast<size_t>(index)));
         }
     }
     return toBits(QoreValue());

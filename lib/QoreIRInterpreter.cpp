@@ -524,6 +524,34 @@ static bool evaluateOwnedWeakReferenceResult(QoreValue& value, ExceptionSink* xs
     return true;
 }
 
+// A weak reference read from a list element reads as its target, as one read from a hash value does; a weak
+// reference to an object that has been destroyed is kept, so that a method call through it raises
+// OBJECT-ALREADY-DELETED.  The value is owned by the caller.
+static void evaluateOwnedListElement(QoreValue& value, ExceptionSink* xsink) {
+    if (value.getType() == NT_WEAKREF && !value.get<const WeakReferenceNode>()->get()->isValid()) {
+        return;
+    }
+    evaluateOwnedWeakReferenceResult(value, xsink);
+}
+
+// As evaluateOwnedListElement() for a list element borrowed from its list; the target of a weak reference is returned
+// borrowed as well: the weak reference held by the list keeps it allocated
+static QoreValue getBorrowedListElement(const QoreListNode* l, size_t i) {
+    QoreValue value = l->retrieveEntry(i);
+    switch (value.getType()) {
+        case NT_WEAKREF: {
+            QoreObject* obj = value.get<const WeakReferenceNode>()->get();
+            return obj->isValid() ? QoreValue(obj) : value;
+        }
+        case NT_WEAKREF_HASH:
+            return QoreValue(value.get<const WeakHashReferenceNode>()->get());
+        case NT_WEAKREF_LIST:
+            return QoreValue(value.get<const WeakListReferenceNode>()->get());
+        default:
+            return value;
+    }
+}
+
 QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& left, const QoreValue& right,
         ExceptionSink* xsink) {
     switch (op) {
@@ -4810,8 +4838,12 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         inv->expr.getInternalNode())) {
                     QoreValue lhs_val = getIRValue(values, inv->operands[0]);
                     QoreValue rhs_val = getIRValue(values, inv->operands[1]);
-                    return QoreSquareBracketsOperatorNode::doSquareBrackets(
+                    QoreValue out = QoreSquareBracketsOperatorNode::doSquareBrackets(
                         lhs_val, rhs_val, true, sq->hasStringIndexChar(), sq->hasNegativeOffsets(), xsink);
+                    if (lhs_val.getType() == NT_LIST && !(xsink && *xsink)) {
+                        evaluateOwnedListElement(out, xsink);
+                    }
+                    return out;
                 }
                 if (auto* hod = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
                         inv->expr.getInternalNode())) {
@@ -7513,6 +7545,7 @@ next_instruction:
                     const QoreListNode* l = list_val.get<const QoreListNode>();
                     if (index >= 0 && static_cast<size_t>(index) < l->size()) {
                         result = l->getReferencedEntry(static_cast<size_t>(index));
+                        evaluateOwnedListElement(result, xsink);
                     }
                 }
                 setValueSlot(values, inst->result.id, result, xsink);
@@ -7533,7 +7566,7 @@ next_instruction:
                 if (list_val.getType() == NT_LIST) {
                     const QoreListNode* l = list_val.get<const QoreListNode>();
                     if (index >= 0 && static_cast<size_t>(index) < l->size()) {
-                        result = l->retrieveEntry(static_cast<size_t>(index));
+                        result = getBorrowedListElement(l, static_cast<size_t>(index));
                     }
                 }
                 setValueSlotDirect(values, inst->result.id, result);
@@ -8990,6 +9023,7 @@ load_local_done:
                     const QoreListNode* l = list_val.get<const QoreListNode>();
                     if (index >= 0 && static_cast<size_t>(index) < l->size()) {
                         out = l->getReferencedEntry(static_cast<size_t>(index));
+                        evaluateOwnedListElement(out, xsink);
                     }
                 }
                 setValueSlot(values, inst->result.id, out, xsink);
@@ -12695,6 +12729,10 @@ load_local_done:
                     ? QoreSquareBracketsOperatorNode::doSquareBrackets(left_val, right_val, true,
                         string_index_char != 0, runtime_check_parse_option(PO_NEGATIVE_OFFSETS), xsink)
                     : QoreIRInterpreter::evalBinary(inst->opcode, left_val, right_val, xsink);
+                if (inst->opcode == QoreIROpcode::ListIndexDynamic && left_val.getType() == NT_LIST
+                        && !(xsink && *xsink)) {
+                    evaluateOwnedListElement(res, xsink);
+                }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
@@ -14590,6 +14628,9 @@ load_local_done:
                         QoreValue rhs_val = getIRValue(values, inst->operands[1]);
                         res = QoreSquareBracketsOperatorNode::doSquareBrackets(
                             lhs_val, rhs_val, true, sq->hasStringIndexChar(), sq->hasNegativeOffsets(), xsink);
+                        if (lhs_val.getType() == NT_LIST && !(xsink && *xsink)) {
+                            evaluateOwnedListElement(res, xsink);
+                        }
                         used_operands = true;
                     } else if (auto* hod = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
                             call_expr.getInternalNode())) {
@@ -17466,8 +17507,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             qore_type_t bt = left.getType();
             if (bt == NT_LIST || bt == NT_STRING || bt == NT_BINARY || bt == NT_BUFFER
                     || right.getType() == NT_LIST) {
-                return QoreSquareBracketsOperatorNode::doSquareBrackets(left, right, true, true,
+                QoreValue out = QoreSquareBracketsOperatorNode::doSquareBrackets(left, right, true, true,
                     runtime_check_parse_option(PO_NEGATIVE_OFFSETS), xsink);
+                if (bt == NT_LIST && !(xsink && *xsink)) {
+                    evaluateOwnedListElement(out, xsink);
+                }
+                return out;
             }
             if (bt == NT_HASH) {
                 // hash[key] is equivalent to hash{key}

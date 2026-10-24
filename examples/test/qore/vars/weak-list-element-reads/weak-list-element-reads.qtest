@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%allow-weak-references
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%include weak-list-element-checks.qi
+
+%exec-class WeakListElementReadsTest
+
+#! Tests that a weak reference read from a list element behaves as one read from a hash value
+/** Each check reads a weak reference (\c ":=") to an object from a hash value, from a list element with a constant
+    index and from one with a variable index; the three results must be the same, live or destroyed, in every
+    execution mode and in a compiled module.  The checks are in weak-list-element-checks.qi.
+*/
+class WeakListElementReadsTest inherits QUnit::Test {
+    public {
+        #! check name -> the result of each of its three reads
+        const Expected = {
+            "live-exists": "True",
+            "live-is-nothing": "False",
+            "live-optional-object-argument": "True",
+            "live-object-argument": "True",
+            "live-auto-argument": "object",
+            "live-returned": "object",
+            "live-assigned": "object",
+            "live-assigned-typed": "True",
+            "live-method-call": "7",
+            "live-pseudo-method-call": "object",
+            "live-member": "7",
+            "live-instanceof": "True",
+            "live-cast": "True",
+            "live-bool": "True",
+            "live-list-element": "object",
+            "live-hash-value": "object",
+            "live-string": "{<Target object>: {n: 7}}",
+            "live-typed-list": "True",
+            "live-map": "True",
+            "destroyed-object-argument": "RUNTIME-OVERLOAD-ERROR",
+            "destroyed-assigned-typed": "False",
+            "destroyed-method-call": "OBJECT-ALREADY-DELETED",
+            "destroyed-pseudo-method-call": "OBJECT-ALREADY-DELETED",
+            "destroyed-member": "null",
+            "destroyed-instanceof": "False",
+            "destroyed-bool": "False",
+            "destroyed-hash-value": "nothing",
+            "destroyed-string": "null",
+        };
+
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("WeakListElementReadsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("checks in this program", \testInProgram());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    #! the checks in the execution mode that the test is run in
+    testInProgram() {
+        checkResults("in-program", WeakListElementChecks::get_results());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            checkWorkerOutput(mode, runWorker("weak-list-element-reads-worker.q", get_script_dir(),
+                "--exec-mode=" + mode));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-weak-list-element-reads-");
+        string qmod_path = tmp.path + DirSep + "WeakListElementChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "WeakListElementChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot", runWorker("weak-list-element-reads-module-worker.q", tmp.path));
+    }
+
+    #! a run with an execution mode runs through ExecModeHarness, which checks its native compilation
+    private string runWorker(string worker_name, string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + worker_name;
+        return ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s %s",
+            libqore_dir, module_dir, qore_bin, opts, worker));
+    }
+
+    #! parses the "name=value" lines printed by the worker and checks them
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        checkResults(label, results);
+    }
+
+    private checkResults(string label, hash<string, string> results) {
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            # the hash value, the list element with a constant index and the one with a variable index
+            assertEq((i.value, i.value, i.value).join("|"), results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}
