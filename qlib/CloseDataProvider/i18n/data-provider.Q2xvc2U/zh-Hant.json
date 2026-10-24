@@ -423,27 +423,27 @@
           "source": "A list of email address objects, each with `type` and `email` fields",
           "message": "電子郵件地址物件清單，每個物件包含 `type` 與 `email` 欄位"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZUVtYWlsRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-Izg2MTU0NjcwMWQ3YzRkMTkzMmE4MzYwOTVhNTQ0MGQzZmEyMmYxOWMzNDMwYzRhNmVhOGQ4MDJkYWNkYWM0ODM6b3B0aW9uOlkyOXVkR0ZqZEhNOmZpZWxkOlpXMWhhV3h6.field.ZW1haWw.display_name": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZUVtYWlsRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-Izg2MTU0NjcwMWQ3YzRkMTkzMmE4MzYwOTVhNTQ0MGQzZmEyMmYxOWMzNDMwYzRhNmVhOGQ4MDJkYWNkYWM0ODM.field.ZW1haWw.display_name": {
           "source": "Email",
           "message": "電子郵件"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZUVtYWlsRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-Izg2MTU0NjcwMWQ3YzRkMTkzMmE4MzYwOTVhNTQ0MGQzZmEyMmYxOWMzNDMwYzRhNmVhOGQ4MDJkYWNkYWM0ODM6b3B0aW9uOlkyOXVkR0ZqZEhNOmZpZWxkOlpXMWhhV3h6.field.ZW1haWw.short_desc": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZUVtYWlsRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-Izg2MTU0NjcwMWQ3YzRkMTkzMmE4MzYwOTVhNTQ0MGQzZmEyMmYxOWMzNDMwYzRhNmVhOGQ4MDJkYWNkYWM0ODM.field.ZW1haWw.short_desc": {
           "source": "The email address",
           "message": "電子郵件地址"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZUVtYWlsRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-Izg2MTU0NjcwMWQ3YzRkMTkzMmE4MzYwOTVhNTQ0MGQzZmEyMmYxOWMzNDMwYzRhNmVhOGQ4MDJkYWNkYWM0ODM6b3B0aW9uOlkyOXVkR0ZqZEhNOmZpZWxkOlpXMWhhV3h6.field.ZW1haWw.desc": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZUVtYWlsRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-Izg2MTU0NjcwMWQ3YzRkMTkzMmE4MzYwOTVhNTQ0MGQzZmEyMmYxOWMzNDMwYzRhNmVhOGQ4MDJkYWNkYWM0ODM.field.ZW1haWw.desc": {
           "source": "The email address value",
           "message": "電子郵件地址值"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZUVtYWlsRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-Izg2MTU0NjcwMWQ3YzRkMTkzMmE4MzYwOTVhNTQ0MGQzZmEyMmYxOWMzNDMwYzRhNmVhOGQ4MDJkYWNkYWM0ODM6b3B0aW9uOlkyOXVkR0ZqZEhNOmZpZWxkOlpXMWhhV3h6.field.dHlwZQ.display_name": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZUVtYWlsRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-Izg2MTU0NjcwMWQ3YzRkMTkzMmE4MzYwOTVhNTQ0MGQzZmEyMmYxOWMzNDMwYzRhNmVhOGQ4MDJkYWNkYWM0ODM.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "類型"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZUVtYWlsRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-Izg2MTU0NjcwMWQ3YzRkMTkzMmE4MzYwOTVhNTQ0MGQzZmEyMmYxOWMzNDMwYzRhNmVhOGQ4MDJkYWNkYWM0ODM6b3B0aW9uOlkyOXVkR0ZqZEhNOmZpZWxkOlpXMWhhV3h6.field.dHlwZQ.short_desc": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZUVtYWlsRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-Izg2MTU0NjcwMWQ3YzRkMTkzMmE4MzYwOTVhNTQ0MGQzZmEyMmYxOWMzNDMwYzRhNmVhOGQ4MDJkYWNkYWM0ODM.field.dHlwZQ.short_desc": {
           "source": "The email type",
           "message": "電子郵件類型"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZUVtYWlsRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-Izg2MTU0NjcwMWQ3YzRkMTkzMmE4MzYwOTVhNTQ0MGQzZmEyMmYxOWMzNDMwYzRhNmVhOGQ4MDJkYWNkYWM0ODM6b3B0aW9uOlkyOXVkR0ZqZEhNOmZpZWxkOlpXMWhhV3h6.field.dHlwZQ.desc": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZUVtYWlsRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-Izg2MTU0NjcwMWQ3YzRkMTkzMmE4MzYwOTVhNTQ0MGQzZmEyMmYxOWMzNDMwYzRhNmVhOGQ4MDJkYWNkYWM0ODM.field.dHlwZQ.desc": {
           "source": "The type of email address (e.g., `office`, `home`, `direct`)",
           "message": "電子郵件位址類型（例如 `office`、`home`、`direct`）"
         },
@@ -471,27 +471,27 @@
           "source": "A list of phone number objects, each with `type` and `phone` fields",
           "message": "電話號碼物件清單，每個物件包含 `type` 與 `phone` 欄位"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVBob25lRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzRiNmQzNjQxZmIxOGJkM2NjOTNlYTk4MzRkZDM5NGU2M2UzNjNjMjU4OTA2ZTViNDU2ZGQ3MGNmMTBiNzIwNTM6b3B0aW9uOlkyOXVkR0ZqZEhNOmZpZWxkOmNHaHZibVZ6.field.cGhvbmU.display_name": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVBob25lRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzRiNmQzNjQxZmIxOGJkM2NjOTNlYTk4MzRkZDM5NGU2M2UzNjNjMjU4OTA2ZTViNDU2ZGQ3MGNmMTBiNzIwNTM.field.cGhvbmU.display_name": {
           "source": "Phone",
           "message": "電話"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVBob25lRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzRiNmQzNjQxZmIxOGJkM2NjOTNlYTk4MzRkZDM5NGU2M2UzNjNjMjU4OTA2ZTViNDU2ZGQ3MGNmMTBiNzIwNTM6b3B0aW9uOlkyOXVkR0ZqZEhNOmZpZWxkOmNHaHZibVZ6.field.cGhvbmU.short_desc": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVBob25lRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzRiNmQzNjQxZmIxOGJkM2NjOTNlYTk4MzRkZDM5NGU2M2UzNjNjMjU4OTA2ZTViNDU2ZGQ3MGNmMTBiNzIwNTM.field.cGhvbmU.short_desc": {
           "source": "The phone number",
           "message": "電話號碼"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVBob25lRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzRiNmQzNjQxZmIxOGJkM2NjOTNlYTk4MzRkZDM5NGU2M2UzNjNjMjU4OTA2ZTViNDU2ZGQ3MGNmMTBiNzIwNTM6b3B0aW9uOlkyOXVkR0ZqZEhNOmZpZWxkOmNHaHZibVZ6.field.cGhvbmU.desc": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVBob25lRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzRiNmQzNjQxZmIxOGJkM2NjOTNlYTk4MzRkZDM5NGU2M2UzNjNjMjU4OTA2ZTViNDU2ZGQ3MGNmMTBiNzIwNTM.field.cGhvbmU.desc": {
           "source": "The phone number value",
           "message": "電話號碼值"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVBob25lRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzRiNmQzNjQxZmIxOGJkM2NjOTNlYTk4MzRkZDM5NGU2M2UzNjNjMjU4OTA2ZTViNDU2ZGQ3MGNmMTBiNzIwNTM6b3B0aW9uOlkyOXVkR0ZqZEhNOmZpZWxkOmNHaHZibVZ6.field.dHlwZQ.display_name": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVBob25lRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzRiNmQzNjQxZmIxOGJkM2NjOTNlYTk4MzRkZDM5NGU2M2UzNjNjMjU4OTA2ZTViNDU2ZGQ3MGNmMTBiNzIwNTM.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "類型"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVBob25lRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzRiNmQzNjQxZmIxOGJkM2NjOTNlYTk4MzRkZDM5NGU2M2UzNjNjMjU4OTA2ZTViNDU2ZGQ3MGNmMTBiNzIwNTM6b3B0aW9uOlkyOXVkR0ZqZEhNOmZpZWxkOmNHaHZibVZ6.field.dHlwZQ.short_desc": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVBob25lRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzRiNmQzNjQxZmIxOGJkM2NjOTNlYTk4MzRkZDM5NGU2M2UzNjNjMjU4OTA2ZTViNDU2ZGQ3MGNmMTBiNzIwNTM.field.dHlwZQ.short_desc": {
           "source": "The phone type",
           "message": "電話類型"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVBob25lRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzRiNmQzNjQxZmIxOGJkM2NjOTNlYTk4MzRkZDM5NGU2M2UzNjNjMjU4OTA2ZTViNDU2ZGQ3MGNmMTBiNzIwNTM6b3B0aW9uOlkyOXVkR0ZqZEhNOmZpZWxkOmNHaHZibVZ6.field.dHlwZQ.desc": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVBob25lRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzRiNmQzNjQxZmIxOGJkM2NjOTNlYTk4MzRkZDM5NGU2M2UzNjNjMjU4OTA2ZTViNDU2ZGQ3MGNmMTBiNzIwNTM.field.dHlwZQ.desc": {
           "source": "The type of phone number (e.g., `mobile`, `office`, `home`, `fax`)",
           "message": "電話號碼類型（例如 `mobile`、`office`、`home`、`fax`）"
         },
@@ -519,27 +519,27 @@
           "source": "A list of URL objects, each with `type` and `url` fields",
           "message": "URL 物件清單，每個物件包含 `type` 和 `url` 欄位"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVVybEVudHJ5RGF0YVR5cGU6aGFzaDxhdXRvPiMwZDJhZDc0OTA1NzczNDkzYjRkZjQ0NzNkMTVkNjJkZDZmOGZmMzA1NTk0OWU1OGU3ZjM5MTUzNjBmMTY0N2RjOm9wdGlvbjpZMjl1ZEdGamRITTpmaWVsZDpkWEpzY3c.field.dHlwZQ.display_name": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVVybEVudHJ5RGF0YVR5cGU6aGFzaDxhdXRvPiMwZDJhZDc0OTA1NzczNDkzYjRkZjQ0NzNkMTVkNjJkZDZmOGZmMzA1NTk0OWU1OGU3ZjM5MTUzNjBmMTY0N2Rj.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "類型"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVVybEVudHJ5RGF0YVR5cGU6aGFzaDxhdXRvPiMwZDJhZDc0OTA1NzczNDkzYjRkZjQ0NzNkMTVkNjJkZDZmOGZmMzA1NTk0OWU1OGU3ZjM5MTUzNjBmMTY0N2RjOm9wdGlvbjpZMjl1ZEdGamRITTpmaWVsZDpkWEpzY3c.field.dHlwZQ.short_desc": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVVybEVudHJ5RGF0YVR5cGU6aGFzaDxhdXRvPiMwZDJhZDc0OTA1NzczNDkzYjRkZjQ0NzNkMTVkNjJkZDZmOGZmMzA1NTk0OWU1OGU3ZjM5MTUzNjBmMTY0N2Rj.field.dHlwZQ.short_desc": {
           "source": "The URL type",
           "message": "網址類型"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVVybEVudHJ5RGF0YVR5cGU6aGFzaDxhdXRvPiMwZDJhZDc0OTA1NzczNDkzYjRkZjQ0NzNkMTVkNjJkZDZmOGZmMzA1NTk0OWU1OGU3ZjM5MTUzNjBmMTY0N2RjOm9wdGlvbjpZMjl1ZEdGamRITTpmaWVsZDpkWEpzY3c.field.dHlwZQ.desc": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVVybEVudHJ5RGF0YVR5cGU6aGFzaDxhdXRvPiMwZDJhZDc0OTA1NzczNDkzYjRkZjQ0NzNkMTVkNjJkZDZmOGZmMzA1NTk0OWU1OGU3ZjM5MTUzNjBmMTY0N2Rj.field.dHlwZQ.desc": {
           "source": "The type of URL (e.g., `url`, `office`, `home`)",
           "message": "URL 類型（例如 `url`、`office`、`home`）"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVVybEVudHJ5RGF0YVR5cGU6aGFzaDxhdXRvPiMwZDJhZDc0OTA1NzczNDkzYjRkZjQ0NzNkMTVkNjJkZDZmOGZmMzA1NTk0OWU1OGU3ZjM5MTUzNjBmMTY0N2RjOm9wdGlvbjpZMjl1ZEdGamRITTpmaWVsZDpkWEpzY3c.field.dXJs.display_name": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVVybEVudHJ5RGF0YVR5cGU6aGFzaDxhdXRvPiMwZDJhZDc0OTA1NzczNDkzYjRkZjQ0NzNkMTVkNjJkZDZmOGZmMzA1NTk0OWU1OGU3ZjM5MTUzNjBmMTY0N2Rj.field.dXJs.display_name": {
           "source": "URL",
           "message": "URL"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVVybEVudHJ5RGF0YVR5cGU6aGFzaDxhdXRvPiMwZDJhZDc0OTA1NzczNDkzYjRkZjQ0NzNkMTVkNjJkZDZmOGZmMzA1NTk0OWU1OGU3ZjM5MTUzNjBmMTY0N2RjOm9wdGlvbjpZMjl1ZEdGamRITTpmaWVsZDpkWEpzY3c.field.dXJs.short_desc": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVVybEVudHJ5RGF0YVR5cGU6aGFzaDxhdXRvPiMwZDJhZDc0OTA1NzczNDkzYjRkZjQ0NzNkMTVkNjJkZDZmOGZmMzA1NTk0OWU1OGU3ZjM5MTUzNjBmMTY0N2Rj.field.dXJs.short_desc": {
           "source": "The URL value",
           "message": "網址值"
         },
-        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVVybEVudHJ5RGF0YVR5cGU6aGFzaDxhdXRvPiMwZDJhZDc0OTA1NzczNDkzYjRkZjQ0NzNkMTVkNjJkZDZmOGZmMzA1NTk0OWU1OGU3ZjM5MTUzNjBmMTY0N2RjOm9wdGlvbjpZMjl1ZEdGamRITTpmaWVsZDpkWEpzY3c.field.dXJs.desc": {
+        "app.Q2xvc2U.type.YWN0aW9uOlkzSmxZWFJsTFd4bFlXUTpDbG9zZVVybEVudHJ5RGF0YVR5cGU6aGFzaDxhdXRvPiMwZDJhZDc0OTA1NzczNDkzYjRkZjQ0NzNkMTVkNjJkZDZmOGZmMzA1NTk0OWU1OGU3ZjM5MTUzNjBmMTY0N2Rj.field.dXJs.desc": {
           "source": "The URL value",
           "message": "網址值"
         },

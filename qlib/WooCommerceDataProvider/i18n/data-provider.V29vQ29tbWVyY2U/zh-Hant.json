@@ -1071,39 +1071,39 @@
           "source": "Per-line metadata key-value pairs",
           "message": "每行的元資料鍵值對"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.aWQ.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.aWQ.display_name": {
           "source": "ID",
           "message": "ID"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.aWQ.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.aWQ.short_desc": {
           "source": "Meta entry ID",
           "message": "Meta 項目 ID"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.aWQ.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.aWQ.desc": {
           "source": "The unique ID of the meta entry (omit when creating)",
           "message": "資料列的唯一 ID（建立時省略）"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.a2V5.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.a2V5.display_name": {
           "source": "Key",
           "message": "鍵"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.a2V5.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.a2V5.short_desc": {
           "source": "Meta key",
           "message": "Meta 金鑰"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.a2V5.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.a2V5.desc": {
           "source": "The meta key",
           "message": "元鍵"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.dmFsdWU.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.dmFsdWU.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.dmFsdWU.short_desc": {
           "source": "Meta value",
           "message": "Meta 值"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.dmFsdWU.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.dmFsdWU.desc": {
           "source": "The meta value (any JSON-serializable type)",
           "message": "元值（任何可序列化的 JSON 類型）"
         },
@@ -1299,42 +1299,6 @@
           "source": "Per-line metadata key-value pairs",
           "message": "每行的元資料鍵值對"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.aWQ.display_name": {
-          "source": "ID",
-          "message": "ID"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.aWQ.short_desc": {
-          "source": "Meta entry ID",
-          "message": "Meta 項目 ID"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.aWQ.desc": {
-          "source": "The unique ID of the meta entry (omit when creating)",
-          "message": "資料列的唯一 ID（建立時省略）"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.a2V5.display_name": {
-          "source": "Key",
-          "message": "鍵"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.a2V5.short_desc": {
-          "source": "Meta key",
-          "message": "Meta 金鑰"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.a2V5.desc": {
-          "source": "The meta key",
-          "message": "元鍵"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.dmFsdWU.display_name": {
-          "source": "Value",
-          "message": "值"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.dmFsdWU.short_desc": {
-          "source": "Meta value",
-          "message": "Meta 值"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.dmFsdWU.desc": {
-          "source": "The meta value (any JSON-serializable type)",
-          "message": "元值（任何可序列化的 JSON 類型）"
-        },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfbGluZXM.field.bWV0aG9kX2lk.display_name": {
           "source": "Method ID",
           "message": "方法 ID"
@@ -1418,42 +1382,6 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.ZmVlX2xpbmVz.field.bWV0YV9kYXRh.desc": {
           "source": "Per-line metadata key-value pairs",
           "message": "每行的元資料鍵值對"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.aWQ.display_name": {
-          "source": "ID",
-          "message": "ID"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.aWQ.short_desc": {
-          "source": "Meta entry ID",
-          "message": "Meta 項目 ID"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.aWQ.desc": {
-          "source": "The unique ID of the meta entry (omit when creating)",
-          "message": "資料列的唯一 ID（建立時省略）"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.a2V5.display_name": {
-          "source": "Key",
-          "message": "鍵"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.a2V5.short_desc": {
-          "source": "Meta key",
-          "message": "Meta 金鑰"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.a2V5.desc": {
-          "source": "The meta key",
-          "message": "元鍵"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.dmFsdWU.display_name": {
-          "source": "Value",
-          "message": "值"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.dmFsdWU.short_desc": {
-          "source": "Meta value",
-          "message": "Meta 值"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.dmFsdWU.desc": {
-          "source": "The meta value (any JSON-serializable type)",
-          "message": "元值（任何可序列化的 JSON 類型）"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.ZmVlX2xpbmVz.field.bmFtZQ.display_name": {
           "source": "Name",
@@ -1586,42 +1514,6 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y291cG9uX2xpbmVz.field.bWV0YV9kYXRh.desc": {
           "source": "Per-line metadata key-value pairs",
           "message": "每行的元資料鍵值對"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.aWQ.display_name": {
-          "source": "ID",
-          "message": "ID"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.aWQ.short_desc": {
-          "source": "Meta entry ID",
-          "message": "Meta 項目 ID"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.aWQ.desc": {
-          "source": "The unique ID of the meta entry (omit when creating)",
-          "message": "資料列的唯一 ID（建立時省略）"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.a2V5.display_name": {
-          "source": "Key",
-          "message": "鍵"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.a2V5.short_desc": {
-          "source": "Meta key",
-          "message": "Meta 金鑰"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.a2V5.desc": {
-          "source": "The meta key",
-          "message": "元鍵"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.dmFsdWU.display_name": {
-          "source": "Value",
-          "message": "值"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.dmFsdWU.short_desc": {
-          "source": "Meta value",
-          "message": "Meta 值"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.dmFsdWU.desc": {
-          "source": "The meta value (any JSON-serializable type)",
-          "message": "元值（任何可序列化的 JSON 類型）"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJfbm90ZQ.display_name": {
           "source": "Customer Note",
@@ -2131,39 +2023,39 @@
           "source": "Per-line metadata key-value pairs",
           "message": "每行的元資料鍵值對"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.aWQ.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.aWQ.display_name": {
           "source": "ID",
           "message": "ID"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.aWQ.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.aWQ.short_desc": {
           "source": "Meta entry ID",
           "message": "Meta 項目 ID"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.aWQ.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.aWQ.desc": {
           "source": "The unique ID of the meta entry (omit when creating)",
           "message": "資料列的唯一 ID（建立時省略）"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.a2V5.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.a2V5.display_name": {
           "source": "Key",
           "message": "鍵"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.a2V5.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.a2V5.short_desc": {
           "source": "Meta key",
           "message": "Meta 金鑰"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.a2V5.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.a2V5.desc": {
           "source": "The meta key",
           "message": "元鍵"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.dmFsdWU.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.dmFsdWU.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.dmFsdWU.short_desc": {
           "source": "Meta value",
           "message": "Meta 值"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpiR2x1WlY5cGRHVnRjdzpmaWVsZDpiV1YwWVY5a1lYUmg.field.dmFsdWU.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBi.field.dmFsdWU.desc": {
           "source": "The meta value (any JSON-serializable type)",
           "message": "元值（任何可序列化的 JSON 類型）"
         },
@@ -2359,42 +2251,6 @@
           "source": "Per-line metadata key-value pairs",
           "message": "每行的元資料鍵值對"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.aWQ.display_name": {
-          "source": "ID",
-          "message": "ID"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.aWQ.short_desc": {
-          "source": "Meta entry ID",
-          "message": "Meta 項目 ID"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.aWQ.desc": {
-          "source": "The unique ID of the meta entry (omit when creating)",
-          "message": "資料列的唯一 ID（建立時省略）"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.a2V5.display_name": {
-          "source": "Key",
-          "message": "鍵"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.a2V5.short_desc": {
-          "source": "Meta key",
-          "message": "Meta 金鑰"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.a2V5.desc": {
-          "source": "The meta key",
-          "message": "元鍵"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.dmFsdWU.display_name": {
-          "source": "Value",
-          "message": "值"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.dmFsdWU.short_desc": {
-          "source": "Meta value",
-          "message": "Meta 值"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpjMmhwY0hCcGJtZGZiR2x1WlhNOmZpZWxkOmJXVjBZVjlrWVhSaA.field.dmFsdWU.desc": {
-          "source": "The meta value (any JSON-serializable type)",
-          "message": "元值（任何可序列化的 JSON 類型）"
-        },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c2hpcHBpbmdfbGluZXM.field.bWV0aG9kX2lk.display_name": {
           "source": "Method ID",
           "message": "方法 ID"
@@ -2478,42 +2334,6 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.ZmVlX2xpbmVz.field.bWV0YV9kYXRh.desc": {
           "source": "Per-line metadata key-value pairs",
           "message": "每行的元資料鍵值對"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.aWQ.display_name": {
-          "source": "ID",
-          "message": "ID"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.aWQ.short_desc": {
-          "source": "Meta entry ID",
-          "message": "Meta 項目 ID"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.aWQ.desc": {
-          "source": "The unique ID of the meta entry (omit when creating)",
-          "message": "資料列的唯一 ID（建立時省略）"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.a2V5.display_name": {
-          "source": "Key",
-          "message": "鍵"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.a2V5.short_desc": {
-          "source": "Meta key",
-          "message": "Meta 金鑰"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.a2V5.desc": {
-          "source": "The meta key",
-          "message": "元鍵"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.dmFsdWU.display_name": {
-          "source": "Value",
-          "message": "值"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.dmFsdWU.short_desc": {
-          "source": "Meta value",
-          "message": "Meta 值"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpabVZsWDJ4cGJtVno6ZmllbGQ6YldWMFlWOWtZWFJo.field.dmFsdWU.desc": {
-          "source": "The meta value (any JSON-serializable type)",
-          "message": "元值（任何可序列化的 JSON 類型）"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.ZmVlX2xpbmVz.field.bmFtZQ.display_name": {
           "source": "Name",
@@ -2646,42 +2466,6 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.Y291cG9uX2xpbmVz.field.bWV0YV9kYXRh.desc": {
           "source": "Per-line metadata key-value pairs",
           "message": "每行的元資料鍵值對"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.aWQ.display_name": {
-          "source": "ID",
-          "message": "ID"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.aWQ.short_desc": {
-          "source": "Meta entry ID",
-          "message": "Meta 項目 ID"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.aWQ.desc": {
-          "source": "The unique ID of the meta entry (omit when creating)",
-          "message": "資料列的唯一 ID（建立時省略）"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.a2V5.display_name": {
-          "source": "Key",
-          "message": "鍵"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.a2V5.short_desc": {
-          "source": "Meta key",
-          "message": "Meta 金鑰"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.a2V5.desc": {
-          "source": "The meta key",
-          "message": "元鍵"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.dmFsdWU.display_name": {
-          "source": "Value",
-          "message": "值"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.dmFsdWU.short_desc": {
-          "source": "Meta value",
-          "message": "Meta 值"
-        },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6V29vQ29tbWVyY2VNZXRhRGF0YVR5cGU6aGFzaDxhdXRvPiNiY2IxZjllOGQ5NzEyNDAyODc2NWViNWMyZDRjNTIwNTQ3OTMyNjQwNzEwZmUyZjM1NmVhMDNjMzRmNTFhZjBiOm9wdGlvbjpZMjkxY0c5dVgyeHBibVZ6OmZpZWxkOmJXVjBZVjlrWVhSaA.field.dmFsdWU.desc": {
-          "source": "The meta value (any JSON-serializable type)",
-          "message": "元值（任何可序列化的 JSON 類型）"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.Y3VzdG9tZXJfbm90ZQ.display_name": {
           "source": "Customer Note",
@@ -3131,39 +2915,39 @@
           "source": "Per-line metadata key-value pairs",
           "message": "每行的元資料鍵值對"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI6b3B0aW9uOmJHbHVaVjlwZEdWdGN3OmZpZWxkOmJXVjBZVjlrWVhSaA.field.aWQ.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI.field.aWQ.display_name": {
           "source": "ID",
           "message": "ID"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI6b3B0aW9uOmJHbHVaVjlwZEdWdGN3OmZpZWxkOmJXVjBZVjlrWVhSaA.field.aWQ.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI.field.aWQ.short_desc": {
           "source": "Meta entry ID",
           "message": "Meta 項目 ID"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI6b3B0aW9uOmJHbHVaVjlwZEdWdGN3OmZpZWxkOmJXVjBZVjlrWVhSaA.field.aWQ.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI.field.aWQ.desc": {
           "source": "The unique ID of the meta entry (omit when creating)",
           "message": "資料列的唯一 ID（建立時省略）"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI6b3B0aW9uOmJHbHVaVjlwZEdWdGN3OmZpZWxkOmJXVjBZVjlrWVhSaA.field.a2V5.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI.field.a2V5.display_name": {
           "source": "Key",
           "message": "鍵"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI6b3B0aW9uOmJHbHVaVjlwZEdWdGN3OmZpZWxkOmJXVjBZVjlrWVhSaA.field.a2V5.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI.field.a2V5.short_desc": {
           "source": "Meta key",
           "message": "Meta 金鑰"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI6b3B0aW9uOmJHbHVaVjlwZEdWdGN3OmZpZWxkOmJXVjBZVjlrWVhSaA.field.a2V5.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI.field.a2V5.desc": {
           "source": "The meta key",
           "message": "元鍵"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI6b3B0aW9uOmJHbHVaVjlwZEdWdGN3OmZpZWxkOmJXVjBZVjlrWVhSaA.field.dmFsdWU.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI6b3B0aW9uOmJHbHVaVjlwZEdWdGN3OmZpZWxkOmJXVjBZVjlrWVhSaA.field.dmFsdWU.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI.field.dmFsdWU.short_desc": {
           "source": "Meta value",
           "message": "Meta 值"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI6b3B0aW9uOmJHbHVaVjlwZEdWdGN3OmZpZWxkOmJXVjBZVjlrWVhSaA.field.dmFsdWU.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhKbFpuVnVaQTpXb29Db21tZXJjZU1ldGFEYXRhVHlwZTpoYXNoPGF1dG8-I2JjYjFmOWU4ZDk3MTI0MDI4NzY1ZWI1YzJkNGM1MjA1NDc5MzI2NDA3MTBmZTJmMzU2ZWEwM2MzNGY1MWFmMGI.field.dmFsdWU.desc": {
           "source": "The meta value (any JSON-serializable type)",
           "message": "元值（任何可序列化的 JSON 類型）"
         },
@@ -4119,51 +3903,51 @@
           "source": "The image data for the category",
           "message": "類別的影像資料"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.YWx0.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.YWx0.display_name": {
           "source": "Alt Text",
           "message": "替代文字"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.YWx0.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.YWx0.short_desc": {
           "source": "Image alt text",
           "message": "圖片替代文字"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.YWx0.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.YWx0.desc": {
           "source": "The alternative text for the image",
           "message": "影像的替代文字"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.aWQ.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.aWQ.display_name": {
           "source": "ID",
           "message": "ID"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.aWQ.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.aWQ.short_desc": {
           "source": "Image ID",
           "message": "影像 ID"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.aWQ.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.aWQ.desc": {
           "source": "The image attachment ID",
           "message": "影像附件 ID"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.bmFtZQ.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "名稱"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.bmFtZQ.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.bmFtZQ.short_desc": {
           "source": "Image name",
           "message": "圖片名稱"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.bmFtZQ.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.bmFtZQ.desc": {
           "source": "The image name",
           "message": "影像名稱"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.c3Jj.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.c3Jj.display_name": {
           "source": "Source URL",
           "message": "來源 URL"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.c3Jj.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.c3Jj.short_desc": {
           "source": "Image source URL",
           "message": "影像來源 URL"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.c3Jj.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.c3Jj.desc": {
           "source": "The URL of the image",
           "message": "圖片的網址"
         },
@@ -5279,51 +5063,51 @@
           "source": "The image data for the category",
           "message": "類別的影像資料"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.YWx0.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.YWx0.display_name": {
           "source": "Alt Text",
           "message": "替代文字"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.YWx0.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.YWx0.short_desc": {
           "source": "Image alt text",
           "message": "圖片替代文字"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.YWx0.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.YWx0.desc": {
           "source": "The alternative text for the image",
           "message": "影像的替代文字"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.aWQ.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.aWQ.display_name": {
           "source": "ID",
           "message": "ID"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.aWQ.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.aWQ.short_desc": {
           "source": "Image ID",
           "message": "影像 ID"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.aWQ.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.aWQ.desc": {
           "source": "The image attachment ID",
           "message": "影像附件 ID"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.bmFtZQ.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "名稱"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.bmFtZQ.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.bmFtZQ.short_desc": {
           "source": "Image name",
           "message": "圖片名稱"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.bmFtZQ.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.bmFtZQ.desc": {
           "source": "The image name",
           "message": "影像名稱"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.c3Jj.display_name": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.c3Jj.display_name": {
           "source": "Source URL",
           "message": "來源 URL"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.c3Jj.short_desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.c3Jj.short_desc": {
           "source": "Image source URL",
           "message": "影像來源 URL"
         },
-        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZDpvcHRpb246WTJGMFpXZHZjbWxsY3c6ZmllbGQ6YVcxaFoyVQ.field.c3Jj.desc": {
+        "app.V29vQ29tbWVyY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1E6V29vQ29tbWVyY2VJbWFnZURhdGFUeXBlOldvb0NvbW1lcmNlSW1hZ2UjNDgxMjc1ZTFjODc1MDc1Mjc0ZGQzMzIxZGViZGNlNmVmOTAwM2ZiYTMxNjNhOWJiZGUyMWRjZmE5MTM4YzgxZA.field.c3Jj.desc": {
           "source": "The URL of the image",
           "message": "圖片的網址"
         },

@@ -759,27 +759,27 @@
           "source": "List of configuration attributes assigned to this variant",
           "message": "Lista atrybutów konfiguracji przypisanych do tej wariantu"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3Om9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpZMjl1Wm1sblgyRjBkSEpwWW5WMFpYTQ.field.Y29uZmlnX25hbWU.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3.field.Y29uZmlnX25hbWU.display_name": {
           "source": "Config Name",
           "message": "Nazwa konfiguracji"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3Om9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpZMjl1Wm1sblgyRjBkSEpwWW5WMFpYTQ.field.Y29uZmlnX25hbWU.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3.field.Y29uZmlnX25hbWU.short_desc": {
           "source": "Configuration attribute name",
           "message": "Nazwa atrybutu konfiguracji"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3Om9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpZMjl1Wm1sblgyRjBkSEpwWW5WMFpYTQ.field.Y29uZmlnX25hbWU.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3.field.Y29uZmlnX25hbWU.desc": {
           "source": "Name of the configuration attribute (e.g. `Color`)",
           "message": "Nazwa atrybutu konfiguracji (np. `Color`)"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3Om9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpZMjl1Wm1sblgyRjBkSEpwWW5WMFpYTQ.field.Y29uZmlnX3ZhbHVl.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3.field.Y29uZmlnX3ZhbHVl.display_name": {
           "source": "Config Value",
           "message": "Wartość konfiguracji"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3Om9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpZMjl1Wm1sblgyRjBkSEpwWW5WMFpYTQ.field.Y29uZmlnX3ZhbHVl.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3.field.Y29uZmlnX3ZhbHVl.short_desc": {
           "source": "Configuration attribute value",
           "message": "Wartość atrybutu konfiguracji"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3Om9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpZMjl1Wm1sblgyRjBkSEpwWW5WMFpYTQ.field.Y29uZmlnX3ZhbHVl.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3.field.Y29uZmlnX3ZhbHVl.desc": {
           "source": "Value of the configuration attribute (e.g. `Red`)",
           "message": "Wartość atrybutu konfiguracji (np. `Red`)"
         },
@@ -795,27 +795,27 @@
           "source": "List of custom field values for the variant",
           "message": "Lista wartości pól niestandardowych dla wariantu"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3MzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTNWemRHOXRYMlpwWld4a2N3.field.ZmllbGRfbmFtZQ.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3Mw.field.ZmllbGRfbmFtZQ.display_name": {
           "source": "Field Name",
           "message": "Nazwa pola"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3MzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTNWemRHOXRYMlpwWld4a2N3.field.ZmllbGRfbmFtZQ.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3Mw.field.ZmllbGRfbmFtZQ.short_desc": {
           "source": "Custom field name",
           "message": "Nazwa pola niestandardowego"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3MzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTNWemRHOXRYMlpwWld4a2N3.field.ZmllbGRfbmFtZQ.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3Mw.field.ZmllbGRfbmFtZQ.desc": {
           "source": "Name of the custom field",
           "message": "Nazwa pola niestandardowego"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3MzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTNWemRHOXRYMlpwWld4a2N3.field.ZmllbGRfdmFsdWU.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3Mw.field.ZmllbGRfdmFsdWU.display_name": {
           "source": "Field Value",
           "message": "Wartość pola"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3MzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTNWemRHOXRYMlpwWld4a2N3.field.ZmllbGRfdmFsdWU.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3Mw.field.ZmllbGRfdmFsdWU.short_desc": {
           "source": "Custom field value",
           "message": "Wartość pola niestandardowego"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3MzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTNWemRHOXRYMlpwWld4a2N3.field.ZmllbGRfdmFsdWU.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3Mw.field.ZmllbGRfdmFsdWU.desc": {
           "source": "Value of the custom field",
           "message": "Wartość pola niestandardowego"
         },
@@ -1575,27 +1575,27 @@
           "source": "List of configuration attributes assigned to this variant",
           "message": "Lista atrybutów konfiguracji przypisanych do tej wariantu"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTI5dVptbG5YMkYwZEhKcFluVjBaWE0.field.Y29uZmlnX25hbWU.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNw.field.Y29uZmlnX25hbWU.display_name": {
           "source": "Config Name",
           "message": "Nazwa konfiguracji"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTI5dVptbG5YMkYwZEhKcFluVjBaWE0.field.Y29uZmlnX25hbWU.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNw.field.Y29uZmlnX25hbWU.short_desc": {
           "source": "Configuration attribute name",
           "message": "Nazwa atrybutu konfiguracji"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTI5dVptbG5YMkYwZEhKcFluVjBaWE0.field.Y29uZmlnX25hbWU.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNw.field.Y29uZmlnX25hbWU.desc": {
           "source": "Name of the configuration attribute (e.g. `Color`)",
           "message": "Nazwa atrybutu konfiguracji (np. `Color`)"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTI5dVptbG5YMkYwZEhKcFluVjBaWE0.field.Y29uZmlnX3ZhbHVl.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNw.field.Y29uZmlnX3ZhbHVl.display_name": {
           "source": "Config Value",
           "message": "Wartość konfiguracji"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTI5dVptbG5YMkYwZEhKcFluVjBaWE0.field.Y29uZmlnX3ZhbHVl.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNw.field.Y29uZmlnX3ZhbHVl.short_desc": {
           "source": "Configuration attribute value",
           "message": "Wartość atrybutu konfiguracji"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTI5dVptbG5YMkYwZEhKcFluVjBaWE0.field.Y29uZmlnX3ZhbHVl.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNw.field.Y29uZmlnX3ZhbHVl.desc": {
           "source": "Value of the configuration attribute (e.g. `Red`)",
           "message": "Wartość atrybutu konfiguracji (np. `Red`)"
         },
@@ -1611,27 +1611,27 @@
           "source": "List of custom field values for the variant",
           "message": "Lista wartości pól niestandardowych dla wariantu"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOlkzVnpkRzl0WDJacFpXeGtjdw.field.ZmllbGRfbmFtZQ.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM.field.ZmllbGRfbmFtZQ.display_name": {
           "source": "Field Name",
           "message": "Nazwa pola"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOlkzVnpkRzl0WDJacFpXeGtjdw.field.ZmllbGRfbmFtZQ.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM.field.ZmllbGRfbmFtZQ.short_desc": {
           "source": "Custom field name",
           "message": "Nazwa pola niestandardowego"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOlkzVnpkRzl0WDJacFpXeGtjdw.field.ZmllbGRfbmFtZQ.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM.field.ZmllbGRfbmFtZQ.desc": {
           "source": "Name of the custom field",
           "message": "Nazwa pola niestandardowego"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOlkzVnpkRzl0WDJacFpXeGtjdw.field.ZmllbGRfdmFsdWU.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM.field.ZmllbGRfdmFsdWU.display_name": {
           "source": "Field Value",
           "message": "Wartość pola"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOlkzVnpkRzl0WDJacFpXeGtjdw.field.ZmllbGRfdmFsdWU.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM.field.ZmllbGRfdmFsdWU.short_desc": {
           "source": "Custom field value",
           "message": "Wartość pola niestandardowego"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOlkzVnpkRzl0WDJacFpXeGtjdw.field.ZmllbGRfdmFsdWU.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM.field.ZmllbGRfdmFsdWU.desc": {
           "source": "Value of the custom field",
           "message": "Wartość pola niestandardowego"
         },
@@ -3683,27 +3683,27 @@
           "source": "List of `{key, value}` attribute pairs for this row",
           "message": "Lista par atrybutów `{key, value}` dla tego wiersza"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5Om9wdGlvbjpjMkZzWlhOZmIzSmtaWEpmY205M2N3OmZpZWxkOllYUjBjbWxpZFhSbGN3.field.a2V5.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5.field.a2V5.display_name": {
           "source": "Key",
           "message": "Klucz"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5Om9wdGlvbjpjMkZzWlhOZmIzSmtaWEpmY205M2N3OmZpZWxkOllYUjBjbWxpZFhSbGN3.field.a2V5.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5.field.a2V5.short_desc": {
           "source": "Attribute key",
           "message": "Klucz atrybutu"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5Om9wdGlvbjpjMkZzWlhOZmIzSmtaWEpmY205M2N3OmZpZWxkOllYUjBjbWxpZFhSbGN3.field.a2V5.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5.field.a2V5.desc": {
           "source": "Attribute key (e.g. `Color`)",
           "message": "Klucz atrybutu (np. `Color`)"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5Om9wdGlvbjpjMkZzWlhOZmIzSmtaWEpmY205M2N3OmZpZWxkOllYUjBjbWxpZFhSbGN3.field.dmFsdWU.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Wartość"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5Om9wdGlvbjpjMkZzWlhOZmIzSmtaWEpmY205M2N3OmZpZWxkOllYUjBjbWxpZFhSbGN3.field.dmFsdWU.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5.field.dmFsdWU.short_desc": {
           "source": "Attribute value",
           "message": "Wartość atrybutu"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5Om9wdGlvbjpjMkZzWlhOZmIzSmtaWEpmY205M2N3OmZpZWxkOllYUjBjbWxpZFhSbGN3.field.dmFsdWU.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5.field.dmFsdWU.desc": {
           "source": "Attribute value (e.g. `Red`)",
           "message": "Wartość atrybutu (np. `Red`)"
         },

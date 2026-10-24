@@ -1035,63 +1035,63 @@
           "source": "The weight of a single unit of this item",
           "message": "Hmotnosť jednej jednotky tohto predmetu"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.V2VpZ2h0VW5pdHM.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.V2VpZ2h0VW5pdHM.display_name": {
           "source": "Weight Units Code",
           "message": "Kód jednotiek hmotnosti"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.V2VpZ2h0VW5pdHM.short_desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.V2VpZ2h0VW5pdHM.short_desc": {
           "source": "Numeric weight units code",
           "message": "Kód jednotiek hmotnosti"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.V2VpZ2h0VW5pdHM.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.V2VpZ2h0VW5pdHM.desc": {
           "source": "The numeric code for weight units (1=pounds, 2=ounces, 3=grams)",
           "message": "Číselný kód jednotky hmotnosti (1 = libry, 2 = uncie, 3 = gramy)"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.display_name": {
           "source": "Units",
           "message": "Jednotky"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.short_desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.short_desc": {
           "source": "Weight units",
           "message": "Jednotky hmotnosti"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.desc": {
           "source": "The weight units: 'ounces', 'pounds', or 'grams'",
           "message": "Jednotky hmotnosti: 'uncie', 'pounds' alebo 'gramy'"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOm91bmNlcw.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOm91bmNlcw.display_name": {
           "source": "Ounces",
           "message": "Unce"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOm91bmNlcw.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOm91bmNlcw.desc": {
           "source": "Weight in ounces (oz)",
           "message": "Hmotnosť v uncách (oz)"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOnBvdW5kcw.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOnBvdW5kcw.display_name": {
           "source": "Pounds",
           "message": "Libry"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOnBvdW5kcw.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOnBvdW5kcw.desc": {
           "source": "Weight in pounds (lbs)",
           "message": "Hmotnosť v librách (lbs)"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOmdyYW1z.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOmdyYW1z.display_name": {
           "source": "Grams",
           "message": "Gramy"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOmdyYW1z.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOmdyYW1z.desc": {
           "source": "Weight in grams (g)",
           "message": "Hmotnosť v gramoch (g)"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Hodnota"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.short_desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dmFsdWU.short_desc": {
           "source": "Weight value",
           "message": "Hodnota hmotnosti"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dmFsdWU.desc": {
           "source": "The numeric weight value",
           "message": "Číselná hodnota hmotnosti"
         },
@@ -2087,63 +2087,63 @@
           "source": "The weight of a single unit of this item",
           "message": "Hmotnosť jednej jednotky tohto predmetu"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.V2VpZ2h0VW5pdHM.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.V2VpZ2h0VW5pdHM.display_name": {
           "source": "Weight Units Code",
           "message": "Kód jednotiek hmotnosti"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.V2VpZ2h0VW5pdHM.short_desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.V2VpZ2h0VW5pdHM.short_desc": {
           "source": "Numeric weight units code",
           "message": "Kód jednotiek hmotnosti"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.V2VpZ2h0VW5pdHM.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.V2VpZ2h0VW5pdHM.desc": {
           "source": "The numeric code for weight units (1=pounds, 2=ounces, 3=grams)",
           "message": "Číselný kód jednotky hmotnosti (1 = libry, 2 = uncie, 3 = gramy)"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.display_name": {
           "source": "Units",
           "message": "Jednotky"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.short_desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.short_desc": {
           "source": "Weight units",
           "message": "Jednotky hmotnosti"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.desc": {
           "source": "The weight units: 'ounces', 'pounds', or 'grams'",
           "message": "Jednotky hmotnosti: 'uncie', 'pounds' alebo 'gramy'"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOm91bmNlcw.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOm91bmNlcw.display_name": {
           "source": "Ounces",
           "message": "Unce"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOm91bmNlcw.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOm91bmNlcw.desc": {
           "source": "Weight in ounces (oz)",
           "message": "Hmotnosť v uncách (oz)"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOnBvdW5kcw.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOnBvdW5kcw.display_name": {
           "source": "Pounds",
           "message": "Libry"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOnBvdW5kcw.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOnBvdW5kcw.desc": {
           "source": "Weight in pounds (lbs)",
           "message": "Hmotnosť v librách (lbs)"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOmdyYW1z.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOmdyYW1z.display_name": {
           "source": "Grams",
           "message": "Gramy"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOmdyYW1z.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOmdyYW1z.desc": {
           "source": "Weight in grams (g)",
           "message": "Hmotnosť v gramoch (g)"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Hodnota"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.short_desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dmFsdWU.short_desc": {
           "source": "Weight value",
           "message": "Hodnota hmotnosti"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dmFsdWU.desc": {
           "source": "The numeric weight value",
           "message": "Číselná hodnota hmotnosti"
         },

@@ -434,171 +434,171 @@
           "source": "Where the index runs.  Defaults to serverless on AWS in `us-east-1` when omitted.\n\n- `{\"deployment_type\": \"managed\", \"cloud\": \"aws\", \"region\": \"us-east-1\"}` — serverless, managed by Pinecone\n- `{\"deployment_type\": \"byoc\", ...}` — bring your own compute\n\n`cloud` is one of `aws`, `gcp` or `azure`; for the regions each one offers see [Regions](https://docs.pinecone.io/guides/index-data/create-an-index#cloud-regions).",
           "message": "インデックスの実行場所。  省略した場合の既定は、AWS の `us-east-1` におけるサーバーレスです。\n\n- `{\"deployment_type\": \"managed\", \"cloud\": \"aws\", \"region\": \"us-east-1\"}` — サーバーレス（Pinecone が管理）\n- `{\"deployment_type\": \"byoc\", ...}` — 自前のコンピューティングを使用\n\n`cloud` は `aws`、`gcp`、`azure` のいずれかです。それぞれが提供するリージョンについては [Regions](https://docs.pinecone.io/guides/index-data/create-an-index#cloud-regions) を参照してください。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.Y2xvdWQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.display_name": {
           "source": "Cloud",
           "message": "クラウド"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.Y2xvdWQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.short_desc": {
           "source": "The public cloud to host the index on",
           "message": "インデックスをホストするパブリッククラウド"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.Y2xvdWQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.desc": {
           "source": "The public cloud where the index is hosted.\nPossible values: `gcp`, `aws`, or `azure`.",
           "message": "インデックスがホストされているパブリッククラウド。\n可能な値：`gcp`、`aws`、または `azure`。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF3cw.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF3cw.display_name": {
           "source": "AWS",
           "message": "AWS"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF3cw.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF3cw.desc": {
           "source": "Amazon Web Services.",
           "message": "Amazon Web Services。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.Y2xvdWQ.allowed-value.c3RyaW5nOmdjcA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.allowed-value.c3RyaW5nOmdjcA.display_name": {
           "source": "Google Cloud",
           "message": "Google Cloud"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.Y2xvdWQ.allowed-value.c3RyaW5nOmdjcA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.allowed-value.c3RyaW5nOmdjcA.desc": {
           "source": "Google Cloud Platform.",
           "message": "Google Cloud Platform。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF6dXJl.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF6dXJl.display_name": {
           "source": "Azure",
           "message": "Azure"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF6dXJl.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF6dXJl.desc": {
           "source": "Microsoft Azure.",
           "message": "Microsoft Azure。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.ZGVwbG95bWVudF90eXBl.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.ZGVwbG95bWVudF90eXBl.display_name": {
           "source": "Deployment Type",
           "message": "デプロイメントタイプ"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.ZGVwbG95bWVudF90eXBl.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.ZGVwbG95bWVudF90eXBl.short_desc": {
           "source": "Identifies this as a managed (serverless) deployment",
           "message": "これはマネージド（サーバーレス）デプロイメントであることを示す"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.ZGVwbG95bWVudF90eXBl.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.ZGVwbG95bWVudF90eXBl.desc": {
           "source": "Identifies this as a managed (serverless) deployment. Must be `managed`.",
           "message": "これはマネージド（サーバーレス）デプロイメントであることを示す。`managed` でなければなりません。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.ZGVwbG95bWVudF90eXBl.allowed-value.c3RyaW5nOm1hbmFnZWQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.ZGVwbG95bWVudF90eXBl.allowed-value.c3RyaW5nOm1hbmFnZWQ.display_name": {
           "source": "managed",
           "message": "管理済み"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.ZW52aXJvbm1lbnQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.ZW52aXJvbm1lbnQ.display_name": {
           "source": "Environment",
           "message": "環境"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.ZW52aXJvbm1lbnQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.ZW52aXJvbm1lbnQ.short_desc": {
           "source": "The Pinecone environment hosting the index",
           "message": "インデックスをホスティングするPinecone環境"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.ZW52aXJvbm1lbnQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.ZW52aXJvbm1lbnQ.desc": {
           "source": "The Pinecone environment hosting the index. Returned in responses; do not set it when creating an index.",
           "message": "インデックスをホスティングするPinecone環境。レスポンスで返却されます。インデックス作成時に設定しないでください。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.display_name": {
           "source": "Region",
           "message": "リージョン"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.short_desc": {
           "source": "The region to host the index in",
           "message": "インデックスをホストするリージョン"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.desc": {
           "source": "The region to host the index in.  A region belongs to one cloud, so it has to match the **Cloud** chosen beside it: `us-east-1` exists on AWS and not on Google Cloud, and Pinecone refuses the pair rather than the value.\n\nThe list is Pinecone's published set at the time of writing and a region it has opened since can still be typed in; see [Available cloud regions](https://docs.pinecone.io/troubleshooting/available-cloud-regions).",
           "message": "インデックスをホストするリージョン。  リージョンは 1 つのクラウドに属するため、隣で選択した **クラウド** と一致している必要があります。`us-east-1` は AWS には存在しますが Google Cloud には存在せず、Pinecone は値単体ではなく組み合わせを拒否します。\n\nこの一覧は作成時点で Pinecone が公開していたものであり、その後追加されたリージョンも手入力できます。[Available cloud regions](https://docs.pinecone.io/troubleshooting/available-cloud-regions) を参照してください。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWVhc3QtMQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWVhc3QtMQ.display_name": {
           "source": "AWS · Virginia",
           "message": "AWS · バージニア"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWVhc3QtMQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWVhc3QtMQ.desc": {
           "source": "AWS `us-east-1`, in Virginia.  The only region available on the Starter plan.",
           "message": "AWS `us-east-1`（バージニア）。  Starter プランで利用できる唯一のリージョンです。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLXdlc3QtMg.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLXdlc3QtMg.display_name": {
           "source": "AWS · Oregon",
           "message": "AWS · オレゴン"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLXdlc3QtMg.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLXdlc3QtMg.desc": {
           "source": "AWS `us-west-2`, in Oregon.",
           "message": "AWS `us-west-2`（オレゴン）。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LXdlc3QtMQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LXdlc3QtMQ.display_name": {
           "source": "AWS · Ireland",
           "message": "AWS · アイルランド"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LXdlc3QtMQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LXdlc3QtMQ.desc": {
           "source": "AWS `eu-west-1`, in Ireland.",
           "message": "AWS `eu-west-1`（アイルランド）。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LWNlbnRyYWwtMQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LWNlbnRyYWwtMQ.display_name": {
           "source": "AWS · Frankfurt",
           "message": "AWS · フランクフルト"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LWNlbnRyYWwtMQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LWNlbnRyYWwtMQ.desc": {
           "source": "AWS `eu-central-1`, in Frankfurt.",
           "message": "AWS `eu-central-1`（フランクフルト）。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.allowed-value.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.display_name": {
           "source": "AWS · Singapore",
           "message": "AWS · シンガポール"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.allowed-value.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.desc": {
           "source": "AWS `ap-southeast-1`, in Singapore.",
           "message": "AWS `ap-southeast-1`（シンガポール）。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWNlbnRyYWwx.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWNlbnRyYWwx.display_name": {
           "source": "Google Cloud · Iowa",
           "message": "Google Cloud · アイオワ"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWNlbnRyYWwx.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWNlbnRyYWwx.desc": {
           "source": "Google Cloud `us-central1`, in Iowa.",
           "message": "Google Cloud `us-central1`（アイオワ）。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1cm9wZS13ZXN0NA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1cm9wZS13ZXN0NA.display_name": {
           "source": "Google Cloud · Netherlands",
           "message": "Google Cloud · オランダ"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1cm9wZS13ZXN0NA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1cm9wZS13ZXN0NA.desc": {
           "source": "Google Cloud `europe-west4`, in the Netherlands.",
           "message": "Google Cloud `europe-west4`（オランダ）。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.allowed-value.c3RyaW5nOmVhc3R1czI.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmVhc3R1czI.display_name": {
           "source": "Azure · Virginia",
           "message": "Azure · バージニア"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzFhZTc4MmExOWUxOGZlYmI0MGE1ZTVhMWJiYmYyYWIxNTM2NDZhNTlmOTM4MzcyMGZiOGJjY2RjM2I3NGZiMmI.field.cmVnaW9u.allowed-value.c3RyaW5nOmVhc3R1czI.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmVhc3R1czI.desc": {
           "source": "Azure `eastus2`, in Virginia.",
           "message": "Azure `eastus2`（バージニア）。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCNhMWIxMjY4MzllNDBiODgyMjNmYTQ5ZWFkNDVlZDYyYzI3ZTEzMTQ5NTk3ZTI3MzcxNzU3N2VhMzZiZDgzMTFh.field.ZGVwbG95bWVudF90eXBl.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCMxZjU4MzA2OWJkNmY1OWQ0MDdmMzdjOGU1ZWE2Y2M4N2ViMTVlYmViZTU2N2ZmM2YzYzg3MDRiOGIyOWFkMzA0.field.ZGVwbG95bWVudF90eXBl.display_name": {
           "source": "Deployment Type",
           "message": "デプロイメントタイプ"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCNhMWIxMjY4MzllNDBiODgyMjNmYTQ5ZWFkNDVlZDYyYzI3ZTEzMTQ5NTk3ZTI3MzcxNzU3N2VhMzZiZDgzMTFh.field.ZGVwbG95bWVudF90eXBl.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCMxZjU4MzA2OWJkNmY1OWQ0MDdmMzdjOGU1ZWE2Y2M4N2ViMTVlYmViZTU2N2ZmM2YzYzg3MDRiOGIyOWFkMzA0.field.ZGVwbG95bWVudF90eXBl.short_desc": {
           "source": "Identifies this as a BYOC deployment",
           "message": "これはBYOCデプロイメントであることを示す"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCNhMWIxMjY4MzllNDBiODgyMjNmYTQ5ZWFkNDVlZDYyYzI3ZTEzMTQ5NTk3ZTI3MzcxNzU3N2VhMzZiZDgzMTFh.field.ZGVwbG95bWVudF90eXBl.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCMxZjU4MzA2OWJkNmY1OWQ0MDdmMzdjOGU1ZWE2Y2M4N2ViMTVlYmViZTU2N2ZmM2YzYzg3MDRiOGIyOWFkMzA0.field.ZGVwbG95bWVudF90eXBl.desc": {
           "source": "Identifies this as a BYOC deployment. Must be `byoc`.",
           "message": "これはBYOCデプロイメントであることを示す。`byoc` でなければなりません。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCNhMWIxMjY4MzllNDBiODgyMjNmYTQ5ZWFkNDVlZDYyYzI3ZTEzMTQ5NTk3ZTI3MzcxNzU3N2VhMzZiZDgzMTFh.field.ZGVwbG95bWVudF90eXBl.allowed-value.c3RyaW5nOmJ5b2M.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCMxZjU4MzA2OWJkNmY1OWQ0MDdmMzdjOGU1ZWE2Y2M4N2ViMTVlYmViZTU2N2ZmM2YzYzg3MDRiOGIyOWFkMzA0.field.ZGVwbG95bWVudF90eXBl.allowed-value.c3RyaW5nOmJ5b2M.display_name": {
           "source": "byoc",
           "message": "byoc"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCNhMWIxMjY4MzllNDBiODgyMjNmYTQ5ZWFkNDVlZDYyYzI3ZTEzMTQ5NTk3ZTI3MzcxNzU3N2VhMzZiZDgzMTFh.field.ZW52aXJvbm1lbnQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCMxZjU4MzA2OWJkNmY1OWQ0MDdmMzdjOGU1ZWE2Y2M4N2ViMTVlYmViZTU2N2ZmM2YzYzg3MDRiOGIyOWFkMzA0.field.ZW52aXJvbm1lbnQ.display_name": {
           "source": "Environment",
           "message": "環境"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCNhMWIxMjY4MzllNDBiODgyMjNmYTQ5ZWFkNDVlZDYyYzI3ZTEzMTQ5NTk3ZTI3MzcxNzU3N2VhMzZiZDgzMTFh.field.ZW52aXJvbm1lbnQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCMxZjU4MzA2OWJkNmY1OWQ0MDdmMzdjOGU1ZWE2Y2M4N2ViMTVlYmViZTU2N2ZmM2YzYzg3MDRiOGIyOWFkMzA0.field.ZW52aXJvbm1lbnQ.short_desc": {
           "source": "The BYOC environment where the index is hosted",
           "message": "インデックスがホストされているBYOC環境"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCNhMWIxMjY4MzllNDBiODgyMjNmYTQ5ZWFkNDVlZDYyYzI3ZTEzMTQ5NTk3ZTI3MzcxNzU3N2VhMzZiZDgzMTFh.field.ZW52aXJvbm1lbnQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCMxZjU4MzA2OWJkNmY1OWQ0MDdmMzdjOGU1ZWE2Y2M4N2ViMTVlYmViZTU2N2ZmM2YzYzg3MDRiOGIyOWFkMzA0.field.ZW52aXJvbm1lbnQ.desc": {
           "source": "The BYOC environment where the index is hosted.",
           "message": "インデックスがホストされているBYOC環境。"
         },
@@ -666,131 +666,131 @@
           "source": "How reads are served.\n\n- `{\"mode\": \"OnDemand\"}` — the default; you are billed for what you read.\n- `{\"mode\": \"Dedicated\", \"node_type\": ..., \"scaling\": ...}` — dedicated read nodes for a predictable workload.\n\nA BYOC index must set `Dedicated` explicitly: it does not support on-demand, and omitting this defaults to on-demand and is rejected.",
           "message": "読み取りの提供方法。\n\n- `{\"mode\": \"OnDemand\"}` — 既定値。読み取った分だけ課金されます。\n- `{\"mode\": \"Dedicated\", \"node_type\": ..., \"scaling\": ...}` — 予測可能なワークロード向けの専用読み取りノード。\n\nBYOC インデックスでは `Dedicated` を明示的に設定する必要があります。オンデマンドはサポートされておらず、この値を省略すると既定のオンデマンドとなり拒否されます。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.display_name": {
           "source": "Read Capacity Mode",
           "message": "読み取り容量モード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.short_desc": {
           "source": "On-demand reads or dedicated read nodes",
           "message": "オンデマンドリードまたは専用リードノード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.desc": {
           "source": "The mode of the index. Possible values: `OnDemand` or `Dedicated`. Defaults to `OnDemand`. If set to `Dedicated`, `dedicated.node_type`, and `dedicated.scaling` must be specified.",
           "message": "インデックスのモード。可能な値：`OnDemand` または `Dedicated`。デフォルトは `OnDemand`。`Dedicated` に設定された場合、`dedicated.node_type`、`dedicated.scaling` を指定する必要があります。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
           "source": "On demand",
           "message": "オンデマンド"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
           "source": "Reads are served without dedicated nodes and billed by use.  The default, and not available on a BYOC index.",
           "message": "専用ノードなしで読み取りが提供され、使用量に応じて課金されます。デフォルトであり、BYOCインデックスでは利用できません。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
           "source": "Dedicated nodes",
           "message": "専用ノード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
           "source": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it.",
           "message": "専用ノードで読み取りが提供され、予測可能なワークロードに対応します。`node_type` および `scaling` が必要です。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.ZGVkaWNhdGVk.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.display_name": {
           "source": "Dedicated",
           "message": "スタッフ"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.ZGVkaWNhdGVk.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.short_desc": {
           "source": "Configuration for dedicated read capacity",
           "message": "専用読み取り容量の構成"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.ZGVkaWNhdGVk.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.desc": {
           "source": "Configuration for dedicated read capacity. See  [this guide](https://docs.pinecone.io/guides/index-data/dedicated-read-nodes) for more details on  how to configure dedicated read capacity.",
           "message": "専用読み取り容量の構成。専用読み取り容量の設定方法については [このガイド](https://docs.pinecone.io/guides/index-data/dedicated-read-nodes) を参照してください。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyNkNGVhZWJiOTY3ZmU5ZGM0ZGMyNmMwNmYzNmEwNDVjYjY5OWVlMjc5ZGExOWYxNjhjYmYxYzZmZTcwZmE5N2U5Om9wdGlvbjpjbVZoWkY5allYQmhZMmwwZVE6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcFNaV0ZrUTJGd1lXTnBkSGxFWldScFkyRjBaV1JUY0dWakl6azNaak15WTJNMVpETXhOR0ZoTVRaa056TmxNRGsyWW1JelkyRXdaVGczTWpGbE16VXlOREF6Tm1NM09HSTNaVFJoTlRoaVpEZGhObUk1Tm1SalltVTpmaWVsZDpaR1ZrYVdOaGRHVms.field.bWFudWFs.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.bWFudWFs.display_name": {
           "source": "Manual",
           "message": "手動"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyNkNGVhZWJiOTY3ZmU5ZGM0ZGMyNmMwNmYzNmEwNDVjYjY5OWVlMjc5ZGExOWYxNjhjYmYxYzZmZTcwZmE5N2U5Om9wdGlvbjpjbVZoWkY5allYQmhZMmwwZVE6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcFNaV0ZrUTJGd1lXTnBkSGxFWldScFkyRjBaV1JUY0dWakl6azNaak15WTJNMVpETXhOR0ZoTVRaa056TmxNRGsyWW1JelkyRXdaVGczTWpGbE16VXlOREF6Tm1NM09HSTNaVFJoTlRoaVpEZGhObUk1Tm1SalltVTpmaWVsZDpaR1ZrYVdOaGRHVms.field.bWFudWFs.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.bWFudWFs.short_desc": {
           "source": "The config to use for manual read capacity scaling",
           "message": "手動リード容量スケーリングに使用する設定"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyNkNGVhZWJiOTY3ZmU5ZGM0ZGMyNmMwNmYzNmEwNDVjYjY5OWVlMjc5ZGExOWYxNjhjYmYxYzZmZTcwZmE5N2U5Om9wdGlvbjpjbVZoWkY5allYQmhZMmwwZVE6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcFNaV0ZrUTJGd1lXTnBkSGxFWldScFkyRjBaV1JUY0dWakl6azNaak15WTJNMVpETXhOR0ZoTVRaa056TmxNRGsyWW1JelkyRXdaVGczTWpGbE16VXlOREF6Tm1NM09HSTNaVFJoTlRoaVpEZGhObUk1Tm1SalltVTpmaWVsZDpaR1ZrYVdOaGRHVms.field.bWFudWFs.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.bWFudWFs.desc": {
           "source": "The config to use for manual read capacity scaling.",
           "message": "手動リード容量スケーリングに使用する設定"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjMGExNDUwOWY0MjBkNTg5ZDk2Y2Q0NmIwODM3MzhlYWI5NDBmNzAzMzcyMmRmNDdhODhiZTkwZmE3MzFlMjlmNjpvcHRpb246Y21WaFpGOWpZWEJoWTJsMGVROnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXBTWldGa1EyRndZV05wZEhsRVpXUnBZMkYwWldSVGNHVmpJemszWmpNeVkyTTFaRE14TkdGaE1UWmtOek5sTURrMlltSXpZMkV3WlRnM01qRmxNelV5TkRBek5tTTNPR0kzWlRSaE5UaGlaRGRoTm1JNU5tUmpZbVU6ZmllbGQ6WkdWa2FXTmhkR1ZrOmZpZWxkOmJXRnVkV0Zz.field.cmVwbGljYXM.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjYjI0ZjhmMjJhOTQ1NDNjOTQ1YTRiNWFmZWQ4YmMxOTdlZjEwYWQ1NTE3Y2QwZmU0NDkyYWFkMjZlY2Y3YmZlOQ.field.cmVwbGljYXM.display_name": {
           "source": "Replicas",
           "message": "レプリカ"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjMGExNDUwOWY0MjBkNTg5ZDk2Y2Q0NmIwODM3MzhlYWI5NDBmNzAzMzcyMmRmNDdhODhiZTkwZmE3MzFlMjlmNjpvcHRpb246Y21WaFpGOWpZWEJoWTJsMGVROnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXBTWldGa1EyRndZV05wZEhsRVpXUnBZMkYwWldSVGNHVmpJemszWmpNeVkyTTFaRE14TkdGaE1UWmtOek5sTURrMlltSXpZMkV3WlRnM01qRmxNelV5TkRBek5tTTNPR0kzWlRSaE5UaGlaRGRoTm1JNU5tUmpZbVU6ZmllbGQ6WkdWa2FXTmhkR1ZrOmZpZWxkOmJXRnVkV0Zz.field.cmVwbGljYXM.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjYjI0ZjhmMjJhOTQ1NDNjOTQ1YTRiNWFmZWQ4YmMxOTdlZjEwYWQ1NTE3Y2QwZmU0NDkyYWFkMjZlY2Y3YmZlOQ.field.cmVwbGljYXM.short_desc": {
           "source": "The number of replicas to use",
           "message": "使用するレプリカ数"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjMGExNDUwOWY0MjBkNTg5ZDk2Y2Q0NmIwODM3MzhlYWI5NDBmNzAzMzcyMmRmNDdhODhiZTkwZmE3MzFlMjlmNjpvcHRpb246Y21WaFpGOWpZWEJoWTJsMGVROnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXBTWldGa1EyRndZV05wZEhsRVpXUnBZMkYwWldSVGNHVmpJemszWmpNeVkyTTFaRE14TkdGaE1UWmtOek5sTURrMlltSXpZMkV3WlRnM01qRmxNelV5TkRBek5tTTNPR0kzWlRSaE5UaGlaRGRoTm1JNU5tUmpZbVU6ZmllbGQ6WkdWa2FXTmhkR1ZrOmZpZWxkOmJXRnVkV0Zz.field.cmVwbGljYXM.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjYjI0ZjhmMjJhOTQ1NDNjOTQ1YTRiNWFmZWQ4YmMxOTdlZjEwYWQ1NTE3Y2QwZmU0NDkyYWFkMjZlY2Y3YmZlOQ.field.cmVwbGljYXM.desc": {
           "source": "The number of replicas to use. Replicas duplicate the compute resources and data of an index, allowing higher query throughput and availability. Setting replicas to 0 disables the index but can be used to reduce costs while usage is paused.",
           "message": "使用するレプリカ数。レプリカはインデックスの計算リソースとデータを複製し、より高いクエリスループットと可用性を可能にします。レプリカを0に設定するとインデックスは無効化されますが、使用が一時停止されている間はコストを削減できます。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjMGExNDUwOWY0MjBkNTg5ZDk2Y2Q0NmIwODM3MzhlYWI5NDBmNzAzMzcyMmRmNDdhODhiZTkwZmE3MzFlMjlmNjpvcHRpb246Y21WaFpGOWpZWEJoWTJsMGVROnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXBTWldGa1EyRndZV05wZEhsRVpXUnBZMkYwWldSVGNHVmpJemszWmpNeVkyTTFaRE14TkdGaE1UWmtOek5sTURrMlltSXpZMkV3WlRnM01qRmxNelV5TkRBek5tTTNPR0kzWlRSaE5UaGlaRGRoTm1JNU5tUmpZbVU6ZmllbGQ6WkdWa2FXTmhkR1ZrOmZpZWxkOmJXRnVkV0Zz.field.c2hhcmRz.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjYjI0ZjhmMjJhOTQ1NDNjOTQ1YTRiNWFmZWQ4YmMxOTdlZjEwYWQ1NTE3Y2QwZmU0NDkyYWFkMjZlY2Y3YmZlOQ.field.c2hhcmRz.display_name": {
           "source": "Shards",
           "message": "シャード"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjMGExNDUwOWY0MjBkNTg5ZDk2Y2Q0NmIwODM3MzhlYWI5NDBmNzAzMzcyMmRmNDdhODhiZTkwZmE3MzFlMjlmNjpvcHRpb246Y21WaFpGOWpZWEJoWTJsMGVROnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXBTWldGa1EyRndZV05wZEhsRVpXUnBZMkYwWldSVGNHVmpJemszWmpNeVkyTTFaRE14TkdGaE1UWmtOek5sTURrMlltSXpZMkV3WlRnM01qRmxNelV5TkRBek5tTTNPR0kzWlRSaE5UaGlaRGRoTm1JNU5tUmpZbVU6ZmllbGQ6WkdWa2FXTmhkR1ZrOmZpZWxkOmJXRnVkV0Zz.field.c2hhcmRz.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjYjI0ZjhmMjJhOTQ1NDNjOTQ1YTRiNWFmZWQ4YmMxOTdlZjEwYWQ1NTE3Y2QwZmU0NDkyYWFkMjZlY2Y3YmZlOQ.field.c2hhcmRz.short_desc": {
           "source": "The number of shards to use",
           "message": "使用するシャード数"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjMGExNDUwOWY0MjBkNTg5ZDk2Y2Q0NmIwODM3MzhlYWI5NDBmNzAzMzcyMmRmNDdhODhiZTkwZmE3MzFlMjlmNjpvcHRpb246Y21WaFpGOWpZWEJoWTJsMGVROnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXBTWldGa1EyRndZV05wZEhsRVpXUnBZMkYwWldSVGNHVmpJemszWmpNeVkyTTFaRE14TkdGaE1UWmtOek5sTURrMlltSXpZMkV3WlRnM01qRmxNelV5TkRBek5tTTNPR0kzWlRSaE5UaGlaRGRoTm1JNU5tUmpZbVU6ZmllbGQ6WkdWa2FXTmhkR1ZrOmZpZWxkOmJXRnVkV0Zz.field.c2hhcmRz.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjYjI0ZjhmMjJhOTQ1NDNjOTQ1YTRiNWFmZWQ4YmMxOTdlZjEwYWQ1NTE3Y2QwZmU0NDkyYWFkMjZlY2Y3YmZlOQ.field.c2hhcmRz.desc": {
           "source": "The number of shards to use. Shards determine the storage capacity of an index, with each shard providing 250 GB of storage.",
           "message": "使用するシャード数。シャードはインデックスのストレージ容量を決定し、1つのシャードが250GBのストレージを提供します。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyNkNGVhZWJiOTY3ZmU5ZGM0ZGMyNmMwNmYzNmEwNDVjYjY5OWVlMjc5ZGExOWYxNjhjYmYxYzZmZTcwZmE5N2U5Om9wdGlvbjpjbVZoWkY5allYQmhZMmwwZVE6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcFNaV0ZrUTJGd1lXTnBkSGxFWldScFkyRjBaV1JUY0dWakl6azNaak15WTJNMVpETXhOR0ZoTVRaa056TmxNRGsyWW1JelkyRXdaVGczTWpGbE16VXlOREF6Tm1NM09HSTNaVFJoTlRoaVpEZGhObUk1Tm1SalltVTpmaWVsZDpaR1ZrYVdOaGRHVms.field.bm9kZV90eXBl.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.bm9kZV90eXBl.display_name": {
           "source": "Node Type",
           "message": "ノードタイプ"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyNkNGVhZWJiOTY3ZmU5ZGM0ZGMyNmMwNmYzNmEwNDVjYjY5OWVlMjc5ZGExOWYxNjhjYmYxYzZmZTcwZmE5N2U5Om9wdGlvbjpjbVZoWkY5allYQmhZMmwwZVE6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcFNaV0ZrUTJGd1lXTnBkSGxFWldScFkyRjBaV1JUY0dWakl6azNaak15WTJNMVpETXhOR0ZoTVRaa056TmxNRGsyWW1JelkyRXdaVGczTWpGbE16VXlOREF6Tm1NM09HSTNaVFJoTlRoaVpEZGhObUk1Tm1SalltVTpmaWVsZDpaR1ZrYVdOaGRHVms.field.bm9kZV90eXBl.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.bm9kZV90eXBl.short_desc": {
           "source": "The type of machines to use",
           "message": "使用するマシンのタイプ。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyNkNGVhZWJiOTY3ZmU5ZGM0ZGMyNmMwNmYzNmEwNDVjYjY5OWVlMjc5ZGExOWYxNjhjYmYxYzZmZTcwZmE5N2U5Om9wdGlvbjpjbVZoWkY5allYQmhZMmwwZVE6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcFNaV0ZrUTJGd1lXTnBkSGxFWldScFkyRjBaV1JUY0dWakl6azNaak15WTJNMVpETXhOR0ZoTVRaa056TmxNRGsyWW1JelkyRXdaVGczTWpGbE16VXlOREF6Tm1NM09HSTNaVFJoTlRoaVpEZGhObUk1Tm1SalltVTpmaWVsZDpaR1ZrYVdOaGRHVms.field.bm9kZV90eXBl.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.bm9kZV90eXBl.desc": {
           "source": "The type of machines to use. Available options: `b1` and `t1`. `t1` includes increased processing power and memory.",
           "message": "使用するマシンのタイプ。利用可能なオプション：`b1` および `t1`。`t1`は処理能力とメモリが増加している。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyNkNGVhZWJiOTY3ZmU5ZGM0ZGMyNmMwNmYzNmEwNDVjYjY5OWVlMjc5ZGExOWYxNjhjYmYxYzZmZTcwZmE5N2U5Om9wdGlvbjpjbVZoWkY5allYQmhZMmwwZVE6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcFNaV0ZrUTJGd1lXTnBkSGxFWldScFkyRjBaV1JUY0dWakl6azNaak15WTJNMVpETXhOR0ZoTVRaa056TmxNRGsyWW1JelkyRXdaVGczTWpGbE16VXlOREF6Tm1NM09HSTNaVFJoTlRoaVpEZGhObUk1Tm1SalltVTpmaWVsZDpaR1ZrYVdOaGRHVms.field.c2NhbGluZw.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.c2NhbGluZw.display_name": {
           "source": "Scaling",
           "message": "スケーリング"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyNkNGVhZWJiOTY3ZmU5ZGM0ZGMyNmMwNmYzNmEwNDVjYjY5OWVlMjc5ZGExOWYxNjhjYmYxYzZmZTcwZmE5N2U5Om9wdGlvbjpjbVZoWkY5allYQmhZMmwwZVE6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcFNaV0ZrUTJGd1lXTnBkSGxFWldScFkyRjBaV1JUY0dWakl6azNaak15WTJNMVpETXhOR0ZoTVRaa056TmxNRGsyWW1JelkyRXdaVGczTWpGbE16VXlOREF6Tm1NM09HSTNaVFJoTlRoaVpEZGhObUk1Tm1SalltVTpmaWVsZDpaR1ZrYVdOaGRHVms.field.c2NhbGluZw.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.c2NhbGluZw.short_desc": {
           "source": "The type of scaling strategy to use",
           "message": "使用するスケーリング戦略のタイプ。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyNkNGVhZWJiOTY3ZmU5ZGM0ZGMyNmMwNmYzNmEwNDVjYjY5OWVlMjc5ZGExOWYxNjhjYmYxYzZmZTcwZmE5N2U5Om9wdGlvbjpjbVZoWkY5allYQmhZMmwwZVE6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcFNaV0ZrUTJGd1lXTnBkSGxFWldScFkyRjBaV1JUY0dWakl6azNaak15WTJNMVpETXhOR0ZoTVRaa056TmxNRGsyWW1JelkyRXdaVGczTWpGbE16VXlOREF6Tm1NM09HSTNaVFJoTlRoaVpEZGhObUk1Tm1SalltVTpmaWVsZDpaR1ZrYVdOaGRHVms.field.c2NhbGluZw.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.c2NhbGluZw.desc": {
           "source": "The type of scaling strategy to use.",
           "message": "使用するスケーリング戦略のタイプ。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.display_name": {
           "source": "Read Capacity Mode",
           "message": "読み取り容量モード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.short_desc": {
           "source": "On-demand reads or dedicated read nodes",
           "message": "オンデマンドリードまたは専用リードノード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.desc": {
           "source": "The mode of the index. Possible values: `OnDemand` or `Dedicated`. Defaults to `OnDemand`. If set to `Dedicated`, `dedicated.node_type`, and `dedicated.scaling` must be specified.",
           "message": "インデックスのモード。可能な値：`OnDemand` または `Dedicated`。デフォルトは `OnDemand`。`Dedicated` に設定された場合、`dedicated.node_type`、`dedicated.scaling` を指定する必要があります。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
           "source": "On demand",
           "message": "オンデマンド"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
           "source": "Reads are served without dedicated nodes and billed by use.  The default, and not available on a BYOC index.",
           "message": "専用ノードなしで読み取りが提供され、使用量に応じて課金されます。デフォルトであり、BYOCインデックスでは利用できません。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
           "source": "Dedicated nodes",
           "message": "専用ノード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
           "source": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it.",
           "message": "専用ノードで読み取りが提供され、予測可能なワークロードに対応します。`node_type` および `scaling` が必要です。"
         },
@@ -1066,131 +1066,131 @@
           "source": "How reads are served.\n\n- `{\"mode\": \"OnDemand\"}` — the default; you are billed for what you read.\n- `{\"mode\": \"Dedicated\", \"node_type\": ..., \"scaling\": ...}` — dedicated read nodes for a predictable workload.\n\nA BYOC index must set `Dedicated` explicitly: it does not support on-demand, and omitting this defaults to on-demand and is rejected.",
           "message": "読み取りの提供方法。\n\n- `{\"mode\": \"OnDemand\"}` — 既定値。読み取った分だけ課金されます。\n- `{\"mode\": \"Dedicated\", \"node_type\": ..., \"scaling\": ...}` — 予測可能なワークロード向けの専用読み取りノード。\n\nBYOC インデックスでは `Dedicated` を明示的に設定する必要があります。オンデマンドはサポートされておらず、この値を省略すると既定のオンデマンドとなり拒否されます。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.display_name": {
           "source": "Read Capacity Mode",
           "message": "読み取り容量モード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.short_desc": {
           "source": "On-demand reads or dedicated read nodes",
           "message": "オンデマンドリードまたは専用リードノード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.desc": {
           "source": "The mode of the index. Possible values: `OnDemand` or `Dedicated`. Defaults to `OnDemand`. If set to `Dedicated`, `dedicated.node_type`, and `dedicated.scaling` must be specified.",
           "message": "インデックスのモード。可能な値：`OnDemand` または `Dedicated`。デフォルトは `OnDemand`。`Dedicated` に設定された場合、`dedicated.node_type`、`dedicated.scaling` を指定する必要があります。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
           "source": "On demand",
           "message": "オンデマンド"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
           "source": "Reads are served without dedicated nodes and billed by use.  The default, and not available on a BYOC index.",
           "message": "専用ノードなしで読み取りが提供され、使用量に応じて課金されます。デフォルトであり、BYOCインデックスでは利用できません。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
           "source": "Dedicated nodes",
           "message": "専用ノード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
           "source": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it.",
           "message": "専用ノードで読み取りが提供され、予測可能なワークロードに対応します。`node_type` および `scaling` が必要です。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.ZGVkaWNhdGVk.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.display_name": {
           "source": "Dedicated",
           "message": "スタッフ"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.ZGVkaWNhdGVk.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.short_desc": {
           "source": "Configuration for dedicated read capacity",
           "message": "専用読み取り容量の構成"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.ZGVkaWNhdGVk.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.desc": {
           "source": "Configuration for dedicated read capacity. See  [this guide](https://docs.pinecone.io/guides/index-data/dedicated-read-nodes) for more details on  how to configure dedicated read capacity.",
           "message": "専用読み取り容量の構成。専用読み取り容量の設定方法については [このガイド](https://docs.pinecone.io/guides/index-data/dedicated-read-nodes) を参照してください。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnI2Q0ZWFlYmI5NjdmZTlkYzRkYzI2YzA2ZjM2YTA0NWNiNjk5ZWUyNzlkYTE5ZjE2OGNiZjFjNmZlNzBmYTk3ZTk6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlRjR1ZqSXprM1pqTXlZMk0xWkRNeE5HRmhNVFprTnpObE1EazJZbUl6WTJFd1pUZzNNakZsTXpVeU5EQXpObU0zT0dJM1pUUmhOVGhpWkRkaE5tSTVObVJqWW1VOmZpZWxkOlpHVmthV05oZEdWaw.field.bWFudWFs.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.bWFudWFs.display_name": {
           "source": "Manual",
           "message": "手動"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnI2Q0ZWFlYmI5NjdmZTlkYzRkYzI2YzA2ZjM2YTA0NWNiNjk5ZWUyNzlkYTE5ZjE2OGNiZjFjNmZlNzBmYTk3ZTk6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlRjR1ZqSXprM1pqTXlZMk0xWkRNeE5HRmhNVFprTnpObE1EazJZbUl6WTJFd1pUZzNNakZsTXpVeU5EQXpObU0zT0dJM1pUUmhOVGhpWkRkaE5tSTVObVJqWW1VOmZpZWxkOlpHVmthV05oZEdWaw.field.bWFudWFs.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.bWFudWFs.short_desc": {
           "source": "The config to use for manual read capacity scaling",
           "message": "手動リード容量スケーリングに使用する設定"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnI2Q0ZWFlYmI5NjdmZTlkYzRkYzI2YzA2ZjM2YTA0NWNiNjk5ZWUyNzlkYTE5ZjE2OGNiZjFjNmZlNzBmYTk3ZTk6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlRjR1ZqSXprM1pqTXlZMk0xWkRNeE5HRmhNVFprTnpObE1EazJZbUl6WTJFd1pUZzNNakZsTXpVeU5EQXpObU0zT0dJM1pUUmhOVGhpWkRkaE5tSTVObVJqWW1VOmZpZWxkOlpHVmthV05oZEdWaw.field.bWFudWFs.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.bWFudWFs.desc": {
           "source": "The config to use for manual read capacity scaling.",
           "message": "手動リード容量スケーリングに使用する設定"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCMwYTE0NTA5ZjQyMGQ1ODlkOTZjZDQ2YjA4MzczOGVhYjk0MGY3MDMzNzIyZGY0N2E4OGJlOTBmYTczMWUyOWY2Om9wdGlvbjpjbVZoWkY5allYQmhZMmwwZVE6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcFNaV0ZrUTJGd1lXTnBkSGxFWldScFkyRjBaV1JUY0dWakl6azNaak15WTJNMVpETXhOR0ZoTVRaa056TmxNRGsyWW1JelkyRXdaVGczTWpGbE16VXlOREF6Tm1NM09HSTNaVFJoTlRoaVpEZGhObUk1Tm1SalltVTpmaWVsZDpaR1ZrYVdOaGRHVms6ZmllbGQ6YldGdWRXRnM.field.cmVwbGljYXM.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCNiMjRmOGYyMmE5NDU0M2M5NDVhNGI1YWZlZDhiYzE5N2VmMTBhZDU1MTdjZDBmZTQ0OTJhYWQyNmVjZjdiZmU5.field.cmVwbGljYXM.display_name": {
           "source": "Replicas",
           "message": "レプリカ"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCMwYTE0NTA5ZjQyMGQ1ODlkOTZjZDQ2YjA4MzczOGVhYjk0MGY3MDMzNzIyZGY0N2E4OGJlOTBmYTczMWUyOWY2Om9wdGlvbjpjbVZoWkY5allYQmhZMmwwZVE6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcFNaV0ZrUTJGd1lXTnBkSGxFWldScFkyRjBaV1JUY0dWakl6azNaak15WTJNMVpETXhOR0ZoTVRaa056TmxNRGsyWW1JelkyRXdaVGczTWpGbE16VXlOREF6Tm1NM09HSTNaVFJoTlRoaVpEZGhObUk1Tm1SalltVTpmaWVsZDpaR1ZrYVdOaGRHVms6ZmllbGQ6YldGdWRXRnM.field.cmVwbGljYXM.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCNiMjRmOGYyMmE5NDU0M2M5NDVhNGI1YWZlZDhiYzE5N2VmMTBhZDU1MTdjZDBmZTQ0OTJhYWQyNmVjZjdiZmU5.field.cmVwbGljYXM.short_desc": {
           "source": "The number of replicas to use",
           "message": "使用するレプリカ数"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCMwYTE0NTA5ZjQyMGQ1ODlkOTZjZDQ2YjA4MzczOGVhYjk0MGY3MDMzNzIyZGY0N2E4OGJlOTBmYTczMWUyOWY2Om9wdGlvbjpjbVZoWkY5allYQmhZMmwwZVE6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcFNaV0ZrUTJGd1lXTnBkSGxFWldScFkyRjBaV1JUY0dWakl6azNaak15WTJNMVpETXhOR0ZoTVRaa056TmxNRGsyWW1JelkyRXdaVGczTWpGbE16VXlOREF6Tm1NM09HSTNaVFJoTlRoaVpEZGhObUk1Tm1SalltVTpmaWVsZDpaR1ZrYVdOaGRHVms6ZmllbGQ6YldGdWRXRnM.field.cmVwbGljYXM.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCNiMjRmOGYyMmE5NDU0M2M5NDVhNGI1YWZlZDhiYzE5N2VmMTBhZDU1MTdjZDBmZTQ0OTJhYWQyNmVjZjdiZmU5.field.cmVwbGljYXM.desc": {
           "source": "The number of replicas to use. Replicas duplicate the compute resources and data of an index, allowing higher query throughput and availability. Setting replicas to 0 disables the index but can be used to reduce costs while usage is paused.",
           "message": "使用するレプリカ数。レプリカはインデックスの計算リソースとデータを複製し、より高いクエリスループットと可用性を可能にします。レプリカを0に設定するとインデックスは無効化されますが、使用が一時停止されている間はコストを削減できます。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCMwYTE0NTA5ZjQyMGQ1ODlkOTZjZDQ2YjA4MzczOGVhYjk0MGY3MDMzNzIyZGY0N2E4OGJlOTBmYTczMWUyOWY2Om9wdGlvbjpjbVZoWkY5allYQmhZMmwwZVE6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcFNaV0ZrUTJGd1lXTnBkSGxFWldScFkyRjBaV1JUY0dWakl6azNaak15WTJNMVpETXhOR0ZoTVRaa056TmxNRGsyWW1JelkyRXdaVGczTWpGbE16VXlOREF6Tm1NM09HSTNaVFJoTlRoaVpEZGhObUk1Tm1SalltVTpmaWVsZDpaR1ZrYVdOaGRHVms6ZmllbGQ6YldGdWRXRnM.field.c2hhcmRz.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCNiMjRmOGYyMmE5NDU0M2M5NDVhNGI1YWZlZDhiYzE5N2VmMTBhZDU1MTdjZDBmZTQ0OTJhYWQyNmVjZjdiZmU5.field.c2hhcmRz.display_name": {
           "source": "Shards",
           "message": "シャード"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCMwYTE0NTA5ZjQyMGQ1ODlkOTZjZDQ2YjA4MzczOGVhYjk0MGY3MDMzNzIyZGY0N2E4OGJlOTBmYTczMWUyOWY2Om9wdGlvbjpjbVZoWkY5allYQmhZMmwwZVE6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcFNaV0ZrUTJGd1lXTnBkSGxFWldScFkyRjBaV1JUY0dWakl6azNaak15WTJNMVpETXhOR0ZoTVRaa056TmxNRGsyWW1JelkyRXdaVGczTWpGbE16VXlOREF6Tm1NM09HSTNaVFJoTlRoaVpEZGhObUk1Tm1SalltVTpmaWVsZDpaR1ZrYVdOaGRHVms6ZmllbGQ6YldGdWRXRnM.field.c2hhcmRz.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCNiMjRmOGYyMmE5NDU0M2M5NDVhNGI1YWZlZDhiYzE5N2VmMTBhZDU1MTdjZDBmZTQ0OTJhYWQyNmVjZjdiZmU5.field.c2hhcmRz.short_desc": {
           "source": "The number of shards to use",
           "message": "使用するシャード数"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCMwYTE0NTA5ZjQyMGQ1ODlkOTZjZDQ2YjA4MzczOGVhYjk0MGY3MDMzNzIyZGY0N2E4OGJlOTBmYTczMWUyOWY2Om9wdGlvbjpjbVZoWkY5allYQmhZMmwwZVE6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcFNaV0ZrUTJGd1lXTnBkSGxFWldScFkyRjBaV1JUY0dWakl6azNaak15WTJNMVpETXhOR0ZoTVRaa056TmxNRGsyWW1JelkyRXdaVGczTWpGbE16VXlOREF6Tm1NM09HSTNaVFJoTlRoaVpEZGhObUk1Tm1SalltVTpmaWVsZDpaR1ZrYVdOaGRHVms6ZmllbGQ6YldGdWRXRnM.field.c2hhcmRz.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCNiMjRmOGYyMmE5NDU0M2M5NDVhNGI1YWZlZDhiYzE5N2VmMTBhZDU1MTdjZDBmZTQ0OTJhYWQyNmVjZjdiZmU5.field.c2hhcmRz.desc": {
           "source": "The number of shards to use. Shards determine the storage capacity of an index, with each shard providing 250 GB of storage.",
           "message": "使用するシャード数。シャードはインデックスのストレージ容量を決定し、1つのシャードが250GBのストレージを提供します。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnI2Q0ZWFlYmI5NjdmZTlkYzRkYzI2YzA2ZjM2YTA0NWNiNjk5ZWUyNzlkYTE5ZjE2OGNiZjFjNmZlNzBmYTk3ZTk6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlRjR1ZqSXprM1pqTXlZMk0xWkRNeE5HRmhNVFprTnpObE1EazJZbUl6WTJFd1pUZzNNakZsTXpVeU5EQXpObU0zT0dJM1pUUmhOVGhpWkRkaE5tSTVObVJqWW1VOmZpZWxkOlpHVmthV05oZEdWaw.field.bm9kZV90eXBl.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.bm9kZV90eXBl.display_name": {
           "source": "Node Type",
           "message": "ノードタイプ"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnI2Q0ZWFlYmI5NjdmZTlkYzRkYzI2YzA2ZjM2YTA0NWNiNjk5ZWUyNzlkYTE5ZjE2OGNiZjFjNmZlNzBmYTk3ZTk6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlRjR1ZqSXprM1pqTXlZMk0xWkRNeE5HRmhNVFprTnpObE1EazJZbUl6WTJFd1pUZzNNakZsTXpVeU5EQXpObU0zT0dJM1pUUmhOVGhpWkRkaE5tSTVObVJqWW1VOmZpZWxkOlpHVmthV05oZEdWaw.field.bm9kZV90eXBl.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.bm9kZV90eXBl.short_desc": {
           "source": "The type of machines to use",
           "message": "使用するマシンのタイプ。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnI2Q0ZWFlYmI5NjdmZTlkYzRkYzI2YzA2ZjM2YTA0NWNiNjk5ZWUyNzlkYTE5ZjE2OGNiZjFjNmZlNzBmYTk3ZTk6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlRjR1ZqSXprM1pqTXlZMk0xWkRNeE5HRmhNVFprTnpObE1EazJZbUl6WTJFd1pUZzNNakZsTXpVeU5EQXpObU0zT0dJM1pUUmhOVGhpWkRkaE5tSTVObVJqWW1VOmZpZWxkOlpHVmthV05oZEdWaw.field.bm9kZV90eXBl.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.bm9kZV90eXBl.desc": {
           "source": "The type of machines to use. Available options: `b1` and `t1`. `t1` includes increased processing power and memory.",
           "message": "使用するマシンのタイプ。利用可能なオプション：`b1` および `t1`。`t1`は処理能力とメモリが増加している。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnI2Q0ZWFlYmI5NjdmZTlkYzRkYzI2YzA2ZjM2YTA0NWNiNjk5ZWUyNzlkYTE5ZjE2OGNiZjFjNmZlNzBmYTk3ZTk6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlRjR1ZqSXprM1pqTXlZMk0xWkRNeE5HRmhNVFprTnpObE1EazJZbUl6WTJFd1pUZzNNakZsTXpVeU5EQXpObU0zT0dJM1pUUmhOVGhpWkRkaE5tSTVObVJqWW1VOmZpZWxkOlpHVmthV05oZEdWaw.field.c2NhbGluZw.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.c2NhbGluZw.display_name": {
           "source": "Scaling",
           "message": "スケーリング"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnI2Q0ZWFlYmI5NjdmZTlkYzRkYzI2YzA2ZjM2YTA0NWNiNjk5ZWUyNzlkYTE5ZjE2OGNiZjFjNmZlNzBmYTk3ZTk6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlRjR1ZqSXprM1pqTXlZMk0xWkRNeE5HRmhNVFprTnpObE1EazJZbUl6WTJFd1pUZzNNakZsTXpVeU5EQXpObU0zT0dJM1pUUmhOVGhpWkRkaE5tSTVObVJqWW1VOmZpZWxkOlpHVmthV05oZEdWaw.field.c2NhbGluZw.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.c2NhbGluZw.short_desc": {
           "source": "The type of scaling strategy to use",
           "message": "使用するスケーリング戦略のタイプ。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnI2Q0ZWFlYmI5NjdmZTlkYzRkYzI2YzA2ZjM2YTA0NWNiNjk5ZWUyNzlkYTE5ZjE2OGNiZjFjNmZlNzBmYTk3ZTk6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlRjR1ZqSXprM1pqTXlZMk0xWkRNeE5HRmhNVFprTnpObE1EazJZbUl6WTJFd1pUZzNNakZsTXpVeU5EQXpObU0zT0dJM1pUUmhOVGhpWkRkaE5tSTVObVJqWW1VOmZpZWxkOlpHVmthV05oZEdWaw.field.c2NhbGluZw.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.c2NhbGluZw.desc": {
           "source": "The type of scaling strategy to use.",
           "message": "使用するスケーリング戦略のタイプ。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.display_name": {
           "source": "Read Capacity Mode",
           "message": "読み取り容量モード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.short_desc": {
           "source": "On-demand reads or dedicated read nodes",
           "message": "オンデマンドリードまたは専用リードノード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.desc": {
           "source": "The mode of the index. Possible values: `OnDemand` or `Dedicated`. Defaults to `OnDemand`. If set to `Dedicated`, `dedicated.node_type`, and `dedicated.scaling` must be specified.",
           "message": "インデックスのモード。可能な値：`OnDemand` または `Dedicated`。デフォルトは `OnDemand`。`Dedicated` に設定された場合、`dedicated.node_type`、`dedicated.scaling` を指定する必要があります。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
           "source": "On demand",
           "message": "オンデマンド"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
           "source": "Reads are served without dedicated nodes and billed by use.  The default, and not available on a BYOC index.",
           "message": "専用ノードなしで読み取りが提供され、使用量に応じて課金されます。デフォルトであり、BYOCインデックスでは利用できません。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
           "source": "Dedicated nodes",
           "message": "専用ノード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
           "source": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it.",
           "message": "専用ノードで読み取りが提供され、予測可能なワークロードに対応します。`node_type` および `scaling` が必要です。"
         },
@@ -1366,131 +1366,131 @@
           "source": "How reads are served.\n\n- `{\"mode\": \"OnDemand\"}` — the default; you are billed for what you read.\n- `{\"mode\": \"Dedicated\", \"node_type\": ..., \"scaling\": ...}` — dedicated read nodes for a predictable workload.\n\nA BYOC index must set `Dedicated` explicitly: it does not support on-demand, and omitting this defaults to on-demand and is rejected.",
           "message": "読み取りの提供方法。\n\n- `{\"mode\": \"OnDemand\"}` — 既定値。読み取った分だけ課金されます。\n- `{\"mode\": \"Dedicated\", \"node_type\": ..., \"scaling\": ...}` — 予測可能なワークロード向けの専用読み取りノード。\n\nBYOC インデックスでは `Dedicated` を明示的に設定する必要があります。オンデマンドはサポートされておらず、この値を省略すると既定のオンデマンドとなり拒否されます。"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.display_name": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.display_name": {
           "source": "Read Capacity Mode",
           "message": "読み取り容量モード"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.short_desc": {
           "source": "On-demand reads or dedicated read nodes",
           "message": "オンデマンドリードまたは専用リードノード"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.desc": {
           "source": "The mode of the index. Possible values: `OnDemand` or `Dedicated`. Defaults to `OnDemand`. If set to `Dedicated`, `dedicated.node_type`, and `dedicated.scaling` must be specified.",
           "message": "インデックスのモード。可能な値：`OnDemand` または `Dedicated`。デフォルトは `OnDemand`。`Dedicated` に設定された場合、`dedicated.node_type`、`dedicated.scaling` を指定する必要があります。"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
           "source": "On demand",
           "message": "オンデマンド"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
           "source": "Reads are served without dedicated nodes and billed by use.  The default, and not available on a BYOC index.",
           "message": "専用ノードなしで読み取りが提供され、使用量に応じて課金されます。デフォルトであり、BYOCインデックスでは利用できません。"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
           "source": "Dedicated nodes",
           "message": "専用ノード"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
           "source": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it.",
           "message": "専用ノードで読み取りが提供され、予測可能なワークロードに対応します。`node_type` および `scaling` が必要です。"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjZTlmMzZmMGM1Zjk5N2NjNmYzYmVhNTgzZDg5YjgzYmQ1NWVkNzFhOTQ1NDg3ODEyMjk4YjU3OThhNDZiMWE3NA.field.ZGVkaWNhdGVk.display_name": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.ZGVkaWNhdGVk.display_name": {
           "source": "Dedicated",
           "message": "スタッフ"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjZTlmMzZmMGM1Zjk5N2NjNmYzYmVhNTgzZDg5YjgzYmQ1NWVkNzFhOTQ1NDg3ODEyMjk4YjU3OThhNDZiMWE3NA.field.ZGVkaWNhdGVk.short_desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.ZGVkaWNhdGVk.short_desc": {
           "source": "Changes to the dedicated read capacity of an index",
           "message": "インデックスの専用読み取り容量の変更"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjZTlmMzZmMGM1Zjk5N2NjNmYzYmVhNTgzZDg5YjgzYmQ1NWVkNzFhOTQ1NDg3ODEyMjk4YjU3OThhNDZiMWE3NA.field.ZGVkaWNhdGVk.desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.ZGVkaWNhdGVk.desc": {
           "source": "Changes to the dedicated read capacity of an index. Every field is optional; omitted fields keep their current value. `scaling` and `manual` go together and must be sent as a pair: `scaling: Manual` without `manual` is rejected, and a `manual` block without `scaling: Manual` is not accepted by this schema (the service would silently ignore it). An index moving from `OnDemand` to `Dedicated` must supply `node_type`, `scaling`, and `manual`.",
           "message": "インデックスの専用読み取り容量の変更。すべてのフィールドはオプションです。省略されたフィールドは現在の値を維持します。`scaling` と `manual` はペアで送信する必要があります：`scaling: Manual` だけを送信しても `manual` が存在しない場合、拒否されます。また、`manual` ブロックは `scaling: Manual` が存在しないとこのスキーマで受け入れられません（サービスは無視します）。インデックスが `OnDemand` から `Dedicated` に移行する場合、`node_type`、`scaling`、および `manual` を指定する必要があります。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzAwNDIzMTJkNjhmYzJlNTE4Mjc5YjMzZTIyYzk0YTU0ZGM5M2FiNWUyNzkwZjlhMjA5NzFhMTA2ODE4ODg1ZWY6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlFZWFJqYUZOd1pXTWpaVGxtTXpabU1HTTFaams1TjJOak5tWXpZbVZoTlRnelpEZzVZamd6WW1RMU5XVmtOekZoT1RRMU5EZzNPREV5TWprNFlqVTNPVGhoTkRaaU1XRTNOQTpmaWVsZDpaR1ZrYVdOaGRHVms.field.bWFudWFs.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.bWFudWFs.display_name": {
           "source": "Manual",
           "message": "手動"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzAwNDIzMTJkNjhmYzJlNTE4Mjc5YjMzZTIyYzk0YTU0ZGM5M2FiNWUyNzkwZjlhMjA5NzFhMTA2ODE4ODg1ZWY6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlFZWFJqYUZOd1pXTWpaVGxtTXpabU1HTTFaams1TjJOak5tWXpZbVZoTlRnelpEZzVZamd6WW1RMU5XVmtOekZoT1RRMU5EZzNPREV5TWprNFlqVTNPVGhoTkRaaU1XRTNOQTpmaWVsZDpaR1ZrYVdOaGRHVms.field.bWFudWFs.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.bWFudWFs.short_desc": {
           "source": "Manual scaling changes",
           "message": "手動スケーリング変更"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzAwNDIzMTJkNjhmYzJlNTE4Mjc5YjMzZTIyYzk0YTU0ZGM5M2FiNWUyNzkwZjlhMjA5NzFhMTA2ODE4ODg1ZWY6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlFZWFJqYUZOd1pXTWpaVGxtTXpabU1HTTFaams1TjJOak5tWXpZbVZoTlRnelpEZzVZamd6WW1RMU5XVmtOekZoT1RRMU5EZzNPREV5TWprNFlqVTNPVGhoTkRaaU1XRTNOQTpmaWVsZDpaR1ZrYVdOaGRHVms.field.bWFudWFs.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.bWFudWFs.desc": {
           "source": "Manual scaling changes. Omitted fields keep their current value.",
           "message": "手動スケーリング変更。未指定フィールドは現在の値を保持する"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2MxMDcwMzg4NmJkN2YyODZlMDEyYjAzMzE3NDE1ZTRlNDZhMTkzMTVjYTdjNDJhNWU0ZDUxNGU0OTkxMjVmYjI6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlFZWFJqYUZOd1pXTWpaVGxtTXpabU1HTTFaams1TjJOak5tWXpZbVZoTlRnelpEZzVZamd6WW1RMU5XVmtOekZoT1RRMU5EZzNPREV5TWprNFlqVTNPVGhoTkRaaU1XRTNOQTpmaWVsZDpaR1ZrYVdOaGRHVms6ZmllbGQ6YldGdWRXRnM.field.cmVwbGljYXM.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2U5YzIwODJiOWZhOGQ2YTljZjhjMWYwNjcxNmRlYjEwMzEwYmUwM2QyM2RlMTM3MTFmYzNlZDllN2VmOGVmYjU.field.cmVwbGljYXM.display_name": {
           "source": "Replicas",
           "message": "レプリカ"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2MxMDcwMzg4NmJkN2YyODZlMDEyYjAzMzE3NDE1ZTRlNDZhMTkzMTVjYTdjNDJhNWU0ZDUxNGU0OTkxMjVmYjI6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlFZWFJqYUZOd1pXTWpaVGxtTXpabU1HTTFaams1TjJOak5tWXpZbVZoTlRnelpEZzVZamd6WW1RMU5XVmtOekZoT1RRMU5EZzNPREV5TWprNFlqVTNPVGhoTkRaaU1XRTNOQTpmaWVsZDpaR1ZrYVdOaGRHVms6ZmllbGQ6YldGdWRXRnM.field.cmVwbGljYXM.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2U5YzIwODJiOWZhOGQ2YTljZjhjMWYwNjcxNmRlYjEwMzEwYmUwM2QyM2RlMTM3MTFmYzNlZDllN2VmOGVmYjU.field.cmVwbGljYXM.short_desc": {
           "source": "The number of replicas",
           "message": "レプリカ数"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2MxMDcwMzg4NmJkN2YyODZlMDEyYjAzMzE3NDE1ZTRlNDZhMTkzMTVjYTdjNDJhNWU0ZDUxNGU0OTkxMjVmYjI6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlFZWFJqYUZOd1pXTWpaVGxtTXpabU1HTTFaams1TjJOak5tWXpZbVZoTlRnelpEZzVZamd6WW1RMU5XVmtOekZoT1RRMU5EZzNPREV5TWprNFlqVTNPVGhoTkRaaU1XRTNOQTpmaWVsZDpaR1ZrYVdOaGRHVms6ZmllbGQ6YldGdWRXRnM.field.cmVwbGljYXM.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2U5YzIwODJiOWZhOGQ2YTljZjhjMWYwNjcxNmRlYjEwMzEwYmUwM2QyM2RlMTM3MTFmYzNlZDllN2VmOGVmYjU.field.cmVwbGljYXM.desc": {
           "source": "The number of replicas.",
           "message": "レプリカ数。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2MxMDcwMzg4NmJkN2YyODZlMDEyYjAzMzE3NDE1ZTRlNDZhMTkzMTVjYTdjNDJhNWU0ZDUxNGU0OTkxMjVmYjI6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlFZWFJqYUZOd1pXTWpaVGxtTXpabU1HTTFaams1TjJOak5tWXpZbVZoTlRnelpEZzVZamd6WW1RMU5XVmtOekZoT1RRMU5EZzNPREV5TWprNFlqVTNPVGhoTkRaaU1XRTNOQTpmaWVsZDpaR1ZrYVdOaGRHVms6ZmllbGQ6YldGdWRXRnM.field.c2hhcmRz.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2U5YzIwODJiOWZhOGQ2YTljZjhjMWYwNjcxNmRlYjEwMzEwYmUwM2QyM2RlMTM3MTFmYzNlZDllN2VmOGVmYjU.field.c2hhcmRz.display_name": {
           "source": "Shards",
           "message": "シャード"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2MxMDcwMzg4NmJkN2YyODZlMDEyYjAzMzE3NDE1ZTRlNDZhMTkzMTVjYTdjNDJhNWU0ZDUxNGU0OTkxMjVmYjI6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlFZWFJqYUZOd1pXTWpaVGxtTXpabU1HTTFaams1TjJOak5tWXpZbVZoTlRnelpEZzVZamd6WW1RMU5XVmtOekZoT1RRMU5EZzNPREV5TWprNFlqVTNPVGhoTkRaaU1XRTNOQTpmaWVsZDpaR1ZrYVdOaGRHVms6ZmllbGQ6YldGdWRXRnM.field.c2hhcmRz.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2U5YzIwODJiOWZhOGQ2YTljZjhjMWYwNjcxNmRlYjEwMzEwYmUwM2QyM2RlMTM3MTFmYzNlZDllN2VmOGVmYjU.field.c2hhcmRz.short_desc": {
           "source": "The number of shards",
           "message": "シャード数"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2MxMDcwMzg4NmJkN2YyODZlMDEyYjAzMzE3NDE1ZTRlNDZhMTkzMTVjYTdjNDJhNWU0ZDUxNGU0OTkxMjVmYjI6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlFZWFJqYUZOd1pXTWpaVGxtTXpabU1HTTFaams1TjJOak5tWXpZbVZoTlRnelpEZzVZamd6WW1RMU5XVmtOekZoT1RRMU5EZzNPREV5TWprNFlqVTNPVGhoTkRaaU1XRTNOQTpmaWVsZDpaR1ZrYVdOaGRHVms6ZmllbGQ6YldGdWRXRnM.field.c2hhcmRz.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2U5YzIwODJiOWZhOGQ2YTljZjhjMWYwNjcxNmRlYjEwMzEwYmUwM2QyM2RlMTM3MTFmYzNlZDllN2VmOGVmYjU.field.c2hhcmRz.desc": {
           "source": "The number of shards.",
           "message": "シャードの数。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzAwNDIzMTJkNjhmYzJlNTE4Mjc5YjMzZTIyYzk0YTU0ZGM5M2FiNWUyNzkwZjlhMjA5NzFhMTA2ODE4ODg1ZWY6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlFZWFJqYUZOd1pXTWpaVGxtTXpabU1HTTFaams1TjJOak5tWXpZbVZoTlRnelpEZzVZamd6WW1RMU5XVmtOekZoT1RRMU5EZzNPREV5TWprNFlqVTNPVGhoTkRaaU1XRTNOQTpmaWVsZDpaR1ZrYVdOaGRHVms.field.bm9kZV90eXBl.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.bm9kZV90eXBl.display_name": {
           "source": "Node Type",
           "message": "ノードタイプ"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzAwNDIzMTJkNjhmYzJlNTE4Mjc5YjMzZTIyYzk0YTU0ZGM5M2FiNWUyNzkwZjlhMjA5NzFhMTA2ODE4ODg1ZWY6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlFZWFJqYUZOd1pXTWpaVGxtTXpabU1HTTFaams1TjJOak5tWXpZbVZoTlRnelpEZzVZamd6WW1RMU5XVmtOekZoT1RRMU5EZzNPREV5TWprNFlqVTNPVGhoTkRaaU1XRTNOQTpmaWVsZDpaR1ZrYVdOaGRHVms.field.bm9kZV90eXBl.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.bm9kZV90eXBl.short_desc": {
           "source": "The type of machines to use",
           "message": "使用するマシンのタイプ。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzAwNDIzMTJkNjhmYzJlNTE4Mjc5YjMzZTIyYzk0YTU0ZGM5M2FiNWUyNzkwZjlhMjA5NzFhMTA2ODE4ODg1ZWY6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlFZWFJqYUZOd1pXTWpaVGxtTXpabU1HTTFaams1TjJOak5tWXpZbVZoTlRnelpEZzVZamd6WW1RMU5XVmtOekZoT1RRMU5EZzNPREV5TWprNFlqVTNPVGhoTkRaaU1XRTNOQTpmaWVsZDpaR1ZrYVdOaGRHVms.field.bm9kZV90eXBl.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.bm9kZV90eXBl.desc": {
           "source": "The type of machines to use. Available options: `b1` and `t1`.",
           "message": "使用するマシンのタイプ。利用可能なオプション：`b1` および `t1`。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzAwNDIzMTJkNjhmYzJlNTE4Mjc5YjMzZTIyYzk0YTU0ZGM5M2FiNWUyNzkwZjlhMjA5NzFhMTA2ODE4ODg1ZWY6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlFZWFJqYUZOd1pXTWpaVGxtTXpabU1HTTFaams1TjJOak5tWXpZbVZoTlRnelpEZzVZamd6WW1RMU5XVmtOekZoT1RRMU5EZzNPREV5TWprNFlqVTNPVGhoTkRaaU1XRTNOQTpmaWVsZDpaR1ZrYVdOaGRHVms.field.c2NhbGluZw.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.c2NhbGluZw.display_name": {
           "source": "Scaling",
           "message": "スケーリング"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzAwNDIzMTJkNjhmYzJlNTE4Mjc5YjMzZTIyYzk0YTU0ZGM5M2FiNWUyNzkwZjlhMjA5NzFhMTA2ODE4ODg1ZWY6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlFZWFJqYUZOd1pXTWpaVGxtTXpabU1HTTFaams1TjJOak5tWXpZbVZoTlRnelpEZzVZamd6WW1RMU5XVmtOekZoT1RRMU5EZzNPREV5TWprNFlqVTNPVGhoTkRaaU1XRTNOQTpmaWVsZDpaR1ZrYVdOaGRHVms.field.c2NhbGluZw.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.c2NhbGluZw.short_desc": {
           "source": "The scaling strategy",
           "message": "スケーリング戦略"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzAwNDIzMTJkNjhmYzJlNTE4Mjc5YjMzZTIyYzk0YTU0ZGM5M2FiNWUyNzkwZjlhMjA5NzFhMTA2ODE4ODg1ZWY6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlFZWFJqYUZOd1pXTWpaVGxtTXpabU1HTTFaams1TjJOak5tWXpZbVZoTlRnelpEZzVZamd6WW1RMU5XVmtOekZoT1RRMU5EZzNPREV5TWprNFlqVTNPVGhoTkRaaU1XRTNOQTpmaWVsZDpaR1ZrYVdOaGRHVms.field.c2NhbGluZw.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.c2NhbGluZw.desc": {
           "source": "The scaling strategy. Only `Manual` is supported. Required whenever `manual` is set.",
           "message": "スケーリング戦略。`Manual` のみがサポートされています。`manual` が設定されている場合、必須です。"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjZTlmMzZmMGM1Zjk5N2NjNmYzYmVhNTgzZDg5YjgzYmQ1NWVkNzFhOTQ1NDg3ODEyMjk4YjU3OThhNDZiMWE3NA.field.bW9kZQ.display_name": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.bW9kZQ.display_name": {
           "source": "Read Capacity Mode",
           "message": "読み取り容量モード"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjZTlmMzZmMGM1Zjk5N2NjNmYzYmVhNTgzZDg5YjgzYmQ1NWVkNzFhOTQ1NDg3ODEyMjk4YjU3OThhNDZiMWE3NA.field.bW9kZQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.bW9kZQ.short_desc": {
           "source": "On-demand reads or dedicated read nodes",
           "message": "オンデマンドリードまたは専用リードノード"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjZTlmMzZmMGM1Zjk5N2NjNmYzYmVhNTgzZDg5YjgzYmQ1NWVkNzFhOTQ1NDg3ODEyMjk4YjU3OThhNDZiMWE3NA.field.bW9kZQ.desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.bW9kZQ.desc": {
           "source": "Must be `Dedicated`.",
           "message": "必須です。`Dedicated` である必要があります。"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjZTlmMzZmMGM1Zjk5N2NjNmYzYmVhNTgzZDg5YjgzYmQ1NWVkNzFhOTQ1NDg3ODEyMjk4YjU3OThhNDZiMWE3NA.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
           "source": "On demand",
           "message": "オンデマンド"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjZTlmMzZmMGM1Zjk5N2NjNmYzYmVhNTgzZDg5YjgzYmQ1NWVkNzFhOTQ1NDg3ODEyMjk4YjU3OThhNDZiMWE3NA.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
           "source": "Reads are served without dedicated nodes and billed by use.  The default, and not available on a BYOC index.",
           "message": "専用ノードなしで読み取りが提供され、使用量に応じて課金されます。デフォルトであり、BYOCインデックスでは利用できません。"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjZTlmMzZmMGM1Zjk5N2NjNmYzYmVhNTgzZDg5YjgzYmQ1NWVkNzFhOTQ1NDg3ODEyMjk4YjU3OThhNDZiMWE3NA.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
           "source": "Dedicated nodes",
           "message": "専用ノード"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjZTlmMzZmMGM1Zjk5N2NjNmYzYmVhNTgzZDg5YjgzYmQ1NWVkNzFhOTQ1NDg3ODEyMjk4YjU3OThhNDZiMWE3NA.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
           "source": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it.",
           "message": "専用ノードで読み取りが提供され、予測可能なワークロードに対応します。`node_type` および `scaling` が必要です。"
         },
@@ -1798,131 +1798,131 @@
           "source": "How reads are served.\n\n- `{\"mode\": \"OnDemand\"}` — the default; you are billed for what you read.\n- `{\"mode\": \"Dedicated\", \"node_type\": ..., \"scaling\": ...}` — dedicated read nodes for a predictable workload.\n\nA BYOC index must set `Dedicated` explicitly: it does not support on-demand, and omitting this defaults to on-demand and is rejected.",
           "message": "読み取りの提供方法。\n\n- `{\"mode\": \"OnDemand\"}` — 既定値。読み取った分だけ課金されます。\n- `{\"mode\": \"Dedicated\", \"node_type\": ..., \"scaling\": ...}` — 予測可能なワークロード向けの専用読み取りノード。\n\nBYOC インデックスでは `Dedicated` を明示的に設定する必要があります。オンデマンドはサポートされておらず、この値を省略すると既定のオンデマンドとなり拒否されます。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.display_name": {
           "source": "Read Capacity Mode",
           "message": "読み取り容量モード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.short_desc": {
           "source": "On-demand reads or dedicated read nodes",
           "message": "オンデマンドリードまたは専用リードノード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.desc": {
           "source": "The mode of the index. Possible values: `OnDemand` or `Dedicated`. Defaults to `OnDemand`. If set to `Dedicated`, `dedicated.node_type`, and `dedicated.scaling` must be specified.",
           "message": "インデックスのモード。可能な値：`OnDemand` または `Dedicated`。デフォルトは `OnDemand`。`Dedicated` に設定された場合、`dedicated.node_type`、`dedicated.scaling` を指定する必要があります。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
           "source": "On demand",
           "message": "オンデマンド"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
           "source": "Reads are served without dedicated nodes and billed by use.  The default, and not available on a BYOC index.",
           "message": "専用ノードなしで読み取りが提供され、使用量に応じて課金されます。デフォルトであり、BYOCインデックスでは利用できません。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
           "source": "Dedicated nodes",
           "message": "専用ノード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjNGQzODQ2NmY4ODAyODRmMTMxMzFiYWZhZGYwYmE5MzVkMTBiNTY3ODYzYmQ5MzRmMzM3NzA1ZmYzNjJmNTlhYg.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
           "source": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it.",
           "message": "専用ノードで読み取りが提供され、予測可能なワークロードに対応します。`node_type` および `scaling` が必要です。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.ZGVkaWNhdGVk.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.display_name": {
           "source": "Dedicated",
           "message": "スタッフ"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.ZGVkaWNhdGVk.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.short_desc": {
           "source": "Configuration for dedicated read capacity",
           "message": "専用読み取り容量の構成"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.ZGVkaWNhdGVk.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.desc": {
           "source": "Configuration for dedicated read capacity. See  [this guide](https://docs.pinecone.io/guides/index-data/dedicated-read-nodes) for more details on  how to configure dedicated read capacity.",
           "message": "専用読み取り容量の構成。専用読み取り容量の設定方法については [このガイド](https://docs.pinecone.io/guides/index-data/dedicated-read-nodes) を参照してください。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjZDRlYWViYjk2N2ZlOWRjNGRjMjZjMDZmMzZhMDQ1Y2I2OTllZTI3OWRhMTlmMTY4Y2JmMWM2ZmU3MGZhOTdlOTpvcHRpb246Y21WaFpGOWpZWEJoWTJsMGVROnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXBTWldGa1EyRndZV05wZEhsRVpXUnBZMkYwWldSVGNHVmpJemszWmpNeVkyTTFaRE14TkdGaE1UWmtOek5sTURrMlltSXpZMkV3WlRnM01qRmxNelV5TkRBek5tTTNPR0kzWlRSaE5UaGlaRGRoTm1JNU5tUmpZbVU6ZmllbGQ6WkdWa2FXTmhkR1Zr.field.bWFudWFs.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.bWFudWFs.display_name": {
           "source": "Manual",
           "message": "手動"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjZDRlYWViYjk2N2ZlOWRjNGRjMjZjMDZmMzZhMDQ1Y2I2OTllZTI3OWRhMTlmMTY4Y2JmMWM2ZmU3MGZhOTdlOTpvcHRpb246Y21WaFpGOWpZWEJoWTJsMGVROnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXBTWldGa1EyRndZV05wZEhsRVpXUnBZMkYwWldSVGNHVmpJemszWmpNeVkyTTFaRE14TkdGaE1UWmtOek5sTURrMlltSXpZMkV3WlRnM01qRmxNelV5TkRBek5tTTNPR0kzWlRSaE5UaGlaRGRoTm1JNU5tUmpZbVU6ZmllbGQ6WkdWa2FXTmhkR1Zr.field.bWFudWFs.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.bWFudWFs.short_desc": {
           "source": "The config to use for manual read capacity scaling",
           "message": "手動リード容量スケーリングに使用する設定"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjZDRlYWViYjk2N2ZlOWRjNGRjMjZjMDZmMzZhMDQ1Y2I2OTllZTI3OWRhMTlmMTY4Y2JmMWM2ZmU3MGZhOTdlOTpvcHRpb246Y21WaFpGOWpZWEJoWTJsMGVROnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXBTWldGa1EyRndZV05wZEhsRVpXUnBZMkYwWldSVGNHVmpJemszWmpNeVkyTTFaRE14TkdGaE1UWmtOek5sTURrMlltSXpZMkV3WlRnM01qRmxNelV5TkRBek5tTTNPR0kzWlRSaE5UaGlaRGRoTm1JNU5tUmpZbVU6ZmllbGQ6WkdWa2FXTmhkR1Zr.field.bWFudWFs.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.bWFudWFs.desc": {
           "source": "The config to use for manual read capacity scaling.",
           "message": "手動リード容量スケーリングに使用する設定"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsIzBhMTQ1MDlmNDIwZDU4OWQ5NmNkNDZiMDgzNzM4ZWFiOTQwZjcwMzM3MjJkZjQ3YTg4YmU5MGZhNzMxZTI5ZjY6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlRjR1ZqSXprM1pqTXlZMk0xWkRNeE5HRmhNVFprTnpObE1EazJZbUl6WTJFd1pUZzNNakZsTXpVeU5EQXpObU0zT0dJM1pUUmhOVGhpWkRkaE5tSTVObVJqWW1VOmZpZWxkOlpHVmthV05oZEdWazpmaWVsZDpiV0Z1ZFdGcw.field.cmVwbGljYXM.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsI2IyNGY4ZjIyYTk0NTQzYzk0NWE0YjVhZmVkOGJjMTk3ZWYxMGFkNTUxN2NkMGZlNDQ5MmFhZDI2ZWNmN2JmZTk.field.cmVwbGljYXM.display_name": {
           "source": "Replicas",
           "message": "レプリカ"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsIzBhMTQ1MDlmNDIwZDU4OWQ5NmNkNDZiMDgzNzM4ZWFiOTQwZjcwMzM3MjJkZjQ3YTg4YmU5MGZhNzMxZTI5ZjY6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlRjR1ZqSXprM1pqTXlZMk0xWkRNeE5HRmhNVFprTnpObE1EazJZbUl6WTJFd1pUZzNNakZsTXpVeU5EQXpObU0zT0dJM1pUUmhOVGhpWkRkaE5tSTVObVJqWW1VOmZpZWxkOlpHVmthV05oZEdWazpmaWVsZDpiV0Z1ZFdGcw.field.cmVwbGljYXM.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsI2IyNGY4ZjIyYTk0NTQzYzk0NWE0YjVhZmVkOGJjMTk3ZWYxMGFkNTUxN2NkMGZlNDQ5MmFhZDI2ZWNmN2JmZTk.field.cmVwbGljYXM.short_desc": {
           "source": "The number of replicas to use",
           "message": "使用するレプリカ数"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsIzBhMTQ1MDlmNDIwZDU4OWQ5NmNkNDZiMDgzNzM4ZWFiOTQwZjcwMzM3MjJkZjQ3YTg4YmU5MGZhNzMxZTI5ZjY6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlRjR1ZqSXprM1pqTXlZMk0xWkRNeE5HRmhNVFprTnpObE1EazJZbUl6WTJFd1pUZzNNakZsTXpVeU5EQXpObU0zT0dJM1pUUmhOVGhpWkRkaE5tSTVObVJqWW1VOmZpZWxkOlpHVmthV05oZEdWazpmaWVsZDpiV0Z1ZFdGcw.field.cmVwbGljYXM.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsI2IyNGY4ZjIyYTk0NTQzYzk0NWE0YjVhZmVkOGJjMTk3ZWYxMGFkNTUxN2NkMGZlNDQ5MmFhZDI2ZWNmN2JmZTk.field.cmVwbGljYXM.desc": {
           "source": "The number of replicas to use. Replicas duplicate the compute resources and data of an index, allowing higher query throughput and availability. Setting replicas to 0 disables the index but can be used to reduce costs while usage is paused.",
           "message": "使用するレプリカ数。レプリカはインデックスの計算リソースとデータを複製し、より高いクエリスループットと可用性を可能にします。レプリカを0に設定するとインデックスは無効化されますが、使用が一時停止されている間はコストを削減できます。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsIzBhMTQ1MDlmNDIwZDU4OWQ5NmNkNDZiMDgzNzM4ZWFiOTQwZjcwMzM3MjJkZjQ3YTg4YmU5MGZhNzMxZTI5ZjY6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlRjR1ZqSXprM1pqTXlZMk0xWkRNeE5HRmhNVFprTnpObE1EazJZbUl6WTJFd1pUZzNNakZsTXpVeU5EQXpObU0zT0dJM1pUUmhOVGhpWkRkaE5tSTVObVJqWW1VOmZpZWxkOlpHVmthV05oZEdWazpmaWVsZDpiV0Z1ZFdGcw.field.c2hhcmRz.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsI2IyNGY4ZjIyYTk0NTQzYzk0NWE0YjVhZmVkOGJjMTk3ZWYxMGFkNTUxN2NkMGZlNDQ5MmFhZDI2ZWNmN2JmZTk.field.c2hhcmRz.display_name": {
           "source": "Shards",
           "message": "シャード"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsIzBhMTQ1MDlmNDIwZDU4OWQ5NmNkNDZiMDgzNzM4ZWFiOTQwZjcwMzM3MjJkZjQ3YTg4YmU5MGZhNzMxZTI5ZjY6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlRjR1ZqSXprM1pqTXlZMk0xWkRNeE5HRmhNVFprTnpObE1EazJZbUl6WTJFd1pUZzNNakZsTXpVeU5EQXpObU0zT0dJM1pUUmhOVGhpWkRkaE5tSTVObVJqWW1VOmZpZWxkOlpHVmthV05oZEdWazpmaWVsZDpiV0Z1ZFdGcw.field.c2hhcmRz.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsI2IyNGY4ZjIyYTk0NTQzYzk0NWE0YjVhZmVkOGJjMTk3ZWYxMGFkNTUxN2NkMGZlNDQ5MmFhZDI2ZWNmN2JmZTk.field.c2hhcmRz.short_desc": {
           "source": "The number of shards to use",
           "message": "使用するシャード数"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsIzBhMTQ1MDlmNDIwZDU4OWQ5NmNkNDZiMDgzNzM4ZWFiOTQwZjcwMzM3MjJkZjQ3YTg4YmU5MGZhNzMxZTI5ZjY6b3B0aW9uOmNtVmhaRjlqWVhCaFkybDBlUTp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwU1pXRmtRMkZ3WVdOcGRIbEVaV1JwWTJGMFpXUlRjR1ZqSXprM1pqTXlZMk0xWkRNeE5HRmhNVFprTnpObE1EazJZbUl6WTJFd1pUZzNNakZsTXpVeU5EQXpObU0zT0dJM1pUUmhOVGhpWkRkaE5tSTVObVJqWW1VOmZpZWxkOlpHVmthV05oZEdWazpmaWVsZDpiV0Z1ZFdGcw.field.c2hhcmRz.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsI2IyNGY4ZjIyYTk0NTQzYzk0NWE0YjVhZmVkOGJjMTk3ZWYxMGFkNTUxN2NkMGZlNDQ5MmFhZDI2ZWNmN2JmZTk.field.c2hhcmRz.desc": {
           "source": "The number of shards to use. Shards determine the storage capacity of an index, with each shard providing 250 GB of storage.",
           "message": "使用するシャード数。シャードはインデックスのストレージ容量を決定し、1つのシャードが250GBのストレージを提供します。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjZDRlYWViYjk2N2ZlOWRjNGRjMjZjMDZmMzZhMDQ1Y2I2OTllZTI3OWRhMTlmMTY4Y2JmMWM2ZmU3MGZhOTdlOTpvcHRpb246Y21WaFpGOWpZWEJoWTJsMGVROnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXBTWldGa1EyRndZV05wZEhsRVpXUnBZMkYwWldSVGNHVmpJemszWmpNeVkyTTFaRE14TkdGaE1UWmtOek5sTURrMlltSXpZMkV3WlRnM01qRmxNelV5TkRBek5tTTNPR0kzWlRSaE5UaGlaRGRoTm1JNU5tUmpZbVU6ZmllbGQ6WkdWa2FXTmhkR1Zr.field.bm9kZV90eXBl.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.bm9kZV90eXBl.display_name": {
           "source": "Node Type",
           "message": "ノードタイプ"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjZDRlYWViYjk2N2ZlOWRjNGRjMjZjMDZmMzZhMDQ1Y2I2OTllZTI3OWRhMTlmMTY4Y2JmMWM2ZmU3MGZhOTdlOTpvcHRpb246Y21WaFpGOWpZWEJoWTJsMGVROnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXBTWldGa1EyRndZV05wZEhsRVpXUnBZMkYwWldSVGNHVmpJemszWmpNeVkyTTFaRE14TkdGaE1UWmtOek5sTURrMlltSXpZMkV3WlRnM01qRmxNelV5TkRBek5tTTNPR0kzWlRSaE5UaGlaRGRoTm1JNU5tUmpZbVU6ZmllbGQ6WkdWa2FXTmhkR1Zr.field.bm9kZV90eXBl.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.bm9kZV90eXBl.short_desc": {
           "source": "The type of machines to use",
           "message": "使用するマシンのタイプ。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjZDRlYWViYjk2N2ZlOWRjNGRjMjZjMDZmMzZhMDQ1Y2I2OTllZTI3OWRhMTlmMTY4Y2JmMWM2ZmU3MGZhOTdlOTpvcHRpb246Y21WaFpGOWpZWEJoWTJsMGVROnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXBTWldGa1EyRndZV05wZEhsRVpXUnBZMkYwWldSVGNHVmpJemszWmpNeVkyTTFaRE14TkdGaE1UWmtOek5sTURrMlltSXpZMkV3WlRnM01qRmxNelV5TkRBek5tTTNPR0kzWlRSaE5UaGlaRGRoTm1JNU5tUmpZbVU6ZmllbGQ6WkdWa2FXTmhkR1Zr.field.bm9kZV90eXBl.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.bm9kZV90eXBl.desc": {
           "source": "The type of machines to use. Available options: `b1` and `t1`. `t1` includes increased processing power and memory.",
           "message": "使用するマシンのタイプ。利用可能なオプション：`b1` および `t1`。`t1`は処理能力とメモリが増加している。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjZDRlYWViYjk2N2ZlOWRjNGRjMjZjMDZmMzZhMDQ1Y2I2OTllZTI3OWRhMTlmMTY4Y2JmMWM2ZmU3MGZhOTdlOTpvcHRpb246Y21WaFpGOWpZWEJoWTJsMGVROnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXBTWldGa1EyRndZV05wZEhsRVpXUnBZMkYwWldSVGNHVmpJemszWmpNeVkyTTFaRE14TkdGaE1UWmtOek5sTURrMlltSXpZMkV3WlRnM01qRmxNelV5TkRBek5tTTNPR0kzWlRSaE5UaGlaRGRoTm1JNU5tUmpZbVU6ZmllbGQ6WkdWa2FXTmhkR1Zr.field.c2NhbGluZw.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.c2NhbGluZw.display_name": {
           "source": "Scaling",
           "message": "スケーリング"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjZDRlYWViYjk2N2ZlOWRjNGRjMjZjMDZmMzZhMDQ1Y2I2OTllZTI3OWRhMTlmMTY4Y2JmMWM2ZmU3MGZhOTdlOTpvcHRpb246Y21WaFpGOWpZWEJoWTJsMGVROnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXBTWldGa1EyRndZV05wZEhsRVpXUnBZMkYwWldSVGNHVmpJemszWmpNeVkyTTFaRE14TkdGaE1UWmtOek5sTURrMlltSXpZMkV3WlRnM01qRmxNelV5TkRBek5tTTNPR0kzWlRSaE5UaGlaRGRoTm1JNU5tUmpZbVU6ZmllbGQ6WkdWa2FXTmhkR1Zr.field.c2NhbGluZw.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.c2NhbGluZw.short_desc": {
           "source": "The type of scaling strategy to use",
           "message": "使用するスケーリング戦略のタイプ。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjZDRlYWViYjk2N2ZlOWRjNGRjMjZjMDZmMzZhMDQ1Y2I2OTllZTI3OWRhMTlmMTY4Y2JmMWM2ZmU3MGZhOTdlOTpvcHRpb246Y21WaFpGOWpZWEJoWTJsMGVROnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXBTWldGa1EyRndZV05wZEhsRVpXUnBZMkYwWldSVGNHVmpJemszWmpNeVkyTTFaRE14TkdGaE1UWmtOek5sTURrMlltSXpZMkV3WlRnM01qRmxNelV5TkRBek5tTTNPR0kzWlRSaE5UaGlaRGRoTm1JNU5tUmpZbVU6ZmllbGQ6WkdWa2FXTmhkR1Zr.field.c2NhbGluZw.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.c2NhbGluZw.desc": {
           "source": "The type of scaling strategy to use.",
           "message": "使用するスケーリング戦略のタイプ。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.display_name": {
           "source": "Read Capacity Mode",
           "message": "読み取り容量モード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.short_desc": {
           "source": "On-demand reads or dedicated read nodes",
           "message": "オンデマンドリードまたは専用リードノード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.desc": {
           "source": "The mode of the index. Possible values: `OnDemand` or `Dedicated`. Defaults to `OnDemand`. If set to `Dedicated`, `dedicated.node_type`, and `dedicated.scaling` must be specified.",
           "message": "インデックスのモード。可能な値：`OnDemand` または `Dedicated`。デフォルトは `OnDemand`。`Dedicated` に設定された場合、`dedicated.node_type`、`dedicated.scaling` を指定する必要があります。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
           "source": "On demand",
           "message": "オンデマンド"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
           "source": "Reads are served without dedicated nodes and billed by use.  The default, and not available on a BYOC index.",
           "message": "専用ノードなしで読み取りが提供され、使用量に応じて課金されます。デフォルトであり、BYOCインデックスでは利用できません。"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
           "source": "Dedicated nodes",
           "message": "専用ノード"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzk3ZjMyY2M1ZDMxNGFhMTZkNzNlMDk2YmIzY2EwZTg3MjFlMzUyNDAzNmM3OGI3ZTRhNThiZDdhNmI5NmRjYmU.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
           "source": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it.",
           "message": "専用ノードで読み取りが提供され、予測可能なワークロードに対応します。`node_type` および `scaling` が必要です。"
         },
@@ -2738,27 +2738,27 @@
           "source": "Vector sparse data. Represented as a list of indices and a list of  corresponded values, which must be with the same length.",
           "message": "ベクトルスパースデータ。インデックスのリストと対応する値のリストで表され、長さは同じでなければなりません。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjOWRlNTg4YjE2MGYxODJiYWM5ZmY1MTI4NjdlOWQxMmQ5NWNiMmNkMzkyMWE5NTQxM2YxOTJjMjc2NGQyYzc2ZjpvcHRpb246ZG1WamRHOXljdzpmaWVsZDpjM0JoY25ObFZtRnNkV1Z6.field.aW5kaWNlcw.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.aW5kaWNlcw.display_name": {
           "source": "Indices",
           "message": "インデックス"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjOWRlNTg4YjE2MGYxODJiYWM5ZmY1MTI4NjdlOWQxMmQ5NWNiMmNkMzkyMWE5NTQxM2YxOTJjMjc2NGQyYzc2ZjpvcHRpb246ZG1WamRHOXljdzpmaWVsZDpjM0JoY25ObFZtRnNkV1Z6.field.aW5kaWNlcw.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.aW5kaWNlcw.short_desc": {
           "source": "The indices of the sparse data",
           "message": "スパースデータのインデックス"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjOWRlNTg4YjE2MGYxODJiYWM5ZmY1MTI4NjdlOWQxMmQ5NWNiMmNkMzkyMWE5NTQxM2YxOTJjMjc2NGQyYzc2ZjpvcHRpb246ZG1WamRHOXljdzpmaWVsZDpjM0JoY25ObFZtRnNkV1Z6.field.aW5kaWNlcw.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.aW5kaWNlcw.desc": {
           "source": "The indices of the sparse data.",
           "message": "スパースデータのインデックス。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjOWRlNTg4YjE2MGYxODJiYWM5ZmY1MTI4NjdlOWQxMmQ5NWNiMmNkMzkyMWE5NTQxM2YxOTJjMjc2NGQyYzc2ZjpvcHRpb246ZG1WamRHOXljdzpmaWVsZDpjM0JoY25ObFZtRnNkV1Z6.field.dmFsdWVz.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.dmFsdWVz.display_name": {
           "source": "Values",
           "message": "値"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjOWRlNTg4YjE2MGYxODJiYWM5ZmY1MTI4NjdlOWQxMmQ5NWNiMmNkMzkyMWE5NTQxM2YxOTJjMjc2NGQyYzc2ZjpvcHRpb246ZG1WamRHOXljdzpmaWVsZDpjM0JoY25ObFZtRnNkV1Z6.field.dmFsdWVz.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.dmFsdWVz.short_desc": {
           "source": "The corresponding values of the sparse data, which must be with the same…",
           "message": "スパースデータに対応する値。インデックスと同一の長さである必要があります。…"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjOWRlNTg4YjE2MGYxODJiYWM5ZmY1MTI4NjdlOWQxMmQ5NWNiMmNkMzkyMWE5NTQxM2YxOTJjMjc2NGQyYzc2ZjpvcHRpb246ZG1WamRHOXljdzpmaWVsZDpjM0JoY25ObFZtRnNkV1Z6.field.dmFsdWVz.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.dmFsdWVz.desc": {
           "source": "The corresponding values of the sparse data, which must be with the same length as the indices.",
           "message": "スパースデータに対応する値。インデックスと同一の長さである必要があります。"
         },
@@ -3838,27 +3838,27 @@
           "source": "Vector sparse data. Represented as a list of indices and a list of  corresponded values, which must be with the same length.",
           "message": "ベクトルスパースデータ。インデックスのリストと対応する値のリストで表され、長さは同じでなければなりません。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjOWRlNTg4YjE2MGYxODJiYWM5ZmY1MTI4NjdlOWQxMmQ5NWNiMmNkMzkyMWE5NTQxM2YxOTJjMjc2NGQyYzc2ZjpvcHRpb246YzJOdmNtVmZZbms6ZmllbGQ6YzNCaGNuTmxYM1poYkhWbGN3.field.aW5kaWNlcw.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.aW5kaWNlcw.display_name": {
           "source": "Indices",
           "message": "インデックス"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjOWRlNTg4YjE2MGYxODJiYWM5ZmY1MTI4NjdlOWQxMmQ5NWNiMmNkMzkyMWE5NTQxM2YxOTJjMjc2NGQyYzc2ZjpvcHRpb246YzJOdmNtVmZZbms6ZmllbGQ6YzNCaGNuTmxYM1poYkhWbGN3.field.aW5kaWNlcw.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.aW5kaWNlcw.short_desc": {
           "source": "The indices of the sparse data",
           "message": "スパースデータのインデックス"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjOWRlNTg4YjE2MGYxODJiYWM5ZmY1MTI4NjdlOWQxMmQ5NWNiMmNkMzkyMWE5NTQxM2YxOTJjMjc2NGQyYzc2ZjpvcHRpb246YzJOdmNtVmZZbms6ZmllbGQ6YzNCaGNuTmxYM1poYkhWbGN3.field.aW5kaWNlcw.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.aW5kaWNlcw.desc": {
           "source": "The indices of the sparse data.",
           "message": "スパースデータのインデックス。"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjOWRlNTg4YjE2MGYxODJiYWM5ZmY1MTI4NjdlOWQxMmQ5NWNiMmNkMzkyMWE5NTQxM2YxOTJjMjc2NGQyYzc2ZjpvcHRpb246YzJOdmNtVmZZbms6ZmllbGQ6YzNCaGNuTmxYM1poYkhWbGN3.field.dmFsdWVz.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.dmFsdWVz.display_name": {
           "source": "Values",
           "message": "値"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjOWRlNTg4YjE2MGYxODJiYWM5ZmY1MTI4NjdlOWQxMmQ5NWNiMmNkMzkyMWE5NTQxM2YxOTJjMjc2NGQyYzc2ZjpvcHRpb246YzJOdmNtVmZZbms6ZmllbGQ6YzNCaGNuTmxYM1poYkhWbGN3.field.dmFsdWVz.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.dmFsdWVz.short_desc": {
           "source": "The corresponding values of the sparse data, which must be with the same…",
           "message": "スパースデータに対応する値。インデックスと同一の長さである必要があります。…"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjOWRlNTg4YjE2MGYxODJiYWM5ZmY1MTI4NjdlOWQxMmQ5NWNiMmNkMzkyMWE5NTQxM2YxOTJjMjc2NGQyYzc2ZjpvcHRpb246YzJOdmNtVmZZbms6ZmllbGQ6YzNCaGNuTmxYM1poYkhWbGN3.field.dmFsdWVz.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.dmFsdWVz.desc": {
           "source": "The corresponding values of the sparse data, which must be with the same length as the indices.",
           "message": "スパースデータに対応する値。インデックスと同一の長さである必要があります。"
         },

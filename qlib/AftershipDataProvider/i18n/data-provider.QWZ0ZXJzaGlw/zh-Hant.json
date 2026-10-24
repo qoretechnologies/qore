@@ -1931,47 +1931,47 @@
           "source": "Shipping method for the return",
           "message": "退貨的運送方式"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.display_name": {
           "source": "Return Method Type",
           "message": "回傳方法類型"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.short_desc": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.short_desc": {
           "source": "Type of return shipping method",
           "message": "退貨運送方式類型"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.desc": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.desc": {
           "source": "Return shipping method type",
           "message": "回傳運送方式類型"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.allowed-value.c3RyaW5nOnJldGFpbGVyX2xhYmVs.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.allowed-value.c3RyaW5nOnJldGFpbGVyX2xhYmVs.display_name": {
           "source": "Retailer Label",
           "message": "零售商標籤"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbWVyX2NvdXJpZXI.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbWVyX2NvdXJpZXI.display_name": {
           "source": "Customer Courier",
           "message": "客戶自行寄件"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.allowed-value.c3RyaW5nOmhhcHB5X3JldHVybnM.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.allowed-value.c3RyaW5nOmhhcHB5X3JldHVybnM.display_name": {
           "source": "Happy Returns",
           "message": "Happy Returns"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.allowed-value.c3RyaW5nOmluX3N0b3Jl.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.allowed-value.c3RyaW5nOmluX3N0b3Jl.display_name": {
           "source": "In Store",
           "message": "門市退貨"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.allowed-value.c3RyaW5nOmdyZWVuX3JldHVybg.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.allowed-value.c3RyaW5nOmdyZWVuX3JldHVybg.display_name": {
           "source": "Green Return",
           "message": "綠色退貨"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.allowed-value.c3RyaW5nOnJldGFpbF9yZXdvcmtz.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.allowed-value.c3RyaW5nOnJldGFpbF9yZXdvcmtz.display_name": {
           "source": "Retail Reworks",
           "message": "Retail Reworks"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.allowed-value.c3RyaW5nOmNhcnJpZXJfcGlja3Vw.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.allowed-value.c3RyaW5nOmNhcnJpZXJfcGlja3Vw.display_name": {
           "source": "Carrier Pickup",
           "message": "承運商上門取件"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.allowed-value.c3RyaW5nOmNhcnJpZXJfZHJvcG9mZg.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.allowed-value.c3RyaW5nOmNhcnJpZXJfZHJvcG9mZg.display_name": {
           "source": "Carrier Dropoff",
           "message": "承運商自送站點"
         },

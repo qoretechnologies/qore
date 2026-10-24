@@ -439,39 +439,39 @@
           "source": "List of tool calls emitted by the assistant.  Present only on assistant messages that chose to invoke a tool.",
           "message": "Seznam volání nástrojů vydaných asistentem. Přítomno pouze u zpráv asistenta, který zvolil spuštění nástroje."
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.ZnVuY3Rpb24.display_name": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.ZnVuY3Rpb24.display_name": {
           "source": "Function Call",
           "message": "Volání funkce"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.ZnVuY3Rpb24.short_desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.ZnVuY3Rpb24.short_desc": {
           "source": "Function name and JSON-encoded arguments",
           "message": "Název funkce a argumenty zakódované jako JSON"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.ZnVuY3Rpb24.desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.ZnVuY3Rpb24.desc": {
           "source": "Hash with `name` (string) and `arguments` (JSON-encoded string) describing the function the model wants to invoke.",
           "message": "Kontrolní součet s `name` (řetězec) a `arguments` (JSON zakódovaný řetězec) popisující funkci, kterou model chce zavolat."
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.aWQ.display_name": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.aWQ.display_name": {
           "source": "Tool Call ID",
           "message": "ID volání nástroje"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.aWQ.short_desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.aWQ.short_desc": {
           "source": "Unique identifier for the tool call",
           "message": "Jedinečný identifikátor volání nástroje"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.aWQ.desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.aWQ.desc": {
           "source": "Unique identifier for this tool call.  The same `id` must be echoed back in the corresponding `tool` role message that returns the tool's result.",
           "message": "Jedinečný identifikátor tohoto volání nástroje. Stejné `id` musí být vráceno v odpovídajícím zprávě role `tool` obsahující výsledek nástroje."
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.dHlwZQ.display_name": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.dHlwZQ.display_name": {
           "source": "Tool Type",
           "message": "Typ nástroje"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.dHlwZQ.short_desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.dHlwZQ.short_desc": {
           "source": "Type of tool invoked",
           "message": "Typ vyvolaného nástroje"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.dHlwZQ.desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.dHlwZQ.desc": {
           "source": "Type of tool invoked.  Currently `function` is the only supported type for OpenAI-compatible tool calling.",
           "message": "Typ vyvolaného nástroje. V současnosti je podporován pouze typ `function` pro kompatibilní nástroje OpenAI."
         },

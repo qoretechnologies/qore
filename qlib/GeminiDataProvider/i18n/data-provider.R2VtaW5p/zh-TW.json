@@ -411,51 +411,51 @@
           "source": "Ordered list of content parts that make up this message",
           "message": "組成此訊息的內容部分順序清單"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.aW5saW5lX2RhdGE.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.aW5saW5lX2RhdGE.display_name": {
           "source": "Inline Data",
           "message": "內嵌資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.aW5saW5lX2RhdGE.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.aW5saW5lX2RhdGE.short_desc": {
           "source": "Inline media data",
           "message": "內嵌媒體資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.aW5saW5lX2RhdGE.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.aW5saW5lX2RhdGE.desc": {
           "source": "Inline media data such as images, audio, or video; mutually exclusive with `text`",
           "message": "內嵌媒體資料，例如影像、音訊或影片；與 `text` 互斥"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.ZGF0YQ.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.ZGF0YQ.display_name": {
           "source": "Data",
           "message": "資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.ZGF0YQ.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.ZGF0YQ.short_desc": {
           "source": "Base64-encoded binary data",
           "message": "Base64 編碼的二進位資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.ZGF0YQ.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.ZGF0YQ.desc": {
           "source": "Base64-encoded binary data (e.g., image, audio, video)",
           "message": "Base64 編碼的二進位資料（例如：影像、音訊、影片）"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.bWltZV90eXBl.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.bWltZV90eXBl.display_name": {
           "source": "MIME Type",
           "message": "MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.bWltZV90eXBl.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.bWltZV90eXBl.short_desc": {
           "source": "The MIME type of the inline data",
           "message": "內嵌資料的 MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.bWltZV90eXBl.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.bWltZV90eXBl.desc": {
           "source": "The IANA standard MIME type of the source data",
           "message": "來源資料的 IANA 標準 MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.dGV4dA.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.dGV4dA.display_name": {
           "source": "Text",
           "message": "文字"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.dGV4dA.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.dGV4dA.short_desc": {
           "source": "The text content of the part",
           "message": "部分之文字內容"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.dGV4dA.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.dGV4dA.desc": {
           "source": "The text content of the part; mutually exclusive with `inline_data`",
           "message": "部分之文字內容；與 `inline_data` 互斥"
         },
@@ -919,51 +919,51 @@
           "source": "Ordered list of content parts that make up this message",
           "message": "組成此訊息的內容部分順序清單"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.aW5saW5lX2RhdGE.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.aW5saW5lX2RhdGE.display_name": {
           "source": "Inline Data",
           "message": "內嵌資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.aW5saW5lX2RhdGE.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.aW5saW5lX2RhdGE.short_desc": {
           "source": "Inline media data",
           "message": "內嵌媒體資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.aW5saW5lX2RhdGE.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.aW5saW5lX2RhdGE.desc": {
           "source": "Inline media data such as images, audio, or video; mutually exclusive with `text`",
           "message": "內嵌媒體資料，例如影像、音訊或影片；與 `text` 互斥"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.ZGF0YQ.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.ZGF0YQ.display_name": {
           "source": "Data",
           "message": "資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.ZGF0YQ.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.ZGF0YQ.short_desc": {
           "source": "Base64-encoded binary data",
           "message": "Base64 編碼的二進位資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.ZGF0YQ.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.ZGF0YQ.desc": {
           "source": "Base64-encoded binary data (e.g., image, audio, video)",
           "message": "Base64 編碼的二進位資料（例如：影像、音訊、影片）"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.bWltZV90eXBl.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.bWltZV90eXBl.display_name": {
           "source": "MIME Type",
           "message": "MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.bWltZV90eXBl.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.bWltZV90eXBl.short_desc": {
           "source": "The MIME type of the inline data",
           "message": "內嵌資料的 MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.bWltZV90eXBl.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.bWltZV90eXBl.desc": {
           "source": "The IANA standard MIME type of the source data",
           "message": "來源資料的 IANA 標準 MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.dGV4dA.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.dGV4dA.display_name": {
           "source": "Text",
           "message": "文字"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.dGV4dA.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.dGV4dA.short_desc": {
           "source": "The text content of the part",
           "message": "部分之文字內容"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.dGV4dA.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.dGV4dA.desc": {
           "source": "The text content of the part; mutually exclusive with `inline_data`",
           "message": "部分之文字內容；與 `inline_data` 互斥"
         },
@@ -1383,51 +1383,51 @@
           "source": "Ordered list of content parts that make up this message",
           "message": "組成此訊息的內容部分順序清單"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZjpvcHRpb246WTI5dWRHVnVkQTpmaWVsZDpjR0Z5ZEhN.field.aW5saW5lX2RhdGE.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZg.field.aW5saW5lX2RhdGE.display_name": {
           "source": "Inline Data",
           "message": "內嵌資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZjpvcHRpb246WTI5dWRHVnVkQTpmaWVsZDpjR0Z5ZEhN.field.aW5saW5lX2RhdGE.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZg.field.aW5saW5lX2RhdGE.short_desc": {
           "source": "Inline media data",
           "message": "內嵌媒體資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZjpvcHRpb246WTI5dWRHVnVkQTpmaWVsZDpjR0Z5ZEhN.field.aW5saW5lX2RhdGE.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZg.field.aW5saW5lX2RhdGE.desc": {
           "source": "Inline media data such as images, audio, or video; mutually exclusive with `text`",
           "message": "內嵌媒體資料，例如影像、音訊或影片；與 `text` 互斥"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE6b3B0aW9uOlkyOXVkR1Z1ZEE6ZmllbGQ6Y0dGeWRITTpmaWVsZDphVzVzYVc1bFgyUmhkR0U.field.ZGF0YQ.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE.field.ZGF0YQ.display_name": {
           "source": "Data",
           "message": "資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE6b3B0aW9uOlkyOXVkR1Z1ZEE6ZmllbGQ6Y0dGeWRITTpmaWVsZDphVzVzYVc1bFgyUmhkR0U.field.ZGF0YQ.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE.field.ZGF0YQ.short_desc": {
           "source": "Base64-encoded binary data",
           "message": "Base64 編碼的二進位資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE6b3B0aW9uOlkyOXVkR1Z1ZEE6ZmllbGQ6Y0dGeWRITTpmaWVsZDphVzVzYVc1bFgyUmhkR0U.field.ZGF0YQ.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE.field.ZGF0YQ.desc": {
           "source": "Base64-encoded binary data (e.g., image, audio, video)",
           "message": "Base64 編碼的二進位資料（例如：影像、音訊、影片）"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE6b3B0aW9uOlkyOXVkR1Z1ZEE6ZmllbGQ6Y0dGeWRITTpmaWVsZDphVzVzYVc1bFgyUmhkR0U.field.bWltZV90eXBl.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE.field.bWltZV90eXBl.display_name": {
           "source": "MIME Type",
           "message": "MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE6b3B0aW9uOlkyOXVkR1Z1ZEE6ZmllbGQ6Y0dGeWRITTpmaWVsZDphVzVzYVc1bFgyUmhkR0U.field.bWltZV90eXBl.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE.field.bWltZV90eXBl.short_desc": {
           "source": "The MIME type of the inline data",
           "message": "內嵌資料的 MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE6b3B0aW9uOlkyOXVkR1Z1ZEE6ZmllbGQ6Y0dGeWRITTpmaWVsZDphVzVzYVc1bFgyUmhkR0U.field.bWltZV90eXBl.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE.field.bWltZV90eXBl.desc": {
           "source": "The IANA standard MIME type of the source data",
           "message": "來源資料的 IANA 標準 MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZjpvcHRpb246WTI5dWRHVnVkQTpmaWVsZDpjR0Z5ZEhN.field.dGV4dA.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZg.field.dGV4dA.display_name": {
           "source": "Text",
           "message": "文字"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZjpvcHRpb246WTI5dWRHVnVkQTpmaWVsZDpjR0Z5ZEhN.field.dGV4dA.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZg.field.dGV4dA.short_desc": {
           "source": "The text content of the part",
           "message": "部分之文字內容"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZjpvcHRpb246WTI5dWRHVnVkQTpmaWVsZDpjR0Z5ZEhN.field.dGV4dA.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlpXMWlaV1F0WTI5dWRHVnVkQTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZg.field.dGV4dA.desc": {
           "source": "The text content of the part; mutually exclusive with `inline_data`",
           "message": "部分之文字內容；與 `inline_data` 互斥"
         },
@@ -1507,91 +1507,91 @@
           "source": "The content to embed. Only the `parts.text` fields will be counted. For simple text, use the `text` field instead",
           "message": "要嵌入的內容。僅會計算 `parts.text` 欄位。若是簡單文字，請改用 `text` 欄位"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOlkyOXVkR1Z1ZEE.field.cGFydHM.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ.field.cGFydHM.display_name": {
           "source": "Parts",
           "message": "部分"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOlkyOXVkR1Z1ZEE.field.cGFydHM.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ.field.cGFydHM.short_desc": {
           "source": "The content parts",
           "message": "內容部分"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOlkyOXVkR1Z1ZEE.field.cGFydHM.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ.field.cGFydHM.desc": {
           "source": "Ordered list of content parts that make up this message",
           "message": "組成此訊息的內容部分順序清單"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZjpvcHRpb246Y21WeGRXVnpkSE06ZmllbGQ6WTI5dWRHVnVkQTpmaWVsZDpjR0Z5ZEhN.field.aW5saW5lX2RhdGE.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZg.field.aW5saW5lX2RhdGE.display_name": {
           "source": "Inline Data",
           "message": "內嵌資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZjpvcHRpb246Y21WeGRXVnpkSE06ZmllbGQ6WTI5dWRHVnVkQTpmaWVsZDpjR0Z5ZEhN.field.aW5saW5lX2RhdGE.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZg.field.aW5saW5lX2RhdGE.short_desc": {
           "source": "Inline media data",
           "message": "內嵌媒體資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZjpvcHRpb246Y21WeGRXVnpkSE06ZmllbGQ6WTI5dWRHVnVkQTpmaWVsZDpjR0Z5ZEhN.field.aW5saW5lX2RhdGE.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZg.field.aW5saW5lX2RhdGE.desc": {
           "source": "Inline media data such as images, audio, or video; mutually exclusive with `text`",
           "message": "內嵌媒體資料，例如影像、音訊或影片；與 `text` 互斥"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOlkyOXVkR1Z1ZEE6ZmllbGQ6Y0dGeWRITTpmaWVsZDphVzVzYVc1bFgyUmhkR0U.field.ZGF0YQ.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE.field.ZGF0YQ.display_name": {
           "source": "Data",
           "message": "資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOlkyOXVkR1Z1ZEE6ZmllbGQ6Y0dGeWRITTpmaWVsZDphVzVzYVc1bFgyUmhkR0U.field.ZGF0YQ.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE.field.ZGF0YQ.short_desc": {
           "source": "Base64-encoded binary data",
           "message": "Base64 編碼的二進位資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOlkyOXVkR1Z1ZEE6ZmllbGQ6Y0dGeWRITTpmaWVsZDphVzVzYVc1bFgyUmhkR0U.field.ZGF0YQ.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE.field.ZGF0YQ.desc": {
           "source": "Base64-encoded binary data (e.g., image, audio, video)",
           "message": "Base64 編碼的二進位資料（例如：影像、音訊、影片）"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOlkyOXVkR1Z1ZEE6ZmllbGQ6Y0dGeWRITTpmaWVsZDphVzVzYVc1bFgyUmhkR0U.field.bWltZV90eXBl.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE.field.bWltZV90eXBl.display_name": {
           "source": "MIME Type",
           "message": "MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOlkyOXVkR1Z1ZEE6ZmllbGQ6Y0dGeWRITTpmaWVsZDphVzVzYVc1bFgyUmhkR0U.field.bWltZV90eXBl.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE.field.bWltZV90eXBl.short_desc": {
           "source": "The MIME type of the inline data",
           "message": "內嵌資料的 MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOlkyOXVkR1Z1ZEE6ZmllbGQ6Y0dGeWRITTpmaWVsZDphVzVzYVc1bFgyUmhkR0U.field.bWltZV90eXBl.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlJbmxpbmVEYXRhRGF0YVR5cGU6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlIzY0ODIzYmQxNjQyMWFlZDZiNzBhMWZmMWY0NjIyYjFmOTc4ZGNmZjE4MjYyMTYyYmM5YzFmNWU4YmQ3YjNhZDE.field.bWltZV90eXBl.desc": {
           "source": "The IANA standard MIME type of the source data",
           "message": "來源資料的 IANA 標準 MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZjpvcHRpb246Y21WeGRXVnpkSE06ZmllbGQ6WTI5dWRHVnVkQTpmaWVsZDpjR0Z5ZEhN.field.dGV4dA.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZg.field.dGV4dA.display_name": {
           "source": "Text",
           "message": "文字"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZjpvcHRpb246Y21WeGRXVnpkSE06ZmllbGQ6WTI5dWRHVnVkQTpmaWVsZDpjR0Z5ZEhN.field.dGV4dA.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZg.field.dGV4dA.short_desc": {
           "source": "The text content of the part",
           "message": "部分之文字內容"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZjpvcHRpb246Y21WeGRXVnpkSE06ZmllbGQ6WTI5dWRHVnVkQTpmaWVsZDpjR0Z5ZEhN.field.dGV4dA.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50UGFydERhdGFUeXBlOmhhc2g8YXV0bz4jYmYwNTVhZjllNTc4ZGYyMzY5ODVjZGIxMjc4MzBjOWVkNjYzZWEwYzAxZDZlNWY1MTRmYWQ3NThiZmNkYmIzZg.field.dGV4dA.desc": {
           "source": "The text content of the part; mutually exclusive with `inline_data`",
           "message": "部分之文字內容；與 `inline_data` 互斥"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOlkyOXVkR1Z1ZEE.field.cm9sZQ.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ.field.cm9sZQ.display_name": {
           "source": "Role",
           "message": "角色"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOlkyOXVkR1Z1ZEE.field.cm9sZQ.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ.field.cm9sZQ.short_desc": {
           "source": "The role of the content author",
           "message": "內容作者的角色"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOlkyOXVkR1Z1ZEE.field.cm9sZQ.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ.field.cm9sZQ.desc": {
           "source": "The role of the content author: `user` or `model`",
           "message": "內容作者的角色：`user` 或 `model`"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOlkyOXVkR1Z1ZEE.field.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ.field.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
           "source": "User",
           "message": "使用者"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOlkyOXVkR1Z1ZEE.field.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ.field.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
           "source": "Content from the user",
           "message": "來自使用者的內容"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOlkyOXVkR1Z1ZEE.field.cm9sZQ.allowed-value.c3RyaW5nOm1vZGVs.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ.field.cm9sZQ.allowed-value.c3RyaW5nOm1vZGVs.display_name": {
           "source": "Model",
           "message": "模型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOlkyOXVkR1Z1ZEE.field.cm9sZQ.allowed-value.c3RyaW5nOm1vZGVs.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlltRjBZMmd0WlcxaVpXUTpHZW1pbmlDb250ZW50RGF0YVR5cGU6R2VtaW5pQ29udGVudERhdGFUeXBlIzU0NDllMzc0ZDcwZTkzZDMyNDdlOTkxODU0ZDk0YjkwZDE3MGZiY2JiM2YxNTkzOTNkYmEwZjFlZmU4Njg4YjQ.field.cm9sZQ.allowed-value.c3RyaW5nOm1vZGVs.desc": {
           "source": "Content from the model",
           "message": "來自模型的內容"
         },
@@ -1755,51 +1755,51 @@
           "source": "Ordered list of content parts that make up this message",
           "message": "組成此訊息的內容部分順序清單"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.aW5saW5lX2RhdGE.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.aW5saW5lX2RhdGE.display_name": {
           "source": "Inline Data",
           "message": "內嵌資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.aW5saW5lX2RhdGE.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.aW5saW5lX2RhdGE.short_desc": {
           "source": "Inline media data",
           "message": "內嵌媒體資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.aW5saW5lX2RhdGE.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.aW5saW5lX2RhdGE.desc": {
           "source": "Inline media data such as images, audio, or video; mutually exclusive with `text`",
           "message": "內嵌媒體資料，例如影像、音訊或影片；與 `text` 互斥"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.ZGF0YQ.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.ZGF0YQ.display_name": {
           "source": "Data",
           "message": "資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.ZGF0YQ.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.ZGF0YQ.short_desc": {
           "source": "Base64-encoded binary data",
           "message": "Base64 編碼的二進位資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.ZGF0YQ.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.ZGF0YQ.desc": {
           "source": "Base64-encoded binary data (e.g., image, audio, video)",
           "message": "Base64 編碼的二進位資料（例如：影像、音訊、影片）"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.bWltZV90eXBl.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.bWltZV90eXBl.display_name": {
           "source": "MIME Type",
           "message": "MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.bWltZV90eXBl.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.bWltZV90eXBl.short_desc": {
           "source": "The MIME type of the inline data",
           "message": "內嵌資料的 MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.bWltZV90eXBl.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.bWltZV90eXBl.desc": {
           "source": "The IANA standard MIME type of the source data",
           "message": "來源資料的 IANA 標準 MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.dGV4dA.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.dGV4dA.display_name": {
           "source": "Text",
           "message": "文字"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.dGV4dA.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.dGV4dA.short_desc": {
           "source": "The text content of the part",
           "message": "部分之文字內容"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.dGV4dA.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkyOTFiblF0ZEc5clpXNXo6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.dGV4dA.desc": {
           "source": "The text content of the part; mutually exclusive with `inline_data`",
           "message": "部分之文字內容；與 `inline_data` 互斥"
         },
@@ -2119,51 +2119,51 @@
           "source": "Ordered list of content parts that make up this message",
           "message": "組成此訊息的內容部分順序清單"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.aW5saW5lX2RhdGE.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.aW5saW5lX2RhdGE.display_name": {
           "source": "Inline Data",
           "message": "內嵌資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.aW5saW5lX2RhdGE.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.aW5saW5lX2RhdGE.short_desc": {
           "source": "Inline media data",
           "message": "內嵌媒體資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.aW5saW5lX2RhdGE.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.aW5saW5lX2RhdGE.desc": {
           "source": "Inline media data such as images, audio, or video; mutually exclusive with `text`",
           "message": "內嵌媒體資料，例如影像、音訊或影片；與 `text` 互斥"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.ZGF0YQ.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.ZGF0YQ.display_name": {
           "source": "Data",
           "message": "資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.ZGF0YQ.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.ZGF0YQ.short_desc": {
           "source": "Base64-encoded binary data",
           "message": "Base64 編碼的二進位資料"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.ZGF0YQ.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.ZGF0YQ.desc": {
           "source": "Base64-encoded binary data (e.g., image, audio, video)",
           "message": "Base64 編碼的二進位資料（例如：影像、音訊、影片）"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.bWltZV90eXBl.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.bWltZV90eXBl.display_name": {
           "source": "MIME Type",
           "message": "MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.bWltZV90eXBl.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.bWltZV90eXBl.short_desc": {
           "source": "The MIME type of the inline data",
           "message": "內嵌資料的 MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQxOm9wdGlvbjpZMjl1ZEdWdWRITTpmaWVsZDpjR0Z5ZEhNOmZpZWxkOmFXNXNhVzVsWDJSaGRHRQ.field.bWltZV90eXBl.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pSW5saW5lRGF0YURhdGFUeXBlOkdlbWluaUlubGluZURhdGFEYXRhVHlwZSM2NDgyM2JkMTY0MjFhZWQ2YjcwYTFmZjFmNDYyMmIxZjk3OGRjZmYxODI2MjE2MmJjOWMxZjVlOGJkN2IzYWQx.field.bWltZV90eXBl.desc": {
           "source": "The IANA standard MIME type of the source data",
           "message": "來源資料的 IANA 標準 MIME 類型"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.dGV4dA.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.dGV4dA.display_name": {
           "source": "Text",
           "message": "文字"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.dGV4dA.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.dGV4dA.short_desc": {
           "source": "The text content of the part",
           "message": "部分之文字內容"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y6b3B0aW9uOlkyOXVkR1Z1ZEhNOmZpZWxkOmNHRnlkSE0.field.dGV4dA.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOlkzSmxZWFJsTFdOaFkyaGxaQzFqYjI1MFpXNTA6R2VtaW5pQ29udGVudFBhcnREYXRhVHlwZTpoYXNoPGF1dG8-I2JmMDU1YWY5ZTU3OGRmMjM2OTg1Y2RiMTI3ODMwYzllZDY2M2VhMGMwMWQ2ZTVmNTE0ZmFkNzU4YmZjZGJiM2Y.field.dGV4dA.desc": {
           "source": "The text content of the part; mutually exclusive with `inline_data`",
           "message": "部分之文字內容；與 `inline_data` 互斥"
         },
@@ -2495,55 +2495,55 @@
           "source": "Use `thinkingLevel` for Gemini 3.x or `thinkingBudget` for Gemini 2.5.",
           "message": "Gemini 3.x 請使用 `thinkingLevel`，Gemini 2.5 請使用 `thinkingBudget`。"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.aW5jbHVkZVRob3VnaHRz.display_name": {
           "source": "Include Thoughts",
           "message": "包含思考"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.aW5jbHVkZVRob3VnaHRz.short_desc": {
           "source": "Include reasoning summaries in the response",
           "message": "在回應中包含推理摘要"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.aW5jbHVkZVRob3VnaHRz.desc": {
           "source": "Set `True` to include thought summaries for inspecting the model's reasoning.",
           "message": "設為 `True` 可包含摘要，以檢視模型的推理過程。"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdCdWRnZXQ.display_name": {
           "source": "Thinking Budget",
           "message": "思考預算"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdCdWRnZXQ.short_desc": {
           "source": "Legacy reasoning token budget for Gemini 2.5",
           "message": "Gemini 2.5 的舊版推理權杖預算"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdCdWRnZXQ.desc": {
           "source": "Reasoning token budget for Gemini 2.5. Omitted on Gemini 3.x; set `thinkingLevel` instead. Numeric budgets have no exact thinking-level equivalent.",
           "message": "Gemini 2.5 的推理權杖預算。Gemini 3.x 會省略此設定；請改用 `thinkingLevel`。數值預算沒有完全對應的思考層級。"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdMZXZlbA.display_name": {
           "source": "Thinking Level",
           "message": "思考層級"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdMZXZlbA.short_desc": {
           "source": "Reasoning effort for Gemini 3 models",
           "message": "Gemini 3 模型的推理強度"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdMZXZlbA.desc": {
           "source": "Choose reasoning depth for Gemini 3.x. Omit to use the model default. Supported levels depend on the model; `MINIMAL` does not fully disable thinking. Use `thinkingBudget` on 2.5.",
           "message": "選擇 Gemini 3.x 的推理深度。省略時使用模型預設值。支援的層級取決於模型；`MINIMAL` 不會完全關閉思考。2.5 請使用 `thinkingBudget`。"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1JTklNQUw.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1JTklNQUw.display_name": {
           "source": "Minimal",
           "message": "最低"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkxPVw.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkxPVw.display_name": {
           "source": "Low",
           "message": "低"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1FRElVTQ.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1FRElVTQ.display_name": {
           "source": "Medium",
           "message": "中"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkhJR0g.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOloyVnVaWEpoZEdVdFkyOXVkR1Z1ZEE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkhJR0g.display_name": {
           "source": "High",
           "message": "高"
         },
@@ -2623,55 +2623,55 @@
           "source": "Use `thinkingLevel` for Gemini 3.x or `thinkingBudget` for Gemini 2.5.",
           "message": "Gemini 3.x 請使用 `thinkingLevel`，Gemini 2.5 請使用 `thinkingBudget`。"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.aW5jbHVkZVRob3VnaHRz.display_name": {
           "source": "Include Thoughts",
           "message": "包含思考"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.aW5jbHVkZVRob3VnaHRz.short_desc": {
           "source": "Include reasoning summaries in the response",
           "message": "在回應中包含推理摘要"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.aW5jbHVkZVRob3VnaHRz.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.aW5jbHVkZVRob3VnaHRz.desc": {
           "source": "Set `True` to include thought summaries for inspecting the model's reasoning.",
           "message": "設為 `True` 可包含摘要，以檢視模型的推理過程。"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdCdWRnZXQ.display_name": {
           "source": "Thinking Budget",
           "message": "思考預算"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdCdWRnZXQ.short_desc": {
           "source": "Legacy reasoning token budget for Gemini 2.5",
           "message": "Gemini 2.5 的舊版推理權杖預算"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdCdWRnZXQ.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdCdWRnZXQ.desc": {
           "source": "Reasoning token budget for Gemini 2.5. Omitted on Gemini 3.x; set `thinkingLevel` instead. Numeric budgets have no exact thinking-level equivalent.",
           "message": "Gemini 2.5 的推理權杖預算。Gemini 3.x 會省略此設定；請改用 `thinkingLevel`。數值預算沒有完全對應的思考層級。"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdMZXZlbA.display_name": {
           "source": "Thinking Level",
           "message": "思考層級"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.short_desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdMZXZlbA.short_desc": {
           "source": "Reasoning effort for Gemini 3 models",
           "message": "Gemini 3 模型的推理強度"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.desc": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdMZXZlbA.desc": {
           "source": "Choose reasoning depth for Gemini 3.x. Omit to use the model default. Supported levels depend on the model; `MINIMAL` does not fully disable thinking. Use `thinkingBudget` on 2.5.",
           "message": "選擇 Gemini 3.x 的推理深度。省略時使用模型預設值。支援的層級取決於模型；`MINIMAL` 不會完全關閉思考。2.5 請使用 `thinkingBudget`。"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1JTklNQUw.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1JTklNQUw.display_name": {
           "source": "Minimal",
           "message": "最低"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkxPVw.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkxPVw.display_name": {
           "source": "Low",
           "message": "低"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1FRElVTQ.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOk1FRElVTQ.display_name": {
           "source": "Medium",
           "message": "中"
         },
-        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg6b3B0aW9uOloyVnVaWEpoZEdsdmJrTnZibVpwWnc6ZmllbGQ6ZEdocGJtdHBibWREYjI1bWFXYw.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkhJR0g.display_name": {
+        "app.R2VtaW5p.type.YWN0aW9uOmMzUnlaV0Z0TFdOdmJuUmxiblE6R2VtaW5pVGhpbmtpbmdDb25maWdEYXRhVHlwZTpHZW1pbmlUaGlua2luZ0NvbmZpZ0RhdGFUeXBlIzMzYTJhOWQ0OGY3OGM1YjJjNDcwOGQzOTZlNzY3ZTA2ZmFmYzEyYzRhYzQ3MDhmM2E4NzMwMjdiZThhZmVhYjg.field.dGhpbmtpbmdMZXZlbA.allowed-value.c3RyaW5nOkhJR0g.display_name": {
           "source": "High",
           "message": "高"
         }

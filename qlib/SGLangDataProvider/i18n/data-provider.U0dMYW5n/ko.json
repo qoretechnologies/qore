@@ -439,39 +439,39 @@
           "source": "List of tool calls emitted by the assistant.  Present only on assistant messages that chose to invoke a tool.",
           "message": "보조자가 도구를 호출했을 때만 존재하는 도구 호출 목록. 보조자 메시지에서만 나타남."
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.ZnVuY3Rpb24.display_name": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.ZnVuY3Rpb24.display_name": {
           "source": "Function Call",
           "message": "함수 호출"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.ZnVuY3Rpb24.short_desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.ZnVuY3Rpb24.short_desc": {
           "source": "Function name and JSON-encoded arguments",
           "message": "함수 이름과 JSON 인코딩된 인수"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.ZnVuY3Rpb24.desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.ZnVuY3Rpb24.desc": {
           "source": "Hash with `name` (string) and `arguments` (JSON-encoded string) describing the function the model wants to invoke.",
           "message": "`name` (문자열)과 `arguments` (JSON 인코딩된 문자열)을 포함한 해시로, 모델이 호출하고자 하는 함수를 설명합니다."
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.aWQ.display_name": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.aWQ.display_name": {
           "source": "Tool Call ID",
           "message": "도구 호출 ID"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.aWQ.short_desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.aWQ.short_desc": {
           "source": "Unique identifier for the tool call",
           "message": "도구 호출의 고유 식별자"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.aWQ.desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.aWQ.desc": {
           "source": "Unique identifier for this tool call.  The same `id` must be echoed back in the corresponding `tool` role message that returns the tool's result.",
           "message": "이 도구 호출의 고유 식별자. 도구 결과를 반환하는 해당 `tool` 역할 메시지에서 동일한 `id`를 반영해야 합니다."
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.dHlwZQ.display_name": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.dHlwZQ.display_name": {
           "source": "Tool Type",
           "message": "도구 유형"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.dHlwZQ.short_desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.dHlwZQ.short_desc": {
           "source": "Type of tool invoked",
           "message": "호출된 도구 유형"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.dHlwZQ.desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.dHlwZQ.desc": {
           "source": "Type of tool invoked.  Currently `function` is the only supported type for OpenAI-compatible tool calling.",
           "message": "호출된 도구 유형. 현재 OpenAI 호환 도구 호출에 대해 `function`만 지원됩니다."
         },

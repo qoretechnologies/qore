@@ -527,15 +527,15 @@
           "source": "Use the `status` property to enable or disable GitHub Advanced Security for this repository.\nFor more information, see \"[About GitHub Advanced\nSecurity](/github/getting-started-with-github/learning-about-github/about-github-advanced-security).\"\n\nFor standalone Code Scanning or Secret Protection products, this parameter cannot be used.",
           "message": "Використовуйте властивість `status` для увімкнення або вимкнення GitHub Advanced Security для цього репозиторію.\nДля отримання додаткової інформації див. \"[Про GitHub Advanced\nSecurity](/github/getting-started-with-github/learning-about-github/about-github-advanced-security).\"\n\nДля окремих продуктів Code Scanning або Secret Protection цей параметр не може бути використаний."
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOiphZHZhbmNlZF9zZWN1cml0eSNhNzQ2OWRlZjY1MjgwOTlhZDcxN2VlMTAzNTM4YWRkMTIxZDM3ZTU5ZjcxNTc5Y2M3MDQwNDIxMTgzYzI3YmQ4Om9wdGlvbjpjMlZqZFhKcGRIbGZZVzVrWDJGdVlXeDVjMmx6OmZpZWxkOllXUjJZVzVqWldSZmMyVmpkWEpwZEhr.field.c3RhdHVz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOiphZHZhbmNlZF9zZWN1cml0eSNlNjE5NTFmZWNjNTY1OTE4ODc2MjcxNDFkYzU1ZDQwYWRjYzA0ZTMxZjdlNGNmODliMzEyMWM4OTBjN2I3N2E3.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "Статус"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOiphZHZhbmNlZF9zZWN1cml0eSNhNzQ2OWRlZjY1MjgwOTlhZDcxN2VlMTAzNTM4YWRkMTIxZDM3ZTU5ZjcxNTc5Y2M3MDQwNDIxMTgzYzI3YmQ4Om9wdGlvbjpjMlZqZFhKcGRIbGZZVzVrWDJGdVlXeDVjMmx6OmZpZWxkOllXUjJZVzVqWldSZmMyVmpkWEpwZEhr.field.c3RhdHVz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOiphZHZhbmNlZF9zZWN1cml0eSNlNjE5NTFmZWNjNTY1OTE4ODc2MjcxNDFkYzU1ZDQwYWRjYzA0ZTMxZjdlNGNmODliMzEyMWM4OTBjN2I3N2E3.field.c3RhdHVz.short_desc": {
           "source": "Can be 'enabled' or 'disabled'",
           "message": "Може бути 'ввімкнено' або 'вимкнено'"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOiphZHZhbmNlZF9zZWN1cml0eSNhNzQ2OWRlZjY1MjgwOTlhZDcxN2VlMTAzNTM4YWRkMTIxZDM3ZTU5ZjcxNTc5Y2M3MDQwNDIxMTgzYzI3YmQ4Om9wdGlvbjpjMlZqZFhKcGRIbGZZVzVrWDJGdVlXeDVjMmx6OmZpZWxkOllXUjJZVzVqWldSZmMyVmpkWEpwZEhr.field.c3RhdHVz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOiphZHZhbmNlZF9zZWN1cml0eSNlNjE5NTFmZWNjNTY1OTE4ODc2MjcxNDFkYzU1ZDQwYWRjYzA0ZTMxZjdlNGNmODliMzEyMWM4OTBjN2I3N2E3.field.c3RhdHVz.desc": {
           "source": "Can be `enabled` or `disabled`.",
           "message": "Може бути `enabled` або `disabled`."
         },
@@ -551,15 +551,15 @@
           "source": "Use the `status` property to enable or disable GitHub Code Security for this repository.",
           "message": "Використовуйте властивість `status` для увімкнення або вимкнення GitHub Code Security для цього репозиторію."
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipjb2RlX3NlY3VyaXR5IzMzYWVmOGE4YTA4MWY0Y2I2MjY0ODVhMTY1ZDUyYzBkMWJmOTEwMDkyMjY2YzhlNzE4MDU3YTQ0N2FhMDgzODc6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6WTI5a1pWOXpaV04xY21sMGVR.field.c3RhdHVz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipjb2RlX3NlY3VyaXR5IzJkZTQ2MGY5NjY1NDljM2YzMWIyYjE0ZTkwOGQ4Nzk1ZGQ4ZDQ0NzVkYzhlN2IwODZlNTAxZWNhYjFiODU4MDk.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "Статус"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipjb2RlX3NlY3VyaXR5IzMzYWVmOGE4YTA4MWY0Y2I2MjY0ODVhMTY1ZDUyYzBkMWJmOTEwMDkyMjY2YzhlNzE4MDU3YTQ0N2FhMDgzODc6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6WTI5a1pWOXpaV04xY21sMGVR.field.c3RhdHVz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipjb2RlX3NlY3VyaXR5IzJkZTQ2MGY5NjY1NDljM2YzMWIyYjE0ZTkwOGQ4Nzk1ZGQ4ZDQ0NzVkYzhlN2IwODZlNTAxZWNhYjFiODU4MDk.field.c3RhdHVz.short_desc": {
           "source": "Can be 'enabled' or 'disabled'",
           "message": "Може бути 'ввімкнено' або 'вимкнено'"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipjb2RlX3NlY3VyaXR5IzMzYWVmOGE4YTA4MWY0Y2I2MjY0ODVhMTY1ZDUyYzBkMWJmOTEwMDkyMjY2YzhlNzE4MDU3YTQ0N2FhMDgzODc6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6WTI5a1pWOXpaV04xY21sMGVR.field.c3RhdHVz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipjb2RlX3NlY3VyaXR5IzJkZTQ2MGY5NjY1NDljM2YzMWIyYjE0ZTkwOGQ4Nzk1ZGQ4ZDQ0NzVkYzhlN2IwODZlNTAxZWNhYjFiODU4MDk.field.c3RhdHVz.desc": {
           "source": "Can be `enabled` or `disabled`.",
           "message": "Може бути `enabled` або `disabled`."
         },
@@ -575,15 +575,15 @@
           "source": "Use the `status` property to enable or disable secret scanning for this repository. For more information, see \"[About secret scanning](/code-security/secret-security/about-secret-scanning).\"",
           "message": "Використовуйте властивість `status` для увімкнення або вимкнення виявлення секретів для цього репозиторію. Для отримання додаткової інформації див. \"[Про виявлення секретів](/code-security/secret-security/about-secret-scanning).\""
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmcjOTRjZTE5OWE0MjU1MjU2YjdlYWRhNjZjZDQ2YmMwNTg0MTgxYzc2NzhkMjAxYTlhOTg4YWU3OTdlNzM4OTBhMTpvcHRpb246YzJWamRYSnBkSGxmWVc1a1gyRnVZV3g1YzJsejpmaWVsZDpjMlZqY21WMFgzTmpZVzV1YVc1bg.field.c3RhdHVz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmcjZWY2ZTNhMWMzZTAyYmQ3MGY0M2Q2MzI2N2MxOTA4OTQ1MzBiYjhmZTc2OTlhM2RhMmE2YTExMDZmNGFiMTNmNA.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "Статус"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmcjOTRjZTE5OWE0MjU1MjU2YjdlYWRhNjZjZDQ2YmMwNTg0MTgxYzc2NzhkMjAxYTlhOTg4YWU3OTdlNzM4OTBhMTpvcHRpb246YzJWamRYSnBkSGxmWVc1a1gyRnVZV3g1YzJsejpmaWVsZDpjMlZqY21WMFgzTmpZVzV1YVc1bg.field.c3RhdHVz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmcjZWY2ZTNhMWMzZTAyYmQ3MGY0M2Q2MzI2N2MxOTA4OTQ1MzBiYjhmZTc2OTlhM2RhMmE2YTExMDZmNGFiMTNmNA.field.c3RhdHVz.short_desc": {
           "source": "Can be 'enabled' or 'disabled'",
           "message": "Може бути 'ввімкнено' або 'вимкнено'"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmcjOTRjZTE5OWE0MjU1MjU2YjdlYWRhNjZjZDQ2YmMwNTg0MTgxYzc2NzhkMjAxYTlhOTg4YWU3OTdlNzM4OTBhMTpvcHRpb246YzJWamRYSnBkSGxmWVc1a1gyRnVZV3g1YzJsejpmaWVsZDpjMlZqY21WMFgzTmpZVzV1YVc1bg.field.c3RhdHVz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmcjZWY2ZTNhMWMzZTAyYmQ3MGY0M2Q2MzI2N2MxOTA4OTQ1MzBiYjhmZTc2OTlhM2RhMmE2YTExMDZmNGFiMTNmNA.field.c3RhdHVz.desc": {
           "source": "Can be `enabled` or `disabled`.",
           "message": "Може бути `enabled` або `disabled`."
         },
@@ -599,15 +599,15 @@
           "source": "Use the `status` property to enable or disable secret scanning AI detection for this repository. For more information, see \"[Responsible detection of generic secrets with AI](https://docs.github.com/code-security/secret-scanning/using-advanced-secret-scanning-and-push-protection-features/generic-secret-detection/responsible-ai-generic-secrets).\"",
           "message": "Використовуйте властивість `status` для увімкнення або вимкнення виявлення секретів за допомогою штучного інтелекту для цього репозиторію. Для отримання додаткової інформації див. \"[Відповідальне виявлення загальних секретів за допомогою штучного інтелекту](https://docs.github.com/code-security/secret-scanning/using-advanced-secret-scanning-and-push-protection-features/generic-secret-detection/responsible-ai-generic-secrets).\""
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfYWlfZGV0ZWN0aW9uIzQyYTY5Y2ZiMTQxMWI0MTE3MDgxN2ZiZDhiZDRjZDliM2EzNzlkZTBjZmI4ODIwMTNkY2FjMjg5ZDJjNTMyZGE6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMkZwWDJSbGRHVmpkR2x2Ymc.field.c3RhdHVz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfYWlfZGV0ZWN0aW9uIzJiYzBhZWUzYzdmZjY4ZTg1MGMwNzViZTBmNzdhYTQxMGI3MmRhMWIzMGY4NTBiNTIyMTQ2YzVhNzg0ODNhOWQ.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "Статус"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfYWlfZGV0ZWN0aW9uIzQyYTY5Y2ZiMTQxMWI0MTE3MDgxN2ZiZDhiZDRjZDliM2EzNzlkZTBjZmI4ODIwMTNkY2FjMjg5ZDJjNTMyZGE6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMkZwWDJSbGRHVmpkR2x2Ymc.field.c3RhdHVz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfYWlfZGV0ZWN0aW9uIzJiYzBhZWUzYzdmZjY4ZTg1MGMwNzViZTBmNzdhYTQxMGI3MmRhMWIzMGY4NTBiNTIyMTQ2YzVhNzg0ODNhOWQ.field.c3RhdHVz.short_desc": {
           "source": "Can be 'enabled' or 'disabled'",
           "message": "Може бути 'ввімкнено' або 'вимкнено'"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfYWlfZGV0ZWN0aW9uIzQyYTY5Y2ZiMTQxMWI0MTE3MDgxN2ZiZDhiZDRjZDliM2EzNzlkZTBjZmI4ODIwMTNkY2FjMjg5ZDJjNTMyZGE6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMkZwWDJSbGRHVmpkR2x2Ymc.field.c3RhdHVz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfYWlfZGV0ZWN0aW9uIzJiYzBhZWUzYzdmZjY4ZTg1MGMwNzViZTBmNzdhYTQxMGI3MmRhMWIzMGY4NTBiNTIyMTQ2YzVhNzg0ODNhOWQ.field.c3RhdHVz.desc": {
           "source": "Can be `enabled` or `disabled`.",
           "message": "Може бути `enabled` або `disabled`."
         },
@@ -623,15 +623,15 @@
           "source": "Use the `status` property to enable or disable secret scanning delegated alert dismissal for this repository.",
           "message": "Використовуйте властивість `status` для увімкнення або вимкнення відхилення попереджень, делегованих секретів, для цього репозиторію."
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2FsZXJ0X2Rpc21pc3NhbCM3NDE4Njg4ZjQ3ZGUzNWFiZGNhNTA3NDE2Y2YxNjc3ODczMzAyMDU5NDY0N2FlNmExYzI1N2FiNTI4MDg1Y2NlOm9wdGlvbjpjMlZqZFhKcGRIbGZZVzVrWDJGdVlXeDVjMmx6OmZpZWxkOmMyVmpjbVYwWDNOallXNXVhVzVuWDJSbGJHVm5ZWFJsWkY5aGJHVnlkRjlrYVhOdGFYTnpZV3c.field.c3RhdHVz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2FsZXJ0X2Rpc21pc3NhbCM3ZmUzNDczNzk4ZWVhNTRlYWFiNTYxNGU5OGM0NTIxMGY1MWNjNjJlM2U4MjU4MDg4OGE5YzBlOWYwM2M1YzU5.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "Статус"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2FsZXJ0X2Rpc21pc3NhbCM3NDE4Njg4ZjQ3ZGUzNWFiZGNhNTA3NDE2Y2YxNjc3ODczMzAyMDU5NDY0N2FlNmExYzI1N2FiNTI4MDg1Y2NlOm9wdGlvbjpjMlZqZFhKcGRIbGZZVzVrWDJGdVlXeDVjMmx6OmZpZWxkOmMyVmpjbVYwWDNOallXNXVhVzVuWDJSbGJHVm5ZWFJsWkY5aGJHVnlkRjlrYVhOdGFYTnpZV3c.field.c3RhdHVz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2FsZXJ0X2Rpc21pc3NhbCM3ZmUzNDczNzk4ZWVhNTRlYWFiNTYxNGU5OGM0NTIxMGY1MWNjNjJlM2U4MjU4MDg4OGE5YzBlOWYwM2M1YzU5.field.c3RhdHVz.short_desc": {
           "source": "Can be 'enabled' or 'disabled'",
           "message": "Може бути 'ввімкнено' або 'вимкнено'"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2FsZXJ0X2Rpc21pc3NhbCM3NDE4Njg4ZjQ3ZGUzNWFiZGNhNTA3NDE2Y2YxNjc3ODczMzAyMDU5NDY0N2FlNmExYzI1N2FiNTI4MDg1Y2NlOm9wdGlvbjpjMlZqZFhKcGRIbGZZVzVrWDJGdVlXeDVjMmx6OmZpZWxkOmMyVmpjbVYwWDNOallXNXVhVzVuWDJSbGJHVm5ZWFJsWkY5aGJHVnlkRjlrYVhOdGFYTnpZV3c.field.c3RhdHVz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2FsZXJ0X2Rpc21pc3NhbCM3ZmUzNDczNzk4ZWVhNTRlYWFiNTYxNGU5OGM0NTIxMGY1MWNjNjJlM2U4MjU4MDg4OGE5YzBlOWYwM2M1YzU5.field.c3RhdHVz.desc": {
           "source": "Can be `enabled` or `disabled`.",
           "message": "Може бути `enabled` або `disabled`."
         },
@@ -647,15 +647,15 @@
           "source": "Use the `status` property to enable or disable secret scanning delegated bypass for this repository.",
           "message": "Використовуйте властивість `status` для увімкнення або вимкнення обходу, делегованого секретів, для цього репозиторію."
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzcyNkN2VhMjcyNTdmNTJmZGIwNzRlYjUxMDdlOWE2YjE2ZGExYzY5NmMxNjMzYTk0NzZhMDE3N2Q1OGFlNDYwMGM5Om9wdGlvbjpjMlZqZFhKcGRIbGZZVzVrWDJGdVlXeDVjMmx6OmZpZWxkOmMyVmpjbVYwWDNOallXNXVhVzVuWDJSbGJHVm5ZWFJsWkY5aWVYQmhjM00.field.c3RhdHVz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzcyMzZWJjMDk1NWQ3NTI4ZThhMjE5MGE3MTQ0ZTM2ZTQ5ODRhNmNlZWIyMmUwYTBjNDhiMDcwNjhlNGQ3ZTg5MTQ4.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "Статус"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzcyNkN2VhMjcyNTdmNTJmZGIwNzRlYjUxMDdlOWE2YjE2ZGExYzY5NmMxNjMzYTk0NzZhMDE3N2Q1OGFlNDYwMGM5Om9wdGlvbjpjMlZqZFhKcGRIbGZZVzVrWDJGdVlXeDVjMmx6OmZpZWxkOmMyVmpjbVYwWDNOallXNXVhVzVuWDJSbGJHVm5ZWFJsWkY5aWVYQmhjM00.field.c3RhdHVz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzcyMzZWJjMDk1NWQ3NTI4ZThhMjE5MGE3MTQ0ZTM2ZTQ5ODRhNmNlZWIyMmUwYTBjNDhiMDcwNjhlNGQ3ZTg5MTQ4.field.c3RhdHVz.short_desc": {
           "source": "Can be 'enabled' or 'disabled'",
           "message": "Може бути 'ввімкнено' або 'вимкнено'"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzcyNkN2VhMjcyNTdmNTJmZGIwNzRlYjUxMDdlOWE2YjE2ZGExYzY5NmMxNjMzYTk0NzZhMDE3N2Q1OGFlNDYwMGM5Om9wdGlvbjpjMlZqZFhKcGRIbGZZVzVrWDJGdVlXeDVjMmx6OmZpZWxkOmMyVmpjbVYwWDNOallXNXVhVzVuWDJSbGJHVm5ZWFJsWkY5aWVYQmhjM00.field.c3RhdHVz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzcyMzZWJjMDk1NWQ3NTI4ZThhMjE5MGE3MTQ0ZTM2ZTQ5ODRhNmNlZWIyMmUwYTBjNDhiMDcwNjhlNGQ3ZTg5MTQ4.field.c3RhdHVz.desc": {
           "source": "Can be `enabled` or `disabled`.",
           "message": "Може бути `enabled` або `disabled`."
         },
@@ -671,67 +671,67 @@
           "source": "Feature options for secret scanning delegated bypass.\nThis object is only honored when `security_and_analysis.secret_scanning_delegated_bypass.status` is set to `enabled`.\nYou can send this object in the same request as `secret_scanning_delegated_bypass`, or update just the options in a separate request.",
           "message": "Параметри функції для обходу перевірки секретів.\nЦей об’єкт враховується лише тоді, коли `security_and_analysis.secret_scanning_delegated_bypass.status` встановлено у значення `enabled`.\nВи можете надіслати цей об’єкт у тій самій заявці, що й `secret_scanning_delegated_bypass`, або оновити лише параметри у окремій заявці."
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzc19vcHRpb25zIzhlNjYxMDVlODI1NjZjYjYxOWRmODg0OWFkY2MyZTgwMGIwY2Y4ODM1NjdjNTBmOTQ3NzQ1ZjRlOGM5NTJlZDY6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMlJsYkdWbllYUmxaRjlpZVhCaGMzTmZiM0IwYVc5dWN3.field.cmV2aWV3ZXJz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzc19vcHRpb25zI2ExNjI5NTdiYThiNTFlOGY1MmJiOTNkODVjYWYyOTU1ZTU0ZjE1NzU1MjA2Y2RmZGI2MzNlNDY4NDVlZGNhYzU.field.cmV2aWV3ZXJz.display_name": {
           "source": "Reviewers",
           "message": "Рецензенти"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzc19vcHRpb25zIzhlNjYxMDVlODI1NjZjYjYxOWRmODg0OWFkY2MyZTgwMGIwY2Y4ODM1NjdjNTBmOTQ3NzQ1ZjRlOGM5NTJlZDY6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMlJsYkdWbllYUmxaRjlpZVhCaGMzTmZiM0IwYVc5dWN3.field.cmV2aWV3ZXJz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzc19vcHRpb25zI2ExNjI5NTdiYThiNTFlOGY1MmJiOTNkODVjYWYyOTU1ZTU0ZjE1NzU1MjA2Y2RmZGI2MzNlNDY4NDVlZGNhYzU.field.cmV2aWV3ZXJz.short_desc": {
           "source": "The bypass reviewers for secret scanning delegated bypass",
           "message": "Перевірники-виключення для перевірки секретів з делегованим виключенням"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzc19vcHRpb25zIzhlNjYxMDVlODI1NjZjYjYxOWRmODg0OWFkY2MyZTgwMGIwY2Y4ODM1NjdjNTBmOTQ3NzQ1ZjRlOGM5NTJlZDY6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMlJsYkdWbllYUmxaRjlpZVhCaGMzTmZiM0IwYVc5dWN3.field.cmV2aWV3ZXJz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzc19vcHRpb25zI2ExNjI5NTdiYThiNTFlOGY1MmJiOTNkODVjYWYyOTU1ZTU0ZjE1NzU1MjA2Y2RmZGI2MzNlNDY4NDVlZGNhYzU.field.cmV2aWV3ZXJz.desc": {
           "source": "The bypass reviewers for secret scanning delegated bypass.\nIf you omit this field, the existing set of reviewers is unchanged.",
           "message": "Перевірники-виключення для перевірки секретів з делегованим виключенням.\nЯкщо це поле опущено, існуючий набір перевірників залишається незмінним."
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzA0MzUyZThlMjQ0Y2EzYmVkODY3YjUxZjAyMmY4MjNiNzNkNGY3ZTQyMmVjZjU3ZDUzYWI0OTA0ZGFmODAzODg6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMlJsYkdWbllYUmxaRjlpZVhCaGMzTmZiM0IwYVc5dWN3OmZpZWxkOmNtVjJhV1YzWlhKeg.field.bW9kZQ.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.bW9kZQ.display_name": {
           "source": "Mode",
           "message": "Режим"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzA0MzUyZThlMjQ0Y2EzYmVkODY3YjUxZjAyMmY4MjNiNzNkNGY3ZTQyMmVjZjU3ZDUzYWI0OTA0ZGFmODAzODg6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMlJsYkdWbllYUmxaRjlpZVhCaGMzTmZiM0IwYVc5dWN3OmZpZWxkOmNtVjJhV1YzWlhKeg.field.bW9kZQ.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.bW9kZQ.short_desc": {
           "source": "The bypass mode for the reviewer",
           "message": "Режим виключення для перевірника"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzA0MzUyZThlMjQ0Y2EzYmVkODY3YjUxZjAyMmY4MjNiNzNkNGY3ZTQyMmVjZjU3ZDUzYWI0OTA0ZGFmODAzODg6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMlJsYkdWbllYUmxaRjlpZVhCaGMzTmZiM0IwYVc5dWN3OmZpZWxkOmNtVjJhV1YzWlhKeg.field.bW9kZQ.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.bW9kZQ.desc": {
           "source": "The bypass mode for the reviewer",
           "message": "Режим виключення для перевірника"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzA0MzUyZThlMjQ0Y2EzYmVkODY3YjUxZjAyMmY4MjNiNzNkNGY3ZTQyMmVjZjU3ZDUzYWI0OTA0ZGFmODAzODg6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMlJsYkdWbllYUmxaRjlpZVhCaGMzTmZiM0IwYVc5dWN3OmZpZWxkOmNtVjJhV1YzWlhKeg.field.bW9kZQ.allowed-value.c3RyaW5nOkFMV0FZUw.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.bW9kZQ.allowed-value.c3RyaW5nOkFMV0FZUw.display_name": {
           "source": "ALWAYS",
           "message": "ЗАВЖДИ"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzA0MzUyZThlMjQ0Y2EzYmVkODY3YjUxZjAyMmY4MjNiNzNkNGY3ZTQyMmVjZjU3ZDUzYWI0OTA0ZGFmODAzODg6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMlJsYkdWbllYUmxaRjlpZVhCaGMzTmZiM0IwYVc5dWN3OmZpZWxkOmNtVjJhV1YzWlhKeg.field.bW9kZQ.allowed-value.c3RyaW5nOkVYRU1QVA.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.bW9kZQ.allowed-value.c3RyaW5nOkVYRU1QVA.display_name": {
           "source": "EXEMPT",
           "message": "ЗВІЛЬНЕННЯ"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzA0MzUyZThlMjQ0Y2EzYmVkODY3YjUxZjAyMmY4MjNiNzNkNGY3ZTQyMmVjZjU3ZDUzYWI0OTA0ZGFmODAzODg6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMlJsYkdWbllYUmxaRjlpZVhCaGMzTmZiM0IwYVc5dWN3OmZpZWxkOmNtVjJhV1YzWlhKeg.field.cmV2aWV3ZXJfaWQ.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.cmV2aWV3ZXJfaWQ.display_name": {
           "source": "Reviewer ID",
           "message": "ID рецензента"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzA0MzUyZThlMjQ0Y2EzYmVkODY3YjUxZjAyMmY4MjNiNzNkNGY3ZTQyMmVjZjU3ZDUzYWI0OTA0ZGFmODAzODg6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMlJsYkdWbllYUmxaRjlpZVhCaGMzTmZiM0IwYVc5dWN3OmZpZWxkOmNtVjJhV1YzWlhKeg.field.cmV2aWV3ZXJfaWQ.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.cmV2aWV3ZXJfaWQ.short_desc": {
           "source": "The ID of the team or role selected as a bypass reviewer",
           "message": "ID команди або ролі, вибраної як перевірник-виключення"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzA0MzUyZThlMjQ0Y2EzYmVkODY3YjUxZjAyMmY4MjNiNzNkNGY3ZTQyMmVjZjU3ZDUzYWI0OTA0ZGFmODAzODg6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMlJsYkdWbllYUmxaRjlpZVhCaGMzTmZiM0IwYVc5dWN3OmZpZWxkOmNtVjJhV1YzWlhKeg.field.cmV2aWV3ZXJfaWQ.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.cmV2aWV3ZXJfaWQ.desc": {
           "source": "The ID of the team or role selected as a bypass reviewer",
           "message": "ID команди або ролі, вибраної як перевірник-виключення"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzA0MzUyZThlMjQ0Y2EzYmVkODY3YjUxZjAyMmY4MjNiNzNkNGY3ZTQyMmVjZjU3ZDUzYWI0OTA0ZGFmODAzODg6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMlJsYkdWbllYUmxaRjlpZVhCaGMzTmZiM0IwYVc5dWN3OmZpZWxkOmNtVjJhV1YzWlhKeg.field.cmV2aWV3ZXJfdHlwZQ.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.cmV2aWV3ZXJfdHlwZQ.display_name": {
           "source": "Reviewer Type",
           "message": "Тип рецензента"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzA0MzUyZThlMjQ0Y2EzYmVkODY3YjUxZjAyMmY4MjNiNzNkNGY3ZTQyMmVjZjU3ZDUzYWI0OTA0ZGFmODAzODg6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMlJsYkdWbllYUmxaRjlpZVhCaGMzTmZiM0IwYVc5dWN3OmZpZWxkOmNtVjJhV1YzWlhKeg.field.cmV2aWV3ZXJfdHlwZQ.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.cmV2aWV3ZXJfdHlwZQ.short_desc": {
           "source": "The type of the bypass reviewer",
           "message": "Тип перевіряючого, якого обходять"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzA0MzUyZThlMjQ0Y2EzYmVkODY3YjUxZjAyMmY4MjNiNzNkNGY3ZTQyMmVjZjU3ZDUzYWI0OTA0ZGFmODAzODg6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMlJsYkdWbllYUmxaRjlpZVhCaGMzTmZiM0IwYVc5dWN3OmZpZWxkOmNtVjJhV1YzWlhKeg.field.cmV2aWV3ZXJfdHlwZQ.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.cmV2aWV3ZXJfdHlwZQ.desc": {
           "source": "The type of the bypass reviewer",
           "message": "Тип перевіряючого, якого обходять"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzA0MzUyZThlMjQ0Y2EzYmVkODY3YjUxZjAyMmY4MjNiNzNkNGY3ZTQyMmVjZjU3ZDUzYWI0OTA0ZGFmODAzODg6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMlJsYkdWbllYUmxaRjlpZVhCaGMzTmZiM0IwYVc5dWN3OmZpZWxkOmNtVjJhV1YzWlhKeg.field.cmV2aWV3ZXJfdHlwZQ.allowed-value.c3RyaW5nOlRFQU0.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.cmV2aWV3ZXJfdHlwZQ.allowed-value.c3RyaW5nOlRFQU0.display_name": {
           "source": "TEAM",
           "message": "КОМАНДА"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzA0MzUyZThlMjQ0Y2EzYmVkODY3YjUxZjAyMmY4MjNiNzNkNGY3ZTQyMmVjZjU3ZDUzYWI0OTA0ZGFmODAzODg6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMlJsYkdWbllYUmxaRjlpZVhCaGMzTmZiM0IwYVc5dWN3OmZpZWxkOmNtVjJhV1YzWlhKeg.field.cmV2aWV3ZXJfdHlwZQ.allowed-value.c3RyaW5nOlJPTEU.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.cmV2aWV3ZXJfdHlwZQ.allowed-value.c3RyaW5nOlJPTEU.display_name": {
           "source": "ROLE",
           "message": "РОЛЬ"
         },
@@ -747,15 +747,15 @@
           "source": "Use the `status` property to enable or disable secret scanning non-provider patterns for this repository. For more information, see \"[Supported secret scanning patterns](/code-security/secret-scanning/introduction/supported-secret-scanning-patterns#supported-secrets).\"",
           "message": "Використовуйте властивість `status` для увімкнення або вимкнення патернів не-провайдерів для виявлення секретів для цього репозиторію. Для отримання додаткової інформації див. \"[Підтримувані патерни виявлення секретів](/code-security/secret-scanning/introduction/supported-secret-scanning-patterns#supported-secrets).\""
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfbm9uX3Byb3ZpZGVyX3BhdHRlcm5zIzgwYTc2YmM4MDFjMGFlM2ZiMTNhNTdiZDhhNmU2NGNhMjQ0MGI4ODQ1YjU3MTZhYTM1NjIyYTAyNWIzMzQyNjY6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMjV2Ymw5d2NtOTJhV1JsY2w5d1lYUjBaWEp1Y3c.field.c3RhdHVz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfbm9uX3Byb3ZpZGVyX3BhdHRlcm5zIzQ2ZjRmZGU1MmVlZDIzMjQ1OGY0MzkxNTBlNzk5ZWEyMzA3MjhhNTBiYWQ1YzI0MGFhNzg5MGRlZDhiZTU0YWY.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "Статус"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfbm9uX3Byb3ZpZGVyX3BhdHRlcm5zIzgwYTc2YmM4MDFjMGFlM2ZiMTNhNTdiZDhhNmU2NGNhMjQ0MGI4ODQ1YjU3MTZhYTM1NjIyYTAyNWIzMzQyNjY6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMjV2Ymw5d2NtOTJhV1JsY2w5d1lYUjBaWEp1Y3c.field.c3RhdHVz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfbm9uX3Byb3ZpZGVyX3BhdHRlcm5zIzQ2ZjRmZGU1MmVlZDIzMjQ1OGY0MzkxNTBlNzk5ZWEyMzA3MjhhNTBiYWQ1YzI0MGFhNzg5MGRlZDhiZTU0YWY.field.c3RhdHVz.short_desc": {
           "source": "Can be 'enabled' or 'disabled'",
           "message": "Може бути 'ввімкнено' або 'вимкнено'"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfbm9uX3Byb3ZpZGVyX3BhdHRlcm5zIzgwYTc2YmM4MDFjMGFlM2ZiMTNhNTdiZDhhNmU2NGNhMjQ0MGI4ODQ1YjU3MTZhYTM1NjIyYTAyNWIzMzQyNjY6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YMjV2Ymw5d2NtOTJhV1JsY2w5d1lYUjBaWEp1Y3c.field.c3RhdHVz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfbm9uX3Byb3ZpZGVyX3BhdHRlcm5zIzQ2ZjRmZGU1MmVlZDIzMjQ1OGY0MzkxNTBlNzk5ZWEyMzA3MjhhNTBiYWQ1YzI0MGFhNzg5MGRlZDhiZTU0YWY.field.c3RhdHVz.desc": {
           "source": "Can be `enabled` or `disabled`.",
           "message": "Може бути `enabled` або `disabled`."
         },
@@ -771,15 +771,15 @@
           "source": "Use the `status` property to enable or disable secret scanning push protection for this repository. For more information, see \"[Protecting pushes with secret scanning](/code-security/secret-scanning/protecting-pushes-with-secret-scanning).\"",
           "message": "Використовуйте властивість `status` для увімкнення або вимкнення захисту від відправки за допомогою виявлення секретів для цього репозиторію. Для отримання додаткової інформації див. \"[Захист від відправки за допомогою виявлення секретів](/code-security/secret-scanning/protecting-pushes-with-secret-scanning).\""
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfcHVzaF9wcm90ZWN0aW9uIzRlNTEwYTI2MDgwNzc2MTU4ZjhhYmY0NThkODdjODJjYTM4OGQ4YWZmOTUwZDNjNDBkNDg4Y2E4ODA2ZDMyMjM6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YM0IxYzJoZmNISnZkR1ZqZEdsdmJn.field.c3RhdHVz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfcHVzaF9wcm90ZWN0aW9uIzNlZjgwMmY2MjJiYzFjOGQ2ZDM5OWU5NWY1MjQyN2ZlY2U2NDFkMzNkODc4ZjhmNGMxOTRjODgwOWRmMDAwYzU.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "Статус"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfcHVzaF9wcm90ZWN0aW9uIzRlNTEwYTI2MDgwNzc2MTU4ZjhhYmY0NThkODdjODJjYTM4OGQ4YWZmOTUwZDNjNDBkNDg4Y2E4ODA2ZDMyMjM6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YM0IxYzJoZmNISnZkR1ZqZEdsdmJn.field.c3RhdHVz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfcHVzaF9wcm90ZWN0aW9uIzNlZjgwMmY2MjJiYzFjOGQ2ZDM5OWU5NWY1MjQyN2ZlY2U2NDFkMzNkODc4ZjhmNGMxOTRjODgwOWRmMDAwYzU.field.c3RhdHVz.short_desc": {
           "source": "Can be 'enabled' or 'disabled'",
           "message": "Може бути 'ввімкнено' або 'вимкнено'"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfcHVzaF9wcm90ZWN0aW9uIzRlNTEwYTI2MDgwNzc2MTU4ZjhhYmY0NThkODdjODJjYTM4OGQ4YWZmOTUwZDNjNDBkNDg4Y2E4ODA2ZDMyMjM6b3B0aW9uOmMyVmpkWEpwZEhsZllXNWtYMkZ1WVd4NWMybHo6ZmllbGQ6YzJWamNtVjBYM05qWVc1dWFXNW5YM0IxYzJoZmNISnZkR1ZqZEdsdmJn.field.c3RhdHVz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfcHVzaF9wcm90ZWN0aW9uIzNlZjgwMmY2MjJiYzFjOGQ2ZDM5OWU5NWY1MjQyN2ZlY2U2NDFkMzNkODc4ZjhmNGMxOTRjODgwOWRmMDAwYzU.field.c3RhdHVz.desc": {
           "source": "Can be `enabled` or `disabled`.",
           "message": "Може бути `enabled` або `disabled`."
         },
@@ -3339,19 +3339,19 @@
           "source": "Label names. A label that does not exist in the repository is created by GitHub when it is applied.",
           "message": "Назви міток. Якщо мітка не існує в репозиторії, GitHub створить її під час застосування."
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjNiYzA4NmViODg0ODFmNWJiYjljZDZmM2JmNGU4M2JhNzdkYjRjZjgzZTNiZjNiOGRlZTc4ZWZhZGI1MWZjOA.field.Y29sb3I.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYWUwNDcyYzAxYThiYzYxOGE3MDkwMjAxZTU4ZmEyOTM2YzRjOTJlMzZhODIyZDIyMTkyMzA3ZGEzYzcyMzc1Nw.field.Y29sb3I.display_name": {
           "source": "Color",
           "message": "Колір"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjNiYzA4NmViODg0ODFmNWJiYjljZDZmM2JmNGU4M2JhNzdkYjRjZjgzZTNiZjNiOGRlZTc4ZWZhZGI1MWZjOA.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYWUwNDcyYzAxYThiYzYxOGE3MDkwMjAxZTU4ZmEyOTM2YzRjOTJlMzZhODIyZDIyMTkyMzA3ZGEzYzcyMzc1Nw.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "Опис"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjNiYzA4NmViODg0ODFmNWJiYjljZDZmM2JmNGU4M2JhNzdkYjRjZjgzZTNiZjNiOGRlZTc4ZWZhZGI1MWZjOA.field.aWQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYWUwNDcyYzAxYThiYzYxOGE3MDkwMjAxZTU4ZmEyOTM2YzRjOTJlMzZhODIyZDIyMTkyMzA3ZGEzYzcyMzc1Nw.field.aWQ.display_name": {
           "source": "ID",
           "message": "ID"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjNiYzA4NmViODg0ODFmNWJiYjljZDZmM2JmNGU4M2JhNzdkYjRjZjgzZTNiZjNiOGRlZTc4ZWZhZGI1MWZjOA.field.bmFtZQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYWUwNDcyYzAxYThiYzYxOGE3MDkwMjAxZTU4ZmEyOTM2YzRjOTJlMzZhODIyZDIyMTkyMzA3ZGEzYzcyMzc1Nw.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "Назва"
         },
@@ -3551,55 +3551,55 @@
           "source": "GitHub only accepts assignees with **push access** to the repository and silently ignores the rest, so this dropdown lists the repository's collaborators.",
           "message": "GitHub приймає лише виконавців із **доступом на запис** до репозиторію та автоматично ігнорує решту, тому цей спадний список містить співавторів репозиторію."
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjY1ZmU1M2M0MzA3ZDczMWY5ZDNiMjdjZWJhMWM5NTNjNmRhM2NkNTI3N2FkZTJkZmFhZmM5NzdjNjIyMDc3ZA.field.Y29uZmlkZW5jZQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.Y29uZmlkZW5jZQ.display_name": {
           "source": "Confidence",
           "message": "Ймовірність"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjY1ZmU1M2M0MzA3ZDczMWY5ZDNiMjdjZWJhMWM5NTNjNmRhM2NkNTI3N2FkZTJkZmFhZmM5NzdjNjIyMDc3ZA.field.Y29uZmlkZW5jZQ.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.Y29uZmlkZW5jZQ.short_desc": {
           "source": "The confidence level for this assignee choice",
           "message": "Рівень довіри для цього вибору виконавця"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjY1ZmU1M2M0MzA3ZDczMWY5ZDNiMjdjZWJhMWM5NTNjNmRhM2NkNTI3N2FkZTJkZmFhZmM5NzdjNjIyMDc3ZA.field.Y29uZmlkZW5jZQ.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.Y29uZmlkZW5jZQ.desc": {
           "source": "The confidence level for this assignee choice.",
           "message": "Рівень довіри для цього вибору виконавця."
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjY1ZmU1M2M0MzA3ZDczMWY5ZDNiMjdjZWJhMWM5NTNjNmRhM2NkNTI3N2FkZTJkZmFhZmM5NzdjNjIyMDc3ZA.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "low",
           "message": "низький"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjY1ZmU1M2M0MzA3ZDczMWY5ZDNiMjdjZWJhMWM5NTNjNmRhM2NkNTI3N2FkZTJkZmFhZmM5NzdjNjIyMDc3ZA.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "medium",
           "message": "середній"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjY1ZmU1M2M0MzA3ZDczMWY5ZDNiMjdjZWJhMWM5NTNjNmRhM2NkNTI3N2FkZTJkZmFhZmM5NzdjNjIyMDc3ZA.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
           "source": "high",
           "message": "високий"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjY1ZmU1M2M0MzA3ZDczMWY5ZDNiMjdjZWJhMWM5NTNjNmRhM2NkNTI3N2FkZTJkZmFhZmM5NzdjNjIyMDc3ZA.field.bG9naW4.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.bG9naW4.display_name": {
           "source": "Login",
           "message": "Логін"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjY1ZmU1M2M0MzA3ZDczMWY5ZDNiMjdjZWJhMWM5NTNjNmRhM2NkNTI3N2FkZTJkZmFhZmM5NzdjNjIyMDc3ZA.field.cmF0aW9uYWxl.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.cmF0aW9uYWxl.display_name": {
           "source": "Rationale",
           "message": "Аргументація"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjY1ZmU1M2M0MzA3ZDczMWY5ZDNiMjdjZWJhMWM5NTNjNmRhM2NkNTI3N2FkZTJkZmFhZmM5NzdjNjIyMDc3ZA.field.cmF0aW9uYWxl.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.cmF0aW9uYWxl.short_desc": {
           "source": "Optional reasoning for selecting this assignee",
           "message": "Додаткове пояснення вибору цього відповідального"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjY1ZmU1M2M0MzA3ZDczMWY5ZDNiMjdjZWJhMWM5NTNjNmRhM2NkNTI3N2FkZTJkZmFhZmM5NzdjNjIyMDc3ZA.field.cmF0aW9uYWxl.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.cmF0aW9uYWxl.desc": {
           "source": "Optional reasoning for selecting this assignee.",
           "message": "Додаткове пояснення вибору цього відповідального."
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjY1ZmU1M2M0MzA3ZDczMWY5ZDNiMjdjZWJhMWM5NTNjNmRhM2NkNTI3N2FkZTJkZmFhZmM5NzdjNjIyMDc3ZA.field.c3VnZ2VzdA.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.c3VnZ2VzdA.display_name": {
           "source": "Suggest",
           "message": "Підказка"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjY1ZmU1M2M0MzA3ZDczMWY5ZDNiMjdjZWJhMWM5NTNjNmRhM2NkNTI3N2FkZTJkZmFhZmM5NzdjNjIyMDc3ZA.field.c3VnZ2VzdA.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.c3VnZ2VzdA.short_desc": {
           "source": "If 'true', the change is stored as a pending suggestion for human review…",
           "message": "Якщо 'true', зміна зберігається як запропонований варіант для людської перевірки…"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYjY1ZmU1M2M0MzA3ZDczMWY5ZDNiMjdjZWJhMWM5NTNjNmRhM2NkNTI3N2FkZTJkZmFhZmM5NzdjNjIyMDc3ZA.field.c3VnZ2VzdA.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.c3VnZ2VzdA.desc": {
           "source": "If `true`, the change is stored as a pending suggestion for human review rather than applied directly.",
           "message": "Якщо `true`, зміна зберігається як запропонований варіант для людської перевірки, а не застосовується безпосередньо."
         },
@@ -3615,67 +3615,67 @@
           "source": "Label names. A label that does not exist in the repository is created by GitHub when it is applied.",
           "message": "Назви міток. Якщо мітка не існує в репозиторії, GitHub створить її під час застосування."
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNGJlNDgxMDZhNzZiZDcxMDM5ZTg2N2E3ZmUzNmM0MzM0OWU2YjdkZGQ5YzJkYWU5NGU0NjllYTRiOWUwNTBmMA.field.Y29sb3I.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.Y29sb3I.display_name": {
           "source": "Color",
           "message": "Колір"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNGJlNDgxMDZhNzZiZDcxMDM5ZTg2N2E3ZmUzNmM0MzM0OWU2YjdkZGQ5YzJkYWU5NGU0NjllYTRiOWUwNTBmMA.field.Y29uZmlkZW5jZQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.Y29uZmlkZW5jZQ.display_name": {
           "source": "Confidence",
           "message": "Ймовірність"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNGJlNDgxMDZhNzZiZDcxMDM5ZTg2N2E3ZmUzNmM0MzM0OWU2YjdkZGQ5YzJkYWU5NGU0NjllYTRiOWUwNTBmMA.field.Y29uZmlkZW5jZQ.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.Y29uZmlkZW5jZQ.short_desc": {
           "source": "The confidence level for this label choice",
           "message": "Рівень довіри для цього вибору мітки"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNGJlNDgxMDZhNzZiZDcxMDM5ZTg2N2E3ZmUzNmM0MzM0OWU2YjdkZGQ5YzJkYWU5NGU0NjllYTRiOWUwNTBmMA.field.Y29uZmlkZW5jZQ.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.Y29uZmlkZW5jZQ.desc": {
           "source": "The confidence level for this label choice.",
           "message": "Рівень довіри для цього вибору мітки."
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNGJlNDgxMDZhNzZiZDcxMDM5ZTg2N2E3ZmUzNmM0MzM0OWU2YjdkZGQ5YzJkYWU5NGU0NjllYTRiOWUwNTBmMA.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "low",
           "message": "низький"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNGJlNDgxMDZhNzZiZDcxMDM5ZTg2N2E3ZmUzNmM0MzM0OWU2YjdkZGQ5YzJkYWU5NGU0NjllYTRiOWUwNTBmMA.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "medium",
           "message": "середній"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNGJlNDgxMDZhNzZiZDcxMDM5ZTg2N2E3ZmUzNmM0MzM0OWU2YjdkZGQ5YzJkYWU5NGU0NjllYTRiOWUwNTBmMA.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
           "source": "high",
           "message": "високий"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNGJlNDgxMDZhNzZiZDcxMDM5ZTg2N2E3ZmUzNmM0MzM0OWU2YjdkZGQ5YzJkYWU5NGU0NjllYTRiOWUwNTBmMA.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "Опис"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNGJlNDgxMDZhNzZiZDcxMDM5ZTg2N2E3ZmUzNmM0MzM0OWU2YjdkZGQ5YzJkYWU5NGU0NjllYTRiOWUwNTBmMA.field.aWQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.aWQ.display_name": {
           "source": "ID",
           "message": "ID"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNGJlNDgxMDZhNzZiZDcxMDM5ZTg2N2E3ZmUzNmM0MzM0OWU2YjdkZGQ5YzJkYWU5NGU0NjllYTRiOWUwNTBmMA.field.bmFtZQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "Назва"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNGJlNDgxMDZhNzZiZDcxMDM5ZTg2N2E3ZmUzNmM0MzM0OWU2YjdkZGQ5YzJkYWU5NGU0NjllYTRiOWUwNTBmMA.field.cmF0aW9uYWxl.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.cmF0aW9uYWxl.display_name": {
           "source": "Rationale",
           "message": "Аргументація"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNGJlNDgxMDZhNzZiZDcxMDM5ZTg2N2E3ZmUzNmM0MzM0OWU2YjdkZGQ5YzJkYWU5NGU0NjllYTRiOWUwNTBmMA.field.cmF0aW9uYWxl.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.cmF0aW9uYWxl.short_desc": {
           "source": "Optional reasoning for selecting this label",
           "message": "Додаткове пояснення вибору цього мітки"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNGJlNDgxMDZhNzZiZDcxMDM5ZTg2N2E3ZmUzNmM0MzM0OWU2YjdkZGQ5YzJkYWU5NGU0NjllYTRiOWUwNTBmMA.field.cmF0aW9uYWxl.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.cmF0aW9uYWxl.desc": {
           "source": "Optional reasoning for selecting this label.",
           "message": "Додаткове пояснення вибору цього мітки."
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNGJlNDgxMDZhNzZiZDcxMDM5ZTg2N2E3ZmUzNmM0MzM0OWU2YjdkZGQ5YzJkYWU5NGU0NjllYTRiOWUwNTBmMA.field.c3VnZ2VzdA.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.c3VnZ2VzdA.display_name": {
           "source": "Suggest",
           "message": "Підказка"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNGJlNDgxMDZhNzZiZDcxMDM5ZTg2N2E3ZmUzNmM0MzM0OWU2YjdkZGQ5YzJkYWU5NGU0NjllYTRiOWUwNTBmMA.field.c3VnZ2VzdA.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.c3VnZ2VzdA.short_desc": {
           "source": "If 'true', the change is stored as a pending suggestion for human review…",
           "message": "Якщо 'true', зміна зберігається як запропонований варіант для людської перевірки…"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNGJlNDgxMDZhNzZiZDcxMDM5ZTg2N2E3ZmUzNmM0MzM0OWU2YjdkZGQ5YzJkYWU5NGU0NjllYTRiOWUwNTBmMA.field.c3VnZ2VzdA.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.c3VnZ2VzdA.desc": {
           "source": "If `true`, the change is stored as a pending suggestion for human review rather than applied directly.",
           "message": "Якщо `true`, зміна зберігається як запропонований варіант для людської перевірки, а не застосовується безпосередньо."
         },
@@ -3803,63 +3803,63 @@
           "source": "The issue type to associate with this issue. Only users with push access can set the type for issues. Without push access to the repository, type changes are silently dropped.",
           "message": "Тип завдання, який слід пов'язати з цим завданням. Лише користувачі з правами на push-доступ можуть встановлювати тип завдань. Без push-доступу до репозиторію зміни типу відхиляються без повідомлення."
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjYTNkY2RmNDkwNTIxYTc3ZmIzNDBiM2EyNWU5NTQ1ZDQwZTkwYjMzMWYzZTQwYmRhYzY4Mzc0ZTdlYTkzNjgwYg.field.Y29uZmlkZW5jZQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.Y29uZmlkZW5jZQ.display_name": {
           "source": "Confidence",
           "message": "Ймовірність"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjYTNkY2RmNDkwNTIxYTc3ZmIzNDBiM2EyNWU5NTQ1ZDQwZTkwYjMzMWYzZTQwYmRhYzY4Mzc0ZTdlYTkzNjgwYg.field.Y29uZmlkZW5jZQ.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.Y29uZmlkZW5jZQ.short_desc": {
           "source": "The confidence level for this type choice",
           "message": "Рівень довіри для цього вибору типу"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjYTNkY2RmNDkwNTIxYTc3ZmIzNDBiM2EyNWU5NTQ1ZDQwZTkwYjMzMWYzZTQwYmRhYzY4Mzc0ZTdlYTkzNjgwYg.field.Y29uZmlkZW5jZQ.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.Y29uZmlkZW5jZQ.desc": {
           "source": "The confidence level for this type choice.",
           "message": "Рівень довіри для цього вибору типу."
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjYTNkY2RmNDkwNTIxYTc3ZmIzNDBiM2EyNWU5NTQ1ZDQwZTkwYjMzMWYzZTQwYmRhYzY4Mzc0ZTdlYTkzNjgwYg.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "low",
           "message": "низький"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjYTNkY2RmNDkwNTIxYTc3ZmIzNDBiM2EyNWU5NTQ1ZDQwZTkwYjMzMWYzZTQwYmRhYzY4Mzc0ZTdlYTkzNjgwYg.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "medium",
           "message": "середній"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjYTNkY2RmNDkwNTIxYTc3ZmIzNDBiM2EyNWU5NTQ1ZDQwZTkwYjMzMWYzZTQwYmRhYzY4Mzc0ZTdlYTkzNjgwYg.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
           "source": "high",
           "message": "високий"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjYTNkY2RmNDkwNTIxYTc3ZmIzNDBiM2EyNWU5NTQ1ZDQwZTkwYjMzMWYzZTQwYmRhYzY4Mzc0ZTdlYTkzNjgwYg.field.cmF0aW9uYWxl.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.cmF0aW9uYWxl.display_name": {
           "source": "Rationale",
           "message": "Аргументація"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjYTNkY2RmNDkwNTIxYTc3ZmIzNDBiM2EyNWU5NTQ1ZDQwZTkwYjMzMWYzZTQwYmRhYzY4Mzc0ZTdlYTkzNjgwYg.field.cmF0aW9uYWxl.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.cmF0aW9uYWxl.short_desc": {
           "source": "Optional reasoning for selecting this type",
           "message": "Додаткове пояснення вибору цього типу"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjYTNkY2RmNDkwNTIxYTc3ZmIzNDBiM2EyNWU5NTQ1ZDQwZTkwYjMzMWYzZTQwYmRhYzY4Mzc0ZTdlYTkzNjgwYg.field.cmF0aW9uYWxl.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.cmF0aW9uYWxl.desc": {
           "source": "Optional reasoning for selecting this type.",
           "message": "Додаткове пояснення вибору цього типу."
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjYTNkY2RmNDkwNTIxYTc3ZmIzNDBiM2EyNWU5NTQ1ZDQwZTkwYjMzMWYzZTQwYmRhYzY4Mzc0ZTdlYTkzNjgwYg.field.c3VnZ2VzdA.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.c3VnZ2VzdA.display_name": {
           "source": "Suggest",
           "message": "Підказка"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjYTNkY2RmNDkwNTIxYTc3ZmIzNDBiM2EyNWU5NTQ1ZDQwZTkwYjMzMWYzZTQwYmRhYzY4Mzc0ZTdlYTkzNjgwYg.field.c3VnZ2VzdA.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.c3VnZ2VzdA.short_desc": {
           "source": "If 'true', the change is stored as a pending suggestion for human review…",
           "message": "Якщо 'true', зміна зберігається як запропонований варіант для людської перевірки…"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjYTNkY2RmNDkwNTIxYTc3ZmIzNDBiM2EyNWU5NTQ1ZDQwZTkwYjMzMWYzZTQwYmRhYzY4Mzc0ZTdlYTkzNjgwYg.field.c3VnZ2VzdA.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.c3VnZ2VzdA.desc": {
           "source": "If `true`, the change is stored as a pending suggestion for human review rather than applied directly.",
           "message": "Якщо `true`, зміна зберігається як запропонований варіант для людської перевірки, а не застосовується безпосередньо."
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjYTNkY2RmNDkwNTIxYTc3ZmIzNDBiM2EyNWU5NTQ1ZDQwZTkwYjMzMWYzZTQwYmRhYzY4Mzc0ZTdlYTkzNjgwYg.field.dmFsdWU.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Значення"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjYTNkY2RmNDkwNTIxYTc3ZmIzNDBiM2EyNWU5NTQ1ZDQwZTkwYjMzMWYzZTQwYmRhYzY4Mzc0ZTdlYTkzNjgwYg.field.dmFsdWU.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.dmFsdWU.short_desc": {
           "source": "The name of the issue type to associate with this issue, or 'null' to remove…",
           "message": "Назва типу завдання, яке потрібно призначити цьому завданню, або 'null' для видалення…"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjYTNkY2RmNDkwNTIxYTc3ZmIzNDBiM2EyNWU5NTQ1ZDQwZTkwYjMzMWYzZTQwYmRhYzY4Mzc0ZTdlYTkzNjgwYg.field.dmFsdWU.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.dmFsdWU.desc": {
           "source": "The name of the issue type to associate with this issue, or `null` to remove the current issue type.",
           "message": "Назва типу завдання, яке потрібно призначити цьому завданню, або `null` для видалення поточного типу завдання."
         },
@@ -3923,63 +3923,63 @@
           "source": "GitHub only accepts assignees with **push access** to the repository and silently ignores the rest, so this dropdown lists the repository's collaborators.",
           "message": "GitHub приймає лише виконавців із **доступом на запис** до репозиторію та автоматично ігнорує решту, тому цей спадний список містить співавторів репозиторію."
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjMmM3Mjg1YTgzZjg4NzRjY2MzNDAxMWNmMGQyYTBiOWZjZDk5YTZlMjFhMGI3NGJmYjczNDg4NjhkNTA4MDAyNw.field.Y29uZmlkZW5jZQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.Y29uZmlkZW5jZQ.display_name": {
           "source": "Confidence",
           "message": "Ймовірність"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjMmM3Mjg1YTgzZjg4NzRjY2MzNDAxMWNmMGQyYTBiOWZjZDk5YTZlMjFhMGI3NGJmYjczNDg4NjhkNTA4MDAyNw.field.Y29uZmlkZW5jZQ.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.Y29uZmlkZW5jZQ.short_desc": {
           "source": "The confidence level for this assignee choice",
           "message": "Рівень довіри для цього вибору виконавця"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjMmM3Mjg1YTgzZjg4NzRjY2MzNDAxMWNmMGQyYTBiOWZjZDk5YTZlMjFhMGI3NGJmYjczNDg4NjhkNTA4MDAyNw.field.Y29uZmlkZW5jZQ.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.Y29uZmlkZW5jZQ.desc": {
           "source": "The confidence level for this assignee choice.",
           "message": "Рівень довіри для цього вибору виконавця."
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjMmM3Mjg1YTgzZjg4NzRjY2MzNDAxMWNmMGQyYTBiOWZjZDk5YTZlMjFhMGI3NGJmYjczNDg4NjhkNTA4MDAyNw.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "low",
           "message": "низький"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjMmM3Mjg1YTgzZjg4NzRjY2MzNDAxMWNmMGQyYTBiOWZjZDk5YTZlMjFhMGI3NGJmYjczNDg4NjhkNTA4MDAyNw.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "medium",
           "message": "середній"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjMmM3Mjg1YTgzZjg4NzRjY2MzNDAxMWNmMGQyYTBiOWZjZDk5YTZlMjFhMGI3NGJmYjczNDg4NjhkNTA4MDAyNw.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
           "source": "high",
           "message": "високий"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjMmM3Mjg1YTgzZjg4NzRjY2MzNDAxMWNmMGQyYTBiOWZjZDk5YTZlMjFhMGI3NGJmYjczNDg4NjhkNTA4MDAyNw.field.bG9naW4.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.bG9naW4.display_name": {
           "source": "Login",
           "message": "Логін"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjMmM3Mjg1YTgzZjg4NzRjY2MzNDAxMWNmMGQyYTBiOWZjZDk5YTZlMjFhMGI3NGJmYjczNDg4NjhkNTA4MDAyNw.field.bG9naW4.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.bG9naW4.short_desc": {
           "source": "The login of the user to assign",
           "message": "Логін користувача для призначення"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjMmM3Mjg1YTgzZjg4NzRjY2MzNDAxMWNmMGQyYTBiOWZjZDk5YTZlMjFhMGI3NGJmYjczNDg4NjhkNTA4MDAyNw.field.bG9naW4.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.bG9naW4.desc": {
           "source": "The login of the user to assign.",
           "message": "Логін користувача для призначення."
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjMmM3Mjg1YTgzZjg4NzRjY2MzNDAxMWNmMGQyYTBiOWZjZDk5YTZlMjFhMGI3NGJmYjczNDg4NjhkNTA4MDAyNw.field.cmF0aW9uYWxl.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.cmF0aW9uYWxl.display_name": {
           "source": "Rationale",
           "message": "Аргументація"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjMmM3Mjg1YTgzZjg4NzRjY2MzNDAxMWNmMGQyYTBiOWZjZDk5YTZlMjFhMGI3NGJmYjczNDg4NjhkNTA4MDAyNw.field.cmF0aW9uYWxl.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.cmF0aW9uYWxl.short_desc": {
           "source": "Optional reasoning for adding this assignee",
           "message": "Додаткове пояснення додавання цього відповідального"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjMmM3Mjg1YTgzZjg4NzRjY2MzNDAxMWNmMGQyYTBiOWZjZDk5YTZlMjFhMGI3NGJmYjczNDg4NjhkNTA4MDAyNw.field.cmF0aW9uYWxl.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.cmF0aW9uYWxl.desc": {
           "source": "Optional reasoning for adding this assignee.",
           "message": "Додаткове пояснення додавання цього відповідального."
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjMmM3Mjg1YTgzZjg4NzRjY2MzNDAxMWNmMGQyYTBiOWZjZDk5YTZlMjFhMGI3NGJmYjczNDg4NjhkNTA4MDAyNw.field.c3VnZ2VzdA.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.c3VnZ2VzdA.display_name": {
           "source": "Suggest",
           "message": "Підказка"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjMmM3Mjg1YTgzZjg4NzRjY2MzNDAxMWNmMGQyYTBiOWZjZDk5YTZlMjFhMGI3NGJmYjczNDg4NjhkNTA4MDAyNw.field.c3VnZ2VzdA.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.c3VnZ2VzdA.short_desc": {
           "source": "If 'true', the assignee is stored as a pending suggestion for human review…",
           "message": "Якщо 'true', відповідальний зберігається як запропонований варіант для людської перевірки…"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjMmM3Mjg1YTgzZjg4NzRjY2MzNDAxMWNmMGQyYTBiOWZjZDk5YTZlMjFhMGI3NGJmYjczNDg4NjhkNTA4MDAyNw.field.c3VnZ2VzdA.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.c3VnZ2VzdA.desc": {
           "source": "If `true`, the assignee is stored as a pending suggestion for human review rather than applied directly.",
           "message": "Якщо `true`, відповідальний зберігається як запропонований варіант для людської перевірки, а не застосовується безпосередньо."
         },

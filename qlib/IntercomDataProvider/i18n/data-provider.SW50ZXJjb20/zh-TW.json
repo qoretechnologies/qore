@@ -355,203 +355,203 @@
           "source": "Query",
           "message": "查詢"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.ZmllbGQ.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.ZmllbGQ.display_name": {
           "source": "Field",
           "message": "欄位"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.ZmllbGQ.short_desc": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.ZmllbGQ.short_desc": {
           "source": "The accepted field that you want to search on",
           "message": "您想要搜尋的接受欄位"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.ZmllbGQ.desc": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.ZmllbGQ.desc": {
           "source": "The accepted field that you want to search on.",
           "message": "您想要搜尋的接受欄位。"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.display_name": {
           "source": "Operator",
           "message": "運運算元"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.short_desc": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.short_desc": {
           "source": "The accepted operators you can use to define how you want to search for the…",
           "message": "用來定義您要如何搜尋值的接受運算子……"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.desc": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.desc": {
           "source": "The accepted operators you can use to define how you want to search for the value.",
           "message": "用來定義您要如何搜尋值的接受運算子"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOj0.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOj0.display_name": {
           "source": "=",
           "message": "="
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiE9.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiE9.display_name": {
           "source": "!=",
           "message": "!="
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOklO.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOklO.display_name": {
           "source": "IN",
           "message": "IN"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOk5JTg.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOk5JTg.display_name": {
           "source": "NIN",
           "message": "NIN"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOjw.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOjw.display_name": {
           "source": "<",
           "message": "<"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOj4.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOj4.display_name": {
           "source": ">",
           "message": ">"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOn4.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOn4.display_name": {
           "source": "~",
           "message": "~"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiF-.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiF-.display_name": {
           "source": "!~",
           "message": "!~"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOl4.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOl4.display_name": {
           "source": "^",
           "message": "^"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiQ.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiQ.display_name": {
           "source": "$",
           "message": "$"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.dmFsdWU.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.dmFsdWU.short_desc": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.dmFsdWU.short_desc": {
           "source": "The value that you want to search on",
           "message": "您想要搜尋的值"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.dmFsdWU.desc": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.dmFsdWU.desc": {
           "source": "The value that you want to search on.",
           "message": "您想要搜尋的值。"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjY2JjMjIwNTE3YThlMjkzZjk1ZTNlOGIwNzU0ZDE1ZWYyYTFlN2YxMmEwMzY4YTkxYmIzYWZkZWQ2N2YyM2FhMA.field.b3BlcmF0b3I.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjMDAxMGMyMTQwOWY3MWNkNmY1MTk2NTJmM2ZjMGUxOTQ5MWU0YTMzNGNjNzZmOTZlOWFhMzI1MjM4YTk2MmU1OA.field.b3BlcmF0b3I.display_name": {
           "source": "Operator",
           "message": "運運算元"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjY2JjMjIwNTE3YThlMjkzZjk1ZTNlOGIwNzU0ZDE1ZWYyYTFlN2YxMmEwMzY4YTkxYmIzYWZkZWQ2N2YyM2FhMA.field.b3BlcmF0b3I.short_desc": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjMDAxMGMyMTQwOWY3MWNkNmY1MTk2NTJmM2ZjMGUxOTQ5MWU0YTMzNGNjNzZmOTZlOWFhMzI1MjM4YTk2MmU1OA.field.b3BlcmF0b3I.short_desc": {
           "source": "An operator to allow boolean inspection between multiple fields",
           "message": "允許在多個欄位之間進行布林值檢視的運算子"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjY2JjMjIwNTE3YThlMjkzZjk1ZTNlOGIwNzU0ZDE1ZWYyYTFlN2YxMmEwMzY4YTkxYmIzYWZkZWQ2N2YyM2FhMA.field.b3BlcmF0b3I.desc": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjMDAxMGMyMTQwOWY3MWNkNmY1MTk2NTJmM2ZjMGUxOTQ5MWU0YTMzNGNjNzZmOTZlOWFhMzI1MjM4YTk2MmU1OA.field.b3BlcmF0b3I.desc": {
           "source": "An operator to allow boolean inspection between multiple fields.",
           "message": "允許在多個欄位之間進行布林值檢視的運算子。"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjY2JjMjIwNTE3YThlMjkzZjk1ZTNlOGIwNzU0ZDE1ZWYyYTFlN2YxMmEwMzY4YTkxYmIzYWZkZWQ2N2YyM2FhMA.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOkFORA.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjMDAxMGMyMTQwOWY3MWNkNmY1MTk2NTJmM2ZjMGUxOTQ5MWU0YTMzNGNjNzZmOTZlOWFhMzI1MjM4YTk2MmU1OA.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOkFORA.display_name": {
           "source": "AND",
           "message": "AND"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjY2JjMjIwNTE3YThlMjkzZjk1ZTNlOGIwNzU0ZDE1ZWYyYTFlN2YxMmEwMzY4YTkxYmIzYWZkZWQ2N2YyM2FhMA.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOk9S.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjMDAxMGMyMTQwOWY3MWNkNmY1MTk2NTJmM2ZjMGUxOTQ5MWU0YTMzNGNjNzZmOTZlOWFhMzI1MjM4YTk2MmU1OA.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOk9S.display_name": {
           "source": "OR",
           "message": "OR"
         },
-        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjY2JjMjIwNTE3YThlMjkzZjk1ZTNlOGIwNzU0ZDE1ZWYyYTFlN2YxMmEwMzY4YTkxYmIzYWZkZWQ2N2YyM2FhMA.field.dmFsdWU.display_name": {
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjMDAxMGMyMTQwOWY3MWNkNmY1MTk2NTJmM2ZjMGUxOTQ5MWU0YTMzNGNjNzZmOTZlOWFhMzI1MjM4YTk2MmU1OA.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOm11bHRpcGxlX2ZpbHRlcl9zZWFyY2hfcmVxdWVzdCM1ZWU2OTQxNTlkMDA0ZGM1NzYxMDg5ZTE5ODc1ZDg4MGNkYjY0MTI3ZDQxMDdmM2MyMDA1ZjEzYjQyNDk3OGFkOm9wdGlvbjpjWFZsY25rOnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXB0ZFd4MGFYQnNaVjltYVd4MFpYSmZjMlZoY21Ob1gzSmxjWFZsYzNRalkySmpNakl3TlRFM1lUaGxNamt6WmprMVpUTmxPR0l3TnpVMFpERTFaV1l5WVRGbE4yWXhNbUV3TXpZNFlUa3hZbUl6WVdaa1pXUTJOMll5TTJGaE1BOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPaXBzYVhOMFBHaGhjMmc4WVhWMGJ6NC1JekV3WW1VeE1tTmhNalkxTldabE5EWTVabVprWXpVeE16SmpZbU15T0RZM1lUSm1ZakkyWldabE5EYzRObVEzWVdVd09EVmhOV0V3TjJRMllqRTJPV0k6ZmllbGQ6ZG1Gc2RXVQ.field.b3BlcmF0b3I.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOm11bHRpcGxlX2ZpbHRlcl9zZWFyY2hfcmVxdWVzdCNkYzIwYjNiMzQxNDUyZjEzOTczOTU5OTE5ZGE5MTNiOGNjNDM0OWUxYmY3Njg3MzliMzYxYjUwNmJhMDE4Njhi.field.b3BlcmF0b3I.display_name": {
           "source": "Operator",
           "message": "運運算元"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOm11bHRpcGxlX2ZpbHRlcl9zZWFyY2hfcmVxdWVzdCM1ZWU2OTQxNTlkMDA0ZGM1NzYxMDg5ZTE5ODc1ZDg4MGNkYjY0MTI3ZDQxMDdmM2MyMDA1ZjEzYjQyNDk3OGFkOm9wdGlvbjpjWFZsY25rOnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXB0ZFd4MGFYQnNaVjltYVd4MFpYSmZjMlZoY21Ob1gzSmxjWFZsYzNRalkySmpNakl3TlRFM1lUaGxNamt6WmprMVpUTmxPR0l3TnpVMFpERTFaV1l5WVRGbE4yWXhNbUV3TXpZNFlUa3hZbUl6WVdaa1pXUTJOMll5TTJGaE1BOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPaXBzYVhOMFBHaGhjMmc4WVhWMGJ6NC1JekV3WW1VeE1tTmhNalkxTldabE5EWTVabVprWXpVeE16SmpZbU15T0RZM1lUSm1ZakkyWldabE5EYzRObVEzWVdVd09EVmhOV0V3TjJRMllqRTJPV0k6ZmllbGQ6ZG1Gc2RXVQ.field.b3BlcmF0b3I.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOm11bHRpcGxlX2ZpbHRlcl9zZWFyY2hfcmVxdWVzdCNkYzIwYjNiMzQxNDUyZjEzOTczOTU5OTE5ZGE5MTNiOGNjNDM0OWUxYmY3Njg3MzliMzYxYjUwNmJhMDE4Njhi.field.b3BlcmF0b3I.short_desc": {
           "source": "An operator to allow boolean inspection between multiple fields",
           "message": "允許在多個欄位之間進行布林值檢視的運算子"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOm11bHRpcGxlX2ZpbHRlcl9zZWFyY2hfcmVxdWVzdCM1ZWU2OTQxNTlkMDA0ZGM1NzYxMDg5ZTE5ODc1ZDg4MGNkYjY0MTI3ZDQxMDdmM2MyMDA1ZjEzYjQyNDk3OGFkOm9wdGlvbjpjWFZsY25rOnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXB0ZFd4MGFYQnNaVjltYVd4MFpYSmZjMlZoY21Ob1gzSmxjWFZsYzNRalkySmpNakl3TlRFM1lUaGxNamt6WmprMVpUTmxPR0l3TnpVMFpERTFaV1l5WVRGbE4yWXhNbUV3TXpZNFlUa3hZbUl6WVdaa1pXUTJOMll5TTJGaE1BOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPaXBzYVhOMFBHaGhjMmc4WVhWMGJ6NC1JekV3WW1VeE1tTmhNalkxTldabE5EWTVabVprWXpVeE16SmpZbU15T0RZM1lUSm1ZakkyWldabE5EYzRObVEzWVdVd09EVmhOV0V3TjJRMllqRTJPV0k6ZmllbGQ6ZG1Gc2RXVQ.field.b3BlcmF0b3I.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOm11bHRpcGxlX2ZpbHRlcl9zZWFyY2hfcmVxdWVzdCNkYzIwYjNiMzQxNDUyZjEzOTczOTU5OTE5ZGE5MTNiOGNjNDM0OWUxYmY3Njg3MzliMzYxYjUwNmJhMDE4Njhi.field.b3BlcmF0b3I.desc": {
           "source": "An operator to allow boolean inspection between multiple fields.",
           "message": "允許在多個欄位之間進行布林值檢視的運算子。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOm11bHRpcGxlX2ZpbHRlcl9zZWFyY2hfcmVxdWVzdCM1ZWU2OTQxNTlkMDA0ZGM1NzYxMDg5ZTE5ODc1ZDg4MGNkYjY0MTI3ZDQxMDdmM2MyMDA1ZjEzYjQyNDk3OGFkOm9wdGlvbjpjWFZsY25rOnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXB0ZFd4MGFYQnNaVjltYVd4MFpYSmZjMlZoY21Ob1gzSmxjWFZsYzNRalkySmpNakl3TlRFM1lUaGxNamt6WmprMVpUTmxPR0l3TnpVMFpERTFaV1l5WVRGbE4yWXhNbUV3TXpZNFlUa3hZbUl6WVdaa1pXUTJOMll5TTJGaE1BOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPaXBzYVhOMFBHaGhjMmc4WVhWMGJ6NC1JekV3WW1VeE1tTmhNalkxTldabE5EWTVabVprWXpVeE16SmpZbU15T0RZM1lUSm1ZakkyWldabE5EYzRObVEzWVdVd09EVmhOV0V3TjJRMllqRTJPV0k6ZmllbGQ6ZG1Gc2RXVQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOkFORA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOm11bHRpcGxlX2ZpbHRlcl9zZWFyY2hfcmVxdWVzdCNkYzIwYjNiMzQxNDUyZjEzOTczOTU5OTE5ZGE5MTNiOGNjNDM0OWUxYmY3Njg3MzliMzYxYjUwNmJhMDE4Njhi.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOkFORA.display_name": {
           "source": "AND",
           "message": "AND"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOm11bHRpcGxlX2ZpbHRlcl9zZWFyY2hfcmVxdWVzdCM1ZWU2OTQxNTlkMDA0ZGM1NzYxMDg5ZTE5ODc1ZDg4MGNkYjY0MTI3ZDQxMDdmM2MyMDA1ZjEzYjQyNDk3OGFkOm9wdGlvbjpjWFZsY25rOnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXB0ZFd4MGFYQnNaVjltYVd4MFpYSmZjMlZoY21Ob1gzSmxjWFZsYzNRalkySmpNakl3TlRFM1lUaGxNamt6WmprMVpUTmxPR0l3TnpVMFpERTFaV1l5WVRGbE4yWXhNbUV3TXpZNFlUa3hZbUl6WVdaa1pXUTJOMll5TTJGaE1BOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPaXBzYVhOMFBHaGhjMmc4WVhWMGJ6NC1JekV3WW1VeE1tTmhNalkxTldabE5EWTVabVprWXpVeE16SmpZbU15T0RZM1lUSm1ZakkyWldabE5EYzRObVEzWVdVd09EVmhOV0V3TjJRMllqRTJPV0k6ZmllbGQ6ZG1Gc2RXVQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOk9S.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOm11bHRpcGxlX2ZpbHRlcl9zZWFyY2hfcmVxdWVzdCNkYzIwYjNiMzQxNDUyZjEzOTczOTU5OTE5ZGE5MTNiOGNjNDM0OWUxYmY3Njg3MzliMzYxYjUwNmJhMDE4Njhi.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOk9S.display_name": {
           "source": "OR",
           "message": "OR"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOm11bHRpcGxlX2ZpbHRlcl9zZWFyY2hfcmVxdWVzdCM1ZWU2OTQxNTlkMDA0ZGM1NzYxMDg5ZTE5ODc1ZDg4MGNkYjY0MTI3ZDQxMDdmM2MyMDA1ZjEzYjQyNDk3OGFkOm9wdGlvbjpjWFZsY25rOnVuaW9uOlNHRnphRVJoZEdGVWVYQmxPaXB0ZFd4MGFYQnNaVjltYVd4MFpYSmZjMlZoY21Ob1gzSmxjWFZsYzNRalkySmpNakl3TlRFM1lUaGxNamt6WmprMVpUTmxPR0l3TnpVMFpERTFaV1l5WVRGbE4yWXhNbUV3TXpZNFlUa3hZbUl6WVdaa1pXUTJOMll5TTJGaE1BOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPaXBzYVhOMFBHaGhjMmc4WVhWMGJ6NC1JekV3WW1VeE1tTmhNalkxTldabE5EWTVabVprWXpVeE16SmpZbU15T0RZM1lUSm1ZakkyWldabE5EYzRObVEzWVdVd09EVmhOV0V3TjJRMllqRTJPV0k6ZmllbGQ6ZG1Gc2RXVQ.field.dmFsdWU.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOm11bHRpcGxlX2ZpbHRlcl9zZWFyY2hfcmVxdWVzdCNkYzIwYjNiMzQxNDUyZjEzOTczOTU5OTE5ZGE5MTNiOGNjNDM0OWUxYmY3Njg3MzliMzYxYjUwNmJhMDE4Njhi.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.ZmllbGQ.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.ZmllbGQ.display_name": {
           "source": "Field",
           "message": "欄位"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.ZmllbGQ.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.ZmllbGQ.short_desc": {
           "source": "The accepted field that you want to search on",
           "message": "您想要搜尋的接受欄位"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.ZmllbGQ.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.ZmllbGQ.desc": {
           "source": "The accepted field that you want to search on.",
           "message": "您想要搜尋的接受欄位。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.b3BlcmF0b3I.display_name": {
           "source": "Operator",
           "message": "運運算元"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.b3BlcmF0b3I.short_desc": {
           "source": "The accepted operators you can use to define how you want to search for the…",
           "message": "用來定義您要如何搜尋值的接受運算子……"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.b3BlcmF0b3I.desc": {
           "source": "The accepted operators you can use to define how you want to search for the value.",
           "message": "用來定義您要如何搜尋值的接受運算子"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOj0.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOj0.display_name": {
           "source": "=",
           "message": "="
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiE9.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiE9.display_name": {
           "source": "!=",
           "message": "!="
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOklO.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOklO.display_name": {
           "source": "IN",
           "message": "IN"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOk5JTg.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOk5JTg.display_name": {
           "source": "NIN",
           "message": "NIN"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOjw.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOjw.display_name": {
           "source": "<",
           "message": "<"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOj4.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOj4.display_name": {
           "source": ">",
           "message": ">"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOn4.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOn4.display_name": {
           "source": "~",
           "message": "~"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiF-.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiF-.display_name": {
           "source": "!~",
           "message": "!~"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOl4.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOl4.display_name": {
           "source": "^",
           "message": "^"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiQ.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiQ.display_name": {
           "source": "$",
           "message": "$"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.dmFsdWU.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.dmFsdWU.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.dmFsdWU.short_desc": {
           "source": "The value that you want to search on",
           "message": "您想要搜尋的值"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNmFkNTdjYTNlZjlhNjBjMmQ3NWMxZTBjMzc2Y2U3NjA0NWM3ZjExMjJmMWJkNTQ3MzFjY2ZkNGI1Nzc0NGI2MjpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSTJFNE9ESmxNR0l4TWpKaE0yUTVaakZqTldSak16STNOakl4WVRrNE1XSmxaRGMyTldaaVpqRTJNV016TVRka05UWXhPVEF3TTJZeVpEa3hZbVJrWWpVOmZpZWxkOmRtRnNkV1U.field.dmFsdWU.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlUyVmhjbU5vUTI5dWRHRmpkSE06SGFzaERhdGFUeXBlOnNpbmdsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZTYwN2NiOGI0MGU5M2YzY2M4MmVlZDhmNGE4ZmRmZTI2OTQwNjA2YTkxNDBmOTU1NDNjZTQyYTdiMzYxYjAyNQ.field.dmFsdWU.desc": {
           "source": "The value that you want to search on.",
           "message": "您想要搜尋的值。"
         },
@@ -1151,203 +1151,203 @@
           "source": "Query",
           "message": "查詢"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.ZmllbGQ.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.ZmllbGQ.display_name": {
           "source": "Field",
           "message": "欄位"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.ZmllbGQ.short_desc": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.ZmllbGQ.short_desc": {
           "source": "The accepted field that you want to search on",
           "message": "您想要搜尋的接受欄位"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.ZmllbGQ.desc": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.ZmllbGQ.desc": {
           "source": "The accepted field that you want to search on.",
           "message": "您想要搜尋的接受欄位。"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.display_name": {
           "source": "Operator",
           "message": "運運算元"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.short_desc": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.short_desc": {
           "source": "The accepted operators you can use to define how you want to search for the…",
           "message": "用來定義您要如何搜尋值的接受運算子……"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.desc": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.desc": {
           "source": "The accepted operators you can use to define how you want to search for the value.",
           "message": "用來定義您要如何搜尋值的接受運算子"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOj0.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOj0.display_name": {
           "source": "=",
           "message": "="
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiE9.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiE9.display_name": {
           "source": "!=",
           "message": "!="
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOklO.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOklO.display_name": {
           "source": "IN",
           "message": "IN"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOk5JTg.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOk5JTg.display_name": {
           "source": "NIN",
           "message": "NIN"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOjw.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOjw.display_name": {
           "source": "<",
           "message": "<"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOj4.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOj4.display_name": {
           "source": ">",
           "message": ">"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOn4.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOn4.display_name": {
           "source": "~",
           "message": "~"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiF-.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiF-.display_name": {
           "source": "!~",
           "message": "!~"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOl4.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOl4.display_name": {
           "source": "^",
           "message": "^"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiQ.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiQ.display_name": {
           "source": "$",
           "message": "$"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.dmFsdWU.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.dmFsdWU.short_desc": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.dmFsdWU.short_desc": {
           "source": "The value that you want to search on",
           "message": "您想要搜尋的值"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzA0ODZjNjJiYTcyMTkwMzg2NDA4ZGJmZDI3YzE3MGE0M2NiM2Q2MDBhZDMzZWQ0NWRiNmU2MDZjYzU5NjMyODE.field.dmFsdWU.desc": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOipzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzU4YzRlNTcwMGQ5ZGExYzU3ODZkYmM4MThkYTMxNGM3MDU1YTdkZTYwZjE2NDNiZjliNzc3NWRmZTIyZDRlMTk.field.dmFsdWU.desc": {
           "source": "The value that you want to search on.",
           "message": "您想要搜尋的值。"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjY2JjMjIwNTE3YThlMjkzZjk1ZTNlOGIwNzU0ZDE1ZWYyYTFlN2YxMmEwMzY4YTkxYmIzYWZkZWQ2N2YyM2FhMA.field.b3BlcmF0b3I.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjMDAxMGMyMTQwOWY3MWNkNmY1MTk2NTJmM2ZjMGUxOTQ5MWU0YTMzNGNjNzZmOTZlOWFhMzI1MjM4YTk2MmU1OA.field.b3BlcmF0b3I.display_name": {
           "source": "Operator",
           "message": "運運算元"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjY2JjMjIwNTE3YThlMjkzZjk1ZTNlOGIwNzU0ZDE1ZWYyYTFlN2YxMmEwMzY4YTkxYmIzYWZkZWQ2N2YyM2FhMA.field.b3BlcmF0b3I.short_desc": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjMDAxMGMyMTQwOWY3MWNkNmY1MTk2NTJmM2ZjMGUxOTQ5MWU0YTMzNGNjNzZmOTZlOWFhMzI1MjM4YTk2MmU1OA.field.b3BlcmF0b3I.short_desc": {
           "source": "An operator to allow boolean inspection between multiple fields",
           "message": "允許在多個欄位之間進行布林值檢視的運算子"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjY2JjMjIwNTE3YThlMjkzZjk1ZTNlOGIwNzU0ZDE1ZWYyYTFlN2YxMmEwMzY4YTkxYmIzYWZkZWQ2N2YyM2FhMA.field.b3BlcmF0b3I.desc": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjMDAxMGMyMTQwOWY3MWNkNmY1MTk2NTJmM2ZjMGUxOTQ5MWU0YTMzNGNjNzZmOTZlOWFhMzI1MjM4YTk2MmU1OA.field.b3BlcmF0b3I.desc": {
           "source": "An operator to allow boolean inspection between multiple fields.",
           "message": "允許在多個欄位之間進行布林值檢視的運算子。"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjY2JjMjIwNTE3YThlMjkzZjk1ZTNlOGIwNzU0ZDE1ZWYyYTFlN2YxMmEwMzY4YTkxYmIzYWZkZWQ2N2YyM2FhMA.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOkFORA.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjMDAxMGMyMTQwOWY3MWNkNmY1MTk2NTJmM2ZjMGUxOTQ5MWU0YTMzNGNjNzZmOTZlOWFhMzI1MjM4YTk2MmU1OA.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOkFORA.display_name": {
           "source": "AND",
           "message": "AND"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjY2JjMjIwNTE3YThlMjkzZjk1ZTNlOGIwNzU0ZDE1ZWYyYTFlN2YxMmEwMzY4YTkxYmIzYWZkZWQ2N2YyM2FhMA.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOk9S.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjMDAxMGMyMTQwOWY3MWNkNmY1MTk2NTJmM2ZjMGUxOTQ5MWU0YTMzNGNjNzZmOTZlOWFhMzI1MjM4YTk2MmU1OA.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOk9S.display_name": {
           "source": "OR",
           "message": "OR"
         },
-        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjY2JjMjIwNTE3YThlMjkzZjk1ZTNlOGIwNzU0ZDE1ZWYyYTFlN2YxMmEwMzY4YTkxYmIzYWZkZWQ2N2YyM2FhMA.field.dmFsdWU.display_name": {
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.union.SGFzaERhdGFUeXBlOiptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjMDAxMGMyMTQwOWY3MWNkNmY1MTk2NTJmM2ZjMGUxOTQ5MWU0YTMzNGNjNzZmOTZlOWFhMzI1MjM4YTk2MmU1OA.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNWVlNjk0MTU5ZDAwNGRjNTc2MTA4OWUxOTg3NWQ4ODBjZGI2NDEyN2Q0MTA3ZjNjMjAwNWYxM2I0MjQ5NzhhZDpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSXpFd1ltVXhNbU5oTWpZMU5XWmxORFk1Wm1aa1l6VXhNekpqWW1NeU9EWTNZVEptWWpJMlpXWmxORGM0Tm1RM1lXVXdPRFZoTldFd04yUTJZakUyT1dJOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZGMyMGIzYjM0MTQ1MmYxMzk3Mzk1OTkxOWRhOTEzYjhjYzQzNDllMWJmNzY4NzM5YjM2MWI1MDZiYTAxODY4Yg.field.b3BlcmF0b3I.display_name": {
           "source": "Operator",
           "message": "運運算元"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNWVlNjk0MTU5ZDAwNGRjNTc2MTA4OWUxOTg3NWQ4ODBjZGI2NDEyN2Q0MTA3ZjNjMjAwNWYxM2I0MjQ5NzhhZDpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSXpFd1ltVXhNbU5oTWpZMU5XWmxORFk1Wm1aa1l6VXhNekpqWW1NeU9EWTNZVEptWWpJMlpXWmxORGM0Tm1RM1lXVXdPRFZoTldFd04yUTJZakUyT1dJOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZGMyMGIzYjM0MTQ1MmYxMzk3Mzk1OTkxOWRhOTEzYjhjYzQzNDllMWJmNzY4NzM5YjM2MWI1MDZiYTAxODY4Yg.field.b3BlcmF0b3I.short_desc": {
           "source": "An operator to allow boolean inspection between multiple fields",
           "message": "允許在多個欄位之間進行布林值檢視的運算子"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNWVlNjk0MTU5ZDAwNGRjNTc2MTA4OWUxOTg3NWQ4ODBjZGI2NDEyN2Q0MTA3ZjNjMjAwNWYxM2I0MjQ5NzhhZDpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSXpFd1ltVXhNbU5oTWpZMU5XWmxORFk1Wm1aa1l6VXhNekpqWW1NeU9EWTNZVEptWWpJMlpXWmxORGM0Tm1RM1lXVXdPRFZoTldFd04yUTJZakUyT1dJOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZGMyMGIzYjM0MTQ1MmYxMzk3Mzk1OTkxOWRhOTEzYjhjYzQzNDllMWJmNzY4NzM5YjM2MWI1MDZiYTAxODY4Yg.field.b3BlcmF0b3I.desc": {
           "source": "An operator to allow boolean inspection between multiple fields.",
           "message": "允許在多個欄位之間進行布林值檢視的運算子。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNWVlNjk0MTU5ZDAwNGRjNTc2MTA4OWUxOTg3NWQ4ODBjZGI2NDEyN2Q0MTA3ZjNjMjAwNWYxM2I0MjQ5NzhhZDpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSXpFd1ltVXhNbU5oTWpZMU5XWmxORFk1Wm1aa1l6VXhNekpqWW1NeU9EWTNZVEptWWpJMlpXWmxORGM0Tm1RM1lXVXdPRFZoTldFd04yUTJZakUyT1dJOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOkFORA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZGMyMGIzYjM0MTQ1MmYxMzk3Mzk1OTkxOWRhOTEzYjhjYzQzNDllMWJmNzY4NzM5YjM2MWI1MDZiYTAxODY4Yg.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOkFORA.display_name": {
           "source": "AND",
           "message": "AND"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNWVlNjk0MTU5ZDAwNGRjNTc2MTA4OWUxOTg3NWQ4ODBjZGI2NDEyN2Q0MTA3ZjNjMjAwNWYxM2I0MjQ5NzhhZDpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSXpFd1ltVXhNbU5oTWpZMU5XWmxORFk1Wm1aa1l6VXhNekpqWW1NeU9EWTNZVEptWWpJMlpXWmxORGM0Tm1RM1lXVXdPRFZoTldFd04yUTJZakUyT1dJOmZpZWxkOmRtRnNkV1U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOk9S.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZGMyMGIzYjM0MTQ1MmYxMzk3Mzk1OTkxOWRhOTEzYjhjYzQzNDllMWJmNzY4NzM5YjM2MWI1MDZiYTAxODY4Yg.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOk9S.display_name": {
           "source": "OR",
           "message": "OR"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjNWVlNjk0MTU5ZDAwNGRjNTc2MTA4OWUxOTg3NWQ4ODBjZGI2NDEyN2Q0MTA3ZjNjMjAwNWYxM2I0MjQ5NzhhZDpvcHRpb246Y1hWbGNuazp1bmlvbjpTR0Z6YUVSaGRHRlVlWEJsT2lwdGRXeDBhWEJzWlY5bWFXeDBaWEpmYzJWaGNtTm9YM0psY1hWbGMzUWpZMkpqTWpJd05URTNZVGhsTWprelpqazFaVE5sT0dJd056VTBaREUxWldZeVlURmxOMll4TW1Fd016WTRZVGt4WW1JellXWmtaV1EyTjJZeU0yRmhNQTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2lwc2FYTjBQR2hoYzJnOFlYVjBiejQtSXpFd1ltVXhNbU5oTWpZMU5XWmxORFk1Wm1aa1l6VXhNekpqWW1NeU9EWTNZVEptWWpJMlpXWmxORGM0Tm1RM1lXVXdPRFZoTldFd04yUTJZakUyT1dJOmZpZWxkOmRtRnNkV1U.field.dmFsdWU.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTptdWx0aXBsZV9maWx0ZXJfc2VhcmNoX3JlcXVlc3QjZGMyMGIzYjM0MTQ1MmYxMzk3Mzk1OTkxOWRhOTEzYjhjYzQzNDllMWJmNzY4NzM5YjM2MWI1MDZiYTAxODY4Yg.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.ZmllbGQ.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.ZmllbGQ.display_name": {
           "source": "Field",
           "message": "欄位"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.ZmllbGQ.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.ZmllbGQ.short_desc": {
           "source": "The accepted field that you want to search on",
           "message": "您想要搜尋的接受欄位"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.ZmllbGQ.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.ZmllbGQ.desc": {
           "source": "The accepted field that you want to search on.",
           "message": "您想要搜尋的接受欄位。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.b3BlcmF0b3I.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.b3BlcmF0b3I.display_name": {
           "source": "Operator",
           "message": "運運算元"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.b3BlcmF0b3I.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.b3BlcmF0b3I.short_desc": {
           "source": "The accepted operators you can use to define how you want to search for the…",
           "message": "用來定義您要如何搜尋值的接受運算子……"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.b3BlcmF0b3I.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.b3BlcmF0b3I.desc": {
           "source": "The accepted operators you can use to define how you want to search for the value.",
           "message": "用來定義您要如何搜尋值的接受運算子"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOj0.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOj0.display_name": {
           "source": "=",
           "message": "="
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiE9.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiE9.display_name": {
           "source": "!=",
           "message": "!="
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOklO.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOklO.display_name": {
           "source": "IN",
           "message": "IN"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOk5JTg.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOk5JTg.display_name": {
           "source": "NIN",
           "message": "NIN"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOjw.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOjw.display_name": {
           "source": "<",
           "message": "<"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOj4.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOj4.display_name": {
           "source": ">",
           "message": ">"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOn4.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOn4.display_name": {
           "source": "~",
           "message": "~"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiF-.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiF-.display_name": {
           "source": "!~",
           "message": "!~"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOl4.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOl4.display_name": {
           "source": "^",
           "message": "^"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiQ.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOiQ.display_name": {
           "source": "$",
           "message": "$"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.dmFsdWU.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.dmFsdWU.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.dmFsdWU.short_desc": {
           "source": "The value that you want to search on",
           "message": "您想要搜尋的值"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0IzZhZDU3Y2EzZWY5YTYwYzJkNzVjMWUwYzM3NmNlNzYwNDVjN2YxMTIyZjFiZDU0NzMxY2NmZDRiNTc3NDRiNjI6b3B0aW9uOmNYVmxjbms6dW5pb246U0dGemFFUmhkR0ZVZVhCbE9pcHRkV3gwYVhCc1pWOW1hV3gwWlhKZmMyVmhjbU5vWDNKbGNYVmxjM1FqWTJKak1qSXdOVEUzWVRobE1qa3paamsxWlRObE9HSXdOelUwWkRFMVpXWXlZVEZsTjJZeE1tRXdNelk0WVRreFltSXpZV1prWldRMk4yWXlNMkZoTUE6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9pcHNhWE4wUEdoaGMyZzhZWFYwYno0LUkyRTRPREpsTUdJeE1qSmhNMlE1WmpGak5XUmpNekkzTmpJeFlUazRNV0psWkRjMk5XWmlaakUyTVdNek1UZGtOVFl4T1RBd00yWXlaRGt4WW1Sa1lqVTpmaWVsZDpkbUZzZFdV.field.dmFsdWU.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmMyVmhjbU5vUTI5dWRtVnljMkYwYVc5dWN3Okhhc2hEYXRhVHlwZTpzaW5nbGVfZmlsdGVyX3NlYXJjaF9yZXF1ZXN0I2U2MDdjYjhiNDBlOTNmM2NjODJlZWQ4ZjRhOGZkZmUyNjk0MDYwNmE5MTQwZjk1NTQzY2U0MmE3YjM2MWIwMjU.field.dmFsdWU.desc": {
           "source": "The value that you want to search on.",
           "message": "您想要搜尋的值。"
         },
@@ -1483,35 +1483,35 @@
           "source": "The contact to send the message to",
           "message": "訊息接收聯絡人"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.aWQ.display_name": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.aWQ.display_name": {
           "source": "ID",
           "message": "ID"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.aWQ.short_desc": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.aWQ.short_desc": {
           "source": "The identifier for the contact which is given by Intercom",
           "message": "由 Intercom 提供的聯絡人識別碼"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.aWQ.desc": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.aWQ.desc": {
           "source": "The identifier for the contact which is given by Intercom.",
           "message": "由 Intercom 提供的聯絡人識別碼。"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.dHlwZQ.display_name": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "類型"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.dHlwZQ.short_desc": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.dHlwZQ.short_desc": {
           "source": "The role associated to the contact - 'user' or 'lead'",
           "message": "與聯絡人關聯的角色 - 'user' 或 'lead'"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.dHlwZQ.desc": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.dHlwZQ.desc": {
           "source": "The role associated to the contact - `user` or `lead`.",
           "message": "與聯絡人關聯的角色 - `user` 或 `lead`。"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
           "source": "user",
           "message": "使用者"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.dHlwZQ.allowed-value.c3RyaW5nOmxlYWQ.display_name": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.dHlwZQ.allowed-value.c3RyaW5nOmxlYWQ.display_name": {
           "source": "lead",
           "message": "潛在客戶"
         },
@@ -1599,35 +1599,35 @@
           "source": "Cc",
           "message": "副本"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.aWQ.display_name": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.aWQ.display_name": {
           "source": "ID",
           "message": "ID"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.aWQ.short_desc": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.aWQ.short_desc": {
           "source": "The identifier for the contact which is given by Intercom",
           "message": "由 Intercom 提供的聯絡人識別碼"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.aWQ.desc": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.aWQ.desc": {
           "source": "The identifier for the contact which is given by Intercom.",
           "message": "由 Intercom 提供的聯絡人識別碼。"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.dHlwZQ.display_name": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "類型"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.dHlwZQ.short_desc": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.dHlwZQ.short_desc": {
           "source": "The role associated to the contact - 'user' or 'lead'",
           "message": "與聯絡人關聯的角色 - 'user' 或 'lead'"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.dHlwZQ.desc": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.dHlwZQ.desc": {
           "source": "The role associated to the contact - `user` or `lead`.",
           "message": "與聯絡人關聯的角色 - `user` 或 `lead`。"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
           "source": "user",
           "message": "使用者"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.dHlwZQ.allowed-value.c3RyaW5nOmxlYWQ.display_name": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.dHlwZQ.allowed-value.c3RyaW5nOmxlYWQ.display_name": {
           "source": "lead",
           "message": "潛在客戶"
         },
@@ -1667,35 +1667,35 @@
           "source": "Bcc",
           "message": "密件副本"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.aWQ.display_name": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.aWQ.display_name": {
           "source": "ID",
           "message": "ID"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.aWQ.short_desc": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.aWQ.short_desc": {
           "source": "The identifier for the contact which is given by Intercom",
           "message": "由 Intercom 提供的聯絡人識別碼"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.aWQ.desc": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.aWQ.desc": {
           "source": "The identifier for the contact which is given by Intercom.",
           "message": "由 Intercom 提供的聯絡人識別碼。"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.dHlwZQ.display_name": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "類型"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.dHlwZQ.short_desc": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.dHlwZQ.short_desc": {
           "source": "The role associated to the contact - 'user' or 'lead'",
           "message": "與聯絡人關聯的角色 - 'user' 或 'lead'"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.dHlwZQ.desc": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.dHlwZQ.desc": {
           "source": "The role associated to the contact - `user` or `lead`.",
           "message": "與聯絡人關聯的角色 - `user` 或 `lead`。"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
           "source": "user",
           "message": "使用者"
         },
-        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjZDNhYWMzNmYxYjdiMjlhZTM1ZTA5MDE3MDVmYzE0ZTcxNDkzMDdhNGUxNjI4ZDk3Yzc2NmQ3ZmI5ZjE1ZjE4Ng.field.dHlwZQ.allowed-value.c3RyaW5nOmxlYWQ.display_name": {
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.union.SGFzaERhdGFUeXBlOipyZWNpcGllbnQjMzJkMTYxZjdjYzNkNGJmYjNkN2NmMDQ5ZjBiNWZiNWZkNmFlODA3ODUwNTFjODI5NWE0ZDEwNTU4ZDNlM2JlOQ.field.dHlwZQ.allowed-value.c3RyaW5nOmxlYWQ.display_name": {
           "source": "lead",
           "message": "潛在客戶"
         },
@@ -1851,15 +1851,15 @@
           "source": "Names the contact whose events are summarised, in exactly one of three ways: `user_id` is the identity your own system gave them, `intercom_user_id` is Intercom's, and `email` is their address.",
           "message": "指定要彙整事件的聯絡人，僅能採用三種方式之一：`user_id` 是您系統賦予的識別碼、`intercom_user_id` 是 Intercom 的識別碼，而 `email` 則是其地址。"
         },
-        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.union.SGFzaERhdGFUeXBlOmZpbHRlck9uZU9mIzIzM2I4MGVkYmY0NGM2YmUwZjU3ZThkZWQ3NGIyZmU3ZTcxM2UzYjlhOTAwYTcwMWU2NmVlYjdkNWI4ZjBiZmE.field.dXNlcl9pZA.display_name": {
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.union.SGFzaERhdGFUeXBlOmZpbHRlck9uZU9mI2E2MDEzNjg0YjIyYjMxNzQ1Mzg3NzJmN2QwODJlYThhY2E4OWVlMTVmNzM5MDY2OTUyZTUzMzE1ZTc1YWUxODA.field.dXNlcl9pZA.display_name": {
           "source": "User ID",
           "message": "使用者 ID"
         },
-        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.union.SGFzaERhdGFUeXBlOmZpbHRlck9uZU9mI2E4ZDY0OWI2NTYxMTljMjlmMDg3MGYzMzQzNTQ2OTQzNjdjNDJlYjNmZjY4MzIwZTVhODA4YmY5MDVlOTJlMzk.field.aW50ZXJjb21fdXNlcl9pZA.display_name": {
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.union.SGFzaERhdGFUeXBlOmZpbHRlck9uZU9mIzdmMDM0MzIyNTg1YzVhMmI1YzRjNDA1NjBjN2VmNWVhNzJjZGI5MzhjZDE3MGExMjA2MzgzNmNmOGE0Yjc2NTQ.field.aW50ZXJjb21fdXNlcl9pZA.display_name": {
           "source": "Intercom User ID",
           "message": "Intercom 使用者 ID"
         },
-        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.union.SGFzaERhdGFUeXBlOmZpbHRlck9uZU9mIzgyYmM2M2VhZTgzNWE2Nzk0ZjRhOTA0NDg1NjdhOGZhYTQ5ZDA0M2IwOTllOWMwOGJlOGUxYmNkYzQ2M2JlN2E.field.ZW1haWw.display_name": {
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.union.SGFzaERhdGFUeXBlOmZpbHRlck9uZU9mIzhmMzVjZTQxNjg5MDUyOTgzZDlhMGJlYzg1MzI3Mjg3ZGMwMjYwNjhjNjU3NWIwMjk5MDZiMmM5ODY5YTI2OGU.field.ZW1haWw.display_name": {
           "source": "Email",
           "message": "電子郵件"
         },
@@ -2083,231 +2083,231 @@
           "source": "The Content of an Article.",
           "message": "文章內容。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
           "source": "AI Chatbot Availability",
           "message": "AI 聊天機器人可用性"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article is available for AI Chatbot",
           "message": "文章是否可供 AI Chatbot 使用"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
           "source": "Whether the article is available for AI Chatbot.",
           "message": "文章是否可供 AI Chatbot 使用。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
           "source": "AI Copilot Availability",
           "message": "AI Copilot 可用性"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article is available for AI Copilot",
           "message": "文章是否可供 AI Copilot 使用"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
           "source": "Whether the article is available for AI Copilot.",
           "message": "文章是否可供 AI Copilot 使用。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
           "source": "AI Sales Agent Availability",
           "message": "AI 銷售專員可用性"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
           "source": "Whether the article is available for AI Sales Agent",
           "message": "文章是否可供 AI Sales Agent 使用"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
           "source": "Whether the article is available for AI Sales Agent.",
           "message": "文章是否可供 AI Sales Agent 使用。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YXVkaWVuY2VfaWRz.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.display_name": {
           "source": "Audience Ids",
           "message": "受眾 ID"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YXVkaWVuY2VfaWRz.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.short_desc": {
           "source": "The list of audience IDs this article content is targeted to for Fin AI Agent",
           "message": "此文章內容針對 Fin AI Agent 的目標受眾 ID 清單"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YXVkaWVuY2VfaWRz.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.desc": {
           "source": "The list of audience IDs this article content is targeted to for Fin AI Agent. On multilingual help centers this field appears per-locale inside `translated_content`. On single-language help centers it appears at the article root level. Empty array means no audience targeting is set.",
           "message": "此文章內容針對 Fin AI Agent 的目標受眾 ID 清單。在多語言幫助中心中，此欄位會出現在 `translated_content` 內的每個語言環境中。在單語言幫助中心中，它會出現在文章根層級。空陣列表示未設定受眾定位。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YXV0aG9yX2lk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.display_name": {
           "source": "Author ID",
           "message": "作者 ID"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YXV0aG9yX2lk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.short_desc": {
           "source": "The ID of the author of the article",
           "message": "文章作者的 ID"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YXV0aG9yX2lk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.desc": {
           "source": "The ID of the author of the article.",
           "message": "文章作者的 ID。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Ym9keQ.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.display_name": {
           "source": "Body",
           "message": "內文"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Ym9keQ.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.short_desc": {
           "source": "The body of the article in HTML",
           "message": "文章內容，以 HTML 格式"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Ym9keQ.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.desc": {
           "source": "The body of the article in HTML.",
           "message": "文章內容，以 HTML 格式。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Ym9keV9tYXJrZG93bg.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.display_name": {
           "source": "Body Markdown",
           "message": "Markdown 內文"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Ym9keV9tYXJrZG93bg.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.short_desc": {
           "source": "The body of the article in markdown",
           "message": "文章內容，以 Markdown 格式"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Ym9keV9tYXJrZG93bg.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.desc": {
           "source": "The body of the article in markdown.",
           "message": "文章內容，以 Markdown 格式。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Y3JlYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.display_name": {
           "source": "Created At",
           "message": "建立時間"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Y3JlYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.short_desc": {
           "source": "The time when the article was created (seconds)",
           "message": "文章建立時間（秒）"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Y3JlYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.desc": {
           "source": "The time when the article was created (seconds).",
           "message": "文章建立時間（秒）。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Y3JlYXRlZF9ieV9pZA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.display_name": {
           "source": "Created by ID",
           "message": "建立者 ID"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Y3JlYXRlZF9ieV9pZA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.short_desc": {
           "source": "The ID of the teammate who created this content version",
           "message": "建立此內容版本的同僚 ID"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Y3JlYXRlZF9ieV9pZA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.desc": {
           "source": "The ID of the teammate who created this content version.",
           "message": "建立此內容版本的同僚 ID。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "描述"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "The description of the article",
           "message": "文章的描述"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.ZGVzY3JpcHRpb24.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.desc": {
           "source": "The description of the article.",
           "message": "文章的說明"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
           "source": "Draft Updated At",
           "message": "草稿更新時間"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
           "source": "The time, in seconds, when this locale's staged draft was last edited, or…",
           "message": "此語系的暫存草稿最後編輯時間（秒），或…"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.ZHJhZnRfdXBkYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.desc": {
           "source": "The time, in seconds, when this locale's staged draft was last edited, or `null` when there is no staged draft.",
           "message": "此語系的暫存草稿最後編輯時間（秒），若無暫存草稿則為 `null`"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
           "source": "Has Unpublished Changes",
           "message": "有未發布的變更"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
           "source": "Whether this locale's published content has unpublished changes staged as a…",
           "message": "此語言環境的已發佈內容是否在即時內容之上有未發佈的變更處於…"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.desc": {
           "source": "Whether this locale's published content has unpublished changes staged as a draft on top of its live content.",
           "message": "此語言環境的已發佈內容是否在即時內容之上有未發佈的變更處於草稿狀態。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.c3RhdGU.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.display_name": {
           "source": "State",
           "message": "狀態"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.c3RhdGU.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.short_desc": {
           "source": "Whether the article is 'published' or is a 'draft'",
           "message": "文章狀態為「發佈」或「草稿」"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.c3RhdGU.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.desc": {
           "source": "Whether the article is `published` or is a `draft` .",
           "message": "文章狀態為 `published` 或 `draft`。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
           "source": "published",
           "message": "published"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
           "source": "draft",
           "message": "草稿"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dGl0bGU.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.display_name": {
           "source": "Title",
           "message": "標題"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dGl0bGU.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.short_desc": {
           "source": "The title of the article",
           "message": "文章標題"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dGl0bGU.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.desc": {
           "source": "The title of the article.",
           "message": "文章標題。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dHlwZQ.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "類型"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dHlwZQ.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.short_desc": {
           "source": "The type of object - 'article_content'",
           "message": "物件類型 - 'article_content'"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dHlwZQ.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.desc": {
           "source": "The type of object - `article_content` .",
           "message": "物件類型 - `article_content` 。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dHlwZQ.allowed-value.c3RyaW5nOmFydGljbGVfY29udGVudA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.allowed-value.c3RyaW5nOmFydGljbGVfY29udGVudA.display_name": {
           "source": "article_content",
           "message": "文章內容"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXBkYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.display_name": {
           "source": "Updated At",
           "message": "更新時間"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXBkYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.short_desc": {
           "source": "The time when the article was last updated (seconds)",
           "message": "文章最後更新時間（秒）"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXBkYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.desc": {
           "source": "The time when the article was last updated (seconds).",
           "message": "文章最後更新時間（秒）。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXBkYXRlZF9ieV9pZA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.display_name": {
           "source": "Updated by ID",
           "message": "更新者 ID"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXBkYXRlZF9ieV9pZA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.short_desc": {
           "source": "The ID of the teammate who last updated this content version",
           "message": "最後更新此內容版本的同僚 ID"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXBkYXRlZF9ieV9pZA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.desc": {
           "source": "The ID of the teammate who last updated this content version.",
           "message": "最後更新此內容版本的同僚 ID。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXJs.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.display_name": {
           "source": "URL",
           "message": "URL"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXJs.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.short_desc": {
           "source": "The URL of the article",
           "message": "文章的網址"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXJs.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.desc": {
           "source": "The URL of the article.",
           "message": "文章的網址。"
         },
@@ -3499,231 +3499,231 @@
           "source": "The Content of an Article.",
           "message": "文章內容。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
           "source": "AI Chatbot Availability",
           "message": "AI 聊天機器人可用性"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article is available for AI Chatbot",
           "message": "文章是否可供 AI Chatbot 使用"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
           "source": "Whether the article is available for AI Chatbot.",
           "message": "文章是否可供 AI Chatbot 使用。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
           "source": "AI Copilot Availability",
           "message": "AI Copilot 可用性"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article is available for AI Copilot",
           "message": "文章是否可供 AI Copilot 使用"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
           "source": "Whether the article is available for AI Copilot.",
           "message": "文章是否可供 AI Copilot 使用。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
           "source": "AI Sales Agent Availability",
           "message": "AI 銷售專員可用性"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
           "source": "Whether the article is available for AI Sales Agent",
           "message": "文章是否可供 AI Sales Agent 使用"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
           "source": "Whether the article is available for AI Sales Agent.",
           "message": "文章是否可供 AI Sales Agent 使用。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YXVkaWVuY2VfaWRz.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.display_name": {
           "source": "Audience Ids",
           "message": "受眾 ID"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YXVkaWVuY2VfaWRz.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.short_desc": {
           "source": "The list of audience IDs this article content is targeted to for Fin AI Agent",
           "message": "此文章內容針對 Fin AI Agent 的目標受眾 ID 清單"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YXVkaWVuY2VfaWRz.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.desc": {
           "source": "The list of audience IDs this article content is targeted to for Fin AI Agent. On multilingual help centers this field appears per-locale inside `translated_content`. On single-language help centers it appears at the article root level. Empty array means no audience targeting is set.",
           "message": "此文章內容針對 Fin AI Agent 的目標受眾 ID 清單。在多語言幫助中心中，此欄位會出現在 `translated_content` 內的每個語言環境中。在單語言幫助中心中，它會出現在文章根層級。空陣列表示未設定受眾定位。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YXV0aG9yX2lk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.display_name": {
           "source": "Author ID",
           "message": "作者 ID"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YXV0aG9yX2lk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.short_desc": {
           "source": "The ID of the author of the article",
           "message": "文章作者的 ID"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.YXV0aG9yX2lk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.desc": {
           "source": "The ID of the author of the article.",
           "message": "文章作者的 ID。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Ym9keQ.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.display_name": {
           "source": "Body",
           "message": "內文"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Ym9keQ.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.short_desc": {
           "source": "The body of the article in HTML",
           "message": "文章內容，以 HTML 格式"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Ym9keQ.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.desc": {
           "source": "The body of the article in HTML.",
           "message": "文章內容，以 HTML 格式。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Ym9keV9tYXJrZG93bg.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.display_name": {
           "source": "Body Markdown",
           "message": "Markdown 內文"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Ym9keV9tYXJrZG93bg.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.short_desc": {
           "source": "The body of the article in markdown",
           "message": "文章內容，以 Markdown 格式"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Ym9keV9tYXJrZG93bg.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.desc": {
           "source": "The body of the article in markdown.",
           "message": "文章內容，以 Markdown 格式。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Y3JlYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.display_name": {
           "source": "Created At",
           "message": "建立時間"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Y3JlYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.short_desc": {
           "source": "The time when the article was created (seconds)",
           "message": "文章建立時間（秒）"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Y3JlYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.desc": {
           "source": "The time when the article was created (seconds).",
           "message": "文章建立時間（秒）。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Y3JlYXRlZF9ieV9pZA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.display_name": {
           "source": "Created by ID",
           "message": "建立者 ID"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Y3JlYXRlZF9ieV9pZA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.short_desc": {
           "source": "The ID of the teammate who created this content version",
           "message": "建立此內容版本的同僚 ID"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.Y3JlYXRlZF9ieV9pZA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.desc": {
           "source": "The ID of the teammate who created this content version.",
           "message": "建立此內容版本的同僚 ID。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "描述"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "The description of the article",
           "message": "文章的描述"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.ZGVzY3JpcHRpb24.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.desc": {
           "source": "The description of the article.",
           "message": "文章的說明"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
           "source": "Draft Updated At",
           "message": "草稿更新時間"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
           "source": "The time, in seconds, when this locale's staged draft was last edited, or…",
           "message": "此語系的暫存草稿最後編輯時間（秒），或…"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.ZHJhZnRfdXBkYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.desc": {
           "source": "The time, in seconds, when this locale's staged draft was last edited, or `null` when there is no staged draft.",
           "message": "此語系的暫存草稿最後編輯時間（秒），若無暫存草稿則為 `null`"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
           "source": "Has Unpublished Changes",
           "message": "有未發布的變更"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
           "source": "Whether this locale's published content has unpublished changes staged as a…",
           "message": "此語言環境的已發佈內容是否在即時內容之上有未發佈的變更處於…"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.desc": {
           "source": "Whether this locale's published content has unpublished changes staged as a draft on top of its live content.",
           "message": "此語言環境的已發佈內容是否在即時內容之上有未發佈的變更處於草稿狀態。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.c3RhdGU.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.display_name": {
           "source": "State",
           "message": "狀態"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.c3RhdGU.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.short_desc": {
           "source": "Whether the article is 'published' or is a 'draft'",
           "message": "文章狀態為「發佈」或「草稿」"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.c3RhdGU.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.desc": {
           "source": "Whether the article is `published` or is a `draft` .",
           "message": "文章狀態為 `published` 或 `draft`。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
           "source": "published",
           "message": "published"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
           "source": "draft",
           "message": "草稿"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dGl0bGU.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.display_name": {
           "source": "Title",
           "message": "標題"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dGl0bGU.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.short_desc": {
           "source": "The title of the article",
           "message": "文章標題"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dGl0bGU.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.desc": {
           "source": "The title of the article.",
           "message": "文章標題。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dHlwZQ.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "類型"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dHlwZQ.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.short_desc": {
           "source": "The type of object - 'article_content'",
           "message": "物件類型 - 'article_content'"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dHlwZQ.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.desc": {
           "source": "The type of object - `article_content` .",
           "message": "物件類型 - `article_content` 。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dHlwZQ.allowed-value.c3RyaW5nOmFydGljbGVfY29udGVudA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.allowed-value.c3RyaW5nOmFydGljbGVfY29udGVudA.display_name": {
           "source": "article_content",
           "message": "文章內容"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXBkYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.display_name": {
           "source": "Updated At",
           "message": "更新時間"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXBkYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.short_desc": {
           "source": "The time when the article was last updated (seconds)",
           "message": "文章最後更新時間（秒）"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXBkYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.desc": {
           "source": "The time when the article was last updated (seconds).",
           "message": "文章最後更新時間（秒）。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXBkYXRlZF9ieV9pZA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.display_name": {
           "source": "Updated by ID",
           "message": "更新者 ID"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXBkYXRlZF9ieV9pZA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.short_desc": {
           "source": "The ID of the teammate who last updated this content version",
           "message": "最後更新此內容版本的同僚 ID"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXBkYXRlZF9ieV9pZA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.desc": {
           "source": "The ID of the teammate who last updated this content version.",
           "message": "最後更新此內容版本的同僚 ID。"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXJs.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.display_name": {
           "source": "URL",
           "message": "URL"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXJs.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.short_desc": {
           "source": "The URL of the article",
           "message": "文章的網址"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzlkMTBkYTgxZGYzZjU5NWU1YzljYzYwYWZkNWNlYTE0YWM5OGM4NzQ3NjBlOGRhYTYyOTBjYjA1NzZkMTczODE6b3B0aW9uOmRISmhibk5zWVhSbFpGOWpiMjUwWlc1MDpmaWVsZDpZWEk.field.dXJs.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.desc": {
           "source": "The URL of the article.",
           "message": "文章的網址。"
         },

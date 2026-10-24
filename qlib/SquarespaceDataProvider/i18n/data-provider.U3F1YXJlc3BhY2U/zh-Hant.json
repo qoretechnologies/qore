@@ -491,27 +491,27 @@
           "source": "The unit price paid for this line item",
           "message": "此明細項目的支付單價"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmJHbHVaVWwwWlcxejpmaWVsZDpkVzVwZEZCeWFXTmxVR0ZwWkE.field.Y3VycmVuY3k.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ.field.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "貨幣"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmJHbHVaVWwwWlcxejpmaWVsZDpkVzVwZEZCeWFXTmxVR0ZwWkE.field.Y3VycmVuY3k.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ.field.Y3VycmVuY3k.short_desc": {
           "source": "ISO currency code",
           "message": "ISO 貨幣代碼"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmJHbHVaVWwwWlcxejpmaWVsZDpkVzVwZEZCeWFXTmxVR0ZwWkE.field.Y3VycmVuY3k.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ.field.Y3VycmVuY3k.desc": {
           "source": "The ISO 4217 currency code (e.g., USD, EUR)",
           "message": "ISO 4217 貨幣代碼（例如 USD、EUR）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmJHbHVaVWwwWlcxejpmaWVsZDpkVzVwZEZCeWFXTmxVR0ZwWkE.field.dmFsdWU.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmJHbHVaVWwwWlcxejpmaWVsZDpkVzVwZEZCeWFXTmxVR0ZwWkE.field.dmFsdWU.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ.field.dmFsdWU.short_desc": {
           "source": "Monetary amount",
           "message": "金額"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmJHbHVaVWwwWlcxejpmaWVsZDpkVzVwZEZCeWFXTmxVR0ZwWkE.field.dmFsdWU.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ.field.dmFsdWU.desc": {
           "source": "The monetary amount as a string (e.g., \"9.99\")",
           "message": "以字串形式表示的金額（例如 \"9.99\"）"
         },
@@ -1319,89 +1319,65 @@
           "source": "The variant pricing (basePrice, onSale, salePrice)",
           "message": "變體定價（basePrice、onSale、salePrice）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.YmFzZVByaWNl.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI.field.YmFzZVByaWNl.display_name": {
           "source": "Base Price",
           "message": "基本價格"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.YmFzZVByaWNl.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI.field.YmFzZVByaWNl.short_desc": {
           "source": "The base price of the variant",
           "message": "變體的基礎價格"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.YmFzZVByaWNl.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI.field.YmFzZVByaWNl.desc": {
           "source": "The base price of the variant (currency + value)",
           "message": "變體的基礎價格（貨幣 + 金額）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc6ZmllbGQ6WW1GelpWQnlhV05s.field.Y3VycmVuY3k.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ.field.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "貨幣"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc6ZmllbGQ6WW1GelpWQnlhV05s.field.Y3VycmVuY3k.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ.field.Y3VycmVuY3k.short_desc": {
           "source": "ISO currency code",
           "message": "ISO 貨幣代碼"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc6ZmllbGQ6WW1GelpWQnlhV05s.field.Y3VycmVuY3k.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ.field.Y3VycmVuY3k.desc": {
           "source": "The ISO 4217 currency code (e.g., USD, EUR)",
           "message": "ISO 4217 貨幣代碼（例如 USD、EUR）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc6ZmllbGQ6WW1GelpWQnlhV05s.field.dmFsdWU.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc6ZmllbGQ6WW1GelpWQnlhV05s.field.dmFsdWU.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ.field.dmFsdWU.short_desc": {
           "source": "Monetary amount",
           "message": "金額"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc6ZmllbGQ6WW1GelpWQnlhV05s.field.dmFsdWU.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ.field.dmFsdWU.desc": {
           "source": "The monetary amount as a string (e.g., \"9.99\")",
           "message": "以字串形式表示的金額（例如 \"9.99\"）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.b25TYWxl.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI.field.b25TYWxl.display_name": {
           "source": "On Sale",
           "message": "特價中"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.b25TYWxl.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI.field.b25TYWxl.short_desc": {
           "source": "Whether the variant is on sale",
           "message": "變體是否正在促銷"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.b25TYWxl.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI.field.b25TYWxl.desc": {
           "source": "Whether the variant is on sale; if `true`, `salePrice` is required",
           "message": "變體是否正在促銷；若為 `true`，則需提供 `salePrice`"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.c2FsZVByaWNl.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI.field.c2FsZVByaWNl.display_name": {
           "source": "Sale Price",
           "message": "促銷價"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.c2FsZVByaWNl.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI.field.c2FsZVByaWNl.short_desc": {
           "source": "The sale price of the variant",
           "message": "變體的銷售價格"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.c2FsZVByaWNl.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI.field.c2FsZVByaWNl.desc": {
           "source": "The sale price of the variant (currency + value); required if `onSale` is `true`",
           "message": "變體的銷售價格（貨幣 + 金額）；若 `onSale` 為 `true`，則為必填"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc6ZmllbGQ6YzJGc1pWQnlhV05s.field.Y3VycmVuY3k.display_name": {
-          "source": "Currency",
-          "message": "貨幣"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc6ZmllbGQ6YzJGc1pWQnlhV05s.field.Y3VycmVuY3k.short_desc": {
-          "source": "ISO currency code",
-          "message": "ISO 貨幣代碼"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc6ZmllbGQ6YzJGc1pWQnlhV05s.field.Y3VycmVuY3k.desc": {
-          "source": "The ISO 4217 currency code (e.g., USD, EUR)",
-          "message": "ISO 4217 貨幣代碼（例如 USD、EUR）"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc6ZmllbGQ6YzJGc1pWQnlhV05s.field.dmFsdWU.display_name": {
-          "source": "Value",
-          "message": "值"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc6ZmllbGQ6YzJGc1pWQnlhV05s.field.dmFsdWU.short_desc": {
-          "source": "Monetary amount",
-          "message": "金額"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VNb25leURhdGFUeXBlOk1vbmV5IzJjNjNkYWJjNzZmYWU0MmE3MGE4MjczNTRlMTg4MjY0MDdmZDY1ZjZmODY2N2UwYzc3MDIwMDYyYTFmYWRlMGQ6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc6ZmllbGQ6YzJGc1pWQnlhV05s.field.dmFsdWU.desc": {
-          "source": "The monetary amount as a string (e.g., \"9.99\")",
-          "message": "以字串形式表示的金額（例如 \"9.99\"）"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudHM.field.c2hpcHBpbmdNZWFzdXJlbWVudHM.display_name": {
           "source": "Shipping Measurements",
@@ -1415,115 +1391,115 @@
           "source": "The shipping measurements (weight + dimensions)",
           "message": "運送測量值（重量 + 尺寸）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTaGlwcGluZ01lYXN1cmVtZW50c0RhdGFUeXBlOlNoaXBwaW5nTWVhc3VyZW1lbnRzIzIzMmUwN2JhMWRkOThmOWQ3MGQ2NDJmNWE1MTUyMTNjODZiZjFiMzRjZWUzZDQyZjg0NmY2NGJiNGRmMzY1ZTA6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITQ.field.ZGltZW5zaW9ucw.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTaGlwcGluZ01lYXN1cmVtZW50c0RhdGFUeXBlOlNoaXBwaW5nTWVhc3VyZW1lbnRzIzIzMmUwN2JhMWRkOThmOWQ3MGQ2NDJmNWE1MTUyMTNjODZiZjFiMzRjZWUzZDQyZjg0NmY2NGJiNGRmMzY1ZTA.field.ZGltZW5zaW9ucw.display_name": {
           "source": "Dimensions",
           "message": "維度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTaGlwcGluZ01lYXN1cmVtZW50c0RhdGFUeXBlOlNoaXBwaW5nTWVhc3VyZW1lbnRzIzIzMmUwN2JhMWRkOThmOWQ3MGQ2NDJmNWE1MTUyMTNjODZiZjFiMzRjZWUzZDQyZjg0NmY2NGJiNGRmMzY1ZTA6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITQ.field.ZGltZW5zaW9ucw.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTaGlwcGluZ01lYXN1cmVtZW50c0RhdGFUeXBlOlNoaXBwaW5nTWVhc3VyZW1lbnRzIzIzMmUwN2JhMWRkOThmOWQ3MGQ2NDJmNWE1MTUyMTNjODZiZjFiMzRjZWUzZDQyZjg0NmY2NGJiNGRmMzY1ZTA.field.ZGltZW5zaW9ucw.short_desc": {
           "source": "The shipping dimensions",
           "message": "運送尺寸"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTaGlwcGluZ01lYXN1cmVtZW50c0RhdGFUeXBlOlNoaXBwaW5nTWVhc3VyZW1lbnRzIzIzMmUwN2JhMWRkOThmOWQ3MGQ2NDJmNWE1MTUyMTNjODZiZjFiMzRjZWUzZDQyZjg0NmY2NGJiNGRmMzY1ZTA6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITQ.field.ZGltZW5zaW9ucw.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTaGlwcGluZ01lYXN1cmVtZW50c0RhdGFUeXBlOlNoaXBwaW5nTWVhc3VyZW1lbnRzIzIzMmUwN2JhMWRkOThmOWQ3MGQ2NDJmNWE1MTUyMTNjODZiZjFiMzRjZWUzZDQyZjg0NmY2NGJiNGRmMzY1ZTA.field.ZGltZW5zaW9ucw.desc": {
           "source": "The shipping dimensions (unit, length, width, height)",
           "message": "運送尺寸（單位、長度、寬度、高度）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzViOm9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6WkdsdFpXNXphVzl1Y3c.field.aGVpZ2h0.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzVi.field.aGVpZ2h0.display_name": {
           "source": "Height",
           "message": "高度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzViOm9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6WkdsdFpXNXphVzl1Y3c.field.aGVpZ2h0.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzVi.field.aGVpZ2h0.short_desc": {
           "source": "The height",
           "message": "高度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzViOm9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6WkdsdFpXNXphVzl1Y3c.field.aGVpZ2h0.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzVi.field.aGVpZ2h0.desc": {
           "source": "The height dimension",
           "message": "高度維度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzViOm9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6WkdsdFpXNXphVzl1Y3c.field.bGVuZ3Ro.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzVi.field.bGVuZ3Ro.display_name": {
           "source": "Length",
           "message": "長度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzViOm9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6WkdsdFpXNXphVzl1Y3c.field.bGVuZ3Ro.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzVi.field.bGVuZ3Ro.short_desc": {
           "source": "The length",
           "message": "長度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzViOm9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6WkdsdFpXNXphVzl1Y3c.field.bGVuZ3Ro.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzVi.field.bGVuZ3Ro.desc": {
           "source": "The length dimension",
           "message": "長度維度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzViOm9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6WkdsdFpXNXphVzl1Y3c.field.dW5pdA.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzVi.field.dW5pdA.display_name": {
           "source": "Unit",
           "message": "單位"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzViOm9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6WkdsdFpXNXphVzl1Y3c.field.dW5pdA.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzVi.field.dW5pdA.short_desc": {
           "source": "Dimension unit (INCH or CENTIMETER)",
           "message": "維度單位（INCH 或 CENTIMETER）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzViOm9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6WkdsdFpXNXphVzl1Y3c.field.dW5pdA.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzVi.field.dW5pdA.desc": {
           "source": "The dimension unit: INCH or CENTIMETER",
           "message": "尺寸單位：INCH 或 CENTIMETER"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzViOm9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6WkdsdFpXNXphVzl1Y3c.field.dW5pdA.allowed-value.c3RyaW5nOklOQ0g.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzVi.field.dW5pdA.allowed-value.c3RyaW5nOklOQ0g.desc": {
           "source": "Inches",
           "message": "英吋"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzViOm9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6WkdsdFpXNXphVzl1Y3c.field.dW5pdA.allowed-value.c3RyaW5nOkNFTlRJTUVURVI.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzVi.field.dW5pdA.allowed-value.c3RyaW5nOkNFTlRJTUVURVI.desc": {
           "source": "Centimeters",
           "message": "公分"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzViOm9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6WkdsdFpXNXphVzl1Y3c.field.d2lkdGg.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzVi.field.d2lkdGg.display_name": {
           "source": "Width",
           "message": "寬度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzViOm9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6WkdsdFpXNXphVzl1Y3c.field.d2lkdGg.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzVi.field.d2lkdGg.short_desc": {
           "source": "The width",
           "message": "寬度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzViOm9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6WkdsdFpXNXphVzl1Y3c.field.d2lkdGg.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VEaW1lbnNpb25zRGF0YVR5cGU6RGltZW5zaW9ucyM1MjQxZDQ4N2Y2N2Y0NzFjYmI1MDI1OGYzYzA0ZTBlZTM1ZDhlZDhhMjQ2MGY3ZGEwNzYyOWNhZTQwMzJmNzVi.field.d2lkdGg.desc": {
           "source": "The width dimension",
           "message": "寬度尺寸"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTaGlwcGluZ01lYXN1cmVtZW50c0RhdGFUeXBlOlNoaXBwaW5nTWVhc3VyZW1lbnRzIzIzMmUwN2JhMWRkOThmOWQ3MGQ2NDJmNWE1MTUyMTNjODZiZjFiMzRjZWUzZDQyZjg0NmY2NGJiNGRmMzY1ZTA6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITQ.field.d2VpZ2h0.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTaGlwcGluZ01lYXN1cmVtZW50c0RhdGFUeXBlOlNoaXBwaW5nTWVhc3VyZW1lbnRzIzIzMmUwN2JhMWRkOThmOWQ3MGQ2NDJmNWE1MTUyMTNjODZiZjFiMzRjZWUzZDQyZjg0NmY2NGJiNGRmMzY1ZTA.field.d2VpZ2h0.display_name": {
           "source": "Weight",
           "message": "重量"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTaGlwcGluZ01lYXN1cmVtZW50c0RhdGFUeXBlOlNoaXBwaW5nTWVhc3VyZW1lbnRzIzIzMmUwN2JhMWRkOThmOWQ3MGQ2NDJmNWE1MTUyMTNjODZiZjFiMzRjZWUzZDQyZjg0NmY2NGJiNGRmMzY1ZTA6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITQ.field.d2VpZ2h0.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTaGlwcGluZ01lYXN1cmVtZW50c0RhdGFUeXBlOlNoaXBwaW5nTWVhc3VyZW1lbnRzIzIzMmUwN2JhMWRkOThmOWQ3MGQ2NDJmNWE1MTUyMTNjODZiZjFiMzRjZWUzZDQyZjg0NmY2NGJiNGRmMzY1ZTA.field.d2VpZ2h0.short_desc": {
           "source": "The shipping weight",
           "message": "運送重量"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTaGlwcGluZ01lYXN1cmVtZW50c0RhdGFUeXBlOlNoaXBwaW5nTWVhc3VyZW1lbnRzIzIzMmUwN2JhMWRkOThmOWQ3MGQ2NDJmNWE1MTUyMTNjODZiZjFiMzRjZWUzZDQyZjg0NmY2NGJiNGRmMzY1ZTA6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITQ.field.d2VpZ2h0.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTaGlwcGluZ01lYXN1cmVtZW50c0RhdGFUeXBlOlNoaXBwaW5nTWVhc3VyZW1lbnRzIzIzMmUwN2JhMWRkOThmOWQ3MGQ2NDJmNWE1MTUyMTNjODZiZjFiMzRjZWUzZDQyZjg0NmY2NGJiNGRmMzY1ZTA.field.d2VpZ2h0.desc": {
           "source": "The shipping weight (unit + value)",
           "message": "運送重量（單位 + 數值）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VXZWlnaHREYXRhVHlwZTpXZWlnaHQjYjEzNjg1MTRiNDQ3ZDNlMWNlNTQ3ZGRmNWQxMGI0NmI5ZDRiZDEwOTEyOTZhNjA1Mzg3MThkNDg1Y2IzMDgwODpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6YzJocGNIQnBibWROWldGemRYSmxiV1Z1ZEhNOmZpZWxkOmQyVnBaMmgw.field.dW5pdA.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VXZWlnaHREYXRhVHlwZTpXZWlnaHQjYjEzNjg1MTRiNDQ3ZDNlMWNlNTQ3ZGRmNWQxMGI0NmI5ZDRiZDEwOTEyOTZhNjA1Mzg3MThkNDg1Y2IzMDgwOA.field.dW5pdA.display_name": {
           "source": "Unit",
           "message": "單位"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VXZWlnaHREYXRhVHlwZTpXZWlnaHQjYjEzNjg1MTRiNDQ3ZDNlMWNlNTQ3ZGRmNWQxMGI0NmI5ZDRiZDEwOTEyOTZhNjA1Mzg3MThkNDg1Y2IzMDgwODpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6YzJocGNIQnBibWROWldGemRYSmxiV1Z1ZEhNOmZpZWxkOmQyVnBaMmgw.field.dW5pdA.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VXZWlnaHREYXRhVHlwZTpXZWlnaHQjYjEzNjg1MTRiNDQ3ZDNlMWNlNTQ3ZGRmNWQxMGI0NmI5ZDRiZDEwOTEyOTZhNjA1Mzg3MThkNDg1Y2IzMDgwOA.field.dW5pdA.short_desc": {
           "source": "Weight unit (POUND or KILOGRAM)",
           "message": "重量單位（POUND 或 KILOGRAM）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VXZWlnaHREYXRhVHlwZTpXZWlnaHQjYjEzNjg1MTRiNDQ3ZDNlMWNlNTQ3ZGRmNWQxMGI0NmI5ZDRiZDEwOTEyOTZhNjA1Mzg3MThkNDg1Y2IzMDgwODpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6YzJocGNIQnBibWROWldGemRYSmxiV1Z1ZEhNOmZpZWxkOmQyVnBaMmgw.field.dW5pdA.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VXZWlnaHREYXRhVHlwZTpXZWlnaHQjYjEzNjg1MTRiNDQ3ZDNlMWNlNTQ3ZGRmNWQxMGI0NmI5ZDRiZDEwOTEyOTZhNjA1Mzg3MThkNDg1Y2IzMDgwOA.field.dW5pdA.desc": {
           "source": "The weight unit: POUND or KILOGRAM",
           "message": "重量單位：POUND 或 KILOGRAM"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VXZWlnaHREYXRhVHlwZTpXZWlnaHQjYjEzNjg1MTRiNDQ3ZDNlMWNlNTQ3ZGRmNWQxMGI0NmI5ZDRiZDEwOTEyOTZhNjA1Mzg3MThkNDg1Y2IzMDgwODpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6YzJocGNIQnBibWROWldGemRYSmxiV1Z1ZEhNOmZpZWxkOmQyVnBaMmgw.field.dW5pdA.allowed-value.c3RyaW5nOlBPVU5E.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VXZWlnaHREYXRhVHlwZTpXZWlnaHQjYjEzNjg1MTRiNDQ3ZDNlMWNlNTQ3ZGRmNWQxMGI0NmI5ZDRiZDEwOTEyOTZhNjA1Mzg3MThkNDg1Y2IzMDgwOA.field.dW5pdA.allowed-value.c3RyaW5nOlBPVU5E.desc": {
           "source": "Pounds",
           "message": "磅"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VXZWlnaHREYXRhVHlwZTpXZWlnaHQjYjEzNjg1MTRiNDQ3ZDNlMWNlNTQ3ZGRmNWQxMGI0NmI5ZDRiZDEwOTEyOTZhNjA1Mzg3MThkNDg1Y2IzMDgwODpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6YzJocGNIQnBibWROWldGemRYSmxiV1Z1ZEhNOmZpZWxkOmQyVnBaMmgw.field.dW5pdA.allowed-value.c3RyaW5nOktJTE9HUkFN.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VXZWlnaHREYXRhVHlwZTpXZWlnaHQjYjEzNjg1MTRiNDQ3ZDNlMWNlNTQ3ZGRmNWQxMGI0NmI5ZDRiZDEwOTEyOTZhNjA1Mzg3MThkNDg1Y2IzMDgwOA.field.dW5pdA.allowed-value.c3RyaW5nOktJTE9HUkFN.desc": {
           "source": "Kilograms",
           "message": "公斤"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VXZWlnaHREYXRhVHlwZTpXZWlnaHQjYjEzNjg1MTRiNDQ3ZDNlMWNlNTQ3ZGRmNWQxMGI0NmI5ZDRiZDEwOTEyOTZhNjA1Mzg3MThkNDg1Y2IzMDgwODpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6YzJocGNIQnBibWROWldGemRYSmxiV1Z1ZEhNOmZpZWxkOmQyVnBaMmgw.field.dmFsdWU.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VXZWlnaHREYXRhVHlwZTpXZWlnaHQjYjEzNjg1MTRiNDQ3ZDNlMWNlNTQ3ZGRmNWQxMGI0NmI5ZDRiZDEwOTEyOTZhNjA1Mzg3MThkNDg1Y2IzMDgwOA.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VXZWlnaHREYXRhVHlwZTpXZWlnaHQjYjEzNjg1MTRiNDQ3ZDNlMWNlNTQ3ZGRmNWQxMGI0NmI5ZDRiZDEwOTEyOTZhNjA1Mzg3MThkNDg1Y2IzMDgwODpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6YzJocGNIQnBibWROWldGemRYSmxiV1Z1ZEhNOmZpZWxkOmQyVnBaMmgw.field.dmFsdWU.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VXZWlnaHREYXRhVHlwZTpXZWlnaHQjYjEzNjg1MTRiNDQ3ZDNlMWNlNTQ3ZGRmNWQxMGI0NmI5ZDRiZDEwOTEyOTZhNjA1Mzg3MThkNDg1Y2IzMDgwOA.field.dmFsdWU.short_desc": {
           "source": "The weight value",
           "message": "重量數值"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VXZWlnaHREYXRhVHlwZTpXZWlnaHQjYjEzNjg1MTRiNDQ3ZDNlMWNlNTQ3ZGRmNWQxMGI0NmI5ZDRiZDEwOTEyOTZhNjA1Mzg3MThkNDg1Y2IzMDgwODpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6YzJocGNIQnBibWROWldGemRYSmxiV1Z1ZEhNOmZpZWxkOmQyVnBaMmgw.field.dmFsdWU.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VXZWlnaHREYXRhVHlwZTpXZWlnaHQjYjEzNjg1MTRiNDQ3ZDNlMWNlNTQ3ZGRmNWQxMGI0NmI5ZDRiZDEwOTEyOTZhNjA1Mzg3MThkNDg1Y2IzMDgwOA.field.dmFsdWU.desc": {
           "source": "The weight value",
           "message": "重量數值"
         },
@@ -1551,27 +1527,27 @@
           "source": "The stock information (quantity, unlimited)",
           "message": "庫存資訊（數量、無限）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.cXVhbnRpdHk.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "數量"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.cXVhbnRpdHk.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M.field.cXVhbnRpdHk.short_desc": {
           "source": "The stock quantity",
           "message": "庫存數量"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.cXVhbnRpdHk.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M.field.cXVhbnRpdHk.desc": {
           "source": "The available stock quantity for the variant",
           "message": "變體的可用庫存數量"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.dW5saW1pdGVk.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M.field.dW5saW1pdGVk.display_name": {
           "source": "Unlimited",
           "message": "無限"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.dW5saW1pdGVk.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M.field.dW5saW1pdGVk.short_desc": {
           "source": "Whether stock is unlimited",
           "message": "庫存是否無限"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.dW5saW1pdGVk.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M.field.dW5saW1pdGVk.desc": {
           "source": "Whether the variant has unlimited stock",
           "message": "變體是否具有無限庫存"
         },
@@ -1883,27 +1859,27 @@
           "source": "The base price of the variant (currency + value)",
           "message": "變體的基礎價格（貨幣 + 金額）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpZbUZ6WlZCeWFXTmw.field.Y3VycmVuY3k.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZA.field.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "貨幣"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpZbUZ6WlZCeWFXTmw.field.Y3VycmVuY3k.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZA.field.Y3VycmVuY3k.short_desc": {
           "source": "ISO currency code",
           "message": "ISO 貨幣代碼"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpZbUZ6WlZCeWFXTmw.field.Y3VycmVuY3k.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZA.field.Y3VycmVuY3k.desc": {
           "source": "The ISO 4217 currency code (e.g., USD, EUR)",
           "message": "ISO 4217 貨幣代碼（例如 USD、EUR）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpZbUZ6WlZCeWFXTmw.field.dmFsdWU.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZA.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpZbUZ6WlZCeWFXTmw.field.dmFsdWU.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZA.field.dmFsdWU.short_desc": {
           "source": "Monetary amount",
           "message": "金額"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpZbUZ6WlZCeWFXTmw.field.dmFsdWU.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZA.field.dmFsdWU.desc": {
           "source": "The monetary amount as a string (e.g., \"9.99\")",
           "message": "以字串形式表示的金額（例如 \"9.99\"）"
         },
@@ -1930,30 +1906,6 @@
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.field.c2FsZVByaWNl.desc": {
           "source": "The sale price of the variant (currency + value); required if `onSale` is `true`",
           "message": "變體的銷售價格（貨幣 + 金額）；若 `onSale` 為 `true`，則為必填"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpjMkZzWlZCeWFXTmw.field.Y3VycmVuY3k.display_name": {
-          "source": "Currency",
-          "message": "貨幣"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpjMkZzWlZCeWFXTmw.field.Y3VycmVuY3k.short_desc": {
-          "source": "ISO currency code",
-          "message": "ISO 貨幣代碼"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpjMkZzWlZCeWFXTmw.field.Y3VycmVuY3k.desc": {
-          "source": "The ISO 4217 currency code (e.g., USD, EUR)",
-          "message": "ISO 4217 貨幣代碼（例如 USD、EUR）"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpjMkZzWlZCeWFXTmw.field.dmFsdWU.display_name": {
-          "source": "Value",
-          "message": "值"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpjMkZzWlZCeWFXTmw.field.dmFsdWU.short_desc": {
-          "source": "Monetary amount",
-          "message": "金額"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpjMkZzWlZCeWFXTmw.field.dmFsdWU.desc": {
-          "source": "The monetary amount as a string (e.g., \"9.99\")",
-          "message": "以字串形式表示的金額（例如 \"9.99\"）"
         },
         "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.display_name": {
           "source": "Stock",
@@ -2027,59 +1979,59 @@
           "source": "The shipping dimensions (unit, length, width, height)",
           "message": "運送尺寸（單位、長度、寬度、高度）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.aGVpZ2h0.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.aGVpZ2h0.display_name": {
           "source": "Height",
           "message": "高度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.aGVpZ2h0.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.aGVpZ2h0.short_desc": {
           "source": "The height",
           "message": "高度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.aGVpZ2h0.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.aGVpZ2h0.desc": {
           "source": "The height dimension",
           "message": "高度維度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.bGVuZ3Ro.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.bGVuZ3Ro.display_name": {
           "source": "Length",
           "message": "長度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.bGVuZ3Ro.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.bGVuZ3Ro.short_desc": {
           "source": "The length",
           "message": "長度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.bGVuZ3Ro.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.bGVuZ3Ro.desc": {
           "source": "The length dimension",
           "message": "長度維度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.dW5pdA.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.dW5pdA.display_name": {
           "source": "Unit",
           "message": "單位"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.dW5pdA.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.dW5pdA.short_desc": {
           "source": "Dimension unit (INCH or CENTIMETER)",
           "message": "維度單位（INCH 或 CENTIMETER）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.dW5pdA.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.dW5pdA.desc": {
           "source": "The dimension unit: INCH or CENTIMETER",
           "message": "尺寸單位：INCH 或 CENTIMETER"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.dW5pdA.allowed-value.c3RyaW5nOklOQ0g.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.dW5pdA.allowed-value.c3RyaW5nOklOQ0g.desc": {
           "source": "Inches",
           "message": "英吋"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.dW5pdA.allowed-value.c3RyaW5nOkNFTlRJTUVURVI.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.dW5pdA.allowed-value.c3RyaW5nOkNFTlRJTUVURVI.desc": {
           "source": "Centimeters",
           "message": "公分"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.d2lkdGg.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.d2lkdGg.display_name": {
           "source": "Width",
           "message": "寬度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.d2lkdGg.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.d2lkdGg.short_desc": {
           "source": "The width",
           "message": "寬度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.d2lkdGg.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.d2lkdGg.desc": {
           "source": "The width dimension",
           "message": "寬度尺寸"
         },
@@ -2095,35 +2047,35 @@
           "source": "The shipping weight (unit + value)",
           "message": "運送重量（單位 + 數值）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4Om9wdGlvbjpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdA.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4.field.dW5pdA.display_name": {
           "source": "Unit",
           "message": "單位"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4Om9wdGlvbjpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdA.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4.field.dW5pdA.short_desc": {
           "source": "Weight unit (POUND or KILOGRAM)",
           "message": "重量單位（POUND 或 KILOGRAM）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4Om9wdGlvbjpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdA.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4.field.dW5pdA.desc": {
           "source": "The weight unit: POUND or KILOGRAM",
           "message": "重量單位：POUND 或 KILOGRAM"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4Om9wdGlvbjpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdA.allowed-value.c3RyaW5nOlBPVU5E.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4.field.dW5pdA.allowed-value.c3RyaW5nOlBPVU5E.desc": {
           "source": "Pounds",
           "message": "磅"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4Om9wdGlvbjpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdA.allowed-value.c3RyaW5nOktJTE9HUkFN.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4.field.dW5pdA.allowed-value.c3RyaW5nOktJTE9HUkFN.desc": {
           "source": "Kilograms",
           "message": "公斤"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4Om9wdGlvbjpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4Om9wdGlvbjpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4.field.dmFsdWU.short_desc": {
           "source": "The weight value",
           "message": "重量數值"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4Om9wdGlvbjpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4.field.dmFsdWU.desc": {
           "source": "The weight value",
           "message": "重量數值"
         },
@@ -2199,27 +2151,27 @@
           "source": "The base price of the variant (currency + value)",
           "message": "變體的基礎價格（貨幣 + 金額）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpZbUZ6WlZCeWFXTmw.field.Y3VycmVuY3k.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZA.field.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "貨幣"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpZbUZ6WlZCeWFXTmw.field.Y3VycmVuY3k.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZA.field.Y3VycmVuY3k.short_desc": {
           "source": "ISO currency code",
           "message": "ISO 貨幣代碼"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpZbUZ6WlZCeWFXTmw.field.Y3VycmVuY3k.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZA.field.Y3VycmVuY3k.desc": {
           "source": "The ISO 4217 currency code (e.g., USD, EUR)",
           "message": "ISO 4217 貨幣代碼（例如 USD、EUR）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpZbUZ6WlZCeWFXTmw.field.dmFsdWU.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZA.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpZbUZ6WlZCeWFXTmw.field.dmFsdWU.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZA.field.dmFsdWU.short_desc": {
           "source": "Monetary amount",
           "message": "金額"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpZbUZ6WlZCeWFXTmw.field.dmFsdWU.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZA.field.dmFsdWU.desc": {
           "source": "The monetary amount as a string (e.g., \"9.99\")",
           "message": "以字串形式表示的金額（例如 \"9.99\"）"
         },
@@ -2246,30 +2198,6 @@
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.field.c2FsZVByaWNl.desc": {
           "source": "The sale price of the variant (currency + value); required if `onSale` is `true`",
           "message": "變體的銷售價格（貨幣 + 金額）；若 `onSale` 為 `true`，則為必填"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpjMkZzWlZCeWFXTmw.field.Y3VycmVuY3k.display_name": {
-          "source": "Currency",
-          "message": "貨幣"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpjMkZzWlZCeWFXTmw.field.Y3VycmVuY3k.short_desc": {
-          "source": "ISO currency code",
-          "message": "ISO 貨幣代碼"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpjMkZzWlZCeWFXTmw.field.Y3VycmVuY3k.desc": {
-          "source": "The ISO 4217 currency code (e.g., USD, EUR)",
-          "message": "ISO 4217 貨幣代碼（例如 USD、EUR）"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpjMkZzWlZCeWFXTmw.field.dmFsdWU.display_name": {
-          "source": "Value",
-          "message": "值"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpjMkZzWlZCeWFXTmw.field.dmFsdWU.short_desc": {
-          "source": "Monetary amount",
-          "message": "金額"
-        },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZU1vbmV5RGF0YVR5cGU6TW9uZXkjMmM2M2RhYmM3NmZhZTQyYTcwYTgyNzM1NGUxODgyNjQwN2ZkNjVmNmY4NjY3ZTBjNzcwMjAwNjJhMWZhZGUwZDpvcHRpb246Y0hKcFkybHVadzpmaWVsZDpjMkZzWlZCeWFXTmw.field.dmFsdWU.desc": {
-          "source": "The monetary amount as a string (e.g., \"9.99\")",
-          "message": "以字串形式表示的金額（例如 \"9.99\"）"
         },
         "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.display_name": {
           "source": "Stock",
@@ -2343,59 +2271,59 @@
           "source": "The shipping dimensions (unit, length, width, height)",
           "message": "運送尺寸（單位、長度、寬度、高度）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.aGVpZ2h0.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.aGVpZ2h0.display_name": {
           "source": "Height",
           "message": "高度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.aGVpZ2h0.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.aGVpZ2h0.short_desc": {
           "source": "The height",
           "message": "高度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.aGVpZ2h0.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.aGVpZ2h0.desc": {
           "source": "The height dimension",
           "message": "高度維度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.bGVuZ3Ro.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.bGVuZ3Ro.display_name": {
           "source": "Length",
           "message": "長度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.bGVuZ3Ro.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.bGVuZ3Ro.short_desc": {
           "source": "The length",
           "message": "長度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.bGVuZ3Ro.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.bGVuZ3Ro.desc": {
           "source": "The length dimension",
           "message": "長度維度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.dW5pdA.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.dW5pdA.display_name": {
           "source": "Unit",
           "message": "單位"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.dW5pdA.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.dW5pdA.short_desc": {
           "source": "Dimension unit (INCH or CENTIMETER)",
           "message": "維度單位（INCH 或 CENTIMETER）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.dW5pdA.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.dW5pdA.desc": {
           "source": "The dimension unit: INCH or CENTIMETER",
           "message": "尺寸單位：INCH 或 CENTIMETER"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.dW5pdA.allowed-value.c3RyaW5nOklOQ0g.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.dW5pdA.allowed-value.c3RyaW5nOklOQ0g.desc": {
           "source": "Inches",
           "message": "英吋"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.dW5pdA.allowed-value.c3RyaW5nOkNFTlRJTUVURVI.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.dW5pdA.allowed-value.c3RyaW5nOkNFTlRJTUVURVI.desc": {
           "source": "Centimeters",
           "message": "公分"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.d2lkdGg.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.d2lkdGg.display_name": {
           "source": "Width",
           "message": "寬度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.d2lkdGg.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.d2lkdGg.short_desc": {
           "source": "The width",
           "message": "寬度"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI6b3B0aW9uOmMyaHBjSEJwYm1kTlpXRnpkWEpsYldWdWRITTpmaWVsZDpaR2x0Wlc1emFXOXVjdw.field.d2lkdGg.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZURpbWVuc2lvbnNEYXRhVHlwZTpEaW1lbnNpb25zIzUyNDFkNDg3ZjY3ZjQ3MWNiYjUwMjU4ZjNjMDRlMGVlMzVkOGVkOGEyNDYwZjdkYTA3NjI5Y2FlNDAzMmY3NWI.field.d2lkdGg.desc": {
           "source": "The width dimension",
           "message": "寬度尺寸"
         },
@@ -2411,35 +2339,35 @@
           "source": "The shipping weight (unit + value)",
           "message": "運送重量（單位 + 數值）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4Om9wdGlvbjpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdA.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4.field.dW5pdA.display_name": {
           "source": "Unit",
           "message": "單位"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4Om9wdGlvbjpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdA.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4.field.dW5pdA.short_desc": {
           "source": "Weight unit (POUND or KILOGRAM)",
           "message": "重量單位（POUND 或 KILOGRAM）"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4Om9wdGlvbjpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdA.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4.field.dW5pdA.desc": {
           "source": "The weight unit: POUND or KILOGRAM",
           "message": "重量單位：POUND 或 KILOGRAM"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4Om9wdGlvbjpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdA.allowed-value.c3RyaW5nOlBPVU5E.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4.field.dW5pdA.allowed-value.c3RyaW5nOlBPVU5E.desc": {
           "source": "Pounds",
           "message": "磅"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4Om9wdGlvbjpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdA.allowed-value.c3RyaW5nOktJTE9HUkFN.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4.field.dW5pdA.allowed-value.c3RyaW5nOktJTE9HUkFN.desc": {
           "source": "Kilograms",
           "message": "公斤"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4Om9wdGlvbjpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4Om9wdGlvbjpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4.field.dmFsdWU.short_desc": {
           "source": "The weight value",
           "message": "重量數值"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4Om9wdGlvbjpjMmhwY0hCcGJtZE5aV0Z6ZFhKbGJXVnVkSE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOmRYQmtZWFJsTFhCeWIyUjFZM1F0ZG1GeWFXRnVkQTpTcXVhcmVzcGFjZVdlaWdodERhdGFUeXBlOldlaWdodCNiMTM2ODUxNGI0NDdkM2UxY2U1NDdkZGY1ZDEwYjQ2YjlkNGJkMTA5MTI5NmE2MDUzODcxOGQ0ODVjYjMwODA4.field.dmFsdWU.desc": {
           "source": "The weight value",
           "message": "重量數值"
         },

@@ -759,27 +759,27 @@
           "source": "List of configuration attributes assigned to this variant",
           "message": "指派給此變體的設定屬性清單"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3Om9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpZMjl1Wm1sblgyRjBkSEpwWW5WMFpYTQ.field.Y29uZmlnX25hbWU.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3.field.Y29uZmlnX25hbWU.display_name": {
           "source": "Config Name",
           "message": "設定名稱"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3Om9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpZMjl1Wm1sblgyRjBkSEpwWW5WMFpYTQ.field.Y29uZmlnX25hbWU.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3.field.Y29uZmlnX25hbWU.short_desc": {
           "source": "Configuration attribute name",
           "message": "設定屬性名稱"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3Om9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpZMjl1Wm1sblgyRjBkSEpwWW5WMFpYTQ.field.Y29uZmlnX25hbWU.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3.field.Y29uZmlnX25hbWU.desc": {
           "source": "Name of the configuration attribute (e.g. `Color`)",
           "message": "設定屬性名稱（例如 `Color`）"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3Om9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpZMjl1Wm1sblgyRjBkSEpwWW5WMFpYTQ.field.Y29uZmlnX3ZhbHVl.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3.field.Y29uZmlnX3ZhbHVl.display_name": {
           "source": "Config Value",
           "message": "設定值"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3Om9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpZMjl1Wm1sblgyRjBkSEpwWW5WMFpYTQ.field.Y29uZmlnX3ZhbHVl.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3.field.Y29uZmlnX3ZhbHVl.short_desc": {
           "source": "Configuration attribute value",
           "message": "設定屬性值"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3Om9wdGlvbjpkbUZ5YVdGdWRITTpmaWVsZDpZMjl1Wm1sblgyRjBkSEpwWW5WMFpYTQ.field.Y29uZmlnX3ZhbHVl.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ29uZmlnQXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNiNGFhZGQ5YjFkYjYxZDg3OWUzNjgxMjUzOTIwODkzNzUwMWYxZGFjN2FjYjI5MDE5M2E0MTMxYjg0OWM4NTE3.field.Y29uZmlnX3ZhbHVl.desc": {
           "source": "Value of the configuration attribute (e.g. `Red`)",
           "message": "設定屬性的值（例如 `Red`）"
         },
@@ -795,27 +795,27 @@
           "source": "List of custom field values for the variant",
           "message": "變體的自訂欄位值清單"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3MzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTNWemRHOXRYMlpwWld4a2N3.field.ZmllbGRfbmFtZQ.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3Mw.field.ZmllbGRfbmFtZQ.display_name": {
           "source": "Field Name",
           "message": "欄位名稱"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3MzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTNWemRHOXRYMlpwWld4a2N3.field.ZmllbGRfbmFtZQ.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3Mw.field.ZmllbGRfbmFtZQ.short_desc": {
           "source": "Custom field name",
           "message": "自訂欄位名稱"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3MzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTNWemRHOXRYMlpwWld4a2N3.field.ZmllbGRfbmFtZQ.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3Mw.field.ZmllbGRfbmFtZQ.desc": {
           "source": "Name of the custom field",
           "message": "自訂欄位名稱"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3MzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTNWemRHOXRYMlpwWld4a2N3.field.ZmllbGRfdmFsdWU.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3Mw.field.ZmllbGRfdmFsdWU.display_name": {
           "source": "Field Value",
           "message": "欄位值"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3MzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTNWemRHOXRYMlpwWld4a2N3.field.ZmllbGRfdmFsdWU.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3Mw.field.ZmllbGRfdmFsdWU.short_desc": {
           "source": "Custom field value",
           "message": "自訂欄位值"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3MzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTNWemRHOXRYMlpwWld4a2N3.field.ZmllbGRfdmFsdWU.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6S2F0YW5hQ3VzdG9tRmllbGRFbnRyeURhdGFUeXBlOmhhc2g8YXV0bz4jNjdhYjcxMTYxOTg5NzQ0NmNjOWJlZjNmMDA4MzdlMGUzYTc0NWU2YjhhZWRkOTE2NTFiNzllNmNkNTFhODg3Mw.field.ZmllbGRfdmFsdWU.desc": {
           "source": "Value of the custom field",
           "message": "自訂欄位的值"
         },
@@ -1575,27 +1575,27 @@
           "source": "List of configuration attributes assigned to this variant",
           "message": "指派給此變體的設定屬性清單"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTI5dVptbG5YMkYwZEhKcFluVjBaWE0.field.Y29uZmlnX25hbWU.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNw.field.Y29uZmlnX25hbWU.display_name": {
           "source": "Config Name",
           "message": "設定名稱"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTI5dVptbG5YMkYwZEhKcFluVjBaWE0.field.Y29uZmlnX25hbWU.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNw.field.Y29uZmlnX25hbWU.short_desc": {
           "source": "Configuration attribute name",
           "message": "設定屬性名稱"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTI5dVptbG5YMkYwZEhKcFluVjBaWE0.field.Y29uZmlnX25hbWU.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNw.field.Y29uZmlnX25hbWU.desc": {
           "source": "Name of the configuration attribute (e.g. `Color`)",
           "message": "設定屬性名稱（例如 `Color`）"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTI5dVptbG5YMkYwZEhKcFluVjBaWE0.field.Y29uZmlnX3ZhbHVl.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNw.field.Y29uZmlnX3ZhbHVl.display_name": {
           "source": "Config Value",
           "message": "設定值"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTI5dVptbG5YMkYwZEhKcFluVjBaWE0.field.Y29uZmlnX3ZhbHVl.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNw.field.Y29uZmlnX3ZhbHVl.short_desc": {
           "source": "Configuration attribute value",
           "message": "設定屬性值"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNzpvcHRpb246ZG1GeWFXRnVkSE06ZmllbGQ6WTI5dVptbG5YMkYwZEhKcFluVjBaWE0.field.Y29uZmlnX3ZhbHVl.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUNvbmZpZ0F0dHJpYnV0ZURhdGFUeXBlOmhhc2g8YXV0bz4jYjRhYWRkOWIxZGI2MWQ4NzllMzY4MTI1MzkyMDg5Mzc1MDFmMWRhYzdhY2IyOTAxOTNhNDEzMWI4NDljODUxNw.field.Y29uZmlnX3ZhbHVl.desc": {
           "source": "Value of the configuration attribute (e.g. `Red`)",
           "message": "設定屬性的值（例如 `Red`）"
         },
@@ -1611,27 +1611,27 @@
           "source": "List of custom field values for the variant",
           "message": "變體的自訂欄位值清單"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOlkzVnpkRzl0WDJacFpXeGtjdw.field.ZmllbGRfbmFtZQ.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM.field.ZmllbGRfbmFtZQ.display_name": {
           "source": "Field Name",
           "message": "欄位名稱"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOlkzVnpkRzl0WDJacFpXeGtjdw.field.ZmllbGRfbmFtZQ.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM.field.ZmllbGRfbmFtZQ.short_desc": {
           "source": "Custom field name",
           "message": "自訂欄位名稱"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOlkzVnpkRzl0WDJacFpXeGtjdw.field.ZmllbGRfbmFtZQ.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM.field.ZmllbGRfbmFtZQ.desc": {
           "source": "Name of the custom field",
           "message": "自訂欄位名稱"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOlkzVnpkRzl0WDJacFpXeGtjdw.field.ZmllbGRfdmFsdWU.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM.field.ZmllbGRfdmFsdWU.display_name": {
           "source": "Field Value",
           "message": "欄位值"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOlkzVnpkRzl0WDJacFpXeGtjdw.field.ZmllbGRfdmFsdWU.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM.field.ZmllbGRfdmFsdWU.short_desc": {
           "source": "Custom field value",
           "message": "自訂欄位值"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOlkzVnpkRzl0WDJacFpXeGtjdw.field.ZmllbGRfdmFsdWU.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFcxaGRHVnlhV0ZzOkthdGFuYUN1c3RvbUZpZWxkRW50cnlEYXRhVHlwZTpoYXNoPGF1dG8-IzY3YWI3MTE2MTk4OTc0NDZjYzliZWYzZjAwODM3ZTBlM2E3NDVlNmI4YWVkZDkxNjUxYjc5ZTZjZDUxYTg4NzM.field.ZmllbGRfdmFsdWU.desc": {
           "source": "Value of the custom field",
           "message": "自訂欄位的值"
         },
@@ -3683,27 +3683,27 @@
           "source": "List of `{key, value}` attribute pairs for this row",
           "message": "此項目的 `{key, value}` 屬性配對清單"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5Om9wdGlvbjpjMkZzWlhOZmIzSmtaWEpmY205M2N3OmZpZWxkOllYUjBjbWxpZFhSbGN3.field.a2V5.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5.field.a2V5.display_name": {
           "source": "Key",
           "message": "鍵"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5Om9wdGlvbjpjMkZzWlhOZmIzSmtaWEpmY205M2N3OmZpZWxkOllYUjBjbWxpZFhSbGN3.field.a2V5.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5.field.a2V5.short_desc": {
           "source": "Attribute key",
           "message": "屬性金鑰"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5Om9wdGlvbjpjMkZzWlhOZmIzSmtaWEpmY205M2N3OmZpZWxkOllYUjBjbWxpZFhSbGN3.field.a2V5.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5.field.a2V5.desc": {
           "source": "Attribute key (e.g. `Color`)",
           "message": "屬性金鑰（例如 `Color`）"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5Om9wdGlvbjpjMkZzWlhOZmIzSmtaWEpmY205M2N3OmZpZWxkOllYUjBjbWxpZFhSbGN3.field.dmFsdWU.display_name": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5Om9wdGlvbjpjMkZzWlhOZmIzSmtaWEpmY205M2N3OmZpZWxkOllYUjBjbWxpZFhSbGN3.field.dmFsdWU.short_desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5.field.dmFsdWU.short_desc": {
           "source": "Attribute value",
           "message": "屬性值"
         },
-        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5Om9wdGlvbjpjMkZzWlhOZmIzSmtaWEpmY205M2N3OmZpZWxkOllYUjBjbWxpZFhSbGN3.field.dmFsdWU.desc": {
+        "app.S2F0YW5h.type.YWN0aW9uOlkzSmxZWFJsTFhOaGJHVnpMVzl5WkdWeTpLYXRhbmFTYWxlc09yZGVyUm93QXR0cmlidXRlRGF0YVR5cGU6aGFzaDxhdXRvPiNmMDNmODllNzI5OGQ1NWU2N2JkZTM5NGEyNGJmZGNkMWY0MjYyN2UxMDA4ZjFjN2VlNWI0YzBkYjIwNDE4NTc5.field.dmFsdWU.desc": {
           "source": "Attribute value (e.g. `Red`)",
           "message": "屬性值（例如 `Red`）"
         },
