@@ -1950,7 +1950,11 @@ fetch
       skipped by later discovery generations
     - provider presentation catalogs recursively extract structured option fields, list elements, union branches, and
       nested allowed values with stable bounded IDs; anonymous nested types are action-scoped and include any stable
-      producer schema path so equal-shaped objects with different semantics cannot silently share translations. New
+      producer schema path so equal-shaped objects with different semantics cannot silently share translations; a
+      nested type has one identity in an action, whichever option or path reaches it, so each of its texts has one
+      message per action, and equal-shaped types that give a field different texts in one action are refused with an
+      error that names them in clear text (@ref DataProvider::DataProviderPresentation::describeMessageId()
+      "DataProviderPresentation::describeMessageId()"). New
       static @ref DataProvider::AbstractDataField::getPresentationInfo() "presentation metadata" and
       @ref DataProvider::AbstractDataField::getDeclaredType() "declared types" keep extraction deterministic without
       invoking context-dependent dynamic type, default, or example callbacks

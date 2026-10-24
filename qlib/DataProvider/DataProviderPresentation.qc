@@ -382,10 +382,13 @@ public class DataProviderPresentation {
             technical_shape.join("|")).toHex();
     }
 
-    #! Returns the stable action-scoped presentation identity for a reusable provider type
+    #! Returns the stable presentation identity of a type reached below the options of an action
     /** Type names and shapes are not globally semantic: two actions can legitimately use equal-shaped anonymous
-        objects for unrelated concepts. Scoping the reusable identity to the exact technical action prevents those
-        objects from sharing translations while still coalescing a type DAG within one action.
+        objects for unrelated concepts.  Scoping the identity to the exact technical action keeps those objects from
+        sharing translations, while within one action a type's presentation is identified once, whichever option or
+        path reaches it, so that the catalog holds each text of a schema component once per action.  Distinct type
+        objects with the same identity in one action must carry the same presentation: conflicting source text is a
+        hard extraction error (give such types distinct names or technical paths).
 
         @param action exact technical action identifier
         @param type provider type to identify
@@ -401,43 +404,14 @@ public class DataProviderPresentation {
             + typePresentationIdentity(type);
     }
 
-    #! Returns the stable occurrence identity for a reusable type below an action option
-    /** The exact technical option, field, and union paths distinguish separate concrete type objects that happen to
-        share a name and field shape. The identity remains independent of all presentation prose.
-
-        @param action exact technical action identifier
-        @param option exact technical option identifier
-        @param type provider type to identify
-        @param field_path exact technical field path leading to the type
-        @param union_path ordered technical union-alternative identities crossed on the way to the type
-        @return stable action-option occurrence and provider-type identity
-
-        @throw DATA-PROVIDER-PRESENTATION-ERROR if an identity is empty
-
-        @since %DataProvider 3.8
-    */
-    static string occurrenceTypePresentationIdentity(string action,
-            string option, AbstractDataProviderType type,
-            list<string> field_path, list<string> union_path = ()) {
-        string rv = actionTypePresentationIdentity(action, type)
-            + ":option:" + identitySegment(option);
-        foreach string union_type in (union_path) {
-            rv += ":union:" + identitySegment(union_type);
-        }
-        foreach string field_name in (field_path) {
-            rv += ":field:" + identitySegment(field_name);
-        }
-        return rv;
-    }
-
-    #! Returns a stable presentation message id for a field in a reusable provider-type occurrence
-    /** Deeper schema traversal uses an occurrence identity that includes action, option, technical field/union path,
-        and type identity. The traversal assigns one canonical occurrence to each concrete type object per
-        action/option, keeping work proportional to distinct schema objects rather than the potentially exponential
-        number of paths through a shared type DAG.
+    #! Returns a stable presentation message id for a field of a type reached below the options of an action
+    /** Below the first field layer of an option, the fields of a type are identified by the type's action-scoped
+        identity (see @ref actionTypePresentationIdentity()): traversal visits each concrete type object once per
+        action, keeping work proportional to distinct schema objects rather than to the potentially exponential number
+        of paths through a shared type DAG, and gives one message to a text that several options reach.
 
         @param app exact technical app identifier
-        @param type_identity stable identity returned by @ref occurrenceTypePresentationIdentity()
+        @param type_identity stable identity returned by @ref actionTypePresentationIdentity()
         @param field_name exact technical field identifier
         @param field presentation field name; one of @ref PresentationFields
         @return stable symbolic message id
@@ -454,9 +428,9 @@ public class DataProviderPresentation {
             + identitySegment(field_name) + "." + field;
     }
 
-    #! Returns a stable allowed-value message id for a field in a reusable provider-type occurrence
+    #! Returns a stable allowed-value message id for a field of a type reached below the options of an action
     /** @param app exact technical app identifier
-        @param type_identity stable identity returned by @ref occurrenceTypePresentationIdentity()
+        @param type_identity stable identity returned by @ref actionTypePresentationIdentity()
         @param field_name exact technical field identifier
         @param value exact technical allowed value
         @param field presentation field name; one of @ref PresentationFields
@@ -561,7 +535,7 @@ public class DataProviderPresentation {
     static hash<string, hash<auto>> buildSourceCatalogs(hash<auto> app,
             list<hash<auto>> actions, bool include_app = True) {
         hash<string, hash<auto>> domain_messages = {};
-        # domain -> action/option scope -> concrete type object -> seen
+        # domain -> action scope -> concrete type object -> seen
         #
         # Repeated paths to the same object are bounded, while distinct objects
         # claiming the same stable presentation identity are still traversed so
@@ -819,6 +793,56 @@ public class DataProviderPresentation {
         };
     }
 
+    #! Returns a message id with its technical identities decoded, for diagnostics
+    /** Each technical identity of a message id is base64url-encoded so that an id is a stable symbolic key; this
+        decodes them so that a person can read which app, action, option, type, field and member an id stands for.
+
+        @par Example:
+        @code{.py}
+# app "Mail", action "send", option "to", field "address", display_name
+string desc = DataProviderPresentation::describeMessageId(
+    DataProviderPresentation::nestedFieldMessageId("Mail", "send", "to", ("address",), "display_name"));
+        @endcode
+
+        @param id a message id
+        @return the components of the id separated by \c ", ", with each identity decoded and quoted; a segment that
+        does not decode is shown as it is
+
+        @since %DataProvider 3.11
+    */
+    static string describeMessageId(string id) {
+        list<string> parts = id.split(".");
+        list<string> rv = ();
+        int i = 0;
+        while (i < parts.size()) {
+            string part = parts[i];
+            if (i + 1 < parts.size()
+                    && inlist(part, ("app", "action", "option", "union", "field", "type", "allowed-value",
+                        "element-allowed-value"))) {
+                # a segment that does not decode is shown as it is
+                string value = parts[i + 1];
+                try {
+                    string decoded = parse_base64_url_string_to_string(value);
+                    # the action-scoped identity of a type names the action with a segment too
+                    *list<*string> action = part == "type"
+                        ? regex_extract(decoded, "^action:([A-Za-z0-9_-]+):")
+                        : NOTHING;
+                    value = action
+                        ? "action " + parse_base64_url_string_to_string(action[0]) + ": "
+                            + decoded.substr(8 + action[0].length())
+                        : decoded;
+                } catch (hash<ExceptionInfo> ex) {
+                }
+                rv += sprintf("%s %y", part, value);
+                i += 2;
+                continue;
+            }
+            rv += part;
+            ++i;
+        }
+        return rv.join(", ");
+    }
+
     private static string identitySegment(string identity) {
         if (!identity.val()) {
             throw "DATA-PROVIDER-PRESENTATION-ERROR",
@@ -962,8 +986,9 @@ public class DataProviderPresentation {
     #! Adds presentation reachable through one option type
     /** \a type_path is passed by value deliberately and cuts a genuinely recursive root edge. Below the first
         field layer, \a type_seen makes traversal proportional to distinct type objects rather than paths through the
-        type DAG. Distinct objects sharing a stable presentation identity are compared so conflicting source text
-        remains a hard extraction error.
+        type DAG: each concrete type object is visited once per action, whichever option reaches it, and its fields
+        are identified by its action-scoped identity (@ref actionTypePresentationIdentity()). Distinct objects sharing
+        a stable presentation identity are compared so conflicting source text remains a hard extraction error.
     */
     private static addTypeMessages(reference<hash<auto>> messages,
             string catalog_app, string action, string option,
@@ -990,11 +1015,11 @@ public class DataProviderPresentation {
 
         string presentation_type = option_scoped
             ? typePresentationIdentity(type)
-            : occurrenceTypePresentationIdentity(action, option, type,
-                field_path, union_path);
+            : actionTypePresentationIdentity(action, type);
         if (!option_scoped) {
+            # each concrete type object is visited once per action, whichever option reaches it first
             string seen_key = identitySegment(catalog_app) + ":"
-                + identitySegment(action) + ":" + identitySegment(option);
+                + identitySegment(action);
             if (type_seen{seen_key}{object_identity}) {
                 return;
             }
@@ -1079,8 +1104,13 @@ public class DataProviderPresentation {
                 string existing = messages{id}.source.toString();
                 if (existing != source) {
                     throw "DATA-PROVIDER-PRESENTATION-CATALOG-ERROR",
-                        sprintf("message id %y has conflicting source strings "
-                            "%y and %y", id, existing, source);
+                        sprintf("message id %y (%s) has conflicting source strings "
+                            "%y and %y%s", id, describeMessageId(id), existing, source,
+                            id.split(".")[2] == "type"
+                                ? "; the types with this name and shape reached below the options of the action "
+                                    "have one text for each field: give types that need different texts different "
+                                    "names or paths"
+                                : "");
                 }
                 continue;
             }
@@ -1660,11 +1690,11 @@ public class DataProviderPresentationCatalog {
             });
     }
 
-    #! Projects a localized field belonging to a stable reusable provider-type occurrence
+    #! Projects a localized field of a type reached below the options of an action
     /** @param app provider application metadata
         @param action provider action metadata
         @param type_identity stable identity returned by
-            @ref DataProviderPresentation::occurrenceTypePresentationIdentity()
+            @ref DataProviderPresentation::actionTypePresentationIdentity()
         @param field_name exact technical field identifier
         @param field_info static field presentation metadata
         @return a copy with available localized presentation fields
@@ -1755,11 +1785,11 @@ public class DataProviderPresentationCatalog {
             });
     }
 
-    #! Projects an allowed value on a field in a stable reusable provider-type occurrence
+    #! Projects an allowed value on a field of a type reached below the options of an action
     /** @param app provider application metadata
         @param action provider action metadata
         @param type_identity stable identity returned by
-            @ref DataProviderPresentation::occurrenceTypePresentationIdentity()
+            @ref DataProviderPresentation::actionTypePresentationIdentity()
         @param field_name exact technical field identifier
         @param allowed_value allowed-value metadata to project
         @param element_value if @ref True, use the element-allowed-value identity

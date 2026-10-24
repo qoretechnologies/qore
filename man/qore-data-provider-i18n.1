@@ -82,6 +82,67 @@ required when it cannot be inferred.  Use
 .B \-m
 only to load any additional runtime dependency.
 .TP
+.BR \-\-update\-source\-tree
+Discover the root catalogs and owner modules below the output directory as
+.B \-\-check\-source\-tree
+does, load every owner module once, and rewrite every root catalog from the
+current provider metadata.  Translations are not changed.
+.TP
+.BR \-\-rekey\-source\-tree
+Discover the catalogs and owner modules below the output directory as
+.B \-\-check\-source\-tree
+does and move every catalog to the message identifiers of the current
+provider metadata, carrying its translations.  Each root catalog is rewritten
+from the current metadata; in each translation file, a translation is kept for
+the new identifier of its message when the producer text there is unchanged.
+The fields of a type reached below the options of an action have one message
+for each text in that action, however many options or paths reach the type;
+catalogs whose messages identified such a type by the option and path that
+reached it have one message for each of them, and these come together.  When
+they had different translations of one text, the translation given most often
+is kept, or the first one in the file for a tie, and the text is reported as a
+variant.  A message without such a translation takes the translation that the
+locale gives the same text of the same field and member under another
+identifier, if there is exactly one.  For each domain that changes, a
+.B REKEY:
+line gives the number of messages before and after and the numbers of
+translations carried, variants, translations reused by text, missing
+translations, and new texts, which are texts the old root catalog did not
+have.  Only the
+.I domain/root.json
+layout is supported.
+.IP
+If two types reached below the options of one action have the same name,
+shape and schema path but give a field different texts, extraction is refused
+for the owner module, which is reported as a conflict.  If any domain has a
+conflict, nothing is written, and the exit status is 2.
+.TP
+.BR \-\-mechanical
+With
+.BR \-\-rekey\-source\-tree ,
+re-key the committed root catalogs instead of loading the owner modules: the
+messages of a type reached below the options of an action are given their
+per-action identifiers, and messages that come together must have the same
+producer text, or they are reported as a conflict.  No other identifier
+changes.  No module is loaded, so
+.B \-m
+and
+.B \-\-owner
+cannot be given.
+.TP
+.BR \-\-dry\-run
+With
+.BR \-\-rekey\-source\-tree ,
+report what would be re-keyed and write nothing.
+.TP
+.BR \-\-require\-standard\-locales
+With a check mode, require a translation file for every standard translation
+locale.
+.TP
+.BR \-\-require\-complete\-locales
+With a check mode, require every checked translation file to translate every
+root message.
+.TP
 .BR \-v ", " \-\-verbose
 Show loaded modules and written files.
 .TP
@@ -109,6 +170,13 @@ Verify every provider catalog below an installed or source tree:
 Verify every provider catalog against its source owner modules:
 .RS
 .B qore\-data\-provider\-i18n \-\-check\-source\-tree \-o qlib
+.RE
+.PP
+Report how the catalogs of a source tree would be re-keyed, then re-key them:
+.RS
+.B qore\-data\-provider\-i18n \-\-rekey\-source\-tree \-\-dry\-run \-o .
+.br
+.B qore\-data\-provider\-i18n \-\-rekey\-source\-tree \-o .
 .RE
 .SH SEE ALSO
 .BR qore (1),

@@ -46,6 +46,9 @@ class QoreDataProviderI18nCmd {
             "check_tree": "check-tree",
             "check_source_tree": "check-source-tree",
             "update_source_tree": "update-source-tree",
+            "rekey_source_tree": "rekey-source-tree",
+            "mechanical": "mechanical",
+            "dry_run": "dry-run",
             "require_standard_locales": "require-standard-locales",
             "require_complete_locales": "require-complete-locales",
             "verbose": "v,verbose:i+",
@@ -93,6 +96,23 @@ class QoreDataProviderI18nCmd {
         }
         list<string> required_locales = opt.require_standard_locales
             ? DataProviderPresentation::StandardTranslationLocales : ();
+        if ((opt.mechanical || opt.dry_run) && !opt.rekey_source_tree) {
+            fail("--mechanical and --dry-run require --rekey-source-tree");
+        }
+        if (opt.rekey_source_tree) {
+            if (opt.check || opt.check_tree || opt.check_source_tree
+                    || opt.update_source_tree || opt.app) {
+                fail("--rekey-source-tree cannot be combined with a check mode, --update-source-tree or --app");
+            }
+            if (opt.mechanical && (opt.module || opt.owner)) {
+                fail("--mechanical loads no modules and cannot be combined with --module or --owner");
+            }
+            rekeySourceTree(opt.output,
+                cast<list<string>>(opt.module ?? ()),
+                cast<list<string>>(opt.owner ?? ()), opt.mechanical ?? False,
+                opt.dry_run ?? False, opt.verbose);
+            return;
+        }
         if (opt.update_source_tree) {
             if (opt.check || opt.check_tree || opt.check_source_tree
                     || opt.app) {
@@ -565,6 +585,293 @@ class QoreDataProviderI18nCmd {
         return paths.first();
     }
 
+    #! The pattern of a type identity that includes the option and path through which the type was reached
+    /** Catalogs generated before the types below the options of an action were identified once per action
+        identified them by the option and path that reached them: the action-scoped identity followed by
+        \c ":option:" and optionally \c ":union:" and \c ":field:" components.  Group 1 is the action-scoped
+        identity (DataProviderPresentation::actionTypePresentationIdentity()).
+    */
+    const OccurrenceIdentityRegex = "^(action:[A-Za-z0-9_-]+:.*?#[0-9a-f]{64}):option:";
+
+    #! Returns the message id for the action-scoped type identity of an id built with an occurrence identity
+    /** @param id a message id of a source catalog
+        @return the id with the type identity reduced to its action-scoped identity, or \a id unchanged if it is not
+        the id of a field of a type reached below an option (\c "app.<app>.type.<identity>.field...")
+    */
+    static string rekeyMessageId(string id) {
+        list<string> parts = id.split(".");
+        if (parts.size() < 5 || parts[0] != "app" || parts[2] != "type") {
+            return id;
+        }
+        # an id that is not one of these, such as one whose segment does not decode, is not changed
+        *list<*string> m;
+        try {
+            m = regex_extract(parse_base64_url_string_to_string(parts[3]), OccurrenceIdentityRegex);
+        } catch (hash<ExceptionInfo> ex) {
+            return id;
+        }
+        if (!m) {
+            return id;
+        }
+        parts[3] = convert_encoding(m[0], "UTF-8").toBase64Url();
+        return parts.join(".");
+    }
+
+    #! Re-keys the source-owned catalogs below a source tree for the per-action type identities
+    /** For each catalog domain, the root messages are the fresh extraction of the domain's owner module (or, with
+        \a mechanical, the committed root messages re-keyed with rekeyMessageId(), where messages that come together
+        must have the same source text).  The translations of each locale are carried to the new ids: a translation
+        is kept for the new id of its old id if the new root has the same source text there; translations of one text
+        that differ are reported as variants, and the most frequent one (the first one in the file for a tie) is
+        kept.  A new root message without such a translation takes the translation that the locale gives the same
+        text for the same field and member under another id, if there is exactly one; the others are reported as
+        missing.  A root text that the old root does not have is reported as a new text.
+
+        Conflicting texts for one new id (or a conflict reported by the extraction) are reported for each domain;
+        then nothing is written, and the program exits with status 2.
+
+        @param output the source tree
+        @param extra_modules more modules to load
+        @param explicit_owners the owner of a noncanonical source tree
+        @param mechanical re-key the committed root messages instead of extracting the roots
+        @param dry_run report only; write nothing
+        @param verbose report every domain, also domains without changes
+    */
+    private rekeySourceTree(string output, list<string> extra_modules,
+            list<string> explicit_owners, bool mechanical, bool dry_run, *int verbose) {
+        list<string> source_roots = providerSourceRoots(output);
+        list<hash<auto>> roots = ();
+        foreach string source_root in (source_roots) {
+            collectRootCatalogs(source_root, \roots);
+        }
+        if (!roots) {
+            throw "DATA-PROVIDER-I18N-ERROR", sprintf(
+                "no source-owned provider root catalogs found below %y",
+                output);
+        }
+
+        hash<string, hash<string, hash<auto>>> owner_catalogs;
+        hash<string, string> owner_errors;
+        if (!mechanical) {
+            hash<string, bool> owner_modules = map {$1: True}, explicit_owners;
+            foreach string source_root in (source_roots) {
+                collectProviderSourceOwners(source_root, \owner_modules);
+            }
+            foreach hash<auto> root in (\roots) {
+                *string module_name = sourceOwnerModule(root.search_root);
+                if (!module_name.val()) {
+                    if (explicit_owners.size() != 1) {
+                        throw "DATA-PROVIDER-I18N-ERROR", sprintf(
+                            "cannot infer an owner module for catalog %y; pass exactly one --owner for a "
+                            "noncanonical source tree", root.path);
+                    }
+                    module_name = explicit_owners.first();
+                }
+                owner_modules{module_name} = True;
+                root.owner = module_name;
+            }
+            hash<string, bool> modules_to_load = owner_modules;
+            map modules_to_load{$1} = True, extra_modules;
+            foreach string module_name in (sort(keys modules_to_load)) {
+                if (verbose) {
+                    printf("loading provider module %s\n", color.key(module_name));
+                }
+                load_module(module_name);
+            }
+            foreach string owner in (sort(keys owner_modules)) {
+                # a conflict is a hard extraction error: it is reported for the owner's domains
+                try {
+                    owner_catalogs{owner} = moduleCatalogs(owner);
+                } catch (hash<ExceptionInfo> ex) {
+                    owner_errors{owner} = sprintf("%s: %s", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # path -> the catalog to write there
+        hash<string, hash<auto>> writes = {};
+        hash<string, int> totals = {
+            "domains": 0, "changed": 0, "before": 0, "after": 0, "conflicts": 0, "carried": 0, "variants": 0,
+            "reused": 0, "missing": 0, "new_texts": 0,
+        };
+        foreach hash<auto> root in (sort_stable(roots, int sub (hash<auto> l, hash<auto> r) {
+                return l.path <=> r.path; })) {
+            ++totals.domains;
+            if (basename(root.path) != DataProviderPresentation::RootLocale + ".json") {
+                throw "DATA-PROVIDER-I18N-ERROR", sprintf("catalog %y is not in the <domain>/%s.json layout that "
+                    "re-keying supports", root.path, DataProviderPresentation::RootLocale);
+            }
+            hash<auto> old_catalog = parse_json(ReadOnlyFile::readTextFile(root.path));
+            hash<auto> old_messages = old_catalog.locales{DataProviderPresentation::RootLocale}.messages ?? {};
+            # old id -> new id; the translation files of a domain have the ids of its root
+            hash<string, string> idmap = map {$1: rekeyMessageId($1)}, keys old_messages;
+            list<string> conflicts = ();
+            hash<auto> new_messages;
+            # the new root catalog: the committed one with the re-keyed messages, or the extracted one
+            hash<auto> new_catalog;
+            if (mechanical) {
+                new_messages = {};
+                # new id -> the different texts of the messages that come together there
+                hash<string, list<string>> conflict_texts = {};
+                foreach hash<auto> entry in (old_messages.pairIterator()) {
+                    string id = idmap{entry.key};
+                    *hash<auto> first = new_messages{id};
+                    if (!first) {
+                        new_messages{id} = entry.value;
+                        continue;
+                    }
+                    if (first.source == entry.value.source) {
+                        continue;
+                    }
+                    list<string> texts = conflict_texts{id} ?? (first.source,);
+                    if (!inlist(entry.value.source, texts)) {
+                        texts += entry.value.source;
+                    }
+                    conflict_texts{id} = texts;
+                }
+                conflicts = map sprintf("%s (%s): %s", $1.key, DataProviderPresentation::describeMessageId($1.key),
+                    (map sprintf("%y", $1), $1.value).join(" and ")), conflict_texts.pairIterator();
+                new_catalog = old_catalog;
+                new_catalog.locales{DataProviderPresentation::RootLocale}.messages = new_messages;
+            } else if (*string err = owner_errors{root.owner}) {
+                conflicts += err;
+            } else if (!exists owner_catalogs{root.owner}{root.domain}) {
+                throw "DATA-PROVIDER-I18N-ERROR", sprintf("catalog %y is orphaned; module %y no longer owns domain "
+                    "%y", root.path, root.owner, root.domain);
+            } else {
+                new_catalog = owner_catalogs{root.owner}{root.domain};
+                new_messages = new_catalog.locales{DataProviderPresentation::RootLocale}.messages ?? {};
+            }
+            totals.before += old_messages.size();
+            totals.after += new_messages.size();
+            if (conflicts) {
+                totals.conflicts += conflicts.size();
+                stderr.printf("%s %s: %d message(s) before; %d conflict(s):\n", color.error("CONFLICT:"),
+                    root.path, old_messages.size(), conflicts.size());
+                map stderr.printf("  %s\n", $1), conflicts[0..9];
+                if (conflicts.size() > 10) {
+                    stderr.printf("  ... %d more\n", conflicts.size() - 10);
+                }
+                continue;
+            }
+
+            # the sources of the old root, to tell a new text from a text that has a new id
+            hash<string, bool> old_sources = map {$1.source: True}, old_messages.iterator();
+            string dir = dirname(root.path);
+            # locale -> the translation catalog with the re-keyed messages
+            hash<string, hash<auto>> locale_catalogs = {};
+            int carried = 0;
+            int variants = 0;
+            int reused = 0;
+            int missing = 0;
+            foreach string file in (sort(glob(dir + DirSep + "*.json"))) {
+                string locale = basename(file);
+                locale = locale.substr(0, locale.length() - 5);
+                if (locale == DataProviderPresentation::RootLocale) {
+                    continue;
+                }
+                hash<auto> locale_catalog = parse_json(ReadOnlyFile::readTextFile(file));
+                hash<auto> translations = locale_catalog.locales{locale}.messages ?? {};
+                # new id -> translation -> number of old ids giving it, and the position of the first one
+                hash<string, hash<string, int>> counts = {};
+                hash<string, hash<string, int>> first = {};
+                # (field, member, source) -> translations
+                hash<string, hash<string, bool>> by_text = {};
+                int pos = 0;
+                foreach hash<auto> entry in (translations.pairIterator()) {
+                    pos = pos + 1;
+                    if (entry.value.typeCode() != NT_HASH || entry.value.message.typeCode() != NT_STRING
+                            || !entry.value.message.val() || entry.value.source.typeCode() != NT_STRING) {
+                        continue;
+                    }
+                    string message = entry.value.message;
+                    by_text{textKey(entry.key, entry.value.source)}{message} = True;
+                    string id = idmap{entry.key} ?? rekeyMessageId(entry.key);
+                    if (new_messages{id}.source != entry.value.source) {
+                        continue;
+                    }
+                    if (exists counts{id}{message}) {
+                        counts{id}{message} = counts{id}{message} + 1;
+                    } else {
+                        counts{id}{message} = 1;
+                        first{id}{message} = pos;
+                    }
+                }
+                hash<auto> messages = {};
+                foreach hash<auto> entry in (new_messages.pairIterator()) {
+                    if (*hash<string, int> c = counts{entry.key}) {
+                        string best = c.firstKey();
+                        if (c.size() > 1) {
+                            ++variants;
+                            *hash<string, int> f = first{entry.key};
+                            foreach hash<auto> candidate in (c.pairIterator()) {
+                                if (candidate.value > c{best}
+                                        || (candidate.value == c{best} && f{candidate.key} < f{best})) {
+                                    best = candidate.key;
+                                }
+                            }
+                        }
+                        messages{entry.key} = {"source": entry.value.source, "message": best};
+                        ++carried;
+                        continue;
+                    }
+                    *hash<string, bool> same_text = by_text{textKey(entry.key, entry.value.source)};
+                    if (same_text.size() == 1) {
+                        messages{entry.key} = {"source": entry.value.source, "message": same_text.firstKey()};
+                        ++reused;
+                        continue;
+                    }
+                    ++missing;
+                }
+                locale_catalog.locales{locale}.messages = messages;
+                locale_catalogs{locale} = locale_catalog;
+            }
+            hash<string, int> stats = {"carried": carried, "variants": variants, "reused": reused,
+                "missing": missing};
+            int new_texts = (select new_messages.iterator(), !old_sources{$1.source}).size();
+            map totals{$1.key} += $1.value, stats.pairIterator();
+            totals.new_texts += new_texts;
+            bool changed = sort(keys new_messages) != sort(keys old_messages);
+            if (changed) {
+                ++totals.changed;
+            }
+            if (changed || verbose) {
+                printf("%s %s: %d -> %d message(s); translations carried %d, variants %d, reused by text %d, "
+                    "missing %d; new texts %d\n", color.key(changed ? "REKEY:" : "SAME:"), root.path,
+                    old_messages.size(), new_messages.size(), stats.carried, stats.variants, stats.reused,
+                    stats.missing, new_texts);
+            }
+            if (!changed && !stats.reused) {
+                continue;
+            }
+            writes{root.path} = new_catalog;
+            map writes{dir + DirSep + $1.key + ".json"} = $1.value, locale_catalogs.pairIterator();
+        }
+        # nothing is written if any domain has a conflict
+        if (!dry_run && !totals.conflicts) {
+            foreach hash<auto> entry in (writes.pairIterator()) {
+                writeFile(entry.key, make_json(entry.value, JGF_ADD_FORMATTING) + "\n");
+            }
+        }
+        printf("%s %d domain(s), %d re-keyed; %d -> %d message(s); %d conflict(s); translations carried %d, "
+            "variants %d, reused by text %d, missing %d; new texts %d%s\n",
+            dry_run || totals.conflicts ? "surveyed" : "re-keyed", totals.domains, totals.changed, totals.before,
+            totals.after, totals.conflicts, totals.carried, totals.variants, totals.reused, totals.missing,
+            totals.new_texts, dry_run
+                ? " (dry run: nothing written)"
+                : (totals.conflicts ? " (conflicts: nothing written)" : ""));
+        if (totals.conflicts) {
+            exit(2);
+        }
+    }
+
+    #! Returns the key of a text for a field and member: the last two components of the id and the source text
+    private static string textKey(string id, string source) {
+        int member = id.rfind(".");
+        int field = member > 0 ? id.rfind(".", member - 1) : -1;
+        return id.substr(field + 1) + "|" + source;
+    }
+
     #! Returns the production library roots below a source-tree path
     /** A repository can contain examples, tests, build trees, and other Qore
         sources that deliberately exercise provider registration APIs without
@@ -1009,6 +1316,12 @@ class QoreDataProviderI18nCmd {
         printf("                     Load source owners and verify roots and translations\n");
         printf("      --update-source-tree\n");
         printf("                     Load source owners once and rewrite every root catalog\n");
+        printf("      --rekey-source-tree\n");
+        printf("                     Re-key every catalog for the per-action type identities and carry\n");
+        printf("                     the translations of unchanged texts to the new ids\n");
+        printf("      --mechanical   With --rekey-source-tree: re-key the committed roots without\n");
+        printf("                     loading the source owners\n");
+        printf("      --dry-run      With --rekey-source-tree: report only, write nothing\n");
         printf("      --require-standard-locales\n");
         printf("                     Require every standard translation locale in a check\n");
         printf("      --require-complete-locales\n");

@@ -64,9 +64,12 @@ its overlay, not by module code).
       QORE_MODULE_DIR=build/qlib-qmod:build/modules/i18n:build/modules/json:qlib LD_LIBRARY_PATH=build \
         build/qore bin/qore-data-provider-i18n -C -o qlib/<Module>/i18n -m <Module> --owner <Module>
       ```
-      After a framework identity change, regenerate all existing source-owned roots in one deterministic owner-loading
-      pass with `build/qore bin/qore-data-provider-i18n -C --update-source-tree -o .`; then refresh every translation
-      and run the strict source-tree check below.
+      After a framework identity change, re-key all existing source-owned catalogs in one deterministic owner-loading
+      pass with `build/qore bin/qore-data-provider-i18n -C --rekey-source-tree -o .` (run it with `--dry-run` first):
+      it regenerates every root and carries each translation whose text is unchanged to the text's new id, and
+      reports conflicts, missing translations and new texts; then translate the new texts and run the strict
+      source-tree check below. (`--update-source-tree` regenerates the roots only and leaves the translations
+      as they are.)
       Regenerate whenever a translated text (`DataProviderPresentation::PresentationFields`: `display_name`,
       `short_desc`, `desc` or an option's or field's `validation_regex_desc`) changes; the test compares the committed
       tree against what the module currently produces. Note the check only reaches an app once its factory is
@@ -136,6 +139,10 @@ See [Action Path Resolution](data-provider-development-guide.md#action-path-reso
 - [ ] Option `allowed_values` declared explicitly in the option definition (never as text in `desc` or `short_desc`)
 - [ ] Every user-visible label on fields reachable through an option type, list element, or union branch appears in
       the generated root catalog; nested `allowed_values` and `element_allowed_values` are included.
+- [ ] Types below the options of one action that have the same name, shape and schema path give their fields the
+      same texts: they have one message per text in the action, and extraction refuses conflicting texts
+      (`DATA-PROVIDER-PRESENTATION-CATALOG-ERROR`, `conflicting source strings`). Give types that need different
+      texts different names or schema paths.
 - [ ] Every shipped locale has exact root message-ID/source parity after regeneration; a fallback to producer text
       does not qualify as a completed translation.
 

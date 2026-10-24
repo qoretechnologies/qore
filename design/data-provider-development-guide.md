@@ -375,13 +375,24 @@ index, and a catalog mutation after sealing invalidates its single-use token. Se
 An option's `display_name`, `short_desc`, and `desc` are not the end of its presentation surface.
 Fields reachable through its structured type, list elements, union alternatives, and their finite
 values are also user-visible. The catalog generator walks this graph with cycle detection. First-layer
-fields retain action/option context; deeper reusable structures use stable app/action/option/occurrence/type/field
-identities. The occurrence includes the canonical technical field path and any union context above it, and the type
-segment includes an explicit producer schema path when available plus a digest of immediate technical field/type
-shape. One canonical occurrence is assigned per concrete type object in each action/option. This distinguishes
-anonymous schemas without making IDs depend on labels and avoids expanding a shared schema DAG once per path.
+fields retain action/option context; the fields of deeper reusable structures use stable app/action/type/field
+identities (`DataProviderPresentation::actionTypePresentationIdentity()`): the type segment is the class and name
+of the type, its explicit producer schema path when available, and a digest of its immediate technical field/type
+shape, scoped to the action. A type has one identity in an action, whichever option or path reaches it, so each of
+its texts has one message and one translation per action, and each concrete type object is visited once per
+action, which avoids expanding a shared schema DAG once per path. This distinguishes anonymous schemas without
+making IDs depend on labels.
+
+Two distinct type objects with the same name, shape and schema path in one action share that identity, so they must
+give their fields the same texts: extraction refuses conflicting texts with `DATA-PROVIDER-PRESENTATION-CATALOG-ERROR`
+(`... has conflicting source strings ...`), naming the type, field and member. Give types that need different texts
+different names or schema paths.
+
 Regenerate every root and complete locale after changing either a field label or the type graph that makes it
-reachable. The runtime fallback is not evidence that a shipped locale is complete.
+reachable. After a change of the message identities themselves, re-key the catalogs with
+`qore-data-provider-i18n --rekey-source-tree` (first with `--dry-run`): it rewrites the roots and carries each
+translation whose text is unchanged to the text's new id, and reports conflicts and new texts. The runtime
+fallback is not evidence that a shipped locale is complete.
 
 ### Description Formatting
 

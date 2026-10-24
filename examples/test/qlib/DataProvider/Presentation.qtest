@@ -77,6 +77,16 @@ class DataProviderPresentationTest inherits QUnit::Test {
         const PatternOwnerAction = "set-language";
         const PatternOwnerDesc = "a two-letter language code, such as en";
         const PatternOwnerNestedDesc = "a three-letter currency code, such as EUR";
+
+        #! The fixture module that registers an app whose three options reach one nested type
+        const RekeyOwnerModule = "PresentationRekeyOwner";
+        const RekeyOwnerApp = "QoreTestRekeyProvider";
+        const RekeyOwnerAction = "send";
+        const RekeyOwnerOptions = ("sender", "recipient", "courier");
+
+        #! The fixture module that registers an app whose two options give one nested type two texts
+        const RekeyConflictOwnerModule = "PresentationRekeyConflictOwner";
+        const RekeyConflictOwnerApp = "QoreTestRekeyConflictProvider";
     }
 
     constructor() : Test("DataProvider presentation catalog test", "1.0") {
@@ -108,10 +118,26 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \sourceCatalogTest());
         addTestCase("source catalogs recursively cover nested option types",
             \nestedSourceCatalogTest());
+        addTestCase("a nested type's texts have one identity whatever option or path reaches them",
+            \actionScopedTypeIdentityTest());
+        addTestCase("a nested type's texts have one message per action",
+            \actionScopedTypeMessageTest());
+        addTestCase("two options of one action cannot give one type identity two texts",
+            \actionScopedTypeConflictTest());
+        addTestCase("message ids are described in clear text",
+            \describeMessageIdTest());
         addTestCase("validation pattern descriptions are extracted and delivered translated",
             \validationPatternPresentationTest());
         addTestCase("qore-data-provider-i18n extracts validation pattern descriptions",
             \validationPatternExtractionToolTest());
+        addTestCase("qore-data-provider-i18n re-keys nested type texts to their per-action ids",
+            \rekeySourceTreeToolTest());
+        addTestCase("qore-data-provider-i18n re-keys committed catalogs as it re-keys to extracted ones",
+            \mechanicalRekeyToolTest());
+        addTestCase("qore-data-provider-i18n re-keys nothing when texts conflict",
+            \rekeyConflictToolTest());
+        addTestCase("qore-data-provider-i18n refuses re-key requests it does not support",
+            \rekeyUsageToolTest());
         addTestCase("producer locale validation is metadata-only and comprehensive",
             \sourceLocaleInspectionTest());
         addTestCase("the checked-in Qore source catalog is synchronized",
@@ -1350,8 +1376,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
         string body_identity
             = DataProviderPresentation::typePresentationIdentity(body);
         string item_identity
-            = DataProviderPresentation::occurrenceTypePresentationIdentity(
-                Action, Option, item, ("items",), (body_identity,));
+            = DataProviderPresentation::actionTypePresentationIdentity(Action, item);
         # The same branch is deliberately present twice. Identical union paths
         # must coalesce rather than acquire order-dependent branch ids.
         QoreUnionDataType union((body, body));
@@ -1371,7 +1396,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertEq("Režim zpracování", source_messages{
                 DataProviderPresentation::typeFieldMessageId(App,
                     item_identity, "mode", "short_desc")}.source,
-            "fields in reusable deeper types use a bounded occurrence-scoped id");
+            "fields in reusable deeper types use an action-scoped id");
         assertEq("Rychlý", source_messages{
                 DataProviderPresentation::typeAllowedValueMessageId(App,
                     item_identity, "mode", "fast",
@@ -1479,20 +1504,30 @@ class DataProviderPresentationTest inherits QUnit::Test {
                     deep_right_branch))),
         });
         source_action.options{Option}.type = deep_union_container;
+        assertEq(DataProviderPresentation::actionTypePresentationIdentity(Action,
+                deep_left_child),
+            DataProviderPresentation::actionTypePresentationIdentity(Action,
+                deep_right_child),
+            "equal-named and equal-shaped types below one action share one identity, whatever the path");
+        assertThrows("DATA-PROVIDER-PRESENTATION-CATALOG-ERROR",
+            "conflicting source strings", sub () {
+                DataProviderPresentation::buildSourceCatalogs(app(),
+                    (source_action,));
+            }, NOTHING,
+            "deeper union branches with different texts for one identity are refused");
+        # distinct technical paths give the branches distinct identities
+        deep_left_child.setPath("request/branch/left/child");
+        deep_right_child.setPath("request/branch/right/child");
         source_messages = DataProviderPresentation::buildSourceCatalogs(
             app(), (source_action,)){Domain}.locales.root.messages;
         string deep_left_identity
-            = DataProviderPresentation::occurrenceTypePresentationIdentity(
-                Action, Option, deep_left_child, ("branch", "child"),
-                (DataProviderPresentation::typePresentationIdentity(
-                    deep_left_branch),));
+            = DataProviderPresentation::actionTypePresentationIdentity(Action,
+                deep_left_child);
         string deep_right_identity
-            = DataProviderPresentation::occurrenceTypePresentationIdentity(
-                Action, Option, deep_right_child, ("branch", "child"),
-                (DataProviderPresentation::typePresentationIdentity(
-                    deep_right_branch),));
+            = DataProviderPresentation::actionTypePresentationIdentity(Action,
+                deep_right_child);
         assertNeq(deep_left_identity, deep_right_identity,
-            "a deeper union branch remains part of descendant occurrence identity");
+            "deeper union branches at distinct technical paths have distinct identities");
         assertEq("Hodnota vlevo", source_messages{
                 DataProviderPresentation::typeFieldMessageId(App,
                     deep_left_identity, "value", "display_name")}.source,
@@ -1523,13 +1558,11 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertNeq(conflicting_left.uniqueHash(),
             conflicting_right.uniqueHash(),
             "conflict fixtures are distinct concrete type objects");
-        assertEq(DataProviderPresentation::occurrenceTypePresentationIdentity(
-                Action, Option, conflicting_left, ("child",),
-                (DataProviderPresentation::typePresentationIdentity(left),)),
-            DataProviderPresentation::occurrenceTypePresentationIdentity(
-                Action, Option, conflicting_right, ("child",),
-                (DataProviderPresentation::typePresentationIdentity(right),)),
-            "equal technical occurrences deliberately claim the same presentation identity");
+        assertEq(DataProviderPresentation::actionTypePresentationIdentity(
+                Action, conflicting_left),
+            DataProviderPresentation::actionTypePresentationIdentity(
+                Action, conflicting_right),
+            "equal technical types below one action deliberately claim the same presentation identity");
         assertThrows("DATA-PROVIDER-PRESENTATION-CATALOG-ERROR",
             "conflicting source strings", sub () {
                 DataProviderPresentation::buildSourceCatalogs(app(),
@@ -1550,6 +1583,116 @@ class DataProviderPresentationTest inherits QUnit::Test {
     }
 
     #! A validation pattern description is producer prose: it is extracted and delivered like a description
+    #! Returns an address type for the action-scoped type identity tests
+    private static HashDataType addressType(string city) {
+        return new HashDataType("PresentationAddress", {
+            "city": new QoreDataField(<auto>{
+                "name": "city",
+                "display_name": city,
+                "short_desc": "Město adresy",
+                "type": new QoreStringDataType(),
+            }),
+        });
+    }
+
+    #! Returns an action whose two options, and two paths within the first, reach the given address type
+    private hash<auto> addressAction(HashDataType address, *HashDataType recipient_address) {
+        return action() + {
+            "options": {
+                "odesílatel": option() + {"type": new HashDataType("PresentationSender", {
+                    "home": new QoreDataField("home", "Domov", address),
+                    "office": new QoreDataField("office", "Kancelář", address),
+                })},
+                "příjemce": option() + {"type": new HashDataType("PresentationRecipient", {
+                    "home": new QoreDataField("home", "Domov", recipient_address ?? address),
+                })},
+            },
+        };
+    }
+
+    #! The texts of a type below the options of an action are identified by the action, the type and its shape
+    /** A schema component reached by several options, or by several paths, of one action is identified once: its
+        identity does not include the option or the path.
+    */
+    actionScopedTypeIdentityTest() {
+        HashDataType address = addressType("Město");
+        hash<auto> messages = DataProviderPresentation::buildSourceCatalogs(app(),
+            (addressAction(address),)){Domain}.locales.root.messages;
+        string city_id = DataProviderPresentation::typeFieldMessageId(App,
+            DataProviderPresentation::actionTypePresentationIdentity(Action, address), "city", "display_name");
+        assertEq("Město", messages{city_id}.source,
+            "the type's text is identified by the action and the type, not by an option or a path");
+        assertEq((city_id,), (select keys messages, messages{$1}.source == "Město"),
+            "no option or path makes another message for the same text of the same type");
+    }
+
+    #! A type's texts have one message in each action that reaches the type
+    actionScopedTypeMessageTest() {
+        HashDataType address = addressType("Město");
+        hash<auto> source_action = addressAction(address);
+        hash<auto> messages = DataProviderPresentation::buildSourceCatalogs(app(),
+            (source_action, source_action + {"action": "přijmout"})){Domain}.locales.root.messages;
+        string identity = DataProviderPresentation::actionTypePresentationIdentity(Action, address);
+        string other_identity = DataProviderPresentation::actionTypePresentationIdentity("přijmout", address);
+        assertNeq(identity, other_identity, "the identity of a type is scoped to its action");
+        assertEq(sort((
+                DataProviderPresentation::typeFieldMessageId(App, identity, "city", "display_name"),
+                DataProviderPresentation::typeFieldMessageId(App, identity, "city", "short_desc"),
+                DataProviderPresentation::typeFieldMessageId(App, other_identity, "city", "display_name"),
+                DataProviderPresentation::typeFieldMessageId(App, other_identity, "city", "short_desc"),
+            )), sort(select keys messages, messages{$1}.source =~ /^Město/),
+            "each of the type's two texts has one message in each of the two actions");
+    }
+
+    #! Two distinct types of one action with the same identity must carry the same texts
+    actionScopedTypeConflictTest() {
+        HashDataType address = addressType("Město");
+        HashDataType other_address = addressType("Obec");
+        assertEq(DataProviderPresentation::actionTypePresentationIdentity(Action, address),
+            DataProviderPresentation::actionTypePresentationIdentity(Action, other_address),
+            "two type objects with the same name and shape have the same identity");
+        assertThrows("DATA-PROVIDER-PRESENTATION-CATALOG-ERROR", "conflicting source strings", sub () {
+            DataProviderPresentation::buildSourceCatalogs(app(), (addressAction(address, other_address),));
+        }, NOTHING, "two options of one action cannot give one type identity two texts");
+
+        *string desc;
+        try {
+            DataProviderPresentation::buildSourceCatalogs(app(), (addressAction(address, other_address),));
+        } catch (hash<ExceptionInfo> ex) {
+            desc = ex.desc;
+        }
+        assertRegex("type \"action " + Action + ": HashDataType:PresentationAddress#[0-9a-f]{64}\", "
+                "field \"city\", display_name\\)", desc ?? "",
+            "the conflict names the action, the type, the field, and the member in clear text");
+        assertRegex("\"Město\" and \"Obec\"", desc ?? "", "the conflict names both texts");
+        assertRegex("give types that need different texts different names or paths$", desc ?? "",
+            "the conflict says how to resolve it");
+    }
+
+    describeMessageIdTest() {
+        assertEq("app \"Mail\", action \"send\", option \"to\", field \"address\", display_name",
+            DataProviderPresentation::describeMessageId(DataProviderPresentation::nestedFieldMessageId("Mail", "send",
+                "to", ("address",), "display_name")),
+            "each identity of a nested option field id is decoded");
+        HashDataType address = addressType("Město");
+        string identity = DataProviderPresentation::actionTypePresentationIdentity(Action, address);
+        assertRegex("^app \"" + App + "\", type \"action " + Action
+                + ": HashDataType:PresentationAddress#[0-9a-f]{64}\", field \"city\", short_desc$",
+            DataProviderPresentation::describeMessageId(DataProviderPresentation::typeFieldMessageId(App, identity,
+                "city", "short_desc")),
+            "a type field id names the action and the type of its action-scoped identity");
+        assertRegex("^app \"" + App + "\", type \"action " + Action
+                + ": HashDataType:PresentationAddress#[0-9a-f]{64}\", field \"city\", allowed-value \"string:Brno\", "
+                "display_name$",
+            DataProviderPresentation::describeMessageId(DataProviderPresentation::typeAllowedValueMessageId(App,
+                identity, "city", "Brno", "display_name")),
+            "an allowed value id gives the type-qualified value");
+        assertEq("app \"!!\", display_name", DataProviderPresentation::describeMessageId("app.!!.display_name"),
+            "a segment that does not decode is shown as it is");
+        assertEq("display_name", DataProviderPresentation::describeMessageId("display_name"),
+            "an id without identities is shown as it is");
+    }
+
     validationPatternPresentationTest() {
         hash<auto> pattern_option = {
             "display_name": "Jazyk",
@@ -1690,13 +1833,385 @@ class DataProviderPresentationTest inherits QUnit::Test {
             "a field's description has the field's message id for the member");
     }
 
+    #! The tool re-keys the nested type texts of a catalog from their per-option ids to their per-action ids
+    rekeySourceTreeToolTest() {
+        string root = sourceRoot();
+        string work = make_tmp_dir("data-provider-i18n-rekey-");
+        on_exit remove_tree(work);
+        hash<auto> fx = rekeyFixture(root, work);
+
+        # the old root does not have one text that the extraction has: it is reported as a new text
+        string new_text = DataProviderPresentation::actionMessageId(RekeyOwnerApp, RekeyOwnerAction, "desc");
+        assertTrue(exists fx.old_messages{new_text}, "the fixture has an action description");
+        hash<auto> old_messages = fx.old_messages - new_text;
+        hash<auto> cs = fx.cs - new_text;
+        string tree = join_paths(work, "tree");
+        writeRekeyTree(tree, fx, old_messages, {"cs": cs, "de": fx.de});
+        hash<string, string> before = readRekeyTree(tree);
+        string report = "(?m)^REKEY: .*root\\.json: 32 -> 27 message\\(s\\); translations carried 28, variants 2, "
+            "reused by text 1, missing 25; new texts 1$";
+
+        string out;
+        assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree --dry-run -o %s --owner %s", shellQuote(tree),
+                RekeyOwnerModule), \out), "a dry run without conflicts succeeds: " + out);
+        assertRegex(report, out, "a dry run reports the counts of the domain");
+        assertRegex("(?m)^surveyed 1 domain\\(s\\), 1 re-keyed; 32 -> 27 message\\(s\\); 0 conflict\\(s\\); "
+            "translations carried 28, variants 2, reused by text 1, missing 25; new texts 1 "
+            "\\(dry run: nothing written\\)$", out, "a dry run reports the totals");
+        assertEq(before, readRekeyTree(tree), "a dry run writes nothing");
+
+        assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree -o %s --owner %s", shellQuote(tree),
+                RekeyOwnerModule), \out), "re-keying succeeds: " + out);
+        assertRegex(report, out, "re-keying reports the counts of the domain");
+        assertRegex("(?m)^re-keyed 1 domain\\(s\\), 1 re-keyed; ", out, "re-keying reports the totals");
+
+        string dir = join_paths(tree, fx.domain);
+        hash<auto> root_catalog = parse_json(ReadOnlyFile::readTextFile(join_paths(dir, "root.json")));
+        assertEq(fx.root_catalog, root_catalog, "the re-keyed root is the extracted catalog");
+
+        hash<auto> cs_messages = parse_json(ReadOnlyFile::readTextFile(join_paths(dir, "cs.json"))).locales.cs
+            .messages;
+        assertEq(sort(keys (fx.root_catalog.locales.root.messages - new_text)), sort(keys cs_messages),
+            "every text with a translation keeps it, and no translation has an old id");
+        assertEq({"source": "City", "message": "Město"}, cs_messages{fx.city},
+            "the translation that every option gave a text is kept for its one id");
+        assertEq("Obec adresy", cs_messages{fx.city_desc}.message,
+            "of the translations that the options gave a text, the most frequent one is kept");
+        assertEq("Třída", cs_messages{fx.street}.message,
+            "of translations given equally often, the one first in the file is kept");
+        assertEq({"source": "Sender", "message": "Sender (cs)"},
+            cs_messages{DataProviderPresentation::optionMessageId(RekeyOwnerApp, RekeyOwnerAction, "sender",
+                "short_desc")},
+            "a text whose id does not change keeps its translation");
+
+        hash<auto> de_messages = parse_json(ReadOnlyFile::readTextFile(join_paths(dir, "de.json"))).locales.de
+            .messages;
+        assertEq((DataProviderPresentation::appMessageId(RekeyOwnerApp, "display_name"), fx.city, fx.street),
+            keys de_messages, "a locale keeps exactly the translations it can carry or reuse, in the root's order");
+        assertEq("Stadt", de_messages{fx.city}.message, "the translation that one option gave a text is kept");
+        assertEq({"source": "Street", "message": "Straße"}, de_messages{fx.street},
+            "a text without a translation takes the one translation of the same text of the same field and member");
+
+        hash<string, string> rekeyed = readRekeyTree(tree);
+        assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree -o %s --owner %s", shellQuote(tree),
+                RekeyOwnerModule), \out), "re-keying a re-keyed tree succeeds: " + out);
+        assertRegex("(?m)^re-keyed 1 domain\\(s\\), 0 re-keyed; 27 -> 27 message\\(s\\); 0 conflict\\(s\\); ", out,
+            "a re-keyed tree has nothing more to re-key");
+        assertEq(rekeyed, readRekeyTree(tree), "re-keying a re-keyed tree writes nothing");
+
+        assertEq(0, runI18nTool(root, sprintf("--check-source-tree -o %s --owner %s", shellQuote(tree),
+                RekeyOwnerModule), \out), "the re-keyed tree passes the source-tree check: " + out);
+    }
+
+    #! Re-keying the committed roots gives the same catalogs as re-keying to the extracted roots
+    mechanicalRekeyToolTest() {
+        string root = sourceRoot();
+        string work = make_tmp_dir("data-provider-i18n-rekey-mechanical-");
+        on_exit remove_tree(work);
+        hash<auto> fx = rekeyFixture(root, work);
+
+        string extracted = join_paths(work, "extracted");
+        string mechanical = join_paths(work, "mechanical");
+        writeRekeyTree(extracted, fx, fx.old_messages, {"cs": fx.cs, "de": fx.de});
+        writeRekeyTree(mechanical, fx, fx.old_messages, {"cs": fx.cs, "de": fx.de});
+        string report = "(?m)^REKEY: .*root\\.json: 33 -> 27 message\\(s\\); translations carried 29, variants 2, "
+            "reused by text 1, missing 24; new texts 0$";
+
+        string out;
+        assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree -o %s --owner %s", shellQuote(extracted),
+                RekeyOwnerModule), \out), "re-keying to the extracted roots succeeds: " + out);
+        assertRegex(report, out, "re-keying to the extracted roots reports the counts");
+        # no owner module is loaded: the tree is not one the tool could infer an owner for
+        assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree --mechanical -o %s", shellQuote(mechanical)),
+            \out), "re-keying the committed roots succeeds without the owner module: " + out);
+        assertRegex(report, out, "re-keying the committed roots reports the same counts");
+        assertEq(readRekeyTree(extracted), readRekeyTree(mechanical),
+            "re-keying the committed roots writes the same files as re-keying to the extracted roots");
+        assertEq(fx.root_catalog,
+            parse_json(ReadOnlyFile::readTextFile(join_paths(mechanical, fx.domain, "root.json"))),
+            "the committed root re-keyed is the extracted catalog");
+    }
+
+    #! A conflict makes re-keying write nothing in any domain
+    rekeyConflictToolTest() {
+        string root = sourceRoot();
+        string work = make_tmp_dir("data-provider-i18n-rekey-conflict-");
+        on_exit remove_tree(work);
+        hash<auto> fx = rekeyFixture(root, work);
+
+        # a second domain whose committed root gave one option's address city another text
+        string tree = join_paths(work, "tree");
+        writeRekeyTree(tree, fx, fx.old_messages, {"cs": fx.cs});
+        string town_id = occurrenceMessageId(fx.city, "courier");
+        hash<auto> conflicting = fx.old_messages;
+        conflicting{town_id} = {"source": "Town", "message": "Town"};
+        string other_domain = DataProviderPresentation::defaultCatalogDomain("QoreTestRekeyCopy");
+        writeRekeyTree(tree, fx + {"domain": other_domain}, conflicting, {"cs": fx.cs});
+        hash<string, string> before = readRekeyTree(tree);
+
+        string out;
+        foreach bool dry_run in ((True, False)) {
+            assertEq(2, runI18nTool(root, sprintf("--rekey-source-tree --mechanical%s -o %s",
+                    dry_run ? " --dry-run" : "", shellQuote(tree)), \out),
+                "a conflict fails re-keying with status 2: " + out);
+            assertRegex("(?m)^CONFLICT: .*" + other_domain + "/root\\.json: 33 message\\(s\\) before; "
+                "1 conflict\\(s\\):$", out, "the conflict is reported for its domain");
+            assertRegex("(?m)\\(app \"" + RekeyOwnerApp + "\", type \"action send: HashDataType:RekeyAddress#[0-9a-f]{64}\", "
+                "field \"city\", display_name\\): \"City\" and \"Town\"$", out,
+                "the conflict is reported once for its id, in clear text, with both texts");
+            assertRegex("(?m)^REKEY: .*" + fx.domain + "/root\\.json: 33 -> 27 message\\(s\\)", out,
+                "the domain without a conflict is still reported");
+            assertRegex(dry_run ? "\\(dry run: nothing written\\)$" : "\\(conflicts: nothing written\\)$",
+                trim(out), "the totals say that nothing was written");
+            assertEq(before, readRekeyTree(tree), "a conflict in one domain writes nothing in any domain");
+        }
+
+        # an owner module whose extraction is refused for conflicting texts
+        string refused = join_paths(work, "refused");
+        string refused_domain = DataProviderPresentation::defaultCatalogDomain(RekeyConflictOwnerApp);
+        string app_id = DataProviderPresentation::appMessageId(RekeyConflictOwnerApp, "display_name");
+        writeRekeyTree(refused, fx + {"domain": refused_domain},
+            {app_id: {"source": "Rekey Conflict Provider", "message": "Rekey Conflict Provider"}},
+            {"cs": {app_id: {"source": "Rekey Conflict Provider", "message": "Poskytovatel"}}});
+        before = readRekeyTree(refused);
+        assertEq(2, runI18nTool(root, sprintf("--rekey-source-tree -o %s --owner %s", shellQuote(refused),
+                RekeyConflictOwnerModule), \out), "a refused extraction fails re-keying with status 2: " + out);
+        assertRegex("(?m)^CONFLICT: .*" + refused_domain + "/root\\.json: 1 message\\(s\\) before; "
+            "1 conflict\\(s\\):$", out, "the refused extraction is reported for the owner's domain");
+        assertRegex("type \"action send: HashDataType:RekeyAddress#[0-9a-f]{64}\", field \"city\", short_desc\\) has "
+            "conflicting source strings \"The city of the sender\" and \"The city of the recipient\"", out,
+            "the refused extraction names the type, the field, the member, and both texts");
+        assertEq(before, readRekeyTree(refused), "a refused extraction writes nothing");
+    }
+
+    #! Re-keying refuses options it does not support and catalog layouts it cannot rewrite
+    rekeyUsageToolTest() {
+        string root = sourceRoot();
+        string work = make_tmp_dir("data-provider-i18n-rekey-usage-");
+        on_exit remove_tree(work);
+        hash<auto> fx = rekeyFixture(root, work);
+        string tree = join_paths(work, "tree");
+        writeRekeyTree(tree, fx, fx.old_messages, {"cs": fx.cs});
+        hash<string, string> before = readRekeyTree(tree);
+
+        string out;
+        foreach string option in (("--mechanical", "--dry-run")) {
+            assertNeq(0, runI18nTool(root, sprintf("%s -o %s", option, shellQuote(tree)), \out),
+                option + " alone is refused");
+            assertRegex("--mechanical and --dry-run require --rekey-source-tree", out,
+                option + " alone says what it requires");
+        }
+        foreach string option in (("--check", "--check-source-tree", "--update-source-tree", "-a QoreTestRekeyProvider")) {
+            assertNeq(0, runI18nTool(root, sprintf("--rekey-source-tree %s -o %s", option, shellQuote(tree)), \out),
+                "--rekey-source-tree with " + option + " is refused");
+            assertRegex("--rekey-source-tree cannot be combined with a check mode, --update-source-tree or --app", out,
+                "--rekey-source-tree with " + option + " says what it cannot be combined with");
+        }
+        foreach string option in (("--module " + RekeyOwnerModule, "--owner " + RekeyOwnerModule)) {
+            assertNeq(0, runI18nTool(root, sprintf("--rekey-source-tree --mechanical %s -o %s", option,
+                    shellQuote(tree)), \out), "--mechanical with " + option + " is refused");
+            assertRegex("--mechanical loads no modules and cannot be combined with --module or --owner", out,
+                "--mechanical with " + option + " says that it loads no modules");
+        }
+        assertEq(before, readRekeyTree(tree), "a refused request writes nothing");
+
+        # a root catalog of fragments below <domain>/root/
+        string fragments = join_paths(work, "fragments");
+        string fragment_dir = join_paths(fragments, fx.domain, "root");
+        mkdir_ex(fragment_dir, 0755, True);
+        writeJson(join_paths(fragment_dir, "part.json"), fx.root_catalog);
+        assertNeq(0, runI18nTool(root, sprintf("--rekey-source-tree --mechanical -o %s", shellQuote(fragments)),
+            \out), "a root catalog of fragments is refused");
+        assertRegex("is not in the <domain>/root\\.json layout that re-keying supports", out,
+            "the refusal names the supported layout");
+
+        # ids that are not those of a type reached through an option are left as they are
+        string other_ids = join_paths(work, "other-ids");
+        hash<auto> messages = fx.root_catalog.locales.root.messages + {
+            "app." + identitySegment(RekeyOwnerApp) + ".type.not+base64.field." + identitySegment("city")
+                + ".display_name": {"source": "City", "message": "City"},
+            changeTypeIdentity(fx.city, string sub (string identity) { return "HashDataType:Other:option:x"; }): {
+                "source": "City",
+                "message": "City",
+            },
+        };
+        hash<auto> cs = map {$1.key: $1.value}, fx.cs.pairIterator(), $1.key.split(".")[2] != "type";
+        writeRekeyTree(other_ids, fx, messages, {"cs": cs});
+        before = readRekeyTree(other_ids);
+        assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree --mechanical -o %s", shellQuote(other_ids)), \out),
+            "re-keying a tree with other ids succeeds: " + out);
+        assertRegex("(?m)^re-keyed 1 domain\\(s\\), 0 re-keyed; 29 -> 29 message\\(s\\); 0 conflict\\(s\\); ", out,
+            "ids already per action, ids that do not decode, and identities without an action are not re-keyed");
+        assertEq(before, readRekeyTree(other_ids), "a tree with nothing to re-key is not written");
+
+        string empty = join_paths(work, "empty");
+        mkdir(empty);
+        assertNeq(0, runI18nTool(root, sprintf("--rekey-source-tree --mechanical -o %s", shellQuote(empty)), \out),
+            "a tree without root catalogs is refused");
+        assertRegex("no source-owned provider root catalogs found", out, "the refusal says what is missing");
+    }
+
+    #! Returns the catalogs of the re-key fixture: extracted, and as they were with the identities per option
+    /** @return a hash with these keys:
+        - \c domain: the catalog domain of the fixture app
+        - \c root_catalog: the extracted root catalog
+        - \c city, \c city_desc, \c street: the ids of the address type's texts
+        - \c old_messages: the root messages with the address type's texts once for each option
+        - \c cs, \c de: translations with the old ids
+    */
+    private hash<auto> rekeyFixture(string root, string work) {
+        string extracted = join_paths(work, "extracted-catalog");
+        mkdir(extracted);
+        assertEq(0, runOwnerExtraction(root, extracted, RekeyOwnerModule), "the tool extracts the fixture catalog");
+        string domain = DataProviderPresentation::defaultCatalogDomain(RekeyOwnerApp);
+        hash<auto> root_catalog = parse_json(ReadOnlyFile::readTextFile(join_paths(extracted, domain,
+            "root.json")));
+        hash<auto> messages = root_catalog.locales.root.messages;
+        string city = rekeyTypeMessageId(messages, "City");
+        string city_desc = rekeyTypeMessageId(messages, "The city of the address");
+        string street = rekeyTypeMessageId(messages, "Street");
+        assertEq(27, messages.size(), "the fixture catalog has each text of the address type once");
+
+        hash<auto> old_messages = {};
+        foreach hash<auto> entry in (messages.pairIterator()) {
+            if (entry.key.split(".")[2] != "type") {
+                old_messages{entry.key} = entry.value;
+                continue;
+            }
+            map old_messages{occurrenceMessageId(entry.key, $1)} = entry.value, RekeyOwnerOptions;
+        }
+        assertEq(33, old_messages.size(), "the old catalog has each text of the address type once for each option");
+
+        hash<auto> cs = {};
+        foreach hash<auto> entry in (old_messages.pairIterator()) {
+            if (entry.key.split(".")[2] != "type") {
+                cs{entry.key} = {"source": entry.value.source, "message": entry.value.source + " (cs)"};
+            }
+        }
+        map cs{occurrenceMessageId(city, $1)} = {"source": "City", "message": "Město"}, RekeyOwnerOptions;
+        cs{occurrenceMessageId(city_desc, "sender")} = {"source": "The city of the address", "message": "Město adresy"};
+        cs{occurrenceMessageId(city_desc, "recipient")} = {"source": "The city of the address",
+            "message": "Obec adresy"};
+        cs{occurrenceMessageId(city_desc, "courier")} = {"source": "The city of the address",
+            "message": "Obec adresy"};
+        # two translations of one text given equally often: the first one in the file is kept
+        cs{occurrenceMessageId(street, "recipient")} = {"source": "Street", "message": "Třída"};
+        cs{occurrenceMessageId(street, "sender")} = {"source": "Street", "message": "Ulice"};
+        # the translation of a text that has changed since is not carried
+        cs{occurrenceMessageId(street, "courier")} = {"source": "Road", "message": "Silnice"};
+
+        hash<auto> de = {
+            DataProviderPresentation::appMessageId(RekeyOwnerApp, "display_name"): {
+                "source": "Rekey Provider",
+                "message": "Rekey-Anbieter",
+            },
+            occurrenceMessageId(city, "courier"): {"source": "City", "message": "Stadt"},
+            # the same texts of the same fields and members of a type of another shape: one translation is reused,
+            # two different translations are not
+            occurrenceMessageId(otherShapeMessageId(street), "sender"): {"source": "Street", "message": "Straße"},
+            occurrenceMessageId(otherShapeMessageId(city_desc), "sender"): {
+                "source": "The city of the address",
+                "message": "Stadt der Adresse",
+            },
+            occurrenceMessageId(otherShapeMessageId(city_desc), "recipient"): {
+                "source": "The city of the address",
+                "message": "Ort der Adresse",
+            },
+        };
+        return {
+            "domain": domain,
+            "root_catalog": root_catalog,
+            "city": city,
+            "city_desc": city_desc,
+            "street": street,
+            "old_messages": old_messages,
+            "cs": cs,
+            "de": de,
+        };
+    }
+
+    #! Returns the one id of a text of a type below the options in a catalog
+    private string rekeyTypeMessageId(hash<auto> messages, string source) {
+        list<string> ids = select keys messages, messages{$1}.source == source && $1.split(".")[2] == "type";
+        assertEq(1, ids.size(), sprintf("the catalog has one message for %y", source));
+        return ids[0];
+    }
+
+    #! Returns the id that a text of the fixture's address type had for one option with the identities per option
+    private static string occurrenceMessageId(string id, string option) {
+        return changeTypeIdentity(id, string sub (string identity) {
+            return identity + ":option:" + identitySegment(option) + ":field:" + identitySegment("address");
+        });
+    }
+
+    #! Returns the id of a text of a type with another shape
+    private static string otherShapeMessageId(string id) {
+        return changeTypeIdentity(id, string sub (string identity) {
+            return regex_subst(identity, "#[0-9a-f]{64}$", "#" + strmul("0", 64));
+        });
+    }
+
+    #! Returns a type message id with its type identity changed
+    private static string changeTypeIdentity(string id, code<string(string)> change) {
+        list<string> parts = id.split(".");
+        parts[3] = identitySegment(change(parse_base64_url_string_to_string(parts[3])));
+        return parts.join(".");
+    }
+
+    private static string identitySegment(string identity) {
+        return convert_encoding(identity, "UTF-8").toBase64Url();
+    }
+
+    #! Writes a catalog domain with the given root messages and translations below a source tree
+    private writeRekeyTree(string tree, hash<auto> fx, hash<auto> root_messages, hash<string, hash<auto>> locales) {
+        string dir = join_paths(tree, fx.domain);
+        mkdir_ex(dir, 0755, True);
+        writeJson(join_paths(dir, "root.json"), {
+            "schema_version": fx.root_catalog.schema_version,
+            "locales": {"root": {"messages": root_messages}},
+        });
+        foreach hash<auto> entry in (locales.pairIterator()) {
+            writeJson(join_paths(dir, entry.key + ".json"), {
+                "schema_version": fx.root_catalog.schema_version,
+                "locales": {entry.key: {"messages": entry.value}},
+            });
+        }
+    }
+
+    #! Returns the contents of the catalog files of the domains below a source tree, by path below the tree
+    private static hash<string, string> readRekeyTree(string tree) {
+        hash<string, string> rv = {};
+        Dir dir();
+        if (!dir.chdir(tree)) {
+            throw "TEST-ERROR", sprintf("cannot read %y", tree);
+        }
+        foreach string domain in (sort(dir.listDirs())) {
+            foreach string file in (sort(glob(join_paths(tree, domain, "*.json")))) {
+                rv{domain + DirSep + basename(file)} = ReadOnlyFile::readTextFile(file);
+            }
+        }
+        return rv;
+    }
+
     #! Runs the tool to extract the catalogs of one owner module into a directory
+    /** @return the exit status of the tool (see runI18nTool())
+    */
+    private int runOwnerExtraction(string root, string output, string owner) {
+        string out;
+        return runI18nTool(root, sprintf("-o %s --owner %s", shellQuote(output), shellQuote(owner)), \out);
+    }
+
+    #! Runs the tool with the fixture modules of this test in the module path
     /** The tool is run by the built qore when there is one, as for the other cases that run the tool, and
         otherwise by the qore that runs this test, which loads the same source-tree modules.
 
+        @param root the source tree
+        @param args the arguments after \c -C, quoted for the shell
+        @param output the standard output and standard error of the tool
+
         @return the exit status of the tool
     */
-    private int runOwnerExtraction(string root, string output, string owner) {
+    private int runI18nTool(string root, string args, reference<string> output) {
         string build_qore = root + DirSep + "build/qore";
         bool built = is_executable(build_qore);
         list<string> module_path = (root + DirSep + "qlib", get_script_dir());
@@ -1710,9 +2225,10 @@ class DataProviderPresentationTest inherits QUnit::Test {
         if (built) {
             env += " LD_LIBRARY_PATH=" + shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build"));
         }
-        return system(sprintf("%s %s %s -C -o %s --owner %s >/dev/null", env,
-            shellQuote(built ? build_qore : QORE_ARGV[0]),
-            shellQuote(root + DirSep + "bin/qore-data-provider-i18n"), shellQuote(output), shellQuote(owner)));
+        int rc;
+        output = backquote(sprintf("%s %s %s -C %s 2>&1", env, shellQuote(built ? build_qore : QORE_ARGV[0]),
+            shellQuote(root + DirSep + "bin/qore-data-provider-i18n"), args), \rc);
+        return rc;
     }
 
     sourceCatalogSyncTest() {

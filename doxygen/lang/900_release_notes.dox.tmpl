@@ -3051,7 +3051,9 @@ while (*binary chunk = input.read(65536)) {
         contributions when multiple modules share an application catalog domain; source-tree verification also
         discovers new provider owner modules before their first catalog exists and preserves the actual owner of
         registrations performed by a module loaded from a deferred provider initializer; installed owner fragments
-        compose those shared-domain contributions without duplicating source text between repositories
+        compose those shared-domain contributions without duplicating source text between repositories; when message
+        identities change, \c --rekey-source-tree moves a source tree's catalogs to the new identities, carrying
+        each translation whose text is unchanged, and reports conflicting texts, missing translations and new texts
       - the user-module catalog install helper accepts explicit source directories, package components, and install
         destinations, allowing products with nonstandard module layouts and installation prefixes to install the
         same owner-qualified, composable catalog fragments as Qore and external modules

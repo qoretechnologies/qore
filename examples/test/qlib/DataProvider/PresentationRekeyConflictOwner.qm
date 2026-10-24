@@ -1,0 +1,83 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# PresentationRekeyConflictOwner.qm - provider presentation fixture that gives one nested type two texts
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires DataProvider
+
+#! A provider presentation fixture whose action gives one nested type identity two texts
+/** The two options of the action have distinct type objects with the same name and shape, so they have one
+    per-action identity, but their \c city fields have different descriptions: extracting the catalog is refused.
+    Used by the re-keying cases of Presentation.qtest.
+*/
+module PresentationRekeyConflictOwner {
+    version = "1.0";
+    desc = "provider presentation fixture that gives one nested type two texts";
+    author = "Qore Technologies";
+    license = "MIT";
+    init = sub () {
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": "QoreTestRekeyConflictProvider",
+            "display_name": "Rekey Conflict Provider",
+            "short_desc": "Provider with conflicting nested texts",
+            "desc": "Provider whose options give one nested type two texts",
+            "presentation_source_locale": "en",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "rekey-conflict-provider.svg",
+        });
+
+        code address = HashDataType sub (string city_desc) {
+            return new HashDataType("RekeyAddress", {
+                "city": new QoreDataField(<auto>{
+                    "name": "city",
+                    "display_name": "City",
+                    "short_desc": city_desc,
+                    "type": new QoreStringDataType(),
+                }),
+            });
+        };
+        QoreDataField sender("sender", "Sender", new HashDataType("RekeySender", {
+            "address": new QoreDataField("address", "Address", address("The city of the sender")),
+        }));
+        QoreDataField recipient("recipient", "Recipient", new HashDataType("RekeyRecipient", {
+            "address": new QoreDataField("address", "Address", address("The city of the recipient")),
+        }));
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": "QoreTestRekeyConflictProvider",
+            "path": "/send",
+            "action": "send",
+            "display_name": "Send",
+            "short_desc": "Sends a letter",
+            "desc": "Sends a letter from the sender to the recipient",
+            "action_code": DPAT_API,
+            "output_type": new QoreHashDataType(),
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "sender": sender,
+                "recipient": recipient,
+            }),
+        });
+    };
+}
