@@ -1505,13 +1505,6 @@ public:
     //! evaluates the argument with RuntimeConfig, returns -1 for error, 0 = OK
     DLLLOCAL int eval(RuntimeConfig& rc, const QoreValue exp);
 
-    //! evaluates the receiver of a method call with RuntimeConfig, keeping the destroyed target of a weak reference
-    /** returns -1 for error, 0 = OK
-
-        @see AbstractQoreNode::evalCallReceiver()
-    */
-    DLLLOCAL int evalCallReceiver(RuntimeConfig& rc, const QoreValue& exp);
-
 protected:
     //! evaluates the argument with RuntimeConfig, returns -1 for error, 0 = OK
     DLLLOCAL int evalIntern(RuntimeConfig& rc, const AbstractQoreNode* exp);
@@ -1531,13 +1524,6 @@ public:
 
     //! evaluates the argument, returns -1 for error, 0 = OK
     DLLEXPORT int eval(const QoreValue& exp);
-
-    //! evaluates the receiver of a method call, keeping the destroyed target of a weak reference
-    /** returns -1 for error, 0 = OK
-
-        @see AbstractQoreNode::evalCallReceiver()
-    */
-    DLLLOCAL int evalCallReceiver(const QoreValue& exp);
 };
 
 //! "bool"

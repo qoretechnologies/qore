@@ -4319,3 +4319,26 @@ RESULTS and `results-aot-native-refself-macos-arm64.json` retain the target scre
 38 selected fixtures, 18,330 QUnit assertions and 391 qmod builds. Eight Linux
 RSS checks per build remain skipped; native Debug and reference suites pass.
 No new Java/develop ratio, global ceiling or general Java parity is claimed.
+
+
+### Develop integration checkpoint (2026-10-24)
+
+The performance branch integrates develop `7e7de64fbd` after the native scalar
+snapshot optimization `4e5be43486`. The merge has no conflicts. Release and Debug
+all-target builds each rebuild 391 qmods and pass 45 selected fixtures; the
+combined checks include 2,220 IR/AOT reference results and 11,756 native
+assertions. Release records 10,941 QUnit assertions with 26 skipped cases;
+Debug records 10,979 with 17 skips. Three fixtures affected by audit corrections
+pass again after rebuilding their affected modules; core runtime hashes stay
+unchanged. The schema digest reference passes unchanged. Details and all 62
+checklist outcomes are in `bench/runtime-comparison/results-merge-7e7de.json`
+and `bench/runtime-comparison/audit-merge-7e7de.md`.
+
+No new performance ratio is inferred from this merge. Earlier measurements
+remain labeled with their own baselines. Next extend bounded scalar-body proof
+for initialized private float locals in straight-line functions, to admit the
+existing native callback entry and direct expression inlining. Loops, reference
+or captured locals, parameter mutation, handlers and unknown effects remain
+outside this first extension. Freeze the merged optimized baseline and compare
+fresh before/candidate/compile-disabled artifacts. General Java parity and a
+global performance ceiling remain unestablished.

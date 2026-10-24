@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires OpenApi3
+%requires RestSchemaActions
+%requires json
+%exec-class RestSchemaOverlayIdentityTest
+
+class RestSchemaOverlayIdentityTest inherits QUnit::Test {
+    public {
+        const App = "QoreTestOverlayIdentity";
+        const Action = "create-invoice";
+        const Contact = "#/components/schemas/Contact";
+    }
+
+    constructor() : Test("REST schema overlay identity", "1.0", \ARGV) {
+        addTestCase("a type an overlay changes has an identity of its own", \identityTest());
+        addTestCase("a type an overlay changes has catalog messages of its own", \catalogTest());
+        set_return_value(main());
+    }
+
+    identityTest() {
+        RestSchemaActionOperation op = operation();
+        AbstractDataProviderType invoice = op.getRequestFields().invoice.getType();
+        assertEq(Contact + "#overlay:body/invoice/contact", fieldType(invoice, "contact").getSchemaIdentity(),
+            "the type an overlay changes is identified by the schema and the location of the overlay");
+        AbstractDataProviderType credit = fieldType(invoice, "credit");
+        assertEq(Contact + "#overlay:body/invoice/credit/contact", fieldType(credit, "contact").getSchemaIdentity(),
+            "two overlays of one type at two locations give two identities");
+        assertEq(Contact, fieldType(fieldType(invoice, "payment"), "contact").getSchemaIdentity(),
+            "the type at a location no overlay changes keeps the schema's identity");
+        assertEq(fieldType(fieldType(invoice, "payment"), "contact").getName(),
+            fieldType(invoice, "contact").getName(), "the type an overlay changes keeps its name");
+    }
+
+    catalogTest() {
+        RestSchemaActionOperation op = operation();
+        hash<auto> app = {
+            "name": App,
+            "display_name": "Overlay Identity",
+            "short_desc": "Overlay identity test",
+            "desc": "Overlay identity test",
+            "presentation_source_locale": "en",
+        };
+        hash<auto> action = {
+            "app": App,
+            "action": Action,
+            "display_name": "Create Invoice",
+            "short_desc": "Creates an invoice",
+            "desc": "Creates an invoice",
+            "presentation_source_locale": "en",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(op.getRequestFields()),
+        };
+        hash<auto> messages = DataProviderPresentation::buildSourceCatalogs(app, (action,))
+            {DataProviderPresentation::defaultCatalogDomain(App)}.locales.root.messages;
+        AbstractDataProviderType invoice = op.getRequestFields().invoice.getType();
+        hash<string, string> expected = {
+            "The contact this applies to": DataProviderPresentation::actionTypePresentationIdentity(Action,
+                fieldType(invoice, "contact")),
+            "The contact credited": DataProviderPresentation::actionTypePresentationIdentity(Action,
+                fieldType(fieldType(invoice, "credit"), "contact")),
+            "The identifier of the contact": DataProviderPresentation::actionTypePresentationIdentity(Action,
+                fieldType(fieldType(invoice, "payment"), "contact")),
+        };
+        foreach hash<auto> e in (expected.pairIterator()) {
+            assertEq(e.key, messages{DataProviderPresentation::typeFieldMessageId(App, e.value, "id",
+                "short_desc")}.source, sprintf("%y is the text of its own message", e.key));
+        }
+        assertEq(3, (select keys messages, $1 =~ /\.short_desc$/ && messages{$1}.source =~ /contact/).size(),
+            "each of the three texts of the contact identifier has one message");
+    }
+
+    #! Returns the operation whose body reaches one schema at three locations, two of them overlaid
+    private static RestSchemaActionOperation operation() {
+        OpenApi3Schema doc = OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3", "info": {"title": "Overlay identity", "version": "1"},
+            "paths": {"/invoices": {"post": {
+                "operationId": "createInvoice",
+                "requestBody": {"content": {"application/json": {"schema": {
+                    "$ref": "#/components/schemas/InvoiceRequest",
+                }}}},
+                "responses": {"204": {"description": "Created"}},
+            }}},
+            "components": {"schemas": {
+                "Contact": {"type": "object", "properties": {
+                    "id": {"type": "string", "description": "The identifier of the contact"},
+                }},
+                "InvoiceRequest": {"type": "object", "properties": {
+                    "invoice": {"type": "object", "properties": {
+                        "contact": {"$ref": "#/components/schemas/Contact"},
+                        "credit": {"type": "object", "properties": {
+                            "contact": {"$ref": "#/components/schemas/Contact"},
+                        }},
+                        "payment": {"type": "object", "properties": {
+                            "contact": {"$ref": "#/components/schemas/Contact"},
+                        }},
+                    }},
+                }},
+            }},
+        }), True);
+        return new RestSchemaActionSet(doc, (<RestSchemaActionInfo>{
+            "action": Action,
+            "method": "POST",
+            "path": "/invoices",
+            "display_name": "Create Invoice",
+            "short_desc": "Creates an invoice",
+            "desc": "Creates an invoice",
+            "fields": {
+                "invoice": <RestSchemaFieldOverlayInfo>{
+                    "fields": {
+                        "contact": <RestSchemaFieldOverlayInfo>{
+                            "fields": {
+                                "id": <RestSchemaFieldOverlayInfo>{
+                                    "display_name": "Contact",
+                                    "short_desc": "The contact this applies to",
+                                },
+                            },
+                        },
+                        "credit": <RestSchemaFieldOverlayInfo>{
+                            "fields": {
+                                "contact": <RestSchemaFieldOverlayInfo>{
+                                    "fields": {
+                                        "id": <RestSchemaFieldOverlayInfo>{
+                                            "display_name": "Credited Contact",
+                                            "short_desc": "The contact credited",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },)).getOperationEx(Action);
+    }
+
+    #! Returns the declared type of a field of a type
+    private static AbstractDataProviderType fieldType(AbstractDataProviderType type, string field) {
+        return type.getFields(){field}.getDeclaredType();
+    }
+}

@@ -675,27 +675,27 @@
           "source": "The receiver of the message. Provide `id` for an agent or `email` for a customer",
           "message": "メッセージの受信者。エージェントの場合は `id`、顧客の場合は `email` を指定してください"
         },
-        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRjOm9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpjbVZqWldsMlpYSQ.field.ZW1haWw.display_name": {
+        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRj.field.ZW1haWw.display_name": {
           "source": "Email",
           "message": "メール"
         },
-        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRjOm9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpjbVZqWldsMlpYSQ.field.ZW1haWw.short_desc": {
+        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRj.field.ZW1haWw.short_desc": {
           "source": "Email address",
           "message": "メール アドレス"
         },
-        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRjOm9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpjbVZqWldsMlpYSQ.field.ZW1haWw.desc": {
+        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRj.field.ZW1haWw.desc": {
           "source": "The email address. Use this for customer senders/receivers",
           "message": "メールアドレス。顧客の送信者/受信者として使用"
         },
-        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRjOm9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpjbVZqWldsMlpYSQ.field.aWQ.display_name": {
+        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRj.field.aWQ.display_name": {
           "source": "User ID",
           "message": "ユーザーID"
         },
-        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRjOm9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpjbVZqWldsMlpYSQ.field.aWQ.short_desc": {
+        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRj.field.aWQ.short_desc": {
           "source": "Gorgias user ID",
           "message": "GorgiasユーザーID"
         },
-        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRjOm9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpjbVZqWldsMlpYSQ.field.aWQ.desc": {
+        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRj.field.aWQ.desc": {
           "source": "The ID of a Gorgias user (agent). Use this for agent senders/receivers",
           "message": "Gorgiasユーザー（エージェント）のID。エージェントの送信者/受信者として使用"
         },
@@ -710,30 +710,6 @@
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.field.c2VuZGVy.desc": {
           "source": "The sender of the message. Provide `id` for agents or `email` for customers",
           "message": "メッセージの送信者。エージェントの場合は `id`、顧客の場合は `email` を指定してください"
-        },
-        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRjOm9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpjMlZ1WkdWeQ.field.ZW1haWw.display_name": {
-          "source": "Email",
-          "message": "メール"
-        },
-        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRjOm9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpjMlZ1WkdWeQ.field.ZW1haWw.short_desc": {
-          "source": "Email address",
-          "message": "メール アドレス"
-        },
-        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRjOm9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpjMlZ1WkdWeQ.field.ZW1haWw.desc": {
-          "source": "The email address. Use this for customer senders/receivers",
-          "message": "メールアドレス。顧客の送信者/受信者として使用"
-        },
-        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRjOm9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpjMlZ1WkdWeQ.field.aWQ.display_name": {
-          "source": "User ID",
-          "message": "ユーザーID"
-        },
-        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRjOm9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpjMlZ1WkdWeQ.field.aWQ.short_desc": {
-          "source": "Gorgias user ID",
-          "message": "GorgiasユーザーID"
-        },
-        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzU2VuZGVyUmVjZWl2ZXJEYXRhVHlwZToqaGFzaDxhdXRvPiNmMTk2MTkyZTEwYjU2MTQ3NjEyMWY3NTcyYTE2MTU1MTNmMjc4YmMyMTY2MmQ2ZTY2MDM3ZDVhODg3NjRkNDRjOm9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpjMlZ1WkdWeQ.field.aWQ.desc": {
-          "source": "The ID of a Gorgias user (agent). Use this for agent senders/receivers",
-          "message": "Gorgiasユーザー（エージェント）のID。エージェントの送信者/受信者として使用"
         },
         "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.field.c3ViamVjdA.display_name": {
           "source": "Subject",
@@ -927,15 +903,15 @@
           "source": "Optional visual decoration settings for the tag, including color",
           "message": "タグのオプションのビジュアル装飾設定（色など）"
         },
-        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzVGFnRGVjb3JhdGlvbkRhdGFUeXBlOipoYXNoPGF1dG8-IzQzZjU4ZTM2YmUzMTUxMTE1MWQwOWFmODhjNTc3YThkZTgxODljZjQwMjYyMGVhOGJlMTY4MWM5NjljNjViNjM6b3B0aW9uOmRHRm5jdzpmaWVsZDpaR1ZqYjNKaGRHbHZiZw.field.Y29sb3I.display_name": {
+        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzVGFnRGVjb3JhdGlvbkRhdGFUeXBlOipoYXNoPGF1dG8-IzQzZjU4ZTM2YmUzMTUxMTE1MWQwOWFmODhjNTc3YThkZTgxODljZjQwMjYyMGVhOGJlMTY4MWM5NjljNjViNjM.field.Y29sb3I.display_name": {
           "source": "Color",
           "message": "色"
         },
-        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzVGFnRGVjb3JhdGlvbkRhdGFUeXBlOipoYXNoPGF1dG8-IzQzZjU4ZTM2YmUzMTUxMTE1MWQwOWFmODhjNTc3YThkZTgxODljZjQwMjYyMGVhOGJlMTY4MWM5NjljNjViNjM6b3B0aW9uOmRHRm5jdzpmaWVsZDpaR1ZqYjNKaGRHbHZiZw.field.Y29sb3I.short_desc": {
+        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzVGFnRGVjb3JhdGlvbkRhdGFUeXBlOipoYXNoPGF1dG8-IzQzZjU4ZTM2YmUzMTUxMTE1MWQwOWFmODhjNTc3YThkZTgxODljZjQwMjYyMGVhOGJlMTY4MWM5NjljNjViNjM.field.Y29sb3I.short_desc": {
           "source": "Tag color",
           "message": "タグの色"
         },
-        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzVGFnRGVjb3JhdGlvbkRhdGFUeXBlOipoYXNoPGF1dG8-IzQzZjU4ZTM2YmUzMTUxMTE1MWQwOWFmODhjNTc3YThkZTgxODljZjQwMjYyMGVhOGJlMTY4MWM5NjljNjViNjM6b3B0aW9uOmRHRm5jdzpmaWVsZDpaR1ZqYjNKaGRHbHZiZw.field.Y29sb3I.desc": {
+        "app.R29yZ2lhcw.type.YWN0aW9uOlkzSmxZWFJsTFhScFkydGxkQTpHb3JnaWFzVGFnRGVjb3JhdGlvbkRhdGFUeXBlOipoYXNoPGF1dG8-IzQzZjU4ZTM2YmUzMTUxMTE1MWQwOWFmODhjNTc3YThkZTgxODljZjQwMjYyMGVhOGJlMTY4MWM5NjljNjViNjM.field.Y29sb3I.desc": {
           "source": "The hex color code for the tag (e.g., `#F58D86`)",
           "message": "タグの16進色コード（例：`#F58D86`）"
         },
@@ -1143,15 +1119,15 @@
           "source": "Optional visual decoration settings for the tag, including color",
           "message": "タグのオプションのビジュアル装飾設定（色など）"
         },
-        "app.R29yZ2lhcw.type.YWN0aW9uOmRYQmtZWFJsTFhScFkydGxkQTpHb3JnaWFzVGFnRGVjb3JhdGlvbkRhdGFUeXBlOipoYXNoPGF1dG8-IzQzZjU4ZTM2YmUzMTUxMTE1MWQwOWFmODhjNTc3YThkZTgxODljZjQwMjYyMGVhOGJlMTY4MWM5NjljNjViNjM6b3B0aW9uOmRHRm5jdzpmaWVsZDpaR1ZqYjNKaGRHbHZiZw.field.Y29sb3I.display_name": {
+        "app.R29yZ2lhcw.type.YWN0aW9uOmRYQmtZWFJsTFhScFkydGxkQTpHb3JnaWFzVGFnRGVjb3JhdGlvbkRhdGFUeXBlOipoYXNoPGF1dG8-IzQzZjU4ZTM2YmUzMTUxMTE1MWQwOWFmODhjNTc3YThkZTgxODljZjQwMjYyMGVhOGJlMTY4MWM5NjljNjViNjM.field.Y29sb3I.display_name": {
           "source": "Color",
           "message": "色"
         },
-        "app.R29yZ2lhcw.type.YWN0aW9uOmRYQmtZWFJsTFhScFkydGxkQTpHb3JnaWFzVGFnRGVjb3JhdGlvbkRhdGFUeXBlOipoYXNoPGF1dG8-IzQzZjU4ZTM2YmUzMTUxMTE1MWQwOWFmODhjNTc3YThkZTgxODljZjQwMjYyMGVhOGJlMTY4MWM5NjljNjViNjM6b3B0aW9uOmRHRm5jdzpmaWVsZDpaR1ZqYjNKaGRHbHZiZw.field.Y29sb3I.short_desc": {
+        "app.R29yZ2lhcw.type.YWN0aW9uOmRYQmtZWFJsTFhScFkydGxkQTpHb3JnaWFzVGFnRGVjb3JhdGlvbkRhdGFUeXBlOipoYXNoPGF1dG8-IzQzZjU4ZTM2YmUzMTUxMTE1MWQwOWFmODhjNTc3YThkZTgxODljZjQwMjYyMGVhOGJlMTY4MWM5NjljNjViNjM.field.Y29sb3I.short_desc": {
           "source": "Tag color",
           "message": "タグの色"
         },
-        "app.R29yZ2lhcw.type.YWN0aW9uOmRYQmtZWFJsTFhScFkydGxkQTpHb3JnaWFzVGFnRGVjb3JhdGlvbkRhdGFUeXBlOipoYXNoPGF1dG8-IzQzZjU4ZTM2YmUzMTUxMTE1MWQwOWFmODhjNTc3YThkZTgxODljZjQwMjYyMGVhOGJlMTY4MWM5NjljNjViNjM6b3B0aW9uOmRHRm5jdzpmaWVsZDpaR1ZqYjNKaGRHbHZiZw.field.Y29sb3I.desc": {
+        "app.R29yZ2lhcw.type.YWN0aW9uOmRYQmtZWFJsTFhScFkydGxkQTpHb3JnaWFzVGFnRGVjb3JhdGlvbkRhdGFUeXBlOipoYXNoPGF1dG8-IzQzZjU4ZTM2YmUzMTUxMTE1MWQwOWFmODhjNTc3YThkZTgxODljZjQwMjYyMGVhOGJlMTY4MWM5NjljNjViNjM.field.Y29sb3I.desc": {
           "source": "The hex color code for the tag (e.g., `#F58D86`)",
           "message": "タグの16進色コード（例：`#F58D86`）"
         },

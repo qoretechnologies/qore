@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class DataProviderWebhookTest
+
+#! Tests the process-wide webhook API registration of DataProvider::DataProviderWebhook
+/** The registered callbacks are used by the code of every interface in the process that creates a webhook, so code
+    outside the class must not be able to read or replace them; see qoretechnologies/qorus#759
+*/
+public class DataProviderWebhookTest inherits QUnit::Test {
+    private {
+        list<hash<auto>> created = ();
+        list<hash<auto>> deleted = ();
+    }
+
+    constructor() : Test("DataProviderWebhook test", "1.0") {
+        addTestCase("the callbacks cannot be accessed outside the class", \encapsulationTest());
+        addTestCase("the APIs are registered once and used", \registrationTest());
+        set_return_value(main());
+    }
+
+    encapsulationTest() {
+        foreach string code_src in (
+                "DataProviderWebhook::webhookCreate = sub (hash<auto> h) { return h; };",
+                "DataProviderWebhook::webhookDelete = sub (hash<auto> h) {};",
+                "auto x = DataProviderWebhook::webhookCreate;",
+            ) {
+            Program p(PO_NEW_STYLE);
+            p.loadModule("DataProvider");
+            assertThrows("PARSE-EXCEPTION", \p.parse(), (code_src, "webhook-encapsulation"), code_src);
+        }
+    }
+
+    registrationTest() {
+        assertThrows("WEBHOOK-API-ERROR", \DataProviderWebhook::createWebhook(), {"method": "POST"},
+            "no webhook infrastructure before registration");
+        assertFalse(DataProviderWebhook::hasWebhookSupport());
+
+        DataProviderWebhook::registerWebhookApis(
+            hash<auto> sub (hash<auto> config) {
+                created += config;
+                return {"url": "https://example.com/webhook/1", "ctx": 1};
+            },
+            sub (hash<auto> info) {
+                deleted += info;
+            });
+        assertTrue(DataProviderWebhook::hasWebhookSupport());
+
+        # a second registration, which would replace the callbacks for every interface, is refused
+        assertThrows("WEBHOOK-API-ERROR", \DataProviderWebhook::registerWebhookApis(),
+            (sub (hash<auto> config) {}, sub (hash<auto> info) {}), "the callbacks cannot be replaced");
+
+        hash<auto> rv = DataProviderWebhook::createWebhook({"method": "POST"});
+        assertEq({"url": "https://example.com/webhook/1", "ctx": 1}, rv);
+        assertEq(({"method": "POST"},), created, "the registered create callback is used");
+        DataProviderWebhook::deleteWebhook(rv);
+        assertEq((rv,), deleted, "the registered delete callback is used");
+    }
+}

@@ -1,0 +1,89 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# PresentationRekeyOwner.qm - provider presentation fixture with a nested type reached through three options
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires DataProvider
+
+#! A provider presentation fixture whose action reaches one nested type through three options
+/** Catalogs that identified a nested type per option and path have three messages for each of its texts; with the
+    per-action identity they have one.  Used by the re-keying cases of Presentation.qtest.
+*/
+module PresentationRekeyOwner {
+    version = "1.0";
+    desc = "provider presentation fixture with a nested type reached through three options";
+    author = "Qore Technologies";
+    license = "MIT";
+    init = sub () {
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": "QoreTestRekeyProvider",
+            "display_name": "Rekey Provider",
+            "short_desc": "Provider with a shared nested type",
+            "desc": "Provider whose options share a nested type",
+            "presentation_source_locale": "en",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "rekey-provider.svg",
+        });
+
+        HashDataType address("RekeyAddress", {
+            "city": new QoreDataField(<auto>{
+                "name": "city",
+                "display_name": "City",
+                "short_desc": "The city of the address",
+                "type": new QoreStringDataType(),
+            }),
+            "street": new QoreDataField(<auto>{
+                "name": "street",
+                "display_name": "Street",
+                "type": new QoreStringDataType(),
+            }),
+        });
+        QoreDataField sender("sender", "Sender", new HashDataType("RekeySender", {
+            "address": new QoreDataField("address", "Address", address),
+        }));
+        QoreDataField recipient("recipient", "Recipient", new HashDataType("RekeyRecipient", {
+            "address": new QoreDataField("address", "Address", address),
+        }));
+        QoreDataField courier("courier", "Courier", new HashDataType("RekeyCourier", {
+            "address": new QoreDataField("address", "Address", address),
+        }));
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": "QoreTestRekeyProvider",
+            "path": "/send",
+            "action": "send",
+            "display_name": "Send",
+            "short_desc": "Sends a letter",
+            "desc": "Sends a letter from the sender to the recipient",
+            "action_code": DPAT_API,
+            "output_type": new QoreHashDataType(),
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "sender": sender,
+                "recipient": recipient,
+                "courier": courier,
+            }),
+        });
+    };
+}

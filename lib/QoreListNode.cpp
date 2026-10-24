@@ -552,6 +552,9 @@ QoreListNode* QoreListNode::evalList(bool &needs_deref, ExceptionSink* xsink) co
 }
 
 QoreListNode* QoreListNode::copy() const {
+#ifdef DEBUG
+    q_inc_container_copy_count();
+#endif
     return priv->copy();
 }
 

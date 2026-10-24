@@ -4,6 +4,18 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    The webhook creation and deletion callbacks of
+    @ref DataProvider::DataProviderWebhook "DataProviderWebhook" are no longer public members: they are set once
+    with @ref DataProvider::DataProviderWebhook::registerWebhookApis() "registerWebhookApis()" and cannot be read
+    or replaced by other code in the process (see
+    <a href="https://github.com/qoretechnologies/qorus/issues/759">Qorus issue 759</a>).
+
+    @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" now governs
+    module code that is called by sandboxed code re-entered inside the call: a callback into a sandboxed
+    %Program is checked against its sandbox together with the module functions and methods it calls, where
+    previously only code defined in the sandboxed %Program was checked.  Trusted code under the barrier is
+    unaffected (<a href="https://github.com/qoretechnologies/qore/issues/5514">issue 5514</a>).
+
     Connection schemes, their setup messages, connection options and allowed values now have source-owned
     translation catalogs. Unchanged HTTP options reused by REST and other schemes share their original
     identities; changing a default preserves the identity, while changing a field's wording gives it a new
@@ -27,12 +39,6 @@
     raise \c OBJECT-ALREADY-DELETED. Dynamic dispatch now checks the receiver before falling back to
     pseudo-methods such as <tt>val()</tt>, including calls through closure-bound variables
     (<a href="https://github.com/qoretechnologies/qore/issues/5509">issue 5509</a>).
-
-    A @ref weak_assignment_operator "weak reference" to a destroyed object that is held by a hash or by an object
-    member consistently reads as no value. Code run by the AST interpreter read it as the destroyed object, so that
-    \c exists returned @ref True for it and it could be assigned or passed as an argument; this affected AST
-    execution and code that the other execution modes run with the AST interpreter. Method calls through such a
-    reference raise \c OBJECT-ALREADY-DELETED as before.
 
     @ref Qore::seconds() "seconds()", numeric @ref Qore::date() "date()" conversions and the C++ relative-date
     factories preserve durations larger than 2^31 seconds without overflowing intermediate 32-bit arithmetic.
@@ -3065,7 +3071,9 @@ while (*binary chunk = input.read(65536)) {
         contributions when multiple modules share an application catalog domain; source-tree verification also
         discovers new provider owner modules before their first catalog exists and preserves the actual owner of
         registrations performed by a module loaded from a deferred provider initializer; installed owner fragments
-        compose those shared-domain contributions without duplicating source text between repositories
+        compose those shared-domain contributions without duplicating source text between repositories; when message
+        identities change, \c --rekey-source-tree moves a source tree's catalogs to the new identities, carrying
+        each translation whose text is unchanged, and reports conflicting texts, missing translations and new texts
       - the user-module catalog install helper accepts explicit source directories, package components, and install
         destinations, allowing products with nonstandard module layouts and installation prefixes to install the
         same owner-qualified, composable catalog fragments as Qore and external modules
@@ -4902,7 +4910,7 @@ while (*binary chunk = input.read(65536)) {
       access to the environment that %Qore makes, including its own settings read from the environment and the copy
       of the environment that a new process gets from @ref Qore::system() "system()", the
       @ref backquote_operator "backquote operator", @ref Qore::exec() "exec()" and @ref Qore::fork() "fork()", is
-      now serialized with one process-wide lock (reads run in parallel), where this was done only on HP-UX.  Binary
+      now serialized with process-wide locks (reads run in parallel), where this was done only on HP-UX.  Binary
       modules can take the same lock with the new C++ API classes \c QoreEnvironmentReadLock and
       \c QoreEnvironmentValue and with \c SystemEnvironment::isSet(); code that uses the environment without %Qore's
       API, such as a third-party library, is not serialized with it
@@ -4912,11 +4920,13 @@ while (*binary chunk = input.read(65536)) {
       zone or a character encoding.  @ref Qore::fork() "fork()" now briefly waits for threads that hold the
       library's process-wide locks, and the child process gets them free and repairs the state of the threads that
       do not exist in it; this also applies to a \c fork() made by native code.  Objects that another thread was
-      using at the moment of the fork, such as a locked mutex, still cannot be used in the child.  Native code must
-      not hold the environment lock (\c QoreEnvironmentReadLock, \c AtomicEnvironmentSetter) while it calls
-      \c fork(); the child gets a consistent copy of the environment without it.  Binary modules can register fork
-      handlers for their own process-wide locks with the new C++ API function \c qore_register_fork_handler(); the
-      \c i18n, \c linenoise, \c logger_bin, \c ml and \c sshutil modules do, so that a child process can use them
+      using at the moment of the fork, such as a locked mutex, still cannot be used in the child.  A thread that
+      resolves a host name, starts a process or reads the environment through a third-party library while another
+      thread calls \c fork() does not delay it.  Native code must not call \c fork() inside an
+      \c AtomicEnvironmentSetter; the child gets a consistent copy of the environment without it.  Binary modules can
+      register fork handlers for their own process-wide locks with the new C++ API function
+      \c qore_register_fork_handler(); the \c i18n, \c linenoise, \c logger_bin, \c ml and \c sshutil modules do,
+      so that a child process can use them
     - Fixed child processes created with @ref Qore::fork() "fork()" that ended or changed the database sessions of
       their parent: a child that closed or destroyed a @ref Qore::SQL::Datasource "Datasource",
       @ref Qore::SQL::DatasourcePool "DatasourcePool" or @ref Qore::SQL::SQLStatement "SQLStatement" that it had
@@ -4985,6 +4995,9 @@ while (*binary chunk = input.read(65536)) {
       it had written all of the data, and on macOS, which refuses a read or write of more than 2 GiB at once, such
       writes and reads failed with \c EINVAL; reads and writes of files and of the standard streams are now made in
       parts of at most 1 GiB
+    - Fixed empty binary values, such as \c binary() and <tt>binary("")</tt>, which the \c pgsql and \c sqlite3
+      drivers stored as SQL \c NULL: the data pointer of an empty value is never a null pointer in the C++ API
+      (\c BinaryNode::getPtr()), which the database APIs take for a missing value
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module, not those the \c .qm file sets, so a warning that the \c .qm file
       enables, for example with @ref enable-all-warnings "%enable-all-warnings", was not raised in the other files.

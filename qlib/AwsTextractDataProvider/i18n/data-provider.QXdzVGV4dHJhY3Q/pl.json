@@ -587,23 +587,23 @@
           "source": "Content declarations used to route the document for human review.",
           "message": "Deklaracje treści używane do kierowania dokumentu do przeglądu ręcznego."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzg1NDkwYTZlNjcwNWRmYzI5MTQ3MGVmMDQxMjFiMTI3MWMwNjMxNmJjMDU3ZWI1Zjg1N2Q2ODNlNmI5NzJiNGI.field.Q29udGVudENsYXNzaWZpZXJz.display_name": {
           "source": "Content Classifiers",
           "message": "Klasyfikatory treści"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzg1NDkwYTZlNjcwNWRmYzI5MTQ3MGVmMDQxMjFiMTI3MWMwNjMxNmJjMDU3ZWI1Zjg1N2Q2ODNlNmI5NzJiNGI.field.Q29udGVudENsYXNzaWZpZXJz.short_desc": {
           "source": "Content declarations for the human review workflow",
           "message": "Deklaracje treści na potrzeby przepływu pracy weryfikacji ręcznej"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzg1NDkwYTZlNjcwNWRmYzI5MTQ3MGVmMDQxMjFiMTI3MWMwNjMxNmJjMDU3ZWI1Zjg1N2Q2ODNlNmI5NzJiNGI.field.Q29udGVudENsYXNzaWZpZXJz.desc": {
           "source": "Content declarations for the human review workflow.",
           "message": "Deklaracje treści na potrzeby przepływu pracy weryfikacji ręcznej."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZlBlcnNvbmFsbHlJZGVudGlmaWFibGVJbmZvcm1hdGlvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzg1NDkwYTZlNjcwNWRmYzI5MTQ3MGVmMDQxMjFiMTI3MWMwNjMxNmJjMDU3ZWI1Zjg1N2Q2ODNlNmI5NzJiNGI.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZlBlcnNvbmFsbHlJZGVudGlmaWFibGVJbmZvcm1hdGlvbg.display_name": {
           "source": "Free of Personally Identifiable Information",
           "message": "Bez danych umożliwiających identyfikację osoby"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZkFkdWx0Q29udGVudA.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzg1NDkwYTZlNjcwNWRmYzI5MTQ3MGVmMDQxMjFiMTI3MWMwNjMxNmJjMDU3ZWI1Zjg1N2Q2ODNlNmI5NzJiNGI.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZkFkdWx0Q29udGVudA.display_name": {
           "source": "Free of Adult Content",
           "message": "Bez treści dla dorosłych"
         },
@@ -655,39 +655,39 @@
           "source": "Adapters to apply; selected page ranges must not overlap.",
           "message": "Adaptery do zastosowania; wybrane zakresy stron nie mogą się nakładać."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.QWRhcHRlcklk.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.QWRhcHRlcklk.display_name": {
           "source": "Adapter ID",
           "message": "Identyfikator adaptera"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.QWRhcHRlcklk.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.QWRhcHRlcklk.short_desc": {
           "source": "Adapter in the connection's AWS account and region",
           "message": "Adapter na koncie AWS i w regionie połączenia"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.QWRhcHRlcklk.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.QWRhcHRlcklk.desc": {
           "source": "Adapter in the connection's AWS account and region.",
           "message": "Adapter na koncie AWS i w regionie połączenia."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.UGFnZXM.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.UGFnZXM.display_name": {
           "source": "Pages",
           "message": "Strony"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.UGFnZXM.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.UGFnZXM.short_desc": {
           "source": "Page selectors such as '1', '1-3', or '4-*'",
           "message": "Selektory stron, takie jak „1”, „1-3” lub „4-*”"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.UGFnZXM.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.UGFnZXM.desc": {
           "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
           "message": "Selektory stron, takie jak `1`, `1-3` lub `4-*`; dla wszystkich stron używaj tylko `*`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Wersja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Wersja wybranego zasobu"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Wersja wybranego zasobu."
         },
@@ -731,39 +731,39 @@
           "source": "Source object in an S3 bucket in the connection's AWS region.",
           "message": "Obiekt źródłowy w zasobniku S3 w regionie AWS połączenia."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.QnVja2V0.display_name": {
           "source": "Bucket",
           "message": "Zasobnik"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.QnVja2V0.short_desc": {
           "source": "Name of the S3 bucket containing the source document",
           "message": "Nazwa segmentu S3 zawierającego dokument źródłowy"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.QnVja2V0.desc": {
           "source": "Name of the S3 bucket containing the source document.",
           "message": "Nazwa segmentu S3 zawierającego dokument źródłowy."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.TmFtZQ.display_name": {
           "source": "Name",
           "message": "Nazwa"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.TmFtZQ.short_desc": {
           "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
           "message": "Klucz obiektu w zasobniku S3, na przykład „faktury/przykład.pdf”"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.TmFtZQ.desc": {
           "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
           "message": "Klucz obiektu wewnątrz segmentu S3, na przykład `invoices/sample.pdf`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Wersja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Wersja wybranego zasobu"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Wersja wybranego zasobu."
         },
@@ -815,39 +815,39 @@
           "source": "Source object in an S3 bucket in the connection's AWS region.",
           "message": "Obiekt źródłowy w zasobniku S3 w regionie AWS połączenia."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.QnVja2V0.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.QnVja2V0.display_name": {
           "source": "Bucket",
           "message": "Zasobnik"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.QnVja2V0.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.QnVja2V0.short_desc": {
           "source": "Name of the S3 bucket containing the source document",
           "message": "Nazwa segmentu S3 zawierającego dokument źródłowy"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.QnVja2V0.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.QnVja2V0.desc": {
           "source": "Name of the S3 bucket containing the source document.",
           "message": "Nazwa segmentu S3 zawierającego dokument źródłowy."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.TmFtZQ.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.TmFtZQ.display_name": {
           "source": "Name",
           "message": "Nazwa"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.TmFtZQ.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.TmFtZQ.short_desc": {
           "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
           "message": "Klucz obiektu w zasobniku S3, na przykład „faktury/przykład.pdf”"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.TmFtZQ.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.TmFtZQ.desc": {
           "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
           "message": "Klucz obiektu wewnątrz segmentu S3, na przykład `invoices/sample.pdf`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Wersja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Wersja wybranego zasobu"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Wersja wybranego zasobu."
         },
@@ -999,39 +999,39 @@
           "source": "Manifest S3Object",
           "message": "Obiekt S3 manifestu"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.QnVja2V0.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.display_name": {
           "source": "Bucket",
           "message": "Zasobnik"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.QnVja2V0.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.short_desc": {
           "source": "Name of the S3 bucket containing the source document",
           "message": "Nazwa segmentu S3 zawierającego dokument źródłowy"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.QnVja2V0.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.desc": {
           "source": "Name of the S3 bucket containing the source document.",
           "message": "Nazwa segmentu S3 zawierającego dokument źródłowy."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.TmFtZQ.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.display_name": {
           "source": "Name",
           "message": "Nazwa"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.TmFtZQ.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.short_desc": {
           "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
           "message": "Klucz obiektu w zasobniku S3, na przykład „faktury/przykład.pdf”"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.TmFtZQ.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.desc": {
           "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
           "message": "Klucz obiektu wewnątrz segmentu S3, na przykład `invoices/sample.pdf`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Wersja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Wersja wybranego zasobu"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Wersja wybranego zasobu."
         },
@@ -1615,39 +1615,39 @@
           "source": "Source object in an S3 bucket in the connection's AWS region.",
           "message": "Obiekt źródłowy w zasobniku S3 w regionie AWS połączenia."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.QnVja2V0.display_name": {
           "source": "Bucket",
           "message": "Zasobnik"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.QnVja2V0.short_desc": {
           "source": "Name of the S3 bucket containing the source document",
           "message": "Nazwa segmentu S3 zawierającego dokument źródłowy"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.QnVja2V0.desc": {
           "source": "Name of the S3 bucket containing the source document.",
           "message": "Nazwa segmentu S3 zawierającego dokument źródłowy."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.TmFtZQ.display_name": {
           "source": "Name",
           "message": "Nazwa"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.TmFtZQ.short_desc": {
           "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
           "message": "Klucz obiektu w zasobniku S3, na przykład „faktury/przykład.pdf”"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.TmFtZQ.desc": {
           "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
           "message": "Klucz obiektu wewnątrz segmentu S3, na przykład `invoices/sample.pdf`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Wersja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Wersja wybranego zasobu"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Wersja wybranego zasobu."
         },
@@ -1799,39 +1799,39 @@
           "source": "Queries",
           "message": "Zapytania"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.QWxpYXM.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.QWxpYXM.display_name": {
           "source": "Alias",
           "message": "Alias"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.QWxpYXM.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.QWxpYXM.short_desc": {
           "source": "A short name for locating this question in the results",
           "message": "Krótka nazwa umożliwiająca zlokalizowanie tego pytania w wynikach"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.QWxpYXM.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.QWxpYXM.desc": {
           "source": "A short name for locating this question in the results.",
           "message": "Krótka nazwa umożliwiająca zlokalizowanie tego pytania w wynikach."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.UGFnZXM.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.UGFnZXM.display_name": {
           "source": "Pages",
           "message": "Strony"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.UGFnZXM.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.UGFnZXM.short_desc": {
           "source": "Page selectors such as '1', '1-3', or '4-*'",
           "message": "Selektory stron, takie jak „1”, „1-3” lub „4-*”"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.UGFnZXM.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.UGFnZXM.desc": {
           "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
           "message": "Selektory stron, takie jak `1`, `1-3` lub `4-*`; dla wszystkich stron używaj tylko `*`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.VGV4dA.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.VGV4dA.display_name": {
           "source": "Text",
           "message": "Tekst"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.VGV4dA.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.VGV4dA.short_desc": {
           "source": "Question to answer, for example 'What is the invoice total?'",
           "message": "Pytanie, na które należy odpowiedzieć, na przykład „Jaka jest suma faktury?”"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.VGV4dA.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.VGV4dA.desc": {
           "source": "Question to answer, for example `What is the invoice total?`.",
           "message": "Pytanie, na które należy odpowiedzieć, na przykład `What is the invoice total?`."
         },
@@ -1859,39 +1859,39 @@
           "source": "Adapters to apply; selected page ranges must not overlap.",
           "message": "Adaptery do zastosowania; wybrane zakresy stron nie mogą się nakładać."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.QWRhcHRlcklk.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.QWRhcHRlcklk.display_name": {
           "source": "Adapter ID",
           "message": "Identyfikator adaptera"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.QWRhcHRlcklk.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.QWRhcHRlcklk.short_desc": {
           "source": "Adapter in the connection's AWS account and region",
           "message": "Adapter na koncie AWS i w regionie połączenia"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.QWRhcHRlcklk.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.QWRhcHRlcklk.desc": {
           "source": "Adapter in the connection's AWS account and region.",
           "message": "Adapter na koncie AWS i w regionie połączenia."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.UGFnZXM.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.UGFnZXM.display_name": {
           "source": "Pages",
           "message": "Strony"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.UGFnZXM.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.UGFnZXM.short_desc": {
           "source": "Page selectors such as '1', '1-3', or '4-*'",
           "message": "Selektory stron, takie jak „1”, „1-3” lub „4-*”"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.UGFnZXM.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.UGFnZXM.desc": {
           "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
           "message": "Selektory stron, takie jak `1`, `1-3` lub `4-*`; dla wszystkich stron używaj tylko `*`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Wersja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Wersja wybranego zasobu"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Wersja wybranego zasobu."
         },
@@ -1931,39 +1931,39 @@
           "source": "Source object in an S3 bucket in the connection's AWS region.",
           "message": "Obiekt źródłowy w zasobniku S3 w regionie AWS połączenia."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.display_name": {
           "source": "Bucket",
           "message": "Zasobnik"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.short_desc": {
           "source": "Name of the S3 bucket containing the source document",
           "message": "Nazwa segmentu S3 zawierającego dokument źródłowy"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.desc": {
           "source": "Name of the S3 bucket containing the source document.",
           "message": "Nazwa segmentu S3 zawierającego dokument źródłowy."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.display_name": {
           "source": "Name",
           "message": "Nazwa"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.short_desc": {
           "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
           "message": "Klucz obiektu w zasobniku S3, na przykład „faktury/przykład.pdf”"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.desc": {
           "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
           "message": "Klucz obiektu wewnątrz segmentu S3, na przykład `invoices/sample.pdf`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Wersja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Wersja wybranego zasobu"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Wersja wybranego zasobu."
         },
@@ -2111,39 +2111,39 @@
           "source": "Source object in an S3 bucket in the connection's AWS region.",
           "message": "Obiekt źródłowy w zasobniku S3 w regionie AWS połączenia."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.display_name": {
           "source": "Bucket",
           "message": "Zasobnik"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.short_desc": {
           "source": "Name of the S3 bucket containing the source document",
           "message": "Nazwa segmentu S3 zawierającego dokument źródłowy"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.desc": {
           "source": "Name of the S3 bucket containing the source document.",
           "message": "Nazwa segmentu S3 zawierającego dokument źródłowy."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.display_name": {
           "source": "Name",
           "message": "Nazwa"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.short_desc": {
           "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
           "message": "Klucz obiektu w zasobniku S3, na przykład „faktury/przykład.pdf”"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.desc": {
           "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
           "message": "Klucz obiektu wewnątrz segmentu S3, na przykład `invoices/sample.pdf`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Wersja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Wersja wybranego zasobu"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Wersja wybranego zasobu."
         },
@@ -2283,39 +2283,39 @@
           "source": "Source object in an S3 bucket in the connection's AWS region.",
           "message": "Obiekt źródłowy w zasobniku S3 w regionie AWS połączenia."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.display_name": {
           "source": "Bucket",
           "message": "Zasobnik"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.short_desc": {
           "source": "Name of the S3 bucket containing the source document",
           "message": "Nazwa segmentu S3 zawierającego dokument źródłowy"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.desc": {
           "source": "Name of the S3 bucket containing the source document.",
           "message": "Nazwa segmentu S3 zawierającego dokument źródłowy."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.display_name": {
           "source": "Name",
           "message": "Nazwa"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.short_desc": {
           "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
           "message": "Klucz obiektu w zasobniku S3, na przykład „faktury/przykład.pdf”"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.desc": {
           "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
           "message": "Klucz obiektu wewnątrz segmentu S3, na przykład `invoices/sample.pdf`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Wersja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Wersja wybranego zasobu"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Wersja wybranego zasobu."
         },

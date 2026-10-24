@@ -747,159 +747,159 @@
           "source": "Additional options for the parcel including COD, insurance, and label references",
           "message": "Dodatkowe opcje dla przesyłki, w tym COD, ubezpieczenie i odniesienia do etykiety"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5ZjkzOm9wdGlvbjpjR0Z5WTJWc2N3OmZpZWxkOlpYaDBjbUU.field.Q09E.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5Zjkz.field.Q09E.display_name": {
           "source": "COD",
           "message": "COD"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5ZjkzOm9wdGlvbjpjR0Z5WTJWc2N3OmZpZWxkOlpYaDBjbUU.field.Q09E.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5Zjkz.field.Q09E.short_desc": {
           "source": "Collect on delivery",
           "message": "Płatność przy odbiorze"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5ZjkzOm9wdGlvbjpjR0Z5WTJWc2N3OmZpZWxkOlpYaDBjbUU.field.Q09E.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5Zjkz.field.Q09E.desc": {
           "source": "Collection on delivery details for this parcel (UPS only)",
           "message": "Szczegóły płatności przy odbiorze dla tej przesyłki (tylko UPS)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDpRMDlF.field.YW1vdW50.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg.field.YW1vdW50.display_name": {
           "source": "Amount",
           "message": "Wartość"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDpRMDlF.field.YW1vdW50.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg.field.YW1vdW50.short_desc": {
           "source": "Amount to collect",
           "message": "Kwota do pobrania"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDpRMDlF.field.YW1vdW50.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg.field.YW1vdW50.desc": {
           "source": "Amount to be collected on delivery",
           "message": "Kwota do pobrania przy dostawie"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDpRMDlF.field.Y3VycmVuY3k.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg.field.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "Waluta"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDpRMDlF.field.Y3VycmVuY3k.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg.field.Y3VycmVuY3k.short_desc": {
           "source": "Currency code",
           "message": "Kod waluty"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDpRMDlF.field.Y3VycmVuY3k.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg.field.Y3VycmVuY3k.desc": {
           "source": "Currency for the amount to be collected. Currently only USD is supported for UPS",
           "message": "Waluta kwoty do pobrania. Obecnie obsługiwane jest tylko USD dla UPS"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDpRMDlF.field.cGF5bWVudF9tZXRob2Q.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg.field.cGF5bWVudF9tZXRob2Q.display_name": {
           "source": "Payment Method",
           "message": "Metoda płatności"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDpRMDlF.field.cGF5bWVudF9tZXRob2Q.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg.field.cGF5bWVudF9tZXRob2Q.short_desc": {
           "source": "Payment method for COD",
           "message": "Metoda płatności dla płatności przy odbiorze"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDpRMDlF.field.cGF5bWVudF9tZXRob2Q.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg.field.cGF5bWVudF9tZXRob2Q.desc": {
           "source": "Payment method for collection on delivery. Defaults to `ANY` if not specified",
           "message": "Metoda płatności dla płatności przy odbiorze. Domyślnie `ANY`, jeśli nie określono"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDpRMDlF.field.cGF5bWVudF9tZXRob2Q.allowed-value.c3RyaW5nOlNFQ1VSRURfRlVORFM.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg.field.cGF5bWVudF9tZXRob2Q.allowed-value.c3RyaW5nOlNFQ1VSRURfRlVORFM.desc": {
           "source": "Secured funds (money orders, certified cheques)",
           "message": "Zabezpieczone fundusze (polecenia pieniężne, czeki zatwierdzone)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDpRMDlF.field.cGF5bWVudF9tZXRob2Q.allowed-value.c3RyaW5nOkNBU0g.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg.field.cGF5bWVudF9tZXRob2Q.allowed-value.c3RyaW5nOkNBU0g.desc": {
           "source": "Cash on delivery",
           "message": "Płatność przy odbiorze"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDpRMDlF.field.cGF5bWVudF9tZXRob2Q.allowed-value.c3RyaW5nOkFOWQ.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg.field.cGF5bWVudF9tZXRob2Q.allowed-value.c3RyaW5nOkFOWQ.desc": {
           "source": "Any payment method",
           "message": "Dowolna metoda płatności"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5ZjkzOm9wdGlvbjpjR0Z5WTJWc2N3OmZpZWxkOlpYaDBjbUU.field.aW5zdXJhbmNl.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5Zjkz.field.aW5zdXJhbmNl.display_name": {
           "source": "Insurance",
           "message": "Ubezpieczenie"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5ZjkzOm9wdGlvbjpjR0Z5WTJWc2N3OmZpZWxkOlpYaDBjbUU.field.aW5zdXJhbmNl.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5Zjkz.field.aW5zdXJhbmNl.short_desc": {
           "source": "Parcel insurance",
           "message": "Ubezpieczenie paczki"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5ZjkzOm9wdGlvbjpjR0Z5WTJWc2N3OmZpZWxkOlpYaDBjbUU.field.aW5zdXJhbmNl.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5Zjkz.field.aW5zdXJhbmNl.desc": {
           "source": "Insurance details for this parcel. Specify `amount`, `content`, and `currency` for XCover insurance, or additionally set `provider` for carrier-provided insurance",
           "message": "Szczegóły ubezpieczenia dla tej przesyłki. Określ `amount`, `content` i `currency` dla ubezpieczenia XCover, lub dodatkowo ustaw `provider` dla ubezpieczenia oferowanego przez przewoźnika"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDphVzV6ZFhKaGJtTmw.field.YW1vdW50.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY.field.YW1vdW50.display_name": {
           "source": "Amount",
           "message": "Wartość"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDphVzV6ZFhKaGJtTmw.field.YW1vdW50.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY.field.YW1vdW50.short_desc": {
           "source": "Declared value to insure",
           "message": "Zadeklarowana wartość do ubezpieczenia"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDphVzV6ZFhKaGJtTmw.field.YW1vdW50.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY.field.YW1vdW50.desc": {
           "source": "Declared value of the goods you want to insure",
           "message": "Zadeklarowana wartość towarów, które chcesz ubezpieczyć"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDphVzV6ZFhKaGJtTmw.field.Y29udGVudA.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY.field.Y29udGVudA.display_name": {
           "source": "Content",
           "message": "Zawartość"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDphVzV6ZFhKaGJtTmw.field.Y29udGVudA.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY.field.Y29udGVudA.short_desc": {
           "source": "Description of package content",
           "message": "Opis zawartości paczki"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDphVzV6ZFhKaGJtTmw.field.Y29udGVudA.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY.field.Y29udGVudA.desc": {
           "source": "Description of package content",
           "message": "Opis zawartości paczki"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDphVzV6ZFhKaGJtTmw.field.Y3VycmVuY3k.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY.field.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "Waluta"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDphVzV6ZFhKaGJtTmw.field.Y3VycmVuY3k.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY.field.Y3VycmVuY3k.short_desc": {
           "source": "Currency code",
           "message": "Kod waluty"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDphVzV6ZFhKaGJtTmw.field.Y3VycmVuY3k.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY.field.Y3VycmVuY3k.desc": {
           "source": "Currency for the amount value (e.g., `USD`). Currently only USD is supported for FedEx and UPS",
           "message": "Waluta wartości kwoty (np. `USD`). Obecnie obsługiwane jest tylko USD dla FedEx i UPS"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDphVzV6ZFhKaGJtTmw.field.cHJvdmlkZXI.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY.field.cHJvdmlkZXI.display_name": {
           "source": "Provider",
           "message": "Dostawca"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDphVzV6ZFhKaGJtTmw.field.cHJvdmlkZXI.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY.field.cHJvdmlkZXI.short_desc": {
           "source": "Insurance provider",
           "message": "Dostawca ubezpieczenia"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDphVzV6ZFhKaGJtTmw.field.cHJvdmlkZXI.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY.field.cHJvdmlkZXI.desc": {
           "source": "Set to `FEDEX`, `UPS`, or `ONTRAC` to use carrier-provided insurance instead of Shippo's provider (XCover)",
           "message": "Ustaw na `FEDEX`, `UPS` lub `ONTRAC` aby użyć ubezpieczenia dostarczonego przez przewoźnika zamiast dostarczonego przez Shippo (XCover)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDphVzV6ZFhKaGJtTmw.field.cHJvdmlkZXI.allowed-value.c3RyaW5nOkZFREVY.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY.field.cHJvdmlkZXI.allowed-value.c3RyaW5nOkZFREVY.desc": {
           "source": "FedEx carrier insurance",
           "message": "Ubezpieczenie przewoźnika FedEx"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDphVzV6ZFhKaGJtTmw.field.cHJvdmlkZXI.allowed-value.c3RyaW5nOlVQUw.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY.field.cHJvdmlkZXI.allowed-value.c3RyaW5nOlVQUw.desc": {
           "source": "UPS carrier insurance",
           "message": "Ubezpieczenie UPS"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOmNHRnlZMlZzY3c6ZmllbGQ6WlhoMGNtRTpmaWVsZDphVzV6ZFhKaGJtTmw.field.cHJvdmlkZXI.allowed-value.c3RyaW5nOk9OVFJBQw.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY.field.cHJvdmlkZXI.allowed-value.c3RyaW5nOk9OVFJBQw.desc": {
           "source": "OnTrac carrier insurance",
           "message": "Ubezpieczenie przewoźnika OnTrac"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5ZjkzOm9wdGlvbjpjR0Z5WTJWc2N3OmZpZWxkOlpYaDBjbUU.field.cmVmZXJlbmNlXzE.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5Zjkz.field.cmVmZXJlbmNlXzE.display_name": {
           "source": "Reference 1",
           "message": "Referencja 1"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5ZjkzOm9wdGlvbjpjR0Z5WTJWc2N3OmZpZWxkOlpYaDBjbUU.field.cmVmZXJlbmNlXzE.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5Zjkz.field.cmVmZXJlbmNlXzE.short_desc": {
           "source": "Label reference text 1",
           "message": "Tekst referencyjny etykiety 1"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5ZjkzOm9wdGlvbjpjR0Z5WTJWc2N3OmZpZWxkOlpYaDBjbUU.field.cmVmZXJlbmNlXzE.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5Zjkz.field.cmVmZXJlbmNlXzE.desc": {
           "source": "Optional text (up to 50 characters) printed on the shipping label if supported by the carrier",
           "message": "Opcjonalny tekst (do 50 znaków) wydrukowany na etykiecie wysyłkowej, jeśli obsługuje go przewoźnik"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5ZjkzOm9wdGlvbjpjR0Z5WTJWc2N3OmZpZWxkOlpYaDBjbUU.field.cmVmZXJlbmNlXzI.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5Zjkz.field.cmVmZXJlbmNlXzI.display_name": {
           "source": "Reference 2",
           "message": "Referencja 2"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5ZjkzOm9wdGlvbjpjR0Z5WTJWc2N3OmZpZWxkOlpYaDBjbUU.field.cmVmZXJlbmNlXzI.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5Zjkz.field.cmVmZXJlbmNlXzI.short_desc": {
           "source": "Label reference text 2",
           "message": "Tekst referencyjny etykiety 2"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5ZjkzOm9wdGlvbjpjR0Z5WTJWc2N3OmZpZWxkOlpYaDBjbUU.field.cmVmZXJlbmNlXzI.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb1BhcmNlbEV4dHJhRGF0YVR5cGU6U2hpcHBvUGFyY2VsRXh0cmFEYXRhVHlwZSM2NWViOWFjYWQwNDNmYWI1OThlZmY4MzFjZmNlZWYxYjk3ZTdjZWYwYjRmNTNiMjFiNGU2MWRmNzM3ODg5Zjkz.field.cmVmZXJlbmNlXzI.desc": {
           "source": "Optional text (up to 50 characters) printed on the shipping label if supported by the carrier",
           "message": "Opcjonalny tekst (do 50 znaków) wydrukowany na etykiecie wysyłkowej, jeśli obsługuje go przewoźnik"
         },
@@ -1207,54 +1207,6 @@
           "source": "Collection on delivery details (UPS only)",
           "message": "Szczegóły płatności przy odbiorze (tylko UPS)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6UTA5RQ.field.YW1vdW50.display_name": {
-          "source": "Amount",
-          "message": "Wartość"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6UTA5RQ.field.YW1vdW50.short_desc": {
-          "source": "Amount to collect",
-          "message": "Kwota do pobrania"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6UTA5RQ.field.YW1vdW50.desc": {
-          "source": "Amount to be collected on delivery",
-          "message": "Kwota do pobrania przy dostawie"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6UTA5RQ.field.Y3VycmVuY3k.display_name": {
-          "source": "Currency",
-          "message": "Waluta"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6UTA5RQ.field.Y3VycmVuY3k.short_desc": {
-          "source": "Currency code",
-          "message": "Kod waluty"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6UTA5RQ.field.Y3VycmVuY3k.desc": {
-          "source": "Currency for the amount to be collected. Currently only USD is supported for UPS",
-          "message": "Waluta kwoty do pobrania. Obecnie obsługiwane jest tylko USD dla UPS"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6UTA5RQ.field.cGF5bWVudF9tZXRob2Q.display_name": {
-          "source": "Payment Method",
-          "message": "Metoda płatności"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6UTA5RQ.field.cGF5bWVudF9tZXRob2Q.short_desc": {
-          "source": "Payment method for COD",
-          "message": "Metoda płatności dla płatności przy odbiorze"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6UTA5RQ.field.cGF5bWVudF9tZXRob2Q.desc": {
-          "source": "Payment method for collection on delivery. Defaults to `ANY` if not specified",
-          "message": "Metoda płatności dla płatności przy odbiorze. Domyślnie `ANY`, jeśli nie określono"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6UTA5RQ.field.cGF5bWVudF9tZXRob2Q.allowed-value.c3RyaW5nOlNFQ1VSRURfRlVORFM.desc": {
-          "source": "Secured funds (money orders, certified cheques)",
-          "message": "Zabezpieczone fundusze (polecenia pieniężne, czeki zatwierdzone)"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6UTA5RQ.field.cGF5bWVudF9tZXRob2Q.allowed-value.c3RyaW5nOkNBU0g.desc": {
-          "source": "Cash on delivery",
-          "message": "Płatność przy odbiorze"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0NvZERhdGFUeXBlOlNoaXBwb0NvZERhdGFUeXBlI2IzOWM1NjVlNWM2NDgyZWZiMjM2MTkxZjlhYTZkNjhlOWVkNDMzMDc2YTVmMDJlYjc5YmEyMGNhNmM3ZjQ1MTg6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6UTA5RQ.field.cGF5bWVudF9tZXRob2Q.allowed-value.c3RyaW5nOkFOWQ.desc": {
-          "source": "Any payment method",
-          "message": "Dowolna metoda płatności"
-        },
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.field.YWxjb2hvbA.display_name": {
           "source": "Alcohol",
           "message": "Alkohol"
@@ -1267,35 +1219,35 @@
           "source": "Alcohol shipment details (FedEx and UPS only)",
           "message": "Szczegóły przesyłki alkoholowej (tylko FedEx i UPS)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZA.field.Y29udGFpbnNfYWxjb2hvbA.display_name": {
           "source": "Contains Alcohol",
           "message": "Zawiera alkohol"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZA.field.Y29udGFpbnNfYWxjb2hvbA.short_desc": {
           "source": "Package contains alcohol",
           "message": "Paczka zawiera alkohol"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZA.field.Y29udGFpbnNfYWxjb2hvbA.desc": {
           "source": "Specifies that the package contains alcohol (FedEx and UPS only)",
           "message": "Określa, że paczka zawiera alkohol (tylko FedEx i UPS)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZA.field.cmVjaXBpZW50X3R5cGU.display_name": {
           "source": "Recipient Type",
           "message": "Typ odbiorcy"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZA.field.cmVjaXBpZW50X3R5cGU.short_desc": {
           "source": "Alcohol recipient type",
           "message": "Typ odbiorcy alkoholu"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZA.field.cmVjaXBpZW50X3R5cGU.desc": {
           "source": "License type of the recipient (mandatory for FedEx only)",
           "message": "Typ licencji odbiorcy (wymagane tylko dla FedEx)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.allowed-value.c3RyaW5nOmxpY2Vuc2Vl.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZA.field.cmVjaXBpZW50X3R5cGU.allowed-value.c3RyaW5nOmxpY2Vuc2Vl.desc": {
           "source": "Licensed recipient",
           "message": "Odbiorca z licencją"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.allowed-value.c3RyaW5nOmNvbnN1bWVy.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZA.field.cmVjaXBpZW50X3R5cGU.allowed-value.c3RyaW5nOmNvbnN1bWVy.desc": {
           "source": "Consumer recipient",
           "message": "Odbiorca konsumenta"
         },
@@ -1323,71 +1275,71 @@
           "source": "Third-party billing details (UPS, FedEx, and DHL Germany only)",
           "message": "Szczegóły rozliczenia przez stronę trzecią (tylko UPS, FedEx i DHL Niemcy)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.YWNjb3VudA.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.YWNjb3VudA.display_name": {
           "source": "Account",
           "message": "Konto"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.YWNjb3VudA.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.YWNjb3VudA.short_desc": {
           "source": "Account number to bill",
           "message": "Numer konta do rozliczenia"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.YWNjb3VudA.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.YWNjb3VudA.desc": {
           "source": "Account number to be billed. For DHL Germany, leave this field blank",
           "message": "Numer konta do rozliczenia. W przypadku DHL Germany pozostaw to pole puste"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.Y291bnRyeQ.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.Y291bnRyeQ.display_name": {
           "source": "Country",
           "message": "Kraj"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.Y291bnRyeQ.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.Y291bnRyeQ.short_desc": {
           "source": "Account country code",
           "message": "Kod kraju konta"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.Y291bnRyeQ.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.Y291bnRyeQ.desc": {
           "source": "Two-letter ISO country code of the account to be billed (required for UPS third party billing only)",
           "message": "Kod krajowy ISO z dwiema literami konta do rozliczenia (wymagane tylko dla rozliczeń UPS z trzecią stroną)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.cGFydGljaXBhdGlvbl9jb2Rl.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.cGFydGljaXBhdGlvbl9jb2Rl.display_name": {
           "source": "Participation Code",
           "message": "Kod uczestnictwa"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.cGFydGljaXBhdGlvbl9jb2Rl.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.cGFydGljaXBhdGlvbl9jb2Rl.short_desc": {
           "source": "DHL participation code",
           "message": "Kod uczestnictwa DHL"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.cGFydGljaXBhdGlvbl9jb2Rl.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.cGFydGljaXBhdGlvbl9jb2Rl.desc": {
           "source": "2-digit code used to override your default participation code associated with your DHL Germany account",
           "message": "Kod 2-cyfrowy używany do zastąpienia domyślnego kodu uczestnictwa powiązanego z kontem DHL Germany"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.dHlwZQ.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.dHlwZQ.display_name": {
           "source": "Billing Type",
           "message": "Typ rozliczenia"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.dHlwZQ.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.dHlwZQ.short_desc": {
           "source": "Party to be billed",
           "message": "Strona do rozliczenia"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.dHlwZQ.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.dHlwZQ.desc": {
           "source": "Party to be billed. Leave blank for DHL Germany",
           "message": "Strona do rozliczenia. Pozostaw puste dla DHL Germany"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.dHlwZQ.allowed-value.c3RyaW5nOlNFTkRFUg.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.dHlwZQ.allowed-value.c3RyaW5nOlNFTkRFUg.desc": {
           "source": "Bill the sender",
           "message": "Rozliczanie dla nadawcy"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.dHlwZQ.allowed-value.c3RyaW5nOlJFQ0lQSUVOVA.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.dHlwZQ.allowed-value.c3RyaW5nOlJFQ0lQSUVOVA.desc": {
           "source": "Bill the recipient",
           "message": "Rozliczanie dla odbiorcy"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.dHlwZQ.allowed-value.c3RyaW5nOlRISVJEX1BBUlRZ.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.dHlwZQ.allowed-value.c3RyaW5nOlRISVJEX1BBUlRZ.desc": {
           "source": "Bill a third party",
           "message": "Rozliczanie z trzeciej strony"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.dHlwZQ.allowed-value.c3RyaW5nOlRISVJEX1BBUlRZX0NPTlNJR05FRQ.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.dHlwZQ.allowed-value.c3RyaW5nOlRISVJEX1BBUlRZX0NPTlNJR05FRQ.desc": {
           "source": "Bill a third party consignee",
           "message": "Rozliczanie z odbiorcą trzeciej strony"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMTpvcHRpb246WlhoMGNtRTpmaWVsZDpZbWxzYkdsdVp3.field.dHlwZQ.allowed-value.c3RyaW5nOkNPTExFQ1Q.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0JpbGxpbmdEYXRhVHlwZTpTaGlwcG9CaWxsaW5nRGF0YVR5cGUjOTMxNzZkNDMzYTM2OTBkMTYzZWU5OWU5Mzg2NTQyZWM2ZWYwODFmMDI4NmZkYzU3N2Y3ZTg0ZWE0ZTE2MmNmMQ.field.dHlwZQ.allowed-value.c3RyaW5nOkNPTExFQ1Q.desc": {
           "source": "Collect on delivery",
           "message": "Płatność przy odbiorze"
         },
@@ -1439,39 +1391,39 @@
           "source": "Customer reference field on the label (FedEx and UPS only). Contains `prefix`, `value`, and `ref_sort` keys",
           "message": "Pole referencyjne klienta na etykiecie (tylko FedEx i UPS). Zawiera klucze `prefix`, `value` i `ref_sort`"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpZM1Z6ZEc5dFpYSmZjbVZtWlhKbGJtTmw.field.cHJlZml4.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMg.field.cHJlZml4.display_name": {
           "source": "Prefix",
           "message": "Prefiks"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpZM1Z6ZEc5dFpYSmZjbVZtWlhKbGJtTmw.field.cHJlZml4.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMg.field.cHJlZml4.short_desc": {
           "source": "Custom prefix text",
           "message": "Tekst prefiksu niestandardowego"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpZM1Z6ZEc5dFpYSmZjbVZtWlhKbGJtTmw.field.cHJlZml4.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMg.field.cHJlZml4.desc": {
           "source": "Custom prefix for the reference field (ZPL labels only). Up to 11 characters. Empty string removes the default prefix. Omit to use the default prefix",
           "message": "Niestandardowy prefiks dla pola referencyjnego (tylko etykiety ZPL). Do 11 znaków. Pusty ciąg usuwa domyślny prefiks. Pominięcie oznacza użycie domyślnego prefiksu"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpZM1Z6ZEc5dFpYSmZjbVZtWlhKbGJtTmw.field.cmVmX3NvcnQ.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMg.field.cmVmX3NvcnQ.display_name": {
           "source": "Sort Order",
           "message": "Kolejność sortowania"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpZM1Z6ZEc5dFpYSmZjbVZtWlhKbGJtTmw.field.cmVmX3NvcnQ.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMg.field.cmVmX3NvcnQ.short_desc": {
           "source": "UPS reference sort order",
           "message": "Kolejność sortowania referencji UPS"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpZM1Z6ZEc5dFpYSmZjbVZtWlhKbGJtTmw.field.cmVmX3NvcnQ.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMg.field.cmVmX3NvcnQ.desc": {
           "source": "Order UPS reference fields are printed on ZPL labels. If set for one reference, must be set for all other supported UPS references using unique integers",
           "message": "Pola referencyjne UPS są drukowane na etykietach ZPL. Jeśli ustawione dla jednej referencji, muszą być ustawione dla wszystkich innych obsługiwanych referencji UPS przy użyciu unikalnych liczb całkowitych"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpZM1Z6ZEc5dFpYSmZjbVZtWlhKbGJtTmw.field.dmFsdWU.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMg.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Wartość"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpZM1Z6ZEc5dFpYSmZjbVZtWlhKbGJtTmw.field.dmFsdWU.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMg.field.dmFsdWU.short_desc": {
           "source": "Reference text",
           "message": "Tekst referencyjny"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpZM1Z6ZEc5dFpYSmZjbVZtWlhKbGJtTmw.field.dmFsdWU.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMg.field.dmFsdWU.desc": {
           "source": "Reference text to be printed on the shipping label. Up to 40 characters",
           "message": "Tekst referencyjny do wydrukowania na etykiecie wysyłkowej. Maks. 40 znaków"
         },
@@ -1547,42 +1499,6 @@
           "source": "Department number field on the label (FedEx and UPS only). Contains `prefix`, `value`, and `ref_sort` keys",
           "message": "Pole numeru działu na etykiecie (tylko FedEx i UPS). Zawiera klucze `prefix`, `value` i `ref_sort`"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpaR1Z3ZEY5dWRXMWlaWEk.field.cHJlZml4.display_name": {
-          "source": "Prefix",
-          "message": "Prefiks"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpaR1Z3ZEY5dWRXMWlaWEk.field.cHJlZml4.short_desc": {
-          "source": "Custom prefix text",
-          "message": "Tekst prefiksu niestandardowego"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpaR1Z3ZEY5dWRXMWlaWEk.field.cHJlZml4.desc": {
-          "source": "Custom prefix for the reference field (ZPL labels only). Up to 11 characters. Empty string removes the default prefix. Omit to use the default prefix",
-          "message": "Niestandardowy prefiks dla pola referencyjnego (tylko etykiety ZPL). Do 11 znaków. Pusty ciąg usuwa domyślny prefiks. Pominięcie oznacza użycie domyślnego prefiksu"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpaR1Z3ZEY5dWRXMWlaWEk.field.cmVmX3NvcnQ.display_name": {
-          "source": "Sort Order",
-          "message": "Kolejność sortowania"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpaR1Z3ZEY5dWRXMWlaWEk.field.cmVmX3NvcnQ.short_desc": {
-          "source": "UPS reference sort order",
-          "message": "Kolejność sortowania referencji UPS"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpaR1Z3ZEY5dWRXMWlaWEk.field.cmVmX3NvcnQ.desc": {
-          "source": "Order UPS reference fields are printed on ZPL labels. If set for one reference, must be set for all other supported UPS references using unique integers",
-          "message": "Pola referencyjne UPS są drukowane na etykietach ZPL. Jeśli ustawione dla jednej referencji, muszą być ustawione dla wszystkich innych obsługiwanych referencji UPS przy użyciu unikalnych liczb całkowitych"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpaR1Z3ZEY5dWRXMWlaWEk.field.dmFsdWU.display_name": {
-          "source": "Value",
-          "message": "Wartość"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpaR1Z3ZEY5dWRXMWlaWEk.field.dmFsdWU.short_desc": {
-          "source": "Reference text",
-          "message": "Tekst referencyjny"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpaR1Z3ZEY5dWRXMWlaWEk.field.dmFsdWU.desc": {
-          "source": "Reference text to be printed on the shipping label. Up to 40 characters",
-          "message": "Tekst referencyjny do wydrukowania na etykiecie wysyłkowej. Maks. 40 znaków"
-        },
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.field.ZHJ5X2ljZQ.display_name": {
           "source": "Dry Ice",
           "message": "Lód suchy"
@@ -1595,27 +1511,27 @@
           "source": "Dry ice details (FedEx, Veho, and UPS only)",
           "message": "Szczegóły lodu suchego (tylko FedEx, Veho i UPS)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI.field.Y29udGFpbnNfZHJ5X2ljZQ.display_name": {
           "source": "Contains Dry Ice",
           "message": "Zawiera suchy lód"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI.field.Y29udGFpbnNfZHJ5X2ljZQ.short_desc": {
           "source": "Package contains dry ice",
           "message": "Paczka zawiera suchy lód"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI.field.Y29udGFpbnNfZHJ5X2ljZQ.desc": {
           "source": "Specifies that the package contains dry ice (FedEx, Veho, and UPS only)",
           "message": "Określa, że paczka zawiera suchy lód (FedEx, Veho i UPS)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI.field.d2VpZ2h0.display_name": {
           "source": "Weight",
           "message": "Waga"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI.field.d2VpZ2h0.short_desc": {
           "source": "Dry ice weight in kg",
           "message": "Waga lodu suchego w kg"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI.field.d2VpZ2h0.desc": {
           "source": "Weight of dry ice in kilograms. Cannot be greater than the package weight",
           "message": "Waga suchego lodu w kilogramach. Nie może przekraczać wagi paczki"
         },
@@ -1631,66 +1547,6 @@
           "source": "Insurance details. Specify `amount`, `content`, and `currency` for XCover insurance, or additionally set `provider` for carrier-provided insurance",
           "message": "Szczegóły ubezpieczenia. Określ `amount`, `content` i `currency` dla ubezpieczenia XCover, lub dodatkowo ustaw `provider` dla ubezpieczenia oferowanego przez przewoźnika"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6YVc1emRYSmhibU5s.field.YW1vdW50.display_name": {
-          "source": "Amount",
-          "message": "Wartość"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6YVc1emRYSmhibU5s.field.YW1vdW50.short_desc": {
-          "source": "Declared value to insure",
-          "message": "Zadeklarowana wartość do ubezpieczenia"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6YVc1emRYSmhibU5s.field.YW1vdW50.desc": {
-          "source": "Declared value of the goods you want to insure",
-          "message": "Zadeklarowana wartość towarów, które chcesz ubezpieczyć"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6YVc1emRYSmhibU5s.field.Y29udGVudA.display_name": {
-          "source": "Content",
-          "message": "Zawartość"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6YVc1emRYSmhibU5s.field.Y29udGVudA.short_desc": {
-          "source": "Description of package content",
-          "message": "Opis zawartości paczki"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6YVc1emRYSmhibU5s.field.Y29udGVudA.desc": {
-          "source": "Description of package content",
-          "message": "Opis zawartości paczki"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6YVc1emRYSmhibU5s.field.Y3VycmVuY3k.display_name": {
-          "source": "Currency",
-          "message": "Waluta"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6YVc1emRYSmhibU5s.field.Y3VycmVuY3k.short_desc": {
-          "source": "Currency code",
-          "message": "Kod waluty"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6YVc1emRYSmhibU5s.field.Y3VycmVuY3k.desc": {
-          "source": "Currency for the amount value (e.g., `USD`). Currently only USD is supported for FedEx and UPS",
-          "message": "Waluta wartości kwoty (np. `USD`). Obecnie obsługiwane jest tylko USD dla FedEx i UPS"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6YVc1emRYSmhibU5s.field.cHJvdmlkZXI.display_name": {
-          "source": "Provider",
-          "message": "Dostawca"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6YVc1emRYSmhibU5s.field.cHJvdmlkZXI.short_desc": {
-          "source": "Insurance provider",
-          "message": "Dostawca ubezpieczenia"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6YVc1emRYSmhibU5s.field.cHJvdmlkZXI.desc": {
-          "source": "Set to `FEDEX`, `UPS`, or `ONTRAC` to use carrier-provided insurance instead of Shippo's provider (XCover)",
-          "message": "Ustaw na `FEDEX`, `UPS` lub `ONTRAC` aby użyć ubezpieczenia dostarczonego przez przewoźnika zamiast dostarczonego przez Shippo (XCover)"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6YVc1emRYSmhibU5s.field.cHJvdmlkZXI.allowed-value.c3RyaW5nOkZFREVY.desc": {
-          "source": "FedEx carrier insurance",
-          "message": "Ubezpieczenie przewoźnika FedEx"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6YVc1emRYSmhibU5s.field.cHJvdmlkZXI.allowed-value.c3RyaW5nOlVQUw.desc": {
-          "source": "UPS carrier insurance",
-          "message": "Ubezpieczenie UPS"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlOlNoaXBwb0luc3VyYW5jZURhdGFUeXBlIzI1NTQ4YzQ5MmY0NTc3Zjk0MjkzMmViNWI2NGYwODhjODIzMTY2OWNjYjE1Nzk4NGY0NmZhM2JlNzkzYTAyMmY6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6YVc1emRYSmhibU5s.field.cHJvdmlkZXI.allowed-value.c3RyaW5nOk9OVFJBQw.desc": {
-          "source": "OnTrac carrier insurance",
-          "message": "Ubezpieczenie przewoźnika OnTrac"
-        },
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.field.aW52b2ljZV9udW1iZXI.display_name": {
           "source": "Invoice Number",
           "message": "Numer faktury"
@@ -1702,42 +1558,6 @@
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.field.aW52b2ljZV9udW1iZXI.desc": {
           "source": "Invoice number field on the label (FedEx and UPS only). Contains `prefix`, `value`, and `ref_sort` keys",
           "message": "Pole numeru faktury na etykiecie (tylko FedEx i UPS). Zawiera klucze `prefix`, `value` i `ref_sort`"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDphVzUyYjJsalpWOXVkVzFpWlhJ.field.cHJlZml4.display_name": {
-          "source": "Prefix",
-          "message": "Prefiks"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDphVzUyYjJsalpWOXVkVzFpWlhJ.field.cHJlZml4.short_desc": {
-          "source": "Custom prefix text",
-          "message": "Tekst prefiksu niestandardowego"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDphVzUyYjJsalpWOXVkVzFpWlhJ.field.cHJlZml4.desc": {
-          "source": "Custom prefix for the reference field (ZPL labels only). Up to 11 characters. Empty string removes the default prefix. Omit to use the default prefix",
-          "message": "Niestandardowy prefiks dla pola referencyjnego (tylko etykiety ZPL). Do 11 znaków. Pusty ciąg usuwa domyślny prefiks. Pominięcie oznacza użycie domyślnego prefiksu"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDphVzUyYjJsalpWOXVkVzFpWlhJ.field.cmVmX3NvcnQ.display_name": {
-          "source": "Sort Order",
-          "message": "Kolejność sortowania"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDphVzUyYjJsalpWOXVkVzFpWlhJ.field.cmVmX3NvcnQ.short_desc": {
-          "source": "UPS reference sort order",
-          "message": "Kolejność sortowania referencji UPS"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDphVzUyYjJsalpWOXVkVzFpWlhJ.field.cmVmX3NvcnQ.desc": {
-          "source": "Order UPS reference fields are printed on ZPL labels. If set for one reference, must be set for all other supported UPS references using unique integers",
-          "message": "Pola referencyjne UPS są drukowane na etykietach ZPL. Jeśli ustawione dla jednej referencji, muszą być ustawione dla wszystkich innych obsługiwanych referencji UPS przy użyciu unikalnych liczb całkowitych"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDphVzUyYjJsalpWOXVkVzFpWlhJ.field.dmFsdWU.display_name": {
-          "source": "Value",
-          "message": "Wartość"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDphVzUyYjJsalpWOXVkVzFpWlhJ.field.dmFsdWU.short_desc": {
-          "source": "Reference text",
-          "message": "Tekst referencyjny"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDphVzUyYjJsalpWOXVkVzFpWlhJ.field.dmFsdWU.desc": {
-          "source": "Reference text to be printed on the shipping label. Up to 40 characters",
-          "message": "Tekst referencyjny do wydrukowania na etykiecie wysyłkowej. Maks. 40 znaków"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.field.aXNfcmV0dXJu.display_name": {
           "source": "Is Return",
@@ -1762,42 +1582,6 @@
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.field.cG9fbnVtYmVy.desc": {
           "source": "Purchase order number field on the label (FedEx and UPS only). Contains `prefix`, `value`, and `ref_sort` keys",
           "message": "Pole numeru zamówienia zakupowego na etykiecie (tylko FedEx i UPS). Zawiera klucze `prefix`, `value` i `ref_sort`"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjRzlmYm5WdFltVnk.field.cHJlZml4.display_name": {
-          "source": "Prefix",
-          "message": "Prefiks"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjRzlmYm5WdFltVnk.field.cHJlZml4.short_desc": {
-          "source": "Custom prefix text",
-          "message": "Tekst prefiksu niestandardowego"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjRzlmYm5WdFltVnk.field.cHJlZml4.desc": {
-          "source": "Custom prefix for the reference field (ZPL labels only). Up to 11 characters. Empty string removes the default prefix. Omit to use the default prefix",
-          "message": "Niestandardowy prefiks dla pola referencyjnego (tylko etykiety ZPL). Do 11 znaków. Pusty ciąg usuwa domyślny prefiks. Pominięcie oznacza użycie domyślnego prefiksu"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjRzlmYm5WdFltVnk.field.cmVmX3NvcnQ.display_name": {
-          "source": "Sort Order",
-          "message": "Kolejność sortowania"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjRzlmYm5WdFltVnk.field.cmVmX3NvcnQ.short_desc": {
-          "source": "UPS reference sort order",
-          "message": "Kolejność sortowania referencji UPS"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjRzlmYm5WdFltVnk.field.cmVmX3NvcnQ.desc": {
-          "source": "Order UPS reference fields are printed on ZPL labels. If set for one reference, must be set for all other supported UPS references using unique integers",
-          "message": "Pola referencyjne UPS są drukowane na etykietach ZPL. Jeśli ustawione dla jednej referencji, muszą być ustawione dla wszystkich innych obsługiwanych referencji UPS przy użyciu unikalnych liczb całkowitych"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjRzlmYm5WdFltVnk.field.dmFsdWU.display_name": {
-          "source": "Value",
-          "message": "Wartość"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjRzlmYm5WdFltVnk.field.dmFsdWU.short_desc": {
-          "source": "Reference text",
-          "message": "Tekst referencyjny"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjRzlmYm5WdFltVnk.field.dmFsdWU.desc": {
-          "source": "Reference text to be printed on the shipping label. Up to 40 characters",
-          "message": "Tekst referencyjny do wydrukowania na etykiecie wysyłkowej. Maks. 40 znaków"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.field.cXJfY29kZV9yZXF1ZXN0ZWQ.display_name": {
           "source": "QR Code Requested",
@@ -1858,42 +1642,6 @@
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.field.cm1hX251bWJlcg.desc": {
           "source": "Return merchandise authorization number on the label (FedEx and UPS only). Contains `prefix`, `value`, and `ref_sort` keys",
           "message": "Numer autoryzacji towaru na etykiecie (tylko FedEx i UPS). Zawiera klucze `prefix`, `value` i `ref_sort`"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjbTFoWDI1MWJXSmxjZw.field.cHJlZml4.display_name": {
-          "source": "Prefix",
-          "message": "Prefiks"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjbTFoWDI1MWJXSmxjZw.field.cHJlZml4.short_desc": {
-          "source": "Custom prefix text",
-          "message": "Tekst prefiksu niestandardowego"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjbTFoWDI1MWJXSmxjZw.field.cHJlZml4.desc": {
-          "source": "Custom prefix for the reference field (ZPL labels only). Up to 11 characters. Empty string removes the default prefix. Omit to use the default prefix",
-          "message": "Niestandardowy prefiks dla pola referencyjnego (tylko etykiety ZPL). Do 11 znaków. Pusty ciąg usuwa domyślny prefiks. Pominięcie oznacza użycie domyślnego prefiksu"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjbTFoWDI1MWJXSmxjZw.field.cmVmX3NvcnQ.display_name": {
-          "source": "Sort Order",
-          "message": "Kolejność sortowania"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjbTFoWDI1MWJXSmxjZw.field.cmVmX3NvcnQ.short_desc": {
-          "source": "UPS reference sort order",
-          "message": "Kolejność sortowania referencji UPS"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjbTFoWDI1MWJXSmxjZw.field.cmVmX3NvcnQ.desc": {
-          "source": "Order UPS reference fields are printed on ZPL labels. If set for one reference, must be set for all other supported UPS references using unique integers",
-          "message": "Pola referencyjne UPS są drukowane na etykietach ZPL. Jeśli ustawione dla jednej referencji, muszą być ustawione dla wszystkich innych obsługiwanych referencji UPS przy użyciu unikalnych liczb całkowitych"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjbTFoWDI1MWJXSmxjZw.field.dmFsdWU.display_name": {
-          "source": "Value",
-          "message": "Wartość"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjbTFoWDI1MWJXSmxjZw.field.dmFsdWU.short_desc": {
-          "source": "Reference text",
-          "message": "Tekst referencyjny"
-        },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0xhYmVsUmVmZXJlbmNlRmllbGREYXRhVHlwZTpTaGlwcG9MYWJlbFJlZmVyZW5jZUZpZWxkRGF0YVR5cGUjNzBkN2M4ZDc0MjNhYTg2YjU3Yjg3OTg4YWFiNTk0NTNlMmJkNjJhZGRhZmNiMGMyYzFkNjNmYzgwMjZiMmZhMjpvcHRpb246WlhoMGNtRTpmaWVsZDpjbTFoWDI1MWJXSmxjZw.field.dmFsdWU.desc": {
-          "source": "Reference text to be printed on the shipping label. Up to 40 characters",
-          "message": "Tekst referencyjny do wydrukowania na etykiecie wysyłkowej. Maks. 40 znaków"
         },
         "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.field.c2F0dXJkYXlfZGVsaXZlcnk.display_name": {
           "source": "Saturday Delivery",

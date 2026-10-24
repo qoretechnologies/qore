@@ -794,8 +794,26 @@ void QoreHashNode::merge(const QoreHashNode* h, ExceptionSink* xsink) {
     priv->merge(*h->priv, xsink);
 }
 
+#ifdef DEBUG
+namespace {
+//! the number of hashes and lists copied in the current thread; see q_get_container_copy_count()
+thread_local int64 container_copy_count = 0;
+}
+
+int64 q_get_container_copy_count() {
+    return container_copy_count;
+}
+
+void q_inc_container_copy_count() {
+    ++container_copy_count;
+}
+#endif
+
 // returns the same order
 QoreHashNode* QoreHashNode::copy() const {
+#ifdef DEBUG
+    q_inc_container_copy_count();
+#endif
     return priv->copy();
 }
 

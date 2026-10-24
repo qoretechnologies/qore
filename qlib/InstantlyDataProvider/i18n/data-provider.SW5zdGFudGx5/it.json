@@ -915,103 +915,103 @@
           "source": "A list of email sequence steps; each step defines the delay and email variants to send",
           "message": "Un elenco di passaggi della sequenza email; ogni passaggio definisce il ritardo e le varianti di email da inviare"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0ZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE0.field.ZGVsYXk.display_name": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0Zg.field.ZGVsYXk.display_name": {
           "source": "Delay",
           "message": "Ritardo"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0ZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE0.field.ZGVsYXk.short_desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0Zg.field.ZGVsYXk.short_desc": {
           "source": "Delay before next email",
           "message": "Ritardo prima dell'invio successivo email"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0ZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE0.field.ZGVsYXk.desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0Zg.field.ZGVsYXk.desc": {
           "source": "The delay value before sending the next email; the unit is determined by the `delay_unit` field (defaults to days)",
           "message": "Il valore di ritardo prima dell'invio dell'email successiva; l'unità è determinata dal campo `delay_unit` (predefinito: giorni)"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0ZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE0.field.ZGVsYXlfdW5pdA.display_name": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0Zg.field.ZGVsYXlfdW5pdA.display_name": {
           "source": "Delay Unit",
           "message": "Unità ritardo"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0ZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE0.field.ZGVsYXlfdW5pdA.short_desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0Zg.field.ZGVsYXlfdW5pdA.short_desc": {
           "source": "Time unit for delay",
           "message": "Unità di tempo per il ritardo"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0ZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE0.field.ZGVsYXlfdW5pdA.desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0Zg.field.ZGVsYXlfdW5pdA.desc": {
           "source": "The time unit for the `delay` value; defaults to `days`",
           "message": "L'unità di tempo per il valore `delay`; predefinita a `days`"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0ZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE0.field.ZGVsYXlfdW5pdA.allowed-value.c3RyaW5nOm1pbnV0ZXM.display_name": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0Zg.field.ZGVsYXlfdW5pdA.allowed-value.c3RyaW5nOm1pbnV0ZXM.display_name": {
           "source": "Minutes",
           "message": "Minuti"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0ZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE0.field.ZGVsYXlfdW5pdA.allowed-value.c3RyaW5nOmhvdXJz.display_name": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0Zg.field.ZGVsYXlfdW5pdA.allowed-value.c3RyaW5nOmhvdXJz.display_name": {
           "source": "Hours",
           "message": "Ore"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0ZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE0.field.ZGVsYXlfdW5pdA.allowed-value.c3RyaW5nOmRheXM.display_name": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0Zg.field.ZGVsYXlfdW5pdA.allowed-value.c3RyaW5nOmRheXM.display_name": {
           "source": "Days",
           "message": "Giorni"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0ZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE0.field.dHlwZQ.display_name": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0Zg.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Tipo"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0ZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE0.field.dHlwZQ.short_desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0Zg.field.dHlwZQ.short_desc": {
           "source": "Step type",
           "message": "Tipo passo"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0ZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE0.field.dHlwZQ.desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0Zg.field.dHlwZQ.desc": {
           "source": "The type of step; currently only `email` is supported",
           "message": "Il tipo di passo; al momento è supportato solo `email`"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0ZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE0.field.dHlwZQ.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0Zg.field.dHlwZQ.allowed-value.c3RyaW5nOmVtYWls.display_name": {
           "source": "Email",
           "message": "Email"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0ZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE0.field.dmFyaWFudHM.display_name": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0Zg.field.dmFyaWFudHM.display_name": {
           "source": "Variants",
           "message": "Varianti"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0ZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE0.field.dmFyaWFudHM.short_desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0Zg.field.dmFyaWFudHM.short_desc": {
           "source": "Email content variants",
           "message": "Varianti contenuto email"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0ZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE0.field.dmFyaWFudHM.desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduU3RlcERhdGFUeXBlOmhhc2g8YXV0bz4jOGFlYjliOTZjNDQ1MjlkYjBjNTljOTBiMjE2MDczZTA0YzRlMGViM2Y2ZDFjOGE4NjlkYzNjMTY5NGE0OTY0Zg.field.dmFyaWFudHM.desc": {
           "source": "A list of email content variants for A/B testing; at least one variant is required",
           "message": "Un elenco di varianti di contenuto email per il test A/B; è richiesta almeno una variante"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.Ym9keQ.display_name": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZg.field.Ym9keQ.display_name": {
           "source": "Body",
           "message": "Corpo"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.Ym9keQ.short_desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZg.field.Ym9keQ.short_desc": {
           "source": "Email body content",
           "message": "Contenuto corpo email"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.Ym9keQ.desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZg.field.Ym9keQ.desc": {
           "source": "The email body content (HTML or plain text); supports template variables like `{{firstName}}`",
           "message": "Il contenuto del corpo dell'email (HTML o testo semplice); supporta variabili modello come `{{firstName}}`"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.c3ViamVjdA.display_name": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZg.field.c3ViamVjdA.display_name": {
           "source": "Subject",
           "message": "Oggetto"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.c3ViamVjdA.short_desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZg.field.c3ViamVjdA.short_desc": {
           "source": "Email subject line",
           "message": "Oggetto dell'email"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.c3ViamVjdA.desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZg.field.c3ViamVjdA.desc": {
           "source": "The email subject line; supports template variables like `{{firstName}}`",
           "message": "La riga dell'oggetto dell'email; supporta variabili modello come `{{firstName}}`"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.dl9kaXNhYmxlZA.display_name": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZg.field.dl9kaXNhYmxlZA.display_name": {
           "source": "Variant Disabled",
           "message": "Variante disabilitata"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.dl9kaXNhYmxlZA.short_desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZg.field.dl9kaXNhYmxlZA.short_desc": {
           "source": "Whether this variant is disabled",
           "message": "Se questa variante è disabilitata"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.dl9kaXNhYmxlZA.desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZg.field.dl9kaXNhYmxlZA.desc": {
           "source": "If `True`, this variant will not be used for sending; by default all variants are enabled",
           "message": "Se `True`, questa variante non verrà utilizzata per l'invio; per impostazione predefinita tutte le varianti sono abilitate"
         },

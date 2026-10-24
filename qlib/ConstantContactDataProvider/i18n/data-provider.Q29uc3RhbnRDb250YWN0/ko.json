@@ -2303,135 +2303,135 @@
           "source": "Override the organization's physical address shown in the email footer",
           "message": "이메일 푸터에 표시되는 조직의 물리적 주소 오버라이드"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMQ.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMQ.display_name": {
           "source": "Address Line 1",
           "message": "주소 1"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMQ.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMQ.short_desc": {
           "source": "Primary address line",
           "message": "기본 주소 라인"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMQ.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMQ.desc": {
           "source": "The primary address line",
           "message": "기본 주소 라인"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMg.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMg.display_name": {
           "source": "Address Line 2",
           "message": "주소 2"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMg.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMg.short_desc": {
           "source": "Secondary address line",
           "message": "보조 주소 라인"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMg.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMg.desc": {
           "source": "The secondary address line",
           "message": "보조 주소 라인"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMw.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMw.display_name": {
           "source": "Address Line 3",
           "message": "주소 라인 3"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMw.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMw.short_desc": {
           "source": "Third address line",
           "message": "세 번째 주소 줄"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMw.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMw.desc": {
           "source": "The third address line",
           "message": "세 번째 주소 줄"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19vcHRpb25hbA.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19vcHRpb25hbA.display_name": {
           "source": "Address Optional",
           "message": "주소 선택 사항"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19vcHRpb25hbA.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19vcHRpb25hbA.short_desc": {
           "source": "Additional address details",
           "message": "추가 주소 세부 정보"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19vcHRpb25hbA.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19vcHRpb25hbA.desc": {
           "source": "Additional address details (suite, floor, etc.)",
           "message": "추가 주소 세부 정보 (스위트, 층 등)"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y2l0eQ.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y2l0eQ.display_name": {
           "source": "City",
           "message": "도시"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y2l0eQ.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y2l0eQ.short_desc": {
           "source": "The city",
           "message": "도시"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y2l0eQ.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y2l0eQ.desc": {
           "source": "The city name",
           "message": "도시 이름"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9jb2Rl.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9jb2Rl.display_name": {
           "source": "Country Code",
           "message": "국가 코드"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9jb2Rl.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9jb2Rl.short_desc": {
           "source": "Two-letter country code",
           "message": "두 자리 국가 코드"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9jb2Rl.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9jb2Rl.desc": {
           "source": "The two-letter ISO country code",
           "message": "두 자리 ISO 국가 코드"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9uYW1l.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9uYW1l.display_name": {
           "source": "Country Name",
           "message": "국가 이름"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9uYW1l.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9uYW1l.short_desc": {
           "source": "Full country name",
           "message": "국가 전체 이름"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9uYW1l.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9uYW1l.desc": {
           "source": "The full country name",
           "message": "전체 국가 이름"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.b3JnYW5pemF0aW9uX25hbWU.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.b3JnYW5pemF0aW9uX25hbWU.display_name": {
           "source": "Organization Name",
           "message": "조직 이름"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
           "source": "Business or organization name",
           "message": "사업 또는 조직 이름"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.b3JnYW5pemF0aW9uX25hbWU.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.b3JnYW5pemF0aW9uX25hbWU.desc": {
           "source": "The business or organization name for the footer",
           "message": "푸터에 사용할 사업자 또는 조직 이름"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.cG9zdGFsX2NvZGU.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.cG9zdGFsX2NvZGU.display_name": {
           "source": "Postal Code",
           "message": "우편번호"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.cG9zdGFsX2NvZGU.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.cG9zdGFsX2NvZGU.short_desc": {
           "source": "The postal/ZIP code",
           "message": "우편/ZIP 코드"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.cG9zdGFsX2NvZGU.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.cG9zdGFsX2NvZGU.desc": {
           "source": "The postal or ZIP code",
           "message": "우편번호(ZIP code)"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfY29kZQ.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfY29kZQ.display_name": {
           "source": "State Code",
           "message": "주/도 코드"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfY29kZQ.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfY29kZQ.short_desc": {
           "source": "State or province code",
           "message": "주 또는 도/시 코드"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfY29kZQ.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfY29kZQ.desc": {
           "source": "The state or province code",
           "message": "주 또는 도/시 코드"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfbmFtZQ.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfbmFtZQ.display_name": {
           "source": "State Name",
           "message": "상태 이름"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfbmFtZQ.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfbmFtZQ.short_desc": {
           "source": "Full state or province name",
           "message": "주 또는 성 전체 이름"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfbmFtZQ.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfbmFtZQ.desc": {
           "source": "The full state or province name",
           "message": "전체 주 또는 성 이름"
         },
@@ -2855,15 +2855,15 @@
           "source": "An optional exclude object to filter out specific contacts when using `all_active_contacts` or `list_ids`",
           "message": " `all_active_contacts` 또는 `list_ids` 사용 시 특정 연락처를 제외하기 위한 선택적 제외 객체"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3Om9wdGlvbjpjMjkxY21ObDpmaWVsZDpaWGhqYkhWa1pR.field.Y29udGFjdF9pZHM.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3.field.Y29udGFjdF9pZHM.display_name": {
           "source": "Exclude Contact IDs",
           "message": "제외할 연락처 ID"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3Om9wdGlvbjpjMjkxY21ObDpmaWVsZDpaWGhqYkhWa1pR.field.Y29udGFjdF9pZHM.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3.field.Y29udGFjdF9pZHM.short_desc": {
           "source": "Contact IDs to exclude",
           "message": "제외할 연락처 ID"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3Om9wdGlvbjpjMjkxY21ObDpmaWVsZDpaWGhqYkhWa1pR.field.Y29udGFjdF9pZHM.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3.field.Y29udGFjdF9pZHM.desc": {
           "source": "A list of contact IDs to exclude from the activity",
           "message": "활동에서 제외할 연락처 ID 목록입니다."
         },
@@ -3031,15 +3031,15 @@
           "source": "An optional exclude object to filter out specific contacts when using `all_active_contacts` or `list_ids`",
           "message": " `all_active_contacts` 또는 `list_ids` 사용 시 특정 연락처를 제외하기 위한 선택적 제외 객체"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5NzpvcHRpb246YzI5MWNtTmw6ZmllbGQ6WlhoamJIVmtaUQ.field.Y29udGFjdF9pZHM.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5Nw.field.Y29udGFjdF9pZHM.display_name": {
           "source": "Exclude Contact IDs",
           "message": "제외할 연락처 ID"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5NzpvcHRpb246YzI5MWNtTmw6ZmllbGQ6WlhoamJIVmtaUQ.field.Y29udGFjdF9pZHM.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5Nw.field.Y29udGFjdF9pZHM.short_desc": {
           "source": "Contact IDs to exclude",
           "message": "제외할 연락처 ID"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5NzpvcHRpb246YzI5MWNtTmw6ZmllbGQ6WlhoamJIVmtaUQ.field.Y29udGFjdF9pZHM.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5Nw.field.Y29udGFjdF9pZHM.desc": {
           "source": "A list of contact IDs to exclude from the activity",
           "message": "활동에서 제외할 연락처 ID 목록입니다."
         },

@@ -16,14 +16,13 @@ These patterns are fine in Qore code. DGC finds and breaks them at deref time wi
 
 Every `QoreObject` (via `RObject` in `include/qore/intern/RSet.h`) carries these fields on top of its plain `references` counter:
 
-| Field | Meaning |
-|---|---|
-| `references` | Standard refcount (managed by `ref()`/`deref()`). When it reaches 0, the object is destroyed. |
-| `rrefs` | "Real" refs: references known *not* to be part of a cycle (set by `realRef()`, e.g., method-call helpers, background thread ownership). If `rrefs > 0`, starting a scan at that object is **deferred**; scans initiated elsewhere still follow its edges. |
-| `rcount` | Number of unique cyclic references pointing *at* this object, computed by the scanner. `rcount == references` ⇒ every ref to this object comes from inside the rset. |
-| `rset` | Pointer to the `RSet` the object belongs to (a group of objects in one detected cycle). |
-| `rclosed` | The object's `RSet` while that set is **closed** (nothing in it references anything outside it), otherwise null. A scan that reaches the object from outside the set does not enter it. |
-| `rml` | Read/write lock with a special "r-section" mode used during scans. |
+|!Field|!Meaning
+|`references`|Standard refcount (managed by `ref()`/`deref()`). When it reaches 0, the object is destroyed.
+|`rrefs`|"Real" refs: references known *not* to be part of a cycle (set by `realRef()`, e.g., method-call helpers, background thread ownership). If `rrefs > 0`, starting a scan at that object is **deferred**; scans initiated elsewhere still follow its edges.
+|`rcount`|Number of unique cyclic references pointing *at* this object, computed by the scanner. `rcount == references` ⇒ every ref to this object comes from inside the rset.
+|`rset`|Pointer to the `RSet` the object belongs to (a group of objects in one detected cycle).
+|`rclosed`|The object's `RSet` while that set is **closed** (nothing in it references anything outside it), otherwise null. A scan that reaches the object from outside the set does not enter it.
+|`rml`|Read/write lock with a special "r-section" mode used during scans.
 
 The cycle detector (`RSetHelper`, `lib/RSet.cpp`) traverses the graph reachable from a candidate object, divides it into strongly connected components, assigns the objects of each component with a cycle to an `RSet`, and computes each member's `rcount`. Detection runs opportunistically during `customDeref` (`lib/QoreObject.cpp`) when the normal path cannot prove the object is alive.
 
@@ -466,7 +465,9 @@ found.
 Debug builds count the objects that scans have entered in the current thread
 (`dbg_get_scan_object_count()`), which measures what a scan actually walked;
 `examples/test/qore/misc/dgc-closed-sets.qtest` uses it along with collection checks for each of the rules
-above.
+above. They also count the references that scans have followed (`dbg_get_scan_edge_count()`), which is the work of
+the scans and grows with the size of the graphs they walk; `examples/test/qore/misc/dgc-graph-components.qtest` and
+`examples/test/qore/misc/reference-arg-binding.qtest` use it to check that work without timing it.
 
 ### Closed regions: already-scanned subgraphs a scan does not enter
 
@@ -608,10 +609,9 @@ other, and no lock ordering has to be maintained across a graph whose shape is o
 
 Two fields on `RObject` make the restart loop terminate:
 
-| Field | Role |
-|---|---|
-| `rscan` | The scan lock: the TID of the thread scanning this object. One scan per object at a time; other threads wait for it. |
-| `rcycle` | The scan generation: incremented by `setRSet()` for every object a scan commits. |
+|!Field|!Role
+|`rscan`|The scan lock: the TID of the thread scanning this object. One scan per object at a time; other threads wait for it.
+|`rcycle`|The scan generation: incremented by `setRSet()` for every object a scan commits.
 
 `RScanHelper` samples `rcycle` **before** waiting for `rscan`, and the sampled value is compared with the
 current one after **both** waits — after acquiring the scan lock, and after waiting for a conflicting
@@ -1186,11 +1186,10 @@ make the holder's own entries collectable while it still uses them.
 
 The two primitives are opposite trades:
 
-| | `:=` (weak) | `@=` (opaque) |
-|---|---|---|
-| owns the target | no | **yes** |
-| scanner follows it | no | no |
-| failure mode when misused | the target is collected while still in use (dangling) | the cycle is never collected (leak) |
+|!|!`:=` (weak)|!`@=` (opaque)
+|owns the target|no|**yes**
+|scanner follows it|no|no
+|failure mode when misused|the target is collected while still in use (dangling)|the cycle is never collected (leak)
 
 `@=` is therefore strictly safer than `:=` — a mistake leaks rather than dangles — but the leak is
 **unrecoverable by cycle detection**. Use it only where the assigned value can be shown not to

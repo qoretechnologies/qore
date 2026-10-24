@@ -2303,135 +2303,135 @@
           "source": "Override the organization's physical address shown in the email footer",
           "message": "Sobrescribir la dirección física de la organización mostrada en el pie de página del correo"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMQ.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMQ.display_name": {
           "source": "Address Line 1",
           "message": "Línea de dirección 1"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMQ.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMQ.short_desc": {
           "source": "Primary address line",
           "message": "Línea principal de dirección"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMQ.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMQ.desc": {
           "source": "The primary address line",
           "message": "La línea principal de la dirección"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMg.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMg.display_name": {
           "source": "Address Line 2",
           "message": "Línea de dirección 2"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMg.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMg.short_desc": {
           "source": "Secondary address line",
           "message": "Línea secundaria de dirección"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMg.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMg.desc": {
           "source": "The secondary address line",
           "message": "La segunda línea de dirección secundaria"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMw.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMw.display_name": {
           "source": "Address Line 3",
           "message": "Línea 3 de la dirección"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMw.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMw.short_desc": {
           "source": "Third address line",
           "message": "Tercera línea de dirección"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMw.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMw.desc": {
           "source": "The third address line",
           "message": "La tercera línea de la dirección"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19vcHRpb25hbA.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19vcHRpb25hbA.display_name": {
           "source": "Address Optional",
           "message": "Dirección opcional"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19vcHRpb25hbA.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19vcHRpb25hbA.short_desc": {
           "source": "Additional address details",
           "message": "Detalles adicionales de la dirección"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19vcHRpb25hbA.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19vcHRpb25hbA.desc": {
           "source": "Additional address details (suite, floor, etc.)",
           "message": "Detalles adicionales de la dirección (suite, piso, etc.)"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y2l0eQ.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y2l0eQ.display_name": {
           "source": "City",
           "message": "Ciudad"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y2l0eQ.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y2l0eQ.short_desc": {
           "source": "The city",
           "message": "La ciudad"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y2l0eQ.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y2l0eQ.desc": {
           "source": "The city name",
           "message": "El nombre de la ciudad"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9jb2Rl.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9jb2Rl.display_name": {
           "source": "Country Code",
           "message": "Código de país"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9jb2Rl.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9jb2Rl.short_desc": {
           "source": "Two-letter country code",
           "message": "Código de país de dos letras"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9jb2Rl.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9jb2Rl.desc": {
           "source": "The two-letter ISO country code",
           "message": "El código de país ISO de dos letras"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9uYW1l.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9uYW1l.display_name": {
           "source": "Country Name",
           "message": "Nombre del país"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9uYW1l.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9uYW1l.short_desc": {
           "source": "Full country name",
           "message": "Nombre completo del país"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9uYW1l.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9uYW1l.desc": {
           "source": "The full country name",
           "message": "El nombre completo del país"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.b3JnYW5pemF0aW9uX25hbWU.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.b3JnYW5pemF0aW9uX25hbWU.display_name": {
           "source": "Organization Name",
           "message": "Nombre de la organización"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
           "source": "Business or organization name",
           "message": "Nombre del negocio o organización"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.b3JnYW5pemF0aW9uX25hbWU.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.b3JnYW5pemF0aW9uX25hbWU.desc": {
           "source": "The business or organization name for the footer",
           "message": "El nombre de la empresa u organización para el pie de página"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.cG9zdGFsX2NvZGU.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.cG9zdGFsX2NvZGU.display_name": {
           "source": "Postal Code",
           "message": "Código postal"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.cG9zdGFsX2NvZGU.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.cG9zdGFsX2NvZGU.short_desc": {
           "source": "The postal/ZIP code",
           "message": "El código postal/ZIP"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.cG9zdGFsX2NvZGU.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.cG9zdGFsX2NvZGU.desc": {
           "source": "The postal or ZIP code",
           "message": "El código postal"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfY29kZQ.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfY29kZQ.display_name": {
           "source": "State Code",
           "message": "Código de estado"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfY29kZQ.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfY29kZQ.short_desc": {
           "source": "State or province code",
           "message": "Código de estado o provincia"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfY29kZQ.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfY29kZQ.desc": {
           "source": "The state or province code",
           "message": "El código de estado o provincia"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfbmFtZQ.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfbmFtZQ.display_name": {
           "source": "State Name",
           "message": "Nombre del estado"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfbmFtZQ.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfbmFtZQ.short_desc": {
           "source": "Full state or province name",
           "message": "Nombre completo del estado o provincia"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfbmFtZQ.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfbmFtZQ.desc": {
           "source": "The full state or province name",
           "message": "El nombre completo del estado o provincia"
         },
@@ -2855,15 +2855,15 @@
           "source": "An optional exclude object to filter out specific contacts when using `all_active_contacts` or `list_ids`",
           "message": "Objeto opcional de exclusión para filtrar contactos específicos al usar `all_active_contacts` o `list_ids`"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3Om9wdGlvbjpjMjkxY21ObDpmaWVsZDpaWGhqYkhWa1pR.field.Y29udGFjdF9pZHM.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3.field.Y29udGFjdF9pZHM.display_name": {
           "source": "Exclude Contact IDs",
           "message": "Excluir IDs de contacto"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3Om9wdGlvbjpjMjkxY21ObDpmaWVsZDpaWGhqYkhWa1pR.field.Y29udGFjdF9pZHM.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3.field.Y29udGFjdF9pZHM.short_desc": {
           "source": "Contact IDs to exclude",
           "message": "IDs de contacto para excluir"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3Om9wdGlvbjpjMjkxY21ObDpmaWVsZDpaWGhqYkhWa1pR.field.Y29udGFjdF9pZHM.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3.field.Y29udGFjdF9pZHM.desc": {
           "source": "A list of contact IDs to exclude from the activity",
           "message": "Una lista de IDs de contacto para excluir de la actividad"
         },
@@ -3031,15 +3031,15 @@
           "source": "An optional exclude object to filter out specific contacts when using `all_active_contacts` or `list_ids`",
           "message": "Objeto opcional de exclusión para filtrar contactos específicos al usar `all_active_contacts` o `list_ids`"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5NzpvcHRpb246YzI5MWNtTmw6ZmllbGQ6WlhoamJIVmtaUQ.field.Y29udGFjdF9pZHM.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5Nw.field.Y29udGFjdF9pZHM.display_name": {
           "source": "Exclude Contact IDs",
           "message": "Excluir IDs de contacto"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5NzpvcHRpb246YzI5MWNtTmw6ZmllbGQ6WlhoamJIVmtaUQ.field.Y29udGFjdF9pZHM.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5Nw.field.Y29udGFjdF9pZHM.short_desc": {
           "source": "Contact IDs to exclude",
           "message": "IDs de contacto para excluir"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5NzpvcHRpb246YzI5MWNtTmw6ZmllbGQ6WlhoamJIVmtaUQ.field.Y29udGFjdF9pZHM.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5Nw.field.Y29udGFjdF9pZHM.desc": {
           "source": "A list of contact IDs to exclude from the activity",
           "message": "Una lista de IDs de contacto para excluir de la actividad"
         },

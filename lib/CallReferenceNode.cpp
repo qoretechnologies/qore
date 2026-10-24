@@ -300,11 +300,9 @@ QoreValue ParseObjectMethodReferenceNode::evalImpl(bool& needs_deref, ExceptionS
 
 QoreValue ParseObjectMethodReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
-    // evaluate the object expression as the receiver of a call: a weak reference to a destroyed object gives a call
-    // reference that raises OBJECT-ALREADY-DELETED when it is called, as for an object destroyed after the reference
-    // is created
-    ValueEvalRefHolder lv(xsink);
-    if (lv.evalCallReceiver(rc, exp)) {
+    // evaluate lvalue expression
+    ValueEvalRefHolder lv(rc, exp, xsink);
+    if (*xsink) {
         return QoreValue();
     }
 

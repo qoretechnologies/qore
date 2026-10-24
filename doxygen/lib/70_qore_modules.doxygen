@@ -186,11 +186,11 @@
     - to read a variable: QoreEnvironmentValue (a copy of the value), SystemEnvironment::get() or
       SystemEnvironment::getAsStringNode()
     - to change a variable: SystemEnvironment::set() or SystemEnvironment::unset()
-    - to read and change several variables atomically: AtomicEnvironmentSetter, which holds the lock exclusively for
-      its lifetime; the C library functions may be called directly while it exists
+    - to read and change several variables atomically: AtomicEnvironmentSetter, which holds the locks exclusively
+      for its lifetime; the C library functions may be called directly while it exists
     - to read the environment with the C library directly (iterate \c environ, pass \c environ to \c posix_spawn()
       or \c execve(), or call a third-party function that reads the environment): QoreEnvironmentReadLock, which
-      holds the lock shared for its lifetime
+      excludes changes to the environment for its lifetime
 
     @code{.cpp}
 // a setting read from the environment: the value is copied under the lock
@@ -203,26 +203,37 @@ int max = max_conn ? atoi(max_conn.c_str()) : 10;
     rc = posix_spawn(&pid, path, &actions, &attr, argv, environ);
 }
 
-// a third-party library that changes the environment: no other Qore thread uses the environment meanwhile
+// a third-party library that reads the environment and may load libraries: changes wait, fork() does not
+{
+    QoreEnvironmentReadLock env_lock;
+    rc = third_party_init(&handle);
+}
+
+// a third-party function that only changes the environment: no other Qore thread uses the environment meanwhile
 {
     AtomicEnvironmentSetter env_lock;
-    third_party_configure();
+    third_party_set_env_defaults();
 }
     @endcode
 
-    The lock can be nested in one thread, but a thread holding it shared (a QoreEnvironmentReadLock) cannot change
-    the environment: SystemEnvironment::set() and SystemEnvironment::unset() return -1 with \c errno \c EDEADLK.
-    Hold the lock only briefly, since changes to the environment wait until it is released.  Do not call \c fork()
-    with the lock held: the library's fork handlers acquire the lock while the process is copied (so the child gets
-    a consistent copy of the environment and starts with the lock released), and they acquire the library's other
-    process-wide locks first, which a thread waiting for the environment lock can hold.  \c posix_spawn() runs no
-    fork handlers, so hold the read lock while passing \c environ to it, as above.
+    The locks can be nested in one thread, but a thread holding a QoreEnvironmentReadLock cannot change the
+    environment: SystemEnvironment::set() and SystemEnvironment::unset() return -1 with \c errno \c EDEADLK.
+    Hold them only as long as necessary, since changes to the environment wait until they are released.
+
+    Before \c fork(), the library's fork handlers wait until no other thread is changing the environment or copying
+    a variable (so the child gets a consistent copy of the environment and starts with the locks released); they do
+    not wait for the holders of a QoreEnvironmentReadLock, which may therefore be held across calls that take a long
+    time, wait for other threads or load or unload libraries, such as a resolver library that calls \c dlopen() and
+    \c dlclose() (on macOS, \c fork() holds the lock of the dynamic linker while the fork handlers run).  An
+    AtomicEnvironmentSetter is waited for: while it exists, only read and change the environment, and do not call
+    \c fork().  \c posix_spawn() runs no fork handlers, so hold a QoreEnvironmentReadLock while passing \c environ
+    to it, as above.
 
     @note The lock only covers code that takes it.  A third-party library or an embedded language runtime that
     reads the environment internally (for example a resolver or TLS library reading its configuration variables, or
     a JavaScript, Python or Java runtime reading or changing \c environ) is not serialized with %Qore.  Where the
-    module calls such a function and the call is short, hold a QoreEnvironmentReadLock (or an
-    AtomicEnvironmentSetter if the function changes the environment) around it; otherwise the module must not let
+    module calls such a function, hold a QoreEnvironmentReadLock (or an AtomicEnvironmentSetter if the function
+    only changes the environment) around it; otherwise the module must not let
     that code change the environment while other threads may use it, and should pass values to it some other way
     than through the environment.
 

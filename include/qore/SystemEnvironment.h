@@ -46,30 +46,32 @@ class QoreStringNode;
     library), so a thread reading the environment at the same time can read freed memory, and two threads changing
     it at the same time can free the same memory twice.
 
-    %Qore therefore serializes every access to the process environment that it makes with one process-wide
-    read-write lock, on all platforms: reads hold it shared, so they run in parallel, and changes hold it
-    exclusively.  This class reads and changes the environment under that lock; code that uses the environment in
-    a module must use the same lock:
+    %Qore therefore serializes every access to the process environment that it makes with process-wide
+    read-write locks, on all platforms: reads hold them shared, so they run in parallel, and changes hold them
+    exclusively.  This class reads and changes the environment under these locks; code that uses the environment in
+    a module must use the same locks:
     - to read a variable: isSet(), get(), getAsStringNode() or QoreEnvironmentValue
     - to change a variable: set() or unset()
-    - to read and change several variables atomically: AtomicEnvironmentSetter, which holds the lock exclusively for
+    - to read and change several variables atomically: AtomicEnvironmentSetter, which holds the locks exclusively for
       its lifetime
     - to read the environment with the C library directly (for example to iterate \c environ, to pass \c environ to
       \c posix_spawn() or \c execve(), or to call a third-party function that reads the environment): hold a
       QoreEnvironmentReadLock
 
-    A thread may nest these calls: a thread that holds the lock, shared or exclusively, can call any of them again,
-    except that a thread holding the lock only shared (with a QoreEnvironmentReadLock) cannot change the environment:
-    set() and unset() then return -1 with \c errno \c EDEADLK, as do the AtomicEnvironmentSetter functions that
-    change the environment, since the thread cannot wait for the exclusive lock while it holds the lock itself.
+    A thread may nest these calls: a thread that holds the locks, shared or exclusively, can call any of them again,
+    except that a thread holding a QoreEnvironmentReadLock cannot change the environment: set() and unset() then
+    return -1 with \c errno \c EDEADLK, as do the AtomicEnvironmentSetter functions that change the environment,
+    since the thread cannot wait for the exclusive lock while it holds the lock itself.
 
-    Before \c fork(), whoever calls it, the lock is acquired exclusively, so the child gets a consistent copy of the
-    environment, and the child starts with the lock released, whatever other threads held it.  Code that creates a
-    child process with \c fork() therefore does not hold the lock, and must not: the library's fork handlers acquire
-    its other process-wide locks before the process is copied, and a thread that holds one of them while it waits
-    for the environment lock would deadlock with the forking thread.  A process created with \c posix_spawn(),
-    which runs no fork handlers, gets the environment that the caller passes, so the caller holds a
-    QoreEnvironmentReadLock while it passes \c environ.
+    Before \c fork(), whoever calls it, the library waits until no other thread is changing the environment or
+    copying a variable (SystemEnvironment, QoreEnvironmentValue, AtomicEnvironmentSetter), so the child gets a
+    consistent copy of the environment, and the child starts with the locks released, whatever other threads held
+    them.  \c fork() does not wait for the holders of a QoreEnvironmentReadLock, which can call libraries that wait
+    for locks that \c fork() holds (on macOS, \c fork() holds the lock of the dynamic linker while the fork
+    handlers run, and \c dlopen() and \c dlclose() wait for it).  Code that creates a child process with \c fork()
+    therefore does not need to hold a lock; it must not call \c fork() inside an AtomicEnvironmentSetter.  A process
+    created with \c posix_spawn(), which runs no fork handlers, gets the environment that the caller passes, so the
+    caller holds a QoreEnvironmentReadLock while it passes \c environ.
 
     @note Only code that takes the lock is serialized with %Qore: native code that reads or changes the environment
     without it, for example a third-party library calling \c getenv() or \c setenv() internally, or a language
@@ -203,13 +205,15 @@ public:
 
 DLLEXPORT extern SystemEnvironment SysEnv;
 
-//! holds the process environment lock exclusively for its lifetime to read and change the environment atomically; can only be used on the stack
+//! holds the process environment locks exclusively for its lifetime to read and change the environment atomically; can only be used on the stack
 /** While the object exists, no other thread can read or change the environment through %Qore's API, so several
     variables can be read and changed atomically.  The calling thread can also call SystemEnvironment functions, and
     it can change the environment with the C library directly (\c setenv(), \c unsetenv()).
 
     Keep the object only as long as necessary: every other thread that reads or changes the environment waits until
-    it is destroyed.  Created by a thread that holds a QoreEnvironmentReadLock, the object holds the lock only
+    it is destroyed, and so does \c fork(), whoever calls it.  While it exists, only read and change the environment:
+    do not call code that can wait for other threads or load or unload libraries (\c dlopen(), \c dlclose()), and
+    do not call \c fork().  Created by a thread that holds a QoreEnvironmentReadLock, the object holds the lock only
     shared (the thread cannot wait for the exclusive lock while it holds the lock itself): set() and unset() then
     return -1 with \c errno \c EDEADLK.
 
@@ -238,10 +242,10 @@ private:
     DLLLOCAL void* operator new(size_t); // not implemented, make sure it is not new'ed
 
 public:
-    //! acquires the environment lock exclusively
+    //! acquires the environment locks exclusively
     DLLEXPORT AtomicEnvironmentSetter();
 
-    //! releases the environment lock
+    //! releases the environment locks
     DLLEXPORT ~AtomicEnvironmentSetter();
 
     //! sets the given environment variable to the value passed, respecting the overwrite flag
@@ -294,17 +298,23 @@ public:
     DLLEXPORT bool valueExists(const char* name); // true if exists and is not empty
 };
 
-//! holds the process environment lock shared (for reading) for its lifetime; can only be used on the stack
+//! holds the process environment change lock shared (for reading) for its lifetime; can only be used on the stack
 /** While the object exists, the environment cannot be changed through %Qore's API, so the \c environ array and the
     strings that \c getenv() returns stay valid and unchanged, while other threads can still read the environment.
     Use it to read the environment with the C library directly, for example to iterate \c environ, to pass
     \c environ to \c posix_spawn() or \c execve(), or to call a third-party function that reads the environment.
+
+    The object can be held across calls that take a long time, wait for other threads or load or unload libraries
+    (a third-party library that reads the environment and calls \c dlopen() or \c dlclose(), as c-ares does on
+    macOS when it creates a channel): \c fork() does not wait for it, and reading a variable through SystemEnvironment
+    or QoreEnvironmentValue in another thread does not wait for it either; only changes to the environment do.
 
     Rules:
     - do not keep the object longer than necessary: changes to the environment wait until it is destroyed
     - do not change the environment while holding it: SystemEnvironment::set(), SystemEnvironment::unset() and the
       functions of an AtomicEnvironmentSetter that change the environment return -1 with \c errno \c EDEADLK;
       reading it through SystemEnvironment, QoreEnvironmentValue or another QoreEnvironmentReadLock is allowed
+    - do not wait while holding it for a thread that may be changing the environment
     - pointers into the environment are valid only while the object exists; copy what is needed
 
     @par Example:
@@ -323,10 +333,10 @@ public:
  */
 class QoreEnvironmentReadLock {
 public:
-    //! acquires the environment lock shared
+    //! acquires the environment change lock shared
     DLLEXPORT QoreEnvironmentReadLock();
 
-    //! releases the environment lock
+    //! releases the environment change lock
     DLLEXPORT ~QoreEnvironmentReadLock();
 
     QoreEnvironmentReadLock(const QoreEnvironmentReadLock&) = delete;

@@ -1035,63 +1035,63 @@
           "source": "The weight of a single unit of this item",
           "message": "Il peso di una singola unità di questo articolo"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.V2VpZ2h0VW5pdHM.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.V2VpZ2h0VW5pdHM.display_name": {
           "source": "Weight Units Code",
           "message": "Codice unità peso"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.V2VpZ2h0VW5pdHM.short_desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.V2VpZ2h0VW5pdHM.short_desc": {
           "source": "Numeric weight units code",
           "message": "Codice unità di peso numerico"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.V2VpZ2h0VW5pdHM.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.V2VpZ2h0VW5pdHM.desc": {
           "source": "The numeric code for weight units (1=pounds, 2=ounces, 3=grams)",
           "message": "Il codice numerico per le unità di peso (1=libbre, 2=once, 3=grammi)"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.display_name": {
           "source": "Units",
           "message": "Unità"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.short_desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.short_desc": {
           "source": "Weight units",
           "message": "Unità di peso"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.desc": {
           "source": "The weight units: 'ounces', 'pounds', or 'grams'",
           "message": "Le unità di peso: 'once', 'libbre' o 'grammi'"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOm91bmNlcw.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOm91bmNlcw.display_name": {
           "source": "Ounces",
           "message": "Once"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOm91bmNlcw.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOm91bmNlcw.desc": {
           "source": "Weight in ounces (oz)",
           "message": "Peso in once (oz)"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOnBvdW5kcw.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOnBvdW5kcw.display_name": {
           "source": "Pounds",
           "message": "Libbre"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOnBvdW5kcw.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOnBvdW5kcw.desc": {
           "source": "Weight in pounds (lbs)",
           "message": "Peso in libbre (lbs)"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOmdyYW1z.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOmdyYW1z.display_name": {
           "source": "Grams",
           "message": "Grammi"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOmdyYW1z.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOmdyYW1z.desc": {
           "source": "Weight in grams (g)",
           "message": "Peso in grammi (g)"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Valore"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.short_desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dmFsdWU.short_desc": {
           "source": "Weight value",
           "message": "Valore del peso"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOlkzSmxZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dmFsdWU.desc": {
           "source": "The numeric weight value",
           "message": "Il valore numerico del peso"
         },
@@ -2087,63 +2087,63 @@
           "source": "The weight of a single unit of this item",
           "message": "Il peso di una singola unità di questo articolo"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.V2VpZ2h0VW5pdHM.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.V2VpZ2h0VW5pdHM.display_name": {
           "source": "Weight Units Code",
           "message": "Codice unità peso"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.V2VpZ2h0VW5pdHM.short_desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.V2VpZ2h0VW5pdHM.short_desc": {
           "source": "Numeric weight units code",
           "message": "Codice unità di peso numerico"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.V2VpZ2h0VW5pdHM.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.V2VpZ2h0VW5pdHM.desc": {
           "source": "The numeric code for weight units (1=pounds, 2=ounces, 3=grams)",
           "message": "Il codice numerico per le unità di peso (1=libbre, 2=once, 3=grammi)"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.display_name": {
           "source": "Units",
           "message": "Unità"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.short_desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.short_desc": {
           "source": "Weight units",
           "message": "Unità di peso"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.desc": {
           "source": "The weight units: 'ounces', 'pounds', or 'grams'",
           "message": "Le unità di peso: 'once', 'libbre' o 'grammi'"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOm91bmNlcw.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOm91bmNlcw.display_name": {
           "source": "Ounces",
           "message": "Once"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOm91bmNlcw.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOm91bmNlcw.desc": {
           "source": "Weight in ounces (oz)",
           "message": "Peso in once (oz)"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOnBvdW5kcw.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOnBvdW5kcw.display_name": {
           "source": "Pounds",
           "message": "Libbre"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOnBvdW5kcw.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOnBvdW5kcw.desc": {
           "source": "Weight in pounds (lbs)",
           "message": "Peso in libbre (lbs)"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOmdyYW1z.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOmdyYW1z.display_name": {
           "source": "Grams",
           "message": "Grammi"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dW5pdHM.allowed-value.c3RyaW5nOmdyYW1z.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dW5pdHM.allowed-value.c3RyaW5nOmdyYW1z.desc": {
           "source": "Weight in grams (g)",
           "message": "Peso in grammi (g)"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.display_name": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Valore"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.short_desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dmFsdWU.short_desc": {
           "source": "Weight value",
           "message": "Valore del peso"
         },
-        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M6b3B0aW9uOmFYUmxiWE06ZmllbGQ6ZDJWcFoyaDA.field.dmFsdWU.desc": {
+        "app.U2hpcFN0YXRpb24.type.YWN0aW9uOmRYQmtZWFJsTFc5eVpHVnk6U2hpcFN0YXRpb25XZWlnaHREYXRhVHlwZTpoYXNoPGF1dG8-IzkwMzgxZDVhNjBkNzNiNWY5N2VkMGFjODlhNzk4YzJhNzUzNzllZTcyZDEwMWJiYjdjMmQ0NzY4NzA2ZmMzN2M.field.dmFsdWU.desc": {
           "source": "The numeric weight value",
           "message": "Il valore numerico del peso"
         },

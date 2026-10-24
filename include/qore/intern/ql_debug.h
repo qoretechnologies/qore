@@ -136,6 +136,29 @@ DLLLOCAL extern std::atomic<int> qore_dbg_cares_lost_query_count;
 */
 DLLLOCAL std::string qore_dbg_cares_set_servers(const std::string& servers);
 
+//! returns true if the current thread holds the environment lock (not the environment change lock); see
+//! SystemEnvironment.cpp
+DLLLOCAL bool qore_dbg_env_lock_held_by_current_thread();
+
+//! called by the fork handler of the environment lock before it waits for the lock; see dbg_fork_lock_cycle_arm()
+DLLLOCAL void qore_dbg_fork_env_prepare();
+
+//! called while a c-ares channel is created, with the hold that the creation takes; returns true if the creation
+//! must fail without creating the channel; see dbg_fork_lock_cycle_arm()
+DLLLOCAL bool qore_dbg_fork_cares_channel_setup();
+
+//! returns true if the current thread is the writer of dbg_env_read_race_arm()
+DLLLOCAL bool qore_dbg_env_change_probe_writer();
+
+//! called when the writer of dbg_env_read_race_arm() is about to wait for the environment change lock
+DLLLOCAL void qore_dbg_env_change_waits();
+
+//! called when the writer of dbg_env_read_race_arm() has changed the environment and released the locks
+DLLLOCAL void qore_dbg_env_change_done();
+
+//! called by a c-ares lookup right before c-ares starts it and reads HOSTALIASES; see dbg_env_read_race_arm()
+DLLLOCAL void qore_dbg_cares_lookup_env_read();
+
 //! called by qore_queue_private::push() with the queue's lock held, after a value pushed with the queue's object has
 //! been counted for the collector and before the lock is released, with the queue's object; set by the C++ unit tests
 typedef void (*qore_dbg_queue_push_locked_hook_t)(const QoreObject* self);

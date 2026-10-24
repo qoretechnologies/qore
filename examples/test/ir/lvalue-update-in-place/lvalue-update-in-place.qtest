@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class LValueUpdateInPlaceTest
+
+#! Tests that an update of a nested element copies a container only when the container is shared
+/** An update of an element of a nested container, such as <tt>++h{a}{b}[0]</tt> after a statement that only
+    reads <tt>h{a}{b}</tt>, must change the variable's containers in place when nothing else holds them, as the AST
+    interpreter does; a tier that copied the outer hash on every such update made a loop over it quadratic.  The
+    checks are in lvalue-update-in-place-checks.qi; each reports how many hashes and lists it copied (with library
+    debugging) and the values it produced, and every tier and a compiled module must report exactly what the AST
+    interpreter does.
+*/
+class LValueUpdateInPlaceTest inherits QUnit::Test {
+    public {
+        #! the results of the AST interpreter; the first field of each is the number of hashes and lists copied
+        const Expected = {
+            # the containers of a variable that holds them alone are changed in place: no copies
+            "pre-inc": "0:[[3, 1, 2, 3, 4], [3, 1, 2, 3, 4], [3, 1, 2, 3, 4], [3, 1, 2, 3, 4]]",
+            "post-inc": "0:[[0, 4, 2, 3, 4], [0, 4, 2, 3, 4], [0, 4, 2, 3, 4], [0, 4, 2, 3, 4]]",
+            "pre-dec": "0:[[0, 1, -1, 3, 4], [0, 1, -1, 3, 4], [0, 1, -1, 3, 4], [0, 1, -1, 3, 4]]",
+            "post-dec": "0:24:[[0, 1, 2, 0, 4], [0, 1, 2, 0, 4], [0, 1, 2, 0, 4], [0, 1, 2, 0, 4]]",
+            "pre-inc-depth2": "0:[3, 3, 3, 3]",
+            "pre-inc-depth4": "0:[{x: [0, 4]}, {x: [0, 4]}, {x: [0, 4]}, {x: [0, 4]}]",
+            "plus-equals": "0:[[6, 1, 2, 3, 4], [6, 1, 2, 3, 4], [6, 1, 2, 3, 4], [6, 1, 2, 3, 4]]",
+            "multiply-equals": "0:[[0, 1, 2, 3, 32], [0, 1, 2, 3, 32], [0, 1, 2, 3, 32], [0, 1, 2, 3, 32]]",
+            "assign": "0:[[9, 1, 2, 3, 4], [10, 1, 2, 3, 4], [11, 1, 2, 3, 4], [12, 1, 2, 3, 4]]",
+            "push": "0:[[0, 1, 2, 3, 4, 0, 1, 2], [0, 1, 2, 3, 4, 0, 1, 2], [0, 1, 2, 3, 4, 0, 1, 2], "
+                "[0, 1, 2, 3, 4, 0, 1, 2]]",
+            "unshift": "0:[[2, 1, 0, 0, 1, 2, 3, 4], [2, 1, 0, 0, 1, 2, 3, 4], [2, 1, 0, 0, 1, 2, 3, 4], "
+                "[2, 1, 0, 0, 1, 2, 3, 4]]",
+            "pop": "0:36:[[0, 1], [0, 1], [0, 1], [0, 1]]",
+            "shift": "0:[[3, 4], [3, 4], [3, 4], [3, 4]]",
+            "splice": "0:[[3, 4], [3, 4], [3, 4], [3, 4]]",
+            "extract": "0:24:[[0, 4], [0, 4], [0, 4], [0, 4]]",
+            "remove-key": "0:[[\"l\", \"n\", \"s\", \"h\"], [\"l\", \"n\", \"s\", \"h\"], [\"l\", \"n\", \"s\", \"h\"], "
+                "[\"l\", \"n\", \"s\", \"h\"]]",
+            "delete-key": "0:[[\"l\", \"n\", \"s\", \"h\"], [\"l\", \"n\", \"s\", \"h\"], [\"l\", \"n\", \"s\", \"h\"], "
+                "[\"l\", \"n\", \"s\", \"h\"]]",
+            "remove-element": "0:[[null, null, null, 3, 4], [null, null, null, 3, 4], [null, null, null, 3, 4], "
+                "[null, null, null, 3, 4]]",
+            "trim": "0:[\"ab\", \"ab\", \"ab\", \"ab\"]",
+            "chomp": "0:[\" ab \", \" ab \", \" ab \", \" ab \"]",
+            "regex-subst": "0:[\"_ab_\\n\", \"_ab_\\n\", \"_ab_\\n\", \"_ab_\\n\"]",
+            "transliterate": "0:[\" cc \\n\", \" cc \\n\", \" cc \\n\", \" cc \\n\"]",
+            "list-root": "0:[[0, 4, 0, 1, 2], [0, 4, 0, 1, 2], [0, 4, 0, 1, 2], [0, 4, 0, 1, 2]]",
+            "reference-root": "0:[[3, 1, 2, 3], [3, 1, 2, 3], [3, 1, 2, 3], [3, 1, 2, 3]]",
+            "closure-bound": "0:[[3, 1], [3, 1], [3, 1], [3, 1]]",
+            # a container that another variable or member also holds is copied once on each path, and the other
+            # holder does not see the change
+            "alias-root": "3:[2, 1, 2, 3, 4]:[0, 1, 2, 3, 4]",
+            "alias-element": "1:[1, 2, 3, 4]:[0, 1, 2, 3, 4]",
+            "alias-unary": "3,3:[1, 2, 3]:[0, 1, 2, 3]:[0, 1, 2, 3, 4]",
+            "member": "0:[[3, 4], [3, 4], [3, 4], [3, 4]]",
+            "self-member": "0:[[3, 10, 2, 3, 4], [3, 10, 2, 3, 4], [3, 10, 2, 3, 4], [3, 10, 2, 3, 4]]:"
+                "[[\"l\", \"n\", \"s\", \"h\"], [\"l\", \"n\", \"s\", \"h\"], [\"l\", \"n\", \"s\", \"h\"], "
+                "[\"l\", \"n\", \"s\", \"h\"]]",
+            "alias-member": "3:[1, 1, 2, 3, 4]:[0, 1, 2, 3, 4]",
+            "static-var": "0:[[3, 4], [3, 4], [3, 4], [3, 4]]",
+        };
+
+        #! the results of the top-level code of the worker, which the compiled module does not have
+        const ExpectedTopLevel = {
+            "top-level": "0:[[3, 1, 2, 3], [3, 1, 2, 3], [3, 1, 2, 3], [3, 1, 2, 3]]",
+            "top-level-alias": "3:[4, 1, 2, 3]:[3, 1, 2, 3]",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("LValueUpdateInPlaceTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        # each execution mode is a test case of its own, so that a failure in one does not hide the others
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + " execution", getExecModeTest(mode));
+        }
+        addTestCase("compiled module", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    #! returns the test of the given execution mode
+    private code<nothing()> getExecModeTest(string mode) {
+        return sub () {
+            # functions are compiled when first called; the worker runs the checks again once they are native
+            checkWorkerOutput(mode, runWorker("lvalue-update-in-place-worker.q", get_script_dir(),
+                "--exec-mode=" + mode), Expected + ExpectedTopLevel);
+        };
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-lvalue-update-in-place-");
+        string qmod_path = tmp.path + DirSep + "LValueUpdateInPlaceChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "LValueUpdateInPlaceChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot", runWorker("lvalue-update-in-place-module-worker.q", tmp.path), Expected);
+    }
+
+    #! runs a worker with the given module directory and options and returns its output
+    /** a run with an execution mode runs through ExecModeHarness, which checks its native compilation */
+    private string runWorker(string worker_name, string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + worker_name;
+        return ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s", libqore_dir,
+            module_dir, qore_bin, opts, worker));
+    }
+
+    #! compares the "name=value" lines printed by the worker with the expected results
+    private checkWorkerOutput(string label, string out, hash<auto> expected_results) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z0-9]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        assertEq(sort(keys expected_results), sort(keys results), label + ": checks run");
+        # every check that differs is reported, not just the first one
+        hash<string, hash<string, *string>> wrong = {};
+        foreach hash<auto> i in (expected_results.pairIterator()) {
+            string expected = i.value;
+            # copies are only counted with library debugging
+            if (!Option::HAVE_LIBRARY_DEBUGGING) {
+                expected = regex_subst(expected, "^[0-9]+(,[0-9]+)?:", "n/a" + (expected =~ /^[0-9]+,/
+                    ? ",n/a:" : ":"));
+            }
+            if (results{i.key} !== expected) {
+                wrong{i.key} = {"expected": expected, "actual": results{i.key}};
+            }
+        }
+        assertEq({}, wrong, sprintf("%s: %d checks", label, expected_results.size()));
+    }
+}

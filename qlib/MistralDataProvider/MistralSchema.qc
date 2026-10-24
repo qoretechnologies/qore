@@ -143,7 +143,12 @@ public class MistralSchema {
             string path = MistralSchema::getSchemaPath();
             on_error rethrow $1.err, sprintf("%s (while loading the vendored Mistral API "
                 "description %y)", $1.desc, path);
-            schema = OpenApi3::OpenApi3Loader::fromFile(path);
+            OpenApi3::OpenApi3Schema doc = OpenApi3::OpenApi3Loader::fromFile(path);
+            # the labels of an enumeration reached at several locations are given once, to its schema
+            foreach hash<auto> entry in (MistralManifest::EnumDisplayNames.pairIterator()) {
+                doc.getSchemaObjectAt(entry.key).setEnumDisplayNames(entry.value);
+            }
+            schema = doc;
         }
         return schema;
     }

@@ -417,6 +417,9 @@ public class AbstractDataProviderType inherits Qore::Serializable {
 
         #! Validation constraints, if any
         *hash<DataTypeConstraintInfo> constraints;
+
+        #! The identity of the schema the type was built from, if any; see getSchemaIdentity()
+        *string schema_identity;
     }
 
     #! creates the type
@@ -624,6 +627,39 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     */
     clearPath() {
         remove path;
+    }
+
+    #! Returns the identity of the schema the type was built from, if any
+    /** A producer that builds types from a schema, such as a REST schema, gives each type the identity of the
+        schema it stands for (for a REST schema, the location of the schema in its document).  Two types with the
+        same name and fields built from different schemas, which can describe their fields differently, can then
+        be told apart: the identity is part of the type's presentation identity
+        (@ref DataProvider::DataProviderPresentation::typePresentationIdentity()
+        "DataProviderPresentation::typePresentationIdentity()"), so that each schema has its own catalog
+        messages.  The identity is technical; it never depends on a description or other presentation text.
+
+        Copies of the type, such as its "or nothing" type, have the same identity.
+
+        @return the identity of the schema the type was built from, or @ref nothing if the producer gave none
+
+        @see setSchemaIdentity()
+
+        @since DataProvider 3.11
+    */
+    *string getSchemaIdentity() {
+        return schema_identity;
+    }
+
+    #! Sets the identity of the schema the type was built from
+    /** Only the producer of a type sets it, before the type is published; see getSchemaIdentity()
+
+        @param schema_identity the technical identity of the schema the type was built from, or @ref nothing to
+        clear it
+
+        @since DataProvider 3.11
+    */
+    setSchemaIdentity(*string schema_identity) {
+        self.schema_identity = schema_identity;
     }
 
     #! Returns supported options

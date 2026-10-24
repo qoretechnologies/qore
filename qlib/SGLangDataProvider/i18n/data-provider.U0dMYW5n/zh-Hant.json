@@ -439,39 +439,39 @@
           "source": "List of tool calls emitted by the assistant.  Present only on assistant messages that chose to invoke a tool.",
           "message": "助理發出的工具呼叫清單。僅在選擇呼叫工具的助理訊息中出現。"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.ZnVuY3Rpb24.display_name": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.ZnVuY3Rpb24.display_name": {
           "source": "Function Call",
           "message": "函式呼叫"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.ZnVuY3Rpb24.short_desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.ZnVuY3Rpb24.short_desc": {
           "source": "Function name and JSON-encoded arguments",
           "message": "函式名稱與 JSON 編碼參數"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.ZnVuY3Rpb24.desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.ZnVuY3Rpb24.desc": {
           "source": "Hash with `name` (string) and `arguments` (JSON-encoded string) describing the function the model wants to invoke.",
           "message": "使用 `name`（字串）與 `arguments`（JSON 編碼字串）描述模型想要呼叫的函式。"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.aWQ.display_name": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.aWQ.display_name": {
           "source": "Tool Call ID",
           "message": "工具呼叫 ID"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.aWQ.short_desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.aWQ.short_desc": {
           "source": "Unique identifier for the tool call",
           "message": "工具呼叫的唯一識別碼"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.aWQ.desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.aWQ.desc": {
           "source": "Unique identifier for this tool call.  The same `id` must be echoed back in the corresponding `tool` role message that returns the tool's result.",
           "message": "此工具呼叫的唯一識別碼。相同的 `id` 必須在回傳工具結果的對應 `tool` 角色訊息中回傳。"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.dHlwZQ.display_name": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.dHlwZQ.display_name": {
           "source": "Tool Type",
           "message": "工具類型"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.dHlwZQ.short_desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.dHlwZQ.short_desc": {
           "source": "Type of tool invoked",
           "message": "被調用的工具類型"
         },
-        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYjpvcHRpb246YldWemMyRm5aWE06ZmllbGQ6ZEc5dmJGOWpZV3hzY3c.field.dHlwZQ.desc": {
+        "app.U0dMYW5n.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OlNHTGFuZ0NoYXRUb29sQ2FsbERhdGFUeXBlOmhhc2g8YXV0bz4jNjFhODM3YWJkNTZhMWQzMjMyMDU3NTJhNGM2ZGY3MzRkNGU4Y2ZkYWYyMmRjMDBkZWM5MDQ3Y2ViMTQ4YWUwYg.field.dHlwZQ.desc": {
           "source": "Type of tool invoked.  Currently `function` is the only supported type for OpenAI-compatible tool calling.",
           "message": "被調用的工具類型。目前 OpenAI 兼容工具呼叫僅支援 `function` 類型。"
         },

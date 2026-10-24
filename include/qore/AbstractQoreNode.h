@@ -292,27 +292,6 @@ public:
     */
     DLLLOCAL QoreValue eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
-    //! optionally evaluates the node as the receiver of a method call
-    /** As eval(bool&, ExceptionSink*), except that a weak reference to an object that has been destroyed gives the
-        destroyed object instead of no value, so that the call raises \c OBJECT-ALREADY-DELETED
-
-        @param needs_deref this is an output parameter, if needs_deref is true then the value returned must be
-        dereferenced
-        @param xsink if an error occurs, the Qore-language exception information will be added here
-    */
-    DLLLOCAL QoreValue evalCallReceiver(bool& needs_deref, ExceptionSink* xsink) const;
-
-    //! optionally evaluates the node as the receiver of a method call with the given RuntimeConfig
-    /** As eval(RuntimeConfig&, bool&, ExceptionSink*), except that a weak reference to an object that has been
-        destroyed gives the destroyed object instead of no value, so that the call raises \c OBJECT-ALREADY-DELETED
-
-        @param rc the runtime configuration
-        @param needs_deref this is an output parameter, if needs_deref is true then the value returned must be
-        dereferenced
-        @param xsink if an error occurs, the Qore-language exception information will be added here
-    */
-    DLLLOCAL QoreValue evalCallReceiver(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
-
     //! returns true if the node represents a value
     /**
         @return true if the object is a value, false if not

@@ -67,6 +67,7 @@ class NonblockingIoTest inherits QUnit::Test {
         addTestCase("File writes wait for room", \testWrites());
         addTestCase("binary integer writes wait for room", \testIntegerWrites());
         addTestCase("File reads wait for data", \testReads());
+        addTestCase("a read of text in a stateful encoding waits for data", \testStatefulRead());
         addTestCase("binary integer reads wait for the rest of the value", \testIntegerReads());
         addTestCase("a read whose data another reader took waits again", \testDataTaken());
         addTestCase("a write waiting for room is cancelled", \testCancelWrite());
@@ -178,17 +179,41 @@ class NonblockingIoTest inherits QUnit::Test {
             assertEq(NOTHING, res.err, i.key + ": no error");
             assertEq(i.value.expected, res.value, i.key + ": the data written once the read waits");
         }
+    }
 
-        # text in a stateful encoding is read with a decoder that keeps the shift state between reads
-        {
-            hash<auto> p = openPipe("UTF-7");
+    testStatefulRead() {
+        # text in a stateful encoding is read with a decoder that keeps the shift state between reads; the stateful
+        # encodings that iconv supports depend on the platform (musl has no UTF-7)
+        list<list<string>> encs = getStatefulEncodings();
+        if (!encs) {
+            testSkip("iconv supports none of the stateful encodings tested on this platform");
+        }
+        foreach list<string> enc in (encs) {
+            hash<auto> p = openPipe(enc[0]);
             File r = p.r;
             File w = p.w;
-            hash<NonblockingCallResult> res = runCall(r.getPollableDescriptor(), auto sub () { return r.getchar(); },
-                (sub () { w.write(binary("+AOQ-b")); },));
-            assertEq(NOTHING, res.err, "UTF-7 ReadOnlyFile::getchar(): no error");
-            assertEq("ä", res.value, "UTF-7 ReadOnlyFile::getchar(): the character written once the read waits");
+            binary data = binary(convert_encoding(enc[1] + "b", enc[0]));
+            hash<NonblockingCallResult> res = runCall(r.getPollableDescriptor(),
+                auto sub () { return r.getchar(); }, (sub () { w.write(data); },));
+            assertEq(NOTHING, res.err, enc[0] + " ReadOnlyFile::getchar(): no error");
+            assertEq(enc[1], res.value ? convert_encoding(res.value, "UTF-8") : NOTHING,
+                enc[0] + " ReadOnlyFile::getchar(): the character written once the read waits");
         }
+    }
+
+    #! returns the stateful encodings that iconv converts to and from on this platform, each with a character of it
+    private static list<list<string>> getStatefulEncodings() {
+        list<list<string>> rv = ();
+        foreach list<string> enc in ((("UTF-7", "ä"), ("ISO-2022-JP", "日"))) {
+            try {
+                if (convert_encoding(convert_encoding(enc[1], enc[0]), "UTF-8") == enc[1]) {
+                    rv += (enc,);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # the encoding is not supported
+            }
+        }
+        return rv;
     }
 
     testIntegerReads() {

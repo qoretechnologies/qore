@@ -76,16 +76,8 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         const ErrTable = "sqlutil_gen_errors";
         const MemTable = "sqlutil_gen_members";
 
-        #! number of generations measured per timing sample
+        #! number of generations counted
         const Iterations = 60;
-
-        #! largest acceptable ratio between generating a name-referenced and an object-referenced sub-select
-        /** With a table resolver registered, naming the sub-select's table must not cost meaningfully more than
-            supplying the object (measured ~1.05x); it was 4.5x - and read the referenced table's description on
-            every call - when a name was always resolved by building a new table object.  The limit is generous
-            because the measurement runs against a live database, where those reads would dominate.
-        */
-        const MaxNameVsObjectRatio = 2.0;
     }
 
     private {
@@ -459,45 +451,56 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
     }
 
     #! with a resolver registered, naming a sub-select's table must not cost more than supplying the object
+    /** A generation that names its tables resolves each name with the registered resolver, which returns the cached
+        table: it builds no table object and reads no description, as a generation given the objects does.  It took
+        4.5 times as long, and read the referenced table's description on every call, when a name was always
+        resolved by building a new table object.  The queries and the tables resolved are counted, which makes this
+        independent of the speed and load of the machine and of the database.
+    */
     testNameReferenceCost() {
         checkDb();
-        sqlutil_register_table_resolver(\sqlutil_get_cached_table());
+        list<AbstractTable> resolved = ();
+        sqlutil_register_table_resolver(AbstractTable sub (AbstractDatasource rds, string name) {
+            AbstractTable t = sqlutil_get_cached_table(rds, name);
+            push resolved, t;
+            return t;
+        });
         hash<auto> by_name = nameReferencedSelectHash();
         hash<auto> by_object = objectReferencedSelectHash();
-        # warm up both paths so that no description read is included in either measurement
-        list<auto> warm;
-        mem.getSelectSql(by_name, \warm);
-        mem.getSelectSql(by_object, \warm);
+        # the first generation fills the cache
+        list<auto> args;
+        string name_sql = mem.getSelectSql(by_name, \args);
+        AbstractTable cached = sqlutil_get_cached_table(ds, ErrTable);
 
-        # alternate the two shapes and keep the fastest sample of each so that a scheduling stall cannot
-        # land on only one of them
-        float name_us;
-        float object_us;
-        for (int sample = 0; sample < 3; ++sample) {
-            float n = generationCostUs(by_name);
-            float o = generationCostUs(by_object);
-            if (!exists name_us || n < name_us) {
-                name_us = n;
-            }
-            if (!exists object_us || o < object_us) {
-                object_us = o;
-            }
-        }
-        float ratio = name_us / object_us;
+        hash<string, int> by_name_work = generationWork(by_name, name_sql, \resolved);
+        list<AbstractTable> resolved_by_name = resolved;
+        hash<string, int> by_object_work = generationWork(by_object, mem.getSelectSql(by_object, \args),
+            \resolved);
         if (m_options.verbose) {
-            printf("select generation: by name: %.1f us; by object: %.1f us; ratio: %.2f\n", name_us, object_us,
-                ratio);
+            printf("%d generations: by name: %y; by object: %y\n", Iterations, by_name_work, by_object_work);
         }
-        assertLt(MaxNameVsObjectRatio, ratio);
+        # the join and the sub-select each name the table
+        assertEq({"queries": 0, "resolved": 2 * Iterations, "changed": 0}, by_name_work,
+            "naming the tables reads no description and resolves each name to the cached table");
+        assertEq({"queries": 0, "resolved": 0, "changed": 0}, by_object_work,
+            "supplying the tables reads no description and resolves no name");
+        assertEq((), (select resolved_by_name, $1 !== cached), "every name resolves to the cached table");
     }
 
-    #! Returns the per-generation cost in microseconds for the given select hash
-    private float generationCostUs(hash<auto> sh) {
-        date start = now_us();
+    #! Returns the queries made and the tables resolved by generating the SQL of the given select hash repeatedly
+    /** \c changed is the number of generations whose SQL differs from the given SQL.
+    */
+    private hash<string, int> generationWork(hash<auto> sh, string expected_sql,
+            reference<list<AbstractTable>> resolved) {
+        resolved = ();
+        ds.reset();
+        int changed = 0;
         for (int i = 0; i < Iterations; ++i) {
             list<auto> args;
-            mem.getSelectSql(sh, \args);
+            if (mem.getSelectSql(sh, \args) != expected_sql) {
+                ++changed;
+            }
         }
-        return (now_us() - start).durationMicroseconds().toFloat() / Iterations;
+        return {"queries": ds.queries, "resolved": resolved.size(), "changed": changed};
     }
 }

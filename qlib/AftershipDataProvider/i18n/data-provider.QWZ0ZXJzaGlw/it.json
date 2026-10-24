@@ -1931,47 +1931,47 @@
           "source": "Shipping method for the return",
           "message": "Metodo spedizione per il reso"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.display_name": {
           "source": "Return Method Type",
           "message": "Restituisci tipo metodo"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.short_desc": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.short_desc": {
           "source": "Type of return shipping method",
           "message": "Tipo di metodo di spedizione per il reso"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.desc": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.desc": {
           "source": "Return shipping method type",
           "message": "Restituisci tipo metodo spedizione"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.allowed-value.c3RyaW5nOnJldGFpbGVyX2xhYmVs.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.allowed-value.c3RyaW5nOnJldGFpbGVyX2xhYmVs.display_name": {
           "source": "Retailer Label",
           "message": "Etichetta del rivenditore"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbWVyX2NvdXJpZXI.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbWVyX2NvdXJpZXI.display_name": {
           "source": "Customer Courier",
           "message": "Corriere del cliente"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.allowed-value.c3RyaW5nOmhhcHB5X3JldHVybnM.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.allowed-value.c3RyaW5nOmhhcHB5X3JldHVybnM.display_name": {
           "source": "Happy Returns",
           "message": "Happy Returns"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.allowed-value.c3RyaW5nOmluX3N0b3Jl.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.allowed-value.c3RyaW5nOmluX3N0b3Jl.display_name": {
           "source": "In Store",
           "message": "In negozio"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.allowed-value.c3RyaW5nOmdyZWVuX3JldHVybg.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.allowed-value.c3RyaW5nOmdyZWVuX3JldHVybg.display_name": {
           "source": "Green Return",
           "message": "Reso ecologico"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.allowed-value.c3RyaW5nOnJldGFpbF9yZXdvcmtz.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.allowed-value.c3RyaW5nOnJldGFpbF9yZXdvcmtz.display_name": {
           "source": "Retail Reworks",
           "message": "Retail Reworks"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.allowed-value.c3RyaW5nOmNhcnJpZXJfcGlja3Vw.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.allowed-value.c3RyaW5nOmNhcnJpZXJfcGlja3Vw.display_name": {
           "source": "Carrier Pickup",
           "message": "Ritiro del corriere"
         },
-        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2Om9wdGlvbjpjbVYwZFhKdVgybDBaVzF6OmZpZWxkOmNtVjBkWEp1WDIxbGRHaHZaQQ.field.dHlwZQ.allowed-value.c3RyaW5nOmNhcnJpZXJfZHJvcG9mZg.display_name": {
+        "app.QWZ0ZXJzaGlw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGRIVnliZzpBZnRlcnNoaXBSZXR1cm5NZXRob2REYXRhVHlwZToqaGFzaDxhdXRvPiM0ZmQ0NGM3MWUwNjFjYzJlMmRiZTE0NmQ4YTc3MjQxMDJkNmE1M2VkZmMwNGI3MDRmYmYzMmQxMTlmM2RkNDA2.field.dHlwZQ.allowed-value.c3RyaW5nOmNhcnJpZXJfZHJvcG9mZg.display_name": {
           "source": "Carrier Dropoff",
           "message": "Consegna al corriere"
         },

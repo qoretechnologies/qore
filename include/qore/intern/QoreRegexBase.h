@@ -98,6 +98,14 @@ static inline bool qore_pcre2_expected_match_error(int rc) {
 DLLLOCAL int qore_pcre2_match(const pcre2_code* code, PCRE2_SPTR8 subject, PCRE2_SIZE length,
         PCRE2_SIZE startoffset, uint32_t options, pcre2_match_data* md);
 
+#ifdef DEBUG
+//! Returns the number of subject bytes that the matches of the current thread had PCRE2 check for valid UTF-8
+/** A match without @ref PCRE2_NO_UTF_CHECK checks the subject from the start offset to its end, so tests use this
+    to verify that a global match checks its subject once instead of once per match.
+*/
+DLLLOCAL int64 q_get_regex_utf_check_bytes();
+#endif
+
 //! Raises a Qore exception for PCRE2 match errors that do not simply mean "no match".
 /** Must only be called with a return code < 1 from qore_pcre2_match().
 

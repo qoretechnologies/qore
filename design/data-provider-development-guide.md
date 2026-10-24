@@ -375,13 +375,28 @@ index, and a catalog mutation after sealing invalidates its single-use token. Se
 An option's `display_name`, `short_desc`, and `desc` are not the end of its presentation surface.
 Fields reachable through its structured type, list elements, union alternatives, and their finite
 values are also user-visible. The catalog generator walks this graph with cycle detection. First-layer
-fields retain action/option context; deeper reusable structures use stable app/action/option/occurrence/type/field
-identities. The occurrence includes the canonical technical field path and any union context above it, and the type
-segment includes an explicit producer schema path when available plus a digest of immediate technical field/type
-shape. One canonical occurrence is assigned per concrete type object in each action/option. This distinguishes
-anonymous schemas without making IDs depend on labels and avoids expanding a shared schema DAG once per path.
+fields retain action/option context; the fields of deeper reusable structures use stable app/action/type/field
+identities (`DataProviderPresentation::actionTypePresentationIdentity()`): the type segment is the class and name
+of the type, its explicit producer schema path and schema identity when available, and a digest of its immediate
+technical field/type shape, scoped to the action. A REST schema producer gives each object type it builds the
+location of its schema in the document as its schema identity (`AbstractDataProviderType::getSchemaIdentity()`):
+an OpenAPI component or Swagger definition by its name, a property that only adds a description to a referenced
+schema (`allOf` of one `$ref`) by the schema it refers to, and a schema declared in place by its location; a type
+that a REST schema action overlay changes has the schema's identity and the overlay's location. A type has one identity in an action, whichever option or path reaches it, so each of
+its texts has one message and one translation per action, and each concrete type object is visited once per
+action, which avoids expanding a shared schema DAG once per path. This distinguishes anonymous schemas without
+making IDs depend on labels.
+
+Two distinct type objects with the same name, shape and schema path in one action share that identity, so they must
+give their fields the same texts: extraction refuses conflicting texts with `DATA-PROVIDER-PRESENTATION-CATALOG-ERROR`
+(`... has conflicting source strings ...`), naming the type, field and member. Give types that need different texts
+different names, schema paths or schema identities.
+
 Regenerate every root and complete locale after changing either a field label or the type graph that makes it
-reachable. The runtime fallback is not evidence that a shipped locale is complete.
+reachable. After a change of the message identities themselves, re-key the catalogs with
+`qore-data-provider-i18n --rekey-source-tree` (first with `--dry-run`): it rewrites the roots and carries each
+translation whose text is unchanged to the text's new id, and reports conflicts and new texts. The runtime
+fallback is not evidence that a shipped locale is complete.
 
 ### Description Formatting
 
@@ -430,14 +445,13 @@ For very long descriptions with many items (e.g., 20+ draw commands), group rela
 
 #### Common Description Mistakes
 
-| Mistake | Wrong | Correct |
-|---------|-------|---------|
-| Bare boolean | `If True then...` | `` If `True` then... `` |
-| Bare nothing | `returns nothing` | `` returns `NOTHING` `` |
-| Single quotes for code | `'xlsx' format` | `` `xlsx` format `` |
-| Lowercase sentence start | `if true then...` | `If true then...` |
-| Missing opening backtick | `` field_name` `` | `` `field_name` `` |
-| Bare field reference | `see ssl_key_path` | `` see `ssl_key_path` `` |
+|!Mistake|!Wrong|!Correct
+|Bare boolean|`If True then...`|`` If `True` then... ``
+|Bare nothing|`returns nothing`|`` returns `NOTHING` ``
+|Single quotes for code|`'xlsx' format`|`` `xlsx` format ``
+|Lowercase sentence start|`if true then...`|`If true then...`
+|Missing opening backtick|`` field_name` ``|`` `field_name` ``
+|Bare field reference|`see ssl_key_path`|`` see `ssl_key_path` ``
 
 #### Data Examples in Descriptions
 
@@ -740,12 +754,11 @@ Date/time fields require special handling because the type that the API consumes
 
 **Rule:** the request type field should be `DateType` (or `DateOrNothingType`) regardless of the API's wire format. The UI then renders a date/time picker. If the API requires another representation (Unix epoch seconds/milliseconds, an ISO 8601 string in a specific format, etc.) the data provider converts the value inside `doRequestImpl()` immediately before serializing the request.
 
-| API wire format | Request type field | Conversion in `doRequestImpl()` |
-|---|---|---|
-| ISO 8601 string (any flavor) | `DateType` / `DateOrNothingType` | `format_date("YYYY-MM-DDTHH:mm:SSZ", req.field)` (or whichever format the API documents) |
-| Unix seconds (integer) | `DateType` / `DateOrNothingType` | `int(get_epoch_seconds(req.field))` |
-| Unix milliseconds (integer) | `DateType` / `DateOrNothingType` | `(get_epoch_seconds(req.field) * 1000) + (req.field.microseconds() / 1000)` |
-| Local-date string (`YYYY-MM-DD`) | `DateType` / `DateOrNothingType` | `format_date("YYYY-MM-DD", req.field)` |
+|!API wire format|!Request type field|!Conversion in `doRequestImpl()`
+|ISO 8601 string (any flavor)|`DateType` / `DateOrNothingType`|`format_date("YYYY-MM-DDTHH:mm:SSZ", req.field)` (or whichever format the API documents)
+|Unix seconds (integer)|`DateType` / `DateOrNothingType`|`int(get_epoch_seconds(req.field))`
+|Unix milliseconds (integer)|`DateType` / `DateOrNothingType`|`(get_epoch_seconds(req.field) * 1000) + (req.field.microseconds() / 1000)`
+|Local-date string (`YYYY-MM-DD`)|`DateType` / `DateOrNothingType`|`format_date("YYYY-MM-DD", req.field)`
 
 **Anti-pattern (do not do this):**
 
@@ -1164,10 +1177,9 @@ For fields that depend on a previous selection (e.g., form fields based on selec
 
 Implement **both** methods:
 
-| Method | When Called | Purpose |
-|--------|-------------|---------|
-| `getRequestTypeWithOptionsImpl()` | UI requests options | Fields shown in UI |
-| `getRequestTypeWithDataImpl()` | Request execution | Validates request data |
+|!Method|!When Called|!Purpose
+|`getRequestTypeWithOptionsImpl()`|UI requests options|Fields shown in UI
+|`getRequestTypeWithDataImpl()`|Request execution|Validates request data
 
 ```qore
 private *AbstractDataProviderType getRequestTypeWithOptionsImpl(*hash<auto> options) {
@@ -1251,15 +1263,14 @@ public class MyScoredPointRecordType inherits DataProvider::HashDataType {
 
 ### Key Implementation Methods
 
-| Method | Purpose |
-|--------|---------|
-| `searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options)` | Returns `AbstractDataProviderRecordIterator` |
-| `createRecordImpl(hash<auto> rec, *hash<auto> create_options)` | Creates a record, returns it |
-| `upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options)` | Upserts, returns `UpsertResultInserted` or `UpsertResultUpdated` |
-| `updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options)` | Returns count updated |
-| `deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options)` | Returns count deleted |
-| `getRecordTypeImpl(*hash<auto> search_options)` | Returns `*hash<string, AbstractDataField>` — call `.getFields()` on the data type instance |
-| `getStaticInfoImpl()` | Returns `ProviderInfo` |
+|!Method|!Purpose
+|`searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options)`|Returns `AbstractDataProviderRecordIterator`
+|`createRecordImpl(hash<auto> rec, *hash<auto> create_options)`|Creates a record, returns it
+|`upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options)`|Upserts, returns `UpsertResultInserted` or `UpsertResultUpdated`
+|`updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options)`|Returns count updated
+|`deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options)`|Returns count deleted
+|`getRecordTypeImpl(*hash<auto> search_options)`|Returns `*hash<string, AbstractDataField>` — call `.getFields()` on the data type instance
+|`getStaticInfoImpl()`|Returns `ProviderInfo`
 
 ### Record Iterator Pattern
 
@@ -1569,20 +1580,19 @@ type.
 
 The standard DataProvider operators available in `AbstractDataProvider::GenericExpressions`:
 
-| Operator | Constant | Expression Args | Description |
-|----------|----------|-----------------|-------------|
-| AND | `DP_OP_AND` | `(expr, expr, ...)` | Logical AND of sub-expressions |
-| OR | `DP_OP_OR` | `(expr, expr, ...)` | Logical OR of sub-expressions |
-| NOT | `DP_SEARCH_OP_NOT` | `(expr,)` | Logical negation |
-| EQ | `DP_SEARCH_OP_EQ` | `(field_ref, value)` | Equality |
-| NE | `DP_SEARCH_OP_NE` | `(field_ref, value)` | Not equal |
-| LT | `DP_SEARCH_OP_LT` | `(field_ref, value)` | Less than |
-| LE | `DP_SEARCH_OP_LE` | `(field_ref, value)` | Less than or equal |
-| GT | `DP_SEARCH_OP_GT` | `(field_ref, value)` | Greater than |
-| GE | `DP_SEARCH_OP_GE` | `(field_ref, value)` | Greater than or equal |
-| BETWEEN | `DP_SEARCH_OP_BETWEEN` | `(field_ref, lo, hi)` | Range (exclusive) |
-| IN | `DP_SEARCH_OP_IN` | `(field_ref, val, ...)` | Value in list |
-| REGEX | `DP_SEARCH_OP_REGEX` | `(field_ref, pattern)` | Regex match |
+|!Operator|!Constant|!Expression Args|!Description
+|AND|`DP_OP_AND`|`(expr, expr, ...)`|Logical AND of sub-expressions
+|OR|`DP_OP_OR`|`(expr, expr, ...)`|Logical OR of sub-expressions
+|NOT|`DP_SEARCH_OP_NOT`|`(expr,)`|Logical negation
+|EQ|`DP_SEARCH_OP_EQ`|`(field_ref, value)`|Equality
+|NE|`DP_SEARCH_OP_NE`|`(field_ref, value)`|Not equal
+|LT|`DP_SEARCH_OP_LT`|`(field_ref, value)`|Less than
+|LE|`DP_SEARCH_OP_LE`|`(field_ref, value)`|Less than or equal
+|GT|`DP_SEARCH_OP_GT`|`(field_ref, value)`|Greater than
+|GE|`DP_SEARCH_OP_GE`|`(field_ref, value)`|Greater than or equal
+|BETWEEN|`DP_SEARCH_OP_BETWEEN`|`(field_ref, lo, hi)`|Range (exclusive)
+|IN|`DP_SEARCH_OP_IN`|`(field_ref, val, ...)`|Value in list
+|REGEX|`DP_SEARCH_OP_REGEX`|`(field_ref, pattern)`|Regex match
 
 ### Constructing Expression Trees in Tests
 

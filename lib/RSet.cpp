@@ -374,6 +374,13 @@ int64 q_get_scan_object_count() {
     return scan_object_count;
 }
 
+//! the number of references that recursive-reference scans have followed in the current thread
+static thread_local int64 scan_edge_count = 0;
+
+int64 q_get_scan_edge_count() {
+    return scan_edge_count;
+}
+
 //! the number of regions whose dependencies scans in the current thread have walked
 static thread_local int64 region_walk_count = 0;
 
@@ -1908,6 +1915,9 @@ bool RSetHelper::scan(RObject& root) {
         ScanFrame& frame = frames.back();
         if (frame.next < frame.end) {
             size_t ei = frame.next++;
+#ifdef DEBUG
+            ++scan_edge_count;
+#endif
             int from = frame.node;
             // the frame and edge references are invalid after a node is started
             int to = getNode(edges[ei].target, edges[ei].kind, lock_error);

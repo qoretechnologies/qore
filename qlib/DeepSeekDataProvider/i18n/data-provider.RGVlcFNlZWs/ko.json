@@ -375,127 +375,127 @@
           "source": "Text or image content parts. Assistant tool calls may omit text.",
           "message": "텍스트 또는 이미지 콘텐츠 부분. 어시스턴트 도구 호출은 텍스트를 생략할 수 있습니다."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.ZmlsZV9kYXRh.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.ZmlsZV9kYXRh.display_name": {
           "source": "File Data",
           "message": "파일 데이터"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.ZmlsZV9kYXRh.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.ZmlsZV9kYXRh.short_desc": {
           "source": "File Data",
           "message": "파일 데이터"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.ZmlsZV9kYXRh.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.ZmlsZV9kYXRh.desc": {
           "source": "Base64 image data URL; mutually exclusive with `file_id`.",
           "message": "Base64 이미지 데이터 URL; `file_id`와 상호 배타적입니다."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.ZmlsZV9pZA.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.ZmlsZV9pZA.display_name": {
           "source": "File ID",
           "message": "파일 ID"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.ZmlsZV9pZA.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.ZmlsZV9pZA.short_desc": {
           "source": "File ID",
           "message": "파일 ID"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.ZmlsZV9pZA.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.ZmlsZV9pZA.desc": {
           "source": "Uploaded image identifier; mutually exclusive with `file_data`.",
           "message": "업로드된 이미지 식별자; `file_data`와 상호 배타적입니다."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.ZmlsZW5hbWU.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.ZmlsZW5hbWU.display_name": {
           "source": "Filename",
           "message": "파일 이름"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.ZmlsZW5hbWU.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.ZmlsZW5hbWU.short_desc": {
           "source": "Filename",
           "message": "파일 이름"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.ZmlsZW5hbWU.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.ZmlsZW5hbWU.desc": {
           "source": "Optional image filename, used only with `file_data`.",
           "message": "선택적 이미지 파일 이름, `file_data`와 함께 사용될 때만 유효합니다."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.aW1hZ2VfdXJs.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.aW1hZ2VfdXJs.display_name": {
           "source": "Image",
           "message": "이미지"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.aW1hZ2VfdXJs.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.aW1hZ2VfdXJs.short_desc": {
           "source": "Image",
           "message": "이미지"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.aW1hZ2VfdXJs.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.aW1hZ2VfdXJs.desc": {
           "source": "Image.",
           "message": "이미지."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBiOm9wdGlvbjpiV1Z6YzJGblpYTTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2tSbFpYQlRaV1ZyUTJoaGRFTnZiblJsYm5SRVlYUmhWSGx3WlV4cGMzUWpObUl3TUdVeE9XWXdNRGRsTjJOaVl6WXlaRFJtTURka016VTBZVEJtWkdNM05HWTNZVEEyTnpZek5UUTVOV0psTVRrMVlXVmxZV05rTnpKa1pEZGpZUTpmaWVsZDpZMjl1ZEdWdWRBOmZpZWxkOmFXMWhaMlZmZFhKcw.field.ZGV0YWls.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBi.field.ZGV0YWls.display_name": {
           "source": "Image Detail",
           "message": "이미지 세부 정보"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBiOm9wdGlvbjpiV1Z6YzJGblpYTTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2tSbFpYQlRaV1ZyUTJoaGRFTnZiblJsYm5SRVlYUmhWSGx3WlV4cGMzUWpObUl3TUdVeE9XWXdNRGRsTjJOaVl6WXlaRFJtTURka016VTBZVEJtWkdNM05HWTNZVEEyTnpZek5UUTVOV0psTVRrMVlXVmxZV05rTnpKa1pEZGpZUTpmaWVsZDpZMjl1ZEdWdWRBOmZpZWxkOmFXMWhaMlZmZFhKcw.field.ZGV0YWls.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBi.field.ZGV0YWls.short_desc": {
           "source": "Image Detail",
           "message": "이미지 세부 정보"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBiOm9wdGlvbjpiV1Z6YzJGblpYTTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2tSbFpYQlRaV1ZyUTJoaGRFTnZiblJsYm5SRVlYUmhWSGx3WlV4cGMzUWpObUl3TUdVeE9XWXdNRGRsTjJOaVl6WXlaRFJtTURka016VTBZVEJtWkdNM05HWTNZVEEyTnpZek5UUTVOV0psTVRrMVlXVmxZV05rTnpKa1pEZGpZUTpmaWVsZDpZMjl1ZEdWdWRBOmZpZWxkOmFXMWhaMlZmZFhKcw.field.ZGV0YWls.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBi.field.ZGV0YWls.desc": {
           "source": "Choose image processing quality.",
           "message": "이미지 처리 품질을 선택하세요."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBiOm9wdGlvbjpiV1Z6YzJGblpYTTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2tSbFpYQlRaV1ZyUTJoaGRFTnZiblJsYm5SRVlYUmhWSGx3WlV4cGMzUWpObUl3TUdVeE9XWXdNRGRsTjJOaVl6WXlaRFJtTURka016VTBZVEJtWkdNM05HWTNZVEEyTnpZek5UUTVOV0psTVRrMVlXVmxZV05rTnpKa1pEZGpZUTpmaWVsZDpZMjl1ZEdWdWRBOmZpZWxkOmFXMWhaMlZmZFhKcw.field.ZGV0YWls.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBi.field.ZGV0YWls.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "Low",
           "message": "낮음"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBiOm9wdGlvbjpiV1Z6YzJGblpYTTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2tSbFpYQlRaV1ZyUTJoaGRFTnZiblJsYm5SRVlYUmhWSGx3WlV4cGMzUWpObUl3TUdVeE9XWXdNRGRsTjJOaVl6WXlaRFJtTURka016VTBZVEJtWkdNM05HWTNZVEEyTnpZek5UUTVOV0psTVRrMVlXVmxZV05rTnpKa1pEZGpZUTpmaWVsZDpZMjl1ZEdWdWRBOmZpZWxkOmFXMWhaMlZmZFhKcw.field.ZGV0YWls.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBi.field.ZGV0YWls.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
           "source": "High",
           "message": "높음"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBiOm9wdGlvbjpiV1Z6YzJGblpYTTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2tSbFpYQlRaV1ZyUTJoaGRFTnZiblJsYm5SRVlYUmhWSGx3WlV4cGMzUWpObUl3TUdVeE9XWXdNRGRsTjJOaVl6WXlaRFJtTURka016VTBZVEJtWkdNM05HWTNZVEEyTnpZek5UUTVOV0psTVRrMVlXVmxZV05rTnpKa1pEZGpZUTpmaWVsZDpZMjl1ZEdWdWRBOmZpZWxkOmFXMWhaMlZmZFhKcw.field.ZGV0YWls.allowed-value.c3RyaW5nOm9yaWdpbmFs.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBi.field.ZGV0YWls.allowed-value.c3RyaW5nOm9yaWdpbmFs.display_name": {
           "source": "Original",
           "message": "원본"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBiOm9wdGlvbjpiV1Z6YzJGblpYTTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2tSbFpYQlRaV1ZyUTJoaGRFTnZiblJsYm5SRVlYUmhWSGx3WlV4cGMzUWpObUl3TUdVeE9XWXdNRGRsTjJOaVl6WXlaRFJtTURka016VTBZVEJtWkdNM05HWTNZVEEyTnpZek5UUTVOV0psTVRrMVlXVmxZV05rTnpKa1pEZGpZUTpmaWVsZDpZMjl1ZEdWdWRBOmZpZWxkOmFXMWhaMlZmZFhKcw.field.ZGV0YWls.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBi.field.ZGV0YWls.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Automatic",
           "message": "자동"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBiOm9wdGlvbjpiV1Z6YzJGblpYTTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2tSbFpYQlRaV1ZyUTJoaGRFTnZiblJsYm5SRVlYUmhWSGx3WlV4cGMzUWpObUl3TUdVeE9XWXdNRGRsTjJOaVl6WXlaRFJtTURka016VTBZVEJtWkdNM05HWTNZVEEyTnpZek5UUTVOV0psTVRrMVlXVmxZV05rTnpKa1pEZGpZUTpmaWVsZDpZMjl1ZEdWdWRBOmZpZWxkOmFXMWhaMlZmZFhKcw.field.dXJs.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBi.field.dXJs.display_name": {
           "source": "Image URL",
           "message": "이미지 URL"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBiOm9wdGlvbjpiV1Z6YzJGblpYTTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2tSbFpYQlRaV1ZyUTJoaGRFTnZiblJsYm5SRVlYUmhWSGx3WlV4cGMzUWpObUl3TUdVeE9XWXdNRGRsTjJOaVl6WXlaRFJtTURka016VTBZVEJtWkdNM05HWTNZVEEyTnpZek5UUTVOV0psTVRrMVlXVmxZV05rTnpKa1pEZGpZUTpmaWVsZDpZMjl1ZEdWdWRBOmZpZWxkOmFXMWhaMlZmZFhKcw.field.dXJs.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBi.field.dXJs.short_desc": {
           "source": "Image URL",
           "message": "이미지 URL"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBiOm9wdGlvbjpiV1Z6YzJGblpYTTp1bmlvbjpUR2x6ZEVSaGRHRlVlWEJsT2tSbFpYQlRaV1ZyUTJoaGRFTnZiblJsYm5SRVlYUmhWSGx3WlV4cGMzUWpObUl3TUdVeE9XWXdNRGRsTjJOaVl6WXlaRFJtTURka016VTBZVEJtWkdNM05HWTNZVEEyTnpZek5UUTVOV0psTVRrMVlXVmxZV05rTnpKa1pEZGpZUTpmaWVsZDpZMjl1ZEdWdWRBOmZpZWxkOmFXMWhaMlZmZFhKcw.field.dXJs.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrSW1hZ2VVcmxEYXRhVHlwZToqaGFzaDxhdXRvPiNhNzQzYTg5ZDU5NmI5Y2JkMTZmODZmMzJlMzY2Y2JmNjg4ZDQwMzNlMGE5NDM0YTQ5Mjk4NWY2MzMxMzgzNDBi.field.dXJs.desc": {
           "source": "Public image URL or a base64 data URL. Supported formats: JPEG, PNG, GIF, WebP.",
           "message": "공개 이미지 URL 또는 Base64 데이터 URL. 지원 형식: JPEG, PNG, GIF, WebP."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.dGV4dA.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.dGV4dA.display_name": {
           "source": "Text",
           "message": "텍스트"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.dGV4dA.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.dGV4dA.short_desc": {
           "source": "Text",
           "message": "텍스트"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.dGV4dA.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.dGV4dA.desc": {
           "source": "Text for a `text` content part.",
           "message": "`text` 콘텐츠 부분에 대한 텍스트입니다."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.dHlwZQ.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.dHlwZQ.display_name": {
           "source": "Content Type",
           "message": "콘텐츠 유형"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.dHlwZQ.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.dHlwZQ.short_desc": {
           "source": "Content Type",
           "message": "콘텐츠 유형"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.dHlwZQ.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.dHlwZQ.desc": {
           "source": "Content Type.",
           "message": "콘텐츠 유형."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
           "source": "Text",
           "message": "텍스트"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.dHlwZQ.allowed-value.c3RyaW5nOmltYWdlX3VybA.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.dHlwZQ.allowed-value.c3RyaW5nOmltYWdlX3VybA.display_name": {
           "source": "Image URL",
           "message": "이미지 URL"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI6b3B0aW9uOmJXVnpjMkZuWlhNOnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJRMmhoZEVOdmJuUmxiblJFWVhSaFZIbHdaVXhwYzNRak5tSXdNR1V4T1dZd01EZGxOMk5pWXpZeVpEUm1NRGRrTXpVMFlUQm1aR00zTkdZM1lUQTJOell6TlRRNU5XSmxNVGsxWVdWbFlXTmtOekprWkRkallROmZpZWxkOlkyOXVkR1Z1ZEE.field.dHlwZQ.allowed-value.c3RyaW5nOmZpbGU.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdENvbnRlbnREYXRhVHlwZTpoYXNoPGF1dG8-IzZjOTE4YWRlMzJkYzhiODQ3MDdmOTc1NGVmMmYxYmU0MDI5N2NjZDZlMTA3OWU4OTkyY2IwOGJkMTA1MmZkOGI.field.dHlwZQ.allowed-value.c3RyaW5nOmZpbGU.display_name": {
           "source": "File",
           "message": "파일"
         },
@@ -587,67 +587,67 @@
           "source": "Tool calls from a previous assistant turn.",
           "message": "이전 어시스턴트 단계에서의 도구 호출입니다."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1Om9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpkRzl2YkY5allXeHNjdw.field.ZnVuY3Rpb24.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1.field.ZnVuY3Rpb24.display_name": {
           "source": "Function Call",
           "message": "함수 호출"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1Om9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpkRzl2YkY5allXeHNjdw.field.ZnVuY3Rpb24.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1.field.ZnVuY3Rpb24.short_desc": {
           "source": "Function Call",
           "message": "함수 호출"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1Om9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpkRzl2YkY5allXeHNjdw.field.ZnVuY3Rpb24.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1.field.ZnVuY3Rpb24.desc": {
           "source": "Function Call.",
           "message": "함수 호출."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdEZ1bmN0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkYWZmOGQ1ZmUwM2RlY2RkNjk4ZGZiMmVkZTU0OTAzZWM4YmQ0MDY3YmNjN2Y2ZDQ4MjQ5YmY4M2Y2NzUxZmQ5Om9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpkRzl2YkY5allXeHNjdzpmaWVsZDpablZ1WTNScGIyNA.field.YXJndW1lbnRz.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdEZ1bmN0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkYWZmOGQ1ZmUwM2RlY2RkNjk4ZGZiMmVkZTU0OTAzZWM4YmQ0MDY3YmNjN2Y2ZDQ4MjQ5YmY4M2Y2NzUxZmQ5.field.YXJndW1lbnRz.display_name": {
           "source": "Arguments",
           "message": "인수"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdEZ1bmN0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkYWZmOGQ1ZmUwM2RlY2RkNjk4ZGZiMmVkZTU0OTAzZWM4YmQ0MDY3YmNjN2Y2ZDQ4MjQ5YmY4M2Y2NzUxZmQ5Om9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpkRzl2YkY5allXeHNjdzpmaWVsZDpablZ1WTNScGIyNA.field.YXJndW1lbnRz.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdEZ1bmN0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkYWZmOGQ1ZmUwM2RlY2RkNjk4ZGZiMmVkZTU0OTAzZWM4YmQ0MDY3YmNjN2Y2ZDQ4MjQ5YmY4M2Y2NzUxZmQ5.field.YXJndW1lbnRz.short_desc": {
           "source": "Arguments",
           "message": "인수"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdEZ1bmN0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkYWZmOGQ1ZmUwM2RlY2RkNjk4ZGZiMmVkZTU0OTAzZWM4YmQ0MDY3YmNjN2Y2ZDQ4MjQ5YmY4M2Y2NzUxZmQ5Om9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpkRzl2YkY5allXeHNjdzpmaWVsZDpablZ1WTNScGIyNA.field.YXJndW1lbnRz.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdEZ1bmN0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkYWZmOGQ1ZmUwM2RlY2RkNjk4ZGZiMmVkZTU0OTAzZWM4YmQ0MDY3YmNjN2Y2ZDQ4MjQ5YmY4M2Y2NzUxZmQ5.field.YXJndW1lbnRz.desc": {
           "source": "JSON-encoded function arguments.",
           "message": "JSON 인코딩된 함수 인수."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdEZ1bmN0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkYWZmOGQ1ZmUwM2RlY2RkNjk4ZGZiMmVkZTU0OTAzZWM4YmQ0MDY3YmNjN2Y2ZDQ4MjQ5YmY4M2Y2NzUxZmQ5Om9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpkRzl2YkY5allXeHNjdzpmaWVsZDpablZ1WTNScGIyNA.field.bmFtZQ.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdEZ1bmN0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkYWZmOGQ1ZmUwM2RlY2RkNjk4ZGZiMmVkZTU0OTAzZWM4YmQ0MDY3YmNjN2Y2ZDQ4MjQ5YmY4M2Y2NzUxZmQ5.field.bmFtZQ.display_name": {
           "source": "Function Name",
           "message": "함수 이름"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdEZ1bmN0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkYWZmOGQ1ZmUwM2RlY2RkNjk4ZGZiMmVkZTU0OTAzZWM4YmQ0MDY3YmNjN2Y2ZDQ4MjQ5YmY4M2Y2NzUxZmQ5Om9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpkRzl2YkY5allXeHNjdzpmaWVsZDpablZ1WTNScGIyNA.field.bmFtZQ.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdEZ1bmN0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkYWZmOGQ1ZmUwM2RlY2RkNjk4ZGZiMmVkZTU0OTAzZWM4YmQ0MDY3YmNjN2Y2ZDQ4MjQ5YmY4M2Y2NzUxZmQ5.field.bmFtZQ.short_desc": {
           "source": "Function Name",
           "message": "함수 이름"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdEZ1bmN0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkYWZmOGQ1ZmUwM2RlY2RkNjk4ZGZiMmVkZTU0OTAzZWM4YmQ0MDY3YmNjN2Y2ZDQ4MjQ5YmY4M2Y2NzUxZmQ5Om9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpkRzl2YkY5allXeHNjdzpmaWVsZDpablZ1WTNScGIyNA.field.bmFtZQ.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdEZ1bmN0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkYWZmOGQ1ZmUwM2RlY2RkNjk4ZGZiMmVkZTU0OTAzZWM4YmQ0MDY3YmNjN2Y2ZDQ4MjQ5YmY4M2Y2NzUxZmQ5.field.bmFtZQ.desc": {
           "source": "The function to invoke in your application.",
           "message": "애플리케이션에서 호출할 함수"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1Om9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpkRzl2YkY5allXeHNjdw.field.aWQ.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1.field.aWQ.display_name": {
           "source": "Tool Call ID",
           "message": "도구 호출 ID"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1Om9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpkRzl2YkY5allXeHNjdw.field.aWQ.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1.field.aWQ.short_desc": {
           "source": "Tool Call ID",
           "message": "도구 호출 ID"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1Om9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpkRzl2YkY5allXeHNjdw.field.aWQ.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1.field.aWQ.desc": {
           "source": "Pair this identifier with the corresponding `tool_call_id`.",
           "message": "이 식별자를 해당 `tool_call_id`와 쌍으로 연결하세요."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1Om9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpkRzl2YkY5allXeHNjdw.field.dHlwZQ.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1.field.dHlwZQ.display_name": {
           "source": "Tool Type",
           "message": "도구 유형"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1Om9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpkRzl2YkY5allXeHNjdw.field.dHlwZQ.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1.field.dHlwZQ.short_desc": {
           "source": "Tool Type",
           "message": "도구 유형"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1Om9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpkRzl2YkY5allXeHNjdw.field.dHlwZQ.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1.field.dHlwZQ.desc": {
           "source": "Tool Type.",
           "message": "도구 유형."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1Om9wdGlvbjpiV1Z6YzJGblpYTTpmaWVsZDpkRzl2YkY5allXeHNjdw.field.dHlwZQ.allowed-value.c3RyaW5nOmZ1bmN0aW9u.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrQ2hhdFRvb2xDYWxsRGF0YVR5cGU6aGFzaDxhdXRvPiM2Yjk4MWM2MzhkZDM3YTk1ZGI5NzkzOTgxZWI0YmMwZjI4OTAxNGNlYzJjZDQxNDZiM2Q5M2FkMDA3ZWQ2ZjI1.field.dHlwZQ.allowed-value.c3RyaW5nOmZ1bmN0aW9u.display_name": {
           "source": "Function",
           "message": "함수"
         },
@@ -791,51 +791,51 @@
           "source": "Function.",
           "message": "함수."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFm.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "설명"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFm.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "Description",
           "message": "설명"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.ZGVzY3JpcHRpb24.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFm.field.ZGVzY3JpcHRpb24.desc": {
           "source": "Explain when to call this function.",
           "message": "이 함수를 호출할 때를 설명하세요."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.bmFtZQ.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFm.field.bmFtZQ.display_name": {
           "source": "Function Name",
           "message": "함수 이름"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.bmFtZQ.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFm.field.bmFtZQ.short_desc": {
           "source": "Function Name",
           "message": "함수 이름"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.bmFtZQ.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFm.field.bmFtZQ.desc": {
           "source": "Function identifier, at most 64 characters: letters, digits, underscores, or dashes.",
           "message": "함수 식별자, 최대 64자: 영문자, 숫자, 밑줄 또는 하이픈."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.cGFyYW1ldGVycw.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFm.field.cGFyYW1ldGVycw.display_name": {
           "source": "Parameters",
           "message": "매개변수"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.cGFyYW1ldGVycw.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFm.field.cGFyYW1ldGVycw.short_desc": {
           "source": "Parameters",
           "message": "매개변수"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.cGFyYW1ldGVycw.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFm.field.cGFyYW1ldGVycw.desc": {
           "source": "JSON Schema describing function arguments.",
           "message": "함수 인수를 설명하는 JSON 스키마입니다."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.c3RyaWN0.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFm.field.c3RyaWN0.display_name": {
           "source": "Strict Arguments",
           "message": "엄격한 인수"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.c3RyaWN0.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFm.field.c3RyaWN0.short_desc": {
           "source": "Strict Arguments",
           "message": "엄격한 인수"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.c3RyaWN0.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFm.field.c3RyaWN0.desc": {
           "source": "Require arguments to match the schema. Routes this request to the beta API.",
           "message": "인수가 스키마와 일치해야 합니다. 이 요청은 베타 API로 라우팅됩니다."
         },
@@ -1175,119 +1175,119 @@
           "source": "Text or content parts such as `input_text`, `output_text`, `input_image`, or `reasoning_text`.",
           "message": "`input_text`, `output_text`, `input_image`, `reasoning_text`와 같은 텍스트 또는 콘텐츠 부분입니다."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.YW5ub3RhdGlvbnM.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.YW5ub3RhdGlvbnM.display_name": {
           "source": "Annotations",
           "message": "주석"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.YW5ub3RhdGlvbnM.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.YW5ub3RhdGlvbnM.short_desc": {
           "source": "Annotations",
           "message": "주석"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.YW5ub3RhdGlvbnM.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.YW5ub3RhdGlvbnM.desc": {
           "source": "Preserved when reusing content from an earlier response.",
           "message": "이전 응답의 내용을 재사용할 때 유지됩니다."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.ZGV0YWls.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.ZGV0YWls.display_name": {
           "source": "Image Detail",
           "message": "이미지 세부 정보"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.ZGV0YWls.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.ZGV0YWls.short_desc": {
           "source": "Image Detail",
           "message": "이미지 세부 정보"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.ZGV0YWls.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.ZGV0YWls.desc": {
           "source": "Image processing quality; ignored when `file_id` is supplied.",
           "message": "이미지 처리 품질; `file_id`가 제공된 경우 무시됩니다."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.ZGV0YWls.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.ZGV0YWls.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "Low",
           "message": "낮음"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.ZGV0YWls.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.ZGV0YWls.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
           "source": "High",
           "message": "높음"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.ZGV0YWls.allowed-value.c3RyaW5nOm9yaWdpbmFs.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.ZGV0YWls.allowed-value.c3RyaW5nOm9yaWdpbmFs.display_name": {
           "source": "Original",
           "message": "원본"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.ZGV0YWls.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.ZGV0YWls.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Automatic",
           "message": "자동"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.ZmlsZV9pZA.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.ZmlsZV9pZA.display_name": {
           "source": "File ID",
           "message": "파일 ID"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.ZmlsZV9pZA.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.ZmlsZV9pZA.short_desc": {
           "source": "File ID",
           "message": "파일 ID"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.ZmlsZV9pZA.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.ZmlsZV9pZA.desc": {
           "source": "Uploaded image identifier. Mutually exclusive with `image_url`.",
           "message": "업로드된 이미지 식별자. `image_url`와 상호 배타적입니다."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.aW1hZ2VfdXJs.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.aW1hZ2VfdXJs.display_name": {
           "source": "Image URL",
           "message": "이미지 URL"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.aW1hZ2VfdXJs.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.aW1hZ2VfdXJs.short_desc": {
           "source": "Image URL",
           "message": "이미지 URL"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.aW1hZ2VfdXJs.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.aW1hZ2VfdXJs.desc": {
           "source": "Public image URL or base64 data URL. Mutually exclusive with `file_id`.",
           "message": "공개 이미지 URL 또는 Base64 데이터 URL. `file_id`와 상호 배타적입니다."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.bG9ncHJvYnM.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.bG9ncHJvYnM.display_name": {
           "source": "Log Probabilities",
           "message": "로그 확률"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.bG9ncHJvYnM.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.bG9ncHJvYnM.short_desc": {
           "source": "Log Probabilities",
           "message": "로그 확률"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.bG9ncHJvYnM.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.bG9ncHJvYnM.desc": {
           "source": "Preserved when reusing content from an earlier response.",
           "message": "이전 응답의 내용을 재사용할 때 유지됩니다."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.dGV4dA.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.dGV4dA.display_name": {
           "source": "Text",
           "message": "텍스트"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.dGV4dA.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.dGV4dA.short_desc": {
           "source": "Text",
           "message": "텍스트"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.dGV4dA.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.dGV4dA.desc": {
           "source": "Text for a text or reasoning part.",
           "message": "텍스트 또는 추론 부분에 대한 텍스트입니다."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.dHlwZQ.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.dHlwZQ.display_name": {
           "source": "Content Type",
           "message": "콘텐츠 유형"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.dHlwZQ.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.dHlwZQ.short_desc": {
           "source": "Content Type",
           "message": "콘텐츠 유형"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.dHlwZQ.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.dHlwZQ.desc": {
           "source": "Content Type.",
           "message": "콘텐츠 유형."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.dHlwZQ.allowed-value.c3RyaW5nOmlucHV0X3RleHQ.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.dHlwZQ.allowed-value.c3RyaW5nOmlucHV0X3RleHQ.display_name": {
           "source": "Input Text",
           "message": "입력 텍스트"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.dHlwZQ.allowed-value.c3RyaW5nOm91dHB1dF90ZXh0.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.dHlwZQ.allowed-value.c3RyaW5nOm91dHB1dF90ZXh0.display_name": {
           "source": "Output Text",
           "message": "출력 텍스트"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.dHlwZQ.allowed-value.c3RyaW5nOmlucHV0X2ltYWdl.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.dHlwZQ.allowed-value.c3RyaW5nOmlucHV0X2ltYWdl.display_name": {
           "source": "Input Image",
           "message": "입력 이미지"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6WTI5dWRHVnVkQQ.field.dHlwZQ.allowed-value.c3RyaW5nOnJlYXNvbmluZ190ZXh0.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0.field.dHlwZQ.allowed-value.c3RyaW5nOnJlYXNvbmluZ190ZXh0.display_name": {
           "source": "Reasoning Text",
           "message": "추론 텍스트"
         },
@@ -1338,122 +1338,6 @@
         "app.RGVlcFNlZWs.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOkRlZXBTZWVrUmVzcG9uc2VJbnB1dERhdGFUeXBlTGlzdCM0YjBmMGI5ZGQ3NGU2M2U4OGU0MDRmYzkwNDAwMmIzYzVlZjY3OGUzNjljZTUyYmY4MjBmZDg0YWE3ZDliMWMw.field.b3V0cHV0.desc": {
           "source": "Tool result text or image/text content parts.",
           "message": "도구 결과 텍스트 또는 이미지/텍스트 콘텐츠 부분입니다."
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.YW5ub3RhdGlvbnM.display_name": {
-          "source": "Annotations",
-          "message": "주석"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.YW5ub3RhdGlvbnM.short_desc": {
-          "source": "Annotations",
-          "message": "주석"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.YW5ub3RhdGlvbnM.desc": {
-          "source": "Preserved when reusing content from an earlier response.",
-          "message": "이전 응답의 내용을 재사용할 때 유지됩니다."
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.ZGV0YWls.display_name": {
-          "source": "Image Detail",
-          "message": "이미지 세부 정보"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.ZGV0YWls.short_desc": {
-          "source": "Image Detail",
-          "message": "이미지 세부 정보"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.ZGV0YWls.desc": {
-          "source": "Image processing quality; ignored when `file_id` is supplied.",
-          "message": "이미지 처리 품질; `file_id`가 제공된 경우 무시됩니다."
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.ZGV0YWls.allowed-value.c3RyaW5nOmxvdw.display_name": {
-          "source": "Low",
-          "message": "낮음"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.ZGV0YWls.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
-          "source": "High",
-          "message": "높음"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.ZGV0YWls.allowed-value.c3RyaW5nOm9yaWdpbmFs.display_name": {
-          "source": "Original",
-          "message": "원본"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.ZGV0YWls.allowed-value.c3RyaW5nOmF1dG8.display_name": {
-          "source": "Automatic",
-          "message": "자동"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.ZmlsZV9pZA.display_name": {
-          "source": "File ID",
-          "message": "파일 ID"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.ZmlsZV9pZA.short_desc": {
-          "source": "File ID",
-          "message": "파일 ID"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.ZmlsZV9pZA.desc": {
-          "source": "Uploaded image identifier. Mutually exclusive with `image_url`.",
-          "message": "업로드된 이미지 식별자. `image_url`와 상호 배타적입니다."
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.aW1hZ2VfdXJs.display_name": {
-          "source": "Image URL",
-          "message": "이미지 URL"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.aW1hZ2VfdXJs.short_desc": {
-          "source": "Image URL",
-          "message": "이미지 URL"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.aW1hZ2VfdXJs.desc": {
-          "source": "Public image URL or base64 data URL. Mutually exclusive with `file_id`.",
-          "message": "공개 이미지 URL 또는 Base64 데이터 URL. `file_id`와 상호 배타적입니다."
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.bG9ncHJvYnM.display_name": {
-          "source": "Log Probabilities",
-          "message": "로그 확률"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.bG9ncHJvYnM.short_desc": {
-          "source": "Log Probabilities",
-          "message": "로그 확률"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.bG9ncHJvYnM.desc": {
-          "source": "Preserved when reusing content from an earlier response.",
-          "message": "이전 응답의 내용을 재사용할 때 유지됩니다."
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.dGV4dA.display_name": {
-          "source": "Text",
-          "message": "텍스트"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.dGV4dA.short_desc": {
-          "source": "Text",
-          "message": "텍스트"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.dGV4dA.desc": {
-          "source": "Text for a text or reasoning part.",
-          "message": "텍스트 또는 추론 부분에 대한 텍스트입니다."
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.dHlwZQ.display_name": {
-          "source": "Content Type",
-          "message": "콘텐츠 유형"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.dHlwZQ.short_desc": {
-          "source": "Content Type",
-          "message": "콘텐츠 유형"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.dHlwZQ.desc": {
-          "source": "Content Type.",
-          "message": "콘텐츠 유형."
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.dHlwZQ.allowed-value.c3RyaW5nOmlucHV0X3RleHQ.display_name": {
-          "source": "Input Text",
-          "message": "입력 텍스트"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.dHlwZQ.allowed-value.c3RyaW5nOm91dHB1dF90ZXh0.display_name": {
-          "source": "Output Text",
-          "message": "출력 텍스트"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.dHlwZQ.allowed-value.c3RyaW5nOmlucHV0X2ltYWdl.display_name": {
-          "source": "Input Image",
-          "message": "입력 이미지"
-        },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrUmVzcG9uc2VDb250ZW50RGF0YVR5cGU6aGFzaDxhdXRvPiM4NDI2MWViOTc3NjYzYWIwZWUzNDJkNTUxYjllODY1NjhjZGVlNWY2YTU4NTA0YmE1ZmRlZjllY2Y4ZjVmYzk0Om9wdGlvbjphVzV3ZFhROnVuaW9uOlRHbHpkRVJoZEdGVWVYQmxPa1JsWlhCVFpXVnJVbVZ6Y0c5dWMyVkpibkIxZEVSaGRHRlVlWEJsVEdsemRDTTBZakJtTUdJNVpHUTNOR1UyTTJVNE9HVTBNRFJtWXprd05EQXdNbUl6WXpWbFpqWTNPR1V6TmpsalpUVXlZbVk0TWpCbVpEZzBZV0UzWkRsaU1XTXc6dW5pb246VEdsemRFUmhkR0ZVZVhCbE9rUmxaWEJUWldWclVtVnpjRzl1YzJWRGIyNTBaVzUwVEdsemRDTmlZakJpTWpObE5qa3haVFUyTkdRelpXUXpPR0V3WXpkbE1UQTNPR0l6TVRGbE5UVm1NRFV5WlRJMU1tWm1NVGd6WWprNU1tRXhZakZtTlRsaE1EWXk6ZmllbGQ6YjNWMGNIVjA.field.dHlwZQ.allowed-value.c3RyaW5nOnJlYXNvbmluZ190ZXh0.display_name": {
-          "source": "Reasoning Text",
-          "message": "추론 텍스트"
         },
         "app.RGVlcFNlZWs.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOkRlZXBTZWVrUmVzcG9uc2VJbnB1dERhdGFUeXBlTGlzdCM0YjBmMGI5ZGQ3NGU2M2U4OGU0MDRmYzkwNDAwMmIzYzVlZjY3OGUzNjljZTUyYmY4MjBmZDg0YWE3ZDliMWMw.field.cm9sZQ.display_name": {
           "source": "Role",
@@ -1683,51 +1567,51 @@
           "source": "Output Format.",
           "message": "출력 형식."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q.field.bmFtZQ.display_name": {
           "source": "Schema Name",
           "message": "스키마 이름"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q.field.bmFtZQ.short_desc": {
           "source": "Schema Name",
           "message": "스키마 이름"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q.field.bmFtZQ.desc": {
           "source": "Required for `json_schema` output.",
           "message": "`json_schema` 출력에 필수입니다."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "스키마"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q.field.c2NoZW1h.short_desc": {
           "source": "Schema",
           "message": "스키마"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q.field.c2NoZW1h.desc": {
           "source": "Required JSON Schema for `json_schema` output.",
           "message": "`json_schema` 출력에 필요한 JSON 스키마."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q.field.dHlwZQ.display_name": {
           "source": "Format",
           "message": "형식"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q.field.dHlwZQ.short_desc": {
           "source": "Format",
           "message": "형식"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q.field.dHlwZQ.desc": {
           "source": "Format.",
           "message": "형식."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
           "source": "Text",
           "message": "텍스트"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
           "source": "JSON Object",
           "message": "JSON 객체"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkRlZXBTZWVrVGV4dEZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2U5YWU5NTgyY2JkNWU1MWNlMWY2NGNjNTQxNGI5ZDEyYzM3ZmJmMzcyYmQwNWIwMzA5MWM2ODA0N2IyYTZiM2Q.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
           "source": "JSON Schema",
           "message": "JSON 스키마"
         },

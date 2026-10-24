@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class ForkEnvironmentLockOrderTest
+
+#! fork() while another thread creates a c-ares channel, whose library waits for a lock that fork() holds
+/** On macOS, fork() takes the lock of the dynamic linker before it runs the pthread_atfork() prepare handlers, and
+    c-ares calls dlopen() and dlclose(), which wait for that lock, whenever it creates a channel.  A thread that created
+    a channel while it held the environment lock, which the fork handlers wait for, deadlocked with a thread calling
+    fork(), and every thread waiting for one of the locks that the forking thread held deadlocked with them.
+
+    The test makes this happen on every platform, deterministically, with the debug hooks of
+    dbg_fork_lock_cycle_arm(): the next fork() holds a stand-in for the lock of the dynamic linker (a pthread_atfork()
+    prepare handler registered after the library's handlers, so it runs before them, as the dynamic linker takes its
+    lock), and the next channel creation waits for it in the hold that it takes, as c-ares waits in dlclose().  The
+    hook sees the cycle from the state of the two threads (the forking thread, holding the stand-in, is about to wait
+    for a lock that the channel creation holds while it waits for the stand-in) and then releases the channel creation,
+    which fails without calling c-ares (on macOS, c-ares would wait for the real lock of the dynamic linker), so that a
+    cycle fails the test instead of hanging it.
+
+    Without the lock-order cycle, fork() completes while the channel creation holds its hold, releases the stand-in,
+    and the channel creation gets it.
+*/
+class ForkEnvironmentLockOrderTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ForkEnvironmentLockOrderTest", "1.0", \ARGV) {
+        addTestCase("fork() while a name lookup creates its c-ares channel", \testChannelCreation());
+        addTestCase("negative: the lock-order probe cannot be armed twice", \testArmTwice());
+        set_return_value(main());
+    }
+
+    testChannelCreation() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the lock-order probe is only in debug builds");
+        }
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+
+        Counter entered(1);
+        call_function("dbg_fork_lock_cycle_arm", entered);
+        # the probe is always disarmed, which also releases a channel creation that is still waiting
+        hash<auto> probe;
+        bool disarmed;
+        on_exit if (!disarmed) {
+            call_function("dbg_fork_lock_cycle_result");
+        }
+
+        # a name lookup in another thread creates a c-ares channel and waits in the hook for the stand-in
+        Queue lookup();
+        background sub () {
+            try {
+                lookup.push(getaddrinfo("localhost", NOTHING, AF_INET).size());
+            } catch (hash<ExceptionInfo> ex) {
+                lookup.push(sprintf("%s: %s", ex.err, ex.desc));
+            }
+        }();
+        entered.waitForZero();
+
+        # the child reports through a pipe whose write end it holds until it exits, so the parent reads its report
+        # until the child has exited
+        hash<PipeInfo> pipe = File::getPipe();
+        flush();
+        int pid = fork();
+        if (!pid) {
+            pipe.read.close();
+            pipe.write.write("child");
+            Qore::exit(0);
+        }
+        pipe.write.close();
+        assertGt(0, pid, "fork() succeeded");
+        string report;
+        while (*binary data = pipe.read.readBinary(4096)) {
+            report += data.toString();
+        }
+        assertEq("child", report, "the child ran");
+
+        auto lookup_result = lookup.get();
+        probe = call_function("dbg_fork_lock_cycle_result");
+        disarmed = True;
+
+        assertTrue(probe.captured, "the lookup created its channel while the probe was armed");
+        assertTrue(probe.fork_held_standin, "fork() held the stand-in for the lock of the dynamic linker");
+        assertFalse(probe.cycle, "fork() did not wait for a lock that the thread creating the channel held while it "
+            "waited for the stand-in (a deadlock without the probe)");
+        assertFalse(probe.holds_env_lock, "creating the channel did not hold the environment lock, which fork() "
+            "waits for");
+        assertTrue(probe.got_standin, "the channel creation got the stand-in once fork() released it");
+        assertEq(Type::Int, lookup_result.type(), "the lookup succeeded: " + lookup_result);
+        assertGt(0, lookup_result, "the lookup found an address");
+    }
+
+    testArmTwice() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the lock-order probe is only in debug builds");
+        }
+
+        Counter entered(1);
+        call_function("dbg_fork_lock_cycle_arm", entered);
+        on_exit call_function("dbg_fork_lock_cycle_result");
+        assertThrows("DBG-ARGUMENT-ERROR", "already armed", \call_function(), ("dbg_fork_lock_cycle_arm", entered));
+    }
+}

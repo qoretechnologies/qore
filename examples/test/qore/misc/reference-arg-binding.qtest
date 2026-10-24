@@ -52,19 +52,12 @@ class Node {
 
 class ReferenceArgBindingTest inherits QUnit::Test {
     public {
-        #! number of reference bindings measured per timing sample
+        #! number of reference bindings counted
         const Iterations = 4000;
 
-        #! tree shapes used for the scaling test: (depth, width) -> node count grows ~780x
+        #! tree shapes used for the scan test: (depth, width) -> node count grows ~780x
         const SmallShape = (0, 0);
         const LargeShape = (4, 5);
-
-        #! the largest acceptable ratio between binding cost with a large graph and with a small one
-        /** binding a reference must not walk the object graph reachable from the referenced value, so the
-            two costs must be within measurement noise of each other; the ratio was ~35-40x before
-            reference argument binding stopped rescanning an unchanged object graph
-        */
-        const MaxScalingRatio = 4.0;
     }
 
     constructor() : Test("ReferenceArgBindingTest", "1.0") {
@@ -190,9 +183,13 @@ class ReferenceArgBindingTest inherits QUnit::Test {
     /** Binding resolves the lvalue and assigns the value back to itself to apply the reference's type
         restriction; when that leaves the identical value in place, the set of objects reachable from the
         lvalue cannot have changed, so no recursive-reference (cycle) scan is required.  Without that,
-        every call taking a reference to an object-bearing lvalue costs O(reachable object graph).
+        every call taking a reference to an object-bearing lvalue costs O(reachable object graph).  The scans are
+        counted, which makes this independent of the speed and load of the machine.
     */
     testBindingDoesNotScaleWithGraph() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("scan counts require a debug build");
+        }
         hash<auto> small = {"root": Node::make(SmallShape[0], SmallShape[1]), "label": "x"};
         hash<auto> large = {"root": Node::make(LargeShape[0], LargeShape[1]), "label": "x"};
         int small_nodes = cast<Node>(small.root).size();
@@ -200,35 +197,22 @@ class ReferenceArgBindingTest inherits QUnit::Test {
         assertGt(100, large_nodes);
         assertEq(1, small_nodes);
 
-        # alternate the two shapes and keep the fastest sample of each, so that a scheduling stall or CPU
-        # quota stall cannot land on only one of them and fake a scaling difference
-        float small_us;
-        float large_us;
-        for (int sample = 0; sample < 3; ++sample) {
-            float s = bindingCostUs(\small);
-            float l = bindingCostUs(\large);
-            if (!exists small_us || s < small_us) {
-                small_us = s;
-            }
-            if (!exists large_us || l < large_us) {
-                large_us = l;
-            }
-        }
-
-        float ratio = large_us / small_us;
-        if (m_options.verbose) {
-            printf("reference binding: %d node(s): %.4f us; %d nodes: %.4f us; ratio: %.2f\n", small_nodes,
-                small_us, large_nodes, large_us, ratio);
-        }
-        assertLt(MaxScalingRatio, ratio);
+        assertEq({"scans": 0, "references": 0}, bindingScans(\small),
+            "binding a reference to a graph of one object does not scan it");
+        assertEq({"scans": 0, "references": 0}, bindingScans(\large),
+            sprintf("binding a reference to a graph of %d objects does not scan it", large_nodes));
     }
 
-    #! Returns the per-binding cost in microseconds for the given referenced value
-    private float bindingCostUs(reference<hash<auto>> h) {
-        date start = now_us();
+    #! Returns the scans started and the references they followed while binding the given referenced value
+    private hash<string, int> bindingScans(reference<hash<auto>> h) {
+        int scans = call_function("dbg_get_lvalue_scan_count");
+        int references = call_function("dbg_get_scan_edge_count");
         for (int i = 0; i < Iterations; ++i) {
             ReferenceArgBindingTest::bindOnly(\h);
         }
-        return (now_us() - start).durationMicroseconds().toFloat() / Iterations;
+        return {
+            "scans": call_function("dbg_get_lvalue_scan_count") - scans,
+            "references": call_function("dbg_get_scan_edge_count") - references,
+        };
     }
 }

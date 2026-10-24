@@ -405,9 +405,10 @@ DLLLOCAL bool qore_reflection_has_module_caller(const QoreProgram* caller, const
 
 //! Resolves the manager for a POLICY check (filesystem/network); honors the policy barrier
 /** Identical to @ref qore_find_thread_sandbox_manager_ref() except that an active policy
-    barrier stops resolution at the current Program, so trusted infrastructure code does not
-    inherit a sandboxed caller's filesystem/network policy.  The current Program's own manager
-    still wins, so a callback re-entering sandboxed code remains sandboxed.
+    barrier stops resolution at the Program context that was current when it was pushed, so
+    trusted infrastructure code does not inherit a sandboxed caller's filesystem/network policy.
+    The managers of Programs entered inside the barrier still win, so a callback re-entering
+    sandboxed code, and the module code it calls, remains sandboxed.
 
     @since Qore 3.0
 */

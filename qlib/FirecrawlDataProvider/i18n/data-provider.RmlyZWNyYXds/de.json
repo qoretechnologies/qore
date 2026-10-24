@@ -831,27 +831,27 @@
           "source": "Viewport dimensions for the screenshot, with `width` and `height` keys (both integers, in pixels). Used by the `screenshot` action",
           "message": "Ansichtsfensterabmessungen für den Screenshot mit `width` und `height` Schlüsseln (beide Ganzzahlen, in Pixel). Wird von der Aktion `screenshot` verwendet"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyTnlZWEJsOkZpcmVjcmF3bFZpZXdwb3J0RGF0YVR5cGU6Kmhhc2g8YXV0bz4jNzgyNmUzOWE5NTFmZTliYmM1NTNkMjRlZjQxMjcyNzVlOGQwMmE3ZWMxMjg5YmVhYjZkZmYzZmI0OTBiMzdhYjpvcHRpb246WVdOMGFXOXVjdzpmaWVsZDpkbWxsZDNCdmNuUQ.field.aGVpZ2h0.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyTnlZWEJsOkZpcmVjcmF3bFZpZXdwb3J0RGF0YVR5cGU6Kmhhc2g8YXV0bz4jNzgyNmUzOWE5NTFmZTliYmM1NTNkMjRlZjQxMjcyNzVlOGQwMmE3ZWMxMjg5YmVhYjZkZmYzZmI0OTBiMzdhYg.field.aGVpZ2h0.display_name": {
           "source": "Height",
           "message": "Höhe"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyTnlZWEJsOkZpcmVjcmF3bFZpZXdwb3J0RGF0YVR5cGU6Kmhhc2g8YXV0bz4jNzgyNmUzOWE5NTFmZTliYmM1NTNkMjRlZjQxMjcyNzVlOGQwMmE3ZWMxMjg5YmVhYjZkZmYzZmI0OTBiMzdhYjpvcHRpb246WVdOMGFXOXVjdzpmaWVsZDpkbWxsZDNCdmNuUQ.field.aGVpZ2h0.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyTnlZWEJsOkZpcmVjcmF3bFZpZXdwb3J0RGF0YVR5cGU6Kmhhc2g8YXV0bz4jNzgyNmUzOWE5NTFmZTliYmM1NTNkMjRlZjQxMjcyNzVlOGQwMmE3ZWMxMjg5YmVhYjZkZmYzZmI0OTBiMzdhYg.field.aGVpZ2h0.short_desc": {
           "source": "Viewport height in pixels",
           "message": "Ansichtsfensterhöhe in Pixel"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyTnlZWEJsOkZpcmVjcmF3bFZpZXdwb3J0RGF0YVR5cGU6Kmhhc2g8YXV0bz4jNzgyNmUzOWE5NTFmZTliYmM1NTNkMjRlZjQxMjcyNzVlOGQwMmE3ZWMxMjg5YmVhYjZkZmYzZmI0OTBiMzdhYjpvcHRpb246WVdOMGFXOXVjdzpmaWVsZDpkbWxsZDNCdmNuUQ.field.aGVpZ2h0.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyTnlZWEJsOkZpcmVjcmF3bFZpZXdwb3J0RGF0YVR5cGU6Kmhhc2g8YXV0bz4jNzgyNmUzOWE5NTFmZTliYmM1NTNkMjRlZjQxMjcyNzVlOGQwMmE3ZWMxMjg5YmVhYjZkZmYzZmI0OTBiMzdhYg.field.aGVpZ2h0.desc": {
           "source": "Viewport height in pixels",
           "message": "Ansichtsfensterhöhe in Pixel"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyTnlZWEJsOkZpcmVjcmF3bFZpZXdwb3J0RGF0YVR5cGU6Kmhhc2g8YXV0bz4jNzgyNmUzOWE5NTFmZTliYmM1NTNkMjRlZjQxMjcyNzVlOGQwMmE3ZWMxMjg5YmVhYjZkZmYzZmI0OTBiMzdhYjpvcHRpb246WVdOMGFXOXVjdzpmaWVsZDpkbWxsZDNCdmNuUQ.field.d2lkdGg.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyTnlZWEJsOkZpcmVjcmF3bFZpZXdwb3J0RGF0YVR5cGU6Kmhhc2g8YXV0bz4jNzgyNmUzOWE5NTFmZTliYmM1NTNkMjRlZjQxMjcyNzVlOGQwMmE3ZWMxMjg5YmVhYjZkZmYzZmI0OTBiMzdhYg.field.d2lkdGg.display_name": {
           "source": "Width",
           "message": "Breite"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyTnlZWEJsOkZpcmVjcmF3bFZpZXdwb3J0RGF0YVR5cGU6Kmhhc2g8YXV0bz4jNzgyNmUzOWE5NTFmZTliYmM1NTNkMjRlZjQxMjcyNzVlOGQwMmE3ZWMxMjg5YmVhYjZkZmYzZmI0OTBiMzdhYjpvcHRpb246WVdOMGFXOXVjdzpmaWVsZDpkbWxsZDNCdmNuUQ.field.d2lkdGg.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyTnlZWEJsOkZpcmVjcmF3bFZpZXdwb3J0RGF0YVR5cGU6Kmhhc2g8YXV0bz4jNzgyNmUzOWE5NTFmZTliYmM1NTNkMjRlZjQxMjcyNzVlOGQwMmE3ZWMxMjg5YmVhYjZkZmYzZmI0OTBiMzdhYg.field.d2lkdGg.short_desc": {
           "source": "Viewport width in pixels",
           "message": "Ansichtsfensterbreite in Pixel"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyTnlZWEJsOkZpcmVjcmF3bFZpZXdwb3J0RGF0YVR5cGU6Kmhhc2g8YXV0bz4jNzgyNmUzOWE5NTFmZTliYmM1NTNkMjRlZjQxMjcyNzVlOGQwMmE3ZWMxMjg5YmVhYjZkZmYzZmI0OTBiMzdhYjpvcHRpb246WVdOMGFXOXVjdzpmaWVsZDpkbWxsZDNCdmNuUQ.field.d2lkdGg.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyTnlZWEJsOkZpcmVjcmF3bFZpZXdwb3J0RGF0YVR5cGU6Kmhhc2g8YXV0bz4jNzgyNmUzOWE5NTFmZTliYmM1NTNkMjRlZjQxMjcyNzVlOGQwMmE3ZWMxMjg5YmVhYjZkZmYzZmI0OTBiMzdhYg.field.d2lkdGg.desc": {
           "source": "Viewport width in pixels",
           "message": "Ansichtsfensterbreite in Pixel"
         },
@@ -1555,27 +1555,27 @@
           "source": "Viewport dimensions for the screenshot, with `width` and `height` keys (both integers, in pixels). Used by the `screenshot` action",
           "message": "Ansichtsfensterabmessungen für den Screenshot mit `width` und `height` Schlüsseln (beide Ganzzahlen, in Pixel). Wird von der Aktion `screenshot` verwendet"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlltRjBZMmd0YzJOeVlYQmw6RmlyZWNyYXdsVmlld3BvcnREYXRhVHlwZToqaGFzaDxhdXRvPiM3ODI2ZTM5YTk1MWZlOWJiYzU1M2QyNGVmNDEyNzI3NWU4ZDAyYTdlYzEyODliZWFiNmRmZjNmYjQ5MGIzN2FiOm9wdGlvbjpZV04wYVc5dWN3OmZpZWxkOmRtbGxkM0J2Y25R.field.aGVpZ2h0.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlltRjBZMmd0YzJOeVlYQmw6RmlyZWNyYXdsVmlld3BvcnREYXRhVHlwZToqaGFzaDxhdXRvPiM3ODI2ZTM5YTk1MWZlOWJiYzU1M2QyNGVmNDEyNzI3NWU4ZDAyYTdlYzEyODliZWFiNmRmZjNmYjQ5MGIzN2Fi.field.aGVpZ2h0.display_name": {
           "source": "Height",
           "message": "Höhe"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlltRjBZMmd0YzJOeVlYQmw6RmlyZWNyYXdsVmlld3BvcnREYXRhVHlwZToqaGFzaDxhdXRvPiM3ODI2ZTM5YTk1MWZlOWJiYzU1M2QyNGVmNDEyNzI3NWU4ZDAyYTdlYzEyODliZWFiNmRmZjNmYjQ5MGIzN2FiOm9wdGlvbjpZV04wYVc5dWN3OmZpZWxkOmRtbGxkM0J2Y25R.field.aGVpZ2h0.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlltRjBZMmd0YzJOeVlYQmw6RmlyZWNyYXdsVmlld3BvcnREYXRhVHlwZToqaGFzaDxhdXRvPiM3ODI2ZTM5YTk1MWZlOWJiYzU1M2QyNGVmNDEyNzI3NWU4ZDAyYTdlYzEyODliZWFiNmRmZjNmYjQ5MGIzN2Fi.field.aGVpZ2h0.short_desc": {
           "source": "Viewport height in pixels",
           "message": "Ansichtsfensterhöhe in Pixel"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlltRjBZMmd0YzJOeVlYQmw6RmlyZWNyYXdsVmlld3BvcnREYXRhVHlwZToqaGFzaDxhdXRvPiM3ODI2ZTM5YTk1MWZlOWJiYzU1M2QyNGVmNDEyNzI3NWU4ZDAyYTdlYzEyODliZWFiNmRmZjNmYjQ5MGIzN2FiOm9wdGlvbjpZV04wYVc5dWN3OmZpZWxkOmRtbGxkM0J2Y25R.field.aGVpZ2h0.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlltRjBZMmd0YzJOeVlYQmw6RmlyZWNyYXdsVmlld3BvcnREYXRhVHlwZToqaGFzaDxhdXRvPiM3ODI2ZTM5YTk1MWZlOWJiYzU1M2QyNGVmNDEyNzI3NWU4ZDAyYTdlYzEyODliZWFiNmRmZjNmYjQ5MGIzN2Fi.field.aGVpZ2h0.desc": {
           "source": "Viewport height in pixels",
           "message": "Ansichtsfensterhöhe in Pixel"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlltRjBZMmd0YzJOeVlYQmw6RmlyZWNyYXdsVmlld3BvcnREYXRhVHlwZToqaGFzaDxhdXRvPiM3ODI2ZTM5YTk1MWZlOWJiYzU1M2QyNGVmNDEyNzI3NWU4ZDAyYTdlYzEyODliZWFiNmRmZjNmYjQ5MGIzN2FiOm9wdGlvbjpZV04wYVc5dWN3OmZpZWxkOmRtbGxkM0J2Y25R.field.d2lkdGg.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlltRjBZMmd0YzJOeVlYQmw6RmlyZWNyYXdsVmlld3BvcnREYXRhVHlwZToqaGFzaDxhdXRvPiM3ODI2ZTM5YTk1MWZlOWJiYzU1M2QyNGVmNDEyNzI3NWU4ZDAyYTdlYzEyODliZWFiNmRmZjNmYjQ5MGIzN2Fi.field.d2lkdGg.display_name": {
           "source": "Width",
           "message": "Breite"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlltRjBZMmd0YzJOeVlYQmw6RmlyZWNyYXdsVmlld3BvcnREYXRhVHlwZToqaGFzaDxhdXRvPiM3ODI2ZTM5YTk1MWZlOWJiYzU1M2QyNGVmNDEyNzI3NWU4ZDAyYTdlYzEyODliZWFiNmRmZjNmYjQ5MGIzN2FiOm9wdGlvbjpZV04wYVc5dWN3OmZpZWxkOmRtbGxkM0J2Y25R.field.d2lkdGg.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlltRjBZMmd0YzJOeVlYQmw6RmlyZWNyYXdsVmlld3BvcnREYXRhVHlwZToqaGFzaDxhdXRvPiM3ODI2ZTM5YTk1MWZlOWJiYzU1M2QyNGVmNDEyNzI3NWU4ZDAyYTdlYzEyODliZWFiNmRmZjNmYjQ5MGIzN2Fi.field.d2lkdGg.short_desc": {
           "source": "Viewport width in pixels",
           "message": "Ansichtsfensterbreite in Pixel"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlltRjBZMmd0YzJOeVlYQmw6RmlyZWNyYXdsVmlld3BvcnREYXRhVHlwZToqaGFzaDxhdXRvPiM3ODI2ZTM5YTk1MWZlOWJiYzU1M2QyNGVmNDEyNzI3NWU4ZDAyYTdlYzEyODliZWFiNmRmZjNmYjQ5MGIzN2FiOm9wdGlvbjpZV04wYVc5dWN3OmZpZWxkOmRtbGxkM0J2Y25R.field.d2lkdGg.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlltRjBZMmd0YzJOeVlYQmw6RmlyZWNyYXdsVmlld3BvcnREYXRhVHlwZToqaGFzaDxhdXRvPiM3ODI2ZTM5YTk1MWZlOWJiYzU1M2QyNGVmNDEyNzI3NWU4ZDAyYTdlYzEyODliZWFiNmRmZjNmYjQ5MGIzN2Fi.field.d2lkdGg.desc": {
           "source": "Viewport width in pixels",
           "message": "Ansichtsfensterbreite in Pixel"
         },
@@ -2379,55 +2379,55 @@
           "source": "List of parser configurations for PDF processing. Each entry specifies a parser type and processing options",
           "message": "Liste der Parser-Konfigurationen für die PDF-Verarbeitung. Jeder Eintrag gibt einen Parser-Typ und Verarbeitungsoptionen an"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bWF4UGFnZXM.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bWF4UGFnZXM.display_name": {
           "source": "Max Pages",
           "message": "Max. Seitenanzahl"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bWF4UGFnZXM.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bWF4UGFnZXM.short_desc": {
           "source": "Maximum number of pages to parse",
           "message": "Maximale Anzahl an Seiten, die analysiert werden sollen"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bWF4UGFnZXM.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bWF4UGFnZXM.desc": {
           "source": "Maximum number of PDF pages to parse. Range: `1`-`10000`",
           "message": "Maximale Anzahl an PDF-Seiten, die analysiert werden sollen. Bereich: `1`-`10000`"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bW9kZQ.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bW9kZQ.display_name": {
           "source": "Mode",
           "message": "Modus"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bW9kZQ.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bW9kZQ.short_desc": {
           "source": "PDF processing mode",
           "message": "PDF-Verarbeitungsmodus"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bW9kZQ.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bW9kZQ.desc": {
           "source": "The PDF processing strategy to use.\n\n- `fast` — text extraction only, no OCR\n- `auto` — fast extraction with OCR fallback for scanned pages\n- `ocr` — force OCR on all pages",
           "message": "Die PDF-Verarbeitungsstrategie, die verwendet werden soll.\n\n- `fast` — nur Textextraktion, keine OCR\n- `auto` — schnelle Extraktion mit OCR-Fallback für gescannte Seiten\n- `ocr` — OCR auf allen Seiten erzwingen"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bW9kZQ.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bW9kZQ.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
           "source": "Fast",
           "message": "Schnell"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bW9kZQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bW9kZQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Auto",
           "message": "Auto"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bW9kZQ.allowed-value.c3RyaW5nOm9jcg.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bW9kZQ.allowed-value.c3RyaW5nOm9jcg.display_name": {
           "source": "OCR",
           "message": "OCR"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.dHlwZQ.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Typ"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.dHlwZQ.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.dHlwZQ.short_desc": {
           "source": "Parser type",
           "message": "Parser-Typ"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.dHlwZQ.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.dHlwZQ.desc": {
           "source": "The parser type. Currently only `pdf` is supported",
           "message": "Der Parser-Typ. Derzeit wird nur `pdf` unterstützt"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.dHlwZQ.allowed-value.c3RyaW5nOnBkZg.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.dHlwZQ.allowed-value.c3RyaW5nOnBkZg.display_name": {
           "source": "PDF",
           "message": "PDF"
         },
@@ -2443,27 +2443,27 @@
           "source": "Named browser profile to reuse session state (cookies, local storage) across scrape requests",
           "message": "Benanntes Browserprofil, um Sitzungszustand (Cookies, Lokalgespeicher) über Scraping-Anfragen hinweg wiederzuverwenden"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY.field.bmFtZQ.display_name": {
           "source": "Profile Name",
           "message": "Profilname"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY.field.bmFtZQ.short_desc": {
           "source": "Name of the browser profile",
           "message": "Name des Browserprofils"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY.field.bmFtZQ.desc": {
           "source": "Name of the browser profile to use. The first scrape with a given name creates the profile; subsequent scrapes reuse its session state",
           "message": "Name des Browserprofils, das verwendet werden soll. Der erste Scraping-Vorgang mit einem bestimmten Namen erstellt das Profil; nachfolgende Scraping-Vorgänge wiederverwenden dessen Sitzungszustand (Cookies, Lokalgespeicher)"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY.field.c2F2ZUNoYW5nZXM.display_name": {
           "source": "Save Changes",
           "message": "Änderungen speichern"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY.field.c2F2ZUNoYW5nZXM.short_desc": {
           "source": "Persist changes back to the profile",
           "message": "Änderungen im Profil speichern"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY.field.c2F2ZUNoYW5nZXM.desc": {
           "source": "If `True`, changes made during the scrape (cookies, local storage, etc.) are saved back to the named profile. Defaults to `False`",
           "message": "Wenn `True`, werden während des Scrapings vorgenommene Änderungen (Cookies, Lokales Speicher, usw.) in das benannte Profil zurückgeschrieben. Standardwert: `False`"
         },
@@ -3135,55 +3135,55 @@
           "source": "List of parser configurations for PDF processing. Each entry specifies a parser type and processing options",
           "message": "Liste der Parser-Konfigurationen für die PDF-Verarbeitung. Jeder Eintrag gibt einen Parser-Typ und Verarbeitungsoptionen an"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQzOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0dGeWMyVnljdw.field.bWF4UGFnZXM.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQz.field.bWF4UGFnZXM.display_name": {
           "source": "Max Pages",
           "message": "Max. Seitenanzahl"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQzOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0dGeWMyVnljdw.field.bWF4UGFnZXM.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQz.field.bWF4UGFnZXM.short_desc": {
           "source": "Maximum number of pages to parse",
           "message": "Maximale Anzahl an Seiten, die analysiert werden sollen"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQzOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0dGeWMyVnljdw.field.bWF4UGFnZXM.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQz.field.bWF4UGFnZXM.desc": {
           "source": "Maximum number of PDF pages to parse. Range: `1`-`10000`",
           "message": "Maximale Anzahl an PDF-Seiten, die analysiert werden sollen. Bereich: `1`-`10000`"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQzOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0dGeWMyVnljdw.field.bW9kZQ.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQz.field.bW9kZQ.display_name": {
           "source": "Mode",
           "message": "Modus"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQzOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0dGeWMyVnljdw.field.bW9kZQ.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQz.field.bW9kZQ.short_desc": {
           "source": "PDF processing mode",
           "message": "PDF-Verarbeitungsmodus"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQzOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0dGeWMyVnljdw.field.bW9kZQ.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQz.field.bW9kZQ.desc": {
           "source": "The PDF processing strategy to use.\n\n- `fast` — text extraction only, no OCR\n- `auto` — fast extraction with OCR fallback for scanned pages\n- `ocr` — force OCR on all pages",
           "message": "Die PDF-Verarbeitungsstrategie, die verwendet werden soll.\n\n- `fast` — nur Textextraktion, keine OCR\n- `auto` — schnelle Extraktion mit OCR-Fallback für gescannte Seiten\n- `ocr` — OCR auf allen Seiten erzwingen"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQzOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0dGeWMyVnljdw.field.bW9kZQ.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQz.field.bW9kZQ.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
           "source": "Fast",
           "message": "Schnell"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQzOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0dGeWMyVnljdw.field.bW9kZQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQz.field.bW9kZQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Auto",
           "message": "Auto"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQzOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0dGeWMyVnljdw.field.bW9kZQ.allowed-value.c3RyaW5nOm9jcg.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQz.field.bW9kZQ.allowed-value.c3RyaW5nOm9jcg.display_name": {
           "source": "OCR",
           "message": "OCR"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQzOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0dGeWMyVnljdw.field.dHlwZQ.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQz.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Typ"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQzOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0dGeWMyVnljdw.field.dHlwZQ.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQz.field.dHlwZQ.short_desc": {
           "source": "Parser type",
           "message": "Parser-Typ"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQzOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0dGeWMyVnljdw.field.dHlwZQ.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQz.field.dHlwZQ.desc": {
           "source": "The parser type. Currently only `pdf` is supported",
           "message": "Der Parser-Typ. Derzeit wird nur `pdf` unterstützt"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQzOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0dGeWMyVnljdw.field.dHlwZQ.allowed-value.c3RyaW5nOnBkZg.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFBhcnNlcnNEYXRhVHlwZToqaGFzaDxhdXRvPiM4ZjBkMzMwM2M2N2Q5NTY3YzJlMDgxZWU0Y2RmYTUyMzg1YzM5NmQ2MGIyYzE4MjFhMGYwYWNlODViY2JhNGQz.field.dHlwZQ.allowed-value.c3RyaW5nOnBkZg.display_name": {
           "source": "PDF",
           "message": "PDF"
         },
@@ -3199,27 +3199,27 @@
           "source": "Named browser profile to reuse session state (cookies, local storage) across scrape requests",
           "message": "Benanntes Browserprofil, um Sitzungszustand (Cookies, Lokalgespeicher) über Scraping-Anfragen hinweg wiederzuverwenden"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVmOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.bmFtZQ.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVm.field.bmFtZQ.display_name": {
           "source": "Profile Name",
           "message": "Profilname"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVmOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.bmFtZQ.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVm.field.bmFtZQ.short_desc": {
           "source": "Name of the browser profile",
           "message": "Name des Browserprofils"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVmOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.bmFtZQ.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVm.field.bmFtZQ.desc": {
           "source": "Name of the browser profile to use. The first scrape with a given name creates the profile; subsequent scrapes reuse its session state",
           "message": "Name des Browserprofils, das verwendet werden soll. Der erste Scraping-Vorgang mit einem bestimmten Namen erstellt das Profil; nachfolgende Scraping-Vorgänge wiederverwenden dessen Sitzungszustand (Cookies, Lokalgespeicher)"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVmOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.c2F2ZUNoYW5nZXM.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVm.field.c2F2ZUNoYW5nZXM.display_name": {
           "source": "Save Changes",
           "message": "Änderungen speichern"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVmOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.c2F2ZUNoYW5nZXM.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVm.field.c2F2ZUNoYW5nZXM.short_desc": {
           "source": "Persist changes back to the profile",
           "message": "Änderungen im Profil speichern"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVmOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.c2F2ZUNoYW5nZXM.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVm.field.c2F2ZUNoYW5nZXM.desc": {
           "source": "If `True`, changes made during the scrape (cookies, local storage, etc.) are saved back to the named profile. Defaults to `False`",
           "message": "Wenn `True`, werden während des Scrapings vorgenommene Änderungen (Cookies, Lokales Speicher, usw.) in das benannte Profil zurückgeschrieben. Standardwert: `False`"
         },
@@ -3635,55 +3635,55 @@
           "source": "List of parser configurations for PDF processing. Each entry specifies a parser type and processing options",
           "message": "Liste der Parser-Konfigurationen für die PDF-Verarbeitung. Jeder Eintrag gibt einen Parser-Typ und Verarbeitungsoptionen an"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bWF4UGFnZXM.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bWF4UGFnZXM.display_name": {
           "source": "Max Pages",
           "message": "Max. Seitenanzahl"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bWF4UGFnZXM.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bWF4UGFnZXM.short_desc": {
           "source": "Maximum number of pages to parse",
           "message": "Maximale Anzahl an Seiten, die analysiert werden sollen"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bWF4UGFnZXM.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bWF4UGFnZXM.desc": {
           "source": "Maximum number of PDF pages to parse. Range: `1`-`10000`",
           "message": "Maximale Anzahl an PDF-Seiten, die analysiert werden sollen. Bereich: `1`-`10000`"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bW9kZQ.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bW9kZQ.display_name": {
           "source": "Mode",
           "message": "Modus"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bW9kZQ.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bW9kZQ.short_desc": {
           "source": "PDF processing mode",
           "message": "PDF-Verarbeitungsmodus"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bW9kZQ.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bW9kZQ.desc": {
           "source": "The PDF processing strategy to use.\n\n- `fast` — text extraction only, no OCR\n- `auto` — fast extraction with OCR fallback for scanned pages\n- `ocr` — force OCR on all pages",
           "message": "Die PDF-Verarbeitungsstrategie, die verwendet werden soll.\n\n- `fast` — nur Textextraktion, keine OCR\n- `auto` — schnelle Extraktion mit OCR-Fallback für gescannte Seiten\n- `ocr` — OCR auf allen Seiten erzwingen"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bW9kZQ.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bW9kZQ.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
           "source": "Fast",
           "message": "Schnell"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bW9kZQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bW9kZQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Auto",
           "message": "Auto"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.bW9kZQ.allowed-value.c3RyaW5nOm9jcg.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.bW9kZQ.allowed-value.c3RyaW5nOm9jcg.display_name": {
           "source": "OCR",
           "message": "OCR"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.dHlwZQ.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Typ"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.dHlwZQ.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.dHlwZQ.short_desc": {
           "source": "Parser type",
           "message": "Parser-Typ"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.dHlwZQ.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.dHlwZQ.desc": {
           "source": "The parser type. Currently only `pdf` is supported",
           "message": "Der Parser-Typ. Derzeit wird nur `pdf` unterstützt"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjR0Z5YzJWeWN3.field.dHlwZQ.allowed-value.c3RyaW5nOnBkZg.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUGFyc2Vyc0RhdGFUeXBlOipoYXNoPGF1dG8-IzhmMGQzMzAzYzY3ZDk1NjdjMmUwODFlZTRjZGZhNTIzODVjMzk2ZDYwYjJjMTgyMWEwZjBhY2U4NWJjYmE0ZDM.field.dHlwZQ.allowed-value.c3RyaW5nOnBkZg.display_name": {
           "source": "PDF",
           "message": "PDF"
         },
@@ -3699,27 +3699,27 @@
           "source": "Named browser profile to reuse session state (cookies, local storage) across scrape requests",
           "message": "Benanntes Browserprofil, um Sitzungszustand (Cookies, Lokalgespeicher) über Scraping-Anfragen hinweg wiederzuverwenden"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY.field.bmFtZQ.display_name": {
           "source": "Profile Name",
           "message": "Profilname"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY.field.bmFtZQ.short_desc": {
           "source": "Name of the browser profile",
           "message": "Name des Browserprofils"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY.field.bmFtZQ.desc": {
           "source": "Name of the browser profile to use. The first scrape with a given name creates the profile; subsequent scrapes reuse its session state",
           "message": "Name des Browserprofils, das verwendet werden soll. Der erste Scraping-Vorgang mit einem bestimmten Namen erstellt das Profil; nachfolgende Scraping-Vorgänge wiederverwenden dessen Sitzungszustand (Cookies, Lokalgespeicher)"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY.field.c2F2ZUNoYW5nZXM.display_name": {
           "source": "Save Changes",
           "message": "Änderungen speichern"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY.field.c2F2ZUNoYW5nZXM.short_desc": {
           "source": "Persist changes back to the profile",
           "message": "Änderungen im Profil speichern"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY.field.c2F2ZUNoYW5nZXM.desc": {
           "source": "If `True`, changes made during the scrape (cookies, local storage, etc.) are saved back to the named profile. Defaults to `False`",
           "message": "Wenn `True`, werden während des Scrapings vorgenommene Änderungen (Cookies, Lokales Speicher, usw.) in das benannte Profil zurückgeschrieben. Standardwert: `False`"
         },

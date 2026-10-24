@@ -2303,135 +2303,135 @@
           "source": "Override the organization's physical address shown in the email footer",
           "message": "覆蓋電子郵件頁尾顯示的組織實體地址"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMQ.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMQ.display_name": {
           "source": "Address Line 1",
           "message": "地址行 1"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMQ.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMQ.short_desc": {
           "source": "Primary address line",
           "message": "主要地址第一行"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMQ.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMQ.desc": {
           "source": "The primary address line",
           "message": "主要地址行"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMg.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMg.display_name": {
           "source": "Address Line 2",
           "message": "地址行 2"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMg.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMg.short_desc": {
           "source": "Secondary address line",
           "message": "第二地址行"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMg.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMg.desc": {
           "source": "The secondary address line",
           "message": "次要地址行"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMw.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMw.display_name": {
           "source": "Address Line 3",
           "message": "地址第 3 行"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMw.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMw.short_desc": {
           "source": "Third address line",
           "message": "第三地址欄位"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19saW5lMw.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19saW5lMw.desc": {
           "source": "The third address line",
           "message": "第三個地址行"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19vcHRpb25hbA.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19vcHRpb25hbA.display_name": {
           "source": "Address Optional",
           "message": "地址可選"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19vcHRpb25hbA.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19vcHRpb25hbA.short_desc": {
           "source": "Additional address details",
           "message": "額外地址細節"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.YWRkcmVzc19vcHRpb25hbA.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.YWRkcmVzc19vcHRpb25hbA.desc": {
           "source": "Additional address details (suite, floor, etc.)",
           "message": "額外地址細節（套房、樓層等）"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y2l0eQ.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y2l0eQ.display_name": {
           "source": "City",
           "message": "城市"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y2l0eQ.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y2l0eQ.short_desc": {
           "source": "The city",
           "message": "城市"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y2l0eQ.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y2l0eQ.desc": {
           "source": "The city name",
           "message": "城市名稱"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9jb2Rl.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9jb2Rl.display_name": {
           "source": "Country Code",
           "message": "國家/地區代碼"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9jb2Rl.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9jb2Rl.short_desc": {
           "source": "Two-letter country code",
           "message": "兩位字母的國家/地區代碼"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9jb2Rl.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9jb2Rl.desc": {
           "source": "The two-letter ISO country code",
           "message": "兩位字母的 ISO 國家/地區代碼"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9uYW1l.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9uYW1l.display_name": {
           "source": "Country Name",
           "message": "國家名稱"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9uYW1l.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9uYW1l.short_desc": {
           "source": "Full country name",
           "message": "完整國家名稱"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.Y291bnRyeV9uYW1l.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.Y291bnRyeV9uYW1l.desc": {
           "source": "The full country name",
           "message": "完整的國家名稱"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.b3JnYW5pemF0aW9uX25hbWU.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.b3JnYW5pemF0aW9uX25hbWU.display_name": {
           "source": "Organization Name",
           "message": "組織名稱"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
           "source": "Business or organization name",
           "message": "商業或組織名稱"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.b3JnYW5pemF0aW9uX25hbWU.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.b3JnYW5pemF0aW9uX25hbWU.desc": {
           "source": "The business or organization name for the footer",
           "message": "頁尾的企業或組織名稱"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.cG9zdGFsX2NvZGU.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.cG9zdGFsX2NvZGU.display_name": {
           "source": "Postal Code",
           "message": "郵遞區號"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.cG9zdGFsX2NvZGU.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.cG9zdGFsX2NvZGU.short_desc": {
           "source": "The postal/ZIP code",
           "message": "郵政/ZIP 編碼"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.cG9zdGFsX2NvZGU.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.cG9zdGFsX2NvZGU.desc": {
           "source": "The postal or ZIP code",
           "message": "郵遞區號"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfY29kZQ.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfY29kZQ.display_name": {
           "source": "State Code",
           "message": "州/省代碼"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfY29kZQ.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfY29kZQ.short_desc": {
           "source": "State or province code",
           "message": "州或省代碼"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfY29kZQ.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfY29kZQ.desc": {
           "source": "The state or province code",
           "message": "州或省代碼"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfbmFtZQ.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfbmFtZQ.display_name": {
           "source": "State Name",
           "message": "狀態名稱"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfbmFtZQ.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfbmFtZQ.short_desc": {
           "source": "Full state or province name",
           "message": "完整省或州名稱"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZiOm9wdGlvbjpaVzFoYVd4ZlkyRnRjR0ZwWjI1ZllXTjBhWFpwZEdsbGN3OmZpZWxkOmNHaDVjMmxqWVd4ZllXUmtjbVZ6YzE5cGJsOW1iMjkwWlhJ.field.c3RhdGVfbmFtZQ.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOlkzSmxZWFJsTFdWdFlXbHNMV05oYlhCaGFXZHU6Q29uc3RhbnRDb250YWN0Rm9vdGVyQWRkcmVzc0RhdGFUeXBlOkNvbnN0YW50Q29udGFjdEZvb3RlckFkZHJlc3NEYXRhVHlwZSM3NjM5NzFmN2ViNjI5ODI3NjY1NDMxMTZmYjA1ZDE4N2YzMzAwYWZjYzBiZDg5NGM5ZTA3YmExYmViZmVmYTZi.field.c3RhdGVfbmFtZQ.desc": {
           "source": "The full state or province name",
           "message": "完整的州或省名稱"
         },
@@ -2855,15 +2855,15 @@
           "source": "An optional exclude object to filter out specific contacts when using `all_active_contacts` or `list_ids`",
           "message": "可選的排除物件，用於在使用 `all_active_contacts` 或 `list_ids` 時過濾特定聯絡人"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3Om9wdGlvbjpjMjkxY21ObDpmaWVsZDpaWGhqYkhWa1pR.field.Y29udGFjdF9pZHM.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3.field.Y29udGFjdF9pZHM.display_name": {
           "source": "Exclude Contact IDs",
           "message": "排除聯絡人 ID"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3Om9wdGlvbjpjMjkxY21ObDpmaWVsZDpaWGhqYkhWa1pR.field.Y29udGFjdF9pZHM.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3.field.Y29udGFjdF9pZHM.short_desc": {
           "source": "Contact IDs to exclude",
           "message": "要排除的聯絡人 ID"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3Om9wdGlvbjpjMjkxY21ObDpmaWVsZDpaWGhqYkhWa1pR.field.Y29udGFjdF9pZHM.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOllXUmtMV3hwYzNRdGJXVnRZbVZ5Y3c6Q29uc3RhbnRDb250YWN0QnVsa0FjdGl2aXR5RXhjbHVkZURhdGFUeXBlOkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZSMyYTU1YzkwYjJmY2RkYmY0NmYxM2IzYWE1NzE4NDE5ZDNkNzcxYjllZWY4YjE1OTk5MjJiOTAzYjIyOGMxMzk3.field.Y29udGFjdF9pZHM.desc": {
           "source": "A list of contact IDs to exclude from the activity",
           "message": "要從活動中排除的聯絡人 ID 清單"
         },
@@ -3031,15 +3031,15 @@
           "source": "An optional exclude object to filter out specific contacts when using `all_active_contacts` or `list_ids`",
           "message": "可選的排除物件，用於在使用 `all_active_contacts` 或 `list_ids` 時過濾特定聯絡人"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5NzpvcHRpb246YzI5MWNtTmw6ZmllbGQ6WlhoamJIVmtaUQ.field.Y29udGFjdF9pZHM.display_name": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5Nw.field.Y29udGFjdF9pZHM.display_name": {
           "source": "Exclude Contact IDs",
           "message": "排除聯絡人 ID"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5NzpvcHRpb246YzI5MWNtTmw6ZmllbGQ6WlhoamJIVmtaUQ.field.Y29udGFjdF9pZHM.short_desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5Nw.field.Y29udGFjdF9pZHM.short_desc": {
           "source": "Contact IDs to exclude",
           "message": "要排除的聯絡人 ID"
         },
-        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5NzpvcHRpb246YzI5MWNtTmw6ZmllbGQ6WlhoamJIVmtaUQ.field.Y29udGFjdF9pZHM.desc": {
+        "app.Q29uc3RhbnRDb250YWN0.type.YWN0aW9uOmNtVnRiM1psTFd4cGMzUXRiV1Z0WW1WeWN3OkNvbnN0YW50Q29udGFjdEJ1bGtBY3Rpdml0eUV4Y2x1ZGVEYXRhVHlwZTpDb25zdGFudENvbnRhY3RCdWxrQWN0aXZpdHlFeGNsdWRlRGF0YVR5cGUjMmE1NWM5MGIyZmNkZGJmNDZmMTNiM2FhNTcxODQxOWQzZDc3MWI5ZWVmOGIxNTk5OTIyYjkwM2IyMjhjMTM5Nw.field.Y29udGFjdF9pZHM.desc": {
           "source": "A list of contact IDs to exclude from the activity",
           "message": "要從活動中排除的聯絡人 ID 清單"
         },

@@ -712,6 +712,18 @@ int cpp_api_file_read_unbacked(string path, int size) {
     return static_cast<int64>(rc);
 }
 
+//! returns the data pointer of a binary value as the C++ API gives it to a module (BinaryNode::getPtr())
+/** @param b the binary value
+
+    @return a hash with \c null: @ref True if the data pointer is a null pointer, and \c size: the size of the value
+*/
+hash<auto> cpp_api_binary_data(binary b) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("null", b->getPtr() ? false : true, xsink);
+    rv->setKeyValue("size", static_cast<int64>(b->size()), xsink);
+    return rv.release();
+}
+
 //! writes data of the given size, which is never touched, with OutputStream::write() of the stream (see above)
 /** @param output_stream the stream to write to
     @param size the number of bytes to write
@@ -977,6 +989,21 @@ hash<auto> cpp_api_env_snapshot(string prefix) [dom=EXTERNAL_INFO] {
         rv->setKeyValue(name.c_str(), new QoreStringNode(eq + 1), xsink);
     }
     return rv.release();
+}
+
+//! calls the code while the thread holds an AtomicEnvironmentSetter or a QoreEnvironmentReadLock, and returns its value
+/** @param c the code to call; it must not change the environment
+    @param exclusive true to hold an AtomicEnvironmentSetter, false to hold a QoreEnvironmentReadLock
+
+    @return the value that the code returns
+*/
+auto cpp_api_env_call_holding(code c, bool exclusive) [dom=PROCESS] {
+    if (exclusive) {
+        AtomicEnvironmentSetter env_lock;
+        return c->execValue(nullptr, xsink);
+    }
+    QoreEnvironmentReadLock env_lock;
+    return c->execValue(nullptr, xsink);
 }
 
 //! sets two environment variables to the same value atomically with an AtomicEnvironmentSetter

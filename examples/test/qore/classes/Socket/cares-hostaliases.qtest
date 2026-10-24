@@ -1,0 +1,106 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires ../../../../../qlib/QUnit.qm
+%requires ../../../../../qlib/Util.qm
+
+%exec-class CaresHostAliasesTest
+
+#! A name lookup reads the HOSTALIASES environment variable while no other thread changes the environment
+/** c-ares reads HOSTALIASES with getenv() when it starts the lookup of a name without a dot
+    (ares_lookup_hostaliases()), and uses the string that getenv() returned; a change to the environment made by
+    another thread at that moment can free that string or the environ array (musl's setenv() frees the value that it
+    replaces), so the lookup can read freed memory.
+
+    The debug hooks of dbg_env_read_race_arm() stop the next lookup right before c-ares starts it, and continue it
+    when the test thread, changing HOSTALIASES, either finds that its change must wait for the lookup (it tries to
+    acquire the environment change lock without waiting first) or completes the change; the change completing while
+    the lookup is stopped there is the race.  The lookup asks a DNS server address where nothing listens
+    (dbg_cares_set_servers()), so it fails at once without the network; whether c-ares finds the alias does not
+    matter here, only that it reads HOSTALIASES.
+*/
+class CaresHostAliasesTest inherits QUnit::Test {
+    public {
+        #! a name without a dot, which HOSTALIASES maps to another name
+        const Alias = "qorehostaliasprobe";
+    }
+
+    private {
+        #! the HOSTALIASES file of the test
+        string aliases_file;
+    }
+
+    constructor() : QUnit::Test("CaresHostAliasesTest", "1.0", \ARGV) {
+        aliases_file = sprintf("%s%sqore-hostaliases-%d.txt", tmp_location(), DirSep, getpid());
+        File f();
+        f.open2(aliases_file, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(Alias + " qorehostaliasprobe.invalid\n");
+        f.close();
+
+        addTestCase("a change to the environment waits for a lookup that reads HOSTALIASES", \testChangeWaits());
+        addTestCase("negative: the environment read probe cannot be armed twice", \testArmTwice());
+        on_exit {
+            unsetenv("HOSTALIASES");
+            unlink(aliases_file);
+        }
+        set_return_value(main());
+    }
+
+    testChangeWaits() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the environment read probe is only in debug builds");
+        }
+
+        setenv("HOSTALIASES", aliases_file);
+        on_exit unsetenv("HOSTALIASES");
+        # nothing listens on the discard port of the loopback address: the lookup fails without the network
+        string servers = call_function("dbg_cares_set_servers", "127.0.0.1:9");
+        on_exit call_function("dbg_cares_set_servers", servers);
+
+        Counter at_read(1);
+        call_function("dbg_env_read_race_arm", at_read);
+        bool disarmed;
+        on_exit if (!disarmed) {
+            call_function("dbg_env_read_race_result");
+        }
+
+        # a lookup in another thread stops right before c-ares starts it and reads HOSTALIASES
+        Queue lookup();
+        background sub () {
+            try {
+                lookup.push(map $1.address, getaddrinfo(Alias, NOTHING, AF_INET));
+            } catch (hash<ExceptionInfo> ex) {
+                lookup.push(ex.err);
+            }
+        }();
+        at_read.waitForZero();
+
+        # this thread changes HOSTALIASES while the lookup is stopped
+        assertEq(0, setenv("HOSTALIASES", aliases_file), "the change succeeded");
+
+        auto result = lookup.get();
+        hash<auto> probe = call_function("dbg_env_read_race_result");
+        disarmed = True;
+
+        assertTrue(probe.captured, "the lookup stopped where c-ares reads HOSTALIASES");
+        assertFalse(probe.change_during_read, "the change did not complete while c-ares could read the environment");
+        assertTrue(probe.change_waited, "the change waited for the lookup");
+        # no DNS server answers, and the alias is a .invalid name (RFC 6761): the lookup fails
+        assertEq("QOREADDRINFO-GETINFO-ERROR", result, "the lookup completed");
+    }
+
+    testArmTwice() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the environment read probe is only in debug builds");
+        }
+
+        Counter at_read(1);
+        call_function("dbg_env_read_race_arm", at_read);
+        on_exit call_function("dbg_env_read_race_result");
+        assertThrows("DBG-ARGUMENT-ERROR", "already armed", \call_function(), ("dbg_env_read_race_arm", at_read));
+    }
+}
