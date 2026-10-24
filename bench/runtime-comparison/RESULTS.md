@@ -20889,3 +20889,76 @@ already-resolved merge findings as resolved; performance data are unchanged.
 No new Java/develop comparison or performance ceiling is claimed. Host load,
 frequency and thermals are uncontrolled. Next resume the planned narrow
 callable-input subset proof while preserving binding and ownership semantics.
+
+## Rejected callable-input subset proof (2026-10-24)
+
+The compiler-only candidate proves that an actual literal function reference
+is accepted unchanged by a required code parameter. It reuses existing internal
+fast entries without changing global input equivalence, callable signature
+guarantees, ownership or mutable runtime guards. Four literal-callback loops
+improve substantially, but an existing typed-local floating-result control
+repeatedly regresses. The fixed acceptance rule rejects the candidate. All
+compiler and test changes are removed and the baseline rebuilt/requalified.
+
+Before, enabled and same-runtime compile-disabled variants use optimized
+-O3 -DNDEBUG runtimes, allocation tracking OFF, LLVM 22.1.8 and qcc -O3.
+QORE_DISABLE_AOT_CALLABLE_INPUT_SUBSET disables only the compile-time proof.
+Nine source-stripped executables cover default, reverse and shuffle487 layouts.
+The screen has 216 runs/648 windows; confirmation 360 runs/1,080 windows. Each uses
+three warmups and three 300 ms measured windows, 4,096 items, seed 7, with three/five
+fresh-process forks. Aggregate is the median of layout medians of fork means.
+All windows and adverse outcomes are retained.
+
+Confirmation results are whole-workload nanoseconds per item; reference
+construction and wrapper entry are amortized over each 4,096-item loop.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Change vs before|!Change vs disabled
+|literal_int_unary|20.104|6.951|20.500|-65.42%|-66.09%
+|literal_float_unary|20.644|7.468|21.069|-63.82%|-64.55%
+|literal_int_result|19.168|6.881|19.723|-64.10%|-65.11%
+|literal_float_result|19.637|7.336|20.165|-62.64%|-63.62%
+|typed_local_int_unary|6.821|6.962|6.852|+2.06%|+1.61%
+|typed_local_float_unary|7.804|7.503|7.717|-3.85%|-2.78%
+|typed_local_int_result|6.841|6.928|6.881|+1.27%|+0.68%
+|typed_local_float_result|6.853|7.302|6.879|+6.56%|+6.15%
+
+The four-target geometric mean time falls 64.116%/64.759% in screening and
+64.011%/64.856% in confirmation versus before/disabled. All four targets pass
+the improvement threshold. However, typed-local floating-result time rises
+6.147%/4.848% in screening and 6.560%/6.149% in confirmation. Two workload/layout/
+comparison flags repeat with disjoint fork-mean ranges: reverse versus disabled,
+and shuffle487 versus before. These violate the predeclared regression rule.
+No broad 55-workload campaign or additional rescue timing is performed.
+
+All 52 optimized LLVM definitions match before/disabled after normalizing only
+startup metadata length. Enabled changes exactly eight definitions: normal and
+fast forms of the four literal wrappers. Sampling observes ordinary callee/
+helper execution before and fast callee/invariant helper execution afterward.
+The typed-local controls retain their fast path. A separate 27-disassembly and
+three-profile investigation finds the same control loop and floating companion
+instructions apart from relocated addresses; it does not establish the cause
+of the slowdown. No alignment search is used.
+
+Focused Release qualification passes 10 QUnit fixtures, 18 cases, 6,120 assertions,
+two standalone fixtures and 1,110 IR/AOT references, with no skips. Preparation
+checks 1,200 references, including an old standalone on the candidate runtime.
+Earlier failed harness attempts are retained: parse/type mistakes and an
+incorrect assumption that missing-callref errors match across execution modes.
+Explicit before/disabled/candidate checks confirm that mode difference predates
+this change; the final fixture records existing behavior, not a fix. The lost
+outer sampling-driver terminal result is not inferred: recovery independently
+checks all 16 waited child statuses and completed artifact hashes.
+
+Exact restoration rebuilds the Release core and all 252 qmods, verifies 253 Release
+aliases, and passes three fixtures / four cases / 970 assertions plus 1,110 references.
+No rejected-candidate Debug, sanitizer or cross-platform claim is made.
+
+[results-aot-callable-input-subset-rejected-macos-arm64.json](results-aot-callable-input-subset-rejected-macos-arm64.json) records raw timings, provenance, failed attempts, rejected source,
+inspection and restoration evidence, and all 62 audit checks. No new Java/develop
+ratio, retained speedup, parity or global ceiling is claimed. Host load, frequency
+and thermals remain uncontrolled; ranges are descriptive.
+
+Next investigate why a typed callback loop with a floating accumulator and
+final integer cast lacks an AOT fast entry while integer consumption of the
+same callback has one. Establish the lowering/eligibility cause before a new
+prospective experiment. The literal subset change remains rejected.

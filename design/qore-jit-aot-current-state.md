@@ -4204,3 +4204,21 @@ retain all 108 runs, 324 windows, code checks, patch and restoration evidence.
 
 Resume the narrowly scoped callable-input subset proof for literal references.
 This negative experiment establishes neither Java parity nor a global ceiling.
+
+## Rejected callable-input subset proof (2026-10-24)
+
+Compile-time input-kind subset acceptance selects existing fast entries for
+literal callback arguments. Four targeted loops improve about 64% in both
+optimized screen and confirmation. An existing typed-local floating-result
+control nevertheless regresses about 6.6%, with repeated disjoint-range flags.
+The prospective regression gate fails; compiler and fixtures are removed and
+the baseline Release core/all 252 qmods requalified. No production gain retained.
+
+RESULTS and `bench/runtime-comparison/results-aot-callable-input-subset-rejected-macos-arm64.json`
+retain all 576 runs / 1,728 windows, source and code-path evidence, earlier harness
+failures, baseline restoration and the 62-item audit. Identical control
+instructions/paths do not prove the slowdown's cause. No alignment search,
+broad 55 qualification, new Java timing or ceiling claim.
+
+Next investigate the missing fast entry for floating accumulation followed
+by an integer return cast, then test any structural fix as a separate candidate.
