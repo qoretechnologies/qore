@@ -4,6 +4,11 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Assigning an object member through a variable of type <tt>object</tt> now calls <tt>memberNotification()</tt>
+    in IR, JIT and AOT execution, matching AST execution and assignments through class-typed variables.
+    Notification exceptions propagate after the value has been stored
+    (<a href="https://github.com/qoretechnologies/qore/issues/5510">issue 5510</a>).
+
     Method calls through a local @ref weak_assignment_operator "weak reference" to a destroyed object consistently
     raise \c OBJECT-ALREADY-DELETED. Dynamic dispatch now checks the receiver before falling back to
     pseudo-methods such as <tt>val()</tt>, including calls through closure-bound variables

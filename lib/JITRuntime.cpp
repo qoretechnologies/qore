@@ -5726,6 +5726,9 @@ static void qore_rt_assign_object_member_lvalue(QoreObject* obj, const char* key
     if (qore_object_private::getLValue(*obj, key, helper, class_ctx, false, xsink)) {
         return;
     }
+    if (!class_ctx) {
+        helper.vl.addMemberNotification(obj, key);
+    }
 
     QoreValue stored = val.hasNode() ? val.refSelf() : val;
     helper.assign(stored);
