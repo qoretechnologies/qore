@@ -47,6 +47,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
         }
 
         addTestCase("exported Qore CMake build helpers", \testExportedHelpers());
+        addTestCase("a build tree reached through another path is reported, not loaded as an SDK",
+            \testMovedBuildTree());
         addTestCase("downstream catalog install root",
             \testDownstreamCatalogInstallRoot());
         addTestCase("catalog install reconciles obsolete owner fragments",
@@ -320,6 +322,55 @@ qore_user_modules(\"qlib/Fixture\")
         assertNeq(0, system(sprintf("cmake -DQORE_SOURCE_QLIB_DIR=%s -P %s > /dev/null 2>&1",
             shellQuote(source_qlib), shellQuote(remove_script))), "the cleanup refuses to run without a build tree");
         assertTrue(is_link(links.ModA), "a refused cleanup removes nothing");
+    }
+
+    #! a build tree's QoreConfig.cmake loaded from another real path says so, with both paths
+    /** The build tree's config records the paths it was configured at.  Loaded from another path, as from a moved
+        build tree or one mounted elsewhere in a container, those paths do not exist, and the config used to fall
+        through to the installed-SDK settings, which then failed to include a QoreMacros.cmake that only an install
+        has.  The config files copied to another directory stand in for a remount; a symlink to the build tree's
+        cmake directory resolves to the same real path, so it keeps working.
+    */
+    testMovedBuildTree() {
+        if (!qore_dir || !is_file(qore_dir + "/QoreBuildTree.cmake")) {
+            testSkip("the build tree's QoreConfig.cmake is not available for the build under test");
+        }
+        TmpDir tmp("qore-moved-build-tree-");
+        string src_dir = tmp.path + "/src";
+        string moved_dir = tmp.path + "/moved";
+        string link_dir = tmp.path + "/link";
+        mkdir(src_dir);
+        mkdir(moved_dir);
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreMovedBuildTree NONE)
+find_package(Qore REQUIRED)
+message(STATUS \"qore cmake dir: ${QORE_CMAKE_DIR}\")
+");
+        foreach string file in (("QoreConfig.cmake", "QoreConfigVersion.cmake", "QoreBuildTree.cmake")) {
+            write(moved_dir + "/" + file, read(qore_dir + "/" + file));
+        }
+        symlink(qore_dir, link_dir);
+
+        string linked = run(sprintf("cmake -S %s -B %s -DQore_DIR=%s", shellQuote(src_dir),
+            shellQuote(tmp.path + "/build-link"), shellQuote(link_dir)));
+        assertRegex("Configuring done", linked, "a symlink to the build tree's config configures: " + linked);
+        assertRegex("qore cmake dir: ", linked, "a symlink to the build tree's config loads it: " + linked);
+
+        string moved = run(sprintf("cmake -S %s -B %s -DQore_DIR=%s", shellQuote(src_dir),
+            shellQuote(tmp.path + "/build-moved"), shellQuote(moved_dir)));
+        # CMake wraps the reason given by the package, so the words are compared without the line breaks
+        string flat = (moved =~ s/\s+/ /g);
+        assertRegex("Configuring incomplete", moved, "a moved build tree does not configure: " + moved);
+        assertNeq(-1, flat.find("the Qore build tree was moved or remounted"),
+            "the reason is given: " + moved);
+        assertNeq(-1, flat.find("configured at \"" + realpath(qore_dir) + "\""),
+            "the path it was configured at is given: " + moved);
+        assertNeq(-1, flat.find("loaded from \"" + realpath(moved_dir) + "\""),
+            "the path it was loaded from is given: " + moved);
+        assertNeq(-1, flat.find("configure and build Qore again at the new path"),
+            "what to do is given: " + moved);
+        assertEq(-1, moved.find("QoreMacros.cmake"), "the installed-SDK settings are not loaded: " + moved);
     }
 
     testDownstreamCatalogInstallRoot() {
