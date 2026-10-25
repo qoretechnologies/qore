@@ -206,9 +206,8 @@ QORE_QPP_EXECUTABLE="${BUILD_DIR}/qpp" QORE_QCC_EXECUTABLE="${BUILD_DIR}/qcc" QO
 # `qore --module-dir`; macOS cannot use that here because the job configures
 # with an empty CMAKE_INSTALL_PREFIX, so the built binary reports no usable
 # module directory of its own — hence the same prefix probing as at build time.
-CI_NATIVE_MODULE_DIR=/tmp/qore-ci-native-modules
-mkdir -p "${CI_NATIVE_MODULE_DIR}"
-find "${CI_NATIVE_MODULE_DIR}" -mindepth 1 -maxdepth 1 -delete
+# The link farm is a directory of this run's own, so no other content has to be removed from it
+CI_NATIVE_MODULE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/qore-ci-native-modules.XXXXXX")
 for p in "${PM_PREFIX}" /usr/local; do
     # "|| continue" and not "&& continue": under "set -e" a trailing test that
     # fails would end the script rather than the iteration

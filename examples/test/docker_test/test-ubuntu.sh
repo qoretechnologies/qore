@@ -231,9 +231,10 @@ chown -R qore:qore ${QORE_SRC_DIR}
 # must not see AOT user modules compiled by the image's older Qore. Native
 # modules carry an API suffix; expose only those through an isolated link farm.
 SYSTEM_BINARY_MODULE_DIR=$(${QORE_SRC_DIR}/build/qore --module-dir)
-CI_NATIVE_MODULE_DIR=/tmp/qore-ci-native-modules
-mkdir -p "${CI_NATIVE_MODULE_DIR}"
-find "${CI_NATIVE_MODULE_DIR}" -mindepth 1 -maxdepth 1 -delete
+# The link farm is a directory of this run's own, so no other content has to be removed from it; the qore user that
+# runs the tests reads it
+CI_NATIVE_MODULE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/qore-ci-native-modules.XXXXXX")
+chmod 755 "${CI_NATIVE_MODULE_DIR}"
 for qmod in "${SYSTEM_BINARY_MODULE_DIR}"/*-api-*.qmod; do
     [ -e "${qmod}" ] || continue
     ln -s "${qmod}" "${CI_NATIVE_MODULE_DIR}/"
