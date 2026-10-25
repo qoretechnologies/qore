@@ -89,12 +89,22 @@ module ProviderIndex {
       that define the types
     - an option type whose description does not restore an equivalent type is reported in the
       \c type_info_mismatches key of the index summary
-    - an index build describes each option type once, however many options have it, and replaces the unique keys
-      of a description in one walk without a reference argument or a closure for each of its nodes; the index
-      written is unchanged
-    - an index build replaces the unique keys of a subtree that a type description repeats once, and the
-      replacement shares the subtree as the description did; the index written is unchanged
-      (see ProviderIndex::getUniqueKeyReplacementCounts())
+    - an index build describes the option types of each app with one type table
+      (@ref DataProvider::DataTypeGraphBuilder "DataTypeGraphBuilder"), in which each type with fields and each
+      union type is described once, so the descriptions of an app take time and memory in proportion to its distinct
+      types instead of to the number of paths by which its types refer to each other, which for record types that
+      refer to each other, such as NetSuite's, is many millions; each option type description that refers to the
+      table gives it in @ref DataProvider::DataTypeInfo::type_graph "type_graph", the index stores the table once
+      per app (see @ref providerindexutilintro "ProviderIndexUtil"), and the keys of the table do not depend on the
+      process, so the same index is always written identically
+    - the check that the option type descriptions restore equivalent types restores the option types of an app in
+      one restoration and compares each with its description in time and memory in proportion to the app's distinct
+      types; an action whose option types refer to a type that is not plain data is reported as a failure and left
+      out
+    - with worker processes, the descriptions of an action by two workers are compared independently of the keys of
+      the type tables of their apps, and the descriptions of an app's actions by several workers refer to one table
+    - the unique keys of the type descriptions of factory info are replaced in one walk, once for a subtree that a
+      description repeats (see ProviderIndex::getUniqueKeyReplacementCounts())
     - the failure of an index worker that did not finish within
       @ref ProviderIndex::ProviderIndexCreateOptions::worker_timeout_ms "ProviderIndexCreateOptions::worker_timeout_ms"
       has \c timed_out set in its argument, and the log line of each finished worker gives the number of apps of

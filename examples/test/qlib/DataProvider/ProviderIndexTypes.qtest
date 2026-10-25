@@ -11,6 +11,37 @@
 %requires yaml
 %exec-class ProviderIndexTypesTest
 
+#! A type that accepts more than its Qore type, which its description does not say how
+class IndexWiderType inherits QoreStringDataTypeBase {
+    constructor() : QoreStringDataTypeBase(StringType) {
+        accept_type_hash."binary" = True;
+    }
+}
+
+#! A union that is named for what it holds, not for its alternatives, which a restored union is named for
+class IndexNamedUnion inherits QoreUnionDataType {
+    constructor(list<AbstractDataProviderType> types) : QoreUnionDataType(types) {
+    }
+
+    string getName() {
+        return "IndexNamedUnion";
+    }
+}
+
+#! A type whose description has only a type path, which is not registered where the type is restored
+class IndexUnrestorableType inherits QoreDataType {
+    constructor() : QoreDataType(StringType) {
+    }
+
+    hash<DataTypeInfo> getInfo(*bool simple) {
+        hash<DataTypeInfo> rv = QoreDataType::getInfo(simple);
+        rv.name = "";
+        rv.base_type = "";
+        rv.path = "index-test/unregistered";
+        return rv;
+    }
+}
+
 class ProviderIndexTypesTest inherits QUnit::Test {
     private { string directory; }
     constructor() : Test("Provider index type preservation", "1.0", \ARGV) {
@@ -20,6 +51,8 @@ class ProviderIndexTypesTest inherits QUnit::Test {
             \roundTripTest());
         addTestCase("an action whose type description is not plain data is recorded as unavailable",
             \failureTest());
+        addTestCase("an option type whose description does not restore an equivalent type is reported",
+            \mismatchTest());
         set_return_value(main());
     }
     private hash<auto> publish() {
@@ -58,8 +91,12 @@ class ProviderIndexTypesTest inherits QUnit::Test {
                 index.actioninfomap.IndexIdentityFixture.typed);
             # output types are not indexed; option types are described by plain data
             assertFalse(restored.hasKey("output_type"));
-            assertEq(input.getInfo().fields.value.type.name, restored.options.object.type_info.fields.value.type.name);
+            # a type with fields is described in the app's type table, which the description refers to and gives
+            hash<auto> object_info = restored.options.object.type_info;
+            assertEq(input.getInfo().fields.value.type.name,
+                object_info.type_graph{object_info.type_ref}.fields.value.type.name);
             AbstractDataProviderType object = AbstractDataProviderType::get(restored.options.object.type_info);
+            assertEq(input.getInfoGraph(), object.getInfoGraph());
             auto value = {"value": "ordinary", "enabled": False};
             assertEq(value, object.acceptsValue(value));
             assertThrows("MISSING-VALUE-ERROR", sub () { object.acceptsValue({"enabled": False}); });
@@ -70,6 +107,55 @@ class ProviderIndexTypesTest inherits QUnit::Test {
             assertEq(media, media_type.acceptsValue(media));
         }
     }
+    private mismatchTest() {
+        # types that are restored as they are described: a recursive type, a type that two fields have, and a union
+        # that its alternatives refer to
+        HashDataType group("IndexFilterGroup");
+        HashDataType condition("IndexFilterCondition");
+        condition.addField(new QoreDataField("field", NOTHING, AbstractDataProviderTypeMap."string"));
+        QoreUnionDataType filter((group, condition));
+        group.addField(new QoreDataField({"name": "and", "type": new ListDataType(filter, True)}));
+        HashDataType node("IndexNode");
+        node.addField(new QoreDataField({"name": "children", "type": new ListDataType(node, True)}));
+        node.addField(new QoreDataField({"name": "filter", "type": filter}));
+        node.addField(new QoreDataField({"name": "other_filter", "type": filter}));
+
+        auto action = DataProviderActionCatalog::getActionHashEx("IndexIdentityFixture").record;
+        action.action = "mismatch";
+        action.path = "/mismatch";
+        action.options = DataProviderActionCatalog::getActionOptionFromFields({
+            "node": new QoreDataField({"name": "node", "type": node}),
+            "wider": new QoreDataField({"name": "wider", "type": new IndexWiderType()}),
+            "named": new QoreDataField({"name": "named", "type": new IndexNamedUnion((AbstractDataProviderTypeMap."int",
+                AbstractDataProviderTypeMap."string"))}),
+        });
+        DataProviderActionCatalog::registerAction(action);
+        hash<string, hash<auto>> mismatches = getMismatches(publish());
+        # the types restored as described are not reported
+        assertEq(("named", "wider"), sort(keys mismatches));
+        assertEq("types_accepted", mismatches.wider.path);
+        assertEq("name", mismatches.named.path);
+        assertEq("IndexIdentityFixture", mismatches.wider.app);
+        assertEq("mismatch", mismatches.wider.action);
+
+        # a type that cannot be restored is reported with the error, and the other types are checked as before
+        action.action = "unrestorable";
+        action.path = "/unrestorable";
+        action.options = DataProviderActionCatalog::getActionOptionFromFields({
+            "unrestorable": new QoreDataField({"name": "unrestorable", "type": new IndexUnrestorableType()}),
+        });
+        DataProviderActionCatalog::registerAction(action);
+        mismatches = getMismatches(publish());
+        assertEq(("named", "unrestorable", "wider"), sort(keys mismatches));
+        assertEq("types_accepted", mismatches.wider.path);
+        assertRegex("^TYPE-ARG-ERROR: Cannot find any type with path", mismatches.unrestorable.error);
+    }
+
+    #! Returns the option types reported by an index build whose descriptions do not restore equivalent types
+    private static hash<string, hash<auto>> getMismatches(hash<auto> published) {
+        return (map {$1.option: $1}, published.summary.type_info_mismatches) ?? {};
+    }
+
     private failureTest() {
         publish();
         auto action = DataProviderActionCatalog::getActionHashEx("IndexIdentityFixture").record;

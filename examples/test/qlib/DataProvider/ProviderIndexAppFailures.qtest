@@ -389,13 +389,13 @@ public class ProviderIndexAppFailuresTest inherits QUnit::Test {
         LogCapture log = captureLog();
         on_exit ProviderIndexUtil::setGlobalLogger();
         info = getManifest(dir);
-        info.manifest.version = 10;
-        info.routing.metadata_cache_version = 10;
+        info.manifest.version = 11;
+        info.routing.metadata_cache_version = 11;
         writeManifest(dir, info.routing, info.manifest);
         resetIndexState();
         assertNothing(ProviderIndexUtil::tryGetAppInfo(PartialApp));
         assertRegex("supported version", ProviderIndexUtil::getIndexReadError() ?? "");
-        assertEq(1, log.getMessages("no metadata cache with a supported version \\(10\\)").size());
+        assertEq(1, log.getMessages("no metadata cache with a supported version \\(11\\)").size());
     }
 
     corruptFailureFileTest() {

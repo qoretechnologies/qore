@@ -1,0 +1,443 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ProviderIndexUtil
+
+%requires yaml
+
+%try-module msgpack
+%define NoMsgPack
+%endtry
+
+%exec-class ProviderIndexTypeGraphTest
+
+#! Gives the test access to the metadata cache chunk format, as the ProviderIndex module has
+class GraphAccess inherits ProviderIndexUtil {
+    #! Unpacks a metadata cache chunk
+    static hash<DataProviderIndexInfo> unpack(binary data, int version, bool restore) {
+        return unpackMetadataCacheChunk(data, version, restore);
+    }
+
+    #! Returns the actions of an app in the stored form
+    static hash<auto> getStoredForm(hash<auto> actions) {
+        return getStoredAppActions(actions);
+    }
+
+    #! Returns True if a type description refers to a type of a type table
+    static bool refers(auto info) {
+        return refersToTypeGraph(info);
+    }
+}
+
+#! Tests the index format that stores the option types of an app as references into one type table of the app
+/** An index build describes the option types of an app with one type table, in which each type with fields and each
+    union type is described once (DataProvider::DataTypeGraphBuilder); the metadata cache chunk and the canonical index
+    file store the table once per app, and readers give it to each option type description that refers to it, so that
+    DataProvider::AbstractDataProviderType::get() restores the type from the description alone
+*/
+public class ProviderIndexTypeGraphTest inherits QUnit::Test {
+    public {
+        #! The metadata cache format version written
+        const CacheVersion = 10;
+
+        #! The app of the test index
+        const App = "QoreTestTypeGraph";
+    }
+
+    constructor() : Test("ProviderIndex type graph test", "1.0") {
+        addTestCase("the type table of an app is stored once, with the types its options refer to", \storedTest());
+        addTestCase("the descriptions read are those written, and restore the described types", \roundTripTest());
+        addTestCase("descriptions described with two type tables are stored with one", \twoTablesTest());
+        addTestCase("the canonical index file stores the type table of an app once", \canonicalTest());
+        addTestCase("a description that refers to a type it does not give is not written", \invalidTest());
+        addTestCase("an index of the previous version is read", \previousVersionTest());
+        addTestCase("a type graph with an exponential number of paths is stored and restored once per type",
+            \exponentialTest());
+        set_return_value(main());
+    }
+
+    private checkModules() {
+%ifdef NoMsgPack
+        testSkip("no msgpack module");
+%endif
+    }
+
+    #! An order with a billing and a shipping address, the same type, and a recursive category
+    private static hash<string, AbstractDataProviderType> getTypes() {
+        HashDataType address("TestAddress");
+        address.addField(new QoreDataField("street", "the street", AbstractDataProviderTypeMap."string"));
+        HashDataType category("TestCategory");
+        category.addField(new QoreDataField("name", "the name", AbstractDataProviderTypeMap."string"));
+        category.addField(new QoreDataField({"name": "children", "type": new ListDataType(category, True)}));
+        HashDataType order("TestOrder");
+        order.addField(new QoreDataField("id", "the ID", AbstractDataProviderTypeMap."int"));
+        order.addField(new QoreDataField("billing", "the billing address", address));
+        order.addField(new QoreDataField("shipping", "the shipping address", address));
+        order.addField(new QoreDataField("category", "the category", category.getOrNothingType()));
+        HashDataType key("TestKey");
+        key.addField(new QoreDataField("id", "the key", AbstractDataProviderTypeMap."string"));
+        return {
+            "order": order,
+            "key": key,
+            "address": address,
+            "category": category,
+        };
+    }
+
+    #! Returns the actions of the test app with their option types described with one type table, as an index build
+    #! describes them
+    /** @param options option name -> type, by action name
+        @param builder the type table to describe the types with
+    */
+    private static hash<auto> getActions(hash<string, hash<string, AbstractDataProviderType>> options,
+            DataTypeGraphBuilder builder = new DataTypeGraphBuilder()) {
+        hash<auto> rv = {};
+        foreach hash<auto> action in (options.pairIterator()) {
+            hash<auto> action_options = {};
+            foreach hash<auto> option in (action.value.pairIterator()) {
+                action_options{option.key} = {
+                    "display_name": option.key,
+                    "type_info": builder.add(option.value),
+                };
+            }
+            rv{action.key} = {"app": App, "action": action.key, "options": action_options};
+        }
+        hash<string, hash<DataTypeInfo>> table = builder.getTypes();
+        foreach hash<auto> action in (rv.pairIterator()) {
+            foreach hash<auto> option in (action.value.options.pairIterator()) {
+                if (GraphAccess::refers(option.value.type_info)) {
+                    rv{action.key}.options{option.key}.type_info.type_graph = table;
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! The option types of the test actions
+    private static hash<string, hash<string, AbstractDataProviderType>> getOptionTypes() {
+        hash<string, AbstractDataProviderType> types = getTypes();
+        return {
+            "create": {"record": types.order, "count": AbstractDataProviderTypeMap."int"},
+            "lookup": {"key": types.key, "keys": new ListDataType(types.key, True)},
+        };
+    }
+
+    storedTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        # a type table with a type that no option refers to, as when an action fails after its options are described
+        DataTypeGraphBuilder builder();
+        HashDataType unused("TestUnused");
+        unused.addField(new QoreDataField("x", NOTHING, AbstractDataProviderTypeMap."int"));
+        builder.add(unused);
+        writeTestIndex(getActions(getOptionTypes(), builder));
+
+        hash<auto> chunk = readChunk(dir);
+        # the order, the address, the optional category of the order, the category of its children, and the key,
+        # each once; the unused type is not stored
+        hash<string, string> names = map {$1.key: chunk.types[$1.value].name}, chunk.type_graph.pairIterator();
+        assertEq({"1": "TestOrder", "2": "TestAddress", "3": "*TestCategory", "4": "TestCategory", "5": "TestKey"},
+            names, "the keys are numbered in the order in which the actions, by name, refer to the types");
+        hash<auto> actions = chunk.index.actioninfomap{App};
+        hash<auto> record = chunk.types[actions.create.options.record.type_info];
+        assertEq("1", record.type_ref);
+        assertFalse(record.hasKey("type_graph"), "the descriptions do not give the table in a chunk");
+        # a scalar type is described in place
+        assertNothing(chunk.types[actions.create.options.count.type_info].type_ref);
+        # a list of a type with fields refers to it
+        assertEq("5", chunk.types[chunk.types[actions.lookup.options.keys.type_info].element_type].type_ref);
+        # the order's two addresses are one type of the table
+        hash<auto> order = chunk.types[chunk.type_graph."1"];
+        assertEq(chunk.types[chunk.fields[order.fields.billing].type].type_ref,
+            chunk.types[chunk.fields[order.fields.shipping].type].type_ref);
+%endif
+    }
+
+    roundTripTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        hash<string, hash<string, AbstractDataProviderType>> option_types = getOptionTypes();
+        hash<auto> actions = getActions(option_types);
+        writeTestIndex(actions);
+
+        # the serialized form holds the descriptions as written, each giving the app's type table
+        hash<auto> read = ProviderIndexUtil::readSerializedDataProviderIndex(dir).index.actioninfomap{App};
+        assertEq(GraphAccess::getStoredForm(actions), GraphAccess::getStoredForm(read));
+        assertEq(read.create.options.record.type_info.type_graph, read.lookup.options.key.type_info.type_graph,
+            "the descriptions share the table");
+        assertFalse(read.create.options.count.type_info.hasKey("type_graph"),
+            "a description without references does not give the table");
+
+        # the descriptions that a reader gives restore the described types, as QorusIndexedAction restores them
+        foreach hash<auto> action in (ProviderIndexUtil::tryGetActionMetadataForApp(App)) {
+            foreach hash<auto> option in (action.options.pairIterator()) {
+                hash<DataTypeInfo> type_info = option.value.type_info;
+                AbstractDataProviderType restored = AbstractDataProviderType::get(type_info);
+                assertEq(option_types{action.action}{option.key}.getInfoGraph(), restored.getInfoGraph(),
+                    action.action + "." + option.key);
+            }
+        }
+        # the recursive category is restored as a cycle
+        hash<DataTypeInfo> record = (map $1, ProviderIndexUtil::tryGetActionMetadataForApp(App),
+            $1.action == "create")[0].options.record.type_info;
+        AbstractDataProviderType order = AbstractDataProviderType::get(record);
+        AbstractDataProviderType category = order.getFields().category.getType().getFields().children.getType()
+            .getElementType();
+        assertEq(category, category.getFields().children.getType().getElementType());
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+%endif
+    }
+
+    twoTablesTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        hash<string, AbstractDataProviderType> types = getTypes();
+        # two sets of actions, each described with its own table, as two index workers describe an app's actions
+        DataTypeGraphBuilder other();
+        other.add(types.category);
+        hash<auto> actions = getActions({"create": {"record": types.order}})
+            + getActions({"lookup": {"key": types.key, "category": types.category}}, other);
+        assertTrue(actions.create.options.record.type_info.type_graph
+            !== actions.lookup.options.key.type_info.type_graph);
+        writeTestIndex(actions);
+
+        hash<auto> chunk = readChunk(dir);
+        # each type of each table once: the category, which both tables describe, is stored for each
+        assertEq(("TestOrder", "TestAddress", "*TestCategory", "TestCategory", "TestKey", "TestCategory"),
+            map chunk.types[$1].name, chunk.type_graph.iterator());
+        foreach hash<auto> action in (ProviderIndexUtil::tryGetActionMetadataForApp(App)) {
+            foreach hash<auto> option in (action.options.pairIterator()) {
+                hash<DataTypeInfo> type_info = option.value.type_info;
+                AbstractDataProviderType expected = action.action == "create"
+                    ? types.order
+                    : types{option.key};
+                assertEq(expected.getInfoGraph(), AbstractDataProviderType::get(type_info).getInfoGraph(),
+                    action.action + "." + option.key);
+            }
+        }
+%endif
+    }
+
+    canonicalTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        hash<string, hash<string, AbstractDataProviderType>> option_types = getOptionTypes();
+        hash<auto> actions = getActions(option_types);
+        writeTestIndex(actions, True);
+        string yaml = ReadOnlyFile::readTextFile(dir + DirSep + "qore-data-index.yaml");
+        hash<auto> canonical = parse_yaml(yaml);
+        # the actions refer to the app's type table, which the file holds once
+        assertEq(GraphAccess::getStoredForm(actions).actions, canonical.actioninfomap{App});
+        assertEq(("1", "2", "3", "4", "5"), keys canonical.typegraphmap{App});
+        assertEq(1, (yaml =~ x/(\sdesc: "the street")/g).size(), "the address is described once");
+        assertEq(yaml, ProviderIndexUtil::dumpIndexYaml(dir), "the YAML written from the metadata cache");
+
+        # an index read from the canonical index file gives the descriptions the table
+        removeMetadataCache(dir);
+        resetIndexState();
+        hash<DataProviderIndexInfo> index = ProviderIndexUtil::readDataProviderIndex();
+        foreach hash<auto> action in (index.actioninfomap{App}.pairIterator()) {
+            foreach hash<auto> option in (action.value.options.pairIterator()) {
+                hash<DataTypeInfo> type_info = option.value.type_info;
+                assertEq(option_types{action.key}{option.key}.getInfoGraph(),
+                    AbstractDataProviderType::get(type_info).getInfoGraph(), action.key + "." + option.key);
+            }
+        }
+%endif
+    }
+
+    invalidTest() {
+        checkModules();
+%ifndef NoMsgPack
+        hash<auto> actions = getActions(getOptionTypes());
+        # a reference without its table
+        hash<auto> no_table = actions;
+        remove no_table.create.options.record.type_info.type_graph;
+        assertThrows("PROVIDER-INDEX-ERROR", "does not give the table", \GraphAccess::getStoredForm(), no_table);
+        # a reference to a type that the table does not have
+        hash<auto> missing = actions;
+        remove missing.create.options.record.type_info.type_graph."1";
+        assertThrows("PROVIDER-INDEX-ERROR", "not in its type table", \GraphAccess::getStoredForm(), missing);
+        # a chunk whose type table is not a hash of positions
+        binary data = compress(msgpack_pack({"index": {"actioninfomap": {App: {}}}, "types": (), "fields": (),
+            "type_graph": {"1": "x"}}, MSGPACK_QORE_MODE));
+        assertThrows("PROVIDER-INDEX-ERROR", "must be a position", \GraphAccess::unpack(), (data, CacheVersion,
+            False));
+%endif
+    }
+
+    previousVersionTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        # an index of complete descriptions, which version 9 wrote in the format of this version
+        HashDataType record("TestRecord");
+        record.addField(new QoreDataField("id", NOTHING, AbstractDataProviderTypeMap."int"));
+        hash<auto> actions = {"create": {"app": App, "action": "create", "options": {
+            "record": {"display_name": "record", "type_info": record.getInfo()},
+        }}};
+        writeTestIndex(actions);
+        hash<auto> info = getManifest(dir);
+        info.manifest.version = 9;
+        info.routing.metadata_cache_version = 9;
+        writeManifest(dir, info.routing, info.manifest);
+        resetIndexState();
+        hash<auto> read = ProviderIndexUtil::tryGetActionMetadataForApp(App)[0].options.record.type_info;
+        assertEq("TestRecord", read.name);
+        assertEq(("id",), keys read.fields);
+        assertNothing(read.type_graph);
+        assertNothing(ProviderIndexUtil::getIndexReadError());
+%endif
+    }
+
+    exponentialTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+
+        # each level refers to the level below by two fields, so the complete description of the top level holds
+        # 2^depth descriptions of the lowest level
+        int depth = 30;
+        HashDataType level("Level0");
+        level.addField(new QoreDataField("v", NOTHING, AbstractDataProviderTypeMap."string"));
+        for (int i = 1; i <= depth; ++i) {
+            HashDataType next("Level" + i);
+            next.addField(new QoreDataField("a", NOTHING, level));
+            next.addField(new QoreDataField("b", NOTHING, level));
+            level = next;
+        }
+        writeTestIndex(getActions({"deep": {"record": level}}));
+        hash<auto> chunk = readChunk(dir);
+        assertEq(depth + 1, chunk.type_graph.size(), "each level once");
+        hash<DataTypeInfo> record = ProviderIndexUtil::tryGetActionMetadataForApp(App)[0].options.record.type_info;
+        AbstractDataProviderType restored = AbstractDataProviderType::get(record);
+        assertEq(level.getInfoGraph(), restored.getInfoGraph());
+        assertEq(restored.getFields().a.getType(), restored.getFields().b.getType(), "the levels are shared");
+%endif
+    }
+
+    #! Returns the manifest of the published index in the given directory, with its path
+    private static hash<auto> getManifest(string dir) {
+        hash<auto> routing = parse_yaml(ReadOnlyFile::readTextFile(dir + DirSep + "qore-routing-index.yaml"));
+        string path = sprintf("%s%sqore-data-index-manifest-%s.msgpack", dir, DirSep, routing.metadata_cache_sha256);
+        return {
+            "routing": routing,
+            "path": path,
+            "manifest": msgpack_unpack(ReadOnlyFile::readBinaryFile(path), MSGPACK_QORE_MODE),
+        };
+    }
+
+    #! Returns the unpacked chunk of the test app in the given directory
+    private static hash<auto> readChunk(string dir) {
+        hash<auto> manifest = getManifest(dir).manifest;
+        if (manifest.version != CacheVersion) {
+            throw "TEST-ERROR", sprintf("expected version %d, got %y", CacheVersion, manifest.version);
+        }
+        string path = sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, manifest.apps{App}.sha256);
+        return msgpack_unpack(uncompress_to_binary(ReadOnlyFile::readBinaryFile(path)), MSGPACK_QORE_MODE);
+    }
+
+    #! Writes the manifest and the routing index of the published index in the given directory
+    private static writeManifest(string dir, hash<auto> routing, hash<auto> manifest) {
+        binary manifest_data = msgpack_pack(manifest, MSGPACK_QORE_MODE);
+        string manifest_sha256 = digest("sha256", manifest_data).toHex();
+        writeFile(sprintf("%s%sqore-data-index-manifest-%s.msgpack", dir, DirSep, manifest_sha256), manifest_data);
+        routing.metadata_cache_sha256 = manifest_sha256;
+        # the members of the checksum payload, in its order
+        hash<auto> payload = routing{"factorymap", "appmap", "schememap", "version"};
+        foreach string key in (("data_sha256", "data_size", "canonical_yaml", "metadata_cache_version",
+                "metadata_cache_sha256", "altmap")) {
+            if (exists routing{key}) {
+                payload{key} = routing{key};
+            }
+        }
+        routing.routing_sha256 = digest("sha256", make_yaml(payload, BlockStyle)).toHex();
+        writeFile(dir + DirSep + "qore-routing-index.yaml", make_yaml(routing, BlockStyle));
+    }
+
+    #! Removes the metadata cache of the published index, so that it is read from its canonical index file
+    private static removeMetadataCache(string dir) {
+        Dir d();
+        d.chdir(dir);
+        foreach string file in (d.listFiles()) {
+            if (file =~ /\.msgpack$/) {
+                unlink(dir + DirSep + file);
+            }
+        }
+    }
+
+    #! Publishes an index of the test app with the given actions
+    private static writeTestIndex(hash<auto> actions, *bool canonical) {
+        ProviderIndexUtil::writeDataProviderIndexByApp({
+            "factorymap": {},
+            "appmap": {App: {"QoreTestModule": True}},
+            "schememap": {},
+            "appinfomap": {App: {"name": App}},
+        }, (App,), *hash<auto> sub (string app) { return actions; }, 0s, {}, canonical);
+    }
+
+    #! Makes the given directory the index directory; returns code that restores the previous directory
+    private static code useIndexDir(string dir) {
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        resetIndexState();
+        return sub () {
+            if (had_env) {
+                ProviderIndexUtil::setEnvironmentVariable(old_env);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+            # no later test case reads this index
+            resetIndexState();
+        };
+    }
+
+    #! Discards the index state of the process, so the next lookup reads the published index from its files
+    private static resetIndexState() {
+        ProviderIndexUtil::setBuildMode(True);
+        ProviderIndexUtil::setBuildMode(False);
+    }
+
+    private static writeFile(string path, data contents) {
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(contents);
+    }
+}

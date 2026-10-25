@@ -29,7 +29,7 @@ public class ProviderIndexActionSummariesTest inherits QUnit::Test {
         const OtherApp = "QoreTestSummariesOther";
 
         #! The metadata cache format version written
-        const CacheVersion = 9;
+        const CacheVersion = 10;
 
         #! The members of an indexed action that are not in its summary
         const NotInSummary = ("options", "data_provider_info");

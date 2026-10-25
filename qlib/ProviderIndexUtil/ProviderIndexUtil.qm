@@ -182,6 +182,14 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
       initialized when the index was built are recorded in a file of their own (see @ref providerindexutil_failures); an
       index written by an earlier version of this module must be recreated to record the factory info, to store each
       type description once, to record the action summaries, and to record the failures
+    - the metadata cache (version 10) stores the option type descriptions of an app as references into one type
+      table of the app, which describes each type with fields and each union type once and is stored once per app; a
+      description read from the index that refers to the table gives it in
+      @ref DataProvider::DataTypeInfo::type_graph "DataTypeInfo::type_graph", so that
+      @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()" restores the type from the
+      description alone; the canonical index file and the YAML of
+      @ref ProviderIndexUtil::ProviderIndexUtil::dumpIndexYaml() "ProviderIndexUtil::dumpIndexYaml()" hold the table of
+      each app once, in \c typegraphmap; indexes of earlier versions are still read
     - added @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFailures() "ProviderIndexUtil::getIndexedFailures()",
       @ref ProviderIndexUtil::ProviderIndexUtil::tryGetAppFailure() "ProviderIndexUtil::tryGetAppFailure()",
       @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionFailure() "ProviderIndexUtil::tryGetActionFailure()",

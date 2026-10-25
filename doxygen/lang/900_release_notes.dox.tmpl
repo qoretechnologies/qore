@@ -1214,7 +1214,11 @@
     instead: they return the same actions with their option types described by plain data in each option's
     \c type_info, and without output types; a type object can be created from a \c type_info with
     \c DataProvider::AbstractDataProviderType::get(), and the exact types are available from the registered action
-    with \c DataProvider::DataProviderActionCatalog::getAppAction(), which loads the app's modules.
+    with \c DataProvider::DataProviderActionCatalog::getAppAction(), which loads the app's modules.  The option types
+    of an app are described with one type table: the \c type_info of a type with fields or a union type refers to
+    the type in the table by its key (\c DataProvider::DataTypeInfo::type_ref) and gives the table in
+    \c DataProvider::DataTypeInfo::type_graph, so code that reads the fields of a \c type_info finds them in the
+    table.
     @endparblock
 
     @par PostgreSQL Lists Only the Connection's Schemas
@@ -5853,6 +5857,10 @@ while (*binary chunk = input.read(65536)) {
       - the index describes each action option's type completely with plain data, including nested fields,
         structured choices, and media/job results, instead of by the name of its base type
       - an option type whose description does not restore an equivalent type is reported in the index summary
+      - the index describes the option types of an app with one type table, in which each type with fields and each
+        union type is described once and which is stored once per app, so the index of record types that refer to
+        each other, such as NetSuite's, is built, stored, and read in time and memory in proportion to their
+        distinct types
       - the canonical index file \c qore-data-index.yaml is no longer published by default (see
         @ref qore_3_0_0_compatibility "Changes That Can Affect Backwards-Compatibility"); for a large index, this
         saves hundreds of megabytes per index directory, and the memory and time to write and hash the file at the

@@ -74,14 +74,17 @@ const RoutingIndexVersion = 4;
 #! description and field description of an app once, in tables of its chunk that the descriptions refer to by position;
 #! version 8 records the action-level record of every action in a file of its own that the manifest references;
 #! version 9 records the apps and actions that could not be initialized when the index was built in a file of its own
-#! that the manifest references
-const MetadataCacheVersion = 9;
+#! that the manifest references; version 10 stores the option type descriptions of an app as references into one type
+#! table of the app, which describes each type with fields and each union type once (see IndexedTypeGraphForm)
+const MetadataCacheVersion = 10;
 #! The first metadata cache version whose chunks store the type descriptions of an app in tables
 const MetadataCacheTypeTableVersion = 7;
 #! The first metadata cache version that records the action summaries in a file of their own
 const MetadataCacheActionSummaryVersion = 8;
 #! The first metadata cache version that records the apps and actions that could not be initialized
 const MetadataCacheFailureVersion = 9;
+#! The first metadata cache version whose chunks store the option types of an app as references into one type table
+const MetadataCacheTypeGraphVersion = 10;
 
 #! The members of a serialized action that are not in its action summary
 /** The options and the data provider info hold the type descriptions of the action; the others are not indexed, or
@@ -152,7 +155,9 @@ public hashdecl DataProviderIndexInfo {
     /** When read, values are \c DataProvider::DataProviderIndexedActionInfo hashes.
 
         @note Dynamic action callbacks and output types are omitted.  Since ProviderIndex 1.2, each option's type
-        is described by plain data in \c type_info; readers convert primitive type names from earlier indexes.
+        is described by plain data in \c type_info; readers convert primitive type names from earlier indexes.  The
+        option types of an app are described with one type table: a \c type_info that refers to its types
+        (\c DataProvider::DataTypeInfo::type_ref) gives the table in \c DataProvider::DataTypeInfo::type_graph
     */
     *hash<string, hash<string, hash<auto>>> actioninfomap;
 
@@ -242,8 +247,10 @@ public hashdecl ProviderIndexInfo {
 public hashdecl SerializedDataProviderIndexInfo {
     #! The \c factorymap, \c appmap, \c schememap, \c altmap, \c factoryinfomap, \c failuremap, \c appinfomap, and \c actioninfomap members of the index
     /** App and action metadata is in the serialized form stored in the index, as in the YAML written by
-        @ref ProviderIndexUtil::dumpIndexYaml() "ProviderIndexUtil::dumpIndexYaml()"; \c altmap,
-        \c factoryinfomap, and \c failuremap are only present if the index records them
+        @ref ProviderIndexUtil::dumpIndexYaml() "ProviderIndexUtil::dumpIndexYaml()", except that an option type
+        description that refers to the types of its app's type table gives the table in \c type_graph, which the
+        YAML holds once per app in \c typegraphmap; \c altmap, \c factoryinfomap, and \c failuremap are only
+        present if the index records them
     */
     *hash<auto> index;
 
@@ -2794,6 +2801,9 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         # the action summaries of every app, written to a file of their own so that actions can be listed without
         # reading the metadata of any app
         hash<auto> action_summaries = {};
+        # the type table of each app whose option type descriptions refer to one, written to the canonical index
+        # file once, after the actions
+        hash<auto> typegraphmap = {};
         foreach string app in (sort(keys app_set)) {
             *hash<auto> actions;
             if (action_app_set{app}) {
@@ -2805,7 +2815,9 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
                 }
             }
             if (canonical && exists actions) {
-                writeCanonicalAppActions(write, app, actions, !actions_written);
+                if (*hash<auto> type_graph = writeCanonicalAppActions(write, app, actions, !actions_written)) {
+                    typegraphmap{app} = type_graph;
+                }
                 actions_written = True;
             }
 %ifndef NoMsgPack
@@ -2838,6 +2850,9 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         if (canonical) {
             if (!actions_written && action_apps) {
                 write("actioninfomap: {}\n");
+            }
+            if (typegraphmap) {
+                writeCanonicalMaps(write, {"typegraphmap": typegraphmap}, ("typegraphmap",));
             }
             # found while the actions were written, so it follows them
             writeCanonicalMaps(write, {"altmap": altmap}, ("altmap",));
@@ -3007,20 +3022,28 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
     }
 
     #! Writes the actions of one app to the \c actioninfomap member of the canonical index file
-    /** @param write writes a string to the output
+    /** The actions are written in the stored form (see @ref IndexedTypeGraphForm), in which the option type
+        descriptions refer to one type table of the app, which the caller writes once to the \c typegraphmap member
+
+        @param write writes a string to the output
         @param app the app name
-        @param actions the app's actions in the serialized form stored in the index, sorted by action name
+        @param actions the app's actions in the serialized form stored in the index
         @param first @ref True if this is the first app written, in which case the \c actioninfomap key is written
         first
+
+        @return the app's stored type table, if its option type descriptions refer to one
     */
-    static private writeCanonicalAppActions(code<nothing(string)> write, string app, hash<auto> actions, bool first) {
+    static private *hash<auto> writeCanonicalAppActions(code<nothing(string)> write, string app, hash<auto> actions,
+            bool first) {
         if (first) {
             write("actioninfomap:\n");
         }
+        hash<auto> stored = IndexedTypeGraphForm::getStoredForm(actions);
         # each app's entry is indented under the top-level key; strings are written in quoted flow style, so
         # indenting every line leaves their values unchanged
-        string yaml = make_yaml({app: actions}, BlockStyle);
+        string yaml = make_yaml({app: stored.actions}, BlockStyle);
         write("  " + replace(yaml.substr(0, -1), "\n", "\n  ") + "\n");
+        return stored.type_graph;
     }
 
     #! Returns the given index map with its keys sorted
@@ -3042,10 +3065,51 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         return rv;
     }
 
+    #! Returns the actions of an app in the form stored in a metadata cache chunk
+    /** @param actions the app's serialized actions, whose option type descriptions give the type tables they refer
+        to
+
+        @return \c actions: the actions, sorted by name, whose option type descriptions refer to one type table;
+        \c type_graph: the type table, if any description refers to one (see @ref IndexedTypeGraphForm)
+
+        @throw PROVIDER-INDEX-ERROR a description refers to a type of a type table without giving the table, or to a
+        type that its table does not have
+
+        @since ProviderIndexUtil 1.2
+    */
+    static private hash<auto> getStoredAppActions(*hash<auto> actions) {
+        return IndexedTypeGraphForm::getStoredForm(actions);
+    }
+
+    #! Returns @ref True if the given type description refers to a type of a type table
+    /** Only the description itself is searched, not the types of the table it refers to; see
+        @ref IndexedTypeGraphForm
+
+        @param info a type description, which may be in serialized form
+
+        @since ProviderIndexUtil 1.2
+    */
+    static private bool refersToTypeGraph(auto info) {
+        return IndexedTypeGraphForm::refersToTypeGraph(info);
+    }
+
+    #! Adds the keys of the types of a type table that a type description refers to
+    /** Only the description itself is searched, not the types of the table it refers to
+
+        @param info a type description, which may be in serialized form
+        @param refs the keys are added here, in the order in which the description refers to them
+
+        @since ProviderIndexUtil 1.2
+    */
+    static private addTypeRefs(auto info, reference<list<string>> refs) {
+        IndexedTypeGraphForm::addTypeRefs(info, \refs);
+    }
+
     #! Packs one app's metadata into a metadata cache chunk
-    /** The option type descriptions of the app's actions are stored in the chunk's tables of distinct type and
-        field descriptions (see @ref IndexedTypeTableBuilder), and each option refers to its description by its
-        position in the type table
+    /** The option type descriptions of the app's actions refer to one type table of the app, which is stored once
+        (see @ref IndexedTypeGraphForm); the descriptions and the types of the type table are stored in the chunk's
+        tables of distinct type and field descriptions (see @ref IndexedTypeTableBuilder), and each option refers to
+        its description by its position in the type table
 
         @param app the app name
         @param app_info the app's serialized info, if any
@@ -3058,6 +3122,24 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         @since ProviderIndexUtil 1.2
     */
     static private binary packMetadataCacheChunk(string app, *hash<auto> app_info, *hash<auto> actions) {
+        return packStoredMetadataCacheChunk(app, app_info, exists actions
+            ? IndexedTypeGraphForm::getStoredForm(actions)
+            : NOTHING);
+    }
+
+    #! Packs one app's metadata, with its actions in the stored form, into a metadata cache chunk
+    /** @param app the app name
+        @param app_info the app's serialized info, if any
+        @param stored the app's actions in the stored form returned by
+        @ref IndexedTypeGraphForm::getStoredForm(), if the app has actions
+
+        @return the compressed chunk
+
+        @throw PROVIDER-INDEX-ERROR MessagePack support is not available
+
+        @since ProviderIndexUtil 1.2
+    */
+    static private binary packStoredMetadataCacheChunk(string app, *hash<auto> app_info, *hash<auto> stored) {
 %ifdef NoMsgPack
         throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot write data provider metadata";
 %else
@@ -3068,12 +3150,16 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
             app_index.appinfomap{app} = app_info;
         }
         IndexedTypeTableBuilder types();
-        if (exists actions) {
+        if (exists stored) {
             hash<auto> app_actions = {};
-            foreach hash<auto> action in (actions.pairIterator()) {
+            foreach hash<auto> action in (stored.actions.pairIterator()) {
                 app_actions{action.key} = types.addActionTypes(action.value);
             }
             app_index.actioninfomap{app} = app_actions;
+            # the option type descriptions of the app refer to one type table, which is stored once
+            if (stored.type_graph) {
+                types.addTypeGraph(stored.type_graph);
+            }
         }
         # type descriptions repeat many keys and values, so chunks compress by about 10 times
         return compress(msgpack_pack({"index": app_index} + types.getTables(), MSGPACK_QORE_MODE));
@@ -3087,7 +3173,8 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         @param restore @ref True if the actions will be restored by getIndexedAction(), in which case each action of
         a chunk that stores its type descriptions in tables refers to the tables with the @ref IndexedTypeTableKey
         key, so that each description is restored once; @ref False to return the actions in their serialized form,
-        in which every option type description is a complete description
+        in which every option type description is a complete description, and a description that refers to the types
+        of the app's type table gives the table in \c type_graph (see @ref IndexedTypeGraphForm)
 
         @return the chunk's index, with the app's info and actions
 
@@ -3114,7 +3201,9 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         if (!rv.actioninfomap) {
             return rv;
         }
-        IndexedTypeTable types(chunk.types, chunk.fields);
+        IndexedTypeTable types(chunk.types, chunk.fields, version >= MetadataCacheTypeGraphVersion
+            ? chunk.type_graph
+            : NOTHING);
         foreach hash<auto> app in (rv.actioninfomap.pairIterator()) {
             hash<auto> app_actions = {};
             foreach hash<auto> action in (app.value.pairIterator()) {
@@ -3427,6 +3516,8 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             writeCanonicalMaps(write, maps, getCanonicalMapNames(exists maps.factoryinfomap));
         }
         bool actions_written;
+        # the type table of each app whose option type descriptions refer to one, written once after the actions
+        hash<auto> typegraphmap = {};
         foreach string chunk_app in (dump_apps) {
             hash<DataProviderMetadataCacheChunkInfo> info = apps{chunk_app};
             binary data = ReadOnlyFile::readBinaryFile(getMetadataCacheChunkPath(chunk_app, info.sha256,
@@ -3438,9 +3529,14 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             *hash<auto> actions = unpackMetadataCacheChunk(data, compact.manifest.version, False)
                 .actioninfomap{chunk_app};
             if (exists actions) {
-                writeCanonicalAppActions(write, chunk_app, actions, !actions_written);
+                if (*hash<auto> type_graph = writeCanonicalAppActions(write, chunk_app, actions, !actions_written)) {
+                    typegraphmap{chunk_app} = type_graph;
+                }
                 actions_written = True;
             }
+        }
+        if (typegraphmap) {
+            writeCanonicalMaps(write, {"typegraphmap": typegraphmap}, ("typegraphmap",));
         }
         # the complete index records its connection alternatives after its actions, like the canonical index
         # file; a routing index published before version 4 does not record them
@@ -3976,7 +4072,14 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             if (!hstat(getIndexPath("data"))) {
                 return;
             }
-            return cast<*hash<DataProviderIndexInfo>>(readIndex("data"));
+            *hash<auto> index = readIndex("data");
+            # the option type descriptions of an app that refer to its type table, which the file holds once, are
+            # given the table
+            if (index && (*hash<auto> typegraphmap = remove index.typegraphmap)) {
+                index.actioninfomap = map {$1.key: IndexedTypeGraphForm::getSelfContainedForm($1.value,
+                    typegraphmap{$1.key})}, index.actioninfomap.pairIterator();
+            }
+            return cast<*hash<DataProviderIndexInfo>>(index);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s", get_exception_string(ex));
         }
@@ -4424,14 +4527,22 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @param ctx the prepared deserialization context
         @param types the type description tables of the action's chunk, if it stores its type descriptions in tables
 
-        @return a \c DataProvider::DataTypeInfo hash
+        @return a \c DataProvider::DataTypeInfo hash; a description that refers to the types of the app's type table
+        gives the table in \c type_graph
     */
     static private hash<auto> getOptionTypeInfo(hash<auto> action, string name, hash<auto> option,
             hash<MetadataDeserializeContext> ctx, *IndexedTypeTable types) {
         # a registered action's option is a typed hash without this key; an option of a chunk that stores its type
         # descriptions in tables refers to its description by its position, which can be 0
         if (option.hasKey("type_info") && (option.type_info.typeCode() == NT_INT || option.type_info)) {
-            return IndexedTypeTable::restoreTypeInfo(option.type_info, ctx, types);
+            hash<auto> rv = IndexedTypeTable::restoreTypeInfo(option.type_info, ctx, types);
+            # a description that refers to the types of the app's type table gives the table, so that
+            # DataProvider::AbstractDataProviderType::get() restores the type from the description alone
+            if (types && types.hasTypeGraph() && !exists rv.type_graph
+                    && IndexedTypeGraphForm::refersToTypeGraph(rv)) {
+                rv.type_graph = types.getRestoredTypeGraph(ctx);
+            }
+            return rv;
         }
         switch (option.type.typeCode()) {
             case NT_OBJECT:
@@ -4777,6 +4888,278 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 }
 
+#! The option type descriptions of an app's actions with one type table
+/** An index build describes the option types of an app with one type table (see
+    \c DataProvider::DataTypeGraphBuilder): each type with fields and each union type is described once in the table,
+    and every reference to it is a description that gives its key in \c type_ref.  In the self-contained form, used
+    in memory, each option type description that refers to the table gives it in \c type_graph, so that
+    \c DataProvider::AbstractDataProviderType::get() restores the type from the description alone; the descriptions of
+    an app share the table.  In the stored form, used in metadata cache chunks and in the canonical index file, the
+    descriptions refer to one type table of the app, which is stored once.
+
+    The stored type table has the types that the actions refer to, with the keys \c "1", \c "2", ... in the order in
+    which the actions, by name, and their options refer to them.  The stored form therefore depends only on the
+    descriptions, and not on the keys of the tables that they were described with, and descriptions of an app that
+    were described with different tables, such as by two index workers, refer to one table.
+
+    @since ProviderIndexUtil 1.2
+*/
+class IndexedTypeGraphForm {
+    private {
+        #! The type tables of the descriptions in the self-contained form, each once
+        list<hash<auto>> tables = ();
+        #! The position in @ref tables of the table found last
+        int last_table = -1;
+        #! The key of each type in the stored type table, by its table's position and its key in the table
+        hash<string, string> key_map = {};
+        #! The types to store: their table's position, their key in the table, and their stored key
+        list<list<auto>> queue = ();
+        #! The stored type table
+        hash<string, hash<auto>> graph = {};
+    }
+
+    #! Returns the actions of an app in the stored form, with the type table they refer to
+    /** @param actions the app's serialized actions in the self-contained form; an option type description without
+        references is stored as it is
+
+        @return \c actions: the actions, sorted by name, with every option type description in the stored form;
+        \c type_graph: the stored type table, or @ref nothing if no description refers to a type table
+
+        @throw PROVIDER-INDEX-ERROR a description refers to a type of a type table without giving the table, or to a
+        type that its table does not have
+    */
+    static hash<auto> getStoredForm(*hash<auto> actions) {
+        IndexedTypeGraphForm form();
+        hash<auto> stored = {};
+        foreach string name in (sort(keys actions)) {
+            stored{name} = form.storeAction(actions{name});
+        }
+        hash<auto> rv = {};
+        rv.actions = stored;
+        if (form.graph) {
+            rv.type_graph = form.graph;
+        }
+        return rv;
+    }
+
+    #! Returns the actions of an app in the self-contained form
+    /** @param actions the app's serialized actions in the stored form
+        @param type_graph the app's stored type table, if it has one
+
+        @return the actions, in which every option type description that refers to the type table gives it in
+        \c type_graph; the table is shared, not copied
+    */
+    static *hash<auto> getSelfContainedForm(*hash<auto> actions, *hash<auto> type_graph) {
+        if (!type_graph) {
+            return actions;
+        }
+        return map {$1.key: IndexedTypeGraphForm::attachTypeGraph($1.value, type_graph)}, actions.pairIterator();
+    }
+
+    #! Returns @ref True if the given type description refers to a type of a type table
+    /** Only the description itself is searched, not the types of the table that it refers to
+
+        @param info a type description, which may be in serialized form
+    */
+    static bool refersToTypeGraph(auto info) {
+        if (info.typeCode() != NT_HASH) {
+            return False;
+        }
+        if (info.hasKey("type_ref") && info.type_ref.typeCode() == NT_STRING && info.type_ref.val()) {
+            return True;
+        }
+        if (info.hasKey("fields") && info.fields.typeCode() == NT_HASH) {
+            foreach auto field in (info.fields.iterator()) {
+                if (field.typeCode() == NT_HASH && field.hasKey("type")
+                        && IndexedTypeGraphForm::refersToTypeGraph(field.type)) {
+                    return True;
+                }
+            }
+        }
+        foreach string key in (("element_type", "default_field_type_info")) {
+            if (info.hasKey(key) && IndexedTypeGraphForm::refersToTypeGraph(info{key})) {
+                return True;
+            }
+        }
+        if (info.hasKey("union_types") && info.union_types.typeCode() == NT_LIST) {
+            foreach auto union_type in (info.union_types) {
+                if (IndexedTypeGraphForm::refersToTypeGraph(union_type)) {
+                    return True;
+                }
+            }
+        }
+        return False;
+    }
+
+    #! Adds the keys of the types of a type table that a type description refers to
+    /** Only the description itself is searched, not the types of the table it refers to
+
+        @param info a type description, which may be in serialized form
+        @param refs the keys are added here, in the order in which the description refers to them
+    */
+    static addTypeRefs(auto info, reference<list<string>> refs) {
+        if (info.typeCode() != NT_HASH) {
+            return;
+        }
+        if (info.hasKey("type_ref") && info.type_ref.typeCode() == NT_STRING && info.type_ref.val()) {
+            push refs, info.type_ref;
+            return;
+        }
+        if (info.hasKey("fields") && info.fields.typeCode() == NT_HASH) {
+            foreach auto field in (info.fields.iterator()) {
+                if (field.typeCode() == NT_HASH && field.hasKey("type")) {
+                    IndexedTypeGraphForm::addTypeRefs(field.type, \refs);
+                }
+            }
+        }
+        foreach string key in (("element_type", "default_field_type_info")) {
+            if (info.hasKey(key)) {
+                IndexedTypeGraphForm::addTypeRefs(info{key}, \refs);
+            }
+        }
+        if (info.hasKey("union_types") && info.union_types.typeCode() == NT_LIST) {
+            foreach auto union_type in (info.union_types) {
+                IndexedTypeGraphForm::addTypeRefs(union_type, \refs);
+            }
+        }
+    }
+
+    #! Returns the given action with each option type description that refers to the type table giving it
+    private static hash<auto> attachTypeGraph(hash<auto> action, hash<auto> type_graph) {
+        if (!action.hasKey("options") || action.options.typeCode() != NT_HASH) {
+            return action;
+        }
+        hash<auto> options = {};
+        foreach hash<auto> i in (action.options.pairIterator()) {
+            if (i.value.typeCode() == NT_HASH && i.value.hasKey("type_info")
+                    && IndexedTypeGraphForm::refersToTypeGraph(i.value.type_info)) {
+                hash<auto> option = {} + i.value;
+                option.type_info = ({} + i.value.type_info) + {"type_graph": type_graph};
+                options{i.key} = option;
+            } else {
+                options{i.key} = i.value;
+            }
+        }
+        hash<auto> rv = {} + action;
+        rv.options = options;
+        return rv;
+    }
+
+    #! Returns the given action in the stored form
+    private hash<auto> storeAction(hash<auto> action) {
+        if (!action.hasKey("options") || action.options.typeCode() != NT_HASH) {
+            return action;
+        }
+        hash<auto> options = {};
+        foreach hash<auto> i in (action.options.pairIterator()) {
+            if (i.value.typeCode() == NT_HASH && i.value.hasKey("type_info")
+                    && i.value.type_info.typeCode() == NT_HASH) {
+                hash<auto> option = {} + i.value;
+                *hash<auto> table = i.value.type_info.hasKey("type_graph") ? i.value.type_info.type_graph : NOTHING;
+                option.type_info = store(i.value.type_info, table ? getTableIndex(table) : -1);
+                # the types that the description refers to are stored before the next description, so that their
+                # keys are those of the order in which they are referred to
+                while (queue) {
+                    list<auto> item = shift queue;
+                    *hash<auto> entry = tables[item[0]]{item[1]};
+                    if (!entry) {
+                        throw "PROVIDER-INDEX-ERROR", sprintf("a description refers to type %y, which is not in its "
+                            "type table", item[1]);
+                    }
+                    hash<auto> stored = store(entry, item[0]);
+                    # a type of a type table is identified by its key
+                    if (stored.hasKey("unique_key") && stored.unique_key.val()) {
+                        stored.unique_key = item[2];
+                    }
+                    graph{item[2]} = stored;
+                }
+                options{i.key} = option;
+            } else {
+                options{i.key} = i.value;
+            }
+        }
+        hash<auto> rv = {} + action;
+        rv.options = options;
+        return rv;
+    }
+
+    #! Returns the position of the given type table in @ref tables
+    /** The descriptions of an app share their table, so it is found by reference; a table that is not the same
+        value as one found before is compared with it in full, and an equal table is the same table
+    */
+    private int getTableIndex(hash<auto> table) {
+        if (last_table >= 0 && tables[last_table] === table) {
+            return last_table;
+        }
+        for (int i = 0; i < tables.size(); ++i) {
+            if (i != last_table && tables[i] === table) {
+                return last_table = i;
+            }
+        }
+        push tables, table;
+        return last_table = tables.size() - 1;
+    }
+
+    #! Returns the given type description in the stored form
+    /** @param info the description
+        @param table the position in @ref tables of the table that the description refers to, or -1 if it gives none
+    */
+    private auto store(auto info, int table) {
+        if (info.typeCode() != NT_HASH) {
+            return info;
+        }
+        hash<auto> rv = {} + info;
+        remove rv.type_graph;
+        if (info.hasKey("type_ref") && info.type_ref.typeCode() == NT_STRING && info.type_ref.val()) {
+            string key = getStoredKey(table, info.type_ref, info.name);
+            rv.type_ref = key;
+            # a reference has the key of the type it refers to
+            if (rv.hasKey("unique_key") && rv.unique_key.val()) {
+                rv.unique_key = key;
+            }
+            return rv;
+        }
+        if (info.hasKey("fields") && info.fields.typeCode() == NT_HASH) {
+            hash<auto> fields = {};
+            foreach hash<auto> i in (info.fields.pairIterator()) {
+                if (i.value.typeCode() == NT_HASH && i.value.hasKey("type")) {
+                    hash<auto> field = {} + i.value;
+                    field.type = store(i.value.type, table);
+                    fields{i.key} = field;
+                } else {
+                    fields{i.key} = i.value;
+                }
+            }
+            rv.fields = fields;
+        }
+        foreach string key in (("element_type", "default_field_type_info")) {
+            if (info.hasKey(key) && info{key}.typeCode() == NT_HASH) {
+                rv{key} = store(info{key}, table);
+            }
+        }
+        if (info.hasKey("union_types") && info.union_types.typeCode() == NT_LIST) {
+            rv.union_types = map store($1, table), info.union_types;
+        }
+        return rv;
+    }
+
+    #! Returns the key in the stored type table of the given type of a type table
+    private string getStoredKey(int table, string key, *string name) {
+        if (table < 0) {
+            throw "PROVIDER-INDEX-ERROR", sprintf("type %y refers to type %y of a type table, but its description "
+                "does not give the table", name, key);
+        }
+        string id = table.toString() + ":" + key;
+        *string rv = key_map{id};
+        if (exists rv) {
+            return rv;
+        }
+        rv = key_map{id} = (key_map.size() + 1).toString();
+        push queue, (table, key, rv);
+        return rv;
+    }
+}
+
 %ifndef NoMsgPack
 #! Builds the tables of distinct type and field descriptions of a metadata cache chunk
 /** The description of a type that is reachable by more than one path, as a record type that other record types
@@ -4804,6 +5187,8 @@ class IndexedTypeTableBuilder {
         hash<string, int> type_pos = {};
         #! The positions of the field descriptions, by serialized form
         hash<string, int> field_pos = {};
+        #! The positions of the types of the app's type table, by key, if the chunk has one
+        *hash<string, int> type_graph;
     }
 
     #! Returns the given serialized action with each option type description replaced by its position
@@ -4831,14 +5216,26 @@ class IndexedTypeTableBuilder {
         return rv;
     }
 
+    #! Adds the type table that the option type descriptions of the app refer to
+    /** @param graph the type table in the stored form (see @ref IndexedTypeGraphForm)
+    */
+    addTypeGraph(hash<auto> graph) {
+        type_graph = map {$1.key: addType($1.value)}, graph.pairIterator();
+    }
+
     #! Returns the tables as stored in a metadata cache chunk
-    /** @return a hash with \c types and \c fields keys
+    /** @return a hash with \c types and \c fields keys, and a \c type_graph key giving the position of each type of
+        the app's type table by key if the chunk has one
     */
     hash<auto> getTables() {
-        return {
-            "types": types,
-            "fields": fields,
-        };
+        # members are assigned one at a time, since a hash literal would be typed by its values
+        hash<auto> rv = {};
+        rv.types = types;
+        rv.fields = fields;
+        if (exists type_graph) {
+            rv.type_graph = type_graph;
+        }
+        return rv;
     }
 
     #! Adds the given type description and its nested descriptions, and returns its position
@@ -4916,17 +5313,69 @@ class IndexedTypeTable {
         list<auto> expanded_fields = ();
         #! The descriptions being restored or expanded by each thread, to reject a description that refers to itself
         hash<string, bool> pending = {};
+        #! The positions of the types of the app's type table, by key, if the chunk has one
+        *hash<string, int> type_graph;
+        #! The app's type table with complete serialized descriptions, once expanded
+        *hash<auto> expanded_graph;
+        #! The app's type table with DataTypeInfo hashes, once restored
+        *hash<auto> restored_graph;
     }
 
     #! Creates the object from the tables of a metadata cache chunk
     /** @param types the type description table
         @param fields the field description table
+        @param type_graph the positions in the type description table of the types of the app's type table, by key,
+        if the chunk has one (see @ref IndexedTypeGraphForm)
 
-        @throw PROVIDER-INDEX-ERROR a table is not a list
+        @throw PROVIDER-INDEX-ERROR a table is not a list, or the app's type table is not a hash of positions
     */
-    constructor(auto types, auto fields) {
+    constructor(auto types, auto fields, auto type_graph) {
         self.types = getTable(types, "type");
         self.fields = getTable(fields, "field");
+        if (exists type_graph) {
+            if (type_graph.typeCode() != NT_HASH) {
+                throw "PROVIDER-INDEX-ERROR", sprintf("the type table of a metadata cache chunk must be a hash; got "
+                    "%s instead", type_graph.type());
+            }
+            foreach hash<auto> i in (type_graph.pairIterator()) {
+                if (i.value.typeCode() != NT_INT) {
+                    throw "PROVIDER-INDEX-ERROR", sprintf("type %y of the type table of a metadata cache chunk must "
+                        "be a position in its type description table; got %s instead", i.key, i.value.type());
+                }
+            }
+            self.type_graph = type_graph;
+        }
+    }
+
+    #! Returns @ref True if the chunk has a type table that its option type descriptions refer to
+    bool hasTypeGraph() {
+        return exists type_graph;
+    }
+
+    #! Returns the app's type table with complete serialized descriptions
+    /** @return the type table; the descriptions are shared, not copied
+
+        @throw PROVIDER-INDEX-ERROR a description refers to a position that is not in its table, or to itself
+    */
+    hash<auto> getExpandedTypeGraph() {
+        if (!exists expanded_graph) {
+            expanded_graph = (map {$1.key: expandType($1.value)}, type_graph.pairIterator()) ?? {};
+        }
+        return expanded_graph;
+    }
+
+    #! Returns the app's type table with DataTypeInfo hashes
+    /** @param ctx the prepared deserialization context
+
+        @return the type table, whose descriptions are \c DataProvider::DataTypeInfo hashes
+
+        @throw PROVIDER-INDEX-ERROR a description refers to a position that is not in its table, or to itself
+    */
+    hash<auto> getRestoredTypeGraph(hash<MetadataDeserializeContext> ctx) {
+        if (!exists restored_graph) {
+            restored_graph = (map {$1.key: restoreType($1.value, ctx)}, type_graph.pairIterator()) ?? {};
+        }
+        return restored_graph;
     }
 
     #! Returns the given type description, stored in a chunk's tables or as a complete description, as a DataTypeInfo hash
@@ -4978,13 +5427,18 @@ class IndexedTypeTable {
                 ? map cast<hash<AllowedValueInfo>>($1), info.element_allowed_values
                 : NOTHING),
             "constraints": exists info.constraints ? ctx.constraint_info_th.doCast(info.constraints) : NOTHING,
+            # a description that refers to the types of a type table can give the table
+            "type_graph": (info.type_graph
+                ? (map {$1.key: restoreTypeInfo($1.value, ctx, types)}, info.type_graph.pairIterator())
+                : NOTHING),
         });
     }
 
     #! Returns the given serialized action with each option type description that is a position replaced by the complete description
     /** @param action a serialized action from a chunk that stores its type descriptions in tables
 
-        @return the action in the serialized form of a chunk without tables; descriptions are shared, not copied
+        @return the action in the serialized form of a chunk without tables; descriptions are shared, not copied, and
+        a description that refers to the types of the app's type table gives the table in \c type_graph
 
         @throw PROVIDER-INDEX-ERROR a description refers to a position that is not in its table, or to itself
     */
@@ -4997,6 +5451,10 @@ class IndexedTypeTable {
             if (i.value.typeCode() == NT_HASH && i.value.type_info.typeCode() == NT_INT) {
                 hash<auto> option = {} + i.value;
                 option.type_info = expandType(i.value.type_info);
+                # a description that refers to the types of the app's type table gives the table
+                if (type_graph && IndexedTypeGraphForm::refersToTypeGraph(option.type_info)) {
+                    option.type_info += {"type_graph": getExpandedTypeGraph()};
+                }
                 options{i.key} = option;
             } else {
                 options{i.key} = i.value;
