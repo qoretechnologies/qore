@@ -3978,7 +3978,9 @@ QoreValue QoreOnnxModel::convertOutputTensorToTensor(Ort::Value&& tensor, Except
         ReferenceHolder<QoreBufferNode> buffer(
             wrapOnnxDeviceOutput(std::move(tensor), type, buffer_type,
                 static_cast<size_t>(total_elements), dev_info, xsink), xsink);
-        if (*xsink) {
+        // wrapOnnxDeviceOutput() raises an exception whenever it returns no buffer; without CUDA it always does
+        if (!buffer || *xsink) {
+            assert(*xsink);
             return QoreValue();
         }
         db_device_outputs.fetch_add(1, std::memory_order_relaxed);
