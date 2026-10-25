@@ -21633,3 +21633,143 @@ pure-develop ratio, general Java parity or global performance ceiling is
 established. Next inspect the remaining typed-callback dispatch and loop
 bookkeeping costs, preserving live cancellation, stack bounds and observable
 call contexts; separately investigate loop-containing float return bodies.
+
+
+## Known callback native float arguments (2026-10-25)
+
+AOT lowering now recognizes an already-lowered native double as an exact float
+argument for a known same-program callback. Native body-local promotion can
+establish this proof after IR value facts were computed. NaN-boxed values and
+preserved boxed provenance keep the existing guards; the latter can still hold
+NOTHING after a sparse read. Exact arity and existing default/varargs/reference,
+context and callee eligibility checks remain. The compile control is
+QORE_DISABLE_AOT_KNOWN_CALLREF_NATIVE_FLOAT. No runtime ABI or fast-math change.
+
+A source-only feasibility experiment first localized literal callbacks inside
+their loop functions. The unary case needed an explicit float cast to use the
+existing known-target path: 7.526 ns/item through a callback parameter, 18.238 ns/item
+with localization alone, 1.277 ns/item with localization plus a cast. These manual
+rewrites are diagnostic, not compiler gains. The retained compiler change
+removes the need for that cast in the already-localized source.
+
+Five-fork confirmation across three layouts:
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item
+|mixed:callback_pipeline|83.612850|82.584465|83.235844
+|original:callback_local_float_return|7.574584|7.530497|7.636371
+|original:direct_local_float_return|0.786134|0.785691|0.781768
+|target:callback_local_float_return|18.169134|1.273714|18.167233
+|target:typed_local_float_unary|7.855704|7.971026|7.916523
+
+The lexical unary target improves 14.26x (93.0% less time), exceeding the
+prospective 20% gate in each layout against both comparators. Callbacks passed
+through another function remain about 7.5 ns/item; this change does not specialize
+callback parameters. The first untimed candidate unnecessarily boxed the known
+float and retained a NOTHING guard; it was superseded before timing.
+
+Retain under the user-authorized broader workload tradeoff. One control repeats
+a default-layout loss: typed_local_float_unary is 8.123529 ns/item versus
+7.679057/7.674277 before/disabled, +5.788%/+5.854% or 0.444472/0.449252 ns/item.
+Its all-layout confirmation aggregate is +1.47%/+0.69%. The original direct-float
+shuffle-layout screen flag does not repeat in confirmation. All adverse results
+remain recorded. Unchanged callee LLVM does not establish the cause of losses;
+this is not a passed universal no-regression gate.
+
+Fresh broad 55-workload screen (three forks per layout):
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate vs before
+|arithmetic|1.492206|1.494018|1.491712|+0.12%
+|direct_call|1.502210|1.499404|1.501572|-0.19%
+|method_call|1.571037|1.567021|1.568607|-0.26%
+|indirect_call|7.731030|7.732975|7.746508|+0.03%
+|polymorphic_call|23.436441|23.456096|23.406696|+0.08%
+|polymorphic_expression_call|10.754321|10.796574|10.876487|+0.39%
+|monomorphic_call|3.844437|3.802650|3.752797|-1.09%
+|optional_method_call|11.088987|10.952582|10.942725|-1.23%
+|polymorphic_float_call|23.861620|23.706586|23.945908|-0.65%
+|polymorphic_float_expression_call|10.925379|10.984516|11.256102|+0.54%
+|monomorphic_float_call|4.120907|4.091245|4.030345|-0.72%
+|optional_float_method_call|10.905484|10.976795|10.948396|+0.65%
+|boxed_float_method_call|19.961146|19.904847|19.892753|-0.28%
+|dynamic_int_result_call|10.574426|10.530371|10.512098|-0.42%
+|dynamic_int_result_fallback|21.180204|20.933760|20.803000|-1.16%
+|boxed_int_method_call|16.797763|16.673596|16.796866|-0.74%
+|boxed_int_method_fallback|32.644838|33.174340|33.063374|+1.62%
+|boxed_float_method_fallback|34.323115|33.738964|34.289784|-1.70%
+|boxed_int_method_effect|90.067010|90.006705|89.958525|-0.07%
+|dynamic_float_result_call|11.788371|11.641440|11.647963|-1.25%
+|indirect_wide|7.206720|7.227301|7.257235|+0.29%
+|indirect_float|8.223266|8.424766|8.260641|+2.45%
+|indirect_int_result|7.545593|7.496596|7.556646|-0.65%
+|indirect_float_result|7.778204|7.700468|7.825374|-1.00%
+|indirect_tagged_float|7.820841|7.846154|7.872129|+0.32%
+|indirect_branch_float|8.564740|8.709702|8.676371|+1.69%
+|indirect_affine|7.674454|7.804500|7.833453|+1.69%
+|indirect_affine_wide|7.292365|7.344747|7.381829|+0.72%
+|indirect_branch_int|7.522352|7.567785|7.419374|+0.60%
+|dispatch_control|1.840239|1.833711|1.829301|-0.35%
+|list_read|2.816453|2.816000|2.817643|-0.02%
+|list_build|27.409148|27.507382|27.402662|+0.36%
+|list_mutate|182.071599|182.005795|183.552298|-0.04%
+|temporary_list|1.586452|1.578629|1.585228|-0.49%
+|temporary_hash|322.652483|323.357383|321.006491|+0.22%
+|closure_call|16.988758|16.968654|17.004368|-0.12%
+|closure_capture|22.667901|22.569989|22.263376|-0.43%
+|object_loop|167.439539|166.536083|165.195498|-0.54%
+|object_short|1063.400220|1063.092913|1049.362058|-0.03%
+|float_loop|171.707427|170.207121|169.753819|-0.87%
+|float_short|1064.783912|1071.085544|1057.023177|+0.59%
+|string_loop|359.480745|349.865939|354.755193|-2.67%
+|string_short|1201.248005|1204.857611|1195.660242|+0.30%
+|effect_loop|335.273914|334.505973|337.904238|-0.23%
+|effect_short|1241.544596|1243.798828|1259.045176|+0.18%
+|two_read_loop|365.968274|368.770493|359.735239|+0.77%
+|two_read_short|1264.836734|1256.127930|1272.528754|-0.69%
+|default_loop|665.728575|654.781714|665.801248|-1.64%
+|default_short|1568.145752|1584.347490|1584.579099|+1.03%
+|string_result_loop|395.166522|397.691762|394.725880|+0.64%
+|string_result_short|1319.056920|1303.895647|1320.242746|-1.15%
+|csv_report|926.548293|924.257406|930.915506|-0.25%
+|object_orders|1793.813554|1741.371936|1736.938124|-2.92%
+|callback_pipeline|83.649567|83.169288|82.301096|-0.57%
+|text_index|1307.831362|1305.482761|1301.854527|-0.18%
+
+All 55 aggregates remain within 3% of both comparators and no disjoint-range
+regression flag appears. Every broad optimized function body matches after
+explicit debug/private-constant-content and startup-metadata-length normalization.
+A prospectively selected five-fork follow-up covers arithmetic and callback_pipeline
+(no other workload meets the selection rule):
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate vs before
+|arithmetic|1.504058|1.507199|1.503384|+0.21%
+|callback_pipeline|83.138057|83.595398|83.466962|+0.55%
+
+The follow-up has no flags. All builds use -O3 -DNDEBUG, allocation tracking OFF;
+qcc uses -O3 --strip-source. Timings use one warmup, three 150 ms samples, 4096 items,
+seed 7, default/reverse/shuffle-487 layouts and fixed randomized paired ordering.
+Target screen has three forks; target confirmation five. 2,394 timed processes and
+7,182 measured windows are independently replayed; 108 additional feasibility
+processes / 324 windows are separate. No owned work overlaps timing; external
+load, clock frequency and thermals are uncontrolled. These are whole-workload
+ns/item, not isolated call latency or a production-wide throughput estimate.
+Timed checksums are parsed; separate references vary input counts and seeds.
+
+Release passes 18 selected fixtures (15 QUnit, 3 standalone), 6,137 QUnit assertions,
+391 qmod builds and 1,110 IR/AOT reference checks. Eight Linux RSS checks remain
+skipped. 3,510 target and 7,047 broad artifact references pass. The new fixture checks
+AST/IR/JIT/tiered and AOT O0/O3/EH/split/disabled paths, special float values,
+unassigned/optional/sparse arguments, reassignment and observable callbacks.
+Untimed samples verify the actual fast caller and loaded runtime UUID.
+No full-suite, Debug, sanitizer or cross-platform validation is claimed here.
+
+[results-aot-known-callref-native-float-macos-arm64.json](results-aot-known-callref-native-float-macos-arm64.json) preserves the plans, benchmark sources,
+raw timings, reference outputs, process exits, dependency fingerprints, code
+inspection, qualification and all 62 audit outcomes. The feasibility sample-path
+review initially failed because macOS redacts paths; a fresh owned sample set
+verified the runtime by UUID. The extension's outer terminal status was lost
+across compaction; its four waited child exits and final artifacts were replayed
+without inventing an outer status. Before is 83a7de03 production code, not pure
+develop. No new Java ratio, general Java parity or global performance ceiling
+is claimed. Next preserve literal callback-target knowledge across same-program
+function calls using bounded separate specialized entries and the ordinary
+fallback, then measure a fresh optimized Java checkpoint.

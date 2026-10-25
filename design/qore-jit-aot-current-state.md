@@ -4387,3 +4387,31 @@ checkpoint, target screen/confirmation, all 55 broad workloads and every adverse
 result. Only AOT performance was measured. Release/Debug each pass 41 selected
 fixtures and 19,533 QUnit assertions, with eight Linux-only RSS skips per build.
 No pure-develop ratio, general Java parity or performance ceiling is claimed.
+
+
+## Known callback native float arguments (2026-10-25)
+
+AOT known same-program callbacks now accept an already-lowered native double
+when IR value facts predate body-local promotion. Preserved boxed provenance
+(including sparse NOTHING) keeps the old guards; only all-proven native floats
+avoid the redundant boxing/NOTHING check. Existing call shape, context, lifetime,
+stack, cancellation and fallback rules remain. No runtime ABI or fast-math change.
+QORE_DISABLE_AOT_KNOWN_CALLREF_NATIVE_FLOAT is the compile control.
+
+The lexical unary callback loop confirms 18.169134 to 1.273714 ns/item, 14.26x
+faster, with a disabled control at 18.167233. Callbacks passed through parameters
+remain about 7.5 ns/item. Retain under the authorized broader tradeoff: a float
+callback control repeatedly loses 5.8% (0.44 ns/item) in the default layout,
+while its all-layout aggregate is +1.47%/+0.69% versus before/disabled. The broad
+55-workload screen has no regression flags and all aggregates stay within 3%
+of both controls; its two-control follow-up also has no flags. This is not a
+universal no-regression result, and unchanged control LLVM does not prove cause.
+
+RESULTS and results-aot-known-callref-native-float-macos-arm64.json retain all
+2,394 timed processes/7,182 windows, references and adverse results; the manual
+source-localization feasibility experiment is labeled separately. Release passes
+18 fixtures, 6,137 QUnit assertions and 391 qmod builds, with eight Linux RSS
+skips. Only AOT performance is measured; no new Java/develop ratio or performance
+ceiling is claimed. Next investigate bounded specialized entries that preserve
+known callback targets across same-program function calls while keeping ordinary
+dynamic/cross-program entry behavior, then take a fresh optimized Java checkpoint.

@@ -27807,6 +27807,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         call_shape_eligible = !args_priv
                             || !args_priv->hasCallArgEvalMap();
                     }
+                    bool needs_native_guard = false;
                     for (int i = 0;
                             call_shape_eligible && i < native_nargs; ++i) {
                         if (i && !(i % 100)
@@ -27828,6 +27829,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         if (source_kind
                                 != native_boxed_source_kinds.end()
                                 && source_kind->second == param_kind) {
+                            needs_native_guard = true;
+                            continue;
+                        }
+                        // Native body-local promotion can establish a double
+                        // after IR value facts were computed. Reuse that proof
+                        // for an exact float parameter, but never discard the
+                        // boxed provenance of a sparse or optional value: its
+                        // native conversion may have hidden NOTHING.
+                        auto lowered = values.find(value_id);
+                        if (param_kind == BatchCalleeParamKind::NativeFloat
+                                && lowered != values.end()
+                                && lowered->second->getType() == double_type
+                                && !nanboxed_values.count(value_id)
+                                && !native_boxed_sources.count(value_id)
+                                && !q_env_is_set(
+                                    "QORE_DISABLE_AOT_KNOWN_CALLREF_NATIVE_FLOAT")) {
                             continue;
                         }
                         bool dynamic_scalar =
@@ -27836,10 +27853,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 != BatchCalleeParamKind::Boxed;
                         guarded_native_type_checks[
                             static_cast<size_t>(i)] = dynamic_scalar;
+                        needs_native_guard |= dynamic_scalar;
                         call_shape_eligible = dynamic_scalar;
                     }
-                    guarded_native_args = call_shape_eligible;
-                    native_call_eligible = guarded_native_args;
+                    guarded_native_args = call_shape_eligible
+                        && needs_native_guard;
+                    native_call_eligible = call_shape_eligible;
                 }
                 if (callee != batch_callees->end()
                         && callee->second.approach_b_eligible

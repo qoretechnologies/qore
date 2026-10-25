@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+
+sub expect(auto expected, auto actual) {
+    if (type(expected) != type(actual) || (type(expected) == "float"
+            ? (expected.nanp() ? !actual.nanp() : expected != actual
+                || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual)))
+            : expected != actual)) {
+        throw "KNOWN-CALLREF-FLOAT", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+float sub nativeFloatTarget(float value) { return 65535.0 - value; }
+float sub nativeFloatIdentity(float value) { return value; }
+float sub knownNativeFloatLoop(float seed, int count) {
+    code<float(float)> callback = \nativeFloatTarget();
+    float value = seed;
+    float sum = 0.0;
+    for (int i = 0; i < count; ++i) { value = callback(value); sum += value; }
+    return sum;
+}
+float sub knownNativeFloatIdentity(float seed, int count) {
+    code<float(float)> callback = \nativeFloatIdentity();
+    float value = seed;
+    for (int i = 0; i < count; ++i) { value = callback(value); }
+    return value;
+}
+string sub unassignedFloat(bool assigned) {
+    code<float(float)> callback = \nativeFloatIdentity();
+    float value;
+    if (assigned) { value = 1.5; }
+    try { return string(callback(value)); }
+    catch (hash<ExceptionInfo> e) { return e.err; }
+}
+string sub optionalFloat(*float value) {
+    code<float(float)> callback = \nativeFloatIdentity();
+    try { return string(callback(value)); }
+    catch (hash<ExceptionInfo> e) { return e.err; }
+}
+string sub sparseFloat() {
+    code<float(float)> callback = \nativeFloatIdentity();
+    list<float> values = (1.0, 2.0);
+    delete values[1];
+    try { return sprintf("%y", (map callback($1), values)); }
+    catch (hash<ExceptionInfo> e) { return e.err; }
+}
+float sub mutableFloat(bool replace) {
+    code<float(float)> callback = \nativeFloatIdentity();
+    float value = 1.5;
+    if (replace) { callback = \nativeFloatTarget(); }
+    for (int i = 0; i < 3; ++i) { value = callback(value); }
+    return value;
+}
+thread_local int calls = 0;
+float sub observableFloat(float value) {
+    ++calls;
+    if (value == 0.0) { throw "EXPECTED", "zero"; }
+    return value;
+}
+float sub knownObservableFloat(float seed) {
+    code<float(float)> callback = \observableFloat();
+    float value = seed;
+    for (int i = 0; i < 3; ++i) { value = callback(value); }
+    return value;
+}
+foreach float value in ((0.0, -0.0, 1.5, -1.5, -3.0e307, @inf@, -@inf@, @nan@, -@nan@)) {
+    foreach int count in ((0, 1, 2, 17, 257)) {
+        float current = value;
+        float sum = 0.0;
+        for (int i = 0; i < count; ++i) { current = 65535.0 - current; sum += current; }
+        expect(sum, knownNativeFloatLoop(value, count));
+        expect(value, knownNativeFloatIdentity(value, count));
+    }
+}
+expect("1.5", unassignedFloat(True));
+expect("1.5", optionalFloat(1.5));
+foreach string err in ((unassignedFloat(False), optionalFloat(NOTHING), sparseFloat())) {
+    expect(True, err.regex("^RUNTIME-(TYPE|OVERLOAD)-ERROR$"));
+}
+expect(1.5, mutableFloat(False));
+expect(65533.5, mutableFloat(True));
+expect(1.5, knownObservableFloat(1.5));
+expect(3, calls);
+bool caught = False;
+try { knownObservableFloat(0.0); }
+catch (hash<ExceptionInfo> e) { expect("EXPECTED", e.err); caught = True; }
+expect(True, caught);
+expect(4, calls);
+printf("known-callref-native-float: ok\n");

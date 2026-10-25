@@ -221,6 +221,8 @@
     redundant boxing and reference-count operations while retaining boxed-value ownership.
     AOT and JIT compilation can also summarize side-effect-free floating-point expressions returned through
     private locals after local promotion, enabling native direct and typed callback paths for eligible functions.
+    AOT calls through known same-program function references can use native floating-point arguments established
+    by local promotion, avoiding redundant boxing and dynamic dispatch while retaining guards for optional values.
 
     AOT-compiled modules record the AOT runtime identity of the %Qore library that compiled them, and a module
     compiled by a library with a different generated-code contract is refused when it is loaded, with an error that
