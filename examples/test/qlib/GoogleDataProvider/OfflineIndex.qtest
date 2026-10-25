@@ -126,6 +126,7 @@ public class OfflineGoogleIndexTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             assertEq("DATA-PROVIDER-DISCOVERY-ERROR", ex.err);
             assertRegex("did not finish within 1000 ms", ex.arg.failures[0].description);
+            assertTrue(ex.arg.failures[0].argument.timed_out, "the failure says that the worker timed out");
         }
         assertFalse(DataProviderStaticMetadataHelper::get(), "a failed build restores the metadata context");
         int pid = int(ReadOnlyFile::readTextFile(pidfile));

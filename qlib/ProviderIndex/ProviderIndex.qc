@@ -309,7 +309,10 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
             initialized and are recorded as unavailable in the index
         @throw PROVIDER-INDEX-MODULE-ERROR an explicit dependency has no authoritative loaded module identity
         @throw DATA-PROVIDER-DISCOVERY-ERROR if discovery fails other than by the failure of individual apps or actions:
-            a discovery source, a factory, or a worker fails, or the catalog changes while it is indexed
+            a discovery source, a factory, or a worker fails, or the catalog changes while it is indexed; the failure
+            of a worker that did not finish within
+            @ref ProviderIndex::ProviderIndexCreateOptions::worker_timeout_ms "worker_timeout_ms" has \c timed_out
+            set in its argument
         @throw DATA-PROVIDER-DISCOVERY-STALE if registration changes after qualification
         @throw PROVIDER-INDEX-ERROR the output directory is unavailable
         @throw PROVIDER-INDEX-WORKER-ERROR a worker build was requested, but worker processes cannot be started
@@ -1402,8 +1405,12 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                     log(LoggerLevel::LevelInfo, "index worker %s started for %y", batch.id,
                         map $1.name, batch.items);
                     hash<auto> run = runWorker(batch, command, staging_dir, opts.worker_timeout_ms, generation);
-                    log(LoggerLevel::LevelInfo, "index worker %s finished in %y with exit code %y", batch.id,
-                        run.elapsed, run.exit_code);
+                    # the progress of a build that runs for minutes, for the log of the caller: the apps of the
+                    # batch and the seconds it took
+                    log(LoggerLevel::LevelInfo, "index worker %s finished in %.1f s with exit code %y: %d app(s)%s",
+                        batch.id, run.elapsed.durationSecondsFloat(), run.exit_code, run.result.apps.size(),
+                        run.timed_out ? sprintf("; it did not finish within %d ms and was terminated",
+                            opts.worker_timeout_ms) : "");
                     lock.lock();
                     on_exit lock.unlock();
                     runs{batch.id} = run;
@@ -1496,6 +1503,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                         "items": items,
                         "exit_code": run.exit_code,
                         "stderr": run.stderr,
+                        # a worker that did not finish within worker_timeout_ms, which ends a hung worker
+                        "timed_out": run.timed_out ?? False,
                     },
                 };
                 continue;
