@@ -166,8 +166,9 @@ provider.complete("Classify invoices by department", invoice_text, NOTHING,
     values ends with the number of values left out (<tt>… and 12 more</tt>), and a pattern too long to state whole is
     left out rather than cut.  A constraint that the description already states is not repeated.  Descriptions add no
     states to Gemini's decoder, but they are input tokens of every request: measured on 50-tool OpenAPI catalogs, the
-    notes add about 5% to the size of the function declarations.  Response schemas keep \c enum and \c default
-    natively and state only the other constraints.
+    notes add about 5% to the size of the function declarations.  Response schemas keep string-valued \c enum
+    and \c default natively.  Other enum constraints are stated in descriptions without changing the value's type;
+    callers still validate them against the original schema.
 
     A value sent as JSON text is declared as a string whose description summarizes the shape of the original schema
     in at most @ref SchemaSummaryMaxChars characters: its members with their types, required members first and
@@ -336,7 +337,8 @@ public string sub bareModelName(string model) {
     schemas and local validators: local \c "$ref" references are resolved,
     \c allOf / \c anyOf / \c oneOf alternatives are merged, a \c "null"
     alternative or type becomes \c nullable, and \c const becomes a
-    one-value \c enum.
+    one-value \c enum.  Gemini's native enum field accepts only strings: enums of other types are stated in
+    descriptions while their declared types and the caller's original schema remain unchanged.
 
     @param schema the input JSON schema (or @ref nothing)
     @param compact when @ref True, shape the schema as tool parameters with
@@ -648,6 +650,7 @@ class GeminiSchemaShaper {
             if (GeminiBodyShape::isSchemaKeywordStripped(key)
                     || GeminiBodyShape::isSchemaMetadataKeyword(key)
                     || (tool && GeminiBodyShape::isCompactSchemaKeywordStripped(key))
+                    || (key == "enum" && !GeminiSchemaShaper::hasNativeEnum(node))
                     || GeminiBodyShape::isSchemaCompositionKeyword(key)) {
                 continue;
             }
@@ -717,7 +720,7 @@ class GeminiSchemaShaper {
         list<string> parts = ();
         *string lwr_desc = desc ? desc.lwr() : NOTHING;
 
-        # enum and default are kept natively in a response schema and left out of tool parameters
+        # String enums and defaults are kept natively in response schemas; other enums are description-only.
         auto default_value;
         if (tool && node.hasKey("default")) {
             default_value = node."default";
@@ -771,7 +774,7 @@ class GeminiSchemaShaper {
         }
 
         *list<auto> values;
-        if (tool && node."enum".typeCode() == NT_LIST) {
+        if ((tool || !GeminiSchemaShaper::hasNativeEnum(node)) && node."enum".typeCode() == NT_LIST) {
             values = node."enum";
         } else if (node.allowed_values.typeCode() == NT_LIST && (tool || !node.hasKey("enum"))) {
             values = map $1.typeCode() == NT_HASH && $1.hasKey("value") ? $1.value : $1, node.allowed_values;
@@ -785,6 +788,22 @@ class GeminiSchemaShaper {
         string note = allowed ? (rest.val() ? allowed + "; " + rest : allowed) : rest;
         @assert(note.length() <= SchemaConstraintNoteMaxChars);
         return note.val() ? note : NOTHING;
+    }
+
+    #! True if the enum can be sent in Gemini's protobuf-backed response schema
+    /** @param node the resolved schema, including its inferred type
+        @return True only for a nonempty string enum on a string value
+    */
+    private static bool hasNativeEnum(hash<auto> node) {
+        if (node.type != "string" || node."enum".typeCode() != NT_LIST || !node."enum") {
+            return False;
+        }
+        foreach auto value in (node."enum") {
+            if (value.typeCode() != NT_STRING) {
+                return False;
+            }
+        }
+        return True;
     }
 
     #! Adds the numeric range of a schema to the constraint note parts

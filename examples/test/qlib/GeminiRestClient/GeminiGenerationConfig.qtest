@@ -62,7 +62,59 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
         addTestCase("invalid config rejects before sending", \invalid());
         addTestCase("chat shaping handles reasoning effort", \shaping());
         addTestCase("both providers resolve options before normalization", \providers());
+        addTestCase("response enums keep their types and use the native string-only contract", \responseEnums());
         set_return_value(main());
+    }
+
+    responseEnums() {
+        # A strict boolean discriminator in alternative record shapes is legal JSON Schema.  The merged
+        # native schema must not put JSON booleans in the provider's repeated-string enum field.
+        hash<auto> schema = {"type": "object", "properties": {
+            "record": {"anyOf": (
+                {"type": "object", "properties": {"defines_table": {"type": "boolean", "enum": (False,)}},
+                    "required": ("defines_table",)},
+                {"type": "object", "properties": {"defines_table": {"type": "boolean", "enum": (True,)}},
+                    "required": ("defines_table",)})},
+            "fixed": {"const": False},
+            "count": {"type": "integer", "enum": (1, 3)},
+            "ratio": {"type": "number", "enum": (1.5, 2.5)},
+            "status": {"type": "string", "enum": ("準備完了", "připraveno")},
+            "optional": {"type": ("string", "null"), "enum": ("ready", NOTHING)},
+            "enum": {"type": "string", "enum": ("literal-property-name",)},
+        }, "required": ("record", "fixed", "count", "ratio", "status", "optional", "enum")};
+        hash<auto> original = schema;
+        CaptureGenerationRest rest();
+        hash<QoreLlmUtils::LlmBackendConfig> config = <QoreLlmUtils::LlmBackendConfig>{
+            "model": "gemini-3.5-flash", "api_key": "test-only-key", "max_retries": 0,
+            "provider_options": {"gcp_project_id": "test-project"},
+        };
+        foreach GeminiBodyShape::AbstractGeminiModelProvider provider in ((
+                new CaptureGeminiProvider(config, rest), new CaptureVertexProvider(config, rest))) {
+            provider.chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "fixture"},), NOTHING,
+                <QoreLlmUtils::LlmRequestOptions>{"output_schema": schema});
+            hash<auto> shaped = rest.body.generationConfig.responseSchema;
+            assertEq("application/json", rest.body.generationConfig.responseMimeType);
+            assertEq(schema.required, shaped.required);
+            hash<auto> flag = shaped.properties.record.properties.defines_table;
+            assertEq("boolean", flag.type);
+            assertFalse(flag.hasKey("enum"));
+            assertEq("Allowed values: false, true", flag.description);
+            assertEq(("defines_table",), shaped.properties.record.required);
+            foreach hash<auto> expectation in ((
+                    {"name": "fixed", "type": "boolean", "values": "false"},
+                    {"name": "count", "type": "integer", "values": "1, 3"},
+                    {"name": "ratio", "type": "number", "values": "1.5, 2.5"},
+                    {"name": "optional", "type": "string", "values": "ready, null"})) {
+                hash<auto> field = shaped.properties{expectation.name};
+                assertEq(expectation.type, field.type);
+                assertFalse(field.hasKey("enum"));
+                assertEq("Allowed values: " + expectation.values, field.description);
+            }
+            assertTrue(shaped.properties.optional.nullable);
+            assertEq(("準備完了", "připraveno"), shaped.properties.status."enum");
+            assertEq(("literal-property-name",), shaped.properties."enum"."enum");
+            assertEq(original, schema, "the strict caller schema is unchanged");
+        }
     }
 
     models() {
