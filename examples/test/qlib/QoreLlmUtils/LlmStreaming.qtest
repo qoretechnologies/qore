@@ -279,7 +279,7 @@ public class LlmStreamingTest inherits QUnit::Test {
         addTestCase("Gemini: data-provider streaming config", \geminiDataProviderStreamTest());
         addTestCase("Gemini: generation config migration on streams", \geminiGenerationConfigTest());
         addTestCase("Gemini: a stalled stream times out", \geminiStallTest());
-        addTestCase("Gemini: a stream closed without a finish reason", \geminiUnterminatedStreamTest());
+        addTestCase("Gemini: a stream closed without a finish reason is incomplete", \geminiUnterminatedStreamTest());
         addTestCase("Gemini: a response that is not an event stream raises", \geminiNonSseResponseTest());
         addTestCase("Gemini: GeminiResponseSseStreamIo validates the response", \geminiSseStreamIoTest());
         addTestCase("Gemini: the streaming path is derived from the request path", \streamPathTest());
@@ -550,14 +550,19 @@ public class LlmStreamingTest inherits QUnit::Test {
         server.script(sseReply((geminiChunk("cut", NOTHING),)));
         LlmBackend llm = geminiBackend();
         list<hash<ChatStreamEvent>> events = ();
-        llm.chatStream(userMessage("hi"), sub (hash<ChatStreamEvent> e) {
-            push events, e;
-        });
-        assertEq(2, events.size());
+        try {
+            llm.chatStream(userMessage("hi"), sub (hash<ChatStreamEvent> e) {
+                push events, e;
+            });
+            fail("a stream closed without a finish reason is reported as incomplete");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("LLM-ERROR", ex.err);
+            assertRegex("ended without a terminal model event", ex.desc);
+            assertEq("LLM-STREAM-INCOMPLETE", ex.arg.err);
+        }
+        assertEq(1, events.size(), "the partial output before the close is delivered");
         assertEq("cut", events[0].delta);
-        assertFalse(events[0].done);
-        assertTrue(events[1].done, "the end of the stream is reported");
-        assertNothing(events[1].raw);
+        assertFalse(events[0].done, "an unterminated stream is not reported as complete");
     }
 
     geminiNonSseResponseTest() {
