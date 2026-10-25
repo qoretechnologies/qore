@@ -495,8 +495,8 @@ public:
     strset_t parse_modules;
 
     //! the module requests of %try-module directives that failed, in parse order, without duplicates
-    /** An AOT artifact records them, since its code takes the branch for the module being unavailable; see
-        qoreAOTAppendOptionalModulesTrailer()
+    /** An AOT module records them in its module metadata, since its code takes the branch for the module being
+        unavailable; see QoreAOTModuleFileInfo
     */
     std::vector<std::string> unavailable_try_modules;
 

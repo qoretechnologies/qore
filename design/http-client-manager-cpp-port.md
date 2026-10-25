@@ -842,6 +842,51 @@ limit, for instance — is still healthy and stays pooled.  This does not replac
 the ordering rule: it bounds the damage of any future violation to one request
 instead of every subsequent one.
 
+### 7.11 A connection that a response ends stops taking requests before its stream is released
+
+7.10 orders the close before the completion, which protects the caller that the
+completion wakes.  It does not protect a thread that is **not** waiting for that
+response: another thread using the same client, or the caller itself after it
+stopped reading the response early (`HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE`, an
+exception in a receive callback) while the I/O thread still reads the rest.
+`dispatchResponse()` and `dispatchStreamingEnd()` release the response's stream
+slot (`--active_stream_count`) before `closeConnectionPriv()` marks the
+connection closed, and between the two a connection that the response ends with
+`Connection: close` passes both of `findReusableLocked()`'s screens: it is not
+closed or draining, and its slot is free.  The thread that checks it out finds it
+closed when it submits, without a stored error, since the close is clean:
+`raiseClosedSubmitError()` raises `HTTPCLIENT-STATE-ERROR` ("connection is
+closed"), or, if the close has not been marked yet, the poll operation refuses
+the request with `HTTP1-STATE-ERROR`.  A request that cannot be repeated fails;
+HttpClientResponseLimit.qtest "streaming delivery" failed this way on Alpine
+arm64.
+
+**Contract:** a connection that a response ends is marked `DRAINING`
+(`drainConnectionPriv()`) before the response's stream slot is released, and
+`tryReserveStream()` checks `isDraining() || isClosed()` after it reads the
+stream count.  The I/O thread drains the connection before it takes
+`stream_lock` to release the slot, and `getActiveStreamCount()` reads the count
+under `stream_lock`, so a reserver that sees the released slot also sees the
+draining state, even if its pool scan saw the connection accept requests
+before.  Draining is a plain state change: it fires no hook and releases no
+reference, so it is safe on the I/O thread at that point.
+
+**Repeat on a closed reused connection.**  A pooled connection can still be
+closed between its checkout and the submit by an idle timeout or the peer.
+`request()` repeats an idempotent request once on a new connection when the
+reused connection it was given refuses the request because it is closed, with
+or without a stored error (`isClosed()`); `requestStreaming()` does the same
+(`requestStreamingOnce()`), and reports a repeated request as not submitted on a
+reused connection, so that `HTTPClient`'s own repeat of a request whose
+connection closes before the response headers arrive does not send it a third
+time.
+
+Tests: `ut_manager_streaming_repeats_on_closed_reused_connection()` and
+`ut_manager_streaming_does_not_repeat_unsafe_requests()` (asyncio_unit_tests),
+and HttpClientStaleConnection.qtest "a connection that a response ends is not
+used again", which holds the window open with
+`dbg_defer_http1_connection_close(deferred, True)`.
+
 ---
 
 ## 8. Risks

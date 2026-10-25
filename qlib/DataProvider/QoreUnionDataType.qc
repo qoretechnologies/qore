@@ -92,6 +92,28 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         return copyUnion(types);
     }
 
+    #! Sets the alternatives of the union, replacing the alternatives it has
+    /** A union restored from its description is created before its alternatives, so that an alternative that refers
+        back to it, through other types, can be the union itself; see
+        @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()"
+
+        @param types the alternatives, in declaration order
+
+        @return the union itself
+
+        @throw TYPE-ERROR fewer than two alternatives were provided
+
+        @since DataProvider 3.11
+    */
+    QoreUnionDataType setUnionTypes(list<AbstractDataProviderType> types) {
+        if (types.size() < 2) {
+            throw "TYPE-ERROR", sprintf("union types require at least two alternatives; got %y", types);
+        }
+        self.types = types;
+        name = (map $1.getName(), types).join("|");
+        return self;
+    }
+
     #! Returns a union over the given alternatives with this union's descriptions and constraints
     private QoreUnionDataType copyUnion(list<AbstractDataProviderType> types) {
         QoreUnionDataType rv(types, name_desc);
@@ -138,6 +160,10 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
     */
     hash<DataTypeInfo> getInfo(*bool simple) {
         hash<DataTypeInfo> rv = AbstractDataProviderType::getInfo(simple);
+        # a reference in a type graph description describes nothing else
+        if (rv.type_ref) {
+            return rv;
+        }
         rv.union_types = map $1.getInfo(simple), types;
         return rv;
     }

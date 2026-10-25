@@ -109,7 +109,13 @@ public:
 DLLLOCAL int64 q_get_ir_innermost_cleanup_entries();
 
 //! Compound +=/-= helpers — shared between IR interpreter and JIT runtime
-DLLLOCAL QoreValue doPlusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
+/** The value added holds a reference in \a right, which += takes when it stores the value - appended to a list or
+    assigned to an lvalue with no value - as the AST interpreter does; a caller that does not use the value again
+    can therefore hand its own reference over, so that no dereference follows once the value is linked into a graph
+    (see design/dgc.md, "The rrefs deferral").  The holder must be declared before the LValueHelper, so that a
+    reference that += does not take is released after the lvalue's locks.
+*/
+DLLLOCAL QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right, ExceptionSink* xsink);
 DLLLOCAL QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
 
 //! Execute a previously resolved direct-call descriptor when its cached IR is

@@ -769,6 +769,24 @@ sub dag_holder_writes(reference<hash<string, int>> rv, Tally t, reference<*Count
     release = new Counters();
 }
 
+#! as dag_holder_writes(), with each new holder held by a local variable until it has been added
+/** The holder's constructor defers the scan that its write makes, as its self holds a real reference; the local
+    variable holds the holder after it, and its release makes the scan once the holder is in the list.  The first
+    scan records the graph as a closed region (see RRegion), and the later ones only enter the holder.
+*/
+sub dag_holder_local_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    Node root = make_tree(DagDepth, DagFan, False);
+    list<Request> holders = ();
+    Counters c();
+    for (int i = 0; i < Writes; ++i) {
+        Request holder(root);
+        holders += holder;
+    }
+    c.record(\rv, "dag-holder-local");
+    rv."dag-holder-local-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
 #! as dag_holder_writes(), with each node of the graph in a 2-cycle with a peer
 sub dag_holder_cyclic_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
     Node root = make_tree(DagDepth, DagFan, True);
@@ -833,19 +851,32 @@ sub dag_dependent_back_edge_writes(reference<hash<string, int>> rv, Tally t, ref
 
 #! a reference stored in a container whose values the scanner reports through private data ends every region
 /** The objects a reference refers to cannot be found without evaluating it (RSet::untracked_edge_epoch), so the
-    next scan enters the tree again and records it anew, and the one after skips it again.
+    next scan enters the tree again and records it anew, and the one after skips it again.  Each holder is held by a
+    local variable until it has been added, so that the release of the variable makes the scan that the holder's
+    constructor deferred (see dag_holder_local_writes()).
 */
 sub dag_epoch_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
     Node root = make_tree(DagDepth, DagFan, False);
-    list<Request> holders = (new Request(root),);
+    list<Request> holders = ();
+    # the scan records the tree as a closed region
+    {
+        Request holder(root);
+        holders += holder;
+    }
     Node other();
     Queue q();
     q.push(\other.x);
     Counters c();
-    holders += new Request(root);
+    {
+        Request holder(root);
+        holders += holder;
+    }
     c.record(\rv, "dag-epoch-first");
     Counters c2();
-    holders += new Request(root);
+    {
+        Request holder(root);
+        holders += holder;
+    }
     c2.record(\rv, "dag-epoch-second");
     rv."dag-epoch-held-dtors" = Tally::cycleSince(t);
     release = new Counters();
@@ -1075,6 +1106,7 @@ public hash<string, int> sub get_results() {
         run(\rv, "cut-api", \cut_api_writes());
     }
     run(\rv, "dag-holder", \dag_holder_writes());
+    run(\rv, "dag-holder-local", \dag_holder_local_writes());
     run(\rv, "dag-holder-cyclic", \dag_holder_cyclic_writes());
     run(\rv, "dag-back-edge", \dag_back_edge_writes());
     run(\rv, "dag-dependent-back-edge", \dag_dependent_back_edge_writes());

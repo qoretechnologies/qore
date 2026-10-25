@@ -365,6 +365,14 @@ DLLLOCAL void pop_native_call_stack_location(void* thread_data_ptr, const QoreSt
         const AbstractStatement* runtime_stmt, const QoreProgramLocation* runtime_loc);
 
 DLLLOCAL const QoreProgramLocation* get_runtime_location();
+//! Sets the runtime statement, location and parse options of the current thread, and returns the previous ones
+/** The new values are set in any case.
+
+    @param xsink if not null, the stack is checked, and \c STACK-LIMIT-EXCEEDED is raised here if the thread's stack
+    limit has been reached; null to set or restore a location without a stack check
+
+    @return 0 if OK, -1 if the stack limit has been reached (only with \a xsink; the exception is raised in it)
+*/
 DLLLOCAL int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt,
         const QoreProgramLocation* loc, QoreParseOptions po, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);

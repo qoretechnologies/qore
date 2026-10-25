@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class IrLocalSlotReadsTest
+
+#! Checks that the compiled tiers read the caches of local variables through the accessors that unwrap weak references
+/** The variable of a foreach loop is assigned each element as it is (AssignmentMode::Element), so the cache of an
+    IR-only variable can hold a weak reference, which the program reads as its target.  The IR interpreter reads its
+    cache (IRLocalSlotCache in lib/QoreIRInterpreter.cpp) with read(), and native code loads a cache
+    (QoreIRToLLVM::LocalCacheSlot) with loadLocalCacheValue(); both give the target of a weak reference.  The stored
+    value itself, through storage(), is for the code that stores, copies or releases it.
+
+    This test checks the sources: every use of the stored value must be a store or a release, or be marked as a raw
+    use of the stored value with a comment containing "raw slot" (interpreter) or "raw local cache" (native code) on
+    the same line or on the comment lines just before it.  A new read of a cache that bypasses the accessor fails it
+    until it uses the accessor or explains why the stored value is right.
+*/
+class IrLocalSlotReadsTest inherits QUnit::Test {
+    public {
+        #! the number of lines before a use that a marker comment may be on
+        const MarkerLines = 3;
+    }
+
+    constructor() : QUnit::Test("IrLocalSlotReadsTest", "1.0", \ARGV) {
+        addTestCase("the IR interpreter reads local slots through the accessor", \testInterpreter());
+        addTestCase("native code loads local caches through the accessor", \testNativeCode());
+        set_return_value(main());
+    }
+
+    testInterpreter() {
+        *list<string> source = readSource("lib/QoreIRInterpreter.cpp");
+        if (!source) {
+            testSkip("the sources are not available");
+        }
+        list<string> lines = source;
+        list<string> found = ();
+        int uses = 0;
+        foreach string line in (lines) {
+            int i = $#;
+            if (line =~ /locals_slot_cache\[/) {
+                push found, sprintf("%d: the slot cache is indexed directly: %s", i + 1, trim(line));
+                continue;
+            }
+            # uses of the stored value of the frame's slot cache and of the slot caches shared by frames
+            if (line !~ /\.storage\(|\(\*[a-z_]*slot_cache[a-z_]*\)\[/) {
+                continue;
+            }
+            ++uses;
+            if (line =~ /(\.storage\([^()]*\)|\(\*[a-z_]*slot_cache[a-z_]*\)\[[^\]]*\])(\.discard\(| = )/) {
+                continue;
+            }
+            if (!hasMarker(lines, statementStart(lines, i), "raw slot") && !hasMarker(lines, i, "raw slot")) {
+                push found, sprintf("%d: the stored value is used without a \"raw slot\" comment: %s", i + 1,
+                    trim(line));
+            }
+        }
+        assertGt(50, uses, "the uses of the stored values are found");
+        assertEq((), found);
+    }
+
+    testNativeCode() {
+        *list<string> source = readSource("lib/QoreIRToLLVM.cpp");
+        if (!source) {
+            testSkip("the sources are not available");
+        }
+        list<string> lines = source;
+        list<string> found = ();
+        int uses = 0;
+        foreach string line in (lines) {
+            int i = $#;
+            if (line !~ /\.storage\(\)/) {
+                continue;
+            }
+            ++uses;
+            # a load of the stored value, or the alloca kept in a variable for later loads, must be marked; the
+            # statement can start on an earlier line
+            int start = statementStart(lines, i);
+            string statement = "";
+            for (int j = start; j <= i; ++j) {
+                statement += lines[j] + " ";
+            }
+            if (statement =~ /CreateLoad\(/ || statement =~ /=[^=]*\.storage\(\);/) {
+                if (!hasMarker(lines, start, "raw local cache") && !hasMarker(lines, i, "raw local cache")) {
+                    push found, sprintf("%d: the stored value is loaded without a \"raw local cache\" comment: %s",
+                        i + 1, trim(statement));
+                }
+            }
+        }
+        assertGt(30, uses, "the uses of the stored values are found");
+        assertEq((), found);
+    }
+
+    #! Returns the lines of a source file of the repository, or nothing if it is not available
+    private *list<string> readSource(string path) {
+        string file = get_script_dir() + "/../../../" + path;
+        if (!is_file(file)) {
+            return;
+        }
+        return ReadOnlyFile::readTextFile(file).split("\n");
+    }
+
+    #! Returns the index of the first line of the statement that the given line is part of
+    private static int statementStart(list<string> lines, int i) {
+        int start = i;
+        while (start > 0 && start > i - MarkerLines) {
+            string prev = trim(lines[start - 1]);
+            if (!prev.val() || prev =~ /[;{}]$/ || prev =~ /^\/\//) {
+                break;
+            }
+            --start;
+        }
+        return start;
+    }
+
+    #! Returns True if the line or the comment lines just before it contain the marker
+    private static bool hasMarker(list<string> lines, int i, string marker) {
+        if (lines[i].find(marker) >= 0) {
+            return True;
+        }
+        for (int j = i - 1; j >= 0 && j >= i - MarkerLines; --j) {
+            string prev = trim(lines[j]);
+            if (prev !~ /^\/\//) {
+                break;
+            }
+            if (prev.find(marker) >= 0) {
+                return True;
+            }
+        }
+        return False;
+    }
+}

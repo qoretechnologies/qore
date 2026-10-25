@@ -771,7 +771,7 @@ static bool qore_aot_record_module_deps(QoreProgram* pgm,
         // The artifact is compiled without the modules of failed %try-module directives, so the build depends on
         // the files that could provide them: replacing a module that was too old, for example, must rebuild the
         // artifact.  A module that is installed later is detected when the artifact is loaded; see
-        // qoreAOTAppendOptionalModulesTrailer().
+        // QoreAOTModuleFileInfo.
         for (const std::string& spec : pp->unavailable_try_modules) {
             size_t end = spec.find_first_of(" \t<>=!");
             std::string name = spec.substr(0, end);
@@ -1565,6 +1565,9 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             if (info.never_returns_nothing) {
                 entry.flags |= QORE_AOT_FAST_ENTRY_NEVER_NOTHING;
             }
+            if (info.return_rejects_nothing) {
+                entry.flags |= QORE_AOT_FAST_ENTRY_RETURN_REJECTS_NOTHING;
+            }
             if (info.implicit_self_method) {
                 entry.flags |= QORE_AOT_FAST_ENTRY_IMPLICIT_SELF;
             }
@@ -2170,11 +2173,14 @@ std::string qore_aot_get_compile_runtime_identity() {
     return test_identity && !test_identity.str().empty() ? test_identity.str() : qore_aot_runtime_identity;
 }
 
-//! Append producer/build diagnostics and an optional source stat fingerprint to the AOT metadata blob.
-/** BUILD_INFO is informational. The fixed-width fingerprint lets supporting runtimes avoid reading an unchanged
-    source file; older runtimes safely ignore its unknown optional section. */
+//! Append producer/build diagnostics to the AOT metadata blob.
+/** BUILD_INFO is informational.  Nothing about the source file's state on disk, such as its modification time, is
+    recorded: an artifact depends only on the content it was compiled from, so compiling the same content again
+    produces the same bytes, whatever the source file's modification time (a checkout or a rebase rewrites files
+    with unchanged content).  No runtime reads such data from an artifact; the loader checks the sources of a module
+    linked into a source tree with the fingerprints file beside the module (see --depfile). */
 static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* binary_kind,
-        const char* target_triple, int opt_level, bool include_source, const char* source_path = nullptr) {
+        const char* target_triple, int opt_level, bool include_source) {
     std::vector<std::pair<std::string, std::string>> info;
     auto add = [&info](const char* key, const std::string& value) {
         info.emplace_back(key, value);
@@ -2199,14 +2205,6 @@ static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* bina
     const char* big_fn = big_fn_holder.c_str();
     add("big-fn-threshold", big_fn ? big_fn : "");
     serializeBuildInfo(writer, info);
-
-    QoreAOTSourceStatFingerprint source_fingerprint;
-    // A mapped deployment label cannot identify the original source's stat data. Retain the content
-    // hash (and runtime hash-based validation) without persisting a build-machine mtime shortcut.
-    if (qore_aot_map_source_path(source_path) == (source_path ? source_path : "")
-            && getAOTSourceStatFingerprint(source_path, source_fingerprint)) {
-        serializeAOTSourceStatFingerprint(writer, source_fingerprint);
-    }
 }
 
 //! Compute xxHash64 of source file bytes
@@ -2939,7 +2937,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         return -1;
     }
     if (q_env_is_set("QORE_IR_OPT_STATS")) {
-        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu\n",
+        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu return-checks-elided=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
             optimization_stats.scalar_loads_forwarded,
@@ -2961,7 +2959,8 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
             optimization_stats.in_place_string_appends,
             optimization_stats.pure_calls_folded,
             optimization_stats.pure_calls_commoned,
-            optimization_stats.redundant_phis_eliminated);
+            optimization_stats.redundant_phis_eliminated,
+            optimization_stats.return_checks_elided);
     }
 
     return 0;
@@ -14224,6 +14223,10 @@ bool qore_ir_resolve_batch_function_summaries(
         AOTCollectionOpInfo collection_op;
         if (pass_through_return && qore_aot_get_collection_op(*func, *sig, collection_op)) {
             callee_it->second.collection_op = std::move(collection_op);
+            // an element or a key that does not exist has no value, which such a return type rejects
+            const QoreTypeInfo* return_type = func->specializeType(sig->getReturnTypeInfo());
+            callee_it->second.return_rejects_nothing = QoreTypeInfo::hasType(return_type)
+                && !QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING);
         }
         AOTAggregateReturnInfo aggregate_return;
         if (qore_aot_get_aggregate_return(*func, *sig, aggregate_return)
@@ -16795,6 +16798,8 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         : info.may_invalidate_external_caches;
     info.never_returns_nothing =
         rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_NEVER_NOTHING;
+    info.return_rejects_nothing =
+        rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_RETURN_REJECTS_NOTHING;
     if (rec.fast_return_kind > static_cast<uint8_t>(BatchCalleeReturnKind::NativeBool)) {
         return false;
     }
@@ -24461,7 +24466,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
             error = "operation cancelled during AOT module command serialization";
             return false;
         }
-        appendBuildInfoSection(writer, "script", target_triple, opt_level, include_source, label);
+        appendBuildInfoSection(writer, "script", target_triple, opt_level, include_source);
 
         // Serialize dependencies from the parsed program's feature lists.
         // This captures ALL module dependencies including those from %include'd files,
@@ -26072,6 +26077,60 @@ static void emitFragmentSymbols(llvm::LLVMContext& ctx, llvm::Module& module,
     builder.CreateRet(ptr);
 }
 
+//! Adds the section holding the AOT module metadata that the loader reads before it maps the module
+/** The metadata is part of the image, so the code signature that the linker or \c codesign attaches to the module
+    covers it, and stripping the module keeps it (see QoreAOTModuleFileInfo): a Mach-O section in the \c __TEXT
+    segment, or an allocated ELF note section, which the linker places in a \c PT_NOTE segment.  It is added to the
+    object that is linked into a \c .qmod (the module object, or the glue object of an aggregated module), never to a
+    \c .qo, so a module has exactly one.
+
+    @param ctx the LLVM context
+    @param module the LLVM module of the object
+    @param mod_info the module's descriptor information
+    @param unavailable_try_modules the %try-module requests that failed when the module was compiled
+    @param target_triple the target, or nullptr for the host
+    @param error receives a description of invalid metadata or of an unsupported object format
+
+    @return true on success
+*/
+static bool addAOTModuleInfoSection(llvm::LLVMContext& ctx, llvm::Module& module, const QoreAOTModuleInfo& mod_info,
+        const std::vector<std::string>& unavailable_try_modules, const char* target_triple, std::string& error) {
+    QoreAOTModuleFileInfo info;
+    info.module_name = mod_info.name;
+    info.dependencies = mod_info.dependencies;
+    info.unavailable_optional_modules = unavailable_try_modules;
+    std::vector<uint8_t> record;
+    if (!qoreAOTEncodeModuleInfo(info, record, error)) {
+        return false;
+    }
+
+    llvm::Triple triple(target_triple ? std::string(target_triple) : llvm::sys::getDefaultTargetTriple());
+    std::vector<uint8_t> contents;
+    const char* section;
+    if (triple.isOSBinFormatMachO()) {
+        contents = std::move(record);
+        // no_dead_strip keeps the section when the module is linked with -dead_strip
+        section = QORE_AOT_MODULE_INFO_MACHO_SEGMENT "," QORE_AOT_MODULE_INFO_MACHO_SECTION ",regular,no_dead_strip";
+    } else if (triple.isOSBinFormatELF()) {
+        contents = qoreAOTModuleInfoNote(record);
+        section = QORE_AOT_MODULE_INFO_ELF_SECTION;
+    } else {
+        error = "AOT modules can only be built for ELF and Mach-O targets, not for '" + triple.str() + "'";
+        return false;
+    }
+
+    llvm::Constant* data = llvm::ConstantDataArray::get(ctx, llvm::ArrayRef<uint8_t>(contents));
+    auto* gv = new llvm::GlobalVariable(module, data->getType(), true, llvm::GlobalValue::PrivateLinkage, data,
+        "qore_aot_module_info");
+    gv->setSection(section);
+    // ELF notes are 4-byte aligned; the Mach-O record is read with the same alignment
+    gv->setAlignment(llvm::Align(4));
+    // keep the otherwise unreferenced global from being removed or merged; on ELF this also marks the section
+    // SHF_GNU_RETAIN, so that --gc-sections keeps it
+    llvm::appendToUsed(module, {gv});
+    return true;
+}
+
 //! Generate LLVM IR for binary module ABI symbols
 /** Embeds serialized metadata blob and calls qore_aot_module_init_v3.
 
@@ -26771,7 +26830,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             error = "operation cancelled during AOT module command serialization";
             return false;
         }
-        appendBuildInfoSection(writer, "module", target_triple, opt_level, include_source, label);
+        appendBuildInfoSection(writer, "module", target_triple, opt_level, include_source);
 
         // Serialize successfully-loaded dependencies so they can be loaded at
         // runtime before deserializing the namespace tree. Failed %try-module
@@ -26878,6 +26937,10 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         // at module load time.  mod_po is only the initial seed.
         generateModuleABIV2(ctx, *module, metadata, label, qpgm->getParseOptions(),
             mod_info, compiled_funcs, compile_only);
+        if (!compile_only && !addAOTModuleInfoSection(ctx, *module, mod_info,
+                qore_program_private::get(**qpgm)->unavailable_try_modules, target_triple, error)) {
+            return false;
+        }
 
         split_codegen = !func_slots.empty();
     }
@@ -26917,19 +26980,6 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         if (!target_triple) {
             remove(obj_path.c_str());
         }
-    }
-
-    // The optional modules that were unavailable are recorded before the dependency trailer, which is read from
-    // the end of the file.
-    if (!compile_only && !target_triple
-            && !qoreAOTAppendOptionalModulesTrailer(output_path,
-                qore_program_private::get(**qpgm)->unavailable_try_modules, error)) {
-        return false;
-    }
-    if (!compile_only && !target_triple
-            && !qoreAOTAppendModuleDependenciesTrailer(
-                output_path, mod_info.name, mod_info.dependencies, error)) {
-        return false;
     }
 
     reportAOTArtifactStats("module compilation", opt_level, include_source,
@@ -27266,7 +27316,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 error = "operation cancelled during AOT module command serialization";
                 return false;
             }
-            appendBuildInfoSection(writer, "split-module", target_triple, opt_level, include_source, qm_path.c_str());
+            appendBuildInfoSection(writer, "split-module", target_triple, opt_level, include_source);
 
             // Serialize successfully-loaded dependencies so failed %try-module
             // directives do not become hard AOT dependencies.
@@ -27372,6 +27422,10 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             // single-file module path.
             generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(),
                 qpgm->getParseOptions(), mod_info, compiled_funcs, compile_only);
+            if (!compile_only && !addAOTModuleInfoSection(ctx, *module, mod_info,
+                    qore_program_private::get(**qpgm)->unavailable_try_modules, target_triple, error)) {
+                return false;
+            }
 
             split_codegen = !func_slots.empty();
         }
@@ -27411,19 +27465,6 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             if (!target_triple) {
                 remove(obj_path.c_str());
             }
-        }
-
-        // The optional modules that were unavailable are recorded before the dependency
-        // trailers, which are read from the end of the file.
-        if (!compile_only && !target_triple
-                && !qoreAOTAppendOptionalModulesTrailer(output_path,
-                    qore_program_private::get(**qpgm)->unavailable_try_modules, error)) {
-            return false;
-        }
-        if (!compile_only && !target_triple
-                && !qoreAOTAppendModuleDependenciesTrailer(
-                    output_path, mod_info.name, mod_info.dependencies, error)) {
-            return false;
         }
 
         reportAOTArtifactStats("split module compilation", opt_level, include_source,
@@ -27918,8 +27959,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
             error = "operation cancelled during AOT module command serialization";
             return false;
         }
-        appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source,
-            target_canon.c_str());
+        appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source);
         {
             std::vector<QoreAOTUnrunTopLevelStatement> unrun;
             if (!qoreAOTCollectUnrunTopLevelCode(qpgm, target_canon.c_str(), nullptr, unrun, error)) {
@@ -30747,8 +30787,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             error = "operation cancelled during AOT module command serialization";
             return false;
         }
-        appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source,
-            target_canon.c_str());
+        appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source);
         {
             std::vector<QoreAOTUnrunTopLevelStatement> unrun;
             if (!qoreAOTCollectUnrunTopLevelCode(*qpgm, target_canon.c_str(), nullptr, unrun, error)) {
@@ -31338,8 +31377,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 error = "operation cancelled during AOT module command serialization";
                 return false;
             }
-            appendBuildInfoSection(writer, "module-fragment", target_triple, opt_level, include_source,
-                qm_path.c_str());
+            appendBuildInfoSection(writer, "module-fragment", target_triple, opt_level, include_source);
 
             std::vector<std::string> reexport_mods;
             std::vector<std::string> explicit_deps = extractAllDependencies(combined_source.c_str(),
@@ -31846,8 +31884,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 error = "operation cancelled during AOT module command serialization";
                 return false;
             }
-            appendBuildInfoSection(writer, "aggregated-module", target_triple, opt_level, include_source,
-                qm_path.c_str());
+            appendBuildInfoSection(writer, "aggregated-module", target_triple, opt_level, include_source);
 
             std::vector<std::string> reexport_mods;
             std::vector<std::string> explicit_deps = extractAllDependencies(combined_source.c_str(),
@@ -31952,6 +31989,10 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(),
                 qpgm->getParseOptions(), mod_info, compiled_funcs,
                 /*compile_only=*/false);
+            if (!addAOTModuleInfoSection(ctx, *module, mod_info,
+                    qore_program_private::get(**qpgm)->unavailable_try_modules, target_triple, error)) {
+                return false;
+            }
         }
 
         di_builder.finalize();
@@ -31984,15 +32025,6 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         }
 
         if (!linkSharedLibMulti(link_inputs, output_path, error, target_triple)) {
-            remove(glue_obj.c_str());
-            return false;
-        }
-
-        if (!target_triple
-                && (!qoreAOTAppendOptionalModulesTrailer(output_path,
-                        qore_program_private::get(**qpgm)->unavailable_try_modules, error)
-                    || !qoreAOTAppendModuleDependenciesTrailer(
-                        output_path, mod_info.name, mod_info.dependencies, error))) {
             remove(glue_obj.c_str());
             return false;
         }
@@ -32384,7 +32416,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 error = "operation cancelled during AOT module command serialization";
                 return false;
             }
-            appendBuildInfoSection(writer, "archive", target_triple, opt_level, include_source, qm_path.c_str());
+            appendBuildInfoSection(writer, "archive", target_triple, opt_level, include_source);
 
             std::vector<std::string> reexport_mods;
             std::vector<std::string> explicit_deps = extractAllDependencies(combined_source.c_str(),

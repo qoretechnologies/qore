@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../../../qlib/QUnit.qm
 %requires ../../../qlib/FsUtil.qm
+%requires ../TestFileTime.qm
 # catalog install reconciliation is verified by composing what it leaves installed
 %requires ../../../qlib/DataProvider
 %requires i18n
@@ -24,14 +25,6 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
             "function": "return stepPhaseOffset() + 41;",
             "construction": "StepPhasePolicy policy(41);\n        return policy.get() + 1;",
         };
-
-        #! The command that sets the time of files to a time given by touch_time()
-        /** "touch -t [[CC]YY]MMDDhhmm[.SS]" is supported by both BSD (macOS) and GNU touch, unlike "touch -d \@epoch",
-            which BSD touch rejects.  It reads the time in the local time zone, where the hour that the end of daylight
-            saving time repeats is ambiguous: a time in it can set a file time an hour off (as on 2026-10-25 at 02:17 in
-            Europe/Prague).  The times are given in UTC, which has no such hour.
-        */
-        const TouchUtc = "TZ=UTC0 touch -t";
     }
 
     private {
@@ -101,16 +94,6 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
 
     private string run(string cmd) {
         return backquote("{ " + cmd + "; } 2>&1");
-    }
-
-    #! Returns the given time in UTC in the format of POSIX "touch -t"; see TouchUtc
-    private static string touch_time(date d) {
-        return format_date("YYYYMMDDHHmm.SS", gmtime(get_epoch_seconds(d)));
-    }
-
-    #! Returns the time the given number of seconds from now in UTC in the format of POSIX "touch -t"; see TouchUtc
-    private static string future_touch_time(int secs) {
-        return touch_time(now() + seconds(secs));
     }
 
     private static string shellQuote(string value) {
@@ -250,9 +233,9 @@ qore_user_modules(\"qlib/Fixture\")
         write(format_stamp, "format=1\n");
         symlink(qmod, link);
 
-        assertEq(0, system(sprintf("touch -t 202601010000 %s && touch -t 202601010001 %s",
-                shellQuote(qmod), shellQuote(format_stamp))),
-            "the fixture establishes deterministic stale timestamps");
+        TestFileTime::set_file_times(2026-01-01T00:00:00Z, qmod);
+        TestFileTime::set_file_times(2026-01-01T00:01:00Z, format_stamp);
+        assertTrue(mtime(qmod) < mtime(format_stamp), "the fixture establishes deterministic stale timestamps");
         string stale = run(sprintf(
             "cmake -DQORE_SOURCE_QLIB_DIR=%s -DQORE_BUILD_QMOD_DIR=%s "
                 + "-DQORE_QCC_FORMAT_STAMP=%s -P %s",
@@ -262,7 +245,8 @@ qore_user_modules(\"qlib/Fixture\")
         assertTrue(stale.find("1 stale artifact(s) skipped") >= 0,
             "stale qmod rejection is visible in the build diagnostic: " + stale);
 
-        assertEq(0, system(sprintf("touch -t 202601010002 %s", shellQuote(qmod))),
+        TestFileTime::set_file_times(2026-01-01T00:02:00Z, qmod);
+        assertTrue(mtime(qmod) > mtime(format_stamp),
             "the fixture advances the rebuilt qmod timestamp deterministically");
         string fresh = run(sprintf(
             "cmake -DQORE_SOURCE_QLIB_DIR=%s -DQORE_BUILD_QMOD_DIR=%s "
@@ -322,8 +306,9 @@ qore_user_modules(\"qlib/Fixture\")
         # the stale-artifact check of tree "debug" does not remove tree "release"'s link to a fresh qmod
         string format_stamp = tmp.path + "/debug/qcc-format.stamp";
         write(format_stamp, "format=1\n");
-        assertEq(0, system(sprintf("touch -t 202601010000 %s && touch -t 202601010001 %s",
-                shellQuote(debug_moda), shellQuote(format_stamp))),
+        TestFileTime::set_file_times(2026-01-01T00:00:00Z, debug_moda);
+        TestFileTime::set_file_times(2026-01-01T00:01:00Z, format_stamp);
+        assertTrue(mtime(debug_moda) < mtime(format_stamp),
             "the fixture establishes deterministic stale timestamps");
         out = run(sprintf("cmake -DQORE_SOURCE_QLIB_DIR=%s -DQORE_BUILD_QMOD_DIR=%s -DQORE_QCC_FORMAT_STAMP=%s -P %s",
             shellQuote(source_qlib), shellQuote(tmp.path + "/debug/qlib-qmod"), shellQuote(format_stamp),
@@ -1021,20 +1006,20 @@ qore_external_user_module(\"qlib/Fixture\" \"\")
         assertEq(1, compiles(), "an unchanged build recompiles nothing");
 
         # a new Qore library is installed and qcc is not: the qmods are recompiled
-        run(sprintf("%s %s %s", TouchUtc, future_touch_time(2), shellQuote(library)));
+        TestFileTime::set_file_times(now() + 2s, library);
         build = run(sprintf("cmake --build %s", shellQuote(build_dir)));
         assertEq(2, compiles(), "a new Qore library recompiles the qmods: " + build);
 
         # a new qcc reporting a new identity: recompiled, and the stamp names the new identity
         write(identity_file, "bbbb\n");
-        run(sprintf("%s %s %s", TouchUtc, future_touch_time(4), shellQuote(qcc)));
+        TestFileTime::set_file_times(now() + 4s, qcc);
         build = run(sprintf("cmake --build %s", shellQuote(build_dir)));
         assertEq(3, compiles(), "a new qcc recompiles the qmods: " + build);
         assertRegex("aot-runtime-identity=bbbb", read(stamp));
 
         # a qcc that reports no identity fails the build before any module is compiled
         write(identity_file, "");
-        run(sprintf("%s %s %s", TouchUtc, future_touch_time(6), shellQuote(qcc)));
+        TestFileTime::set_file_times(now() + 6s, qcc);
         build = run(sprintf("cmake --build %s; echo RC=$?", shellQuote(build_dir)));
         assertRegex("does\\s+not\\s+report\\s+an\\s+AOT\\s+runtime\\s+identity", build);
         assertFalse(build =~ /RC=0/, "the build fails: " + build);
@@ -1771,7 +1756,8 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
                 + bootstrap_depfile);
         assertTrue(is_file(build_dir + "/qo-static-host"),
             "static AOT host linked from per-file and aggregate objects: " + build1);
-        string source_qore = realpath(qore_bin) ?? qore_bin;
+        # a qore found in the PATH, as when the test is run as "qore CMakeBuildHelpers.qtest", has no path to resolve
+        string source_qore = is_file(qore_bin) ? realpath(qore_bin) : qore_bin;
         string source_out = run(sprintf("cd %s && %s %s", src_dir, source_qore, source_runner));
         string static_out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
             qore_build_dir, build_dir + "/late-modules", build_dir + "/qo-static-host"));
@@ -1881,8 +1867,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         foreach string object_path in (object_paths) {
             push published_stamps, object_path + ".stamp";
         }
-        run(sprintf("%s %s '%s'", TouchUtc, touch_time(context_time),
-            published_stamps.join("' '")));
+        TestFileTime::set_file_times(context_time, published_stamps);
         assertTrue(context_time > mtime(bootstrap_stamp)
                 && get_duration_microseconds(context_time - mtime(bootstrap_stamp))
                     < 1000000,

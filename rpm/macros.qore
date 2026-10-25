@@ -8,8 +8,9 @@
 %qore_install_aot_sources() /usr/bin/python3 %{_rpmconfigdir}/qore/install-aot-sources.py "%{buildroot}" "%{qore_debug_source_dir}" %{*}
 
 # Capture the unexpanded post-install macro, preserving distro-specific debug,
-# stripping, hardening and policy processing. Restore EOF trailers even if a
-# post-install command fails. Binary package generation still fails in that case.
+# stripping, hardening and policy processing. Check that it kept the AOT module
+# metadata note of every module, also when a post-install command fails. Binary
+# package generation fails in either case.
 %qore_enable_aot_post %{lua:
   -- LLVM supplies .debug_names. gdb-add-index cannot replace that index and
   -- warns when RPM requests a second index. Keep the compiler's index.

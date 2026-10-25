@@ -2643,6 +2643,10 @@ foreach(_qore_llvm_dir IN LISTS LLVM_LIBRARY_DIRS)
     list(APPEND _QORE_AOT_LLVM_LDIR "-L${_qore_llvm_dir}")
 endforeach()
 qore_aot_link_arguments(_QORE_AOT_STATIC_LIBS ${QORE_LIBS} ${_QORE_AOT_LLVM_LDIR} ${LLVM_LIBS})
+if (APPLE)
+    # A static runtime also needs the frameworks linked privately by shared libqore.
+    list(APPEND _QORE_AOT_STATIC_LIBS -framework Security -framework CoreFoundation)
+endif()
 
 # On macOS, supply the SDK sysroot (unversioned symlink, see note above) so the
 # full-path toolchain clang++ can find libc++/system libraries when linking AOT
@@ -2810,6 +2814,10 @@ target_include_directories(qore-ir-phase0-smoke PRIVATE
     ${ZLIB_INCLUDE_DIRS}
     ${LLVM_INCLUDE_DIRS})
 target_link_libraries(qore-ir-phase0-smoke PRIVATE ${QORE_LIBS})
+if (APPLE)
+    # These executables compile the runtime themselves, including the module signature check.
+    target_link_libraries(qore-ir-phase0-smoke PRIVATE ${SECURITY_FRAMEWORK} ${CORE_FOUNDATION_FRAMEWORK})
+endif()
 if(LLVM_LIBS)
     target_link_libraries(qore-ir-phase0-smoke PRIVATE ${LLVM_LIBS})
 elseif(TARGET LLVM::LLVM)
@@ -2879,6 +2887,10 @@ target_include_directories(qore-ir-plugin-registry-smoke PRIVATE
     ${ZLIB_INCLUDE_DIRS}
     ${LLVM_INCLUDE_DIRS})
 target_link_libraries(qore-ir-plugin-registry-smoke PRIVATE ${QORE_LIBS})
+if (APPLE)
+    # These executables compile the runtime themselves, including the module signature check.
+    target_link_libraries(qore-ir-plugin-registry-smoke PRIVATE ${SECURITY_FRAMEWORK} ${CORE_FOUNDATION_FRAMEWORK})
+endif()
 if(LLVM_LIBS)
     target_link_libraries(qore-ir-plugin-registry-smoke PRIVATE ${LLVM_LIBS})
 elseif(TARGET LLVM::LLVM)

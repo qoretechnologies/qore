@@ -212,6 +212,9 @@ constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! v22: the merged performance format adds closure entry locations and lexical parse options, plus
 //!      a bound-variant flag and exact constructor signature for VT_NEW_OBJECT defaults. This uses a
 //!      fresh version because development versions 20 and 21 had different payloads on the performance branch.
+//!      Opcodes 409/410 retain SnapshotInt/SnapshotFloat. CheckReturnValue is 411;
+//!      the reader maps upstream v21 opcode 409 (header maximum 409) to it before
+//!      instruction dispatch; older performance files with maximum 410 retain snapshots.
 constexpr uint16_t QORE_AOT_BINARY_VERSION = 22;
 constexpr uint16_t QORE_AOT_OBJECT_DEFAULT_VARIANT_VERSION = 22;
 constexpr uint16_t QORE_AOT_CLOSURE_ENTRY_VERSION = 22;
@@ -346,7 +349,7 @@ enum class QoreAOTSectionType : uint16_t {
     CALL_RELOCATIONS     = 27,  //!< Optional direct-call slot relocation candidates
     DEBUG_IR             = 28,  //!< Lazy debugger IR payloads referenced by SLOT_MAPS entries
     IMPORT_DEPENDENCIES  = 29,  //!< Direct module dependencies imported into an AOT module Program
-    SOURCE_STAT_FINGERPRINT = 30,  //!< Optional source size and nanosecond mtime for staleness checks
+    SOURCE_STAT_FINGERPRINT = 30,  //!< Source size and nanosecond mtime; written by earlier qcc versions only
     UNRUN_TOP_LEVEL_CODE = 31,  //!< Optional top-level statements of a script fragment's sources that never run
 };
 
@@ -456,6 +459,8 @@ constexpr uint32_t QORE_AOT_FAST_ENTRY_PRECISE_LOCAL_EFFECTS = 0x0020;
 constexpr uint32_t QORE_AOT_FAST_ENTRY_MAY_MODIFY_RUNTIME_LOCALS = 0x0040;
 //! Entry is valid only for the serialized generic specialization dispatch key.
 constexpr uint32_t QORE_AOT_FAST_ENTRY_GENERIC_SPECIALIZATION = 0x0080;
+//! The declared return type rejects NOTHING: a summary whose value can be NOTHING cannot take the place of a call
+constexpr uint32_t QORE_AOT_FAST_ENTRY_RETURN_REJECTS_NOTHING = 0x0100;
 
 //! One record in the optional SYMBOL_INDEX section.
 struct QoreAOTSymbolIndexRecord {
@@ -1711,15 +1716,10 @@ struct QoreAOTSourceStatFingerprint {
 */
 bool getAOTSourceStatFingerprint(const char* path, QoreAOTSourceStatFingerprint& fingerprint);
 
-//! Serialize an optional source stat fingerprint into its fixed-width binary section.
-/** @param writer AOT binary writer receiving the section
-    @param fingerprint source stat fingerprint to serialize
-*/
-void serializeAOTSourceStatFingerprint(QoreAOTBinaryWriter& writer,
-        const QoreAOTSourceStatFingerprint& fingerprint);
+//! Read the source fingerprint recorded in an AOT binary written by an earlier qcc
+/** qcc no longer writes the section: an artifact's bytes must not depend on its source file's modification time.
 
-//! Read an optional source fingerprint from an AOT binary.
-/** @param reader opened AOT binary reader
+    @param reader opened AOT binary reader
     @param fingerprint receives the recorded source fingerprint on success
     @return true when both fingerprint fields are present and valid, false otherwise
 */
@@ -2283,83 +2283,110 @@ struct AOTCompiledFuncWithSlots {
     std::vector<AOTStmtLocEntry> aot_stmt_locs;
 };
 
-//! The size of the fixed footer at the end of each AOT module trailer
-/** uint64 payload_len; uint32 magic; uint32 version
+//! AOT module metadata: the module's identity, its dependencies and the optional modules that were unavailable
+/** qcc stores this metadata in a section of every AOT qmod that it links, so that it is part of the image and the code
+    signature covers it (see design/aot-object-files-and-module-artifacts.md "Module Metadata Section"):
+    - Mach-O: the section <tt>__TEXT,__qore_modinfo</tt> holds the record
+    - ELF: the allocated note section <tt>.note.qore.modinfo</tt> holds one note with the owner
+      <tt>"Qore"</tt> and the type QORE_AOT_MODULE_INFO_NOTE_TYPE whose description is the record; the
+      linker places it in a \c PT_NOTE segment, where the loader finds it
+
+    The record is little-endian:
+    - uint32 magic ('QAMI'), uint32 version, uint32 payload_size (the bytes that follow)
+    - the payload: the module name, then uint32 num_dependencies and the dependencies, then uint32 num_optional and
+      the optional modules, each string as uint32 length followed by its bytes; every string is nonempty and
+      contains no NUL
+
+    The loader reads the metadata before it maps the qmod: it loads the dependencies first so the qmod can be
+    mapped once with RTLD_NOW, and it checks the optional modules that were unavailable when the module was compiled
+    (the failed %try-module requests): when one of them can be loaded now, the module is stale.  Earlier qcc
+    versions appended the same data as trailers after the end of the image, outside of its code signature; such a
+    module is refused with an error that asks for it to be rebuilt.
 */
-static constexpr size_t QORE_AOT_TRAILER_FOOTER_SIZE = 16;
+struct QoreAOTModuleFileInfo {
+    //! the module's feature name
+    std::string module_name;
+    //! the exact dependency list of the module descriptor
+    std::vector<std::string> dependencies;
+    //! the %try-module requests that failed when the module was compiled, as written in the directive
+    std::vector<std::string> unavailable_optional_modules;
+};
 
-//! AOT module dependency trailer appended at the end of an AOT qmod
-/** The fixed footer (QORE_AOT_TRAILER_FOOTER_SIZE bytes) is:
-    uint64 payload_len; uint32 magic('QAMD'); uint32 version.  The payload is:
-    uint32 module_name_len; char[module_name_len] module_name; uint32 num_dependencies;
-    repeat: uint32 dependency_len; char[dependency_len] dependency.
+//! The magic number of an AOT module metadata record: 'QAMI' little-endian
+static constexpr uint32_t QORE_AOT_MODULE_INFO_MAGIC = 0x494d4151u;
+//! The format version of AOT module metadata records
+static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 1u;
+//! The size of the header of an AOT module metadata record: magic, version and payload size
+static constexpr size_t QORE_AOT_MODULE_INFO_HEADER_SIZE = 12;
+//! The segment of the Mach-O section holding AOT module metadata
+#define QORE_AOT_MODULE_INFO_MACHO_SEGMENT "__TEXT"
+//! The Mach-O section holding AOT module metadata
+#define QORE_AOT_MODULE_INFO_MACHO_SECTION "__qore_modinfo"
+//! The ELF note section holding AOT module metadata
+#define QORE_AOT_MODULE_INFO_ELF_SECTION ".note.qore.modinfo"
+//! The owner name of the ELF note holding AOT module metadata
+#define QORE_AOT_MODULE_INFO_NOTE_NAME "Qore"
+//! The type of the ELF note holding AOT module metadata (the record magic)
+static constexpr uint32_t QORE_AOT_MODULE_INFO_NOTE_TYPE = QORE_AOT_MODULE_INFO_MAGIC;
 
-    The loader reads this metadata before dlopen() so dependencies can be loaded before
-    mapping the AOT qmod once with RTLD_NOW.  Artifacts without the trailer use the legacy
-    RTLD_LAZY discovery and reopen path.
+//! The result of reading AOT module metadata from a file
+enum class QoreAOTModuleInfoStatus {
+    NONE,     //!< the file has no AOT module metadata, is not an image of this platform, or cannot be opened
+    FOUND,    //!< valid metadata was read
+    INVALID,  //!< the metadata, or the image holding it, is damaged, truncated or in an unsupported format
+};
+
+//! Where AOT module metadata was found in a file
+struct QoreAOTModuleInfoLocation {
+    //! a description of the section or note, such as <tt>Mach-O section __TEXT,__qore_modinfo</tt>
+    std::string container;
+    //! the file offset of the record
+    uint64_t offset = 0;
+    //! the size of the record in bytes
+    uint64_t size = 0;
+};
+
+//! Encodes AOT module metadata as a record
+/** @param info the metadata
+    @param record receives the record
+    @param error receives a description of invalid metadata
+
+    @return true on success, false with @a error set when a string is empty or contains a NUL, or when the metadata
+    exceeds the size or count limits
 */
-static constexpr uint32_t QORE_AOT_MODULE_DEPS_MAGIC = 0x444d4151u;  //!< 'QAMD' little-endian
-static constexpr uint32_t QORE_AOT_MODULE_DEPS_VERSION = 1u;
-
-//! Append module identity and dependency metadata to an AOT qmod.
-/** @param path AOT qmod path
-    @param module_name module feature name
-    @param dependencies exact dependency list from the module descriptor
-    @param error receives a validation or I/O diagnostic
-    @return true on success, false on error
-*/
-bool qoreAOTAppendModuleDependenciesTrailer(const std::string& path, const std::string& module_name,
-        const std::vector<std::string>& dependencies, std::string& error);
-
-//! Read module dependency metadata without loading the native image.
-/** @param path AOT qmod path
-    @param module_name receives the serialized module name
-    @param dependencies receives the serialized dependency list
-    @param error receives a corruption or I/O diagnostic
-    @return 1 when a valid trailer was read, 0 when no trailer is present or the file cannot be opened,
-        -1 for an invalid trailer
-*/
-int qoreAOTReadModuleDependenciesTrailer(const std::string& path, std::string& module_name,
-        std::vector<std::string>& dependencies, std::string& error);
-
-//! AOT module optional-module trailer: the %try-module requests that failed when the module was compiled
-/** The fixed footer has the same shape as the dependency trailer's:
-    uint64 payload_len; uint32 magic('QAOM'); uint32 version.  The payload is:
-    uint32 count; repeat: uint32 spec_len; char[spec_len] spec, where each spec is the module request as written
-    in the %try-module directive (a module name with an optional version constraint, such as
-    <tt>process >= 2.1</tt>).
-
-    The code compiled for such a module takes the branch for the module being unavailable (for example
-    <tt>%ifdef NoProcess</tt>), so the artifact is stale once the module becomes available.  The loader reads this
-    trailer before dlopen() and loads the source module instead when one of the modules can be loaded; see
-    design/aot-object-files-and-module-artifacts.md.
-
-    The trailer is written before the PC->loc and dependency trailers, which are read from the end of the file,
-    so runtimes that predate it read the artifact as before.  It is only written when a %try-module failed.
-*/
-static constexpr uint32_t QORE_AOT_OPTIONAL_MODULES_MAGIC = 0x4d4f4151u;  //!< 'QAOM' little-endian
-static constexpr uint32_t QORE_AOT_OPTIONAL_MODULES_VERSION = 1u;
-
-//! Append the list of optional modules that were unavailable at compile time to an AOT qmod
-/** Must be called before the PC->loc and dependency trailers are appended; a no-op for an empty list.
-
-    @param path AOT qmod path
-    @param specs the failed %try-module requests
-    @param error receives a validation or I/O diagnostic
-    @return true on success, false on error
-*/
-bool qoreAOTAppendOptionalModulesTrailer(const std::string& path, const std::vector<std::string>& specs,
+bool qoreAOTEncodeModuleInfo(const QoreAOTModuleFileInfo& info, std::vector<uint8_t>& record,
         std::string& error);
 
-//! Read the optional modules that were unavailable when an AOT qmod was compiled, without loading it
-/** @param path AOT qmod path
-    @param specs receives the failed %try-module requests
-    @param error receives a corruption or I/O diagnostic
-    @return 1 when a valid trailer was read, 0 when there is none or the file cannot be opened, -1 for an invalid
-    trailer
+//! Returns the ELF note holding an AOT module metadata record, ready to be placed in its note section
+std::vector<uint8_t> qoreAOTModuleInfoNote(const std::vector<uint8_t>& record);
+
+//! Decodes an AOT module metadata record
+/** @param data the record
+    @param len the size of the record; it must be exactly the size the record header gives
+    @param info receives the metadata
+    @param error receives a description of a damaged record
+
+    @return QoreAOTModuleInfoStatus::FOUND or QoreAOTModuleInfoStatus::INVALID
 */
-int qoreAOTReadOptionalModulesTrailer(const std::string& path, std::vector<std::string>& specs,
-        std::string& error);
+QoreAOTModuleInfoStatus qoreAOTDecodeModuleInfo(const uint8_t* data, size_t len,
+        QoreAOTModuleFileInfo& info, std::string& error);
+
+//! Reads the AOT module metadata of a qmod without mapping it
+/** Reads a thin 64-bit Mach-O image, the slice of a universal (fat) Mach-O file for the running architecture, or a
+    linked little-endian ELF image.
+
+    @param path the qmod
+    @param info receives the metadata
+    @param error receives a description of the problem when QoreAOTModuleInfoStatus::INVALID is returned; it does not
+    repeat the path
+    @param location if not null, receives where the metadata was found
+
+    @return QoreAOTModuleInfoStatus::NONE if the file cannot be opened, is no image this function reads, or has no
+    metadata section; QoreAOTModuleInfoStatus::INVALID if the metadata or the image is damaged or truncated, or if the
+    file carries the trailers that earlier qcc versions appended
+*/
+QoreAOTModuleInfoStatus qoreAOTReadModuleInfo(const std::string& path, QoreAOTModuleFileInfo& info,
+        std::string& error, QoreAOTModuleInfoLocation* location = nullptr);
 
 //! Descriptor for a compiled constant/static-var init function
 struct AOTCompiledInitFunc {

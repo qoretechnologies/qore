@@ -170,8 +170,14 @@ public class ListDataType inherits QoreDataType {
     }
 
     #! Updates the element type
-    updateElementType(AbstractDataProviderType element_type) {
-        setElementTypeIntern(element_type);
+    /** @param element_type the new element type
+        @param keep_name if @ref True, the type's name and display name are kept even if they were generated from its
+        former element type, as for a type restored from its description, which gives its name
+
+        @since DataProvider 3.11 \a keep_name
+    */
+    updateElementType(AbstractDataProviderType element_type, *bool keep_name) {
+        setElementTypeIntern(element_type, keep_name);
     }
 
     #! Assigns the element type and updates the type information derived from it
@@ -182,10 +188,11 @@ public class ListDataType inherits QoreDataType {
         A name or display name that was not generated from the element type was given explicitly, so it is kept.
 
         @param element_type the new element type
+        @param keep_name if @ref True, the name and display name are kept
 
         @since DataProvider 3.8
     */
-    private setElementTypeIntern(AbstractDataProviderType element_type) {
+    private setElementTypeIntern(AbstractDataProviderType element_type, *bool keep_name) {
         # the element type is not guaranteed to be set; getDesc() allows for it as well
         if (self.element_type && self.element_type.uniqueHash() == element_type.uniqueHash()) {
             return;
@@ -210,7 +217,7 @@ public class ListDataType inherits QoreDataType {
             accept_type_hash -= "null";
             accept_type_hash_simple -= "null";
         }
-        if (generated_name) {
+        if (generated_name && !keep_name) {
             name = qore_type_name ? type.getName() : getListTypeName(element_type);
             if (generated_display_name) {
                 display_name = AbstractDataField::getDisplayName(name);

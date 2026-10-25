@@ -1,0 +1,259 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires OpenApi3
+%requires json
+%exec-class OpenApi3DescribedReferenceTest
+
+#! A property written as {allOf: [{$ref: X}]} beside a description has X's type, with X's name
+/** OpenAPI 3.0 ignores the siblings of a \c "$ref", so a property of a reusable type that has a description of its
+    own is written as a one-member \c allOf of the reference.  Such a property accepts what \c X accepts: its type is
+    \c X's type, and its description is the field's.  A type built for the property instead, named after it, gave two
+    components one name (Google Document AI's chunk and layout block page spans are both \c "*pageSpan") and one
+    component a type for every description (the chunk, header and footer page spans are three copies of one type).
+*/
+class OpenApi3DescribedReferenceTest inherits QUnit::Test {
+    constructor() : Test("OpenAPI described references", "1.0", \ARGV) {
+        addTestCase("a described reference has the type of the schema it refers to", \typeTest());
+        addTestCase("the field keeps what the use declares", \fieldTest());
+        addTestCase("nullable gives the \"or nothing\" variant of the referenced type", \nullableTest());
+        addTestCase("each variant is the referenced schema's own, whichever is built first", \variantOrderTest());
+        addTestCase("same-named properties referring to different schemas have different types",
+            \distinctComponentsTest());
+        addTestCase("a schema with constraints of its own beside the reference has a type of its own",
+            \ownConstraintsTest());
+        addTestCase("a type naming the referenced schema's type adds nothing", \redundantTypeTest());
+        addTestCase("a schema that only refers to another one has its type", \aliasTest());
+        addTestCase("a schema referring back to itself through a described reference", \recursionTest());
+        addTestCase("a described reference accepts what the referenced schema accepts", \validationTest());
+        addTestCase("a composition declaring more for a described property has a type of its own",
+            \compositionTest());
+        set_return_value(main());
+    }
+
+    typeTest() {
+        OpenApi3Schema doc = document();
+        AbstractDataProviderType chunk = type(doc, "Chunk");
+        AbstractDataProviderType span = fieldType(chunk, "pageSpan");
+        assertEq("*ChunkSpan", span.getName(), "the type has the referenced schema's name");
+        assertTrue(span === doc.components.schemas.ChunkSpan.getDataType(False),
+            "an optional property has the referenced schema's \"or nothing\" type");
+        assertTrue(fieldType(chunk, "span") === doc.components.schemas.ChunkSpan.getDataType(),
+            "a required property has the referenced schema's type");
+        assertTrue(fieldType(fieldType(chunk, "header"), "pageSpan") === span,
+            "two described references to one schema have one type");
+        assertEq("#/components/schemas/ChunkSpan", span.getSchemaIdentity());
+    }
+
+    fieldTest() {
+        OpenApi3Schema doc = document();
+        hash<string, AbstractDataField> fields = type(doc, "Chunk").getFields();
+        assertEq("Page span of the chunk.", fields.pageSpan.getDescription(), "the field has the use's description");
+        assertEq("Page span of the header.",
+            fieldType(type(doc, "Chunk"), "header").getFields().pageSpan.getDescription(),
+            "a use with another description has a field with that description");
+        assertEq("Page where chunk starts", fields.pageSpan.getType().getFields().pageStart.getDescription(),
+            "the fields of the type are the referenced schema's");
+        assertEq({"pageStart": 7}, fields.example.getExampleValue(), "the field has the use's example");
+        assertTrue(fields.readonly.getType() === doc.components.schemas.ChunkSpan.getDataType(False),
+            "a read-only use has the referenced schema's type");
+        # read-only is a property of the use, which the object declaring the property validates
+        AbstractDataProviderType chunk = type(doc, "Chunk");
+        assertThrows("RUNTIME-TYPE-ERROR", "read-only", \chunk.acceptsValue(),
+            {"span": {"pageStart": 1}, "readonly": {"pageStart": 2}});
+        assertEq({"span": {"pageStart": 1}}, chunk.acceptsValue({"span": {"pageStart": 1}}));
+    }
+
+    nullableTest() {
+        OpenApi3Schema doc = document();
+        AbstractDataProviderType nullables = type(doc, "Nullables");
+        hash<string, AbstractDataField> fields = nullables.getFields();
+        foreach string name in (("nullable", "nullable31")) {
+            assertTrue(fields{name}.getType() === doc.components.schemas.ChunkSpan.getDataType(False),
+                name + ": a required nullable property has the referenced schema's \"or nothing\" type");
+            assertTrue(fields{name}.getAttributes().required, name + ": and the field stays required");
+        }
+        assertEq({"nullable": NOTHING, "nullable31": {"pageStart": 1}},
+            nullables.acceptsValue({"nullable": NOTHING, "nullable31": {"pageStart": 1}}),
+            "a null value is accepted for a nullable use");
+    }
+
+    variantOrderTest() {
+        # the referenced schema's "or nothing" variant is built first in one document and last in the other
+        OpenApi3Schema first = document();
+        AbstractDataProviderType optional = first.components.schemas.ChunkSpan.getDataType(False);
+        AbstractDataProviderType mandatory = first.components.schemas.ChunkSpan.getDataType(True);
+        hash<string, AbstractDataField> first_fields = type(first, "Chunk").getFields();
+
+        OpenApi3Schema last = document();
+        hash<string, AbstractDataField> last_fields = type(last, "Chunk").getFields();
+        foreach hash<auto> i in ({"first": first_fields, "last": last_fields}.pairIterator()) {
+            OpenApi3Schema doc = i.key == "first" ? first : last;
+            assertTrue(i.value.pageSpan.getType() === doc.components.schemas.ChunkSpan.getDataType(False),
+                i.key + ": the optional use has the referenced schema's own \"or nothing\" variant");
+            assertTrue(i.value.span.getType() === doc.components.schemas.ChunkSpan.getDataType(True),
+                i.key + ": the required use has the referenced schema's own mandatory variant");
+        }
+        assertTrue(optional === first_fields.pageSpan.getType());
+        assertTrue(mandatory === first_fields.span.getType());
+        assertEq(first_fields.pageSpan.getType().getFields().pageStart.isMandatory(),
+            last_fields.pageSpan.getType().getFields().pageStart.isMandatory(),
+            "the \"or nothing\" variant has the same fields whichever variant is built first");
+        assertEq(keys first_fields.pageSpan.getType().getFields(), keys last_fields.pageSpan.getType().getFields());
+    }
+
+    distinctComponentsTest() {
+        OpenApi3Schema doc = document();
+        AbstractDataProviderType chunk_span = fieldType(type(doc, "Chunk"), "pageSpan");
+        AbstractDataProviderType block_span = fieldType(type(doc, "Block"), "pageSpan");
+        assertEq("*ChunkSpan", chunk_span.getName());
+        assertEq("*BlockSpan", block_span.getName(),
+            "a same-named property referring to another schema has that schema's type and name");
+        assertFalse(chunk_span === block_span);
+        assertEq("Page where block starts", block_span.getFields().pageStart.getDescription());
+        assertNeq(DataProviderPresentation::typePresentationIdentity(chunk_span),
+            DataProviderPresentation::typePresentationIdentity(block_span));
+    }
+
+    ownConstraintsTest() {
+        OpenApi3Schema doc = document();
+        hash<string, AbstractDataField> fields = type(doc, "Chunk").getFields();
+        AbstractDataProviderType span = doc.components.schemas.ChunkSpan.getDataType(False);
+        # a "required" set of its own makes a field of the referenced schema mandatory
+        assertEq("*required", fields.required.getType().getName());
+        assertTrue(fields.required.getType().getFields().pageStart.isMandatory());
+        assertFalse(span.getFields().pageStart.isMandatory());
+        # properties of its own extend the referenced schema
+        assertEq("*extended", fields.extended.getType().getName());
+        assertEq(("pageEnd", "pageStart"), sort(keys fields.extended.getType().getFields()));
+        # a constraint of its own
+        assertEq("*constrained", fields.constrained.getType().getName());
+        assertEq(1, fields.constrained.getType().getConstraints().min_properties);
+        # a type that is not the referenced schema's
+        assertNeq("*ChunkSpan", fields.retyped.getType().getName());
+    }
+
+    redundantTypeTest() {
+        OpenApi3Schema doc = document();
+        hash<string, AbstractDataField> fields = type(doc, "Chunk").getFields();
+        assertTrue(fields.typed.getType() === doc.components.schemas.ChunkSpan.getDataType(False),
+            "\"type\": \"object\" beside a reference to an object schema");
+        assertTrue(fields.typedNullable.getType() === doc.components.schemas.ChunkSpan.getDataType(False),
+            "\"type\": \"object\" and \"nullable\" beside a reference to an object schema");
+        assertEq("*email", fields.email.getType().getName(),
+            "\"type\": \"string\" beside a reference to a string schema has its type, with its format");
+    }
+
+    aliasTest() {
+        OpenApi3Schema doc = document();
+        assertTrue(type(doc, "Alias") === type(doc, "ChunkSpan"),
+            "a component that only refers to another component has that component's type");
+        assertEq("ChunkSpan", type(doc, "Alias").getName());
+    }
+
+    recursionTest() {
+        OpenApi3Schema doc = document();
+        AbstractDataProviderType node = type(doc, "Node");
+        assertTrue(fieldType(node, "parent") === doc.components.schemas.Node.getDataType(False),
+            "a property referring back to the schema declaring it has that schema's \"or nothing\" type");
+        assertEq("Parent node.", node.getFields().parent.getDescription());
+        assertEq(("name", "parent"), keys fieldType(node, "parent").getFields());
+    }
+
+    validationTest() {
+        OpenApi3Schema doc = document();
+        AbstractDataProviderType described = fieldType(type(doc, "Chunk"), "pageSpan");
+        AbstractDataProviderType referenced = fieldType(type(doc, "Chunk"), "direct");
+        foreach AbstractDataProviderType t in ((described, referenced)) {
+            assertEq({"pageStart": 1}, t.acceptsValue({"pageStart": 1}));
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), {"pageStart": 1, "unknown": 2});
+        }
+        # the composition of the referenced schema is enforced on a described use, too
+        AbstractDataProviderType choice = fieldType(type(doc, "Chunk"), "choice");
+        assertEq("*Choice", choice.getName());
+        assertEq({"a": 1}, choice.acceptsValue({"a": 1}));
+        assertThrows("RUNTIME-TYPE-ERROR", "oneOf", \choice.acceptsValue(), {"a": 1, "b": 2});
+    }
+
+    compositionTest() {
+        OpenApi3Schema doc = document();
+        # "allOf" is an intersection, so the property is the referenced schema with the other member's property added
+        AbstractDataProviderType span = fieldType(type(doc, "Composed"), "pageSpan");
+        assertEq(("pageEnd", "pageStart"), sort(keys span.getFields()));
+        assertEq("Page where chunk starts", span.getFields().pageStart.getDescription());
+        assertEq(("pageStart",), keys doc.components.schemas.ChunkSpan.getDataType().getFields(),
+            "the referenced schema is unchanged");
+    }
+
+    #! Returns a document with described references to components with the same property names
+    private static OpenApi3Schema document() {
+        hash<auto> span_ref = {"allOf": ({"$ref": "#/components/schemas/ChunkSpan"},)};
+        return OpenApi3Loader::fromString(make_json({
+            "openapi": "3.1.0", "info": {"title": "Described references", "version": "1"}, "paths": {},
+            "components": {"schemas": {
+                "ChunkSpan": {"type": "object", "properties": {
+                    "pageStart": {"type": "integer", "description": "Page where chunk starts"},
+                }},
+                "BlockSpan": {"type": "object", "properties": {
+                    "pageStart": {"type": "integer", "description": "Page where block starts"},
+                }},
+                "Email": {"type": "string", "format": "email"},
+                "Choice": {"type": "object", "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}},
+                    "oneOf": ({"required": ("a",)}, {"required": ("b",)})},
+                "Alias": {"allOf": ({"$ref": "#/components/schemas/ChunkSpan"},)},
+                "Node": {"type": "object", "properties": {
+                    "name": {"type": "string"},
+                    "parent": {"allOf": ({"$ref": "#/components/schemas/Node"},), "description": "Parent node."},
+                }},
+                "Nullables": {"type": "object", "required": ("nullable", "nullable31"), "properties": {
+                    "nullable": span_ref + {"description": "Nullable.", "nullable": True},
+                    "nullable31": span_ref + {"description": "Nullable.", "type": ("object", "null")},
+                }},
+                "Chunk": {"type": "object", "required": ("span",), "properties": {
+                    "pageSpan": span_ref + {"description": "Page span of the chunk."},
+                    "span": span_ref + {"description": "The required span of the chunk."},
+                    "header": {"type": "object", "properties": {
+                        "pageSpan": span_ref + {"description": "Page span of the header."},
+                    }},
+                    "example": span_ref + {"description": "An example.", "example": {"pageStart": 7}},
+                    "readonly": span_ref + {"description": "Read only.", "readOnly": True, "deprecated": True},
+                    "typed": span_ref + {"description": "Typed.", "type": "object"},
+                    "typedNullable": span_ref + {"description": "Typed.", "type": "object", "nullable": True},
+                    "email": {"allOf": ({"$ref": "#/components/schemas/Email"},), "type": "string",
+                        "description": "The email."},
+                    "required": span_ref + {"description": "Required.", "required": ("pageStart",)},
+                    "extended": span_ref + {"description": "Extended.",
+                        "properties": {"pageEnd": {"type": "integer"}}},
+                    "constrained": span_ref + {"description": "Constrained.", "minProperties": 1},
+                    "retyped": span_ref + {"description": "Retyped.", "type": "string"},
+                    "direct": {"$ref": "#/components/schemas/ChunkSpan"},
+                    "choice": {"allOf": ({"$ref": "#/components/schemas/Choice"},), "description": "A choice."},
+                }},
+                "Block": {"type": "object", "properties": {
+                    "pageSpan": {"allOf": ({"$ref": "#/components/schemas/BlockSpan"},),
+                        "description": "Page span of the block."},
+                }},
+                "Ends": {"type": "object", "properties": {
+                    "pageSpan": {"type": "object", "properties": {"pageEnd": {"type": "integer"}}},
+                }},
+                "Composed": {"allOf": ({"$ref": "#/components/schemas/Chunk"},
+                    {"$ref": "#/components/schemas/Ends"})},
+            }},
+        }), True);
+    }
+
+    #! Returns the type of a component
+    private static AbstractDataProviderType type(OpenApi3Schema doc, string component) {
+        return doc.components.schemas{component}.getDataType();
+    }
+
+    #! Returns the type of a field of a type
+    private static AbstractDataProviderType fieldType(AbstractDataProviderType type, string field) {
+        return type.getFields(){field}.getType();
+    }
+}

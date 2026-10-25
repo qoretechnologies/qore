@@ -14,6 +14,7 @@
 #include <qore/QoreObject.h>
 #include <qore/intern/QoreClassIntern.h>
 #include <qore/intern/QoreIR.h>
+#include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/QoreIRBuilder.h>
 #include <qore/intern/QoreIRVerifier.h>
 #include <qore/intern/QoreOpcodeRegistry.h>
@@ -42,6 +43,121 @@ static bool checkOpcodeRegistry() {
             || isRangeSliceOpcode(QoreIROpcode::RangeInt)) {
         std::cerr << "Opcode registry property smoke checks failed\n";
         return false;
+    }
+    return true;
+}
+
+// Copyright 2026 Qore Technologies, s.r.o.
+// Upstream v21 assigned opcode 409 to the return check; performance v20-v22 used
+// 409/410 for snapshots. Exercise the actual serializer and reader for both histories.
+static bool checkAOTOpcodeCompatibility() {
+    ExceptionSink xsink;
+    QoreProgramHelper pgm(xsink);
+    if (xsink) {
+        std::cerr << "opcode compatibility Program creation failed\n";
+        return false;
+    }
+    struct Case {
+        QoreIROpcode opcode;
+        uint16_t version;
+        uint16_t max_opcode;
+        bool legacy_return;
+    } cases[] = {
+        {QoreIROpcode::CheckReturnValue, 21, 409, true},
+        {QoreIROpcode::CheckReturnValue, 22, 411, false},
+        {QoreIROpcode::SnapshotInt, 20, 410, false},
+        {QoreIROpcode::SnapshotFloat, 20, 410, false},
+        {QoreIROpcode::SnapshotInt, 21, 410, false},
+        {QoreIROpcode::SnapshotFloat, 21, 410, false},
+        {QoreIROpcode::SnapshotInt, 22, 410, false},
+        {QoreIROpcode::SnapshotFloat, 22, 410, false},
+    };
+    for (const auto& test : cases) {
+        QoreIRFunction func("opcode-compatibility");
+        QoreIRBuilder builder(&func);
+        builder.setBlock(func.createBlock("entry"));
+        bool floating = test.opcode == QoreIROpcode::SnapshotFloat;
+        auto* value = floating ? builder.createConstFloat(2.5) : builder.createConstInt(7);
+        QoreIRValue result = value->result;
+        if (test.opcode == QoreIROpcode::CheckReturnValue) {
+            builder.createCheckReturnValue(result, bigIntTypeInfo, nullptr, nullptr);
+        } else {
+            result = builder.createUnaryOp(test.opcode, result)->result;
+        }
+        builder.createReturn(result);
+        QoreAOTBinaryWriter writer;
+        uint32_t section = writer.beginSection(QoreAOTSectionType::FUNCTIONS);
+        auto write_expr = [](QoreAOTBinaryWriter&, const QoreValue&) { return false; };
+        if (!serializeIRFunction(writer, func, write_expr)) {
+            std::cerr << "opcode compatibility serialization failed\n";
+            return false;
+        }
+        writer.endSection(section);
+        QoreAOTBinaryHeader header = {};
+        header.magic = QORE_AOT_BINARY_MAGIC;
+        header.version = test.version;
+        header.max_opcode_id = test.max_opcode;
+        header.label_offset = writer.strings.add("opcode-compatibility");
+        std::vector<uint8_t> blob;
+        if (!writer.finalize(header, blob)) {
+            std::cerr << "opcode compatibility binary finalization failed\n";
+            return false;
+        }
+        QoreAOTBinaryReader reader;
+        std::string error;
+        if (!reader.open(blob.data(), static_cast<uint32_t>(blob.size()), error)) {
+            std::cerr << "opcode compatibility header failed: " << error << "\n";
+            return false;
+        }
+        const auto* data_section = reader.findSection(QoreAOTSectionType::FUNCTIONS);
+        if (!data_section) {
+            std::cerr << "opcode compatibility functions section missing\n";
+            return false;
+        }
+        const uint8_t* section_data = reader.getSectionData(*data_section);
+        if (reader.getHeader().compression != QORE_AOT_COMPRESSION_NONE || !section_data) {
+            std::cerr << "opcode compatibility fixture must have uncompressed section data\n";
+            return false;
+        }
+        // Section offsets are relative to the data area, after the header, directory and string pool.
+        size_t section_offset = section_data - blob.data();
+        if (section_offset > blob.size() || data_section->size > blob.size() - section_offset) {
+            std::cerr << "opcode compatibility section is outside its fixture\n";
+            return false;
+        }
+        if (test.legacy_return) {
+            size_t matches = 0;
+            auto opcode = static_cast<uint16_t>(QoreIROpcode::CheckReturnValue);
+            for (size_t i = section_offset; i + 1 < section_offset + data_section->size; ++i) {
+                if (i && i % 100 == 0 && qore_check_cancel(&xsink, "AOT opcode fixture")) {
+                    return false;
+                }
+                if (blob[i] == (opcode & 255) && blob[i + 1] == (opcode >> 8)) {
+                    blob[i] = 409 & 255;
+                    blob[i + 1] = 409 >> 8;
+                    ++matches;
+                }
+            }
+            if (matches != 1) {
+                std::cerr << "legacy opcode fixture did not identify one return check\n";
+                return false;
+            }
+        }
+        const uint8_t* ptr = reader.getSectionData(*data_section);
+        const uint8_t* end = ptr + data_section->size;
+        auto read_expr = [](const QoreAOTBinaryReader&, const uint8_t*&, const uint8_t*, std::string& err) {
+            err = "unexpected expression in opcode compatibility fixture";
+            return QoreValue();
+        };
+        auto restored = deserializeIRFunction(reader, ptr, end, *pgm, read_expr, nullptr, error);
+        if (!restored || !error.empty() || ptr != end || restored->blocks.size() != 1
+                || restored->blocks[0]->instructions.size() != 3
+                || restored->blocks[0]->instructions[1]->opcode != test.opcode
+                || (test.opcode == QoreIROpcode::CheckReturnValue
+                    && restored->blocks[0]->instructions[1]->element_type != bigIntTypeInfo)) {
+            std::cerr << "opcode compatibility round trip failed: " << error << "\n";
+            return false;
+        }
     }
     return true;
 }
@@ -194,6 +310,7 @@ static bool checkPhiOrderVerifier() {
 int main() {
     qore_init(QL_GPL);
     bool ok = checkOpcodeRegistry()
+        && checkAOTOpcodeCompatibility()
         && checkQoreValueTagReservations()
         && checkTypeProfileBuiltins()
         && checkTypeProfileClassPayload()

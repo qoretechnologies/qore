@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../TestFileTime.qm
 
 %exec-class AOTLinkedModuleStaleTest
 
@@ -66,7 +67,8 @@ class AOTLinkedModuleStaleTest inherits QUnit::Test {
 
     #! sets the modification time of a file to a time after any build
     private touchLater(string path) {
-        assertEq(0, system(sprintf("touch -t 203001010000 '%s'", path)), "touch " + path);
+        TestFileTime::set_file_times(2030-01-01T00:00:00Z, path);
+        assertEq(1893456000, hstat(path).mtime.getEpochSeconds(), "touch " + path);
     }
 
     private TmpDir initDirs() {

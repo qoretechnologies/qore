@@ -136,6 +136,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \rekeySourceTreeToolTest());
         addTestCase("qore-data-provider-i18n re-keys committed catalogs as it re-keys to extracted ones",
             \mechanicalRekeyToolTest());
+        addTestCase("qore-data-provider-i18n carries the translations of a renamed type from its action",
+            \rekeyRenamedTypeToolTest());
         addTestCase("qore-data-provider-i18n re-keys nothing when texts conflict",
             \rekeyConflictToolTest());
         addTestCase("qore-data-provider-i18n refuses re-key requests it does not support",
@@ -1952,6 +1954,48 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 RekeyOwnerModule), \out), "the re-keyed tree passes the source-tree check: " + out);
     }
 
+    #! The tool carries the texts of a type that has a new name with the translations that its action gives them
+    /** A property type that took the name of the schema it refers to keeps its texts, but its message ids name the
+        new type.  A locale can translate one text of one field in two ways in a domain, and then only the action
+        that the type is in says which translation the type had.
+    */
+    rekeyRenamedTypeToolTest() {
+        string root = sourceRoot();
+        string work = make_tmp_dir("data-provider-i18n-rekey-renamed-");
+        on_exit remove_tree(work);
+        hash<auto> fx = rekeyFixture(root, work);
+        hash<auto> messages = fx.root_catalog.locales.root.messages;
+
+        # the old root has the texts of the address type under the old name of the type
+        hash<auto> old_messages = map {($1.key.split(".")[2] == "type" ? renamedTypeMessageId($1.key)
+            : $1.key): $1.value}, messages.pairIterator();
+        # every text but those of the type keeps its id and its translation
+        hash<auto> cs = map {$1.key: {"source": $1.value.source, "message": $1.value.source + " (cs)"}},
+            messages.pairIterator(), $1.key.split(".")[2] != "type";
+        cs{renamedTypeMessageId(fx.street)} = {"source": "Street", "message": "Ulice"};
+        cs{renamedTypeMessageId(fx.city)} = {"source": "City", "message": "Město"};
+        cs{renamedTypeMessageId(fx.city_desc)} = {"source": "The city of the address", "message": "Město adresy"};
+        # another action translates the same text of the same field otherwise
+        cs{otherActionMessageId(renamedTypeMessageId(fx.street))} = {"source": "Street", "message": "Třída"};
+        string tree = join_paths(work, "tree");
+        writeRekeyTree(tree, fx, old_messages, {"cs": cs});
+
+        string out;
+        assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree -o %s --owner %s", shellQuote(tree),
+                RekeyOwnerModule), \out), "re-keying succeeds: " + out);
+        assertRegex("(?m)^REKEY: .*root\\.json: 27 -> 27 message\\(s\\); translations carried 24, matched by type 0, "
+            "variants 0, reused by text 3, missing 0; new texts 0$", out,
+            "every translation of the renamed type is reused: " + out);
+        hash<auto> cs_messages = parse_json(ReadOnlyFile::readTextFile(join_paths(tree, fx.domain, "cs.json")))
+            .locales.cs.messages;
+        assertEq({"source": "Street", "message": "Ulice"}, cs_messages{fx.street},
+            "a text that the domain translates in two ways takes the translation that its action gives it");
+        assertEq("Město", cs_messages{fx.city}.message, "a text that the domain translates in one way takes it");
+        assertEq("Město adresy", cs_messages{fx.city_desc}.message);
+        assertEq(0, runI18nTool(root, sprintf("--check-source-tree -o %s --owner %s", shellQuote(tree),
+                RekeyOwnerModule), \out), "the re-keyed tree passes the source-tree check: " + out);
+    }
+
     #! Re-keying the committed roots gives the same catalogs as re-keying to the extracted roots
     mechanicalRekeyToolTest() {
         string root = sourceRoot();
@@ -2200,6 +2244,20 @@ class DataProviderPresentationTest inherits QUnit::Test {
     private static string otherShapeMessageId(string id) {
         return changeTypeIdentity(id, string sub (string identity) {
             return regex_subst(identity, "#[0-9a-f]{64}$", "#" + strmul("0", 64));
+        });
+    }
+
+    #! Returns the id of a text of the fixture's address type under an earlier name of the type
+    private static string renamedTypeMessageId(string id) {
+        return changeTypeIdentity(id, string sub (string identity) {
+            return regex_subst(identity, ":RekeyAddress#[0-9a-f]{64}$", ":rekeyAddress#" + strmul("1", 64));
+        });
+    }
+
+    #! Returns the id of a text of a type in another action of the fixture's app
+    private static string otherActionMessageId(string id) {
+        return changeTypeIdentity(id, string sub (string identity) {
+            return regex_subst(identity, "^action:[A-Za-z0-9_-]+:", "action:" + identitySegment("deliver") + ":");
         });
     }
 

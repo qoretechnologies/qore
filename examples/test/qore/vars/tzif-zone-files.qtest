@@ -1,0 +1,836 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# TZif zone files (RFC 9636, which obsoletes RFC 8536): version 2+ files are read from their 64-bit data block and
+# footer TZ string, version 1 files from their 32-bit data block, and malformed files raise TZINFO-ERROR.
+#
+# Fixtures in fixtures/tzif:
+# - tzif-zones.zi: zic source of two synthetic zones; slim/ and fat/ are its zic 2022g output (the generation
+#   commands are in the file); the source is also compiled at test time when the platform's zic supports "-b"
+# - rfc9636/*.tzif: the example files of RFC 9636 Appendix B.1 - B.5, transcribed from the hexadecimal column
+# Other files are written by the test with TzifWriter.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%exec-class TzifZoneFilesTest
+
+#! a local time type of a synthetic TZif file
+hashdecl TzifType {
+    #! UT offset in seconds east
+    int utoff;
+    #! the DST indicator byte; RFC 9636 allows 0 and 1 only
+    int dst = 0;
+    #! the time zone designation
+    string abbr;
+    #! overrides the designation index
+    *int desigidx;
+}
+
+#! a synthetic TZif file
+hashdecl TzifSpec {
+    #! the file magic
+    string magic = "TZif";
+    #! the version byte as a string: "" for version 1
+    string version = "2";
+    #! transition times
+    list<int> times = ();
+    #! transition types
+    list<int> idx = ();
+    #! local time types
+    list<hash<TzifType>> types = ();
+    #! the footer TZ string; no footer if not set
+    *string footer = "";
+    #! the footer TZ string as hex, overrides footer
+    *string footer_hex;
+    #! False to leave out the newline after the footer TZ string
+    bool footer_terminated = True;
+    #! the designations as hex, overrides the designations of the types
+    *string chars_hex;
+    #! leap second records as occurrence and correction pairs
+    list<list<int>> leaps = ();
+    #! the value of the standard/wall indicator of every type; no indicators if negative
+    int isstd = -1;
+    #! the value of the UT/local indicator of every type; no indicators if negative
+    int isut = -1;
+    #! the version 1 data block of a version 2+ file as hex with the counts in v1_counts; a placeholder block if
+    #! not set
+    *string v1_block_hex;
+    #! overrides of the counts of the header of the data block that is read
+    hash<string, int> counts = {};
+    #! overrides of the counts of the version 1 header of a version 2+ file
+    hash<string, int> v1_counts = {};
+    #! the magic of the version 2+ header
+    string v2_magic = "TZif";
+    #! hex data appended to the file
+    string trailer_hex = "";
+}
+
+#! the local time at an instant
+hashdecl LocalTime {
+    int offset;
+    bool dst;
+    string name;
+}
+
+#! writes synthetic TZif files (RFC 9636 sections 3.1 - 3.3)
+class TzifWriter {
+    #! returns the file data as hex
+    static string make(hash<TzifSpec> spec) {
+        if (!spec.version.val()) {
+            return TzifWriter::rawHeader(spec.magic, spec.version, TzifWriter::counts(spec, spec.counts))
+                + TzifWriter::block(spec, 4) + spec.trailer_hex;
+        }
+        string v1;
+        if (exists spec.v1_block_hex) {
+            v1 = TzifWriter::rawHeader(spec.magic, spec.version, spec.v1_counts) + spec.v1_block_hex;
+        } else {
+            # RFC 9636 section 4: a placeholder version 1 data block with one type and one designation
+            hash<string, int> counts = {"typecnt": 1, "charcnt": 1} + spec.v1_counts;
+            v1 = TzifWriter::rawHeader(spec.magic, spec.version, counts) + "00000000" + "00" + "00" + "00";
+        }
+        string footer;
+        if (exists spec.footer_hex || exists spec.footer) {
+            footer = "0a" + (spec.footer_hex ?? binary(spec.footer).toHex()) + (spec.footer_terminated ? "0a" : "");
+        }
+        return v1 + TzifWriter::rawHeader(spec.v2_magic, spec.version, TzifWriter::counts(spec, spec.counts))
+            + TzifWriter::block(spec, 8) + footer + spec.trailer_hex;
+    }
+
+    private static hash<string, int> counts(hash<TzifSpec> spec, hash<string, int> overrides) {
+        int typecnt = spec.types.size();
+        hash<string, int> counts = {
+            "isutcnt": spec.isut >= 0 ? typecnt : 0,
+            "isstdcnt": spec.isstd >= 0 ? typecnt : 0,
+            "leapcnt": spec.leaps.size(),
+            "timecnt": spec.times.size(),
+            "typecnt": typecnt,
+            "charcnt": TzifWriter::designations(spec).size() / 2,
+        };
+        return counts + overrides;
+    }
+
+    private static string rawHeader(string magic, string version, hash<string, int> counts) {
+        string hex = binary(magic).toHex() + (version.val() ? binary(version).toHex() : "00") + strmul("00", 15);
+        foreach string key in ("isutcnt", "isstdcnt", "leapcnt", "timecnt", "typecnt", "charcnt") {
+            hex += TzifWriter::u4(counts{key} ?? 0);
+        }
+        return hex;
+    }
+
+    #! returns the designations as hex
+    private static string designations(hash<TzifSpec> spec) {
+        if (exists spec.chars_hex) {
+            return spec.chars_hex;
+        }
+        string hex = "";
+        foreach hash<TzifType> type in (spec.types) {
+            hex += binary(type.abbr).toHex() + "00";
+        }
+        return hex;
+    }
+
+    #! returns a data block as hex
+    private static string block(hash<TzifSpec> spec, int time_size) {
+        string hex = "";
+        foreach int time in (spec.times) {
+            hex += TzifWriter::time(time, time_size);
+        }
+        foreach int idx in (spec.idx) {
+            hex += sprintf("%02x", idx);
+        }
+        int pos = 0;
+        foreach hash<TzifType> type in (spec.types) {
+            hex += TzifWriter::u4(type.utoff) + sprintf("%02x%02x", type.dst, type.desigidx ?? pos);
+            pos += type.abbr.strlen() + 1;
+        }
+        hex += TzifWriter::designations(spec);
+        foreach list<int> leap in (spec.leaps) {
+            hex += TzifWriter::time(leap[0], time_size) + TzifWriter::u4(leap[1]);
+        }
+        if (spec.isstd >= 0) {
+            hex += strmul(sprintf("%02x", spec.isstd), spec.types.size());
+        }
+        if (spec.isut >= 0) {
+            hex += strmul(sprintf("%02x", spec.isut), spec.types.size());
+        }
+        return hex;
+    }
+
+    private static string time(int time, int time_size) {
+        return time_size == 8 ? sprintf("%016x", time) : TzifWriter::u4(time);
+    }
+
+    private static string u4(int value) {
+        return sprintf("%08x", value & 0xffffffff);
+    }
+}
+
+class TzifZoneFilesTest inherits QUnit::Test {
+    private {
+        #! the temporary directory of the files written by the test
+        string dir;
+        #! a counter for unique file names; zones are cached by path
+        int file_count = 0;
+        #! the fixture directory
+        string fixtures;
+    }
+
+    constructor() : QUnit::Test("TZif zone files", "1.0") {
+        # an absolute path, as a relative path would be a region name
+        fixtures = realpath(get_script_dir() + "/fixtures/tzif");
+        dir = make_tmp_dir("qore-tzif-test-");
+        on_exit remove_tree(dir);
+
+        addTestCase("zic slim and fat files compiled at test time", \zicCompiledFiles());
+        addTestCase("zic slim and fat fixtures", \zicFixtures());
+        addTestCase("RFC 9636 Appendix B example files", \rfcExamples());
+        addTestCase("footer TZ string rules", \footerRules());
+        addTestCase("64-bit transition times", \wideTransitions());
+        addTestCase("version 1 files", \version1Files());
+        addTestCase("version 2+ structure", \version2Structure());
+        addTestCase("truncated and corrupt files", \corruptFiles());
+        addTestCase("invalid footer TZ strings", \invalidFooters());
+        set_return_value(main());
+    }
+
+    #! compiles tzif-zones.zi with the platform's zic
+    private zicCompiledFiles() {
+        *string zic = findZic();
+        if (!zic) {
+            testSkip("zic is not available");
+        }
+        string out = dir + "/zic";
+        foreach string bloat in ("slim", "fat") {
+            int rc;
+            string output = backquote(sprintf("%s -b %s -d %s %s 2>&1", shellQuote(zic), bloat,
+                shellQuote(out + "/" + bloat), shellQuote(fixtures + "/tzif-zones.zi")), \rc);
+            if (rc) {
+                testSkip(sprintf("%s does not support \"-b %s\": %s", zic, bloat, trim(output)));
+            }
+        }
+        checkZicZones(out + "/slim", "zic slim");
+        checkZicZones(out + "/fat", "zic fat");
+    }
+
+    private zicFixtures() {
+        checkZicZones(fixtures + "/slim", "slim fixture");
+        checkZicZones(fixtures + "/fat", "fat fixture");
+        # the slim file has two transitions, so local time after 1995-03-26 comes from the footer only
+        assertEq(170, hstat(fixtures + "/slim/Qore/Dst").size);
+    }
+
+    private checkZicZones(string root, string label) {
+        TimeZone dst(root + "/Qore/Dst");
+        assertEq(7200, dst.UTCOffset(), label + " Dst standard offset");
+        assertTrue(dst.hasDST(), label + " Dst has DST");
+        # before the first transition: time type 0 (RFC 9636 section 3.2)
+        checkAt(dst, 1800-01-01T00:00:00Z, 5400, False, "LMT", label + " Dst 1800");
+        checkAt(dst, 1980-01-01T00:00:00Z, 5400, False, "LMT", label + " Dst 1980");
+        # the historic offset change
+        checkAt(dst, 1989-12-31T22:29:59Z, 5400, False, "LMT", label + " Dst before 1990");
+        checkAt(dst, 1989-12-31T22:30:00Z, 7200, False, "TST", label + " Dst 1990");
+        # the first DST period; the start is the last explicit transition of the slim file
+        checkAt(dst, 1995-03-25T23:59:59Z, 7200, False, "TST", label + " Dst before DST 1995");
+        checkAt(dst, 1995-03-26T00:00:00Z, 10800, True, "TDT", label + " Dst DST 1995");
+        checkAt(dst, 1995-07-15T00:00:00Z, 10800, True, "TDT", label + " Dst summer 1995");
+        checkAt(dst, 1995-10-28T23:59:59Z, 10800, True, "TDT", label + " Dst end of DST 1995");
+        checkAt(dst, 1995-10-29T00:00:00Z, 7200, False, "TST", label + " Dst after DST 1995");
+        # current dates: explicit transitions of the fat file, the footer of the slim file
+        checkAt(dst, 2026-01-15T00:00:00Z, 7200, False, "TST", label + " Dst winter 2026");
+        checkAt(dst, 2026-03-28T23:59:59Z, 7200, False, "TST", label + " Dst before DST 2026");
+        checkAt(dst, 2026-03-29T00:00:00Z, 10800, True, "TDT", label + " Dst DST 2026");
+        checkAt(dst, 2026-07-15T00:00:00Z, 10800, True, "TDT", label + " Dst summer 2026");
+        checkAt(dst, 2026-10-24T23:59:59Z, 10800, True, "TDT", label + " Dst end of DST 2026");
+        checkAt(dst, 2026-10-25T00:00:00Z, 7200, False, "TST", label + " Dst after DST 2026");
+        # after the last explicit transition of the fat file (2037): the footer only
+        checkAt(dst, 2100-01-15T00:00:00Z, 7200, False, "TST", label + " Dst winter 2100");
+        checkAt(dst, 2100-03-27T23:59:59Z, 7200, False, "TST", label + " Dst before DST 2100");
+        checkAt(dst, 2100-03-28T00:00:00Z, 10800, True, "TDT", label + " Dst DST 2100");
+        checkAt(dst, 2100-10-30T23:59:59Z, 10800, True, "TDT", label + " Dst end of DST 2100");
+        checkAt(dst, 2100-10-31T00:00:00Z, 7200, False, "TST", label + " Dst after DST 2100");
+        checkAt(dst, 2400-03-26T00:00:00Z, 10800, True, "TDT", label + " Dst DST 2400");
+        # 70 and 1000 400-year cycles after 2026: the same calendar
+        foreach int cycles in (70, 1000) {
+            checkAtEpoch(dst, 2026-03-28T23:59:59Z.getEpochSeconds() + cycles * Cycle400, 7200, False, "TST",
+                sprintf("%s Dst before DST %d", label, 2026 + cycles * 400));
+            checkAtEpoch(dst, 2026-03-29T00:00:00Z.getEpochSeconds() + cycles * Cycle400, 10800, True, "TDT",
+                sprintf("%s Dst DST %d", label, 2026 + cycles * 400));
+        }
+        # local time is converted with the offset in effect
+        assertEq(2026-07-15T09:00:00Z, dst.date("2026-07-15T12:00:00"), label + " Dst local summer 2026");
+        assertEq(2100-01-15T10:00:00Z, dst.date("2100-01-15T12:00:00"), label + " Dst local winter 2100");
+        assertEq(2100-07-15T09:00:00Z, dst.date("2100-07-15T12:00:00"), label + " Dst local summer 2100");
+
+        TimeZone wide(root + "/Qore/Wide");
+        assertEq(7200, wide.UTCOffset(), label + " Wide standard offset");
+        assertFalse(wide.hasDST(), label + " Wide has no DST");
+        checkAt(wide, 1800-01-01T00:00:00Z, 1200, False, "LMT", label + " Wide 1800");
+        # 1850 and 2050 are outside of the 32-bit range of version 1 data
+        checkAt(wide, 1849-12-31T23:39:59Z, 1200, False, "LMT", label + " Wide before 1850");
+        checkAt(wide, 1849-12-31T23:40:00Z, 3600, False, "WT1", label + " Wide 1850");
+        checkAt(wide, 1880-01-01T00:00:00Z, 3600, False, "WT1", label + " Wide 1880");
+        checkAt(wide, 1901-12-13T20:45:52Z, 3600, False, "WT1", label + " Wide -2^31");
+        checkAt(wide, 2038-01-19T03:14:08Z, 3600, False, "WT1", label + " Wide 2^31");
+        checkAt(wide, 2049-12-31T22:59:59Z, 3600, False, "WT1", label + " Wide before 2050");
+        checkAt(wide, 2049-12-31T23:00:00Z, 7200, False, "WT2", label + " Wide 2050");
+        checkAt(wide, 2060-01-01T00:00:00Z, 7200, False, "WT2", label + " Wide 2060");
+        checkAt(wide, 2400-07-01T00:00:00Z, 7200, False, "WT2", label + " Wide 2400");
+    }
+
+    private rfcExamples() {
+        # B.1: version 1 UTC with leap-second records and no transitions: time type 0
+        TimeZone utc(fixtures + "/rfc9636/b1-utc-leap.tzif");
+        assertEq(0, utc.UTCOffset());
+        assertFalse(utc.hasDST());
+        checkAt(utc, 1972-07-01T00:00:00Z, 0, False, "UTC", "B.1 1972");
+        checkAt(utc, 2026-07-15T00:00:00Z, 0, False, "UTC", "B.1 2026");
+
+        # B.2: version 2 Pacific/Honolulu
+        TimeZone honolulu(fixtures + "/rfc9636/b2-honolulu.tzif");
+        assertEq(-36000, honolulu.UTCOffset());
+        assertTrue(honolulu.hasDST());
+        checkAt(honolulu, 1890-01-01T00:00:00Z, -37886, False, "LMT", "B.2 1890");
+        # the first transition is at -2334101314 in the 64-bit data and at -2^31 in the version 1 data
+        checkAt(honolulu, 1896-01-13T22:31:25Z, -37886, False, "LMT", "B.2 before 1896");
+        checkAt(honolulu, 1896-01-13T22:31:26Z, -37800, False, "HST", "B.2 1896");
+        checkAt(honolulu, 1900-01-01T00:00:00Z, -37800, False, "HST", "B.2 1900");
+        # the first worked example of the RFC
+        checkAt(honolulu, 1933-05-04T12:00:00Z, -34200, True, "HDT", "B.2 1933");
+        checkAt(honolulu, 1942-06-01T00:00:00Z, -34200, True, "HWT", "B.2 1942");
+        # a transition that changes only the designation
+        checkAt(honolulu, 1945-08-14T22:59:59Z, -34200, True, "HWT", "B.2 before HPT");
+        checkAt(honolulu, 1945-08-14T23:00:00Z, -34200, True, "HPT", "B.2 HPT");
+        checkAt(honolulu, 1946-01-01T00:00:00Z, -37800, False, "HST", "B.2 1946");
+        checkAt(honolulu, 1947-06-08T12:29:59Z, -37800, False, "HST", "B.2 before 1947");
+        checkAt(honolulu, 1947-06-08T12:30:00Z, -36000, False, "HST", "B.2 1947");
+        # the second worked example of the RFC: the footer TZ string "HST10"
+        checkAt(honolulu, 2019-01-01T00:00:00Z, -36000, False, "HST", "B.2 2019");
+        assertEq("2018-12-31T14:00:00-10:00", honolulu.date(2019-01-01T00:00:00Z).format("YYYY-MM-DDTHH:mm:SSZ"),
+            "B.2 2019 local time");
+
+        # B.3: truncated version 2 Pacific/Johnston with an empty footer: the type of the last transition
+        TimeZone johnston(fixtures + "/rfc9636/b3-johnston.tzif");
+        checkAt(johnston, 2004-06-15T23:59:59Z, -36000, False, "HST", "B.3 before the end");
+        checkAt(johnston, 2004-06-16T00:00:00Z, 0, False, "-00", "B.3 end");
+        checkAt(johnston, 2026-07-15T00:00:00Z, 0, False, "-00", "B.3 2026");
+
+        # B.4: truncated version 3 Asia/Jerusalem; the footer uses the hour 26 of the version 3 extension
+        TimeZone jerusalem(fixtures + "/rfc9636/b4-jerusalem.tzif");
+        assertEq(7200, jerusalem.UTCOffset());
+        assertTrue(jerusalem.hasDST());
+        checkAt(jerusalem, 2037-12-31T23:59:59Z, 0, False, "-00", "B.4 before the start");
+        checkAt(jerusalem, 2038-01-01T00:00:00Z, 7200, False, "IST", "B.4 start");
+        checkAt(jerusalem, 2038-03-25T23:59:59Z, 7200, False, "IST", "B.4 before DST");
+        checkAt(jerusalem, 2038-03-26T00:00:00Z, 10800, True, "IDT", "B.4 DST");
+        checkAt(jerusalem, 2038-10-30T22:59:59Z, 10800, True, "IDT", "B.4 end of DST");
+        checkAt(jerusalem, 2038-10-30T23:00:00Z, 7200, False, "IST", "B.4 after DST");
+
+        # B.5: truncated version 4 Europe/London with a truncated leap-second table; transition times are compared
+        # with Qore's epoch seconds without leap-second corrections
+        TimeZone london(fixtures + "/rfc9636/b5-london.tzif");
+        assertEq(0, london.UTCOffset());
+        checkAtEpoch(london, 1640995226, 0, False, "-00", "B.5 before the start");
+        checkAtEpoch(london, 1640995227, 0, False, "GMT", "B.5 start");
+        checkAt(london, 2026-03-29T00:59:59Z, 0, False, "GMT", "B.5 before DST");
+        checkAt(london, 2026-03-29T01:00:00Z, 3600, True, "BST", "B.5 DST");
+        checkAt(london, 2026-10-25T00:59:59Z, 3600, True, "BST", "B.5 end of DST");
+        checkAt(london, 2026-10-25T01:00:00Z, 0, False, "GMT", "B.5 after DST");
+    }
+
+    #! footer-only zones: without transitions, the footer gives local time for all times (RFC 9636 section 3.2)
+    private footerRules() {
+        TimeZone ny = footerZone("EST5EDT,M3.2.0,M11.1.0");
+        assertEq(-18000, ny.UTCOffset());
+        assertTrue(ny.hasDST());
+        checkUs(ny, "Mm.w.d");
+        # the dates of the year before 1970 and in a negative year
+        checkAt(ny, 1900-07-01T00:00:00Z, -14400, True, "EDT", "Mm.w.d 1900");
+        checkAtEpoch(ny, 2024-03-10T07:00:00Z.getEpochSeconds() - 1000 * Cycle400, -14400, True, "EDT",
+            "Mm.w.d DST in year -397976");
+        checkAtEpoch(ny, 2024-03-10T06:59:59Z.getEpochSeconds() - 1000 * Cycle400, -18000, False, "EST",
+            "Mm.w.d before DST in year -397976");
+        # POSIX: daylight saving time is one hour ahead by default; the default rule is the one of the reference
+        # implementation
+        checkUs(footerZone("EST5EDT"), "default rule");
+
+        # southern hemisphere
+        TimeZone sydney = footerZone("AEST-10AEDT,M10.1.0,M4.1.0/3");
+        assertEq(36000, sydney.UTCOffset());
+        checkAt(sydney, 2024-01-15T00:00:00Z, 39600, True, "AEDT", "southern January");
+        checkAt(sydney, 2024-04-06T15:59:59Z, 39600, True, "AEDT", "southern end of DST");
+        checkAt(sydney, 2024-04-06T16:00:00Z, 36000, False, "AEST", "southern after DST");
+        checkAt(sydney, 2024-10-05T15:59:59Z, 36000, False, "AEST", "southern before DST");
+        checkAt(sydney, 2024-10-05T16:00:00Z, 39600, True, "AEDT", "southern DST");
+        checkAt(sydney, 2024-12-31T23:59:59Z, 39600, True, "AEDT", "southern end of year");
+
+        # Jn never counts February 29
+        TimeZone julian1 = footerZone("XST-1XDT,J60/0,J300/0");
+        checkAt(julian1, 2024-02-29T22:59:59Z, 3600, False, "XST", "Jn leap year before DST");
+        checkAt(julian1, 2024-02-29T23:00:00Z, 7200, True, "XDT", "Jn leap year DST");
+        checkAt(julian1, 2024-10-26T21:59:59Z, 7200, True, "XDT", "Jn leap year end of DST");
+        checkAt(julian1, 2024-10-26T22:00:00Z, 3600, False, "XST", "Jn leap year after DST");
+        checkAt(julian1, 2025-02-28T23:00:00Z, 7200, True, "XDT", "Jn DST");
+        # n counts February 29
+        TimeZone julian0 = footerZone("XST-1XDT,59/0,299/0");
+        checkAt(julian0, 2024-02-28T22:59:59Z, 3600, False, "XST", "n leap year before DST");
+        checkAt(julian0, 2024-02-28T23:00:00Z, 7200, True, "XDT", "n leap year DST");
+        checkAt(julian0, 2024-10-25T21:59:59Z, 7200, True, "XDT", "n leap year end of DST");
+        checkAt(julian0, 2024-10-25T22:00:00Z, 3600, False, "XST", "n leap year after DST");
+        checkAt(julian0, 2025-02-28T22:59:59Z, 3600, False, "XST", "n before DST");
+        checkAt(julian0, 2025-02-28T23:00:00Z, 7200, True, "XDT", "n DST");
+
+        # RFC 9636 section 3.3.2: signed rule hours (the example of the RFC)
+        TimeZone signed = footerZone("<-03>3<-02>,M3.5.0/-2,M10.5.0/-1");
+        assertEq(-10800, signed.UTCOffset());
+        checkAt(signed, 2024-03-31T00:59:59Z, -10800, False, "-03", "signed hours before DST");
+        checkAt(signed, 2024-03-31T01:00:00Z, -7200, True, "-02", "signed hours DST");
+        checkAt(signed, 2024-10-27T00:59:59Z, -7200, True, "-02", "signed hours end of DST");
+        checkAt(signed, 2024-10-27T01:00:00Z, -10800, False, "-03", "signed hours after DST");
+        # hours of more than 24
+        TimeZone israel = footerZone("IST-2IDT,M3.4.4/26,M10.5.0");
+        checkAt(israel, 2024-03-28T23:59:59Z, 7200, False, "IST", "hour 26 before DST");
+        checkAt(israel, 2024-03-29T00:00:00Z, 10800, True, "IDT", "hour 26 DST");
+        checkAt(israel, 2024-10-26T22:59:59Z, 10800, True, "IDT", "hour 26 end of DST");
+        checkAt(israel, 2024-10-26T23:00:00Z, 7200, False, "IST", "hour 26 after DST");
+        # the start rule of the next year can be in this year
+        TimeZone next_year = footerZone("XST-1XDT,J1/-24,J180/0");
+        checkAt(next_year, 2024-12-30T22:59:59Z, 3600, False, "XST", "next year's rule before DST");
+        checkAt(next_year, 2024-12-30T23:00:00Z, 7200, True, "XDT", "next year's rule DST");
+        checkAt(next_year, 2025-06-28T21:59:59Z, 7200, True, "XDT", "next year's rule end of DST");
+        checkAt(next_year, 2025-06-28T22:00:00Z, 3600, False, "XST", "next year's rule after DST");
+
+        # RFC 9636 section 3.3.1: daylight saving time all year, both examples of the RFC
+        foreach string tz in ("EST5EDT,0/0,J365/25", "XXX3EDT4,0/0,J365/23") {
+            TimeZone all_year = footerZone(tz);
+            assertTrue(all_year.hasDST(), tz);
+            foreach date at in (2023-01-01T00:00:00Z, 2023-07-01T00:00:00Z, 2023-12-31T23:59:59Z,
+                    2024-01-01T04:59:59Z, 2024-12-31T23:59:59Z) {
+                checkAt(all_year, at, -14400, True, "EDT", tz + " " + at.format("YYYY-MM-DD HH:mm:SS"));
+            }
+        }
+
+        # negative DST: standard time in summer
+        TimeZone dublin = footerZone("IST-1GMT0,M10.5.0,M3.5.0/1");
+        assertEq(3600, dublin.UTCOffset());
+        checkAt(dublin, 2024-01-15T00:00:00Z, 0, True, "GMT", "negative DST winter");
+        checkAt(dublin, 2024-03-31T00:59:59Z, 0, True, "GMT", "negative DST before standard time");
+        checkAt(dublin, 2024-03-31T01:00:00Z, 3600, False, "IST", "negative DST standard time");
+        checkAt(dublin, 2024-10-27T00:59:59Z, 3600, False, "IST", "negative DST before winter");
+        checkAt(dublin, 2024-10-27T01:00:00Z, 0, True, "GMT", "negative DST after summer");
+
+        # an explicit DST offset, quoted names with digits, offsets with minutes and seconds
+        TimeZone explicit = footerZone("XST-1XDT-3,M3.5.0,M10.5.0/3");
+        checkAt(explicit, 2024-03-31T00:59:59Z, 3600, False, "XST", "explicit DST offset before DST");
+        checkAt(explicit, 2024-03-31T01:00:00Z, 10800, True, "XDT", "explicit DST offset DST");
+        checkAt(explicit, 2024-10-26T23:59:59Z, 10800, True, "XDT", "explicit DST offset end of DST");
+        checkAt(explicit, 2024-10-27T00:00:00Z, 3600, False, "XST", "explicit DST offset after DST");
+        TimeZone troll = footerZone("<+00>0<+02>-2,M3.5.0/1,M10.5.0/3");
+        checkAt(troll, 2024-03-31T00:59:59Z, 0, False, "+00", "quoted names before DST");
+        checkAt(troll, 2024-03-31T01:00:00Z, 7200, True, "+02", "quoted names DST");
+        checkAt(footerZone("<+0545>-5:45"), 2024-07-01T00:00:00Z, 20700, False, "+0545", "minutes east");
+        checkAt(footerZone("<-0130>+1:30"), 2024-07-01T00:00:00Z, -5400, False, "-0130", "minutes west");
+        checkAt(footerZone("LMT-0:57:44"), 2024-07-01T00:00:00Z, 3464, False, "LMT", "seconds");
+        checkAt(footerZone("XXX24"), 2024-07-01T00:00:00Z, -86400, False, "XXX", "24 hours west");
+    }
+
+    #! checks New York's rules of 2024
+    private checkUs(TimeZone tz, string label) {
+        checkAt(tz, 2024-03-10T06:59:59Z, -18000, False, "EST", label + " before DST");
+        checkAt(tz, 2024-03-10T07:00:00Z, -14400, True, "EDT", label + " DST");
+        checkAt(tz, 2024-11-03T05:59:59Z, -14400, True, "EDT", label + " end of DST");
+        checkAt(tz, 2024-11-03T06:00:00Z, -18000, False, "EST", label + " after DST");
+        assertEq(2024-07-01T16:00:00Z, tz.date("2024-07-01T12:00:00"), label + " local summer");
+        assertEq(2024-01-15T17:00:00Z, tz.date("2024-01-15T12:00:00"), label + " local winter");
+    }
+
+    #! transitions outside of the 32-bit range, down to -2^59 (RFC 9636 section 3.2)
+    private wideTransitions() {
+        hash<TzifSpec> spec = <TzifSpec>{
+            "times": (-576460752303423488, -5000000000, 5000000000),
+            "idx": (1, 2, 1),
+            "types": (
+                <TzifType>{"utoff": 0, "abbr": "AAA"},
+                <TzifType>{"utoff": 3600, "abbr": "BBB"},
+                <TzifType>{"utoff": 7200, "dst": 1, "abbr": "CCC"},
+            ),
+            "footer": "BBB-1",
+        };
+        TimeZone tz(write("wide", spec));
+        checkAtEpoch(tz, -576460752303423489, 0, False, "AAA", "before -2^59");
+        checkAtEpoch(tz, -576460752303423488, 3600, False, "BBB", "-2^59");
+        checkAtEpoch(tz, -5000000001, 3600, False, "BBB", "before -5000000000");
+        checkAtEpoch(tz, -5000000000, 7200, True, "CCC", "-5000000000");
+        checkAtEpoch(tz, 0, 7200, True, "CCC", "epoch");
+        checkAtEpoch(tz, 4999999999, 7200, True, "CCC", "before 5000000000");
+        checkAtEpoch(tz, 5000000000, 3600, False, "BBB", "5000000000");
+        checkAtEpoch(tz, 9223372036854775807, 3600, False, "BBB", "maximum time");
+    }
+
+    private version1Files() {
+        # version 1 data: before the first transition time type 0; after the last transition local time is
+        # unspecified, and the type of the last transition is used, as in the reference implementation
+        hash<TzifSpec> spec = <TzifSpec>{
+            "version": "",
+            "times": (1000000, 2000000, 3000000),
+            "idx": (1, 2, 1),
+            "types": (
+                <TzifType>{"utoff": 3600, "abbr": "ZZZ"},
+                <TzifType>{"utoff": 7200, "dst": 1, "abbr": "YYY"},
+                <TzifType>{"utoff": 10800, "abbr": "XXX"},
+            ),
+            "isstd": 0,
+            "isut": 0,
+            "leaps": ((78796800, 1), (94694401, 2)),
+        };
+        TimeZone tz(write("v1", spec));
+        # without a footer: the last standard time type
+        assertEq(10800, tz.UTCOffset());
+        assertTrue(tz.hasDST());
+        checkAtEpoch(tz, -3000000000, 3600, False, "ZZZ", "v1 far before the first transition");
+        checkAtEpoch(tz, 999999, 3600, False, "ZZZ", "v1 before the first transition");
+        checkAtEpoch(tz, 1000000, 7200, True, "YYY", "v1 first transition");
+        checkAtEpoch(tz, 1999999, 7200, True, "YYY", "v1 before the second transition");
+        checkAtEpoch(tz, 2000000, 10800, False, "XXX", "v1 second transition");
+        checkAtEpoch(tz, 3000000, 7200, True, "YYY", "v1 last transition");
+        checkAtEpoch(tz, 4000000000, 7200, True, "YYY", "v1 after the last transition");
+
+        # data after the version 1 data block is ignored (RFC 9636 section 4)
+        spec.trailer_hex = "545a69663200";
+        TimeZone trailer(write("v1-trailer", spec));
+        checkAtEpoch(trailer, 2000000, 10800, False, "XXX", "v1 with trailing data");
+
+        # the authored version 1 fixture of date-utc-offset.qtest
+        TimeZone west(realpath(get_script_dir() + "/fixtures/one-second-west.tzif"));
+        checkAtEpoch(west, 0, -1, False, "QOR", "one second west");
+    }
+
+    private version2Structure() {
+        # the version 1 data block is only skipped (RFC 9636 section 4): here its header has invalid counts, and its
+        # UT/local indicators have invalid values
+        hash<TzifSpec> spec = baseSpec({
+            "v1_counts": {"isutcnt": 5},
+            "v1_block_hex": "0505050505",
+        });
+        checkBase(new TimeZone(write("v1-skipped", spec)), "invalid version 1 data block");
+
+        # the version 1 data is not used: here it has one transition at 0 to a +03 type
+        spec = baseSpec({
+            "v1_counts": {"timecnt": 1, "typecnt": 1, "charcnt": 4},
+            "v1_block_hex": "00000000" + "00" + "00002a30" + "0000" + "43434300",
+        });
+        TimeZone v1_ignored(write("v1-ignored", spec));
+        checkBase(v1_ignored, "version 2+ data instead of version 1 data");
+
+        # later versions and data after the footer (RFC 9636 section 3)
+        foreach string version in ("3", "4", "5") {
+            spec = baseSpec();
+            spec.version = version;
+            spec.trailer_hex = "0102030a";
+            checkBase(new TimeZone(write("version-" + version, spec)), "version " + version);
+        }
+
+        # RFC 9636 section 4: a designation with other bytes than ASCII alphanumerics, '-' and '+' is replaced with
+        # a numeric designation derived from the UT offset
+        spec = <TzifSpec>{
+            "times": (1000, 2000, 3000),
+            "idx": (1, 2, 3),
+            "types": (
+                <TzifType>{"utoff": 0, "abbr": "A A"},
+                <TzifType>{"utoff": 19800, "abbr": "I\tS"},
+                <TzifType>{"utoff": -36000, "abbr": "HéT"},
+                <TzifType>{"utoff": -3600 - 30 * 60 - 15, "dst": 1, "abbr": "<1>"},
+            ),
+            "footer": "",
+        };
+        TimeZone numeric(write("numeric-designations", spec));
+        checkAtEpoch(numeric, 999, 0, False, "+00", "numeric designation +00");
+        checkAtEpoch(numeric, 1000, 19800, False, "+0530", "numeric designation +0530");
+        checkAtEpoch(numeric, 2000, -36000, False, "-10", "numeric designation -10");
+        checkAtEpoch(numeric, 3000, -5415, True, "-013015", "numeric designation -013015");
+
+        # leap-second records and indicators are read
+        spec = baseSpec();
+        spec.leaps = ((78796800, 1), (94694401, 2));
+        spec.isstd = 1;
+        spec.isut = 1;
+        checkBase(new TimeZone(write("leaps", spec)), "leap seconds and indicators");
+
+        # a footer that is not consistent with the last transition, as zic 2022g writes for America/Ojinaga of
+        # tzdata 2026e with "-b slim": the last transition applies up to the first transition of the rule after it,
+        # as in the reference implementation
+        spec = <TzifSpec>{
+            "times": (1647162000, 1667116800),
+            "idx": (1, 2),
+            "types": (
+                <TzifType>{"utoff": -25200, "abbr": "MST"},
+                <TzifType>{"utoff": -21600, "dst": 1, "abbr": "MDT"},
+                <TzifType>{"utoff": -21600, "abbr": "CST"},
+            ),
+            "footer": "CST6CDT,M3.2.0,M11.1.0",
+        };
+        TimeZone inconsistent(write("inconsistent", spec));
+        checkAt(inconsistent, 2022-10-30T07:59:59Z, -21600, True, "MDT", "inconsistent footer before the last "
+            "transition");
+        checkAt(inconsistent, 2022-10-30T08:00:00Z, -21600, False, "CST", "inconsistent footer last transition");
+        checkAt(inconsistent, 2022-11-06T06:59:59Z, -21600, False, "CST", "inconsistent footer before its first "
+            "transition");
+        checkAt(inconsistent, 2022-11-06T07:00:00Z, -21600, False, "CST", "inconsistent footer first transition");
+        checkAt(inconsistent, 2023-03-12T07:59:59Z, -21600, False, "CST", "inconsistent footer before DST");
+        checkAt(inconsistent, 2023-03-12T08:00:00Z, -18000, True, "CDT", "inconsistent footer DST");
+        # a footer without daylight saving time gives local time from the last transition on (RFC 9636 section 3.2)
+        spec = baseSpec({"footer": "CCC-3"});
+        TimeZone fixed(write("fixed-footer", spec));
+        assertEq(10800, fixed.UTCOffset());
+        checkAtEpoch(fixed, 1999, 7200, True, "BBB", "fixed footer before the last transition");
+        checkAtEpoch(fixed, 2000, 10800, False, "CCC", "fixed footer last transition");
+
+        # an empty footer: the type of the last transition
+        spec = baseSpec();
+        spec.footer = "";
+        TimeZone empty_footer(write("empty-footer", spec));
+        checkAtEpoch(empty_footer, 2000, 3600, False, "AAA", "empty footer last transition");
+        checkAtEpoch(empty_footer, 1000000000000, 3600, False, "AAA", "empty footer after the last transition");
+        # no transitions and an empty footer: time type 0
+        spec = baseSpec();
+        spec.times = ();
+        spec.idx = ();
+        spec.footer = "";
+        spec.types = (<TzifType>{"utoff": -3600, "abbr": "WWW"},);
+        checkAtEpoch(new TimeZone(write("type0", spec)), 1000000000, -3600, False, "WWW", "time type 0");
+    }
+
+    #! a valid version 2 file: AAA (+01) before 1000, BBB (+02, DST) from 1000, AAA from 2000, then the footer
+    private hash<TzifSpec> baseSpec(hash<auto> changes = {}) {
+        return cast<hash<TzifSpec>>(<TzifSpec>{
+            "times": (1000, 2000),
+            "idx": (1, 0),
+            "types": (
+                <TzifType>{"utoff": 3600, "abbr": "AAA"},
+                <TzifType>{"utoff": 7200, "dst": 1, "abbr": "BBB"},
+            ),
+            "footer": "AAA-1",
+        } + changes);
+    }
+
+    private checkBase(TimeZone tz, string label) {
+        assertEq(3600, tz.UTCOffset(), label + " standard offset");
+        checkAtEpoch(tz, 999, 3600, False, "AAA", label + " before the first transition");
+        checkAtEpoch(tz, 1000, 7200, True, "BBB", label + " first transition");
+        checkAtEpoch(tz, 1999, 7200, True, "BBB", label + " before the last transition");
+        checkAtEpoch(tz, 2000, 3600, False, "AAA", label + " last transition");
+        checkAtEpoch(tz, 4000000000, 3600, False, "AAA", label + " footer");
+    }
+
+    private corruptFiles() {
+        string valid = TzifWriter::make(baseSpec());
+        int len = valid.size() / 2;
+
+        checkInvalid(writeHex("empty", ""), "truncated TZif file: the TZif header needs 44 bytes, but the file has "
+            "only 0 bytes");
+        checkInvalid(writeHex("short", "545a69"), "truncated TZif file: the TZif header needs 44 bytes");
+        checkInvalid(writeHex("short-header", valid.substr(0, 86)), "the TZif header needs 44 bytes, but the file "
+            "has only 43 bytes");
+        checkInvalid(write("magic", baseSpec({"magic": "TZiX"})), "invalid file magic");
+        checkInvalid(write("version-1-byte", baseSpec({"version": "1"})), "invalid TZif version byte 0x31");
+
+        # the lengths of the data blocks are checked against the file size (RFC 9636 section 4)
+        hash<TzifSpec> spec = baseSpec({"version": ""});
+        spec.counts = {"timecnt": 5};
+        checkInvalid(write("v1-truncated", spec), "the version 1 data block needs 89 bytes, but the file has only "
+            "74 bytes");
+        spec = baseSpec({"v1_counts": {"timecnt": 0xffffffff}});
+        checkInvalid(write("v1-huge", spec), "the version 1 data block needs 21474836526 bytes");
+        checkInvalid(writeHex("no-v2-header", valid.substr(0, 51 * 2)), "the version 2\\+ TZif header needs 95 "
+            "bytes, but the file has only 51 bytes");
+        checkInvalid(writeHex("short-v2-header", valid.substr(0, 94 * 2)), "the version 2\\+ TZif header needs 95 "
+            "bytes");
+        checkInvalid(write("v2-magic", baseSpec({"v2_magic": "TZiX"})), "invalid version 2\\+ TZif header at "
+            "byte 51");
+        checkInvalid(writeHex("v2-version-nul", valid.substr(0, 55 * 2) + "00" + valid.substr(56 * 2)),
+            "invalid version 2\\+ TZif header at byte 51");
+        spec = baseSpec({"counts": {"timecnt": 0xffffffff}});
+        checkInvalid(write("v2-huge", spec), "the version 2\\+ data block needs 38654705770 bytes");
+        checkInvalid(writeHex("v2-truncated", valid.substr(0, (len - 8) * 2)), "the version 2\\+ data block needs "
+            "133 bytes, but the file has only 132 bytes");
+
+        # the footer (RFC 9636 section 3.3)
+        checkInvalid(write("no-footer", baseSpec({"footer": NOTHING})), "the TZif footer is missing");
+        checkInvalid(write("footer-unterminated", baseSpec({"footer_terminated": False})), "the TZ string in "
+            "the TZif footer is not terminated with a newline");
+        checkInvalid(write("footer-nul", baseSpec({"footer_hex": "414141002d31"})), "the TZ string in the TZif "
+            "footer contains a NUL character");
+        checkInvalid(write("footer-colon", baseSpec({"footer": ":Europe/Prague"})), "the TZ string in the TZif "
+            "footer begins with ':'");
+
+        # header counts (RFC 9636 section 3.1)
+        checkInvalid(write("typecnt", baseSpec({"times": (), "idx": (), "types": ()})), "typecnt is zero");
+        checkInvalid(write("charcnt", baseSpec({"counts": {"charcnt": 0}})), "charcnt is zero");
+        checkInvalid(write("isutcnt", baseSpec({"counts": {"isutcnt": 1}})), "isutcnt \\(1\\) must be zero or "
+            "equal to typecnt \\(2\\)");
+        checkInvalid(write("isstdcnt", baseSpec({"counts": {"isstdcnt": 3}})), "isstdcnt \\(3\\) must be zero "
+            "or equal to typecnt \\(2\\)");
+        checkInvalid(write("v1-typecnt", baseSpec({"version": "", "times": (), "idx": (), "types": ()})),
+            "typecnt is zero");
+
+        # the data block (RFC 9636 section 3.2)
+        checkInvalid(write("descending", baseSpec({"times": (2000, 1000)})), "transition time 1 \\(1000\\) is "
+            "not greater than the previous one \\(2000\\)");
+        checkInvalid(write("equal", baseSpec({"times": (1000, 1000)})), "transition time 1 \\(1000\\) is not "
+            "greater");
+        checkInvalid(write("type-index", baseSpec({"idx": (1, 2)})), "transition type index 1 \\(2\\) is not "
+            "less than typecnt \\(2\\)");
+        spec = baseSpec();
+        spec.types[0].utoff = -2147483648;
+        checkInvalid(write("utoff", spec), "the UT offset of TZif local time type 0 is -2\\^31");
+        spec = baseSpec();
+        spec.types[1].dst = 2;
+        checkInvalid(write("isdst", spec), "the DST indicator of TZif local time type 1 is 2");
+        spec = baseSpec();
+        spec.types[1].desigidx = 8;
+        checkInvalid(write("desigidx", spec), "the designation index of TZif local time type 1 \\(8\\) is not "
+            "less than charcnt \\(8\\)");
+        spec = baseSpec({"chars_hex": "4141410042424242"});
+        spec.types[1].desigidx = 4;
+        checkInvalid(write("designation-nul", spec), "the designation of TZif local time type 1 is not "
+            "terminated with a NUL character");
+        checkInvalid(write("isstd", baseSpec({"isstd": 2})), "the standard/wall indicator of TZif local time "
+            "type 0 is 2");
+        checkInvalid(write("isut", baseSpec({"isut": 2})), "the UT/local indicator of TZif local time type 0 is "
+            "2");
+        checkInvalid(write("v1-isdst", baseSpec({"version": "", "types": (<TzifType>{"utoff": 0, "dst": 7,
+            "abbr": "AAA"},), "idx": (0, 0)})), "the DST indicator of TZif local time type 0 is 7");
+
+        # the size limit; the data after the version 1 data block would be ignored otherwise
+        spec = baseSpec({"version": "", "trailer_hex": strmul("00", 1024 * 1024)});
+        checkInvalid(write("too-large", spec), "the file is larger than the maximum TZif file size of 1048576 "
+            "bytes");
+
+        # a valid file loads after the invalid ones
+        checkBase(new TimeZone(writeHex("valid", valid)), "valid after invalid");
+    }
+
+    private invalidFooters() {
+        foreach list<string> row in (
+                ("ES5", "the standard time abbreviation has fewer than 3 characters"),
+                ("5", "the standard time abbreviation has fewer than 3 characters"),
+                ("<AB>5", "the standard time abbreviation has fewer than 3 characters"),
+                ("<EST5", "the quoted standard time abbreviation is not terminated with '>'"),
+                ("<E$T>5", "the quoted standard time abbreviation is not terminated with '>' or contains a "
+                    "character other than"),
+                ("EST", "standard time has no UTC offset"),
+                ("EST25", "the standard time hours must be from -24 to 24"),
+                ("EST5:60", "the standard time minutes must be from 0 to 59"),
+                ("EST5:00:60", "the standard time seconds must be from 0 to 59"),
+                ("EST5:", "the standard time minutes must be a number"),
+                ("EST5ED", "the daylight saving time abbreviation has fewer than 3 characters"),
+                ("EST5EDT25", "the daylight saving time hours must be from -24 to 24"),
+                ("EST5EDT;M3.2.0,M11.1.0", "daylight saving time must be followed by a ',' and a rule"),
+                ("EST5EDT,M3.2.0", "the start rule must be followed by a ',' and the end rule"),
+                ("EST5EDT,M13.1.0,M11.1.0", "the start month must be from 1 to 12"),
+                ("EST5EDT,M0.1.0,M11.1.0", "the start month must be from 1 to 12"),
+                ("EST5EDT,M3.6.0,M11.1.0", "the start week must be from 1 to 5"),
+                ("EST5EDT,M3.2.7,M11.1.0", "the start day of the week must be from 0 to 6"),
+                ("EST5EDT,M3,M11.1.0", "the start rule date has no '.' after the month"),
+                ("EST5EDT,M3.2,M11.1.0", "the start rule date has no '.' after the week"),
+                ("EST5EDT,J0,J365", "the start Julian day must be from 1 to 365"),
+                ("EST5EDT,J1,J366", "the end Julian day must be from 1 to 365"),
+                ("EST5EDT,0,366", "the end zero-based Julian day must be from 0 to 365"),
+                ("EST5EDT,X1,M11.1.0", "the start rule date must have the form Jn, n or Mm.w.d"),
+                ("EST5EDT,M3.2.0/168,M11.1.0", "the start hours must be from -167 to 167"),
+                ("EST5EDT,M3.2.0,M11.1.0/-168", "the end hours must be from -167 to 167"),
+                ("EST5EDT,M3.2.0,M11.1.0x", "unexpected text after the end rule"),
+                ("EST5EDT,M3.2.0,M11.1.0,", "unexpected text after the end rule"),
+                ("EST5 EDT", "the daylight saving time abbreviation has fewer than 3 characters"),
+            ) {
+            # the TZ string is in the message, so it is quoted for the regex
+            checkInvalid(footerFile(row[0]), "invalid TZ string \"" + quoteRegex(row[0]) + "\" in the TZif "
+                "footer: " + row[1]);
+        }
+    }
+
+    private checkInvalid(string path, string desc) {
+        assertThrows("TZINFO-ERROR", desc, sub () { TimeZone tz(path); }, NOTHING, basename(path));
+    }
+
+    #! checks the local time at the given instant
+    private checkAt(TimeZone tz, date at, int offset, bool dst, string name, string label) {
+        date local = tz.date(at);
+        assertEq(<LocalTime>{"offset": offset, "dst": dst, "name": name},
+            <LocalTime>{"offset": local.getUtcOffset(), "dst": local.isDst(), "name": local.currentZoneName()},
+            label);
+        # the broken-down local time applies the offset
+        assertEq(Utc.date(at.getEpochSeconds() + offset).format("YYYY-MM-DD HH:mm:SS"),
+            local.format("YYYY-MM-DD HH:mm:SS"), label + " local time");
+    }
+
+    #! checks the local time at the given seconds from the epoch, without broken-down time
+    private checkAtEpoch(TimeZone tz, int epoch, int offset, bool dst, string name, string label) {
+        date local = tz.date(epoch);
+        assertEq(<LocalTime>{"offset": offset, "dst": dst, "name": name},
+            <LocalTime>{"offset": local.getUtcOffset(), "dst": local.isDst(), "name": local.currentZoneName()},
+            label);
+    }
+
+    #! returns a zone with no transitions and the given footer TZ string
+    private TimeZone footerZone(string tz) {
+        return new TimeZone(footerFile(tz));
+    }
+
+    private string footerFile(string tz) {
+        return write("footer", <TzifSpec>{
+            "types": (<TzifType>{"utoff": 0, "abbr": "-00"},),
+            "footer": tz,
+        });
+    }
+
+    private string write(string name, hash<TzifSpec> spec) {
+        return writeHex(name, TzifWriter::make(spec));
+    }
+
+    #! writes a file with a unique name, as zones are cached by path
+    private string writeHex(string name, string hex) {
+        string path = sprintf("%s/%s-%d.tzif", dir, name, ++file_count);
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(parse_hex_string(hex));
+        f.close();
+        return path;
+    }
+
+    #! returns zic from the usual locations or PATH
+    private *string findZic() {
+        list<string> dirs = ("/usr/sbin", "/usr/bin", "/sbin", "/bin", "/usr/local/sbin", "/usr/local/bin");
+        if (ENV.PATH) {
+            dirs += ENV.PATH.split(":");
+        }
+        foreach string d in (dirs) {
+            string path = d + "/zic";
+            if (is_executable(path)) {
+                return path;
+            }
+        }
+    }
+
+    #! quotes a string as one word for the shell
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+
+    #! quotes the regular expression characters of a string
+    private static string quoteRegex(string str) {
+        string rv = "";
+        for (int i = 0; i < str.size(); ++i) {
+            string c = str[i];
+            rv += (c =~ /[\\^$.|?*+()\[\]{}]/ ? "\\" : "") + c;
+        }
+        return rv;
+    }
+
+    #! the seconds of 400 Gregorian years, after which the calendar repeats
+    const Cycle400 = 12622780800;
+
+    #! UTC
+    const Utc = new TimeZone(0);
+}

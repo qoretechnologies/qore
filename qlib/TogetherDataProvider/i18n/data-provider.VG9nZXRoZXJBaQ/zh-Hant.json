@@ -13679,49 +13679,17 @@
           "source": "Placement policy to use when scheduling the deployment.",
           "message": "安排部署時要使用的安放政策 。"
         },
-        "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.option.cGxhY2VtZW50.union.SGFzaERhdGFUeXBlOipERS5QbGFjZW1lbnRPbmVPZiMxZWIxNGI3YjI2MzMxNDhmNmNhNGQxZTg0NjUyNzhjY2Q0NWMyZDNjNDUxZmIwMTQ1NGRkNDI0MTE3YzdlZmVi.field.aW5saW5l.display_name": {
+        "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.option.cGxhY2VtZW50.union.SGFzaERhdGFUeXBlOipERS5QbGFjZW1lbnRPbmVPZiMyODZiZjNmOWZjZjlmYjVlNGYxMWVhNzdlNGUyZTkwZmNmYjBjMDk2NTVlNWUwNGMyOGMyODdiOWFjODFmYmYx.field.aW5saW5l.display_name": {
           "source": "Inline",
           "message": "內聯"
         },
-        "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.option.cGxhY2VtZW50.union.SGFzaERhdGFUeXBlOipERS5QbGFjZW1lbnRPbmVPZiMxZWIxNGI3YjI2MzMxNDhmNmNhNGQxZTg0NjUyNzhjY2Q0NWMyZDNjNDUxZmIwMTQ1NGRkNDI0MTE3YzdlZmVi.field.aW5saW5l.short_desc": {
+        "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.option.cGxhY2VtZW50.union.SGFzaERhdGFUeXBlOipERS5QbGFjZW1lbnRPbmVPZiMyODZiZjNmOWZjZjlmYjVlNGYxMWVhNzdlNGUyZTkwZmNmYjBjMDk2NTVlNWUwNGMyOGMyODdiOWFjODFmYmYx.field.aW5saW5l.short_desc": {
           "source": "Inline placement parameters evaluated at deploy time",
           "message": "在部署時評估的內嵌置放參數"
         },
-        "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.option.cGxhY2VtZW50.union.SGFzaERhdGFUeXBlOipERS5QbGFjZW1lbnRPbmVPZiMxZWIxNGI3YjI2MzMxNDhmNmNhNGQxZTg0NjUyNzhjY2Q0NWMyZDNjNDUxZmIwMTQ1NGRkNDI0MTE3YzdlZmVi.field.aW5saW5l.desc": {
+        "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.option.cGxhY2VtZW50.union.SGFzaERhdGFUeXBlOipERS5QbGFjZW1lbnRPbmVPZiMyODZiZjNmOWZjZjlmYjVlNGYxMWVhNzdlNGUyZTkwZmNmYjBjMDk2NTVlNWUwNGMyOGMyODdiOWFjODFmYmYx.field.aW5saW5l.desc": {
           "source": "Inline placement parameters evaluated at deploy time.",
           "message": "在部署時評估的內嵌置放參數。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpPcGVuQXBpM0hhc2hEYXRhVHlwZTppbmxpbmUjODQ0N2RlMjc4NjNhYjViZjAwMTIxNmU3YmRjNDY4NTVlMmVhMGU5YjQ1OThlMzNkMDE0Mjg5ZTE5MDA4NzM1OA.field.Y29uc3RyYWludA.display_name": {
-          "source": "Constraint",
-          "message": "約束"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpPcGVuQXBpM0hhc2hEYXRhVHlwZTppbmxpbmUjODQ0N2RlMjc4NjNhYjViZjAwMTIxNmU3YmRjNDY4NTVlMmVhMGU5YjQ1OThlMzNkMDE0Mjg5ZTE5MDA4NzM1OA.field.Y29uc3RyYWludA.short_desc": {
-          "source": "How strictly the regions list is enforced",
-          "message": "區域清單的強制執行嚴格程度"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpPcGVuQXBpM0hhc2hEYXRhVHlwZTppbmxpbmUjODQ0N2RlMjc4NjNhYjViZjAwMTIxNmU3YmRjNDY4NTVlMmVhMGU5YjQ1OThlMzNkMDE0Mjg5ZTE5MDA4NzM1OA.field.Y29uc3RyYWludA.desc": {
-          "source": "How strictly the regions list is enforced.",
-          "message": "區域清單的強制執行嚴格程度。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpPcGVuQXBpM0hhc2hEYXRhVHlwZTppbmxpbmUjODQ0N2RlMjc4NjNhYjViZjAwMTIxNmU3YmRjNDY4NTVlMmVhMGU5YjQ1OThlMzNkMDE0Mjg5ZTE5MDA4NzM1OA.field.Y29uc3RyYWludA.allowed-value.c3RyaW5nOkVORk9SQ0VNRU5UX1JFUVVJUkVE.display_name": {
-          "source": "Enforcement Required",
-          "message": "強制要求"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpPcGVuQXBpM0hhc2hEYXRhVHlwZTppbmxpbmUjODQ0N2RlMjc4NjNhYjViZjAwMTIxNmU3YmRjNDY4NTVlMmVhMGU5YjQ1OThlMzNkMDE0Mjg5ZTE5MDA4NzM1OA.field.Y29uc3RyYWludA.allowed-value.c3RyaW5nOkVORk9SQ0VNRU5UX1BSRUZFUlJFRA.display_name": {
-          "source": "Enforcement Preferred",
-          "message": "強制優先"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpPcGVuQXBpM0hhc2hEYXRhVHlwZTppbmxpbmUjODQ0N2RlMjc4NjNhYjViZjAwMTIxNmU3YmRjNDY4NTVlMmVhMGU5YjQ1OThlMzNkMDE0Mjg5ZTE5MDA4NzM1OA.field.cmVnaW9ucw.display_name": {
-          "source": "Regions",
-          "message": "地區"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpPcGVuQXBpM0hhc2hEYXRhVHlwZTppbmxpbmUjODQ0N2RlMjc4NjNhYjViZjAwMTIxNmU3YmRjNDY4NTVlMmVhMGU5YjQ1OThlMzNkMDE0Mjg5ZTE5MDA4NzM1OA.field.cmVnaW9ucw.short_desc": {
-          "source": "Regions where the deployment is allowed to run",
-          "message": "允許部署執行的地區"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpPcGVuQXBpM0hhc2hEYXRhVHlwZTppbmxpbmUjODQ0N2RlMjc4NjNhYjViZjAwMTIxNmU3YmRjNDY4NTVlMmVhMGU5YjQ1OThlMzNkMDE0Mjg5ZTE5MDA4NzM1OA.field.cmVnaW9ucw.desc": {
-          "source": "Regions where the deployment is allowed to run. Multiple regions allow best-effort replica spreading.",
-          "message": "允許部署執行的地區。可指定多個地區，以實現最佳努力的複本分散。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.option.cGxhY2VtZW50.union.SGFzaERhdGFUeXBlOipERS5QbGFjZW1lbnRPbmVPZiNiMGM3Zjg5MDNjNTFlMzhmNzg0MTE1MDZlZTU5M2JiZDhjMDA3M2M1NzdiMDg0ODBjZDIzYTZlMzcxMTA2NzVj.field.cHJvZmlsZQ.display_name": {
           "source": "Profile",
@@ -14771,38 +14739,6 @@
           "source": "Regression evaluation criteria. Mutually exclusive with thresholdCheck.",
           "message": "迴歸評估標準。與 thresholdCheck 互斥。"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOipyZWdyZXNzaW9uQ2hlY2sjNDlhZjIxMGZjMzIxZjc5NWI1YjZkNGY3Njk1ZTk3MDY4MzY5MjU0NDdiNmYwNmU5NmUwMDQ1NDY0NDBjNWUxOA.field.ZGlyZWN0aW9u.display_name": {
-          "source": "Direction",
-          "message": "方向"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOipyZWdyZXNzaW9uQ2hlY2sjNDlhZjIxMGZjMzIxZjc5NWI1YjZkNGY3Njk1ZTk3MDY4MzY5MjU0NDdiNmYwNmU5NmUwMDQ1NDY0NDBjNWUxOA.field.ZGlyZWN0aW9u.short_desc": {
-          "source": "Required direction that indicates whether higher or lower metric values are…",
-          "message": "必要方向，用於指示較高或較低的指標值是否……"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOipyZWdyZXNzaW9uQ2hlY2sjNDlhZjIxMGZjMzIxZjc5NWI1YjZkNGY3Njk1ZTk3MDY4MzY5MjU0NDdiNmYwNmU5NmUwMDQ1NDY0NDBjNWUxOA.field.ZGlyZWN0aW9u.desc": {
-          "source": "Required direction that indicates whether higher or lower metric values are worse.",
-          "message": "必要方向，用於指示較高或較低的指標值是否更差。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOipyZWdyZXNzaW9uQ2hlY2sjNDlhZjIxMGZjMzIxZjc5NWI1YjZkNGY3Njk1ZTk3MDY4MzY5MjU0NDdiNmYwNmU5NmUwMDQ1NDY0NDBjNWUxOA.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOlJFR1JFU1NJT05fRElSRUNUSU9OX0hJR0hFUl9JU19XT1JTRQ.display_name": {
-          "source": "Regression Direction Higher Is Worse",
-          "message": "迴歸方向：數值越高越差"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOipyZWdyZXNzaW9uQ2hlY2sjNDlhZjIxMGZjMzIxZjc5NWI1YjZkNGY3Njk1ZTk3MDY4MzY5MjU0NDdiNmYwNmU5NmUwMDQ1NDY0NDBjNWUxOA.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOlJFR1JFU1NJT05fRElSRUNUSU9OX0xPV0VSX0lTX1dPUlNF.display_name": {
-          "source": "Regression Direction Lower Is Worse",
-          "message": "迴歸方向：數值越低越差"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOipyZWdyZXNzaW9uQ2hlY2sjNDlhZjIxMGZjMzIxZjc5NWI1YjZkNGY3Njk1ZTk3MDY4MzY5MjU0NDdiNmYwNmU5NmUwMDQ1NDY0NDBjNWUxOA.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.display_name": {
-          "source": "Max Regression Percent",
-          "message": "最大回歸百分比"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOipyZWdyZXNzaW9uQ2hlY2sjNDlhZjIxMGZjMzIxZjc5NWI1YjZkNGY3Njk1ZTk3MDY4MzY5MjU0NDdiNmYwNmU5NmUwMDQ1NDY0NDBjNWUxOA.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.short_desc": {
-          "source": "Required maximum allowed regression percentage",
-          "message": "允許的最大回歸百分比"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOipyZWdyZXNzaW9uQ2hlY2sjNDlhZjIxMGZjMzIxZjc5NWI1YjZkNGY3Njk1ZTk3MDY4MzY5MjU0NDdiNmYwNmU5NmUwMDQ1NDY0NDBjNWUxOA.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.desc": {
-          "source": "Required maximum allowed regression percentage.",
-          "message": "允許的最大回歸百分比。"
-        },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yb2xsb3V0.option.bWV0cmljcw.field.c3RhdA.display_name": {
           "source": "Stat",
           "message": "Stat"
@@ -14842,46 +14778,6 @@
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yb2xsb3V0.option.bWV0cmljcw.field.dGhyZXNob2xkQ2hlY2s.desc": {
           "source": "Threshold evaluation criteria. Mutually exclusive with regressionCheck.",
           "message": "閾值評估標準。與 regressionCheck 互斥。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.b3BlcmF0b3I.display_name": {
-          "source": "Operator",
-          "message": "運運算元"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.b3BlcmF0b3I.short_desc": {
-          "source": "Required comparison operator applied to the target metric value",
-          "message": "應用於目標指標值的必要比較運算子"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.b3BlcmF0b3I.desc": {
-          "source": "Required comparison operator applied to the target metric value.",
-          "message": "應用於目標指標值的必要比較運算子。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9HVA.display_name": {
-          "source": "Threshold Operator Gt",
-          "message": "閾值運算子 GT"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9HVEU.display_name": {
-          "source": "Threshold Operator Gte",
-          "message": "閾值運算子 GTE"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9MVA.display_name": {
-          "source": "Threshold Operator Lt",
-          "message": "閾值運算子 LT"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9MVEU.display_name": {
-          "source": "Threshold Operator Lte",
-          "message": "閾值運算子 LTE"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.dmFsdWU.display_name": {
-          "source": "Value",
-          "message": "值"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.dmFsdWU.short_desc": {
-          "source": "Required numeric threshold value",
-          "message": "必要數值閾值"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.dmFsdWU.desc": {
-          "source": "Required numeric threshold value.",
-          "message": "必要數值閾值。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1yb2xsb3V0.option.bWV0cmljcw.field.d2luZG93.display_name": {
           "source": "Window",
@@ -15123,38 +15019,6 @@
           "source": "Regression evaluation criteria. Mutually exclusive with thresholdCheck.",
           "message": "迴歸評估標準。與 thresholdCheck 互斥。"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnJlZ3Jlc3Npb25DaGVjayM0OWFmMjEwZmMzMjFmNzk1YjViNmQ0Zjc2OTVlOTcwNjgzNjkyNTQ0N2I2ZjA2ZTk2ZTAwNDU0NjQ0MGM1ZTE4.field.ZGlyZWN0aW9u.display_name": {
-          "source": "Direction",
-          "message": "方向"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnJlZ3Jlc3Npb25DaGVjayM0OWFmMjEwZmMzMjFmNzk1YjViNmQ0Zjc2OTVlOTcwNjgzNjkyNTQ0N2I2ZjA2ZTk2ZTAwNDU0NjQ0MGM1ZTE4.field.ZGlyZWN0aW9u.short_desc": {
-          "source": "Required direction that indicates whether higher or lower metric values are…",
-          "message": "必要方向，用於指示較高或較低的指標值是否……"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnJlZ3Jlc3Npb25DaGVjayM0OWFmMjEwZmMzMjFmNzk1YjViNmQ0Zjc2OTVlOTcwNjgzNjkyNTQ0N2I2ZjA2ZTk2ZTAwNDU0NjQ0MGM1ZTE4.field.ZGlyZWN0aW9u.desc": {
-          "source": "Required direction that indicates whether higher or lower metric values are worse.",
-          "message": "必要方向，用於指示較高或較低的指標值是否更差。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnJlZ3Jlc3Npb25DaGVjayM0OWFmMjEwZmMzMjFmNzk1YjViNmQ0Zjc2OTVlOTcwNjgzNjkyNTQ0N2I2ZjA2ZTk2ZTAwNDU0NjQ0MGM1ZTE4.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOlJFR1JFU1NJT05fRElSRUNUSU9OX0hJR0hFUl9JU19XT1JTRQ.display_name": {
-          "source": "Regression Direction Higher Is Worse",
-          "message": "迴歸方向：數值越高越差"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnJlZ3Jlc3Npb25DaGVjayM0OWFmMjEwZmMzMjFmNzk1YjViNmQ0Zjc2OTVlOTcwNjgzNjkyNTQ0N2I2ZjA2ZTk2ZTAwNDU0NjQ0MGM1ZTE4.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOlJFR1JFU1NJT05fRElSRUNUSU9OX0xPV0VSX0lTX1dPUlNF.display_name": {
-          "source": "Regression Direction Lower Is Worse",
-          "message": "迴歸方向：數值越低越差"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnJlZ3Jlc3Npb25DaGVjayM0OWFmMjEwZmMzMjFmNzk1YjViNmQ0Zjc2OTVlOTcwNjgzNjkyNTQ0N2I2ZjA2ZTk2ZTAwNDU0NjQ0MGM1ZTE4.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.display_name": {
-          "source": "Max Regression Percent",
-          "message": "最大回歸百分比"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnJlZ3Jlc3Npb25DaGVjayM0OWFmMjEwZmMzMjFmNzk1YjViNmQ0Zjc2OTVlOTcwNjgzNjkyNTQ0N2I2ZjA2ZTk2ZTAwNDU0NjQ0MGM1ZTE4.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.short_desc": {
-          "source": "Required maximum allowed regression percentage",
-          "message": "允許的最大回歸百分比"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnJlZ3Jlc3Npb25DaGVjayM0OWFmMjEwZmMzMjFmNzk1YjViNmQ0Zjc2OTVlOTcwNjgzNjkyNTQ0N2I2ZjA2ZTk2ZTAwNDU0NjQ0MGM1ZTE4.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.desc": {
-          "source": "Required maximum allowed regression percentage.",
-          "message": "允許的最大回歸百分比。"
-        },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByZXZpZXctcm9sbG91dC1kZWZhdWx0cw.option.bWV0cmljcw.field.c3RhdA.display_name": {
           "source": "Stat",
           "message": "Stat"
@@ -15194,46 +15058,6 @@
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByZXZpZXctcm9sbG91dC1kZWZhdWx0cw.option.bWV0cmljcw.field.dGhyZXNob2xkQ2hlY2s.desc": {
           "source": "Threshold evaluation criteria. Mutually exclusive with regressionCheck.",
           "message": "閾值評估標準。與 regressionCheck 互斥。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.b3BlcmF0b3I.display_name": {
-          "source": "Operator",
-          "message": "運運算元"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.b3BlcmF0b3I.short_desc": {
-          "source": "Required comparison operator applied to the target metric value",
-          "message": "應用於目標指標值的必要比較運算子"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.b3BlcmF0b3I.desc": {
-          "source": "Required comparison operator applied to the target metric value.",
-          "message": "應用於目標指標值的必要比較運算子。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9HVA.display_name": {
-          "source": "Threshold Operator Gt",
-          "message": "閾值運算子 GT"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9HVEU.display_name": {
-          "source": "Threshold Operator Gte",
-          "message": "閾值運算子 GTE"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9MVA.display_name": {
-          "source": "Threshold Operator Lt",
-          "message": "閾值運算子 LT"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9MVEU.display_name": {
-          "source": "Threshold Operator Lte",
-          "message": "閾值運算子 LTE"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.dmFsdWU.display_name": {
-          "source": "Value",
-          "message": "值"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.dmFsdWU.short_desc": {
-          "source": "Required numeric threshold value",
-          "message": "必要數值閾值"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.dmFsdWU.desc": {
-          "source": "Required numeric threshold value.",
-          "message": "必要數值閾值。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXByZXZpZXctcm9sbG91dC1kZWZhdWx0cw.option.bWV0cmljcw.field.d2luZG93.display_name": {
           "source": "Window",
@@ -16279,161 +16103,53 @@
           "source": "Endpoint-level source that samples traffic at the API gateway.",
           "message": "端點層級來源，於 API 網關採樣流量。"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6ZW5kcG9pbnQjM2I5MmI5MWRhZGI5YzE3MzUwNzE4NTFlNTk0NDU0YmFhMjc3ZjRkYWQyZDYwOTBkOGRhMGQ3NzFmM2ZkZjgwMw.field.c2FtcGxpbmc.display_name": {
-          "source": "Sampling",
-          "message": "取樣"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6ZW5kcG9pbnQjM2I5MmI5MWRhZGI5YzE3MzUwNzE4NTFlNTk0NDU0YmFhMjc3ZjRkYWQyZDYwOTBkOGRhMGQ3NzFmM2ZkZjgwMw.field.c2FtcGxpbmc.short_desc": {
-          "source": "Sampling strategy applied to endpoint traffic",
-          "message": "套用至端點流量的取樣策略"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6ZW5kcG9pbnQjM2I5MmI5MWRhZGI5YzE3MzUwNzE4NTFlNTk0NDU0YmFhMjc3ZjRkYWQyZDYwOTBkOGRhMGQ3NzFmM2ZkZjgwMw.field.c2FtcGxpbmc.desc": {
-          "source": "Sampling strategy applied to endpoint traffic.",
-          "message": "套用至端點流量的取樣策略。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2JkNzZkMzljZTRmYjJmN2JlMDhlNjgyNTAyNTkxYmY1MjU1ZWNmMjQwNDA3NWFkOTQxMzNlODhhNzNhYjZkNmQ.field.dW5pZm9ybQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2YzZmQ4MzA3ODFkNDEzZDNiMTRhMjQ3MDQwZmRhNjJhMmUyNTc2M2Y5OGEwMzI4MjQ1ZDAzNzJhMzM4ZTg2YTU.field.dW5pZm9ybQ.display_name": {
           "source": "Uniform",
           "message": "統一"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2JkNzZkMzljZTRmYjJmN2JlMDhlNjgyNTAyNTkxYmY1MjU1ZWNmMjQwNDA3NWFkOTQxMzNlODhhNzNhYjZkNmQ.field.dW5pZm9ybQ.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2YzZmQ4MzA3ODFkNDEzZDNiMTRhMjQ3MDQwZmRhNjJhMmUyNTc2M2Y5OGEwMzI4MjQ1ZDAzNzJhMzM4ZTg2YTU.field.dW5pZm9ybQ.short_desc": {
           "source": "Fixed random request sampling",
           "message": "固定隨機請求取樣"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2JkNzZkMzljZTRmYjJmN2JlMDhlNjgyNTAyNTkxYmY1MjU1ZWNmMjQwNDA3NWFkOTQxMzNlODhhNzNhYjZkNmQ.field.dW5pZm9ybQ.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2YzZmQ4MzA3ODFkNDEzZDNiMTRhMjQ3MDQwZmRhNjJhMmUyNTc2M2Y5OGEwMzI4MjQ1ZDAzNzJhMzM4ZTg2YTU.field.dW5pZm9ybQ.desc": {
           "source": "Fixed random request sampling.",
           "message": "固定隨機請求取樣。"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6dW5pZm9ybSM3NDg2YTM4YzliZDAxZjZkMzVmMjhkYTY3ZjBmOThlMTBmMGU4MTFkOTNlM2Q3NGM5MmRmOGM0ZTBkYmMzM2Vi.field.cmF0ZQ.display_name": {
-          "source": "Rate",
-          "message": "費率"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6dW5pZm9ybSM3NDg2YTM4YzliZDAxZjZkMzVmMjhkYTY3ZjBmOThlMTBmMGU4MTFkOTNlM2Q3NGM5MmRmOGM0ZTBkYmMzM2Vi.field.cmF0ZQ.short_desc": {
-          "source": "Required fraction of requests to sample, from 0.0 to 1.0",
-          "message": "要採樣的請求比例，範圍為 0.0 到 1.0"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6dW5pZm9ybSM3NDg2YTM4YzliZDAxZjZkMzVmMjhkYTY3ZjBmOThlMTBmMGU4MTFkOTNlM2Q3NGM5MmRmOGM0ZTBkYmMzM2Vi.field.cmF0ZQ.desc": {
-          "source": "Required fraction of requests to sample, from 0.0 to 1.0.",
-          "message": "要採樣的請求比例，範圍為 0.0 到 1.0。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2NlNWU0NTIyNmJhYTU1MWFiMzI2MzRhMjM0NWQzMzg2ZDM0Zjg1MWRhODYzMjU0ZmQ5ZjAwYzRlODVjN2IyMWI.field.a2V5QmFzZWQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU1MTBkMzQ2YmEyZmQ2M2I2NDM5ZjRmZWUwZDdkZGE2MmFiNWYyMjI5M2UyZmU2NjQxMDhhNmIzYTAzN2FiY2M.field.a2V5QmFzZWQ.display_name": {
           "source": "Key Based",
           "message": "基於金鑰"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2NlNWU0NTIyNmJhYTU1MWFiMzI2MzRhMjM0NWQzMzg2ZDM0Zjg1MWRhODYzMjU0ZmQ5ZjAwYzRlODVjN2IyMWI.field.a2V5QmFzZWQ.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU1MTBkMzQ2YmEyZmQ2M2I2NDM5ZjRmZWUwZDdkZGE2MmFiNWYyMjI5M2UyZmU2NjQxMDhhNmIzYTAzN2FiY2M.field.a2V5QmFzZWQ.short_desc": {
           "source": "Fixed sampling by a sticky request key",
           "message": "透過黏性請求金鑰進行固定取樣"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2NlNWU0NTIyNmJhYTU1MWFiMzI2MzRhMjM0NWQzMzg2ZDM0Zjg1MWRhODYzMjU0ZmQ5ZjAwYzRlODVjN2IyMWI.field.a2V5QmFzZWQ.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU1MTBkMzQ2YmEyZmQ2M2I2NDM5ZjRmZWUwZDdkZGE2MmFiNWYyMjI5M2UyZmU2NjQxMDhhNmIzYTAzN2FiY2M.field.a2V5QmFzZWQ.desc": {
           "source": "Fixed sampling by a sticky request key.",
           "message": "透過黏性請求金鑰進行固定取樣。"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.a2V5.display_name": {
-          "source": "Key",
-          "message": "鍵"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.a2V5.short_desc": {
-          "source": "Required request-body field used as the sticky sampling key",
-          "message": "用作黏性取樣金鑰的必要請求主體欄位"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.a2V5.desc": {
-          "source": "Required request-body field used as the sticky sampling key.",
-          "message": "用作黏性取樣金鑰的必要請求主體欄位。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.cmF0ZQ.display_name": {
-          "source": "Rate",
-          "message": "費率"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.cmF0ZQ.short_desc": {
-          "source": "Required fraction of distinct key values to sample, from 0.0 to 1.0",
-          "message": "要取樣的相異金鑰值的必要比例，範圍為 0.0 到 1.0"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.cmF0ZQ.desc": {
-          "source": "Required fraction of distinct key values to sample, from 0.0 to 1.0.",
-          "message": "要取樣的相異金鑰值的必要比例，範圍為 0.0 到 1.0。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2MzZGM5MTk2MzZkZmIwYjU4YjkzNGRiODYzYjhkNDI1MjFhZTFlZTYxODhhZDQ0YzQ3N2UwZTI4MzAxNTc2OGM.field.YWRhcHRpdmVVbmlmb3Jt.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU3MjZjZWNiMTRmMDA3NWQ4YjVmODBhZWRmYjE0OTAxYTJhZTRhZDAyYTZjZWQ0ZTVmN2VjYzkwZjlhYjFiMjE.field.YWRhcHRpdmVVbmlmb3Jt.display_name": {
           "source": "Adaptive Uniform",
           "message": "適應性均勻"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2MzZGM5MTk2MzZkZmIwYjU4YjkzNGRiODYzYjhkNDI1MjFhZTFlZTYxODhhZDQ0YzQ3N2UwZTI4MzAxNTc2OGM.field.YWRhcHRpdmVVbmlmb3Jt.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU3MjZjZWNiMTRmMDA3NWQ4YjVmODBhZWRmYjE0OTAxYTJhZTRhZDAyYTZjZWQ0ZTVmN2VjYzkwZjlhYjFiMjE.field.YWRhcHRpdmVVbmlmb3Jt.short_desc": {
           "source": "Adaptive random sampling toward a target QPS",
           "message": "針對目標每秒查詢次數 (QPS) 進行適應性隨機取樣"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2MzZGM5MTk2MzZkZmIwYjU4YjkzNGRiODYzYjhkNDI1MjFhZTFlZTYxODhhZDQ0YzQ3N2UwZTI4MzAxNTc2OGM.field.YWRhcHRpdmVVbmlmb3Jt.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU3MjZjZWNiMTRmMDA3NWQ4YjVmODBhZWRmYjE0OTAxYTJhZTRhZDAyYTZjZWQ0ZTVmN2VjYzkwZjlhYjFiMjE.field.YWRhcHRpdmVVbmlmb3Jt.desc": {
           "source": "Adaptive random sampling toward a target QPS.",
           "message": "針對目標每秒查詢次數 (QPS) 進行適應性隨機取樣。"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.dGFyZ2V0UXBz.display_name": {
-          "source": "Target Qps",
-          "message": "目標 QPS"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.dGFyZ2V0UXBz.short_desc": {
-          "source": "Required per-gateway-replica target QPS for adaptive sampling",
-          "message": "適應性取樣所需的每網關副本目標 QPS"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.dGFyZ2V0UXBz.desc": {
-          "source": "Required per-gateway-replica target QPS for adaptive sampling.",
-          "message": "適應性取樣所需的每網關副本目標 QPS。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.d2luZG93.display_name": {
-          "source": "Window",
-          "message": "視窗"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.d2luZG93.short_desc": {
-          "source": "Optional sliding window for QPS observation",
-          "message": "可選的 QPS 觀察滑動視窗"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.d2luZG93.desc": {
-          "source": "Optional sliding window for QPS observation. Defaults to 60s and must not be negative.",
-          "message": "可選的 QPS 觀察滑動視窗。預設為 60 秒，且不得為負數。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzFjZWNlMmQ1MDBhOGY2MThkY2Q4MWYyNTE3ZjI5YjJhMGY3YTAyOTQwNWRjMGY0ZGQ4YjI2OTZkNDIyYTBiNGQ.field.YWRhcHRpdmVLZXlCYXNlZA.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2ZlYTA3NTg4NTY0MDhlMWFjMTM4YTY1MjU4MDkyMDUwYjE4YWMzYjg2MjdlZjJmZjFmYmVmNDRlZDhiODY2MGI.field.YWRhcHRpdmVLZXlCYXNlZA.display_name": {
           "source": "Adaptive Key Based",
           "message": "適應性金鑰基礎"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzFjZWNlMmQ1MDBhOGY2MThkY2Q4MWYyNTE3ZjI5YjJhMGY3YTAyOTQwNWRjMGY0ZGQ4YjI2OTZkNDIyYTBiNGQ.field.YWRhcHRpdmVLZXlCYXNlZA.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2ZlYTA3NTg4NTY0MDhlMWFjMTM4YTY1MjU4MDkyMDUwYjE4YWMzYjg2MjdlZjJmZjFmYmVmNDRlZDhiODY2MGI.field.YWRhcHRpdmVLZXlCYXNlZA.short_desc": {
           "source": "Adaptive sticky-key sampling toward a target QPS",
           "message": "針對目標每秒查詢次數 (QPS) 進行適應性黏性金鑰取樣"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzFjZWNlMmQ1MDBhOGY2MThkY2Q4MWYyNTE3ZjI5YjJhMGY3YTAyOTQwNWRjMGY0ZGQ4YjI2OTZkNDIyYTBiNGQ.field.YWRhcHRpdmVLZXlCYXNlZA.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2ZlYTA3NTg4NTY0MDhlMWFjMTM4YTY1MjU4MDkyMDUwYjE4YWMzYjg2MjdlZjJmZjFmYmVmNDRlZDhiODY2MGI.field.YWRhcHRpdmVLZXlCYXNlZA.desc": {
           "source": "Adaptive sticky-key sampling toward a target QPS.",
           "message": "針對目標每秒查詢次數 (QPS) 進行適應性黏性金鑰取樣。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.a2V5.display_name": {
-          "source": "Key",
-          "message": "鍵"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.a2V5.short_desc": {
-          "source": "Required request-body field used as the sticky sampling key",
-          "message": "用作黏性取樣金鑰的必要請求主體欄位"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.a2V5.desc": {
-          "source": "Required request-body field used as the sticky sampling key.",
-          "message": "用作黏性取樣金鑰的必要請求主體欄位。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.dGFyZ2V0UXBz.display_name": {
-          "source": "Target Qps",
-          "message": "目標 QPS"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.dGFyZ2V0UXBz.short_desc": {
-          "source": "Required per-gateway-replica target QPS for adaptive sampling",
-          "message": "適應性取樣所需的每網關副本目標 QPS"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.dGFyZ2V0UXBz.desc": {
-          "source": "Required per-gateway-replica target QPS for adaptive sampling.",
-          "message": "適應性取樣所需的每網關副本目標 QPS。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.d2luZG93.display_name": {
-          "source": "Window",
-          "message": "視窗"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.d2luZG93.short_desc": {
-          "source": "Optional sliding window for QPS observation",
-          "message": "可選的 QPS 觀察滑動視窗"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.d2luZG93.desc": {
-          "source": "Optional sliding window for QPS observation. Defaults to 60s and must not be negative.",
-          "message": "可選的 QPS 觀察滑動視窗。預設為 60 秒，且不得為負數。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1zaGFkb3ctZXhwZXJpbWVudA.option.dGFyZ2V0cw.display_name": {
           "source": "Targets",
@@ -16567,161 +16283,53 @@
           "source": "Endpoint-level source that samples traffic at the API gateway.",
           "message": "端點層級來源，於 API 網關採樣流量。"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6ZW5kcG9pbnQjM2I5MmI5MWRhZGI5YzE3MzUwNzE4NTFlNTk0NDU0YmFhMjc3ZjRkYWQyZDYwOTBkOGRhMGQ3NzFmM2ZkZjgwMw.field.c2FtcGxpbmc.display_name": {
-          "source": "Sampling",
-          "message": "取樣"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6ZW5kcG9pbnQjM2I5MmI5MWRhZGI5YzE3MzUwNzE4NTFlNTk0NDU0YmFhMjc3ZjRkYWQyZDYwOTBkOGRhMGQ3NzFmM2ZkZjgwMw.field.c2FtcGxpbmc.short_desc": {
-          "source": "Sampling strategy applied to endpoint traffic",
-          "message": "套用至端點流量的取樣策略"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6ZW5kcG9pbnQjM2I5MmI5MWRhZGI5YzE3MzUwNzE4NTFlNTk0NDU0YmFhMjc3ZjRkYWQyZDYwOTBkOGRhMGQ3NzFmM2ZkZjgwMw.field.c2FtcGxpbmc.desc": {
-          "source": "Sampling strategy applied to endpoint traffic.",
-          "message": "套用至端點流量的取樣策略。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2JkNzZkMzljZTRmYjJmN2JlMDhlNjgyNTAyNTkxYmY1MjU1ZWNmMjQwNDA3NWFkOTQxMzNlODhhNzNhYjZkNmQ.field.dW5pZm9ybQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2YzZmQ4MzA3ODFkNDEzZDNiMTRhMjQ3MDQwZmRhNjJhMmUyNTc2M2Y5OGEwMzI4MjQ1ZDAzNzJhMzM4ZTg2YTU.field.dW5pZm9ybQ.display_name": {
           "source": "Uniform",
           "message": "統一"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2JkNzZkMzljZTRmYjJmN2JlMDhlNjgyNTAyNTkxYmY1MjU1ZWNmMjQwNDA3NWFkOTQxMzNlODhhNzNhYjZkNmQ.field.dW5pZm9ybQ.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2YzZmQ4MzA3ODFkNDEzZDNiMTRhMjQ3MDQwZmRhNjJhMmUyNTc2M2Y5OGEwMzI4MjQ1ZDAzNzJhMzM4ZTg2YTU.field.dW5pZm9ybQ.short_desc": {
           "source": "Fixed random request sampling",
           "message": "固定隨機請求取樣"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2JkNzZkMzljZTRmYjJmN2JlMDhlNjgyNTAyNTkxYmY1MjU1ZWNmMjQwNDA3NWFkOTQxMzNlODhhNzNhYjZkNmQ.field.dW5pZm9ybQ.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2YzZmQ4MzA3ODFkNDEzZDNiMTRhMjQ3MDQwZmRhNjJhMmUyNTc2M2Y5OGEwMzI4MjQ1ZDAzNzJhMzM4ZTg2YTU.field.dW5pZm9ybQ.desc": {
           "source": "Fixed random request sampling.",
           "message": "固定隨機請求取樣。"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6dW5pZm9ybSM3NDg2YTM4YzliZDAxZjZkMzVmMjhkYTY3ZjBmOThlMTBmMGU4MTFkOTNlM2Q3NGM5MmRmOGM0ZTBkYmMzM2Vi.field.cmF0ZQ.display_name": {
-          "source": "Rate",
-          "message": "費率"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6dW5pZm9ybSM3NDg2YTM4YzliZDAxZjZkMzVmMjhkYTY3ZjBmOThlMTBmMGU4MTFkOTNlM2Q3NGM5MmRmOGM0ZTBkYmMzM2Vi.field.cmF0ZQ.short_desc": {
-          "source": "Required fraction of requests to sample, from 0.0 to 1.0",
-          "message": "要採樣的請求比例，範圍為 0.0 到 1.0"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6dW5pZm9ybSM3NDg2YTM4YzliZDAxZjZkMzVmMjhkYTY3ZjBmOThlMTBmMGU4MTFkOTNlM2Q3NGM5MmRmOGM0ZTBkYmMzM2Vi.field.cmF0ZQ.desc": {
-          "source": "Required fraction of requests to sample, from 0.0 to 1.0.",
-          "message": "要採樣的請求比例，範圍為 0.0 到 1.0。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2NlNWU0NTIyNmJhYTU1MWFiMzI2MzRhMjM0NWQzMzg2ZDM0Zjg1MWRhODYzMjU0ZmQ5ZjAwYzRlODVjN2IyMWI.field.a2V5QmFzZWQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU1MTBkMzQ2YmEyZmQ2M2I2NDM5ZjRmZWUwZDdkZGE2MmFiNWYyMjI5M2UyZmU2NjQxMDhhNmIzYTAzN2FiY2M.field.a2V5QmFzZWQ.display_name": {
           "source": "Key Based",
           "message": "基於金鑰"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2NlNWU0NTIyNmJhYTU1MWFiMzI2MzRhMjM0NWQzMzg2ZDM0Zjg1MWRhODYzMjU0ZmQ5ZjAwYzRlODVjN2IyMWI.field.a2V5QmFzZWQ.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU1MTBkMzQ2YmEyZmQ2M2I2NDM5ZjRmZWUwZDdkZGE2MmFiNWYyMjI5M2UyZmU2NjQxMDhhNmIzYTAzN2FiY2M.field.a2V5QmFzZWQ.short_desc": {
           "source": "Fixed sampling by a sticky request key",
           "message": "透過黏性請求金鑰進行固定取樣"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2NlNWU0NTIyNmJhYTU1MWFiMzI2MzRhMjM0NWQzMzg2ZDM0Zjg1MWRhODYzMjU0ZmQ5ZjAwYzRlODVjN2IyMWI.field.a2V5QmFzZWQ.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU1MTBkMzQ2YmEyZmQ2M2I2NDM5ZjRmZWUwZDdkZGE2MmFiNWYyMjI5M2UyZmU2NjQxMDhhNmIzYTAzN2FiY2M.field.a2V5QmFzZWQ.desc": {
           "source": "Fixed sampling by a sticky request key.",
           "message": "透過黏性請求金鑰進行固定取樣。"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.a2V5.display_name": {
-          "source": "Key",
-          "message": "鍵"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.a2V5.short_desc": {
-          "source": "Required request-body field used as the sticky sampling key",
-          "message": "用作黏性取樣金鑰的必要請求主體欄位"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.a2V5.desc": {
-          "source": "Required request-body field used as the sticky sampling key.",
-          "message": "用作黏性取樣金鑰的必要請求主體欄位。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.cmF0ZQ.display_name": {
-          "source": "Rate",
-          "message": "費率"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.cmF0ZQ.short_desc": {
-          "source": "Required fraction of distinct key values to sample, from 0.0 to 1.0",
-          "message": "要取樣的相異金鑰值的必要比例，範圍為 0.0 到 1.0"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.cmF0ZQ.desc": {
-          "source": "Required fraction of distinct key values to sample, from 0.0 to 1.0.",
-          "message": "要取樣的相異金鑰值的必要比例，範圍為 0.0 到 1.0。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2MzZGM5MTk2MzZkZmIwYjU4YjkzNGRiODYzYjhkNDI1MjFhZTFlZTYxODhhZDQ0YzQ3N2UwZTI4MzAxNTc2OGM.field.YWRhcHRpdmVVbmlmb3Jt.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU3MjZjZWNiMTRmMDA3NWQ4YjVmODBhZWRmYjE0OTAxYTJhZTRhZDAyYTZjZWQ0ZTVmN2VjYzkwZjlhYjFiMjE.field.YWRhcHRpdmVVbmlmb3Jt.display_name": {
           "source": "Adaptive Uniform",
           "message": "適應性均勻"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2MzZGM5MTk2MzZkZmIwYjU4YjkzNGRiODYzYjhkNDI1MjFhZTFlZTYxODhhZDQ0YzQ3N2UwZTI4MzAxNTc2OGM.field.YWRhcHRpdmVVbmlmb3Jt.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU3MjZjZWNiMTRmMDA3NWQ4YjVmODBhZWRmYjE0OTAxYTJhZTRhZDAyYTZjZWQ0ZTVmN2VjYzkwZjlhYjFiMjE.field.YWRhcHRpdmVVbmlmb3Jt.short_desc": {
           "source": "Adaptive random sampling toward a target QPS",
           "message": "針對目標每秒查詢次數 (QPS) 進行適應性隨機取樣"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2MzZGM5MTk2MzZkZmIwYjU4YjkzNGRiODYzYjhkNDI1MjFhZTFlZTYxODhhZDQ0YzQ3N2UwZTI4MzAxNTc2OGM.field.YWRhcHRpdmVVbmlmb3Jt.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU3MjZjZWNiMTRmMDA3NWQ4YjVmODBhZWRmYjE0OTAxYTJhZTRhZDAyYTZjZWQ0ZTVmN2VjYzkwZjlhYjFiMjE.field.YWRhcHRpdmVVbmlmb3Jt.desc": {
           "source": "Adaptive random sampling toward a target QPS.",
           "message": "針對目標每秒查詢次數 (QPS) 進行適應性隨機取樣。"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.dGFyZ2V0UXBz.display_name": {
-          "source": "Target Qps",
-          "message": "目標 QPS"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.dGFyZ2V0UXBz.short_desc": {
-          "source": "Required per-gateway-replica target QPS for adaptive sampling",
-          "message": "適應性取樣所需的每網關副本目標 QPS"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.dGFyZ2V0UXBz.desc": {
-          "source": "Required per-gateway-replica target QPS for adaptive sampling.",
-          "message": "適應性取樣所需的每網關副本目標 QPS。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.d2luZG93.display_name": {
-          "source": "Window",
-          "message": "視窗"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.d2luZG93.short_desc": {
-          "source": "Optional sliding window for QPS observation",
-          "message": "可選的 QPS 觀察滑動視窗"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.d2luZG93.desc": {
-          "source": "Optional sliding window for QPS observation. Defaults to 60s and must not be negative.",
-          "message": "可選的 QPS 觀察滑動視窗。預設為 60 秒，且不得為負數。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzFjZWNlMmQ1MDBhOGY2MThkY2Q4MWYyNTE3ZjI5YjJhMGY3YTAyOTQwNWRjMGY0ZGQ4YjI2OTZkNDIyYTBiNGQ.field.YWRhcHRpdmVLZXlCYXNlZA.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2ZlYTA3NTg4NTY0MDhlMWFjMTM4YTY1MjU4MDkyMDUwYjE4YWMzYjg2MjdlZjJmZjFmYmVmNDRlZDhiODY2MGI.field.YWRhcHRpdmVLZXlCYXNlZA.display_name": {
           "source": "Adaptive Key Based",
           "message": "適應性金鑰基礎"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzFjZWNlMmQ1MDBhOGY2MThkY2Q4MWYyNTE3ZjI5YjJhMGY3YTAyOTQwNWRjMGY0ZGQ4YjI2OTZkNDIyYTBiNGQ.field.YWRhcHRpdmVLZXlCYXNlZA.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2ZlYTA3NTg4NTY0MDhlMWFjMTM4YTY1MjU4MDkyMDUwYjE4YWMzYjg2MjdlZjJmZjFmYmVmNDRlZDhiODY2MGI.field.YWRhcHRpdmVLZXlCYXNlZA.short_desc": {
           "source": "Adaptive sticky-key sampling toward a target QPS",
           "message": "針對目標每秒查詢次數 (QPS) 進行適應性黏性金鑰取樣"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzFjZWNlMmQ1MDBhOGY2MThkY2Q4MWYyNTE3ZjI5YjJhMGY3YTAyOTQwNWRjMGY0ZGQ4YjI2OTZkNDIyYTBiNGQ.field.YWRhcHRpdmVLZXlCYXNlZA.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2ZlYTA3NTg4NTY0MDhlMWFjMTM4YTY1MjU4MDkyMDUwYjE4YWMzYjg2MjdlZjJmZjFmYmVmNDRlZDhiODY2MGI.field.YWRhcHRpdmVLZXlCYXNlZA.desc": {
           "source": "Adaptive sticky-key sampling toward a target QPS.",
           "message": "針對目標每秒查詢次數 (QPS) 進行適應性黏性金鑰取樣。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.a2V5.display_name": {
-          "source": "Key",
-          "message": "鍵"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.a2V5.short_desc": {
-          "source": "Required request-body field used as the sticky sampling key",
-          "message": "用作黏性取樣金鑰的必要請求主體欄位"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.a2V5.desc": {
-          "source": "Required request-body field used as the sticky sampling key.",
-          "message": "用作黏性取樣金鑰的必要請求主體欄位。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.dGFyZ2V0UXBz.display_name": {
-          "source": "Target Qps",
-          "message": "目標 QPS"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.dGFyZ2V0UXBz.short_desc": {
-          "source": "Required per-gateway-replica target QPS for adaptive sampling",
-          "message": "適應性取樣所需的每網關副本目標 QPS"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.dGFyZ2V0UXBz.desc": {
-          "source": "Required per-gateway-replica target QPS for adaptive sampling.",
-          "message": "適應性取樣所需的每網關副本目標 QPS。"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.d2luZG93.display_name": {
-          "source": "Window",
-          "message": "視窗"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.d2luZG93.short_desc": {
-          "source": "Optional sliding window for QPS observation",
-          "message": "可選的 QPS 觀察滑動視窗"
-        },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.d2luZG93.desc": {
-          "source": "Optional sliding window for QPS observation. Defaults to 60s and must not be negative.",
-          "message": "可選的 QPS 觀察滑動視窗。預設為 60 秒，且不得為負數。"
         },
         "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLXVwZGF0ZS1zaGFkb3ctZXhwZXJpbWVudA.option.ZXRhZw.display_name": {
           "source": "Etag",
@@ -18878,6 +18486,398 @@
         "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtdmlkZW8.option.cmVmZXJlbmNlX2ltYWdlcw.desc": {
           "source": "Deprecated: use media.reference_images instead. Unlike frame_images which constrain specific timeline positions, reference images guide the general appearance that should appear consistently across the video.",
           "message": "荒廢:使用媒體。reference_images 相反。 不像 frame_images 參考影像導導導導導導導導導導導,"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpIYXNoRGF0YVR5cGU6REUuSW5saW5lUGxhY2VtZW50I2VmOGViM2I3YTRjMjAxOWMzYTFlMjZiMDk1NGU0MDQ4YmViODYxODU5YjYxY2IxZWM5ODM1NWExYzI5ZjZjOWY.field.Y29uc3RyYWludA.display_name": {
+          "source": "Constraint",
+          "message": "約束"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpIYXNoRGF0YVR5cGU6REUuSW5saW5lUGxhY2VtZW50I2VmOGViM2I3YTRjMjAxOWMzYTFlMjZiMDk1NGU0MDQ4YmViODYxODU5YjYxY2IxZWM5ODM1NWExYzI5ZjZjOWY.field.Y29uc3RyYWludA.short_desc": {
+          "source": "How strictly the regions list is enforced",
+          "message": "區域清單的強制執行嚴格程度"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpIYXNoRGF0YVR5cGU6REUuSW5saW5lUGxhY2VtZW50I2VmOGViM2I3YTRjMjAxOWMzYTFlMjZiMDk1NGU0MDQ4YmViODYxODU5YjYxY2IxZWM5ODM1NWExYzI5ZjZjOWY.field.Y29uc3RyYWludA.desc": {
+          "source": "How strictly the regions list is enforced.",
+          "message": "區域清單的強制執行嚴格程度。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpIYXNoRGF0YVR5cGU6REUuSW5saW5lUGxhY2VtZW50I2VmOGViM2I3YTRjMjAxOWMzYTFlMjZiMDk1NGU0MDQ4YmViODYxODU5YjYxY2IxZWM5ODM1NWExYzI5ZjZjOWY.field.Y29uc3RyYWludA.allowed-value.c3RyaW5nOkVORk9SQ0VNRU5UX1JFUVVJUkVE.display_name": {
+          "source": "Enforcement Required",
+          "message": "強制要求"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpIYXNoRGF0YVR5cGU6REUuSW5saW5lUGxhY2VtZW50I2VmOGViM2I3YTRjMjAxOWMzYTFlMjZiMDk1NGU0MDQ4YmViODYxODU5YjYxY2IxZWM5ODM1NWExYzI5ZjZjOWY.field.Y29uc3RyYWludA.allowed-value.c3RyaW5nOkVORk9SQ0VNRU5UX1BSRUZFUlJFRA.display_name": {
+          "source": "Enforcement Preferred",
+          "message": "強制優先"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpIYXNoRGF0YVR5cGU6REUuSW5saW5lUGxhY2VtZW50I2VmOGViM2I3YTRjMjAxOWMzYTFlMjZiMDk1NGU0MDQ4YmViODYxODU5YjYxY2IxZWM5ODM1NWExYzI5ZjZjOWY.field.cmVnaW9ucw.display_name": {
+          "source": "Regions",
+          "message": "地區"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpIYXNoRGF0YVR5cGU6REUuSW5saW5lUGxhY2VtZW50I2VmOGViM2I3YTRjMjAxOWMzYTFlMjZiMDk1NGU0MDQ4YmViODYxODU5YjYxY2IxZWM5ODM1NWExYzI5ZjZjOWY.field.cmVnaW9ucw.short_desc": {
+          "source": "Regions where the deployment is allowed to run",
+          "message": "允許部署執行的地區"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpIYXNoRGF0YVR5cGU6REUuSW5saW5lUGxhY2VtZW50I2VmOGViM2I3YTRjMjAxOWMzYTFlMjZiMDk1NGU0MDQ4YmViODYxODU5YjYxY2IxZWM5ODM1NWExYzI5ZjZjOWY.field.cmVnaW9ucw.desc": {
+          "source": "Regions where the deployment is allowed to run. Multiple regions allow best-effort replica spreading.",
+          "message": "允許部署執行的地區。可指定多個地區，以實現最佳努力的複本分散。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuUmVncmVzc2lvbkNoZWNrI2U3YTRhYzZlZTUzZjVjZTY3MTM4ZmNmOWI0NzFiYmJhZDA4NWQ0YmZiMzhhYzIzNWQzNjk3N2JkN2EzNzBmODM.field.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "方向"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuUmVncmVzc2lvbkNoZWNrI2U3YTRhYzZlZTUzZjVjZTY3MTM4ZmNmOWI0NzFiYmJhZDA4NWQ0YmZiMzhhYzIzNWQzNjk3N2JkN2EzNzBmODM.field.ZGlyZWN0aW9u.short_desc": {
+          "source": "Required direction that indicates whether higher or lower metric values are…",
+          "message": "必要方向，用於指示較高或較低的指標值是否……"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuUmVncmVzc2lvbkNoZWNrI2U3YTRhYzZlZTUzZjVjZTY3MTM4ZmNmOWI0NzFiYmJhZDA4NWQ0YmZiMzhhYzIzNWQzNjk3N2JkN2EzNzBmODM.field.ZGlyZWN0aW9u.desc": {
+          "source": "Required direction that indicates whether higher or lower metric values are worse.",
+          "message": "必要方向，用於指示較高或較低的指標值是否更差。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuUmVncmVzc2lvbkNoZWNrI2U3YTRhYzZlZTUzZjVjZTY3MTM4ZmNmOWI0NzFiYmJhZDA4NWQ0YmZiMzhhYzIzNWQzNjk3N2JkN2EzNzBmODM.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOlJFR1JFU1NJT05fRElSRUNUSU9OX0hJR0hFUl9JU19XT1JTRQ.display_name": {
+          "source": "Regression Direction Higher Is Worse",
+          "message": "迴歸方向：數值越高越差"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuUmVncmVzc2lvbkNoZWNrI2U3YTRhYzZlZTUzZjVjZTY3MTM4ZmNmOWI0NzFiYmJhZDA4NWQ0YmZiMzhhYzIzNWQzNjk3N2JkN2EzNzBmODM.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOlJFR1JFU1NJT05fRElSRUNUSU9OX0xPV0VSX0lTX1dPUlNF.display_name": {
+          "source": "Regression Direction Lower Is Worse",
+          "message": "迴歸方向：數值越低越差"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuUmVncmVzc2lvbkNoZWNrI2U3YTRhYzZlZTUzZjVjZTY3MTM4ZmNmOWI0NzFiYmJhZDA4NWQ0YmZiMzhhYzIzNWQzNjk3N2JkN2EzNzBmODM.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.display_name": {
+          "source": "Max Regression Percent",
+          "message": "最大回歸百分比"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuUmVncmVzc2lvbkNoZWNrI2U3YTRhYzZlZTUzZjVjZTY3MTM4ZmNmOWI0NzFiYmJhZDA4NWQ0YmZiMzhhYzIzNWQzNjk3N2JkN2EzNzBmODM.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.short_desc": {
+          "source": "Required maximum allowed regression percentage",
+          "message": "允許的最大回歸百分比"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuUmVncmVzc2lvbkNoZWNrI2U3YTRhYzZlZTUzZjVjZTY3MTM4ZmNmOWI0NzFiYmJhZDA4NWQ0YmZiMzhhYzIzNWQzNjk3N2JkN2EzNzBmODM.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.desc": {
+          "source": "Required maximum allowed regression percentage.",
+          "message": "允許的最大回歸百分比。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.b3BlcmF0b3I.display_name": {
+          "source": "Operator",
+          "message": "運運算元"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.b3BlcmF0b3I.short_desc": {
+          "source": "Required comparison operator applied to the target metric value",
+          "message": "應用於目標指標值的必要比較運算子"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.b3BlcmF0b3I.desc": {
+          "source": "Required comparison operator applied to the target metric value.",
+          "message": "應用於目標指標值的必要比較運算子。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9HVA.display_name": {
+          "source": "Threshold Operator Gt",
+          "message": "閾值運算子 GT"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9HVEU.display_name": {
+          "source": "Threshold Operator Gte",
+          "message": "閾值運算子 GTE"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9MVA.display_name": {
+          "source": "Threshold Operator Lt",
+          "message": "閾值運算子 LT"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9MVEU.display_name": {
+          "source": "Threshold Operator Lte",
+          "message": "閾值運算子 LTE"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "值"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.dmFsdWU.short_desc": {
+          "source": "Required numeric threshold value",
+          "message": "必要數值閾值"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.dmFsdWU.desc": {
+          "source": "Required numeric threshold value.",
+          "message": "必要數值閾值。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5SZWdyZXNzaW9uQ2hlY2sjZTdhNGFjNmVlNTNmNWNlNjcxMzhmY2Y5YjQ3MWJiYmFkMDg1ZDRiZmIzOGFjMjM1ZDM2OTc3YmQ3YTM3MGY4Mw.field.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "方向"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5SZWdyZXNzaW9uQ2hlY2sjZTdhNGFjNmVlNTNmNWNlNjcxMzhmY2Y5YjQ3MWJiYmFkMDg1ZDRiZmIzOGFjMjM1ZDM2OTc3YmQ3YTM3MGY4Mw.field.ZGlyZWN0aW9u.short_desc": {
+          "source": "Required direction that indicates whether higher or lower metric values are…",
+          "message": "必要方向，用於指示較高或較低的指標值是否……"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5SZWdyZXNzaW9uQ2hlY2sjZTdhNGFjNmVlNTNmNWNlNjcxMzhmY2Y5YjQ3MWJiYmFkMDg1ZDRiZmIzOGFjMjM1ZDM2OTc3YmQ3YTM3MGY4Mw.field.ZGlyZWN0aW9u.desc": {
+          "source": "Required direction that indicates whether higher or lower metric values are worse.",
+          "message": "必要方向，用於指示較高或較低的指標值是否更差。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5SZWdyZXNzaW9uQ2hlY2sjZTdhNGFjNmVlNTNmNWNlNjcxMzhmY2Y5YjQ3MWJiYmFkMDg1ZDRiZmIzOGFjMjM1ZDM2OTc3YmQ3YTM3MGY4Mw.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOlJFR1JFU1NJT05fRElSRUNUSU9OX0hJR0hFUl9JU19XT1JTRQ.display_name": {
+          "source": "Regression Direction Higher Is Worse",
+          "message": "迴歸方向：數值越高越差"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5SZWdyZXNzaW9uQ2hlY2sjZTdhNGFjNmVlNTNmNWNlNjcxMzhmY2Y5YjQ3MWJiYmFkMDg1ZDRiZmIzOGFjMjM1ZDM2OTc3YmQ3YTM3MGY4Mw.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOlJFR1JFU1NJT05fRElSRUNUSU9OX0xPV0VSX0lTX1dPUlNF.display_name": {
+          "source": "Regression Direction Lower Is Worse",
+          "message": "迴歸方向：數值越低越差"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5SZWdyZXNzaW9uQ2hlY2sjZTdhNGFjNmVlNTNmNWNlNjcxMzhmY2Y5YjQ3MWJiYmFkMDg1ZDRiZmIzOGFjMjM1ZDM2OTc3YmQ3YTM3MGY4Mw.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.display_name": {
+          "source": "Max Regression Percent",
+          "message": "最大回歸百分比"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5SZWdyZXNzaW9uQ2hlY2sjZTdhNGFjNmVlNTNmNWNlNjcxMzhmY2Y5YjQ3MWJiYmFkMDg1ZDRiZmIzOGFjMjM1ZDM2OTc3YmQ3YTM3MGY4Mw.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.short_desc": {
+          "source": "Required maximum allowed regression percentage",
+          "message": "允許的最大回歸百分比"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5SZWdyZXNzaW9uQ2hlY2sjZTdhNGFjNmVlNTNmNWNlNjcxMzhmY2Y5YjQ3MWJiYmFkMDg1ZDRiZmIzOGFjMjM1ZDM2OTc3YmQ3YTM3MGY4Mw.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.desc": {
+          "source": "Required maximum allowed regression percentage.",
+          "message": "允許的最大回歸百分比。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.b3BlcmF0b3I.display_name": {
+          "source": "Operator",
+          "message": "運運算元"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.b3BlcmF0b3I.short_desc": {
+          "source": "Required comparison operator applied to the target metric value",
+          "message": "應用於目標指標值的必要比較運算子"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.b3BlcmF0b3I.desc": {
+          "source": "Required comparison operator applied to the target metric value.",
+          "message": "應用於目標指標值的必要比較運算子。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9HVA.display_name": {
+          "source": "Threshold Operator Gt",
+          "message": "閾值運算子 GT"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9HVEU.display_name": {
+          "source": "Threshold Operator Gte",
+          "message": "閾值運算子 GTE"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9MVA.display_name": {
+          "source": "Threshold Operator Lt",
+          "message": "閾值運算子 LT"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9MVEU.display_name": {
+          "source": "Threshold Operator Lte",
+          "message": "閾值運算子 LTE"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "值"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.dmFsdWU.short_desc": {
+          "source": "Required numeric threshold value",
+          "message": "必要數值閾值"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.dmFsdWU.desc": {
+          "source": "Required numeric threshold value.",
+          "message": "必要數值閾值。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRFbmRwb2ludFNvdXJjZSM4MTc5MjM3OTVhMmIyNzVlMzYxMjFiOWM0NmI4N2I4ZDQ5ODM5ZGY0NGZmM2JiZGQyMzIzOGM5NjYzNjYxM2I1.field.c2FtcGxpbmc.display_name": {
+          "source": "Sampling",
+          "message": "取樣"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRFbmRwb2ludFNvdXJjZSM4MTc5MjM3OTVhMmIyNzVlMzYxMjFiOWM0NmI4N2I4ZDQ5ODM5ZGY0NGZmM2JiZGQyMzIzOGM5NjYzNjYxM2I1.field.c2FtcGxpbmc.short_desc": {
+          "source": "Sampling strategy applied to endpoint traffic",
+          "message": "套用至端點流量的取樣策略"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRFbmRwb2ludFNvdXJjZSM4MTc5MjM3OTVhMmIyNzVlMzYxMjFiOWM0NmI4N2I4ZDQ5ODM5ZGY0NGZmM2JiZGQyMzIzOGM5NjYzNjYxM2I1.field.c2FtcGxpbmc.desc": {
+          "source": "Sampling strategy applied to endpoint traffic.",
+          "message": "套用至端點流量的取樣策略。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRVbmlmb3JtU2FtcGxpbmcjMWI1OWI4ZmI1NmRhZDhmNWE5N2ZiYWIwYjEyZTIzMmFlZjhlMmEwNTY4M2QxMmQwZmY2MDA5MWMzYzU2NDA0ZQ.field.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "費率"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRVbmlmb3JtU2FtcGxpbmcjMWI1OWI4ZmI1NmRhZDhmNWE5N2ZiYWIwYjEyZTIzMmFlZjhlMmEwNTY4M2QxMmQwZmY2MDA5MWMzYzU2NDA0ZQ.field.cmF0ZQ.short_desc": {
+          "source": "Required fraction of requests to sample, from 0.0 to 1.0",
+          "message": "要採樣的請求比例，範圍為 0.0 到 1.0"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRVbmlmb3JtU2FtcGxpbmcjMWI1OWI4ZmI1NmRhZDhmNWE5N2ZiYWIwYjEyZTIzMmFlZjhlMmEwNTY4M2QxMmQwZmY2MDA5MWMzYzU2NDA0ZQ.field.cmF0ZQ.desc": {
+          "source": "Required fraction of requests to sample, from 0.0 to 1.0.",
+          "message": "要採樣的請求比例，範圍為 0.0 到 1.0。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.a2V5.display_name": {
+          "source": "Key",
+          "message": "鍵"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.a2V5.short_desc": {
+          "source": "Required request-body field used as the sticky sampling key",
+          "message": "用作黏性取樣金鑰的必要請求主體欄位"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.a2V5.desc": {
+          "source": "Required request-body field used as the sticky sampling key.",
+          "message": "用作黏性取樣金鑰的必要請求主體欄位。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "費率"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.cmF0ZQ.short_desc": {
+          "source": "Required fraction of distinct key values to sample, from 0.0 to 1.0",
+          "message": "要取樣的相異金鑰值的必要比例，範圍為 0.0 到 1.0"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.cmF0ZQ.desc": {
+          "source": "Required fraction of distinct key values to sample, from 0.0 to 1.0.",
+          "message": "要取樣的相異金鑰值的必要比例，範圍為 0.0 到 1.0。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.dGFyZ2V0UXBz.display_name": {
+          "source": "Target Qps",
+          "message": "目標 QPS"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.dGFyZ2V0UXBz.short_desc": {
+          "source": "Required per-gateway-replica target QPS for adaptive sampling",
+          "message": "適應性取樣所需的每網關副本目標 QPS"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.dGFyZ2V0UXBz.desc": {
+          "source": "Required per-gateway-replica target QPS for adaptive sampling.",
+          "message": "適應性取樣所需的每網關副本目標 QPS。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.d2luZG93.display_name": {
+          "source": "Window",
+          "message": "視窗"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.d2luZG93.short_desc": {
+          "source": "Optional sliding window for QPS observation",
+          "message": "可選的 QPS 觀察滑動視窗"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.d2luZG93.desc": {
+          "source": "Optional sliding window for QPS observation. Defaults to 60s and must not be negative.",
+          "message": "可選的 QPS 觀察滑動視窗。預設為 60 秒，且不得為負數。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.a2V5.display_name": {
+          "source": "Key",
+          "message": "鍵"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.a2V5.short_desc": {
+          "source": "Required request-body field used as the sticky sampling key",
+          "message": "用作黏性取樣金鑰的必要請求主體欄位"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.a2V5.desc": {
+          "source": "Required request-body field used as the sticky sampling key.",
+          "message": "用作黏性取樣金鑰的必要請求主體欄位。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.dGFyZ2V0UXBz.display_name": {
+          "source": "Target Qps",
+          "message": "目標 QPS"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.dGFyZ2V0UXBz.short_desc": {
+          "source": "Required per-gateway-replica target QPS for adaptive sampling",
+          "message": "適應性取樣所需的每網關副本目標 QPS"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.dGFyZ2V0UXBz.desc": {
+          "source": "Required per-gateway-replica target QPS for adaptive sampling.",
+          "message": "適應性取樣所需的每網關副本目標 QPS。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.d2luZG93.display_name": {
+          "source": "Window",
+          "message": "視窗"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.d2luZG93.short_desc": {
+          "source": "Optional sliding window for QPS observation",
+          "message": "可選的 QPS 觀察滑動視窗"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.d2luZG93.desc": {
+          "source": "Optional sliding window for QPS observation. Defaults to 60s and must not be negative.",
+          "message": "可選的 QPS 觀察滑動視窗。預設為 60 秒，且不得為負數。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRFbmRwb2ludFNvdXJjZSM4MTc5MjM3OTVhMmIyNzVlMzYxMjFiOWM0NmI4N2I4ZDQ5ODM5ZGY0NGZmM2JiZGQyMzIzOGM5NjYzNjYxM2I1.field.c2FtcGxpbmc.display_name": {
+          "source": "Sampling",
+          "message": "取樣"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRFbmRwb2ludFNvdXJjZSM4MTc5MjM3OTVhMmIyNzVlMzYxMjFiOWM0NmI4N2I4ZDQ5ODM5ZGY0NGZmM2JiZGQyMzIzOGM5NjYzNjYxM2I1.field.c2FtcGxpbmc.short_desc": {
+          "source": "Sampling strategy applied to endpoint traffic",
+          "message": "套用至端點流量的取樣策略"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRFbmRwb2ludFNvdXJjZSM4MTc5MjM3OTVhMmIyNzVlMzYxMjFiOWM0NmI4N2I4ZDQ5ODM5ZGY0NGZmM2JiZGQyMzIzOGM5NjYzNjYxM2I1.field.c2FtcGxpbmc.desc": {
+          "source": "Sampling strategy applied to endpoint traffic.",
+          "message": "套用至端點流量的取樣策略。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRVbmlmb3JtU2FtcGxpbmcjMWI1OWI4ZmI1NmRhZDhmNWE5N2ZiYWIwYjEyZTIzMmFlZjhlMmEwNTY4M2QxMmQwZmY2MDA5MWMzYzU2NDA0ZQ.field.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "費率"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRVbmlmb3JtU2FtcGxpbmcjMWI1OWI4ZmI1NmRhZDhmNWE5N2ZiYWIwYjEyZTIzMmFlZjhlMmEwNTY4M2QxMmQwZmY2MDA5MWMzYzU2NDA0ZQ.field.cmF0ZQ.short_desc": {
+          "source": "Required fraction of requests to sample, from 0.0 to 1.0",
+          "message": "要採樣的請求比例，範圍為 0.0 到 1.0"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRVbmlmb3JtU2FtcGxpbmcjMWI1OWI4ZmI1NmRhZDhmNWE5N2ZiYWIwYjEyZTIzMmFlZjhlMmEwNTY4M2QxMmQwZmY2MDA5MWMzYzU2NDA0ZQ.field.cmF0ZQ.desc": {
+          "source": "Required fraction of requests to sample, from 0.0 to 1.0.",
+          "message": "要採樣的請求比例，範圍為 0.0 到 1.0。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.a2V5.display_name": {
+          "source": "Key",
+          "message": "鍵"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.a2V5.short_desc": {
+          "source": "Required request-body field used as the sticky sampling key",
+          "message": "用作黏性取樣金鑰的必要請求主體欄位"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.a2V5.desc": {
+          "source": "Required request-body field used as the sticky sampling key.",
+          "message": "用作黏性取樣金鑰的必要請求主體欄位。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "費率"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.cmF0ZQ.short_desc": {
+          "source": "Required fraction of distinct key values to sample, from 0.0 to 1.0",
+          "message": "要取樣的相異金鑰值的必要比例，範圍為 0.0 到 1.0"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.cmF0ZQ.desc": {
+          "source": "Required fraction of distinct key values to sample, from 0.0 to 1.0.",
+          "message": "要取樣的相異金鑰值的必要比例，範圍為 0.0 到 1.0。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.dGFyZ2V0UXBz.display_name": {
+          "source": "Target Qps",
+          "message": "目標 QPS"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.dGFyZ2V0UXBz.short_desc": {
+          "source": "Required per-gateway-replica target QPS for adaptive sampling",
+          "message": "適應性取樣所需的每網關副本目標 QPS"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.dGFyZ2V0UXBz.desc": {
+          "source": "Required per-gateway-replica target QPS for adaptive sampling.",
+          "message": "適應性取樣所需的每網關副本目標 QPS。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.d2luZG93.display_name": {
+          "source": "Window",
+          "message": "視窗"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.d2luZG93.short_desc": {
+          "source": "Optional sliding window for QPS observation",
+          "message": "可選的 QPS 觀察滑動視窗"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.d2luZG93.desc": {
+          "source": "Optional sliding window for QPS observation. Defaults to 60s and must not be negative.",
+          "message": "可選的 QPS 觀察滑動視窗。預設為 60 秒，且不得為負數。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.a2V5.display_name": {
+          "source": "Key",
+          "message": "鍵"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.a2V5.short_desc": {
+          "source": "Required request-body field used as the sticky sampling key",
+          "message": "用作黏性取樣金鑰的必要請求主體欄位"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.a2V5.desc": {
+          "source": "Required request-body field used as the sticky sampling key.",
+          "message": "用作黏性取樣金鑰的必要請求主體欄位。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.dGFyZ2V0UXBz.display_name": {
+          "source": "Target Qps",
+          "message": "目標 QPS"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.dGFyZ2V0UXBz.short_desc": {
+          "source": "Required per-gateway-replica target QPS for adaptive sampling",
+          "message": "適應性取樣所需的每網關副本目標 QPS"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.dGFyZ2V0UXBz.desc": {
+          "source": "Required per-gateway-replica target QPS for adaptive sampling.",
+          "message": "適應性取樣所需的每網關副本目標 QPS。"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.d2luZG93.display_name": {
+          "source": "Window",
+          "message": "視窗"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.d2luZG93.short_desc": {
+          "source": "Optional sliding window for QPS observation",
+          "message": "可選的 QPS 觀察滑動視窗"
+        },
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.d2luZG93.desc": {
+          "source": "Optional sliding window for QPS observation. Defaults to 60s and must not be negative.",
+          "message": "可選的 QPS 觀察滑動視窗。預設為 60 秒，且不得為負數。"
         }
       }
     }

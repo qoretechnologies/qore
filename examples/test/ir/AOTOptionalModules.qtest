@@ -108,18 +108,31 @@ public namespace Uses {
             artifact_dir, opt_dir, qore_bin)));
     }
 
-    # returns True if the compiled module has the trailer recording unavailable optional modules
-    private bool hasOptionalModuleTrailer() {
-        # every byte is a valid ISO-8859-1 character; the trailer footer carries the "QAOM" magic
-        string data = File::readBinaryFile(artifact_dir + "/Uses.qmod").toString("ISO-8859-1");
-        return data.find("QAOM") != -1;
+    # returns the unavailable optional modules recorded in the module metadata of the compiled module
+    private list<string> recordedOptionalModules() {
+        string out = run(sprintf("%s %s --dump-info %s/Uses.qmod", env, qcc_bin, artifact_dir));
+        list<string> lines = out.split("\n");
+        foreach string line in (lines) {
+            *list<*string> m = (line =~ x/^    unavailable optional modules: ([0-9]+)$/);
+            if (!m) {
+                continue;
+            }
+            list<string> rv = ();
+            for (int i = $# + 1, int end = $# + 1 + int(m[0]); i < end; ++i) {
+                *list<*string> spec = (lines[i] =~ x/^      (.*)$/);
+                assertTrue(exists spec, "an optional module request follows: " + out);
+                rv += spec[0];
+            }
+            return rv;
+        }
+        throw "NO-MODULE-METADATA", out;
     }
 
     depfileTest() {
         TmpDir tmp = initDirs();
         installOpt("1.0");
         string deps = compileUses();
-        assertTrue(hasOptionalModuleTrailer());
+        assertEq(("Opt >= 2.0",), recordedOptionalModules());
         # replacing the module that was too old must rebuild the artifact
         assertNeq(-1, deps.find(realpath(opt_dir) + "/Opt.qm"), "depfile names the optional module: " + deps);
     }
@@ -168,8 +181,8 @@ public namespace Uses {
         assertEq("with Opt 2.0", runUses());
         # a module that was loaded is an ordinary dependency
         assertNeq(-1, deps.find("Opt.qm"), deps);
-        # the artifact has no optional-module trailer
-        assertFalse(hasOptionalModuleTrailer(), "no optional module request is recorded");
+        # the module metadata records no optional module request
+        assertEq((), recordedOptionalModules(), "no optional module request is recorded");
     }
 
     splitInstallFallbackTest() {

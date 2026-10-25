@@ -3635,19 +3635,23 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
         }
     }
 
+    // qcc stores the metadata of an AOT module -- its name, its dependencies, and the optional modules that were
+    // unavailable when it was compiled -- in a section of its image, which is read before the module is mapped
+    QoreAOTModuleFileInfo aot_info;
+    std::string aot_info_error;
+    QoreAOTModuleInfoStatus aot_info_status = qoreAOTReadModuleInfo(path, aot_info, aot_info_error);
+    if (aot_info_status == QoreAOTModuleInfoStatus::INVALID) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
+            "cannot load binary module '%s': %s", path, aot_info_error.c_str());
+        return nullptr;
+    }
+    bool have_aot_info = aot_info_status == QoreAOTModuleInfoStatus::FOUND;
+
     // an AOT module compiled when a module requested with %try-module was unavailable takes the branch for the
     // module being unavailable, so it is stale once the module can be loaded
-    {
-        std::vector<std::string> optional_modules;
-        std::string optional_error;
-        int optional_status = qoreAOTReadOptionalModulesTrailer(path, optional_modules, optional_error);
-        if (optional_status < 0) {
-            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
-                "cannot read AOT optional module metadata from module '%s': %s", path, optional_error.c_str());
-            return nullptr;
-        }
+    if (have_aot_info && !aot_info.unavailable_optional_modules.empty()) {
         std::string available;
-        if (optional_status > 0 && findAvailableOptionalModule(optional_modules, path_pgm, available)) {
+        if (findAvailableOptionalModule(aot_info.unavailable_optional_modules, path_pgm, available)) {
             if (source_available) {
                 xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT module '%s' was "
                     "compiled when optional module '%s' was not available, but it is available now; rebuild the "
@@ -3668,39 +3672,30 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
         }
     }
 
-    std::string trailer_module_name;
-    std::vector<std::string> trailer_dependencies;
-    std::string trailer_error;
-    int trailer_status = qoreAOTReadModuleDependenciesTrailer(
-        path, trailer_module_name, trailer_dependencies, trailer_error);
-    if (trailer_status < 0) {
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
-            "cannot read AOT dependency metadata from module '%s': %s", path,
-            trailer_error.c_str());
-        return nullptr;
-    }
-
     std::unique_ptr<ModuleLoadMapHelper> preload_guard;
-    if (trailer_status > 0) {
-        if (trailer_module_name != feature) {
+    if (have_aot_info) {
+        if (aot_info.module_name != feature) {
             xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
-                "AOT dependency metadata for module '%s' identifies feature '%s', expecting '%s'",
-                path, trailer_module_name.c_str(), feature);
+                "the AOT module metadata of module '%s' identifies feature '%s', expecting '%s'",
+                path, aot_info.module_name.c_str(), feature);
             return nullptr;
         }
         // Reserve the parent before recursively loading its dependency graph,
         // matching loadBinaryModuleFromDesc()'s cycle and waiter semantics.
         preload_guard = std::make_unique<ModuleLoadMapHelper>(feature, xsink, false);
-        if (loadAOTBinaryModuleDependencies(xsink, trailer_dependencies, path_pgm)) {
+        if (loadAOTBinaryModuleDependencies(xsink, aot_info.dependencies, path_pgm)) {
             return nullptr;
         }
     }
 
-    int dlopen_flags = trailer_status > 0 ? QORE_DLOPEN_NOW_FLAGS : QORE_DLOPEN_FLAGS;
+    // with its dependencies loaded, an AOT module is mapped once, resolving all of its symbols; a module without the
+    // metadata is mapped lazily so that its descriptor can be read, and an AOT module without it is refused in
+    // loadBinaryModuleFromDesc()
+    int dlopen_flags = have_aot_info ? QORE_DLOPEN_NOW_FLAGS : QORE_DLOPEN_FLAGS;
     void* ptr = dlopen(path, dlopen_flags);
     if (!ptr) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
-            trailer_status > 0 ? "error resolving symbols in qore AOT module '%s': %s"
+            have_aot_info ? "error resolving symbols in qore AOT module '%s': %s"
                 : "error loading qore module '%s': %s",
             path, dlerror());
         return nullptr;
@@ -3715,13 +3710,13 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
 
     if (mod_desc) {
         mod_desc(mod_info);
-        if (trailer_status > 0 && (!mod_info.is_aot
-                || mod_info.name != trailer_module_name
-                || mod_info.dependencies != trailer_dependencies)) {
+        if (have_aot_info && (!mod_info.is_aot
+                || mod_info.name != aot_info.module_name
+                || mod_info.dependencies != aot_info.dependencies)) {
             ReferenceHolder<QoreHashNode> info(mod_info.info, &xsink);
             mod_info.info = nullptr;
             xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
-                "AOT dependency metadata does not match the module descriptor for '%s'", path);
+                "the AOT module metadata of module '%s' does not match its module descriptor", path);
             return nullptr;
         }
         return loadBinaryModuleFromDesc(xsink, &dlh, mod_info, path, feature, reexport, pholder.release(),
@@ -3736,37 +3731,13 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     return nullptr;
 }
 
-static int reopen_aot_binary_module_now(ExceptionSink& xsink, DLHelper& dlh, QoreModuleInfo& mod_info,
-        const char* path, const char* feature) {
-    // Legacy AOT qmods have no non-executing dependency trailer. The initial
-    // dlopen must stay lazy so the descriptor can be read before dependencies
-    // are loaded; reopen with RTLD_NOW before generated module code runs.
-    void* old_ptr = dlh.release();
-    assert(old_ptr);
-    dlclose(old_ptr);
-
-    void* ptr = dlopen(path, QORE_DLOPEN_NOW_FLAGS);
-    if (!ptr) {
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "error resolving symbols in qore "
-            "AOT module '%s': %s", path, dlerror());
-        return -1;
-    }
-    dlh.ptr = ptr;
-
-    qore_binary_module_desc_t mod_desc = get_binary_module_desc(ptr, feature);
-    if (!mod_desc) {
-        QoreStringMaker suggested_sym("%s_qore_module_desc", feature);
-        suggested_sym.replaceAll("-", "_");
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "module '%s': modules must implement "
-            "the API 2.0 module description function '%s'", path, suggested_sym.c_str());
-        return -1;
-    }
-
-    QoreModuleInfo reloaded_mod_info;
-    mod_desc(reloaded_mod_info);
-    mod_info = reloaded_mod_info;
-    return 0;
-}
+//! The section of a module image that holds its AOT module metadata on this platform, for diagnostics
+#ifdef __APPLE__
+#define QORE_AOT_MODULE_INFO_CONTAINER "the Mach-O section " QORE_AOT_MODULE_INFO_MACHO_SEGMENT "," \
+    QORE_AOT_MODULE_INFO_MACHO_SECTION
+#else
+#define QORE_AOT_MODULE_INFO_CONTAINER "the ELF note section " QORE_AOT_MODULE_INFO_ELF_SECTION
+#endif
 
 QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& xsink, DLHelper* dlh,
         QoreModuleInfo& mod_info, const char* path, const char* feature, bool reexport,
@@ -3811,6 +3782,16 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
                 path, name,
                 mod_info.aot_runtime_identity.empty() ? "<none>" : mod_info.aot_runtime_identity.c_str(),
                 qore_version_string, qore_aot_runtime_identity);
+            return nullptr;
+        }
+        // qcc stores the metadata of every AOT module it links in a section of the image, and the loader read it
+        // before mapping the module (load_guard is set then); an AOT module loaded from a file without it was changed
+        // after it was built, and loading it would skip the check for optional modules that have become available
+        if (dlh && !load_guard) {
+            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name),
+                "AOT module '%s': feature '%s': the module has no AOT module metadata (" QORE_AOT_MODULE_INFO_CONTAINER
+                "); the file was changed after it was built, for example by a tool that removed the section: "
+                "reinstall or rebuild the module", path, name);
             return nullptr;
         }
     }
@@ -3917,15 +3898,6 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
                 }
             }
         }
-    }
-
-    if (dlh && mod_info.is_aot && !dependencies_preloaded) {
-        if (reopen_aot_binary_module_now(xsink, *dlh, mod_info, path, feature)) {
-            return nullptr;
-        }
-        info = mod_info.info;
-        mod_info.info = nullptr;
-        name = mod_info.name.c_str();
     }
 
     // see if a module with this name is already registered

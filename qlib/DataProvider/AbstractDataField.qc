@@ -585,7 +585,8 @@ public class AbstractDataField inherits Qore::Serializable {
             "short_desc": getShortDescription(),
             "desc": getDescription(),
             "type": getType().getInfo(),
-            "unique_key": self.uniqueHash(),
+            # a field in a type graph description has no unique key, so the description is always the same
+            "unique_key": tgraph ? "" : self.uniqueHash(),
             "attr": attr,
         };
     }
@@ -612,7 +613,8 @@ public class AbstractDataField inherits Qore::Serializable {
             "allowed_values_creatable": allowed_values_creatable ?? False,
             "element_allowed_values": element_allowed_values,
             "element_allowed_values_creatable": element_allowed_values_creatable ?? False,
-            "unique_key": self.uniqueHash(),
+            # a field in a type graph description has no unique key, so the description is always the same
+            "unique_key": tgraph ? "" : self.uniqueHash(),
             "attr": attr,
         };
     }

@@ -16,7 +16,7 @@ loader.loader.exec_module(aot)
 
 
 class RpmPostTest(unittest.TestCase):
-    def test_reproducible_rpm_retains_trailers_debug_info_and_sources(self):
+    def test_reproducible_rpm_retains_module_metadata_debug_info_and_sources(self):
         artifacts = []
         for prefix in ("qore-rpm-first-", "qore-rpm-second-longer-"):
             with tempfile.TemporaryDirectory(prefix=prefix) as temporary:
@@ -44,11 +44,16 @@ class RpmPostTest(unittest.TestCase):
         attribute = (ROOT / "qore.attr").read_text().splitlines()
         attribute[0] = "%__qore_requires " + str(generator)
         (attributes / "qore.attr").write_text("\n".join(attribute) + "\n")
+        # the module metadata note that qcc emits: the module name, no dependencies, one optional module
+        payload = struct.pack("<I", 5) + b"Probe" + struct.pack("<II", 0, 1) + struct.pack("<I", 8) + b"optional"
+        record = struct.pack("<III", 0x494D4151, 1, len(payload)) + payload
+        note = struct.pack("<III", 5, len(record), 0x494D4151) + b"Qore\0\0\0\0" + record
+        note += b"\0" * (-len(note) % 4)
         (top / "SOURCES/probe.c").write_text("int package_probe(void) { return 42; }\n"
-                                               "const char* source_path(void) { return __FILE__; }\n")
-        trailers = b"".join(payload + struct.pack("<Q4sI", len(payload), magic, 1)
-                            for magic, payload in [(b"QAOM", b"optional"), (b"QAMD", b"dependencies")])
-        (top / "SOURCES/trailers").write_bytes(trailers)
+                                               "const char* source_path(void) { return __FILE__; }\n"
+                                               "__attribute__((used, section(\".note.qore.modinfo\"), aligned(4)))\n"
+                                               "static const unsigned char module_info[] = { "
+                                               + ", ".join(str(value) for value in note) + " };\n")
         recipe = top / "SPECS/qore-rpm-fixture.spec"
         recipe.write_text(f"""%{{load:{ROOT}/macros.qore}}
 %{{load:{attributes}/qore.attr}}
@@ -64,7 +69,6 @@ Release: 1%{{?dist}}
 Summary: RPM post-processing test fixture
 License: MIT
 Source0: probe.c
-Source1: trailers
 %global qore_rpm_helper {ROOT}/preserve-aot-metadata.py
 %qore_enable_aot_post
 %description
@@ -76,7 +80,6 @@ cp %{{SOURCE0}} probe.c
 . {ROOT}/build-env.sh
 qore_set_source_prefix_maps "%qore_debug_source_dir"
 gcc $CFLAGS -g -O2 -fPIC -shared -Wl,--build-id -o Probe.qmod "$PWD/probe.c"
-cat %{{SOURCE1}} >> Probe.qmod
 %install
 install -Dm755 Probe.qmod %{{buildroot}}%{{_libdir}}/qore-modules/Probe.qmod
 printf 'not a module\n' > %{{buildroot}}%{{_libdir}}/qore-modules/Probe.qmod.backup
@@ -119,7 +122,7 @@ printf 'not a module\n' > %{{buildroot}}%{{_libdir}}/qore-modules/Probe.qmod.bac
         self.assertEqual((top / "SOURCES/probe.c").read_bytes(), source.read_bytes())
         module = next(extract.rglob("Probe.qmod"))
         self.assertNotIn(str(top).encode(), module.read_bytes())
-        self.assertEqual(aot.read_trailers(module), trailers)
+        self.assertEqual(aot.read_module_info(module), record)
         sections = subprocess.check_output(["readelf", "-S", str(module)], text=True)
         self.assertIn(".gnu_debuglink", sections)
         self.assertNotIn(".debug_info", sections)

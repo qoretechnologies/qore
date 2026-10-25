@@ -6719,6 +6719,12 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         return nullptr;
     }
     uint16_t opcode_raw = QoreAOTBinaryReader::readU16(ptr);
+    // Upstream v21 with maximum opcode 409 used it for CheckReturnValue.
+    // Performance artifacts (including v20/v21) used 409/410 for snapshots and
+    // recorded maximum opcode 410. Distinguish both histories before dispatch.
+    if (reader.getHeader().version == 21 && reader.getHeader().max_opcode_id == 409 && opcode_raw == 409) {
+        opcode_raw = static_cast<uint16_t>(QoreIROpcode::CheckReturnValue);
+    }
     auto opcode = static_cast<QoreIROpcode>(opcode_raw);
     if (!need(1, "instruction group")) {
         return nullptr;

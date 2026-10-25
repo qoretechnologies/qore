@@ -297,7 +297,10 @@ winning.  When the containing schema declares no \c type of its own and the memb
 unambiguous scalar type among the members is adopted along with its \c format, \c enum and array \c items — which is \
 what makes a one-member \c allOf wrapping a scalar \c "$ref", the usual way to attach a per-use description to a \
 reusable type, keep the referenced type instead of becoming unconstrained.  Members declaring different types \
-describe an intersection nothing can satisfy, and are left unconstrained rather than guessed at
+describe an intersection nothing can satisfy, and are left unconstrained rather than guessed at.  A one-member \
+\c allOf of a \c "$ref" beside nothing but what describes its use (a description, an example, a default, \c readOnly, \
+\c writeOnly, \c deprecated, \c nullable, documentation or vendor extensions) has the type of the schema it refers \
+to, with that schema's name; the description is the field's, and \c nullable gives the "or nothing" variant
     |\c oneOf / \c anyOf|exposed as a union type that preserves the keyword's matching rule; \c "null" members are \
 excluded from the union and make it @ref RestSchemaValidator::AbstractSchemaObject::nullable "nullable" instead
 
@@ -5516,6 +5519,30 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         *list<SchemaObject> prefix_items;
         #! Whether an items:false declaration forbids elements after the prefix
         bool additional_items = True;
+
+        #! If the schema only describes a use of the one schema it refers to; see isDescribedReference()
+        bool described_reference = False;
+
+        #! The keywords that describe a use of a schema rather than the values the schema accepts
+        /** Beside these, only vendor extensions (\c "x-...") and a \c type naming the referenced schema's own type
+            leave a one-member \c allOf of a \c "$ref" the schema it refers to; see isDescribedReference().
+            \c nullable is one of them: it does not change the type, only which variant of it the use takes.
+        */
+        const ReferenceUseKeywords = {
+            "allOf": True,
+            "description": True,
+            "title": True,
+            "example": True,
+            "examples": True,
+            "default": True,
+            "deprecated": True,
+            "readOnly": True,
+            "writeOnly": True,
+            "externalDocs": True,
+            "xml": True,
+            "nullable": True,
+            "$comment": True,
+        };
     }
 
     #! Returns the document required for schema reference and type resolution
@@ -5792,6 +5819,9 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                 # the referenced schema's
                 if (allOfList.size() == 1 && allOfList[0]."$ref".typeCode() == NT_STRING) {
                     schema_identity = allOf[0].getSchemaIdentity() ?? schema_identity;
+                    # decided from the keywords as written, because the merge below gives this schema the
+                    # properties and "required" set of the schema it refers to
+                    described_reference = SchemaObject::isDescribedReference(oh, allOf[0]);
                 }
                 # Merge allOf member schemas into this schema so that getDataType()
                 # exposes the union of their properties and required sets. Local
@@ -6438,12 +6468,46 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
 
     #! Returns @ref True if this schema is a one-member \c allOf that constrains nothing itself
     /** This is the OpenAPI 3.x idiom for attaching a per-use description, example or \c readOnly flag to a
-        reusable type without redefining it: the schema is exactly its member.
+        reusable type without redefining it: the schema is exactly its member, so its type is the member's.
+
+        A member that is an object gives this schema its properties, so for it the schema is a wrapper only when it
+        is a described reference (see isDescribedReference()); a schema declaring properties, a \c required set or
+        any other constraint of its own beside the member is a schema of its own, with a type of its own.
 
         @see @ref adoptScalarTypeFromAllOf() for the type the schema itself reports
     */
     private bool isAllOfWrapper() {
-        return allOf.size() == 1 && !own_type && !properties && !oneOf && !anyOf && !notSchema;
+        return described_reference
+            || (allOf.size() == 1 && !own_type && !properties && !oneOf && !anyOf && !notSchema);
+    }
+
+    #! Returns @ref True if a schema only describes a use of the one schema it refers to
+    /** A schema declared as \c {allOf: [{$ref: X}]}, beside nothing but what describes its use - a description, an
+        example, a default, \c readOnly, \c writeOnly, \c deprecated, \c nullable, documentation and vendor
+        extensions - is how OpenAPI 3.0 describes a property of a reusable type, because the siblings of a
+        \c "$ref" are ignored there.  It accepts what \c X accepts, so its type is \c X's type, with \c X's name; the
+        description is the field's.  A \c type naming \c X's own type adds nothing either.
+
+        @param oh the schema as written
+        @param member the schema that the only \c allOf member refers to
+
+        @return @ref True if the schema is a described reference
+    */
+    private static bool isDescribedReference(hash<auto> oh, SchemaObject member) {
+        foreach hash<auto> i in (oh.pairIterator()) {
+            if (ReferenceUseKeywords{i.key} || i.key =~ /^x-/) {
+                continue;
+            }
+            if (i.key == "type") {
+                # OpenAPI 3.1 writes a nullable type as a list with "null", which "nullable" already describes
+                list<auto> types = select (i.value.typeCode() == NT_LIST ? i.value : (i.value,)), $1 != "null";
+                if (types.size() == 1 && types[0] == member.type) {
+                    continue;
+                }
+            }
+            return False;
+        }
+        return True;
     }
 
     #! Adopts a scalar type from the \c allOf members when the composition declares none of its own
@@ -6497,6 +6561,9 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         }
         # "required" is a set, so a property both members require stays required once
         rv.required += inner.required;
+        # the composition declares more than the schema the outer declaration refers to, so it is a schema of its
+        # own, with a type of its own
+        rv.described_reference = False;
         return rv;
     }
 

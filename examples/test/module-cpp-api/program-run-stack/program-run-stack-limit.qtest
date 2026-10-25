@@ -1,0 +1,72 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+# the Program's top-level code is run, which the restrictions of %exec-class would not allow
+%no-child-restrictions
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ProgramRunStackLimitTest
+
+#! Tests that a Program's top-level code started with too little stack left raises STACK-LIMIT-EXCEEDED
+/** Program::run() sets the runtime location of the Program's top-level code before it runs the code, and restores
+    the previous location afterwards.  Both steps checked the stack and raised \c STACK-LIMIT-EXCEEDED in a null
+    exception sink, which crashed the process, when the call of Program::run() had left enough stack for its own
+    stack check but too little for theirs, or when the stack limit had moved above the position at which the code
+    was started.
+
+    The test calls Program::run() in a thread of its own with each amount of stack left before the thread's stack
+    limit, from Sweep bytes down to none in steps of Step bytes: each call must run the code or raise
+    \c STACK-LIMIT-EXCEEDED.
+*/
+class ProgramRunStackLimitTest inherits QUnit::Test {
+    public {
+        #! the largest amount of stack left before the stack limit with which Program::run() is called
+        const Sweep = 16 * 1024;
+
+        #! the step between the amounts of stack left, no larger than the alignment of the stack
+        const Step = 16;
+
+        #! the outcome of a call that ran the code
+        const Ran = "ran";
+    }
+
+    constructor() : QUnit::Test("Program::run() with little stack left", "1.0", \ARGV) {
+        addTestCase("Program::run() with each amount of stack left", \runTest());
+        set_return_value(main());
+    }
+
+    runTest() {
+        if (!HAVE_MANAGE_STACK) {
+            testSkip("stack management is not available");
+        }
+        Program p(PO_NEW_STYLE);
+        p.parse("int x = 1; x += 1;", "top-level");
+
+        # the number of calls by outcome: Ran or the exception raised
+        Queue q();
+        background sub () {
+            hash<string, int> outcomes;
+            for (int left = Sweep; left >= 0; left -= Step) {
+                try {
+                    cpp_api_call_with_stack_remaining(left, sub () { p.run(); });
+                    ++outcomes{Ran};
+                } catch (hash<ExceptionInfo> ex) {
+                    ++outcomes{ex.err};
+                }
+            }
+            q.push(outcomes);
+        }();
+        hash<string, int> outcomes = q.get();
+        assertEq(("STACK-LIMIT-EXCEEDED", Ran), sort(outcomes.keys()), sprintf("outcomes: %y", outcomes));
+        assertGt(0, outcomes{Ran}, "calls with enough stack left ran the code");
+        assertGt(0, outcomes."STACK-LIMIT-EXCEEDED", "calls with too little stack left raised STACK-LIMIT-EXCEEDED");
+        assertEq(Sweep / Step + 1, outcomes{Ran} + outcomes."STACK-LIMIT-EXCEEDED", "every call returned");
+    }
+}

@@ -323,7 +323,9 @@ class AOTSmokeTest inherits QUnit::Test {
         # AOT Binary Format v1 tests
         addTestCase("AOT v1 version field", \testVersionField());
         addTestCase("AOT v1 parse options high bits", \testPOHighBitsRoundTrip());
-        addTestCase("AOT v1 source fingerprint recorded", \testSourceFingerprintRecorded());
+        addTestCase("AOT binary records no source modification time", \testNoSourceStatFingerprint());
+        addTestCase("AOT module bytes do not depend on the source modification time",
+            \testModuleBytesIndependentOfSourceMtime());
         addTestCase("AOT v1 feature flags", \testFeatureFlagsNonZero());
         addTestCase("AOT subscript compound assign", \testSubscriptCompoundAssign());
         addTestCase("AOT hash compound native", \testHashCompoundNative());
@@ -6469,7 +6471,17 @@ public int sub ok() {
             libqore_dir, prependModulePath(qlib_dir), libqore_dir, qcc_bin, missing_dir, missing_qmod));
         assertTrue(missing_out.regex("EXIT=0"), "missing try-module qmod compiled: " + missing_out);
         string missing_dump = dumpQccInfo(missing_qmod, False);
-        assertTrue(!missing_dump.regex(missing_feature),
+        # the failed request is recorded in the module metadata as an unavailable optional module, so that the
+        # loader can tell when the module becomes available, and not as a dependency
+        *list<*string> module_info = regex_extract(missing_dump, "\\n  AOT module metadata: [^\\n]*\\n"
+            "    module: [^\\n]*\\n    dependencies: ([0-9]+)\\n(?:      [^\\n]*\\n)*"
+            "    unavailable optional modules: ([0-9]+)\\n      ([^\\n]*)\\n");
+        assertEq(("0", "1", missing_feature), module_info,
+            "failed %try-module dependency is an unavailable optional module in the module metadata: "
+                + missing_dump);
+        int module_info_offset = missing_dump.find("\n  AOT module metadata:");
+        assertTrue(module_info_offset > 0, "the module metadata follows the AOT metadata: " + missing_dump);
+        assertTrue(!missing_dump.substr(0, module_info_offset).regex(missing_feature),
             "failed %try-module dependency is not serialized as a hard qmod dependency: " + missing_dump);
         assertTrue(missing_dump.regex("imports:\\s+\\(none\\)"),
             "failed %try-module dependency is not serialized as a namespace import: " + missing_dump);
@@ -9773,9 +9785,10 @@ printf(\"%d %d\\n\", h.x, h.y);
         assertTrue(aot_out =~ /options test/, "Program executes with parse options");
     }
 
-    testSourceFingerprintRecorded() {
-        # The source size and modification time are recorded in the binary for build tools; a compiled program runs
-        # without reading its source, which can change or be gone, so running it does not check the source.
+    testNoSourceStatFingerprint() {
+        # A binary records nothing about its source file's state on disk, so that compiling the same source content
+        # again produces the same binary; a compiled program runs without reading its source, which can change or
+        # be gone.
         string code = "%modern\nprintf(\"hello\\n\");\n";
         hash<auto> paths = writeTempScript(code);
         on_exit {
@@ -9789,8 +9802,9 @@ printf(\"%d %d\\n\", h.x, h.y);
         backquote(compile_cmd);
 
         string info = dumpQccInfo(paths.out, False);
-        assertTrue(info =~ /source-size: [0-9]+/, "AOT build info records source size: " + info);
-        assertTrue(info =~ /source-mtime-ns: [0-9]+/, "AOT build info records source mtime: " + info);
+        assertTrue(info =~ /build info:/, "the binary has build info: " + info);
+        assertFalse(info =~ /source-size:/, "AOT build info records no source size: " + info);
+        assertFalse(info =~ /source-mtime-ns:/, "AOT build info records no source mtime: " + info);
 
         string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b 2>&1", libqore_dir, paths.out);
         assertEq("hello\n", backquote(run_cmd), "The binary runs");
@@ -9804,6 +9818,73 @@ printf(\"%d %d\\n\", h.x, h.y);
         assertEq("hello\n", backquote(run_cmd), "The binary runs after its source changed");
         unlink(paths.src);
         assertEq("hello\n", backquote(run_cmd), "The binary runs without its source");
+    }
+
+    testModuleBytesIndependentOfSourceMtime() {
+        # A checkout or a rebase rewrites a source file with unchanged content and a new modification time, and a
+        # build compiles it again; the module it produces must be byte for byte the one it replaces, so that
+        # anything that identifies a module by its content (an installer, a cache, a provider index) sees no change.
+        string tmp_dir = sprintf("/tmp/aot_mtime_test_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            system(sprintf("rm -rf %s", tmp_dir));
+        }
+        string suffix = sprintf("%d", getpid());
+
+        # a single-file module and a split module (a directory with its .qm and a .qc)
+        string single_mod = "MtimeProbe" + suffix;
+        string single_src = tmp_dir + "/" + single_mod + ".qm";
+        writeFile(single_src, sprintf("%%modern
+module %s { version = \"1.0\"; desc = \"mtime probe\"; author = \"t\"; license = \"MIT\"; }
+public namespace %s {
+public int sub value() {
+    return 7;
+}
+}
+", single_mod, single_mod));
+        string split_mod = "MtimeSplitProbe" + suffix;
+        string split_dir = tmp_dir + "/" + split_mod;
+        mkdir(split_dir);
+        writeFile(split_dir + "/" + split_mod + ".qm", sprintf("%%modern
+module %s { version = \"1.0\"; desc = \"split mtime probe\"; author = \"t\"; license = \"MIT\"; }
+", split_mod));
+        writeFile(split_dir + "/Values.qc", sprintf("public namespace %s {
+public int sub value() {
+    return 8;
+}
+}
+", split_mod));
+
+        foreach hash<auto> mod in ((
+                {"name": single_mod, "src": single_src, "touch": (single_src,)},
+                {"name": split_mod, "src": split_dir,
+                    "touch": (split_dir + "/" + split_mod + ".qm", split_dir + "/Values.qc")},
+            )) {
+            list<string> digests = ();
+            # two builds of the same content: the sources dated 2000-01-01 and then 2001-01-01, each written to
+            # a module file of the same name, since a module records its file name
+            foreach string stamp in (("200001010000", "200101010000")) {
+                foreach string path in (mod.touch) {
+                    assertEq(0, system(sprintf("touch -t %s %s", stamp, path)), "set the time of " + path);
+                }
+                string out_dir = tmp_dir + "/out-" + stamp;
+                mkdir(out_dir);
+                string qmod = out_dir + "/" + mod.name + ".qmod";
+                string out = backquote(sprintf(
+                    "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -m %s -o %s 2>&1; echo EXIT=$?",
+                    libqore_dir, libqore_dir, qcc_bin, mod.src, qmod));
+                assertTrue(out.regex("EXIT=0"), mod.name + " compiled: " + out);
+                digests += ReadOnlyFile::readBinaryFile(qmod).toSHA256();
+            }
+            assertEq(digests[0], digests[1], mod.name + ": the same source content gives the same module");
+        }
+    }
+
+    private static writeFile(string path, string content) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(content);
+        f.close();
     }
 
     testFeatureFlagsNonZero() {
@@ -11983,25 +12064,16 @@ public namespace CorruptQmodTest {
         # whose signature no longer validates.  A byte-edited .qmod therefore
         # kills the loader before Qore reads a single byte of its metadata: the
         # run dies with signal 9 and no diagnostic at all, which is the OS
-        # enforcing its own rule rather than anything this case is about.
+        # enforcing its own rule rather than anything this case is about (see
+        # testCorruptQmodSignatureCheck() for the loader's opt-in check).
         # Re-signing restores a loadable file with the corruption intact, so
-        # what fails is the AOT metadata -- the path under test.
-        #
-        # (That the OS kill leaves a Qore user with no diagnostic is a real gap,
-        # but it belongs to the module loader, not to this regression: the
-        # loader would have to validate the signature itself before dlopen to
-        # turn it into an error.)
+        # what fails is the AOT metadata -- the path under test.  The module's
+        # own metadata section is part of the image, so the signature covers it
+        # and the module can be signed again in place.
         if (PlatformOS == "Darwin") {
-            string sign_out = backquote(sprintf("codesign -f -s - %s 2>&1; echo RC=$?",
-                qmod_path));
-            if (sign_out.regex("RC=0")) {
-                assertFalse(sign_out.regex("RC=[1-9]"),
-                    "corrupt-qmod-regression: re-signed the corrupted module: " + sign_out);
-            } else {
-                testSkip("cannot re-sign a corrupted .qmod on this host, and macOS "
-                    "kills the loader on an invalid signature before Qore sees the "
-                    "module: " + sign_out);
-            }
+            int sign_rc;
+            string sign_out = backquote(sprintf("codesign -f -s - %s 2>&1", qmod_path), \sign_rc);
+            assertEq(0, sign_rc, "corrupt-qmod-regression: re-signed the corrupted module: " + sign_out);
         }
 
         # Load the corrupt .qmod with -l. Before the fix this process
@@ -12021,21 +12093,61 @@ public namespace CorruptQmodTest {
         }
         string cmd = sprintf("LD_LIBRARY_PATH=%s %s 15 %s --exec-mode=ast -l %s %s 2>&1; echo EXIT=$?",
             libqore_dir, timeout_cmd, qore_bin, qmod_path, script);
-        date started = now_us();
         string out = backquote(cmd);
-        date elapsed = now_us() - started;
 
         # Deadlock would make timeout kill the process, producing
-        # EXIT=124.  With the fix, qore returns fast with a non-zero exit
+        # EXIT=124.  With the fix, qore exits by itself with a non-zero exit
         # (the module load fails) but NOT 124.  Any of the AOT init error
         # tags ("LOAD-MODULE-ERROR", "MODULE-LOAD-ERROR") is acceptable —
         # the regression is the HANG, not which specific error surfaces.
-        assertTrue(elapsed < 10s,
-            "corrupt-qmod-regression: load returned promptly (elapsed=" + elapsed.format("u") + "us): " + out);
         assertFalse(out.regex("EXIT=124"),
             "corrupt-qmod-regression: process not killed by timeout: " + out);
+        assertFalse(out.regex("EXIT=137"),
+            "corrupt-qmod-regression: the loader read the module instead of being killed mapping it: " + out);
         assertTrue(out.regex("(MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)"),
             "corrupt-qmod-regression: saw module load error: " + out);
+
+        # The hang was the failed load leaving the module loader unusable.  So a program that is refused the
+        # corrupt module goes on: it is refused it again, then loads a sound module and calls it, and only then
+        # ends by itself.  Each step prints a line, so the order of the lines shows that each load returned before
+        # the next began; the timeout above stays only as the bound of a regression.
+        string sound_path = tmp_dir + "/SoundModuleAfterCorrupt.qm";
+        {
+            File f();
+            f.open2(sound_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern\nmodule SoundModuleAfterCorrupt {\n    version = \"1.0\";\n    desc = \"test\";\n"
+                "    author = \"Test\";\n    license = \"MIT\";\n}\n"
+                "public namespace SoundModuleAfterCorrupt {\n    public int sub two() { return 2; }\n}\n");
+            f.close();
+        }
+        string loader = tmp_dir + "/load-after-corrupt.q";
+        {
+            File f();
+            f.open2(loader, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern\n"
+                "for (int i = 1; i <= 2; ++i) {\n"
+                "    try {\n"
+                "        load_module(ARGV[0]);\n"
+                "        printf(\"attempt %d: loaded\\n\", i);\n"
+                "    } catch (hash<ExceptionInfo> ex) {\n"
+                "        printf(\"attempt %d: %s\\n\", i, ex.err);\n"
+                "    }\n"
+                "}\n"
+                "load_module(ARGV[1]);\n"
+                "printf(\"sound module: %d\\n\", call_function(\"SoundModuleAfterCorrupt::two\"));\n");
+            f.close();
+        }
+        out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 15 %s --exec-mode=ast %s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, timeout_cmd, qore_bin, loader, qmod_path, sound_path));
+        list<string> lines = map $1, out.split("\n"), $1 =~ /^(attempt [0-9]|sound module|EXIT=)/;
+        assertEq(4, lines.size(), "corrupt-qmod-regression: the program reports each step: " + out);
+        assertRegex("^attempt 1: (MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)$", lines[0],
+            "corrupt-qmod-regression: the first load is refused: " + out);
+        assertRegex("^attempt 2: (MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)$", lines[1],
+            "corrupt-qmod-regression: the second load is refused too, after the first returned: " + out);
+        assertEq("sound module: 2", lines[2],
+            "corrupt-qmod-regression: a sound module loads after the refused loads: " + out);
+        assertEq("EXIT=0", lines[3], "corrupt-qmod-regression: the program ends by itself: " + out);
     }
 
     #! Exceptions escaping catch blocks must unwind catch scopes correctly

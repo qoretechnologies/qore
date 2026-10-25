@@ -546,11 +546,51 @@ private:
     size_t fused_fresh_container_inits = 0;
     size_t assigned_hash_guard_elisions = 0;
 
+    //! The alloca that caches the value of a local variable in native code
+    /** The variable of a foreach loop is assigned each element as it is (AssignmentMode::Element), so the cache of
+        such a variable can hold a weak reference, which reads as its target: loadLocalCacheValue() loads the value
+        as the program reads it, and storage() gives the alloca itself, to the code that stores, copies or releases
+        the stored value.  A value loaded through storage() would be the weak reference;
+        examples/test/ir/ir-local-slot-reads.qtest guards against such loads.
+    */
+    class LocalCacheSlot {
+    public:
+        DLLLOCAL LocalCacheSlot() = default;
+
+        DLLLOCAL explicit LocalCacheSlot(llvm::Value* cache) : cache(cache) {
+        }
+
+        //! Returns the alloca, to store, copy or release the stored value
+        DLLLOCAL llvm::Value* storage() const {
+            return cache;
+        }
+
+    private:
+        llvm::Value* cache = nullptr;
+    };
+
     // Local variable allocas (LocalVar* address → alloca)
     // These maps drive instruction emission, so iterate in registration order rather than pointer-hash order.
     // Pointer values vary with allocator layout, even for identical source and prefix mappings.
-    using LocalAllocaMap = llvm::MapVector<const void*, llvm::Value*>;
+    using LocalAllocaMap = llvm::MapVector<const void*, LocalCacheSlot>;
     LocalAllocaMap local_allocas;
+
+    //! Loads the boxed value of a local variable from its cache as the program reads it
+    /** The value of an IR-only variable of a foreach loop that holds a weak reference is its target, borrowed from
+        the weak reference in the cache; a reference held by such a variable is dereferenced.  Every other value is
+        loaded as it is.  The runtime helper that reads such a variable is only called when the flag of a typed
+        variable is set (see element_local_read_flags), or for a node held by an untyped variable; with
+        \a load_builder, which inserts outside the current block (as in the entry block), it is called for any value,
+        since no block can be split there.
+    */
+    DLLLOCAL llvm::Value* loadLocalCacheValue(const void* key, const LocalCacheSlot& slot, llvm::Module& module,
+            llvm::IRBuilder<>* load_builder = nullptr, const char* name = "");
+
+    //! Emits the call that raises the error of a return statement that returns no value
+    /** The error is the one the AST interpreter raises for such a return statement ("<return statement> expects
+        type ..."), for the given declared return type.
+    */
+    DLLLOCAL void emitReturnStatementNothingError(llvm::Module& module, const QoreTypeInfo* return_type);
 
     // Track LocalVars that underwent COW in HashKeyStore/ListIndexStore
     // These need fresh reload from runtime stack on next LoadLocal to get updated value
@@ -869,6 +909,22 @@ private:
     // (or NOTHING if the target has already been deleted), rather than reading
     // the cached WeakReferenceNode from an LLVM alloca.
     std::unordered_set<const void*> weak_assigned_locals;
+    //! IR-only variables of foreach loops (AssignmentMode::Element): their caches can hold weak references, which
+    //! read as their targets (see loadLocalCacheValue())
+    std::unordered_set<const void*> ir_only_element_locals;
+
+    //! The flags of the typed variables in ir_only_element_locals: whether the cache holds a weak reference
+    /** Only a foreach store assigns a typed variable of a foreach loop a weak reference (any other store assigns its
+        target), and it sets the flag; a read checks the flag instead of the value, so that a read of any other value
+        makes no call.  Another store leaves the flag as it is: a flag that is still set only makes a read call the
+        helper that reads the variable, which gives any other value as it is.  An untyped variable can also hold a
+        reference, which any store can assign it, so its reads check the value itself.
+    */
+    std::unordered_map<const void*, llvm::AllocaInst*> element_local_read_flags;
+
+    //! Returns the flag of a typed variable of a foreach loop in ir_only_element_locals (see
+    //! element_local_read_flags), or nullptr for any other variable
+    DLLLOCAL llvm::Value* getElementLocalReadFlag(const void* key, llvm::Function* llvm_func);
 
     // Result IDs produced by LoadLocal/LoadClosure on weak-assigned locals.
     // These loads return temporary strong refs that must be released at last
@@ -1245,6 +1301,13 @@ private:
     // Uses LLVM branches to check INT48 tag and sign-extend inline, falling back to runtime
     // only for QoreBigIntNode values.  ~2x faster than ensureIntType for common INT48 values.
     llvm::Value* ensureIntTypeInline(llvm::Value* val, uint32_t value_id);
+    //! Converts a boxed value to a native int: an integer in the boxed value inline, any other value with
+    //! qore_rt_to_int()
+    llvm::Value* emitBoxedToIntInline(llvm::Value* val);
+    //! Returns the type path argument of the return type of a method that AOT-compiled code reads a member for
+    //! directly (a getter, an assignment or a compound assignment that returns the member), or a null pointer
+    //! when the return type accepts no value
+    llvm::Value* getAOTGetterReturnTypePathArg(const AbstractQoreFunctionVariant* variant, bool rejects_nothing);
 
     // Preserve timeout's relative-date-to-milliseconds assignment semantics.
     llvm::Value* ensureTimeoutTypeInline(llvm::Value* val, uint32_t value_id);
@@ -1988,16 +2051,8 @@ private:
             llvm::Module& module, std::string& error);
 };
 
-//! Returns true if a returned value with the given facts must be converted or checked by the declared return type
-DLLLOCAL bool qore_ir_return_needs_coercion(const QoreTypeInfo* return_type, const QoreIRValueFacts* value_facts);
-
-//! Returns true if a returned value with the given facts may need a conversion or type check by the declared return
-//! type, apart from the rejection of a NOTHING value
-DLLLOCAL bool qore_ir_return_value_needs_conversion(const QoreTypeInfo* return_type,
-    const QoreIRValueFacts* value_facts);
-
-//! Returns true if the declared return type converts or rejects a missing return value
-DLLLOCAL bool qore_ir_nothing_return_needs_filter(const QoreTypeInfo* return_type);
+// qore_ir_return_needs_coercion(), qore_ir_return_value_needs_conversion() and
+// qore_ir_nothing_return_needs_filter() are declared in QoreIRAnalysis.h
 
 //! Returns true if the declared return type leaves every value returned by the function unchanged
 /** A call-site summary that substitutes the callee's returned value is only valid in this case

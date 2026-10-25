@@ -63,12 +63,14 @@ done
 # AOT user modules are native ELF files and belong under the multiarch libdir.
 module_dir="$(qore --module-dir)/$(qore --short-version)"
 test -s "$module_dir/Util.qmod"
-# ELF stripping must preserve the appended dependency trailer of every AOT
-# module. Native C++ modules have an API suffix and do not carry this metadata.
+# Packaging must keep the module metadata of every AOT module, which the loader
+# refuses to load without it: the ELF note in .note.qore.modinfo, whose type
+# (the record magic "QAMI") precedes its owner name "Qore". Native C++ modules
+# have an API suffix and do not carry this metadata.
 find "$module_dir" -type f -name '*.qmod' ! -name '*-api-*.qmod' > aot-modules.list
 while IFS= read -r module; do
-    if [ "$(tail -c 8 "$module" | head -c 4)" != QAMD ]; then
-        echo "Missing AOT dependency metadata: $module" >&2
+    if ! LC_ALL=C grep -q -a -F QAMIQore "$module"; then
+        echo "Missing AOT module metadata: $module" >&2
         exit 1
     fi
 done < aot-modules.list

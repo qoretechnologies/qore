@@ -141,6 +141,7 @@ public class StmtHandoffTest inherits QUnit::Test {
         Queue ready();
         Queue destroyed();
         Queue before_end();
+        Queue ended();
         background sub () {
             stmt.prepare("insert into t values (%v)");
             stmt.exec(1);
@@ -150,7 +151,14 @@ public class StmtHandoffTest inherits QUnit::Test {
             }
             destroyed.get();
             before_end.push(delta(base));
-            # the thread ends holding the connection: its cleanup rolls the transaction back and releases it
+            # the thread ends holding the connection: the cleanup of its resources rolls the transaction back and
+            # releases it, which runs here as at the end of the thread, so that the pool's rollback notice is handled
+            try {
+                throw_thread_resource_exceptions();
+                ended.push("no notice");
+            } catch (hash<ExceptionInfo> ex) {
+                ended.push(ex.err);
+            }
         }();
         assertTrue(ready.get());
         assertThrows("SQLSTATEMENT-ERROR", sub () { delete stmt; });
@@ -160,6 +168,7 @@ public class StmtHandoffTest inherits QUnit::Test {
         pool.exec("insert into t values (1)");
         pool.rollback();
         assertEq({"closes": 1, "foreign_closes": 0}, delta(base), "closed by the thread that held the connection");
+        assertEq("DATASOURCEPOOL-LOCK-EXCEPTION", ended.get(), "the cleanup rolled the transaction back");
     }
 
     #! runs a Datasource case: the other thread holds the transaction lock with a statement that this thread

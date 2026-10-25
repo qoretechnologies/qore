@@ -1,0 +1,607 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTModuleMetadataSectionTest
+
+# qcc stores the metadata of an AOT module -- its name, its dependencies and the optional modules that were unavailable
+# when it was compiled -- in a section of the module's image: the Mach-O section __TEXT,__qore_modinfo, or the ELF note
+# section .note.qore.modinfo.  The code signature covers it, so a module can be signed and verified strictly on macOS,
+# and stripping keeps it.  The loader reads it before mapping the module and refuses a module whose metadata is
+# damaged, truncated or missing, or that carries the trailers that earlier qcc versions appended after the image.
+class AOTModuleMetadataSectionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+        #! the directory of the module sources, which is not in the module path when modules are loaded
+        string src_dir;
+        #! the directory of the source module that the compiled module depends on
+        string dep_dir;
+        #! the directory of the compiled modules
+        string art_dir;
+
+        #! the dependency recorded in the metadata
+        const DepSource = "%modern
+module MetaDep { version = \"1.0\"; desc = \"dependency\"; author = \"Qore\"; license = \"MIT\"; }
+public namespace MetaDep { public string sub tag() { return \"dep\"; } }
+";
+
+        #! the module whose metadata is checked
+        const MetaSource = "%modern
+%requires MetaDep
+%try-module MetaMissing >= 1.0
+%define NoMetaMissing
+%endtry
+
+module MetaMod { version = \"1.0\"; desc = \"module metadata\"; author = \"Qore\"; license = \"MIT\"; }
+
+public namespace MetaMod {
+    public string sub value() {
+%ifdef NoMetaMissing
+        return \"meta-\" + MetaDep::tag();
+%else
+        return \"with MetaMissing\";
+%endif
+    }
+}
+";
+
+        #! the size of a mach_header_64
+        const MachHeader64Size = 32;
+        #! MH_MAGIC_64, FAT_MAGIC and the load commands of <mach-o/loader.h>
+        const MhMagic64 = 0xfeedfacf;
+        const FatMagic = 0xcafebabe;
+        const LcSegment64 = 0x19;
+        const LcCodeSignature = 0x1d;
+
+        #! the magic number of a metadata record: 'QAMI'
+        const RecordMagic = 0x494d4151;
+    }
+
+    constructor() : QUnit::Test("AOTModuleMetadataSectionTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("the metadata of a module is in a section of its image", \sectionTest());
+        addTestCase("a module from objects and a separated module have one metadata record", \producersTest());
+        addTestCase("a module passes strict code signature validation, also after it is signed again",
+            \codeSignatureTest());
+        addTestCase("stripping a module keeps its metadata", \stripTest());
+        addTestCase("the metadata of a universal module is read", \universalTest());
+        addTestCase("a module with damaged metadata is refused", \damagedTest());
+        addTestCase("a truncated module is refused", \truncatedTest());
+        addTestCase("a module without its metadata section is refused", \missingSectionTest());
+        addTestCase("a module with the trailers of an earlier qcc is refused", \legacyTrailerTest());
+        addTestCase("a binary module written in C++ has no module metadata", \nativeModuleTest());
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    #! runs a command, returning its output and setting its exit code
+    private string run(string cmd, reference<int> rc) {
+        return backquote(cmd + " 2>&1", \rc);
+    }
+
+    private write(string path, data body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit f.close();
+        f.write(body);
+    }
+
+    #! returns the path of a tool, or NOTHING if it is not available
+    private *string tool(string name) {
+        string path = trim(backquote(sprintf("command -v %s 2>/dev/null || true", name)));
+        return path ? path : NOTHING;
+    }
+
+    private TmpDir initDirs() {
+        TmpDir tmp("qore-aot-module-metadata-");
+        src_dir = tmp.path + "/src";
+        dep_dir = tmp.path + "/dep";
+        art_dir = tmp.path + "/artifacts";
+        mkdir(src_dir);
+        mkdir(dep_dir);
+        mkdir(art_dir);
+        write(src_dir + "/MetaDep.qm", DepSource);
+        write(dep_dir + "/MetaDep.qm", DepSource);
+        write(src_dir + "/MetaMod.qm", MetaSource);
+        return tmp;
+    }
+
+    #! compiles MetaMod.qm to a qmod in the artifact directory and returns its path
+    private string compileMeta(string name = "MetaMod.qmod") {
+        string qmod = art_dir + "/" + name;
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m -o %s %s", env, src_dir, qcc_bin, qmod,
+            src_dir + "/MetaMod.qm"));
+        assertTrue(is_file(qmod), "compiled " + name + ": " + out);
+        return qmod;
+    }
+
+    #! returns the output of qcc --dump-info for a file
+    private string dumpInfo(string path) {
+        return run(sprintf("%s %s --dump-info %s", env, qcc_bin, path));
+    }
+
+    #! returns the module metadata that qcc --dump-info reports for a file, or NOTHING if it reports none
+    /** throws an exception if the metadata is reported as invalid
+    */
+    private *hash<auto> moduleInfo(string path) {
+        string dump = dumpInfo(path);
+        list<string> lines = dump.split("\n");
+        foreach string line in (lines) {
+            if (line == "  AOT module metadata: none found") {
+                return NOTHING;
+            }
+            *list<*string> m = (line =~ x/^  AOT module metadata: (.*), offset 0x([0-9a-f]+), ([0-9]+) bytes$/);
+            if (!m) {
+                if (line =~ /^  AOT module metadata: invalid: /) {
+                    throw "INVALID-METADATA", line;
+                }
+                continue;
+            }
+            hash<auto> rv = {
+                "container": m[0],
+                "offset": m[1].toInt(16),
+                "size": int(m[2]),
+                "dependencies": (),
+                "optional": (),
+            };
+            int i = $# + 1;
+            *list<*string> name = (lines[i++] =~ x/^    module: (.*)$/);
+            assertTrue(exists name, "the module name follows: " + dump);
+            rv.module = name[0];
+            foreach string key in (("dependencies", "optional")) {
+                *list<*string> count = (lines[i++] =~ x/^    (?:dependencies|unavailable optional modules): ([0-9]+)$/);
+                assertTrue(exists count, "the " + key + " count follows: " + dump);
+                for (int j = 0, int n = int(count[0]); j < n; ++j) {
+                    *list<*string> entry = (lines[i++] =~ x/^      (.*)$/);
+                    assertTrue(exists entry, "entry " + j + " of " + key + " follows: " + dump);
+                    rv{key} += entry[0];
+                }
+            }
+            return rv;
+        }
+        throw "NO-METADATA-LINE", dump;
+    }
+
+    #! returns the output of a script that loads MetaMod from the artifact directory, setting the exit code
+    private string loadMeta(reference<int> rc, string opts = "") {
+        return trim(run(sprintf("%s %s QORE_MODULE_DIR=%s:%s %s -ne '%%requires MetaMod\nprint(MetaMod::value());'",
+            env, opts, art_dir, dep_dir, qore_bin), \rc));
+    }
+
+    #! returns the bytes of a file
+    private binary readFile(string path) {
+        return File::readBinaryFile(path);
+    }
+
+    #! replaces bytes of a file
+    private patch(string path, int offset, binary data) {
+        File f();
+        f.open2(path, O_RDWR);
+        on_exit f.close();
+        f.setPos(offset);
+        f.write(data);
+    }
+
+    #! returns a 32-bit little-endian value
+    private static binary le32(int v) {
+        BinaryOutputStream out();
+        StreamWriter w(out);
+        w.writei4LSB(v);
+        return out.getData();
+    }
+
+    #! returns the 32-bit little-endian value at the given offset of a binary
+    private static int getLe32(binary data, int offset) {
+        BinaryInputStream input(data.substr(offset, 4));
+        StreamReader r(input);
+        return r.readu4LSB();
+    }
+
+    #! returns the 32-bit big-endian value at the given offset of a binary
+    private static int getBe32(binary data, int offset) {
+        BinaryInputStream input(data.substr(offset, 4));
+        StreamReader r(input);
+        return r.readu4();
+    }
+
+    #! returns the load commands of a thin 64-bit Mach-O image as a list of hashes with the type, offset and size
+    private list<hash<auto>> machoLoadCommands(binary data, string label) {
+        assertEq(MhMagic64, getLe32(data, 0), label + ": the module is a thin 64-bit Mach-O image");
+        int ncmds = getLe32(data, 16);
+        int sizeofcmds = getLe32(data, 20);
+        list<hash<auto>> rv = ();
+        int pos = MachHeader64Size;
+        for (int i = 0; i < ncmds; ++i) {
+            assertTrue(pos + 8 <= MachHeader64Size + sizeofcmds, sprintf("%s: load command %d lies in the load "
+                "commands", label, i));
+            int size = getLe32(data, pos + 4);
+            rv += {"type": getLe32(data, pos), "offset": pos, "size": size};
+            pos += size;
+        }
+        return rv;
+    }
+
+    #! asserts that the code signature of a Mach-O module is the last data in the file
+    /** codesign refuses data after the signature that LC_CODE_SIGNATURE describes ("main executable failed strict
+        validation"); the trailers of earlier qcc versions were such data
+    */
+    private assertSignatureEndsFile(string path, string label) {
+        binary data = readFile(path);
+        *hash<auto> sig = (map $1, machoLoadCommands(data, label), $1.type == LcCodeSignature)[0];
+        assertTrue(exists sig, label + ": the module has a code signature");
+        int dataoff = getLe32(data, sig.offset + 8);
+        int datasize = getLe32(data, sig.offset + 12);
+        assertEq(data.size(), dataoff + datasize, label + ": the code signature ends the file");
+    }
+
+    #! returns the offset of the section name __qore_modinfo in the load commands of a Mach-O module
+    private int machoSectionNameOffset(string path) {
+        binary data = readFile(path);
+        binary name = binary("__qore_modinfo");
+        foreach hash<auto> cmd in (machoLoadCommands(data, path)) {
+            if (cmd.type != LcSegment64) {
+                continue;
+            }
+            int nsects = getLe32(data, cmd.offset + 64);
+            for (int j = 0; j < nsects; ++j) {
+                int sect = cmd.offset + 72 + j * 80;
+                if (data.substr(sect, name.size()) == name) {
+                    return sect;
+                }
+            }
+        }
+        throw "NO-SECTION", sprintf("%s has no __qore_modinfo section", path);
+    }
+
+    #! signs a Mach-O module ad hoc, with the given identifier
+    private signAdHoc(string path, string label, *string identifier) {
+        int rc;
+        string out = run(sprintf("codesign -f -s - --timestamp=none %s%s", identifier
+            ? sprintf("-i %s ", identifier) : "", path), \rc);
+        assertEq(0, rc, label + ": codesign signed the module: " + out);
+    }
+
+    #! asserts that a module is loaded and works
+    private assertLoads(string label, string opts = "") {
+        int rc;
+        string out = loadMeta(\rc, opts);
+        assertEq(0, rc, label + ": the module was loaded: " + out);
+        assertEq("meta-dep", out, label + ": the module works");
+    }
+
+    #! asserts that loading a module fails with an error that names it and matches the pattern
+    private assertRefused(string qmod, string pattern, string label) {
+        int rc;
+        string out = loadMeta(\rc);
+        assertNeq(0, rc, label + ": the module was not loaded: " + out);
+        # the process was not killed for mapping a page that fails signature validation
+        assertNeq(137, rc, label + ": the loader reported the damage: " + out);
+        assertRegex("LOAD-MODULE-ERROR", out, label);
+        assertNeq(-1, out.find(qmod), label + ": the error names the module: " + out);
+        assertRegex(pattern, out, label);
+    }
+
+    sectionTest() {
+        TmpDir tmp = initDirs();
+        string qmod = compileMeta();
+        hash<auto> info = moduleInfo(qmod);
+        assertEq("MetaMod", info.module);
+        assertEq(("MetaDep",), info.dependencies);
+        assertEq(("MetaMissing >= 1.0",), info.optional);
+        binary data = readFile(qmod);
+        assertEq(RecordMagic, getLe32(data, info.offset), "the record starts with its magic number");
+        assertEq(1, getLe32(data, info.offset + 4), "the record has format version 1");
+        assertEq(info.size - 12, getLe32(data, info.offset + 8), "the record gives the size of its payload");
+
+        if (PlatformOS == "Darwin") {
+            assertEq("Mach-O section __TEXT,__qore_modinfo", info.container);
+            # the section lies in the image, before the code signature that ends the file
+            assertSignatureEndsFile(qmod, "fresh module");
+            if (*string otool = tool("otool")) {
+                string out = run(sprintf("%s -l %s", otool, qmod));
+                assertRegex("sectname __qore_modinfo\n\\s+segname __TEXT\n", out);
+            }
+        } else {
+            assertEq("ELF note Qore 0x494d4151 (section .note.qore.modinfo)", info.container);
+            # the note name precedes the description
+            assertEq(<516f726500>, data.substr(info.offset - 8, 5));
+            if (*string readelf = tool("readelf")) {
+                string out = run(sprintf("LC_ALL=C %s --wide --section-headers --notes %s", readelf, qmod));
+                # an allocated note section, so strip keeps it, in a PT_NOTE segment
+                assertRegex("\\.note\\.qore\\.modinfo\\s+NOTE\\s+[0-9a-f]+\\s+[0-9a-f]+\\s+[0-9a-f]+\\s+00\\s+A",
+                    out);
+                assertRegex("Qore\\s+0x[0-9a-f]+\\s+.*0x494d4151", out);
+            }
+        }
+        assertLoads("fresh module");
+    }
+
+    producersTest() {
+        TmpDir tmp = initDirs();
+        # a module from per-file objects: the objects have no metadata, the module one record
+        string sep_dir = src_dir + "/MetaSep";
+        mkdir(sep_dir);
+        write(sep_dir + "/MetaSep.qm", "%modern\n%requires MetaDep\nmodule MetaSep { version = \"1.0\"; "
+            "desc = \"separated\"; author = \"Qore\"; license = \"MIT\"; }\n");
+        write(sep_dir + "/A.qc", "public namespace MetaSep { public string sub a() { return \"a-\" + "
+            "MetaDep::tag(); } }\n");
+        list<string> objs;
+        foreach string file in (("MetaSep.qm", "A.qc")) {
+            string obj = art_dir + "/" + file + ".qo";
+            string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -c --context=%s -o %s %s", env, src_dir, qcc_bin,
+                sep_dir, obj, sep_dir + "/" + file));
+            assertTrue(is_file(obj), "compiled " + file + ": " + out);
+            assertNothing(moduleInfo(obj), "the object of " + file + " has no module metadata");
+            objs += obj;
+        }
+        string agg = art_dir + "/MetaSep.qmod";
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m --from-objects --context=%s -o %s %s", env, src_dir,
+            qcc_bin, sep_dir, agg, objs.join(" ")));
+        assertTrue(is_file(agg), "aggregated module: " + out);
+        hash<auto> info = moduleInfo(agg);
+        assertEq("MetaSep", info.module);
+        assertEq(("MetaDep",), info.dependencies);
+        assertEq((), info.optional);
+
+        # the separated module compiled from its directory
+        string sep = art_dir + "/sep/MetaSep.qmod";
+        mkdir(art_dir + "/sep");
+        out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m -o %s %s", env, src_dir, qcc_bin, sep, sep_dir));
+        assertTrue(is_file(sep), "separated module: " + out);
+        info = moduleInfo(sep);
+        assertEq("MetaSep", info.module);
+        assertEq(("MetaDep",), info.dependencies);
+
+        foreach string qmod in ((agg, sep)) {
+            int rc;
+            out = trim(run(sprintf("%s QORE_MODULE_DIR=%s:%s %s -ne '%%requires MetaSep\nprint(MetaSep::a());'",
+                env, dirname(qmod), dep_dir, qore_bin), \rc));
+            assertEq(0, rc, qmod + ": " + out);
+            assertEq("a-dep", out, qmod);
+        }
+    }
+
+    codeSignatureTest() {
+        if (PlatformOS != "Darwin") {
+            testSkip("code signatures are only verified on macOS");
+        }
+        if (!tool("codesign")) {
+            testSkip("codesign is not available");
+        }
+        TmpDir tmp = initDirs();
+        string qmod = compileMeta();
+
+        # the signature that the linker attached covers the metadata
+        int rc;
+        string out = run(sprintf("codesign --verify --strict --verbose=2 %s", qmod), \rc);
+        assertEq(0, rc, "the linker's signature passes strict validation: " + out);
+
+        # signed again with another identifier, as a distributor signs a module before notarizing it
+        signAdHoc(qmod, "re-signed module", "org.qore.test.AOTModuleMetadataResigned");
+        out = run(sprintf("codesign --verify --strict --verbose=2 %s", qmod), \rc);
+        assertEq(0, rc, "the new signature passes strict validation: " + out);
+        out = run(sprintf("codesign --display --verbose=2 %s", qmod));
+        assertRegex("Identifier=org\\.qore\\.test\\.AOTModuleMetadataResigned", out);
+        assertFalse(out =~ /linker-signed/, "the module is no longer signed by the linker: " + out);
+        assertSignatureEndsFile(qmod, "re-signed module");
+
+        hash<auto> info = moduleInfo(qmod);
+        assertEq("MetaMod", info.module);
+        assertEq(("MetaDep",), info.dependencies);
+        assertEq(("MetaMissing >= 1.0",), info.optional);
+        assertLoads("re-signed module", "QORE_VERIFY_MODULE_SIGNATURES=1");
+    }
+
+    stripTest() {
+        TmpDir tmp = initDirs();
+        string qmod = compileMeta();
+        hash<auto> info = moduleInfo(qmod);
+        if (PlatformOS == "Darwin") {
+            if (!tool("strip") || !tool("codesign")) {
+                testSkip("strip or codesign is not available");
+            }
+            int rc;
+            string out = run(sprintf("strip -x -S %s", qmod), \rc);
+            assertEq(0, rc, "strip: " + out);
+            signAdHoc(qmod, "stripped module");
+            out = run(sprintf("codesign --verify --strict --verbose=2 %s", qmod), \rc);
+            assertEq(0, rc, "the stripped module passes strict validation: " + out);
+        } else {
+            if (!tool("strip") || !tool("objcopy")) {
+                testSkip("strip or objcopy is not available");
+            }
+            # as packaging does: the debug information goes to a separate file that the module links to
+            string debug = qmod + ".debug";
+            int rc;
+            string out = run(sprintf("objcopy --only-keep-debug %s %s && strip --strip-unneeded %s && "
+                "objcopy --add-gnu-debuglink=%s %s", qmod, debug, qmod, debug, qmod), \rc);
+            assertEq(0, rc, "strip and debuglink: " + out);
+            unlink(debug);
+        }
+        hash<auto> stripped = moduleInfo(qmod);
+        assertEq(info - ("offset",), stripped - ("offset",), "the metadata is unchanged");
+        assertLoads("stripped module");
+
+        if (PlatformOS != "Darwin") {
+            # strip --strip-all removes every section that is not loaded, but the note is loaded
+            int rc;
+            string out = run(sprintf("strip --strip-all %s", qmod), \rc);
+            assertEq(0, rc, "strip --strip-all: " + out);
+            assertEq(info - ("offset",), moduleInfo(qmod) - ("offset",), "the metadata is unchanged");
+            assertLoads("module stripped of all symbols");
+        }
+    }
+
+    universalTest() {
+        if (PlatformOS != "Darwin") {
+            testSkip("universal modules are Mach-O files");
+        }
+        if (!tool("lipo") || !tool("codesign")) {
+            testSkip("lipo or codesign is not available");
+        }
+        TmpDir tmp = initDirs();
+        string thin = compileMeta("MetaThin.qmod");
+        string qmod = art_dir + "/MetaMod.qmod";
+        int rc;
+        string out = run(sprintf("lipo -create %s -output %s", thin, qmod), \rc);
+        assertEq(0, rc, "lipo: " + out);
+        unlink(thin);
+        assertEq(FatMagic, getBe32(readFile(qmod), 0), "the module is a universal file");
+        out = run(sprintf("codesign --verify --strict --verbose=2 %s", qmod), \rc);
+        assertEq(0, rc, "the universal module passes strict validation: " + out);
+        hash<auto> info = moduleInfo(qmod);
+        assertEq("MetaMod", info.module);
+        assertEq(("MetaDep",), info.dependencies);
+        assertLoads("universal module");
+    }
+
+    damagedTest() {
+        TmpDir tmp = initDirs();
+        string qmod = compileMeta();
+        hash<auto> info = moduleInfo(qmod);
+        binary orig = readFile(qmod);
+
+        # each damage, the error it gives, and the error that qcc --dump-info reports
+        list<hash<auto>> cases = (
+            {"offset": info.offset, "data": le32(0x58414d49), "error": "the record has an invalid magic number "
+                "0x58414d49; the file is damaged"},
+            {"offset": info.offset + 4, "data": le32(2), "error": "the record has format version 2, but this Qore "
+                "runtime reads version 1; rebuild the module with the qcc of this Qore installation"},
+            {"offset": info.offset + 8, "data": le32(info.size - 11), "error": "the record gives a size of "
+                + (info.size - 11) + " bytes, but holds " + (info.size - 12) + "; the file is damaged"},
+            {"offset": info.offset + 12, "data": le32(0), "error": "the record has an invalid module name; the "
+                "file is damaged"},
+            # the dependency count follows the module name
+            {"offset": info.offset + 16 + "MetaMod".size(), "data": le32(1000), "error": "the record has an invalid "
+                "dependency list; the file is damaged"},
+        );
+        foreach hash<auto> c in (cases) {
+            string label = "damage " + $#;
+            write(qmod, orig);
+            patch(qmod, c.offset, c.data);
+            assertThrows("INVALID-METADATA", sprintf("AOT module metadata: invalid: its AOT module metadata \\(.* at "
+                "offset 0x%x\\): ", info.offset) + quoteRegex(c.error), \moduleInfo(), qmod);
+            assertRefused(qmod, "cannot load binary module '.*MetaMod\\.qmod': its AOT module metadata \\(.*\\): "
+                + quoteRegex(c.error), label);
+        }
+
+        # a module whose metadata names another module
+        write(qmod, orig);
+        patch(qmod, info.offset + 16 + "MetaMo".size(), binary("e"));
+        assertEq("MetaMoe", moduleInfo(qmod).module);
+        assertRefused(qmod, "the AOT module metadata of module '.*MetaMod\\.qmod' identifies feature 'MetaMoe', "
+            "expecting 'MetaMod'", "another module");
+    }
+
+    truncatedTest() {
+        TmpDir tmp = initDirs();
+        string qmod = compileMeta();
+        hash<auto> info = moduleInfo(qmod);
+        binary orig = readFile(qmod);
+
+        # cut in the metadata, and in the headers that locate it
+        foreach int size in ((info.offset + 4, 64)) {
+            string label = sprintf("truncated to %d bytes", size);
+            write(qmod, orig.substr(0, size));
+            assertThrows("INVALID-METADATA", "extends past the end of the file \\(to byte [0-9]+ of " + size
+                + "\\); the file is truncated: reinstall or rebuild the module", \moduleInfo(), qmod);
+            assertRefused(qmod, "cannot load binary module '.*MetaMod\\.qmod': its .* extends past the end of the file "
+                "\\(to byte [0-9]+ of " + size + "\\); the file is truncated: reinstall or rebuild the module", label);
+        }
+    }
+
+    #! removes the metadata section of a module by renaming it
+    /** On macOS the module is signed again, so that it can be mapped.
+    */
+    private removeSection(string qmod, hash<auto> info) {
+        if (PlatformOS == "Darwin") {
+            patch(qmod, machoSectionNameOffset(qmod), binary("__qore_modinfX"));
+            signAdHoc(qmod, "module without metadata");
+        } else {
+            # the owner name of the note precedes its description
+            patch(qmod, info.offset - 8, binary("X"));
+        }
+        assertNothing(moduleInfo(qmod), "the module has no metadata");
+    }
+
+    missingSectionTest() {
+        TmpDir tmp = initDirs();
+        string qmod = compileMeta();
+        removeSection(qmod, moduleInfo(qmod));
+        assertRefused(qmod, "AOT module '.*MetaMod\\.qmod': feature 'MetaMod': the module has no AOT module metadata "
+            "\\(the (Mach-O section __TEXT,__qore_modinfo|ELF note section \\.note\\.qore\\.modinfo)\\); the file was "
+            "changed after it was built, for example by a tool that removed the section: reinstall or rebuild the "
+            "module", "module without metadata");
+    }
+
+    legacyTrailerTest() {
+        TmpDir tmp = initDirs();
+        string qmod = compileMeta();
+        removeSection(qmod, moduleInfo(qmod));
+        # the dependency trailer of an earlier qcc: the module name, no dependencies, and the footer
+        BinaryOutputStream out();
+        StreamWriter w(out);
+        w.writei4LSB("MetaMod".size());
+        w.write("MetaMod");
+        w.writei4LSB(0);
+        w.writei8LSB(8 + "MetaMod".size());
+        w.writei4LSB(0x444d4151);
+        w.writei4LSB(1);
+        {
+            File f();
+            f.open2(qmod, O_WRONLY | O_APPEND);
+            on_exit f.close();
+            f.write(out.getData());
+        }
+        string error = "it carries its AOT module metadata in a trailer after the end of its image, the format of an "
+            "earlier qcc, which this Qore runtime no longer reads; rebuild the module with the qcc of this Qore "
+            "installation";
+        assertThrows("INVALID-METADATA", quoteRegex(error), \moduleInfo(), qmod);
+        assertRefused(qmod, "cannot load binary module '.*MetaMod\\.qmod': " + quoteRegex(error), "earlier trailer");
+    }
+
+    nativeModuleTest() {
+        # the notes of a C++ module are read, but none is the module metadata, for example the GNU property note on
+        # x86_64 and aarch64 Linux, whose segment is aligned to 8 bytes
+        try {
+            load_module("json");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("the json binary module is not available: " + ex.desc);
+        }
+        string path = get_module_hash().json.filename;
+        assertRegex("-api-[0-9.]+\\.qmod$", path, "json is a binary module");
+        assertNothing(moduleInfo(path), "a C++ module has no AOT module metadata");
+        assertNeq(-1, dumpInfo(path).find("  AOT module metadata: none found"));
+    }
+
+    #! returns a regular expression matching a string
+    private static string quoteRegex(string str) {
+        string rv = "";
+        for (int i = 0; i < str.length(); ++i) {
+            string c = str[i];
+            if ("\\^$.|?*+()[]{}".find(c) != -1) {
+                rv += "\\";
+            }
+            rv += c;
+        }
+        return rv;
+    }
+}

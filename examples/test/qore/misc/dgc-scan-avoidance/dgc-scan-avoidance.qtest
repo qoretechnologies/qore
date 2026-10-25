@@ -242,16 +242,24 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "cut-list-release-walked": 0,
             "cut-list-release-sets": 0,
 
-            # new holders each store a reference to an 85-node tree that is already scanned and unchanged: the first
-            # scan records the tree as a closed region (see RRegion), and the later ones do not enter it.  The AST
-            # interpreter makes no scan here at all: the holder's constructor defers it and the holder is handed
-            # over to the list (see CompiledScanCounts)
+            # new holders each store a reference to an 85-node tree that is already scanned and unchanged: no scan
+            # enters it, as the holder's constructor defers its scan and the holder is handed over to the list
             "dag-holder-scans": 100,
             "dag-holder-walked": 0,
             "dag-holder-sets": 0,
             "dag-holder-release-scans": 1,
             "dag-holder-release-walked": 0,
             "dag-holder-release-sets": 0,
+
+            # the same with each new holder held by a local variable, whose release makes the scan the holder's
+            # constructor deferred once the holder is in the list: the first one records the tree as a closed region
+            # (see RRegion) and walks it, the later ones only enter the holder
+            "dag-holder-local-scans": 100,
+            "dag-holder-local-walked": 101,
+            "dag-holder-local-sets": 0,
+            "dag-holder-local-release-scans": 1,
+            "dag-holder-local-release-walked": 0,
+            "dag-holder-local-release-sets": 0,
 
             # the same with each node of the tree in a 2-cycle with a peer, as a schema object is with its cached
             # data type: the pairs are closed sets, which a region can depend on
@@ -281,12 +289,12 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "dag-dependent-back-edge-release-sets": 0,
 
             # a reference stored in a Queue ends every region (RSet::untracked_edge_epoch): the next scan enters the
-            # tree again, the one after does not (the compiled tiers make these scans; see CompiledScanCounts)
+            # tree again, the one after does not
             "dag-epoch-first-scans": 1,
-            "dag-epoch-first-walked": 0,
+            "dag-epoch-first-walked": 86,
             "dag-epoch-first-sets": 0,
             "dag-epoch-second-scans": 1,
-            "dag-epoch-second-walked": 0,
+            "dag-epoch-second-walked": 1,
             "dag-epoch-second-sets": 0,
             "dag-epoch-release-scans": 1,
             "dag-epoch-release-walked": 0,
@@ -305,19 +313,13 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
         };
 
         #! the scan counters of the compiled tiers that differ from the AST interpreter's (ExpectedScanCounts)
-        /** A compiled assignment hands a value it does not use again over to the lvalue, as the AST interpreter does,
-            so the scan a new object's constructor deferred is not made when the object is linked in; and the
-            temporary references the compiled code takes to objects on the lvalue path are released without a
-            rescan, as the set they belong to has gained no edge (see the "release" shape).
+        /** A compiled assignment, and an append to a list with +=, push or unshift, hands a value it does not use
+            again over to the lvalue, as the AST interpreter does, so the scan a new object's constructor deferred is
+            not made when the object is linked in; and the temporary references the compiled code takes to objects on
+            the lvalue path are released without a rescan, as the set they belong to has gained no edge (see the
+            "release" shape).
         */
         const CompiledScanCounts = {
-            # a compiled assignment releases its reference to the new holder after linking it in, which makes the
-            # scan its constructor deferred: the first one records the tree as a closed region and walks it, the
-            # later ones only enter the holder
-            "dag-holder-walked": 101,
-            "dag-holder-cyclic-walked": 102,
-            "dag-epoch-first-walked": 86,
-            "dag-epoch-second-walked": 1,
             # measured
             "server-walked": 1000,
             # removing a closure-bound variable writes it through an lvalue helper, whose scan the frame's real
@@ -410,6 +412,9 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "dag-holder-held-dtors": 0,
             "dag-holder-dtors": 85,
             "dag-holder-leaf-dtors": 100,
+            "dag-holder-local-held-dtors": 0,
+            "dag-holder-local-dtors": 85,
+            "dag-holder-local-leaf-dtors": 100,
             "dag-holder-cyclic-held-dtors": 0,
             "dag-holder-cyclic-dtors": 170,
             "dag-holder-cyclic-leaf-dtors": 100,

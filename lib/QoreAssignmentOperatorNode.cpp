@@ -202,6 +202,14 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         // Preserve the PF_NARROWED_TYPE flag if set during left side parsing
         fh0.preserveFlags(PF_NARROWED_TYPE);
     }
+    // a local variable assigned with := or @= can hold a weak or an opaque reference
+    if (mode != AssignmentMode::Normal && left.getType() == NT_VARREF) {
+        const VarRefNode* var = left.get<const VarRefNode>();
+        qore_var_t var_type = var->getType();
+        if ((var_type == VT_LOCAL || var_type == VT_CLOSURE || var_type == VT_LOCAL_TS) && var->ref.id) {
+            var->ref.id->parseWeakAssigned();
+        }
+    }
     // return type info is the same as the lvalue's typeinfo
     ti = parse_context.typeInfo;
 

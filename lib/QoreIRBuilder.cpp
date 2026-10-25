@@ -1584,6 +1584,16 @@ QoreIRInstruction* QoreIRBuilder::createCheckException(const QoreProgramLocation
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createCheckReturnValue(QoreIRValue value, const QoreTypeInfo* return_type,
+        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CheckReturnValue);
+    inst->operands.push_back(value);
+    inst->element_type = return_type;
+    inst->exception_target = exception_target;
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIRCallAOTHelperInstruction* QoreIRBuilder::createCallAOTHelper(
         const std::string& helper_name, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRCallAOTHelperInstruction>(helper_name);

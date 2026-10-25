@@ -18,8 +18,8 @@
 
 #! Tests that every execution mode reads weak references from containers as the AST interpreter does
 /** The AST interpreter is the benchmark for the semantics of the other execution modes.  Each check applies an
-    operation to a weak reference (\c ":=") read from a hash value, an object member or a list element, or by map,
-    with a live and with a destroyed target; the checks are in
+    operation to a weak reference (\c ":=") read from a hash value, an object member or a list element, by map or
+    as the variable of a foreach loop, with a live and with a destroyed target; the checks are in
     weak-container-read-checks.qi, and weak-container-read-results.qi has their results with the AST interpreter.
     The checks run in this program, in a worker in each execution mode and from a compiled module.
 */

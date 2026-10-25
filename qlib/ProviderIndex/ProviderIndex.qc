@@ -108,6 +108,85 @@ public hashdecl ProviderIndexCreateOptions {
     bool write_canonical_yaml = False;
 }
 
+#! Replaces the unique keys in one type description with keys that do not depend on the process
+/** Unique keys are derived from object addresses; within one description they only need to identify the same type
+    or field consistently, which a recursive type description relies on to refer to an enclosing type.  Each key is
+    replaced by its position in the order in which the keys first occur.  The map of keys is a member, so the walk
+    passes no reference and builds no closure for each node of the description.
+
+    A type that a description reaches by several paths is described by the same subtree on each of them (the
+    description of a type is made once per description, see
+    @ref DataProvider::AbstractDataProviderType::getInfo() "AbstractDataProviderType::getInfo()"), and a
+    description can reach some types by millions of paths.  A subtree is replaced once: when the subtree with the
+    same unique key is found again and it is identical to the one that was replaced, the replacement is used
+    again.  This is exact: every key in the subtree was mapped when it was first replaced, and a key's replacement
+    never changes, so replacing it again would give the same result.  A subtree with the same key that differs,
+    such as a recursive type cut at another depth, is replaced as usual.  The replacement shares the subtree, as
+    the description did, so it takes the memory of the distinct subtrees rather than of every path.
+*/
+class ProviderIndexUniqueKeys {
+    public {
+        #! The hash nodes walked
+        int walked = 0;
+        #! The subtrees replaced by a replacement made before
+        int reused = 0;
+    }
+
+    private {
+        #! original key -> replacement
+        hash<string, string> key_map = {};
+        #! original key -> the first subtree with the key as given (\c original) and as replaced (\c result)
+        hash<string, hash<auto>> subtrees = {};
+        #! original key -> the times its subtree was walked
+        hash<string, int> walks = {};
+    }
+
+    #! Returns the description or part of it with its unique keys replaced
+    auto replace(auto value) {
+        switch (value.typeCode()) {
+            case NT_HASH: {
+                *string subtree_key;
+                if (value.hasKey("unique_key") && value.unique_key.typeCode() == NT_STRING) {
+                    subtree_key = value.unique_key;
+                    *hash<auto> replaced = subtrees{subtree_key};
+                    if (replaced && replaced.original.fullType() == value.fullType()
+                            && replaced.original === value) {
+                        ++reused;
+                        return replaced.result;
+                    }
+                    ++walks{subtree_key};
+                }
+                ++walked;
+                auto original = value;
+                foreach string key in (keys value) {
+                    if (key == "unique_key" && value{key}.typeCode() == NT_STRING) {
+                        string original_key = value{key};
+                        *string replacement = key_map{original_key};
+                        if (!exists replacement) {
+                            replacement = key_map{original_key} = (key_map.size() + 1).toString();
+                        }
+                        value{key} = replacement;
+                    } else {
+                        value{key} = replace(value{key});
+                    }
+                }
+                if (subtree_key && !subtrees{subtree_key}) {
+                    subtrees{subtree_key} = {"original": original, "result": value};
+                }
+                return value;
+            }
+            case NT_LIST:
+                return map replace($1), value;
+        }
+        return value;
+    }
+
+    #! Returns the most times that one subtree with a unique key was walked
+    int getMostWalks() {
+        return walks ? max(walks.values()) : 0;
+    }
+}
+
 #! The main API class
 public class ProviderIndex inherits ProviderIndexUtil {
     public {}
@@ -120,10 +199,51 @@ public class ProviderIndex inherits ProviderIndexUtil {
         static Mutex worker_lock();
         #! Incremented by cancelWorkers(); a build started in an earlier generation has been cancelled
         static int cancel_generation = 0;
+
+        #! Protects @ref unique_key_counts
+        static Mutex unique_key_lock();
+        #! What the replacement of the unique keys of type descriptions did in this process; see
+        #! getUniqueKeyReplacementCounts()
+        static hash<string, int> unique_key_counts = {
+            "descriptions": 0,
+            "walked": 0,
+            "reused": 0,
+            "most_walks": 0,
+        };
 %ifndef NoProcess
         #! The worker processes of the builds in progress, by batch file
         static hash<string, Process> worker_processes = {};
 %endif
+    }
+
+    #! Returns what the replacement of the unique keys of type descriptions did in this process
+    /** For diagnostics and tests: the work of an index build on large type descriptions shows here.
+
+        @return \c descriptions: the descriptions whose unique keys were replaced; \c walked: the hash nodes walked;
+        \c reused: the subtrees that were found again and replaced by the replacement made before; \c most_walks:
+        the most times that one subtree of a description was walked, which is 1 when every subtree that a
+        description repeats is replaced once
+
+        @since %ProviderIndex 1.4
+    */
+    static hash<string, int> getUniqueKeyReplacementCounts() {
+        AutoLock al(unique_key_lock);
+        return unique_key_counts;
+    }
+
+    #! Returns a description with its unique keys replaced, and counts the work done
+    private static auto replaceUniqueKeys(auto description) {
+        ProviderIndexUniqueKeys replacer();
+        auto rv = replacer.replace(description);
+        AutoLock al(unique_key_lock);
+        ++unique_key_counts.descriptions;
+        unique_key_counts.walked += replacer.walked;
+        unique_key_counts.reused += replacer.reused;
+        int most = replacer.getMostWalks();
+        if (most > unique_key_counts.most_walks) {
+            unique_key_counts.most_walks = most;
+        }
+        return rv;
     }
 
     #! Stops the index worker processes of every build in progress in this process
@@ -189,7 +309,10 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
             initialized and are recorded as unavailable in the index
         @throw PROVIDER-INDEX-MODULE-ERROR an explicit dependency has no authoritative loaded module identity
         @throw DATA-PROVIDER-DISCOVERY-ERROR if discovery fails other than by the failure of individual apps or actions:
-            a discovery source, a factory, or a worker fails, or the catalog changes while it is indexed
+            a discovery source, a factory, or a worker fails, or the catalog changes while it is indexed; the failure
+            of a worker that did not finish within
+            @ref ProviderIndex::ProviderIndexCreateOptions::worker_timeout_ms "worker_timeout_ms" has \c timed_out
+            set in its argument
         @throw DATA-PROVIDER-DISCOVERY-STALE if registration changes after qualification
         @throw PROVIDER-INDEX-ERROR the output directory is unavailable
         @throw PROVIDER-INDEX-WORKER-ERROR a worker build was requested, but worker processes cannot be started
@@ -484,6 +607,8 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     private static int snapshotIndex(reference<hash<DataProviderIndexInfo>> index,
             DataProviderDiscoverySession discovery, *list<string> app_filter,
             reference<list<hash<auto>>> type_info_mismatches) {
+        # the description of each option type of this build, made once per type; see getOptionTypeDescription()
+        hash<string, hash<auto>> option_types = {};
         # Finish deferred registration, output-type resolution, and scheme loading before starting the authoritative
         # snapshot. These calls are allowed to advance the revision; the second getIndexApps() below is the actual
         # checked-point read.
@@ -553,7 +678,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
             index.appinfomap{app.name} = app;
             # add to app action info map (skip apps with no actions)
             if (*hash<string, hash<auto>> actions = getSerializableAppActions(app.name, discovery,
-                    \type_info_mismatches)) {
+                    \type_info_mismatches, \option_types)) {
                 index.actioninfomap{app.name} = actions;
             }
             if (!index.appmap{app.name}) {
@@ -615,7 +740,8 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         (see @ref DataProvider::DataProviderStaticMetadataHelper "DataProviderStaticMetadataHelper")
     */
     private static *hash<string, hash<auto>> getSerializableAppActions(string app,
-            DataProviderDiscoverySession discovery, reference<list<hash<auto>>> type_info_mismatches) {
+            DataProviderDiscoverySession discovery, reference<list<hash<auto>>> type_info_mismatches,
+            reference<hash<string, hash<auto>>> option_types) {
         hash<string, hash<auto>> rv;
         # the index is static metadata, so dynamic type and default value callbacks must not run
         DataProviderStaticMetadataHelper static_metadata();
@@ -642,11 +768,14 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                     throw "DATA-PROVIDER-OUTPUT-TYPE-UNAVAILABLE", sprintf("no output type for %s/%s", app,
                         action.action);
                 }
+                # the paths of the option type descriptions already known to be plain data
+                hash<string, bool> plain = {};
                 hash<auto> entry = (action - ("get_dynamic_options", "get_output_type", "output_type")) + {
-                    "options": getSerializableActionOptions(app, action, \type_info_mismatches),
+                    "options": getSerializableActionOptions(app, action, \type_info_mismatches, \option_types,
+                        \plain),
                     "data_provider_info": getSerializableDataProviderInfo(action.data_provider_info),
                 };
-                checkPlainData(entry, "");
+                checkPlainData(entry, "", plain);
                 rv{action.action} = entry;
             } catch (hash<ExceptionInfo> ex) {
                 DataProviderActionCatalog::reportDiscoveryFailure(discovery, "action", "serialize-action-metadata",
@@ -687,8 +816,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                     continue;
                 }
                 # unique keys identify objects by address, so they are replaced to make builds reproducible
-                hash<string, string> key_map;
-                hash<auto> info = replaceUniqueKeys(factory.getInfoAsData(True), \key_map);
+                hash<auto> info = replaceUniqueKeys(factory.getInfoAsData(True));
                 checkPlainData(info, "");
                 rv{name} = info;
             } catch (hash<ExceptionInfo> ex) {
@@ -717,66 +845,87 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     }
 
     #! Get YAML-serializable action options
+    /** @param app the app
+        @param action the action
+        @param type_info_mismatches option types whose descriptions do not restore an equivalent type are added here
+        @param option_types the descriptions of the option types of the build; see getOptionTypeDescription()
+        @param plain the path of each option type description in the action's index entry that is plain data is
+            added here, so that checkPlainData() does not walk it again
+    */
     private static *hash<auto> getSerializableActionOptions(string app, hash<DataProviderActionInfo> action,
-            reference<list<hash<auto>>> type_info_mismatches) {
+            reference<list<hash<auto>>> type_info_mismatches, reference<hash<string, hash<auto>>> option_types,
+            reference<hash<string, bool>> plain) {
         hash<auto> rv;
         foreach hash<auto> i in (action.options.pairIterator()) {
-            hash<DataTypeInfo> type_info = i.value.type.getInfo();
-            # unique keys identify objects by address, so they are replaced to make builds reproducible
-            hash<string, string> key_map;
-            type_info = replaceUniqueKeys(type_info, \key_map);
-            if (*hash<auto> mismatch = checkTypeInfo(type_info)) {
-                push type_info_mismatches, {"app": app, "action": action.action, "option": i.key} + mismatch;
+            hash<auto> description = getOptionTypeDescription(i.value.type, \option_types);
+            if (description.mismatch) {
+                push type_info_mismatches, {"app": app, "action": action.action, "option": i.key}
+                    + description.mismatch;
+            }
+            if (description.plain) {
+                plain{".options." + i.key + ".type_info"} = True;
             }
             rv{i.key} = (i.value - "type") + {
-                "type_info": type_info,
+                "type_info": description.type_info,
             };
         }
         return rv;
     }
 
-    #! Replaces the unique keys in a type description with keys that do not depend on the process
-    /** Unique keys are derived from object addresses; within one description they only need to identify the same
-        type or field consistently, which a recursive type description relies on to refer to an enclosing type.
+    #! Returns the description of an option type, made once per type and build
+    /** The same type object is the type of many options, for example an app's record type is the type of the
+        options of its create, update and upsert actions, and the descriptions of some types have millions of nodes.
+        The description, with its unique keys replaced (see ProviderIndexUniqueKeys), whether it restores an
+        equivalent type (checkTypeInfo()) and whether it is plain data depend only on the type, so they are made the
+        first time the type is described in a build and reused for every other option of the type.  The type is kept
+        with its description, so that its identity cannot be reused by another object while the build runs.
 
-        @param value the description or part of it
-        @param key_map maps each original key to its replacement
+        @param type the option type; a value that is not a type is described as before, and fails as before
+        @param option_types the descriptions made so far in the build, by type identity
 
-        @return the description with replaced unique keys
+        @return \c type_info: the description; \c mismatch: the result of checkTypeInfo(); \c plain: @ref True if
+        the description is plain data
     */
-    private static auto replaceUniqueKeys(auto value, reference<hash<string, string>> key_map) {
-        switch (value.typeCode()) {
-            case NT_HASH:
-                foreach string key in (keys value) {
-                    if (key == "unique_key" && value{key}.typeCode() == NT_STRING) {
-                        value{key} = key_map{value{key}}
-                            ?? (key_map{value{key}} = (key_map.size() + 1).toString());
-                    } else {
-                        value{key} = replaceUniqueKeys(value{key}, \key_map);
-                    }
-                }
-                return value;
-            case NT_LIST:
-                return map replaceUniqueKeys($1, \key_map), value;
+    private static hash<auto> getOptionTypeDescription(auto type, reference<hash<string, hash<auto>>> option_types) {
+        *string key = type instanceof AbstractDataProviderType ? type.uniqueHash() : NOTHING;
+        if (key && (*hash<auto> description = option_types{key})) {
+            return description;
         }
-        return value;
+        # unique keys identify objects by address, so they are replaced to make builds reproducible
+        hash<DataTypeInfo> type_info = replaceUniqueKeys(type.getInfo());
+        hash<auto> description = {
+            "type": type,
+            "type_info": type_info,
+            "mismatch": checkTypeInfo(type_info),
+            "plain": isPlainData(type_info),
+        };
+        if (key) {
+            option_types{key} = description;
+        }
+        return description;
     }
 
     #! Checks that the given value contains only plain data that can be written to the index
     /** @param value the value to check
         @param path the path of the value in the action's index entry
+        @param plain the paths of values known to be plain data, which are not walked again
 
         @throw PROVIDER-INDEX-ERROR the value contains an object or a call reference, such as a type option set to
         a closure
     */
-    private static checkPlainData(auto value, string path) {
+    private static checkPlainData(auto value, string path, *hash<string, bool> plain) {
         switch (value.typeCode()) {
             case NT_HASH:
-                map checkPlainData($1.value, path + "." + $1.key), value.pairIterator();
+                foreach hash<auto> i in (value.pairIterator()) {
+                    string child = path + "." + i.key;
+                    if (!plain{child}) {
+                        checkPlainData(i.value, child, plain);
+                    }
+                }
                 return;
             case NT_LIST:
                 for (int i = 0; i < value.size(); ++i) {
-                    checkPlainData(value[i], sprintf("%s[%d]", path, i));
+                    checkPlainData(value[i], sprintf("%s[%d]", path, i), plain);
                 }
                 return;
             case NT_OBJECT:
@@ -787,6 +936,30 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
             throw "PROVIDER-INDEX-ERROR", sprintf("%s: a call reference cannot be indexed",
                 path.val() ? path.substr(1) : "<root>");
         }
+    }
+
+    #! Returns @ref True if the given value contains only plain data that can be written to the index
+    /** The test of checkPlainData(), without the path of each value, which only an error needs */
+    private static bool isPlainData(auto value) {
+        switch (value.typeCode()) {
+            case NT_HASH:
+                foreach auto v in (value.iterator()) {
+                    if (!isPlainData(v)) {
+                        return False;
+                    }
+                }
+                return True;
+            case NT_LIST:
+                foreach auto v in (value) {
+                    if (!isPlainData(v)) {
+                        return False;
+                    }
+                }
+                return True;
+            case NT_OBJECT:
+                return False;
+        }
+        return !value.callp();
     }
 
     #! Checks that a type description restores an equivalent type
@@ -1232,8 +1405,12 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                     log(LoggerLevel::LevelInfo, "index worker %s started for %y", batch.id,
                         map $1.name, batch.items);
                     hash<auto> run = runWorker(batch, command, staging_dir, opts.worker_timeout_ms, generation);
-                    log(LoggerLevel::LevelInfo, "index worker %s finished in %y with exit code %y", batch.id,
-                        run.elapsed, run.exit_code);
+                    # the progress of a build that runs for minutes, for the log of the caller: the apps of the
+                    # batch and the seconds it took
+                    log(LoggerLevel::LevelInfo, "index worker %s finished in %.1f s with exit code %y: %d app(s)%s",
+                        batch.id, run.elapsed.durationSecondsFloat(), run.exit_code, run.result.apps.size(),
+                        run.timed_out ? sprintf("; it did not finish within %d ms and was terminated",
+                            opts.worker_timeout_ms) : "");
                     lock.lock();
                     on_exit lock.unlock();
                     runs{batch.id} = run;
@@ -1326,6 +1503,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                         "items": items,
                         "exit_code": run.exit_code,
                         "stderr": run.stderr,
+                        # a worker that did not finish within worker_timeout_ms, which ends a hung worker
+                        "timed_out": run.timed_out ?? False,
                     },
                 };
                 continue;

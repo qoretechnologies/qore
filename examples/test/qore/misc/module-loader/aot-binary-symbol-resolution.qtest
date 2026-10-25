@@ -34,6 +34,8 @@ class AotBinarySymbolResolutionTest inherits QUnit::Test {
             \testAotQmodSymbolsAreResolvedBeforeInit());
         addTestCase("AOT qmods are mapped once while resolving symbols",
             \testAotQmodIsMappedOnce());
+        addTestCase("AOT qmods without module metadata are refused before module init",
+            \testAotQmodWithoutMetadataIsRefused());
         set_return_value(main());
     }
 
@@ -61,6 +63,7 @@ extern \"C\" void qore_missing_lazy_symbol_for_aot_loader_test();
 // defined in libqore; not part of the public API
 extern \"C\" const char* qore_aot_runtime_identity;
 
+" + moduleInfoSection("LazyAotResolveFail") + "
 extern \"C\" DLLEXPORT void LazyAotResolveFail_call_missing() {
     qore_missing_lazy_symbol_for_aot_loader_test();
 }
@@ -96,7 +99,7 @@ extern \"C\" DLLEXPORT void LazyAotResolveFail_qore_module_desc(QoreModuleInfo& 
         f.close();
 
         # the macOS linker rejects undefined symbols in shared libraries by default; allow them to be
-        # left for runtime resolution (which the RTLD_NOW reopen then rejects, which is what we test).
+        # left for runtime resolution (which mapping the module with RTLD_NOW then rejects, which is what we test).
         # GNU/musl linkers permit undefined symbols in shared objects by default, so no flag is needed.
         string undefined_flag = PlatformOS == "Darwin" ? " -Wl,-undefined,dynamic_lookup" : "";
 
@@ -136,14 +139,91 @@ extern \"C\" DLLEXPORT void LazyAotResolveFail_qore_module_desc(QoreModuleInfo& 
         string qmod_path = tmp_dir + "/AotSingleMap.qmod";
         string counter_path = tmp_dir + "/load-count.txt";
 
-        File f();
-        f.open2(cpp_path, O_WRONLY | O_CREAT | O_TRUNC);
-        f.write("#include <qore/Qore.h>
+        string build_cmd = sprintf(
+            "%s -std=c++17 -shared -fPIC -I%s/include -I%s/include -o %s %s -L%s -Wl,-rpath,%s -lqore %s 2>&1",
+            shellQuote(cxx), shellQuote(src_root), shellQuote(libqore_dir), shellQuote(qmod_path),
+            shellQuote(cpp_path), shellQuote(libqore_dir), shellQuote(libqore_dir),
+            libqoreTargetFlags().join(" "));
+
+        setenv("QORE_AOT_LOAD_COUNTER_FILE", counter_path);
+        on_exit unsetenv("QORE_AOT_LOAD_COUNTER_FILE");
+
+        writeFile(cpp_path, singleMapSource(moduleInfoSection("WrongAotName")));
+        string build_out = backquote(build_cmd);
+        assertTrue(is_file(qmod_path), "compiled single-map qmod: " + build_out);
+        assertThrows("LOAD-MODULE-ERROR", "AOT module metadata of module .*identifies feature 'WrongAotName', "
+                "expecting 'AotSingleMap'", sub () {
+            Program p(PO_NEW_STYLE);
+            p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
+            p.loadModule(qmod_path, WARN_MODULES);
+        });
+        assertFalse(is_file(counter_path), "mismatched metadata is rejected before mapping the qmod");
+
+        # the metadata that lets the loader resolve eagerly in a single mapping
+        writeFile(cpp_path, singleMapSource(moduleInfoSection("AotSingleMap")));
+        build_out = backquote(build_cmd);
+        assertTrue(is_file(qmod_path), "recompiled single-map qmod: " + build_out);
+
+        Program p(PO_NEW_STYLE);
+        p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
+        p.loadModule(qmod_path, WARN_MODULES);
+
+        assertEq("load\ninit\n", ReadOnlyFile::readTextFile(counter_path),
+            "AOT qmod native constructors run once, and the module is initialized");
+    }
+
+    testAotQmodWithoutMetadataIsRefused() {
+        string cxx = ENV.CXX ?? backquote("command -v c++ 2>/dev/null || command -v g++ 2>/dev/null || true");
+        trim cxx;
+        if (!cxx) {
+            testSkip("no C++ compiler found");
+            return;
+        }
+
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string src_root = realpath(get_script_dir() + "/../../../../..");
+        string cpp_path = tmp_dir + "/AotNoMetadata.cpp";
+        string qmod_path = tmp_dir + "/AotNoMetadata.qmod";
+        string counter_path = tmp_dir + "/load-count.txt";
+
+        # qcc stores the metadata of every AOT module in a section of its image; an AOT module without it was
+        # changed after it was built.  The module has its own name, since a module that is loaded already is not
+        # loaded again.
+        writeFile(cpp_path, replace(singleMapSource(""), "AotSingleMap", "AotNoMetadata"));
+        string build_out = backquote(sprintf(
+            "%s -std=c++17 -shared -fPIC -I%s/include -I%s/include -o %s %s -L%s -Wl,-rpath,%s -lqore %s 2>&1",
+            shellQuote(cxx), shellQuote(src_root), shellQuote(libqore_dir), shellQuote(qmod_path),
+            shellQuote(cpp_path), shellQuote(libqore_dir), shellQuote(libqore_dir),
+            libqoreTargetFlags().join(" ")));
+        assertTrue(is_file(qmod_path), "compiled qmod without metadata: " + build_out);
+
+        setenv("QORE_AOT_LOAD_COUNTER_FILE", counter_path);
+        on_exit unsetenv("QORE_AOT_LOAD_COUNTER_FILE");
+
+        assertThrows("LOAD-MODULE-ERROR", "AOT module '.*AotNoMetadata\\.qmod': feature 'AotNoMetadata': the module "
+                "has no AOT module metadata .*reinstall or rebuild the module", sub () {
+            Program p(PO_NEW_STYLE);
+            p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
+            p.loadModule(qmod_path, WARN_MODULES);
+        });
+        # the module was mapped to read its descriptor, but it was not initialized
+        assertEq("load\n", ReadOnlyFile::readTextFile(counter_path), "the module was refused before its init");
+    }
+
+    #! returns the source of the AotSingleMap module with the given declaration of its module metadata section
+    /** Its static constructor appends \c "load" to the file named by \c QORE_AOT_LOAD_COUNTER_FILE, and its module
+        init function appends \c "init".
+    */
+    private static string singleMapSource(string module_info) {
+        return "#include <qore/Qore.h>
 #include <cstdio>
 #include <cstdlib>
 
 // defined in libqore; not part of the public API
 extern \"C\" const char* qore_aot_runtime_identity;
+" + module_info + "
 
 struct AotLoadCounter {
     AotLoadCounter() {
@@ -162,6 +242,15 @@ struct AotLoadCounter {
 static AotLoadCounter load_counter;
 
 static void aotSingleMapInit(QoreModuleInitContext&, ExceptionSink&) {
+    const char* path = std::getenv(\"QORE_AOT_LOAD_COUNTER_FILE\");
+    if (!path) {
+        return;
+    }
+    FILE* f = std::fopen(path, \"a\");
+    if (f) {
+        std::fputs(\"init\\n\", f);
+        std::fclose(f);
+    }
 }
 
 static void aotSingleMapNsInit(QoreNamespace*, QoreNamespace*, ExceptionSink&) {
@@ -188,56 +277,70 @@ extern \"C\" DLLEXPORT void AotSingleMap_qore_module_desc(QoreModuleInfo& mod_in
     // an AOT module records the AOT runtime identity of the libqore it was built for
     mod_info.aot_runtime_identity = qore_aot_runtime_identity;
 }
-");
-        f.close();
-
-        string build_cmd = sprintf(
-            "%s -std=c++17 -shared -fPIC -I%s/include -I%s/include -o %s %s -L%s -Wl,-rpath,%s -lqore %s 2>&1",
-            shellQuote(cxx), shellQuote(src_root), shellQuote(libqore_dir), shellQuote(qmod_path),
-            shellQuote(cpp_path), shellQuote(libqore_dir), shellQuote(libqore_dir),
-            libqoreTargetFlags().join(" "));
-        string build_out = backquote(build_cmd);
-        assertTrue(is_file(qmod_path), "compiled single-map qmod: " + build_out);
-
-        setenv("QORE_AOT_LOAD_COUNTER_FILE", counter_path);
-        on_exit unsetenv("QORE_AOT_LOAD_COUNTER_FILE");
-
-        appendAotDependencyTrailer(qmod_path, "WrongAotName");
-        assertThrows("LOAD-MODULE-ERROR", "dependency metadata.*WrongAotName.*expecting 'AotSingleMap'", sub () {
-            Program p(PO_NEW_STYLE);
-            p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
-            p.loadModule(qmod_path, WARN_MODULES);
-        });
-        assertFalse(is_file(counter_path), "mismatched metadata is rejected before mapping the qmod");
-
-        # Re-link to discard the intentionally mismatched trailer, then add the
-        # metadata that lets the loader resolve eagerly in a single mapping.
-        build_out = backquote(build_cmd);
-        assertTrue(is_file(qmod_path), "recompiled single-map qmod: " + build_out);
-        appendAotDependencyTrailer(qmod_path, "AotSingleMap");
-
-        Program p(PO_NEW_STYLE);
-        p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
-        p.loadModule(qmod_path, WARN_MODULES);
-
-        assertEq("load\n", ReadOnlyFile::readTextFile(counter_path),
-            "AOT qmod native constructors run once");
+";
     }
 
-    private static appendAotDependencyTrailer(string qmod_path, string module_name) {
-        BinaryOutputStream output();
-        StreamWriter writer(output);
-        writer.writei4LSB(module_name.size());
-        writer.write(module_name);
-        writer.writei4LSB(0);
-        writer.writei8LSB(8 + module_name.size());
-        writer.writei4LSB(0x444d4151);
-        writer.writei4LSB(1);
+    #! returns the C++ declaration of the AOT module metadata section of a module with the given name
+    /** qcc stores the metadata of an AOT module in a section of its image, which the loader reads before mapping the
+        module: a record of the magic number 'QAMI', the format version 1, the payload size and the payload (the
+        module name and the counts of dependencies and of unavailable optional modules, here none).  On macOS the
+        record is the Mach-O section __TEXT,__qore_modinfo; elsewhere it is the description of a note with the owner
+        "Qore" and the record's magic number as its type in the ELF note section .note.qore.modinfo.
+    */
+    private static string moduleInfoSection(string module_name) {
+        BinaryOutputStream payload_out();
+        StreamWriter payload(payload_out);
+        payload.writei4LSB(module_name.size());
+        payload.write(module_name);
+        payload.writei4LSB(0);
+        payload.writei4LSB(0);
+        binary payload_data = payload_out.getData();
 
-        File trailer();
-        trailer.open2(qmod_path, O_WRONLY | O_APPEND);
-        trailer.write(output.getData());
-        trailer.close();
+        BinaryOutputStream record_out();
+        StreamWriter record(record_out);
+        record.writei4LSB(0x494d4151);
+        record.writei4LSB(1);
+        record.writei4LSB(payload_data.size());
+        record.write(payload_data);
+        binary record_data = record_out.getData();
+
+        BinaryOutputStream note_out();
+        StreamWriter note(note_out);
+        note.writei4LSB(5);
+        note.writei4LSB(record_data.size());
+        note.writei4LSB(0x494d4151);
+        note.write(<516f726500000000>);
+        note.write(record_data);
+        # getData() takes the data from the stream
+        binary note_data = note_out.getData();
+        while (note_data.size() % 4) {
+            note_data += <00>;
+        }
+
+        return sprintf("#ifdef __APPLE__
+__attribute__((used, section(\"__TEXT,__qore_modinfo\"), aligned(4)))
+static const unsigned char qore_test_module_info[] = { %s };
+#else
+__attribute__((used, section(\".note.qore.modinfo\"), aligned(4)))
+static const unsigned char qore_test_module_info[] = { %s };
+#endif
+", cBytes(record_data), cBytes(note_data));
+    }
+
+    #! returns the bytes of a binary as a C initializer list
+    private static string cBytes(binary data) {
+        list<string> bytes = ();
+        for (int i = 0; i < data.size(); ++i) {
+            bytes += sprintf("0x%02x", data[i]);
+        }
+        return bytes.join(", ");
+    }
+
+    private static writeFile(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit f.close();
+        f.write(body);
     }
 
     private static string shellQuote(string arg) {

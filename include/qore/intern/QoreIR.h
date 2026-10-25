@@ -805,7 +805,21 @@ enum class QoreIROpcode : uint16_t {
     SnapshotInt = 409,
     SnapshotFloat = 410,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (411, 412, ...)
+    //! Check the value of a return statement against the declared return type, before the statement leaves its
+    //! blocks.
+    //!
+    //! operands[0] = the value returned; no result.  `element_type` = the declared return type.  The AST interpreter
+    //! checks the value in the return statement (ReturnStatement::execImpl()), so its error - "<return statement>
+    //! expects type ..." for no value or a value of another type - is raised inside the blocks of the statement: a
+    //! catch block around the return statement catches it, and the on_error handlers of the blocks it leaves run.  The
+    //! check does not change the value, which the caller converts as before.  The lowering emits one for a return
+    //! statement with a value in typed code that leaves something whose behaviour depends on the error (see
+    //! QoreIRLowering::returnCleanupObservesError()); for any other, nothing runs between the statement and the Return,
+    //! which checks the value for no value itself, and the caller checks its type.  qore_ir_optimize() removes the
+    //! checks whose value facts prove the value is accepted as it is.
+    CheckReturnValue = 411,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (412, 413, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -814,8 +828,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::SnapshotFloat);
-static_assert(QORE_IR_MAX_OPCODE == 410, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::CheckReturnValue);
+static_assert(QORE_IR_MAX_OPCODE == 411, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -1027,7 +1041,8 @@ public:
     QoreIRValue result{};
     std::vector<QoreIRValue> operands;
     QoreIRBasicBlock* exception_target = nullptr;
-    const QoreTypeInfo* element_type = nullptr;  // For list/hash creation instructions
+    // For list/hash creation instructions; for CheckReturnValue, the declared return type
+    const QoreTypeInfo* element_type = nullptr;
     bool list_push_in_place = false;  // Transient: assigned local list can be mutated without a store-back
     bool list_push_local_cow = false;  // Transient: paired local push can run CoW after compiler refs are cleared
     bool string_append_in_place = false;  // Transient: uniquely owned local string can be mutated without store-back
@@ -1463,6 +1478,11 @@ public:
         can change a returned value (such as call-site summaries) use the type the parser checked
     */
     const QoreTypeInfo* value_parse_type = nullptr;
+
+    //! Transient (never serialized): qore_ir_optimize() proved that the declared return type accepts the value as it is
+    /** so native code does not check the value for no value when it returns it; see CheckReturnValue
+    */
+    bool value_accepted = false;
 
     //! Transient (never serialized): set by the AOT function-body outliner on
     //! returns moved into a helper.  The lowering emits
@@ -3376,6 +3396,12 @@ public:
     // LocalVar::getLValue() fails for a local that was never instantiated
     // there, so an IR-only weak store target would abort execution.
     std::unordered_set<const void*> weak_store_locals;
+
+    // Locals assigned in AssignmentMode::Element: the variables of foreach loops, which are assigned each element as
+    // it is, so that a weak reference stays a weak reference.  Such a local can be IR-only: its value cache then
+    // holds the weak reference, and a read of the cache gives its target (see IRLocalSlotCache in
+    // QoreIRInterpreter.cpp and QoreIRToLLVM::loadLocalCacheValue()).
+    std::unordered_set<const void*> element_store_locals;
 
     // Locals assigned by a StoreLocal instruction anywhere in the IR.  Together with the
     // lvalue/COW/weak inventories above this is the complete write set: every other mutation

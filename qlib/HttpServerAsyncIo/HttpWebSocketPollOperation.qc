@@ -208,6 +208,7 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
 
         *HttpAsyncSocketIoController c;
         *HttpAsyncTarget t;
+        auto log_handler;
         {
             AutoLock al(dispatch_mutex);
             if (completed || !wsc) {
@@ -226,10 +227,11 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
             }
             c = completion_controller;
             t = completion_target;
+            log_handler = handler;
             dispatching = True;
         }
         try {
-            c.submitToHandlerPool(t, \handlerPoolDrain());
+            submitDrainer(c, t, log_handler);
         } catch (hash<ExceptionInfo> ex) {
             # Pool stopping or otherwise rejected the submission — release the
             # claim so that future onPollComplete() calls (or onComplete()'s
@@ -238,6 +240,51 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
             *hash<SocketPollResultInfo> result = releaseDispatchClaim();
             if (exists result) {
                 finishCompletion(result);
+            }
+        }
+    }
+
+    #! Submits a handler-pool drainer that holds this operation until it has returned
+    /** A call reference to a method does not keep its object alive, and the operation can lose its last other
+        reference while a drainer is queued or running: the handler thread lets it go once the operation has
+        ended (@ref forceClose() ends it without waiting for a drainer, and @ref finishCompletion() releases the
+        handler thread before it reports the result), and the I/O controller lets it go when @ref onComplete()
+        has handed the result to a drainer.  The drainer would then fail with \c OBJECT-ALREADY-DELETED, and the
+        operation would not be finished.  So the drainer is a closure that holds a strong reference, which it
+        releases when it has returned; the operation's destructor may then run on the handler-pool thread, which
+        it can: it only releases what the operation holds.
+
+        @param c the controller whose handler pool runs the drainer
+        @param t the async target whose dispatch hooks wrap the drainer
+        @param log_handler the connection's handler, which logs an error that the release raises, if any
+
+        @throw any exception raised by @ref HttpAsyncSocketIoController::submitToHandlerPool()
+    */
+    private submitDrainer(HttpAsyncSocketIoController c, HttpAsyncTarget t, auto log_handler) {
+        *HttpWebSocketPollOperation op = self;
+        c.submitToHandlerPool(t, sub () {
+            on_exit releaseOperation(\op, log_handler);
+            op.handlerPoolDrain();
+        });
+    }
+
+    #! Releases a drainer's reference to the operation
+    /** When the drainer holds the last reference, the operation is destroyed here, with the connection when the
+        operation still holds it; an error of a destructor is logged with the connection's handler instead of
+        escaping the handler-pool task.
+
+        @param op the drainer's reference, which is cleared
+        @param log_handler the connection's handler, if any
+    */
+    private static releaseOperation(reference<*HttpWebSocketPollOperation> op, auto log_handler) {
+        try {
+            op = NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            if (log_handler) {
+                try {
+                    log_handler.logError("WebSocket poll operation release error: %s", get_exception_string(ex));
+                } catch () {
+                }
             }
         }
     }
@@ -253,8 +300,8 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
     }
 
     #! Drains queued frames on a handler-pool thread
-    /** Runs as the body submitted by @ref onPollComplete() or @ref onComplete() to the controller, with the
-        @ref dispatching claim already taken.  Frames are taken one at a time under @ref dispatch_mutex and
+    /** Runs as the drainer that @ref submitDrainer() submits for @ref onPollComplete() or @ref onComplete(), with
+        the @ref dispatching claim already taken.  Frames are taken one at a time under @ref dispatch_mutex and
         processed with the mutex released, so callback dispatcher workers never wait for user code.  The claim is
         released in the same critical section that finds the receive queue empty; if @ref onComplete() arrived in
         the meantime, this thread finishes the operation.
@@ -390,6 +437,7 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
     nothing onComplete(hash<SocketPollResultInfo> result) {
         *HttpAsyncSocketIoController c;
         *HttpAsyncTarget t;
+        auto log_handler;
         {
             AutoLock al(dispatch_mutex);
             completed = True;
@@ -402,13 +450,14 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
                 # the remaining frames run user code: process them on a handler-pool thread
                 c = completion_controller;
                 t = completion_target;
+                log_handler = handler;
                 dispatching = True;
                 pending_completion = result;
             }
         }
         if (c) {
             try {
-                c.submitToHandlerPool(t, \handlerPoolDrain());
+                submitDrainer(c, t, log_handler);
                 return;
             } catch (hash<ExceptionInfo> ex) {
                 # the pool is stopping; finish here

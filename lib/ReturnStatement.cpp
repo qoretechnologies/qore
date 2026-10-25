@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -61,6 +61,10 @@ static bool qore_return_expr_is_deferred_static_method_call(const QoreValue& exp
 
 int ReturnStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     //QORE_TRACE("ReturnStatement::execImpl()");
+    // a value that a return statement left when it raised an exception, such as one that the declared return type
+    // rejected in a try block whose catch block returns, is replaced and released
+    ValueHolder replaced(return_value, xsink);
+    return_value.clear();
     ValueEvalOptimizedRefHolder val(exp, xsink);
     if (!*xsink) {
         return_value = val.takeReferencedValue();
@@ -75,6 +79,9 @@ int ReturnStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
 }
 
 int ReturnStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    // a value that a return statement left when it raised an exception is replaced and released (see above)
+    ValueHolder replaced(return_value, xsink);
+    return_value.clear();
     ValueEvalRefHolder val(rc, exp, xsink);
     if (!*xsink) {
         return_value = val.takeReferencedValue();

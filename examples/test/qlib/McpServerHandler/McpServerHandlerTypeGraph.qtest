@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
 
@@ -13,6 +14,7 @@
 %requires DataProvider
 %requires JsonRpcHandler
 %requires McpServerHandler
+%requires GeminiBodyShape
 %exec-class McpServerHandlerTypeGraphTest
 
 #! Registers tools whose input types are not trees
@@ -30,6 +32,16 @@ class TypeGraphMcpServerHandler inherits McpServerHandler {
     #! Returns the input schema published for the given tool
     *hash<auto> getToolInputSchema(string name) {
         return tmap{name}.input;
+    }
+
+    #! Registers a tool with the given input type
+    addTool(string name, AbstractDataProviderType input) {
+        registerTool(name, "a tool", input, \noop());
+    }
+
+    #! Registers a tool with the given input type description
+    addToolWithTypeInfo(string name, hash<DataTypeInfo> input) {
+        registerToolWithTypeInfo(name, "a tool", input, \noop());
     }
 }
 
@@ -86,6 +98,9 @@ public class McpServerHandlerTypeGraphTest inherits QUnit::Test {
     constructor() : Test("McpServerHandlerTypeGraphTest", "1.0") {
         addTestCase("shared subtypes do not blow up the input schema", \sharedSubtypeSchemaTest());
         addTestCase("self-referencing input types terminate", \cyclicSchemaTest());
+        addTestCase("recursive input types are described once in $defs", \recursiveDefinitionsTest());
+        addTestCase("a recursive type description is described once in $defs", \recursiveTypeInfoTest());
+        addTestCase("a schema with definitions is shaped for Gemini without references", \geminiShapeTest());
         addTestCase("wildcard fields are published as values of any type", \wildcardFieldSchemaTest());
         addTestCase("wildcard tool inputs keep their calling convention", \wildcardInputSchemaTest());
 
@@ -132,16 +147,27 @@ public class McpServerHandlerTypeGraphTest inherits QUnit::Test {
 
         assertLt(MaxSchemaTime, elapsed, "building a tool input schema must not re-describe shared subtypes");
 
-        # the schema is intact: Depth levels of "a"/"b"/"c" above the leaf
+        # the schema is intact: Depth levels of "a"/"b"/"c" above the leaf; each shared level is described once in
+        # "$defs", so that the schema does not describe it again at every path to it
         *hash<auto> schema = handler.getToolInputSchema("dag-tool");
         assertEq("object", schema.type, "input schema is an object");
+        assertEq(Depth, schema."$defs".size(), "each shared type is defined once");
         hash<auto> node = schema;
         for (int i = 0; i < Depth; ++i) {
             assertEq(("a", "b", "c"), sort(keys node.properties), sprintf("level %d properties", i));
-            node = node.properties.a;
+            assertEq(node.properties.a."$ref", node.properties.b."$ref", "the shared type is referred to");
+            node = resolve(schema, node.properties.a);
         }
         assertEq(("str",), keys node.properties, "leaf properties");
         assertEq("string", node.properties.str.type, "leaf property type");
+    }
+
+    #! Returns the schema a reference refers to in the definitions of the root schema, or the schema itself
+    private static hash<auto> resolve(hash<auto> root, hash<auto> schema) {
+        if (*string ref = schema."$ref") {
+            return root."$defs"{ref.substr(8)};
+        }
+        return schema;
     }
 
     cyclicSchemaTest() {
@@ -152,10 +178,90 @@ public class McpServerHandlerTypeGraphTest inherits QUnit::Test {
         assertLt(MaxSchemaTime, elapsed, "building a self-referencing tool input schema must terminate");
 
         *hash<auto> schema = handler.getToolInputSchema("cyclic-tool");
+        assertEq("object", schema.type, "the input schema is an object");
         assertEq("string", schema.properties.str.type, "non-recursive property is described");
-        # the cycle is truncated with an opaque object rather than followed
-        assertEq("object", schema.properties.self.type, "the cycle is described as an opaque object");
-        assertNothing(schema.properties.self.properties, "the cycle is truncated rather than followed");
+        # the recursive type is described once in "$defs", and the cycle refers to it
+        assertEq("#/$defs/hash_auto_", schema.properties.self."$ref", "the cycle refers to the definition");
+        assertEq("self-referencing field", schema.properties.self.description, "the reference has its description");
+        assertEq("string", schema."$defs".hash_auto_.properties.str.type, "the definition describes the type");
+        assertEq("#/$defs/hash_auto_", schema."$defs".hash_auto_.properties.self."$ref",
+            "the definition refers to itself");
+    }
+
+    #! Builds a graph of depth levels that share their child type object three times, closed to a cycle
+    private AbstractDataProviderType getCyclicSharedGraph(int depth) {
+        HashDataType root("level0");
+        root.addField(new QoreDataField("str", "a string field", StringType));
+        AbstractDataProviderType rv = root;
+        for (int i = 0; i < depth; ++i) {
+            HashDataType t("level" + (i + 1));
+            foreach string fname in ("a", "b", "c") {
+                t.addField(new QoreDataField(fname, "shared subtype", rv));
+            }
+            rv = t;
+        }
+        root.addField(new QoreDataField("top", "cycle to the top", rv));
+        return rv;
+    }
+
+    #! Returns the number of schemas in a schema: the schema and the schemas of its properties, items, and definitions
+    private static int countSchemas(auto schema) {
+        if (schema.typeCode() != NT_HASH) {
+            return 0;
+        }
+        int rv = 1;
+        foreach auto v in (schema.properties.iterator()) {
+            rv += countSchemas(v);
+        }
+        rv += countSchemas(schema.items);
+        foreach auto v in (schema."$defs".iterator()) {
+            rv += countSchemas(v);
+        }
+        return rv;
+    }
+
+    #! A graph of types that refer to each other is described with each type once
+    /** Every type of this graph is on a cycle, so an input schema that describes a type again at every path to it
+        has 3 ** depth descriptions of the leaf; with the types defined once and referred to, it has one per type
+        and field
+    */
+    recursiveDefinitionsTest() {
+        TypeGraphMcpServerHandler handler(getLogger(), getSharedSubtypeDag(1), getCyclicType());
+        handler.addTool("graph-tool", getCyclicSharedGraph(8));
+        *hash<auto> schema = handler.getToolInputSchema("graph-tool");
+        assertEq("object", schema.type, "the input schema is an object");
+        assertEq(("level0", "level1", "level2", "level3", "level4", "level5", "level6", "level7", "level8"),
+            sort(keys schema."$defs"), "every type on the cycle is defined once");
+        # the root, its definition and the other definitions: one schema per type and per field
+        assertLe(9 * 2 + 3 * 8 + 2 + 1, countSchemas(schema), "the schema grows with the graph");
+        assertEq("#/$defs/level7", schema.properties.a."$ref");
+        assertEq("#/$defs/level8", schema."$defs".level0.properties.top."$ref");
+    }
+
+    #! Gemini's schema has no references: the definitions are expanded and a recursion is sent as JSON text
+    geminiShapeTest() {
+        TypeGraphMcpServerHandler handler(getLogger(), getSharedSubtypeDag(1), getCyclicType());
+        handler.addTool("graph-tool", getCyclicSharedGraph(2));
+        hash<GeminiToolParameterSchema> shaped = GeminiBodyShape::shapeToolParameters(
+            handler.getToolInputSchema("graph-tool"));
+        string json = make_json(shaped.parameters);
+        assertEq(-1, json.find("$ref"), "no reference is sent to Gemini");
+        assertEq(-1, json.find("$defs"), "no definitions are sent to Gemini");
+        assertEq("object", shaped.parameters.properties.a.type, "a definition is expanded in place");
+        assertTrue(shaped.stringified.size() > 0, "the recursion is sent as JSON text");
+    }
+
+    #! A recursion marker in a type description refers to the definition of the enclosing type
+    recursiveTypeInfoTest() {
+        TypeGraphMcpServerHandler handler(getLogger(), getSharedSubtypeDag(1), getCyclicType());
+        handler.addToolWithTypeInfo("info-tool", getCyclicSharedGraph(3).getInfo());
+        *hash<auto> schema = handler.getToolInputSchema("info-tool");
+        assertEq("object", schema.type, "the input schema is an object");
+        assertEq(("level0", "level1", "level2", "level3"), sort(keys schema."$defs"));
+        assertEq("string", schema."$defs".level0.properties.str.type);
+        assertEq("#/$defs/level3", schema."$defs".level0.properties.top."$ref",
+            "the recursion marker refers to the definition");
+        assertEq("#/$defs/level2", schema.properties.a."$ref");
     }
     #! A field of any type, or of a union of different base types, used to be dropped when optional and to fail
     #! the whole tool when mandatory: the wildcard case fell through into the object case

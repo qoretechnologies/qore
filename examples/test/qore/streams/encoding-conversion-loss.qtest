@@ -181,7 +181,8 @@ class EncodingConversionLossTest inherits QUnit::Test {
     #! skips the test if the iconv library does not support the encoding
     private checkAvailable(string enc) {
         try {
-            convert_encoding("x", enc);
+            # a conversion that the iconv library cannot make raises an exception
+            string probe = convert_encoding("x", enc);
         } catch (hash<ExceptionInfo> ex) {
             testSkip(sprintf("%s is not available with the iconv library: %s", enc, ex.desc));
         }

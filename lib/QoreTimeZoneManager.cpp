@@ -33,6 +33,7 @@
 #include "qore/intern/QoreTimeZoneManager.h"
 #include "qore/intern/qore_date_private.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cerrno>
 #include <cstdio>
@@ -56,8 +57,481 @@
 std::string AbstractQoreZoneInfo::localtime_path_prefix;
 std::string AbstractQoreZoneInfo::localtime_location;
 
+namespace {
+// the size of a TZif header: magic (4), version (1), unused (15) and six four-octet counts (RFC 9636 section 3.1)
+constexpr size_t TzifHeaderSize = 44;
+
+// the offset of the first count in a TZif header
+constexpr size_t TzifCountOffset = 20;
+
+// the count fields of a TZif header in file order (RFC 9636 section 3.1)
+enum TzifCount : unsigned {
+    TZIF_ISUTCNT = 0,
+    TZIF_ISSTDCNT,
+    TZIF_LEAPCNT,
+    TZIF_TIMECNT,
+    TZIF_TYPECNT,
+    TZIF_CHARCNT,
+    TZIF_NUM_COUNTS,
+};
+
+// TZif integers are big-endian, signed integers are two's complement (RFC 9636 section 3)
+uint32_t tzif_u4(const unsigned char* p) {
+    return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16)
+        | (static_cast<uint32_t>(p[2]) << 8) | static_cast<uint32_t>(p[3]);
+}
+
+int32_t tzif_i4(const unsigned char* p) {
+    return static_cast<int32_t>(tzif_u4(p));
+}
+
+int64 tzif_i8(const unsigned char* p) {
+    return static_cast<int64>((static_cast<uint64_t>(tzif_u4(p)) << 32) | tzif_u4(p + 4));
+}
+
+// reads a transition time or leap second occurrence of the given size
+int64 tzif_time(const unsigned char* p, unsigned time_size) {
+    assert(time_size == 4 || time_size == 8);
+    return time_size == 8 ? tzif_i8(p) : static_cast<int64>(tzif_i4(p));
+}
+
+void tzif_read_counts(const unsigned char* header, uint32_t* counts) {
+    for (unsigned i = 0; i < TZIF_NUM_COUNTS; ++i) {
+        counts[i] = tzif_u4(header + TzifCountOffset + i * 4);
+    }
+}
+
+// returns the size of a data block (RFC 9636 section 3.2); each count is less than 2^32 and the multipliers add up to
+// at most 30, so the size cannot overflow
+uint64_t tzif_data_block_size(const uint32_t* counts, unsigned time_size) {
+    return static_cast<uint64_t>(counts[TZIF_TIMECNT]) * (time_size + 1)
+        + static_cast<uint64_t>(counts[TZIF_TYPECNT]) * 6
+        + counts[TZIF_CHARCNT]
+        + static_cast<uint64_t>(counts[TZIF_LEAPCNT]) * (time_size + 4)
+        + counts[TZIF_ISSTDCNT]
+        + counts[TZIF_ISUTCNT];
+}
+
+// checks the counts of the header of the data block that is read (RFC 9636 section 3.1)
+int tzif_check_counts(const uint32_t* counts, const char* fn, ExceptionSink* xsink) {
+    uint32_t typecnt = counts[TZIF_TYPECNT];
+    if (!typecnt) {
+        xsink->raiseException("TZINFO-ERROR", "%s: invalid TZif header: typecnt is zero; a TZif file must have at "
+            "least one local time type", fn);
+        return -1;
+    }
+    if (!counts[TZIF_CHARCNT]) {
+        xsink->raiseException("TZINFO-ERROR", "%s: invalid TZif header: charcnt is zero; a TZif file must have at "
+            "least one time zone designation", fn);
+        return -1;
+    }
+    if (counts[TZIF_ISUTCNT] && counts[TZIF_ISUTCNT] != typecnt) {
+        xsink->raiseException("TZINFO-ERROR", "%s: invalid TZif header: isutcnt (%u) must be zero or equal to "
+            "typecnt (%u)", fn, counts[TZIF_ISUTCNT], typecnt);
+        return -1;
+    }
+    if (counts[TZIF_ISSTDCNT] && counts[TZIF_ISSTDCNT] != typecnt) {
+        xsink->raiseException("TZINFO-ERROR", "%s: invalid TZif header: isstdcnt (%u) must be zero or equal to "
+            "typecnt (%u)", fn, counts[TZIF_ISSTDCNT], typecnt);
+        return -1;
+    }
+    return 0;
+}
+
+void tzif_raise_truncated(const char* fn, const char* what, uint64_t end, size_t len, ExceptionSink* xsink) {
+    xsink->raiseException("TZINFO-ERROR", "%s: truncated TZif file: the %s needs %llu bytes, but the file has only "
+        "%llu bytes", fn, what, static_cast<unsigned long long>(end), static_cast<unsigned long long>(len));
+}
+
+bool tz_ascii_alpha(char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
+
+bool tz_ascii_digit(char c) {
+    return c >= '0' && c <= '9';
+}
+
+// returns true if a time zone designation has only ASCII alphanumerics, '-' and '+' (RFC 9636 section 4)
+bool tz_designation_is_valid(const char* desig) {
+    for (const char* p = desig; *p; ++p) {
+        if (!tz_ascii_alpha(*p) && !tz_ascii_digit(*p) && *p != '-' && *p != '+') {
+            return false;
+        }
+    }
+    return true;
+}
+
+// returns a numeric designation for a UT offset, such as "-10" or "+0530" (RFC 9636 section 4)
+std::string tz_numeric_designation(int32_t utoff) {
+    int64 secs = utoff;
+    char sign = secs < 0 ? '-' : '+';
+    if (secs < 0) {
+        secs = -secs;
+    }
+    int hours = static_cast<int>(secs / SECS_PER_HOUR);
+    int minutes = static_cast<int>(secs % SECS_PER_HOUR / SECS_PER_MINUTE);
+    int seconds = static_cast<int>(secs % SECS_PER_MINUTE);
+    QoreStringMaker str("%c%02d", sign, hours);
+    if (minutes || seconds) {
+        str.sprintf("%02d", minutes);
+        if (seconds) {
+            str.sprintf("%02d", seconds);
+        }
+    }
+    return str.c_str();
+}
+
+// parses a POSIX TZ string (POSIX.1-2017 "Base Definitions" section 8.3, with the version 3 extension for the hours
+// of rule times in RFC 9636 section 3.3.2)
+class PosixTzParser {
+public:
+    PosixTzParser(const char* str, size_t len, const char* fn, ExceptionSink* xsink) : p(str),
+            end(str + len), tz(str, len), fn(fn), xsink(xsink) {
+    }
+
+    bool atEnd() const {
+        return p == end;
+    }
+
+    bool accept(char c) {
+        if (p < end && *p == c) {
+            ++p;
+            return true;
+        }
+        return false;
+    }
+
+    bool nextIsDigit() const {
+        return p < end && tz_ascii_digit(*p);
+    }
+
+    bool nextIsOffset() const {
+        return p < end && (tz_ascii_digit(*p) || *p == '+' || *p == '-');
+    }
+
+    // std and dst: at least three alphabetic characters, or at least three ASCII alphanumerics, '+' or '-' in angle
+    // brackets
+    int parseName(std::string& name, const char* what) {
+        if (accept('<')) {
+            const char* b = p;
+            while (p < end && (tz_ascii_alpha(*p) || tz_ascii_digit(*p) || *p == '+' || *p == '-')) {
+                ++p;
+            }
+            name.assign(b, p - b);
+            if (!accept('>')) {
+                return error("the quoted %s abbreviation is not terminated with '>' or contains a character other "
+                    "than an ASCII letter, a digit, '+' or '-'", what);
+            }
+        } else {
+            const char* b = p;
+            while (p < end && tz_ascii_alpha(*p)) {
+                ++p;
+            }
+            name.assign(b, p - b);
+        }
+        if (name.size() < 3) {
+            return error("the %s abbreviation has fewer than 3 characters", what);
+        }
+        return 0;
+    }
+
+    // offset: [+|-]hh[:mm[:ss]] with hh from 0 to 24; returns the POSIX value, which is positive west of UTC
+    int parseOffset(int& secs, const char* what) {
+        return parseTime(secs, 24, what);
+    }
+
+    // date[/time] of a rule
+    int parseDate(int& form, int& day, int& week, int& month, int& time, const char* what) {
+        if (accept('J')) {
+            form = 0;
+            if (parseNumber(day, 1, 365, what, "Julian day")) {
+                return -1;
+            }
+        } else if (accept('M')) {
+            form = 2;
+            if (parseNumber(month, 1, 12, what, "month")) {
+                return -1;
+            }
+            if (!accept('.')) {
+                return error("the %s rule date has no '.' after the month", what);
+            }
+            if (parseNumber(week, 1, 5, what, "week")) {
+                return -1;
+            }
+            if (!accept('.')) {
+                return error("the %s rule date has no '.' after the week", what);
+            }
+            if (parseNumber(day, 0, 6, what, "day of the week")) {
+                return -1;
+            }
+        } else if (nextIsDigit()) {
+            form = 1;
+            if (parseNumber(day, 0, 365, what, "zero-based Julian day")) {
+                return -1;
+            }
+        } else {
+            return error("the %s rule date must have the form Jn, n or Mm.w.d", what);
+        }
+        time = 2 * SECS_PER_HOUR;
+        if (accept('/')) {
+            // RFC 9636 section 3.3.2: the hours may be signed and from -167 to 167
+            return parseTime(time, 167, what);
+        }
+        return 0;
+    }
+
+    // raises TZINFO-ERROR; fmt is a literal format with one %s for what
+    int error(const char* fmt, const char* what) {
+        QoreStringNodeHolder desc(new QoreStringNode);
+        desc->sprintf("%s: invalid TZ string \"%s\" in the TZif footer: ", fn, tz.c_str());
+        desc->sprintf(fmt, what);
+        xsink->raiseException("TZINFO-ERROR", desc.release());
+        return -1;
+    }
+
+private:
+    const char* p;
+    const char* end;
+    std::string tz;
+    const char* fn;
+    ExceptionSink* xsink;
+
+    // parses an unsigned number from min to max; the range in the message starts at shown_min for a signed value
+    int parseNumber(int& value, int min, int max, const char* what, const char* field) {
+        return parseNumber(value, min, max, what, field, min);
+    }
+
+    int parseNumber(int& value, int min, int max, const char* what, const char* field, int shown_min) {
+        if (!nextIsDigit()) {
+            QoreStringMaker msg("the %s %s must be a number", what, field);
+            return error("%s", msg.c_str());
+        }
+        value = 0;
+        while (nextIsDigit()) {
+            value = value * 10 + (*p - '0');
+            ++p;
+            if (value > max) {
+                break;
+            }
+        }
+        if (value < min || value > max) {
+            QoreStringMaker msg("the %s %s must be from %d to %d", what, field, shown_min, max);
+            return error("%s", msg.c_str());
+        }
+        return 0;
+    }
+
+    // [+|-]hh[:mm[:ss]]
+    int parseTime(int& secs, int max_hours, const char* what) {
+        bool neg = false;
+        if (accept('-')) {
+            neg = true;
+        } else {
+            accept('+');
+        }
+        int hours;
+        if (parseNumber(hours, 0, max_hours, what, "hours", -max_hours)) {
+            return -1;
+        }
+        int minutes = 0;
+        int seconds = 0;
+        if (accept(':')) {
+            if (parseNumber(minutes, 0, 59, what, "minutes")) {
+                return -1;
+            }
+            if (accept(':') && parseNumber(seconds, 0, 59, what, "seconds")) {
+                return -1;
+            }
+        }
+        secs = hours * SECS_PER_HOUR + minutes * SECS_PER_MINUTE + seconds;
+        if (neg) {
+            secs = -secs;
+        }
+        return 0;
+    }
+};
+}
+
+int QorePosixTzRule::parse(const char* str, size_t len, const char* fn, ExceptionSink* xsink) {
+    PosixTzParser parser(str, len, fn, xsink);
+
+    // std offset
+    if (parser.parseName(std_name, "standard time")) {
+        return -1;
+    }
+    if (!parser.nextIsOffset()) {
+        return parser.error("%s has no UTC offset", "standard time");
+    }
+    int offset;
+    if (parser.parseOffset(offset, "standard time")) {
+        return -1;
+    }
+    // the POSIX offset is the time added to local time to get UTC, so it is positive west of UTC
+    std_utoff = -offset;
+    if (parser.atEnd()) {
+        dst_utoff = std_utoff;
+        return 0;
+    }
+
+    // [dst [offset] [,rule]]
+    if (parser.parseName(dst_name, "daylight saving time")) {
+        return -1;
+    }
+    has_dst = true;
+    if (parser.nextIsOffset()) {
+        if (parser.parseOffset(offset, "daylight saving time")) {
+            return -1;
+        }
+        dst_utoff = -offset;
+    } else {
+        // POSIX: daylight saving time is one hour ahead of standard time by default
+        dst_utoff = std_utoff + SECS_PER_HOUR;
+    }
+
+    if (parser.atEnd()) {
+        // POSIX leaves the rule implementation-defined when it is missing; this is the default rule of the reference
+        // implementation (tzcode) and of glibc
+        start.form = DateForm::MonthWeekDay;
+        start.month = 3;
+        start.week = 2;
+        start.day = 0;
+        end.form = DateForm::MonthWeekDay;
+        end.month = 11;
+        end.week = 1;
+        end.day = 0;
+        return 0;
+    }
+
+    if (!parser.accept(',')) {
+        return parser.error("%s must be followed by a ',' and a rule", "daylight saving time");
+    }
+    for (unsigned i = 0; i < 2; ++i) {
+        DateRule& rule = i ? end : start;
+        const char* what = i ? "end" : "start";
+        int form = 0;
+        if (parser.parseDate(form, rule.day, rule.week, rule.month, rule.time, what)) {
+            return -1;
+        }
+        rule.form = form == 0 ? DateForm::Julian1 : (form == 1 ? DateForm::Julian0 : DateForm::MonthWeekDay);
+        if (!i && !parser.accept(',')) {
+            return parser.error("the %s rule must be followed by a ',' and the end rule", what);
+        }
+    }
+    if (!parser.atEnd()) {
+        return parser.error("%s", "unexpected text after the end rule");
+    }
+    return 0;
+}
+
+int64 QorePosixTzRule::getRuleTime(int year, const DateRule& rule, int utoff) {
+    int64 day_start;
+    switch (rule.form) {
+        case DateForm::Julian1: {
+            // Jn: February 29 is never counted, so day 60 is always March 1
+            int64 day = rule.day - 1;
+            if (rule.day >= 60 && qore_date_info::isLeapYear(year)) {
+                ++day;
+            }
+            day_start = qore_date_info::getEpochSeconds(year, 1, 1) + day * SECS_PER_DAY;
+            break;
+        }
+
+        case DateForm::Julian0:
+            day_start = qore_date_info::getEpochSeconds(year, 1, 1) + static_cast<int64>(rule.day) * SECS_PER_DAY;
+            break;
+
+        case DateForm::MonthWeekDay: {
+            // the first given day of the week in the month, then the given week; week 5 is the last one
+            int first_dow = qore_date_info::getDayOfWeek(year, rule.month, 1);
+            int day = 1 + (rule.day - first_dow + 7) % 7 + (rule.week - 1) * 7;
+            int last = qore_date_info::getLastDayOfMonth(rule.month, year);
+            while (day > last) {
+                day -= 7;
+            }
+            day_start = qore_date_info::getEpochSeconds(year, rule.month, day);
+            break;
+        }
+
+        default:
+            assert(false);
+            day_start = 0;
+            break;
+    }
+    // the rule time is local time with the given UTC offset
+    return day_start + rule.time - utoff;
+}
+
+unsigned QorePosixTzRule::getYearTransitions(int year, YearTransition (&trans)[2], bool& year_dst) const {
+    // the start time is given in standard time and the end time in daylight saving time
+    int64 dst_start = getRuleTime(year, start, std_utoff);
+    int64 dst_end = getRuleTime(year, end, dst_utoff);
+    if (dst_end < dst_start) {
+        // daylight saving time at the start and at the end of the year, as in the southern hemisphere
+        trans[0] = {dst_end, false};
+        trans[1] = {dst_start, true};
+        return 2;
+    }
+    int64 year_secs = (qore_date_info::isLeapYear(year) ? 366 : 365) * static_cast<int64>(SECS_PER_DAY);
+    if (dst_start < dst_end && dst_end - dst_start < year_secs) {
+        trans[0] = {dst_start, true};
+        trans[1] = {dst_end, false};
+        return 2;
+    }
+    // RFC 9636 section 3.3.1: daylight saving time is in effect all year if it ends a year after it starts, leaving
+    // no room for standard time; a rule that ends when it starts has no daylight saving time
+    year_dst = dst_start < dst_end;
+    return 0;
+}
+
+int QorePosixTzRule::getUTCOffset(int64 epoch_offset, bool& is_dst, const char*& zone_name, uint64_t* since)
+        const {
+    bool dst = false;
+    uint64_t since_transition = UINT64_MAX;
+    if (has_dst) {
+        // the Gregorian calendar repeats every 400 years, so the rule gives the same result for the equivalent time
+        // from 1970 to 2370, for which no calculation can overflow
+        int64 t = epoch_offset % SECS_IN_400_YEARS;
+        if (t < 0) {
+            t += SECS_IN_400_YEARS;
+        }
+        int64 year_offset = t;
+        int year;
+        bool leap_year;
+        qore_date_info::get_epoch_year(year_offset, year, leap_year);
+        assert(year >= 1970 && year <= 2370);
+
+        // a rule time can be up to 167 hours before the rule date, so a transition of the next year can be in this
+        // year; the transitions of two years before are always before this year
+        bool found = false;
+        for (int y = year + 1; y >= year - 2 && !found; --y) {
+            YearTransition trans[2];
+            bool year_dst = false;
+            unsigned count = getYearTransitions(y, trans, year_dst);
+            if (!count) {
+                dst = year_dst;
+                found = true;
+            } else {
+                for (unsigned i = 2; i && !found; --i) {
+                    if (t >= trans[i - 1].time) {
+                        dst = trans[i - 1].dst;
+                        since_transition = static_cast<uint64_t>(t - trans[i - 1].time);
+                        found = true;
+                    }
+                }
+            }
+        }
+        assert(found);
+    }
+    if (since) {
+        *since = since_transition;
+    }
+    is_dst = dst;
+    zone_name = dst ? dst_name.c_str() : std_name.c_str();
+    return dst ? dst_utoff : std_utoff;
+}
+
 QoreZoneInfo::QoreZoneInfo(QoreString& root, std::string& n_name, ExceptionSink* xsink)
-        : AbstractQoreZoneInfo(n_name), first_pos(-1), valid(false), std_abbr(nullptr) {
+        : AbstractQoreZoneInfo(n_name), valid(false) {
     printd(5, "QoreZoneInfo::QoreZoneInfo() this: %p root: %s name: %s\n", this, root.c_str(), name.c_str());
 
     // Skip if name is empty — cannot open the zoneinfo root directory as a file
@@ -82,236 +556,280 @@ QoreZoneInfo::QoreZoneInfo(QoreString& root, std::string& n_name, ExceptionSink*
         xsink->clear();
     }
 
-    // data buffer
-    QoreString str;
-    if (f.read(str, 4, xsink))
-        return;
-
-    if (strcmp("TZif", str.c_str())) {
-        xsink->raiseException("TZINFO-ERROR", "%s: invalid file magic", fn.c_str());
+    // read the whole file, which is small; one byte more than the maximum shows a file that is too large
+    SimpleRefHolder<BinaryNode> data(f.readBinary(static_cast<qore_offset_t>(MaxFileSize + 1), xsink));
+    if (*xsink) {
         return;
     }
-
-    // skip 16 reserved bytes
-    if (f.setPos(20) != 20) {
-        xsink->raiseErrnoException("TZINFO-ERROR", errno, "failed to position file at tzinfo header");
+    // no data is returned for an empty file
+    size_t len = data ? data->size() : 0;
+    if (len > MaxFileSize) {
+        xsink->raiseException("TZINFO-ERROR", "%s: the file is larger than the maximum TZif file size of %llu "
+            "bytes", fn.c_str(), static_cast<unsigned long long>(MaxFileSize));
         return;
     }
 
-    // file header variables
-    unsigned tzh_ttisutccnt,  // The number of UTC/local indicators stored in the file
-        tzh_ttisstdcnt,        // The number of standard/wall indicators stored in the file
-        tzh_leapcnt,           // The number of leap seconds for which data is stored in the file
-        tzh_timecnt,           // The number of "QoreDSTTransition times" for which data is stored in the file
-        tzh_typecnt,           // The number of "local time types" for which data is stored in the file (must not be zero)
-        tzh_charcnt;           // The number of characters of "timezone abbreviation strings" stored in the file
-
-    // read in header count variables
-    if (f.readu4(&tzh_ttisutccnt, xsink)) {
+    if (parse(len ? static_cast<const unsigned char*>(data->getPtr()) : nullptr, len, fn.c_str(), xsink)) {
         return;
     }
 
-    if (f.readu4(&tzh_ttisstdcnt, xsink)) {
+    if (setStandardInfo(xsink)) {
         return;
     }
-
-    if (f.readu4(&tzh_leapcnt, xsink)) {
-        return;
-    }
-
-    if (f.readu4(&tzh_timecnt, xsink)) {
-        return;
-    }
-
-    if (f.readu4(&tzh_typecnt, xsink)) {
-        return;
-    }
-
-    if (f.readu4(&tzh_charcnt, xsink)) {
-        return;
-    }
-
-    printd(5, "QoreZoneInfo::QoreZoneInfo() tzh_ttisutccnt: %d tzh_ttisstdcnt: %d tzh_leapcnt: %d "
-        "tzh_timecnt: %d tzh_typecnt: %d tzh_charcnt: %d\n", tzh_ttisutccnt, tzh_ttisstdcnt, tzh_leapcnt, tzh_timecnt,
-        tzh_typecnt, tzh_charcnt);
-
-    if (tzh_ttisutccnt > tzh_typecnt) {
-        xsink->raiseException("TZINFO-ERROR", "tzh_ttisutccnt (%d) > tzh_typecnt (%d)", tzh_ttisutccnt, tzh_typecnt);
-        return;
-    }
-
-    QoreDSTTransitions.resize(tzh_timecnt);
-
-    // read in QoreDSTTransition time values
-    for (unsigned i = 0; i < tzh_timecnt; ++i) {
-        if (f.readi4(&QoreDSTTransitions[i].time, xsink)) {
-            return;
-        }
-
-        if (first_pos == -1 && QoreDSTTransitions[i].time >= 0) {
-            first_pos = i;
-        }
-        //printd(5, "QoreZoneInfo::QoreZoneInfo() trans_time[%d]: %u\n", i, QoreDSTTransitions[i].time);
-    }
-
-    // for QoreDSTTransition type pointers
-    std::vector<unsigned char> trans_type;
-    trans_type.resize(tzh_timecnt);
-
-    // read in QoreDSTTransition type array
-    for (unsigned i = 0; i < tzh_timecnt; ++i) {
-        if (f.readu1(&trans_type[i], xsink)) {
-            return;
-        }
-        if (trans_type[i] >= tzh_typecnt) {
-            xsink->raiseException("TZINFO-ERROR", "QoreDSTTransition type index %d (%d) is greater than tzh_typecnt "
-                "(%d)", i, trans_type[i], tzh_typecnt);
-            return;
-        }
-        //printd(5, "QoreZoneInfo::QoreZoneInfo() trans_type[%d]: %d\n", i, trans_type[i]);
-    }
-
-    // allocate QoreTransitionInfo array
-    tti.resize(tzh_typecnt);
-
-    // declare temporary abbreviation index array
-    std::vector<unsigned char> ai;
-    ai.reserve(tzh_typecnt);
-
-    // read in QoreTransitionInfo data
-    for (unsigned i = 0; i < tzh_typecnt; ++i) {
-        if (f.readi4(&tti[i].utcoff, xsink)) {
-            return;
-        }
-
-        //printd(5, "QoreZoneInfo::QoreZoneInfo() utcoff: %d\n", tti[i].utcoff);
-
-        unsigned char c;
-        if (f.readu1(&c, xsink)) {
-            return;
-        }
-
-        tti[i].isdst = c;
-        if (c && !has_dst) {
-            has_dst = true;
-        }
-
-        if (f.readu1(&c, xsink)) {
-            return;
-        }
-
-        ai.push_back(c);
-    }
-
-    // set QoreDSTTransition pointers and remove invalid bands
-    {
-        dst_transition_vec_t::iterator di = QoreDSTTransitions.begin();
-        for (unsigned i = 0; i < tzh_timecnt; ++i) {
-            QoreDSTTransition& t = *di;
-            t.trans = &tti[trans_type[i]];
-            if (di != QoreDSTTransitions.begin()) {
-                dst_transition_vec_t::iterator prev = di;
-                --prev;
-                if (t.trans->utcoff == prev->trans->utcoff) {
-                    // invalid transition found
-                    printd(1, "QoreZoneInfo::QoreZoneInfo() skipping invalid transition [%d] at %d\n", i, t.time);
-                    QoreDSTTransitions.erase(di);
-                    di = prev;
-                    if ((int)i < first_pos) {
-                        --first_pos;
-                    }
-                }
-            }
-            ++di;
-        }
-    }
-
-    // read in abbreviation list
-    if (f.read(str, tzh_charcnt, xsink)) {
-        return;
-    }
-
-    // set abbreviations
-    for (unsigned i = 0; i < tzh_typecnt; ++i) {
-        tti[i].abbr = str.c_str() + ai[i];
-        if (!std_abbr && !tti[i].isdst) {
-            std_abbr = tti[i].abbr.c_str();
-        }
-    }
-
-    // read in leap info
-    leapinfo.resize(tzh_leapcnt);
-    for (unsigned i = 0; i < tzh_leapcnt; ++i) {
-        if (f.readi4(&leapinfo[i].ttime, xsink)
-            || f.readi4(&leapinfo[i].total, xsink)) {
-            return;
-        }
-    }
-
-    // read in std indicator array
-    for (unsigned i = 0; i < tzh_ttisstdcnt; ++i) {
-        unsigned char c;
-        if (f.readu1(&c, xsink)) {
-            return;
-        }
-
-        tti[i].isstd = c;
-    }
-
-    // assign remaining entries to default false
-    for (unsigned i = tzh_ttisstdcnt; i < tzh_typecnt; ++i) {
-        tti[i].isstd = false;
-    }
-
-    // read in utc indicator array
-    for (unsigned i = 0; i < tzh_ttisutccnt; ++i) {
-        unsigned char c;
-        if (f.readu1(&c, xsink)) {
-            return;
-        }
-
-        tti[i].isutc = c;
-    }
-
-    // assign remaining entries to default false
-    for (unsigned i = tzh_ttisutccnt; i < tzh_typecnt; ++i) {
-        tti[i].isutc = false;
-    }
-
-    // scan time bands from the end to get the default UTC offset for this zone
-    // if we start from the first, we'll get some historical offset which may be different than the modern offset
-    {
-        unsigned i = tzh_typecnt;
-        while (i) {
-            --i;
-            if (!(i % 100) && qore_check_cancel(xsink, "selecting the standard time zone offset")) {
-                return;
-            }
-            if (!tti[i].isdst) {
-                utcoff = tti[i].utcoff;
-                //printd(5, "QoreZoneInfo::QoreZoneInfo() tti[%d] %s: utcoff: %d isdst: %s isstd: %s isutc: %s\n", i,
-                //    tti[i].abbr.c_str(), tti[i].utcoff, QB(tti[i].isdst), QB(tti[i].isstd), QB(tti[i].isutc));
-                break;
-            }
-        }
-    }
-
-#if 0
-    for (unsigned i = 0, e = QoreDSTTransitions.size(); i < e; ++i) {
-        DateTime d((int64)QoreDSTTransitions[i].time);
-        str.clear();
-        d.format(str, "Dy Mon DD YYYY HH:mm:SS");
-        QoreTransitionInfo &trans = *QoreDSTTransitions[i].trans;
-        DateTime local(d.getEpochSeconds() + trans.utcoff);
-        QoreString lstr;
-        local.format(lstr, "Dy Mon DD YYYY HH:mm:SS");
-        printd(0, "QoreZoneInfo::QoreZoneInfo() trans[%3d] time: %d %s UTC = %s %s isdst: %d isstd: %d isutc: %d "
-            "utcoff: %d\n", i, QoreDSTTransitions[i].time, str.c_str(), lstr.c_str(), trans.abbr.c_str(), trans.isdst,
-            trans.isstd, trans.isutc, trans.utcoff);
-    }
-#endif
 
     valid = true;
+}
+
+int QoreZoneInfo::parse(const unsigned char* data, size_t len, const char* fn, ExceptionSink* xsink) {
+    // RFC 9636 section 3.1: the file starts with the version 1 header
+    if (len < 4 || memcmp(data, "TZif", 4)) {
+        if (len < 4) {
+            tzif_raise_truncated(fn, "TZif header", TzifHeaderSize, len, xsink);
+        } else {
+            xsink->raiseException("TZINFO-ERROR", "%s: invalid file magic", fn);
+        }
+        return -1;
+    }
+    if (len < TzifHeaderSize) {
+        tzif_raise_truncated(fn, "TZif header", TzifHeaderSize, len, xsink);
+        return -1;
+    }
+    // the version is NUL for version 1 and an ASCII digit from '2' for later versions; a reader of one version can
+    // read later versions (RFC 9636 section 3)
+    unsigned char version = data[4];
+    if (version && version < '2') {
+        xsink->raiseException("TZINFO-ERROR", "%s: invalid TZif version byte 0x%02x", fn,
+            static_cast<unsigned>(version));
+        return -1;
+    }
+
+    uint32_t counts[TZIF_NUM_COUNTS];
+    tzif_read_counts(data, counts);
+    // RFC 9636 section 4: the lengths of the headers and data blocks are checked against the size of the file
+    uint64_t v1_end = TzifHeaderSize + tzif_data_block_size(counts, 4);
+    if (v1_end > len) {
+        tzif_raise_truncated(fn, "version 1 data block", v1_end, len, xsink);
+        return -1;
+    }
+
+    if (!version) {
+        // a version 1 file only has the 32-bit data block; any data after it is ignored (RFC 9636 section 4)
+        if (tzif_check_counts(counts, fn, xsink)) {
+            return -1;
+        }
+        return parseDataBlock(data, TzifHeaderSize, 4, counts, fn, xsink);
+    }
+
+    // RFC 9636 section 4: in a version 2+ file, the version 1 header and data block are only skipped
+    size_t v2_header = static_cast<size_t>(v1_end);
+    if (len - v2_header < TzifHeaderSize) {
+        tzif_raise_truncated(fn, "version 2+ TZif header", v2_header + TzifHeaderSize, len, xsink);
+        return -1;
+    }
+    if (memcmp(data + v2_header, "TZif", 4) || data[v2_header + 4] < '2') {
+        xsink->raiseException("TZINFO-ERROR", "%s: invalid version 2+ TZif header at byte %llu; a version 2+ TZif "
+            "file must have a second \"TZif\" header after the version 1 data block", fn,
+            static_cast<unsigned long long>(v2_header));
+        return -1;
+    }
+    tzif_read_counts(data + v2_header, counts);
+    if (tzif_check_counts(counts, fn, xsink)) {
+        return -1;
+    }
+    uint64_t v2_end = v2_header + TzifHeaderSize + tzif_data_block_size(counts, 8);
+    if (v2_end > len) {
+        tzif_raise_truncated(fn, "version 2+ data block", v2_end, len, xsink);
+        return -1;
+    }
+    if (parseDataBlock(data, v2_header + TzifHeaderSize, 8, counts, fn, xsink)) {
+        return -1;
+    }
+
+    // RFC 9636 section 3.3: the footer is a newline, a TZ string and a newline
+    size_t pos = static_cast<size_t>(v2_end);
+    if (pos == len || data[pos] != '\n') {
+        xsink->raiseException("TZINFO-ERROR", "%s: the TZif footer is missing; a version 2+ TZif file must end with "
+            "a footer: a newline, a TZ string and a newline", fn);
+        return -1;
+    }
+    const unsigned char* tz = data + pos + 1;
+    const unsigned char* tz_end = static_cast<const unsigned char*>(memchr(tz, '\n', len - pos - 1));
+    if (!tz_end) {
+        xsink->raiseException("TZINFO-ERROR", "%s: the TZ string in the TZif footer is not terminated with a "
+            "newline", fn);
+        return -1;
+    }
+    // any data after the footer is for later versions and is ignored (RFC 9636 section 3)
+    size_t tz_len = static_cast<size_t>(tz_end - tz);
+    if (!tz_len) {
+        // an empty TZ string: local time after the last transition is not available
+        return 0;
+    }
+    if (memchr(tz, '\0', tz_len)) {
+        xsink->raiseException("TZINFO-ERROR", "%s: the TZ string in the TZif footer contains a NUL character", fn);
+        return -1;
+    }
+    if (*tz == ':') {
+        xsink->raiseException("TZINFO-ERROR", "%s: the TZ string in the TZif footer begins with ':'; the meaning "
+            "of such a TZ string is implementation-defined, and it is not supported", fn);
+        return -1;
+    }
+    std::unique_ptr<QorePosixTzRule> rule(new QorePosixTzRule);
+    if (rule->parse(reinterpret_cast<const char*>(tz), tz_len, fn, xsink)) {
+        return -1;
+    }
+    footer = std::move(rule);
+    return 0;
+}
+
+int QoreZoneInfo::parseDataBlock(const unsigned char* data, size_t offset, unsigned time_size,
+        const uint32_t* counts, const char* fn, ExceptionSink* xsink) {
+    assert(time_size == 4 || time_size == 8);
+    const uint32_t timecnt = counts[TZIF_TIMECNT];
+    const uint32_t typecnt = counts[TZIF_TYPECNT];
+    const uint32_t charcnt = counts[TZIF_CHARCNT];
+    const uint32_t leapcnt = counts[TZIF_LEAPCNT];
+    const uint32_t isstdcnt = counts[TZIF_ISSTDCNT];
+    const uint32_t isutcnt = counts[TZIF_ISUTCNT];
+    assert(typecnt && charcnt);
+    printd(5, "QoreZoneInfo::parseDataBlock() time size: %u isutcnt: %u isstdcnt: %u leapcnt: %u timecnt: %u "
+        "typecnt: %u charcnt: %u\n", time_size, isutcnt, isstdcnt, leapcnt, timecnt, typecnt, charcnt);
+
+    // the caller has checked that the whole data block is in the buffer (RFC 9636 section 3.2)
+    const unsigned char* p = data + offset;
+
+    // transition times in strictly ascending order
+    QoreDSTTransitions.resize(timecnt);
+    for (uint32_t i = 0; i < timecnt; ++i, p += time_size) {
+        int64 t = tzif_time(p, time_size);
+        if (i && t <= QoreDSTTransitions[i - 1].time) {
+            xsink->raiseException("TZINFO-ERROR", "%s: TZif transition time %u (%lld) is not greater than the "
+                "previous one (%lld); transition times must be in strictly ascending order", fn, i,
+                static_cast<long long>(t), static_cast<long long>(QoreDSTTransitions[i - 1].time));
+            return -1;
+        }
+        QoreDSTTransitions[i].time = t;
+        QoreDSTTransitions[i].trans = nullptr;
+    }
+
+    // transition types: indices of local time type records
+    const unsigned char* trans_types = p;
+    for (uint32_t i = 0; i < timecnt; ++i) {
+        if (trans_types[i] >= typecnt) {
+            xsink->raiseException("TZINFO-ERROR", "%s: TZif transition type index %u (%u) is not less than "
+                "typecnt (%u)", fn, i, static_cast<unsigned>(trans_types[i]), typecnt);
+            return -1;
+        }
+    }
+    p += timecnt;
+
+    // local time type records
+    const unsigned char* designations = p + static_cast<size_t>(typecnt) * 6;
+    tti.resize(typecnt);
+    for (uint32_t i = 0; i < typecnt; ++i, p += 6) {
+        int32_t utoff = tzif_i4(p);
+        if (utoff == INT32_MIN) {
+            xsink->raiseException("TZINFO-ERROR", "%s: the UT offset of TZif local time type %u is -2^31", fn, i);
+            return -1;
+        }
+        unsigned char isdst = p[4];
+        if (isdst > 1) {
+            xsink->raiseException("TZINFO-ERROR", "%s: the DST indicator of TZif local time type %u is %u; it must "
+                "be 0 or 1", fn, i, static_cast<unsigned>(isdst));
+            return -1;
+        }
+        unsigned char desigidx = p[5];
+        if (desigidx >= charcnt) {
+            xsink->raiseException("TZINFO-ERROR", "%s: the designation index of TZif local time type %u (%u) is "
+                "not less than charcnt (%u)", fn, i, static_cast<unsigned>(desigidx), charcnt);
+            return -1;
+        }
+        if (!memchr(designations + desigidx, '\0', charcnt - desigidx)) {
+            xsink->raiseException("TZINFO-ERROR", "%s: the designation of TZif local time type %u is not "
+                "terminated with a NUL character", fn, i);
+            return -1;
+        }
+        QoreTransitionInfo& info = tti[i];
+        info.utcoff = utoff;
+        info.isdst = isdst;
+        const char* desig = reinterpret_cast<const char*>(designations + desigidx);
+        // RFC 9636 section 4: a designation with other bytes than ASCII alphanumerics, '-' and '+' is replaced
+        // with a numeric designation derived from the UT offset
+        if (tz_designation_is_valid(desig)) {
+            info.abbr = desig;
+        } else {
+            info.abbr = tz_numeric_designation(utoff);
+        }
+        info.isstd = false;
+        info.isutc = false;
+    }
+    p += charcnt;
+
+    // leap-second records
+    leapinfo.resize(leapcnt);
+    for (uint32_t i = 0; i < leapcnt; ++i, p += time_size + 4) {
+        leapinfo[i].ttime = tzif_time(p, time_size);
+        leapinfo[i].total = tzif_i4(p + time_size);
+    }
+
+    // standard/wall indicators, then UT/local indicators
+    for (uint32_t i = 0; i < isstdcnt; ++i, ++p) {
+        if (*p > 1) {
+            xsink->raiseException("TZINFO-ERROR", "%s: the standard/wall indicator of TZif local time type %u is "
+                "%u; it must be 0 or 1", fn, i, static_cast<unsigned>(*p));
+            return -1;
+        }
+        tti[i].isstd = *p;
+    }
+    for (uint32_t i = 0; i < isutcnt; ++i, ++p) {
+        if (*p > 1) {
+            xsink->raiseException("TZINFO-ERROR", "%s: the UT/local indicator of TZif local time type %u is %u; it "
+                "must be 0 or 1", fn, i, static_cast<unsigned>(*p));
+            return -1;
+        }
+        tti[i].isutc = *p;
+    }
+    assert(static_cast<uint64_t>(p - (data + offset)) == tzif_data_block_size(counts, time_size));
+
+    // tti is complete and is not changed after this
+    for (uint32_t i = 0; i < timecnt; ++i) {
+        QoreDSTTransitions[i].trans = &tti[trans_types[i]];
+    }
+    return 0;
+}
+
+int QoreZoneInfo::setStandardInfo(ExceptionSink* xsink) {
+    for (const QoreTransitionInfo& info : tti) {
+        if (info.isdst) {
+            has_dst = true;
+            break;
+        }
+    }
+
+    if (footer) {
+        // the footer gives local time after the last transition, so its standard time is the current standard time
+        // of the zone (RFC 9636 section 3.3)
+        utcoff = footer->getStandardOffset();
+        if (footer->hasDST()) {
+            has_dst = true;
+        }
+        return 0;
+    }
+
+    // without a footer, scan the time types from the end to get the default UTC offset for this zone
+    // if we start from the first, we'll get some historical offset which may be different than the modern offset
+    unsigned i = static_cast<unsigned>(tti.size());
+    while (i) {
+        --i;
+        if (!(i % 100) && qore_check_cancel(xsink, "selecting the standard time zone offset")) {
+            return -1;
+        }
+        if (!tti[i].isdst) {
+            utcoff = tti[i].utcoff;
+            break;
+        }
+    }
+    return 0;
 }
 
 int QoreTimeZoneManager::process(const char* fn) {
@@ -400,55 +918,46 @@ int QoreTimeZoneManager::processIntern(const char* fn, ExceptionSink* xsink) {
 }
 
 int QoreZoneInfo::getUTCOffsetImpl(int64 epoch_offset, bool &is_dst, const char*& zone_name) const {
-    //printd(5, "QoreZoneInfo::getUTCOffsetImpl() epoch_offset: %lld first_pos: %d time: %lld\n", epoch_offset,
-    //     first_pos, first_pos > 0 ? QoreDSTTransitions[first_pos - 1].time : -1ll);
-    unsigned i = 0;
-    if (first_pos > 0 && epoch_offset >= QoreDSTTransitions[first_pos - 1].time) {
-        i = first_pos - 1;
-        unsigned end = QoreDSTTransitions.size() - 1;
-        while (i < end) {
-            if (QoreDSTTransitions[i].time <= epoch_offset && QoreDSTTransitions[i + 1].time > epoch_offset) {
-                zone_name = QoreDSTTransitions[i].trans->abbr.c_str();
-                is_dst = QoreDSTTransitions[i].trans->isdst;
-
-                //printd(5, "QoreZoneInfo::getUTCOffsetImpl(epoch: %lld) tt[<=]: %d tt[>]: %d zone_name: %s is_dst: %d "
-                //    "utcoff: %d\n", epoch_offset, QoreDSTTransitions[i].time, QoreDSTTransitions[i + 1].time, zone_name,
-                //    is_dst, QoreDSTTransitions[i].trans->utcoff);
-                return QoreDSTTransitions[i].trans->utcoff;
-            }
-            ++i;
+    assert(!tti.empty());
+    const QoreTransitionInfo* type;
+    if (QoreDSTTransitions.empty()) {
+        // RFC 9636 section 3.2: without transitions, local time is given by the footer TZ string if present and
+        // nonempty, otherwise by time type 0
+        if (footer) {
+            return footer->getUTCOffset(epoch_offset, is_dst, zone_name);
         }
-        // not found, time zone unknown
-        is_dst = false;
-        zone_name = std_abbr;
-
-        //printd(5, "QoreZoneInfo::getUTCOffsetImpl(epoch: %lld) NOT FOUND zone_name: %s is_dst: %d utcoff: %d\n",
-        //    epoch_offset, zone_name, is_dst, utcoff);
-
-        return utcoff;
-    }
-
-    i = first_pos + 1;
-    while (i > 0) {
-        if (QoreDSTTransitions[i].time > epoch_offset && QoreDSTTransitions[i - 1].time <= epoch_offset) {
-            zone_name = QoreDSTTransitions[i].trans->abbr.c_str();
-            is_dst = QoreDSTTransitions[i].trans->isdst;
-
-            //printd(5, "QoreZoneInfo::getUTCOffsetImpl(epoch: %lld) i: %d tt[<=]: %d tt[>]: %d zone_name: %s "
-            //   "is_dst: %d utcoff: %d\n", epoch_offset, i, QoreDSTTransitions[i].time, QoreDSTTransitions[i + 1].time,
-            //   zone_name, is_dst, QoreDSTTransitions[i].trans->utcoff);
-            return QoreDSTTransitions[i].trans->utcoff;
+        type = &tti[0];
+    } else if (epoch_offset < QoreDSTTransitions.front().time) {
+        // local time before the first transition is given by time type 0
+        type = &tti[0];
+    } else if (footer && epoch_offset >= QoreDSTTransitions.back().time) {
+        // local time on or after the last transition is given by the footer TZ string if present and nonempty
+        uint64_t since;
+        int offset = footer->getUTCOffset(epoch_offset, is_dst, zone_name, &since);
+        // the TZ string must be consistent with the last transition (RFC 9636 section 3.3); if it is not, the type of
+        // the last transition applies up to the first transition of the rule after it, as in the reference
+        // implementation
+        uint64_t since_last = static_cast<uint64_t>(epoch_offset)
+            - static_cast<uint64_t>(QoreDSTTransitions.back().time);
+        if (since == UINT64_MAX || since < since_last) {
+            return offset;
         }
-        --i;
+        type = QoreDSTTransitions.back().trans;
+    } else {
+        // the type of a transition applies from its time up to, but not including, the next transition time; after
+        // the last transition of a file without a footer TZ string, local time is unspecified, and the type of the
+        // last transition is used, as in the reference implementation
+        dst_transition_vec_t::const_iterator i = std::upper_bound(QoreDSTTransitions.begin(),
+            QoreDSTTransitions.end(), epoch_offset, [](int64 t, const QoreDSTTransition& trans) {
+                return t < trans.time;
+            });
+        assert(i != QoreDSTTransitions.begin());
+        type = (i - 1)->trans;
     }
-    // not found, time zone unknown
-    is_dst = false;
-    zone_name = std_abbr;
-
-    //printd(5, "QoreZoneInfo::getUTCOffsetImpl(epoch: %lld) NOT FOUND zone_name: %s is_dst: %d utcoff: %d\n",
-    //     epoch_offset, zone_name, is_dst, utcoff);
-
-    return utcoff;
+    assert(type);
+    is_dst = type->isdst;
+    zone_name = type->abbr.c_str();
+    return type->utcoff;
 }
 
 // format: S00[[:]00[[:]00]] (S is + or -)

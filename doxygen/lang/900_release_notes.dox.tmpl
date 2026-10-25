@@ -261,6 +261,11 @@
     automatically from the library sources that define the contract, so rebuilding the library for other changes
     does not invalidate compiled modules; \c qcc <tt>--version</tt> shows it; see @ref aot_module_runtime_identity.
 
+    AOT-compiled modules can be code-signed and notarized on macOS: the metadata that the module loader reads before
+    loading a module is stored in a section of the module image, so the module's code signature covers it and modules
+    pass strict signature validation, and stripping modules for packaging keeps it; \c qcc <tt>--dump-info</tt>
+    shows it; see @ref aot_module_code_signing.
+
     Modules built with the %Qore CMake support outside of the %Qore source tree recompile their AOT modules when a
     new %Qore library is installed, also when \c qcc itself is unchanged, and compile them for the library found by
     \c find_package(Qore) even when \c LD_LIBRARY_PATH names another %Qore build tree.
@@ -716,6 +721,26 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Data Provider Types Restored From Their Descriptions Can Be Cyclic and Shared
+    @parblock
+    \c DataProvider::AbstractDataProviderType::get() restores each type of a type description once: a recursive
+    type is restored as a cycle, whose recursive field is the restored type itself, and a type that the description
+    refers to at several places is one type.  Before, every occurrence was restored as a type of its own, and a
+    recursive reference as a hash type without fields, so restoring the option types of large REST schemas, such as
+    NetSuite's from the data provider index, took gigabytes of memory.  Code that walks the fields of restored types,
+    as of the types of recursive schemas, must recognize the types it has already visited.
+
+    Restored types also keep more of their descriptions: a type path that is not registered in the process, the name
+    and softness of a type named otherwise than its Qore type, the options of class-backed named types such as
+    \c file, and the class of an object type that the restoring program cannot resolve.  A restored field gives the
+    example that its description gives, and none if the description gives none, instead of generating one from its
+    allowed values or its type.
+
+    Type descriptions say whether a list type is a soft list, and can describe a type graph with each type once
+    (\c DataProvider::AbstractDataProviderType::getInfoGraph()); the input schemas of MCP tools describe the types
+    that they refer to more than once, including recursive types, once in \c "$defs".
+    @endparblock
+
     @par date() Raises an Exception for Text After a Date or Time
     @ref Qore::date(string) "date(string)" and @ref Qore::TimeZone::date(string) "TimeZone::date(string)" now raise
     \c INVALID-DATE for text after a complete ISO 8601 date or time that is not a zone designator or white space
@@ -957,6 +982,22 @@
     opened the file; the file is no longer opened.  A time zone region with a \c ".." or an empty path component or a
     backslash, which could name a file outside of the zoneinfo directory, raises \c TZINFO-ERROR (see
     @ref sandbox_fs_tz_regions).
+    @endparblock
+
+    @par Local Times Follow All of the Data in Zoneinfo Files
+    @parblock
+    Time zones loaded from zoneinfo files now use all of the data in the file (see @ref zoneinfo_files); before,
+    only the part of the file for 1901 to 2038 was read.  The local time of some dates therefore changes:
+    - with a "slim" zoneinfo file, which \c zic writes by default, local time is correct; before, it was UTC for all
+      dates, without an error
+    - dates after 2037 apply daylight saving time and use the time zone names of the region
+    - dates before 1901, and before the first time zone change of the region, use the historical offsets of the
+      region, such as local mean time (+00:57:44 in Europe/Prague in 1800, before +01:00)
+    - dates before 1970 get the offset in effect at the time; before, many got the offset of the next time zone
+      change, such as standard time in the summer of 1946 in Europe/Prague
+    - a change of only the time zone name is applied
+    - a zoneinfo file that is truncated or otherwise not valid raises \c TZINFO-ERROR when it is loaded; before, it
+      could be read in part
     @endparblock
 
     @par getpwuid2(), getpwnam2() and getgrnam2() Raise Their Documented Error Codes
@@ -3090,6 +3131,14 @@ while (*binary chunk = input.read(65536)) {
         reporting themselves as mandatory, so that a hash type rejected a value omitting such a field
       - fixed @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()" restoring a soft
         list type from its type description as a plain list type that rejected single values
+      - @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()" restores each type of a
+        description once, so that recursive types are restored as cycles, shared types stay shared, and restoring
+        large type graphs takes little time and memory; restored types keep their paths, names, softness, options,
+        and object classes, and restored fields give the examples of their descriptions
+        (@ref DataProvider::DescribedDataField "DescribedDataField")
+      - added type graph descriptions, which describe each type with fields once and refer to it by key
+        (@ref DataProvider::AbstractDataProviderType::getInfoGraph() "AbstractDataProviderType::getInfoGraph()",
+        @ref DataProvider::DataTypeGraphBuilder "DataTypeGraphBuilder")
       - action option generation returns an empty hash for operations without input fields
       - fixed short-description derivation corrupting words and literal braces when help text contains quoted parameter names or numbers
       - added DPQL (Data Provider Query Language) — a human/AI-readable query syntax with a tokenizer,
@@ -4441,7 +4490,8 @@ while (*binary chunk = input.read(65536)) {
       - migrated from module-json; an <a href="https://modelcontextprotocol.io">MCP</a> server handler for use
         with the @ref httpserverintro "HttpServer" module; tools can be registered from type descriptions, such as
         those in the data provider index, without loading the modules that define the types, and tool input
-        schemas include the validation constraints of their types
+        schemas include the validation constraints of their types; a type that a tool's input refers to more than
+        once, including a recursive type, is described once in the schema's \c "$defs"
 
     - @ref memcacheddataproviderintro "MemcachedDataProvider" module
       - new module providing a data provider API for <a href="https://memcached.org/">Memcached</a> caching servers
@@ -4920,6 +4970,10 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - zoneinfo files are read with their 64-bit data and the time zone rule at the end of the file, as RFC 9636
+      describes: local times were UTC with "slim" zoneinfo files, which \c zic writes by default, and with all
+      zoneinfo files, local times after 2037 had no daylight saving time, and many local times before 1970 had the
+      wrong offset (see @ref zoneinfo_files)
     - @ref Qore::date(string) "date(string)" and @ref Qore::TimeZone::date(string) "TimeZone::date(string)" read
       the zone designator after a time without seconds, as ISO 8601 allows for a time of reduced precision:
       <tt>2026-01-01T10:00Z</tt> and <tt>2026-01-01T10:00+02:00</tt> were refused with \c INVALID-DATE, and the
@@ -6099,6 +6153,14 @@ while (*binary chunk = input.read(65536)) {
 
     - @ref restschemavalidatorintro "RestSchemaValidator", @ref openapi3intro "OpenApi3", and
       @ref swaggerintro "Swagger" modules
+      - the type of a described schema reference keeps the referenced schema's name: a property written as a
+        one-member \c allOf of a \c "$ref" with a description of its own, which is how a document describes one use of
+        a reusable schema, has the referenced schema's type, and its description is the field's.  Each such property
+        had a copy of the type named after the property, so that two different schemas could appear under one type
+        name and one schema under several, and the copy did not apply all of the referenced schema's rules: its
+        required properties (Swagger 2.0), its \c oneOf, \c anyOf and discriminator alternatives (OpenAPI 3), and the
+        rejection of undeclared properties.  A \c nullable or \c x-nullable property has the "or nothing" variant of
+        the referenced type
       - schema fields prefer valid declared examples; generated examples are validated against their types, and
         omitted when constraints cannot be satisfied
       - schema data types describe and enforce the schema's validation constraints, so a value violating them is
@@ -6150,6 +6212,13 @@ while (*binary chunk = input.read(65536)) {
       data, such as the \c python module, while another thread used the module: the module's data was copied for the
       new Program with the parent Program's lock held, and a thread of the module that held the module's lock waited
       for the Program's lock
+    - A value whose return was interrupted by an exception that a \c catch block handles is no longer returned: the
+      value of a \c return statement in a \c try block that raised an error (such as a value that the declared
+      return type rejects) or after which an \c on_exit handler raised an exception is released, and the code
+      continues after the \c catch block as if the return had not completed, so code with a declared return type
+      raises the "missing return statement" error unless a later \c return statement returns a value.  Before, the
+      value was returned, also when the declared return type rejected it, and when the \c catch block returned
+      another value, the interrupted value was never released, and an object held by it was never destroyed
 
     @section qore_2_2_1 Qore 2.2.1
 

@@ -417,6 +417,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::SnapshotInt: return "snapshot.int";
         case QoreIROpcode::SnapshotFloat: return "snapshot.float";
         case QoreIROpcode::UnwindTemps: return "unwind.temps";
+        case QoreIROpcode::CheckReturnValue: return "check.return";
         case QoreIROpcode::PushTempMark: return "push.temp.mark";
         case QoreIROpcode::CallAOTHelper: return "call.aot.helper";
         case QoreIROpcode::RefForeachInit: return "ref.foreach.init";
@@ -522,7 +523,8 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     if ((inst->opcode == QoreIROpcode::StoreLocal
                             || inst->opcode == QoreIROpcode::StoreClosure)
                             && local_inst->mode != AssignmentMode::Normal) {
-                        out << " weak";
+                        // the variable of a foreach loop is assigned each element as it is
+                        out << (local_inst->mode == AssignmentMode::Element ? " element" : " weak");
                     }
                 }
             } else if (inst->opcode == QoreIROpcode::LoadGlobal || inst->opcode == QoreIROpcode::StoreGlobal

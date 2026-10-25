@@ -60,6 +60,8 @@ public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
             \requestFieldsTest());
         addTestCase("constructor rejects missing gcp_project_id",
             \missingProjectTest());
+        addTestCase("described references have the referenced components' types",
+            \describedReferenceTypesTest());
 
         # Opt in with a named connection or ADC project plus an existing processor.
         # Cost: three synthetic pages; never provisions resources or assumes free-tier eligibility.
@@ -133,6 +135,58 @@ public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
         assertThrows("CONSTRUCTOR-ERROR", sub () {
             GoogleDocumentAiDataProvider::GoogleDocumentAiDataProvider p({});
         });
+    }
+
+    #! The document's page spans, and every other type reached through a described reference, are built once
+    /** The schema describes a chunk's page span, and its header's and footer's, as an \c allOf of one reference to
+        one component, each with a description of its own; the layout block's page span refers to another
+        component with the same properties.  Each is the component's type, named after it.
+    */
+    private describedReferenceTypesTest() {
+        hash<DataProviderActionInfo> action = (select DataProviderActionCatalog::getActions("GoogleDocumentAi"),
+            $1.action == "process-document")[0];
+        # every object type of the response is built once: no two type objects have one name and schema identity
+        hash<string, hash<string, bool>> objects = {};
+        hash<string, bool> seen = {};
+        list<AbstractDataProviderType> todo = (action.output_type,);
+        while (todo) {
+            AbstractDataProviderType t = shift todo;
+            string h = t.uniqueHash();
+            if (seen{h}) {
+                continue;
+            }
+            seen{h} = True;
+            if (*string identity = t.getSchemaIdentity()) {
+                objects{t.getName() + " " + identity}{h} = True;
+            }
+            todo += map $1.getType(), t.getFields().iterator();
+            if (*AbstractDataProviderType element = t.getElementType()) {
+                push todo, element;
+            }
+            if (t instanceof QoreUnionDataType) {
+                todo += cast<QoreUnionDataType>(t).getUnionTypes();
+            }
+        }
+        hash<string, int> duplicates = map {$1.key: $1.value.size()}, objects.pairIterator(), $1.value.size() > 1;
+        assertEq({}, duplicates, "each object type of the response is one type object");
+        list<string> property_named = select keys objects, $1 =~ /^\*?pageSpan /;
+        assertEq((), property_named, "no type is named after a property");
+
+        AbstractDataProviderType doc = action.output_type.getFields().document.getType();
+        AbstractDataProviderType chunk = doc.getFields().chunkedDocument.getType().getFields().chunks.getType()
+            .getElementType();
+        AbstractDataProviderType chunk_span = chunk.getFields().pageSpan.getType();
+        assertEq("*GoogleCloudDocumentaiV1DocumentChunkedDocumentChunkChunkPageSpan", chunk_span.getName());
+        assertEq("Page span of the chunk.", chunk.getFields().pageSpan.getDescription());
+        foreach string part in (("pageHeaders", "pageFooters")) {
+            AbstractDataField span = chunk.getFields(){part}.getType().getElementType().getFields().pageSpan;
+            assertTrue(span.getType() === chunk_span, part + ": the page span is the chunk's page span type");
+            assertNeq("Page span of the chunk.", span.getDescription(), part + ": with its own description");
+        }
+        AbstractDataProviderType block_span = doc.getFields().documentLayout.getType().getFields().blocks
+            .getType().getElementType().getFields().pageSpan.getType();
+        assertEq("*GoogleCloudDocumentaiV1DocumentDocumentLayoutDocumentLayoutBlockLayoutPageSpan",
+            block_span.getName(), "the layout block's page span has its own component's type and name");
     }
 
     #! Exercises Google Document AI's live `:process` endpoint

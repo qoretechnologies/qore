@@ -22597,3 +22597,9 @@ visibility, then extend proven paths to qmods and more scalar signatures. Java
 parity and a global performance ceiling remain unestablished.
 
 Evidence: [results-aot-shared-callback-inline-macos-arm64.json](results-aot-shared-callback-inline-macos-arm64.json); [all 62 audit checks](audit-aot-shared-callback-inline.md).
+
+### Develop merge 54a6a86070 after shared callback inlining
+
+The optimized merge retains snapshots 409/410, appends CheckReturnValue 411, and distinguishes upstream v21 opcode 409 from older performance artifacts using the header maximum. Eight binary round trips and phase0 metadata checks pass. Native local-cache conflicts preserve weak-target reads and raw ownership operations. Apple embedded-runtime tests and static AOT linking include the required system frameworks.
+
+Qualification: 34 passing QUnit fixtures, 460 reported cases (449 executed), 11493 assertions, 11 skips; 391 qmods and 1110 IR/AOT reference checks. Presentation passed with source fallback for separately installed GrpcUtil and SalesforcePubSubDataProvider qmods built with the old metadata format; rebuild those external qmods after installing. Schema digests were refreshed after exact agreement for 276 actions across native/source execution and upstream sources on old/current runtimes, with the parent matching its saved reference. These are correctness checks, not fresh timing. The earlier Java and before/after numbers remain pre-merge measurements. [Audit](audit-merge-54a6.md); [evidence](results-merge-54a6.json).

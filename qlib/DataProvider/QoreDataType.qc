@@ -383,8 +383,13 @@ public class QoreDataType inherits AbstractDataProviderType {
 
     #! returns a description of the type as a hash
     hash<DataTypeInfo> getInfo(*bool simple) {
+        hash<DataTypeInfo> base = AbstractDataProviderType::getInfo(simple);
+        # a reference in a type graph description describes nothing else
+        if (base.type_ref) {
+            return base;
+        }
         # a plain hash is added, so that the members that are not given keep the values of the base info
-        hash<DataTypeInfo> rv = cast<hash<DataTypeInfo>>(AbstractDataProviderType::getInfo(simple) + {
+        hash<DataTypeInfo> rv = cast<hash<DataTypeInfo>>(base + {
             "allowed_values": allowed_values,
             "allowed_values_creatable": allowed_values_creatable ?? False,
             "element_allowed_values": element_allowed_values,
@@ -392,6 +397,14 @@ public class QoreDataType inherits AbstractDataProviderType {
         });
         if ((base_type_hash{NT_HASH} || base_type_hash{NT_ALL}) && !rv.fields) {
             rv.can_manage_fields = True;
+        }
+        # a list type says whether it is a soft list, which converts a single value to a list
+        if (self instanceof SoftListDataType) {
+            rv.soft_list = True;
+        } else if (self instanceof ListDataType) {
+            rv.soft_list = False;
+        } else if (rv.base_type == "list") {
+            rv.soft_list = (type.getName() =~ /^\*?softlist</) ? True : False;
         }
         return rv;
     }

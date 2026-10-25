@@ -845,6 +845,25 @@ class VRMutex;
 class UserVariantExecHelper;
 class QoreJIT;
 
+//! Returns the value that code gives, or no value if the code raised an exception
+/** Code that raises an exception gives no value to its caller: a return statement whose value the declared return
+    type rejects raises the error with the value still held, which is released here, so that a caller that takes no
+    value with an exception does not keep it; an immediate value (other than an enum value, which holds a reference
+    to its declaration) holds nothing to release
+
+    @param rv the value that the code gave
+    @param xsink the sink of the code's exception, if any
+
+    @return @p rv, or no value if @p rv holds a reference and @p xsink holds an exception, after releasing @p rv
+*/
+DLLLOCAL inline QoreValue qore_release_value_with_exception(QoreValue rv, ExceptionSink* xsink) {
+    if (rv.needsRef() && *xsink) {
+        rv.discard(xsink);
+        return QoreValue();
+    }
+    return rv;
+}
+
 // base implementation shared between all user variants
 class UserVariantBase {
     friend class UserVariantExecHelper;

@@ -21,8 +21,10 @@ import tempfile
 import zlib
 
 
-FOOTER = struct.Struct("<Q4sI")
-MAGICS = {b"QAMD", b"QAOM"}
+# the ELF note holding the metadata of an AOT module; see include/qore/intern/QoreAOTBinary.h
+MODULE_INFO_NOTE_NAME = b"Qore\0"
+MODULE_INFO_NOTE_TYPE = 0x494D4151
+MODULE_INFO_MAGIC = 0x494D4151
 
 
 def digest(data):
@@ -66,21 +68,59 @@ def verify_changes(directory, packages):
     return {"status": "verified", "manifest": changes[0].name, "sha256": file_digest(changes[0])}
 
 
-def trailers(data):
-    """Validate the footer chain and retain independent payload fingerprints."""
-    end = len(data)
-    result = {}
-    while end >= FOOTER.size:
-        size, magic, version = FOOTER.unpack_from(data, end - FOOTER.size)
-        if magic not in MAGICS:
-            break
-        name = magic.decode("ascii")
-        if version != 1 or name in result or not size or size > end - FOOTER.size:
-            raise ValueError(f"Invalid {name} AOT trailer")
-        start = end - FOOTER.size - size
-        result[name] = digest(data[start:end])
-        end = start
-    return result
+def _align(value, alignment):
+    return (value + alignment - 1) & ~(alignment - 1)
+
+
+def module_info(data):
+    """Return the AOT module metadata record of an ELF image, or None without one.
+
+    qcc stores it in a note of the allocated section .note.qore.modinfo, which
+    the linker places in a PT_NOTE segment. Raises ValueError for a truncated
+    image, a second record, or a record that is not a version 1 record.
+    """
+    if len(data) < 16 or data[:4] != b"\x7fELF" or data[5] != 1 or data[4] not in (1, 2):
+        return None
+    elf64 = data[4] == 2
+    header = struct.Struct("<16xHHIQQQIHHHHHH" if elf64 else "<16xHHIIIIIHHHHHH")
+    if len(data) < header.size:
+        raise ValueError("Truncated ELF header")
+    fields = header.unpack_from(data)
+    phoff, phentsize, phnum = fields[4], fields[8], fields[9]
+    phdr = struct.Struct("<IIQQQQQQ" if elf64 else "<IIIIIIII")
+    if phnum and (phentsize < phdr.size or phoff + phnum * phentsize > len(data)):
+        raise ValueError("Truncated or invalid ELF program headers")
+    records = []
+    for index in range(phnum):
+        entry = phdr.unpack_from(data, phoff + index * phentsize)
+        if entry[0] != 4:  # PT_NOTE
+            continue
+        offset, size, alignment = (entry[2], entry[5], entry[7]) if elf64 else (entry[1], entry[4], entry[7])
+        if offset + size > len(data):
+            raise ValueError("Truncated ELF note segment")
+        segment = data[offset:offset + size]
+        alignment = 8 if alignment == 8 else 4
+        position = 0
+        while len(segment) - position >= 12:
+            name_size, desc_size, note_type = struct.unpack_from("<III", segment, position)
+            name = position + 12
+            desc = _align(name + name_size, alignment)
+            if desc + desc_size > len(segment):
+                break
+            if note_type == MODULE_INFO_NOTE_TYPE and segment[name:name + name_size] == MODULE_INFO_NOTE_NAME:
+                records.append(segment[desc:desc + desc_size])
+            position = min(_align(desc + desc_size, alignment), len(segment))
+    if len(records) > 1:
+        raise ValueError("More than one AOT module metadata note")
+    if not records:
+        return None
+    record = records[0]
+    if len(record) < 12:
+        raise ValueError("Invalid AOT module metadata record")
+    magic, version, size = struct.unpack_from("<III", record)
+    if magic != MODULE_INFO_MAGIC or version != 1 or size != len(record) - 12:
+        raise ValueError("Invalid AOT module metadata record")
+    return record
 
 
 def inspect_elf(data, scratch, debug=False, private_jvm_runpath=None, private_pyarrow_needed=None):
@@ -213,9 +253,10 @@ def archive_members(path, control=False, scratch=None, debug=False, private_jvm=
                                                     if private_pyarrow else None))
                         findings.extend(f"{name}: {failure}" for failure in failures)
                     if not control and name.endswith(".qmod") and "-api-" not in name:
-                        entry["trailers"] = trailers(data)
-                        if "QAMD" not in entry["trailers"]:
-                            findings.append(f"{name}: missing AOT dependency metadata")
+                        record = module_info(data)
+                        entry["module_info"] = digest(record) if record else None
+                        if not record:
+                            findings.append(f"{name}: missing AOT module metadata")
                 members[name] = entry
     finally:
         process.stdout.close()

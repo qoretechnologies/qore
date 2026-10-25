@@ -4652,3 +4652,7 @@ ns/item on one host. Validation: 1827 assertions, 1110 IR/AOT references, 391 qm
 See RESULTS.md and results-aot-shared-callback-inline-macos-arm64.json for raw evidence,
 code growth, layout costs and all 62 audit checks. Next reduce native-frame overhead
 and investigate qmod/signature coverage; no global ceiling has been established.
+
+### Develop 54a6a86070 integration checkpoint
+
+The Release merge preserves the branch's SnapshotInt/SnapshotFloat IDs and reads upstream v21 return-check opcode 409 using the header maximum to distinguish the histories. Eight binary round trips cover v20/v21/v22 snapshots and old/new return checks. Native cache integration keeps weak-reference reads separate from raw storage ownership. Apple embedded-runtime tests and static AOT linking include the frameworks used by module loading. See `bench/runtime-comparison/results-merge-54a6.json` and its audit for selected regression evidence. Prior performance numbers precede this merge.
