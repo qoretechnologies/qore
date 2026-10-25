@@ -181,12 +181,25 @@ public:
     /** Must be called without holding stream_lock: marking the connection closed can release its last reference
         and destroy it, and its destructor takes stream_lock in disarmConnectionPriv().
 
-        @param failed true if the operation failed, in which case a debug hook can defer marking the connection closed
+        @param failed true if the operation failed, false if it ends the connection after a response that closes it;
+        in debug builds, a hook can defer marking the connection closed in either case
         @param xsink for exceptions releasing the connection
 
         @since %Qore 3.0
     */
     DLLLOCAL void closeConnectionPriv(bool failed, ExceptionSink* xsink);
+
+    //! Marks the connection as accepting no further requests, while it stays attached to this operation
+    /** Called when a response ends the connection (\c Connection: \c close, or HTTP/1.0 without keep-alive),
+        before the response's stream is released: the connection manager then no longer hands the connection out
+        for a new request, although the connection is marked closed only after the response has been completed.
+        Must be called without holding stream_lock, as closeConnectionPriv().
+
+        @param xsink for exceptions releasing the connection
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void drainConnectionPriv(ExceptionSink* xsink);
 
     // --- SocketPollOperationBase overrides ---
 

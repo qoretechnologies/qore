@@ -149,7 +149,8 @@ public:
 
     //! Atomically checks capacity and reserves a stream slot.
     /** Returns @c true if a slot was reserved, @c false if the connection
-        is at capacity.  Callers MUST call @ref releaseStreamReservation
+        is at capacity or accepts no further requests (it is draining or
+        closed).  Callers MUST call @ref releaseStreamReservation
         when the stream is submitted (the reservation converts to an
         active slot inside the poll op) or abandoned.
 
@@ -166,7 +167,8 @@ public:
         @param streaming_send true for a request whose body will be pushed
             incrementally via @ref pushSendData
 
-        @return @c true on success, @c false at capacity
+        @return @c true on success, @c false at capacity or if the connection
+            accepts no further requests
 
         @since %Qore 3.0
     */

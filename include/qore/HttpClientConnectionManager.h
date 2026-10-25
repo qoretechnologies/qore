@@ -499,6 +499,11 @@ public:
         for the response.  The caller reads headers, body chunks, and
         end_stream sentinels from the returned channel.
 
+        As with @ref request, an idempotent request (RFC 9110 section 9.2.2) that cannot be submitted because the
+        connection it was given is closed, when that connection had served a request before, is repeated once on a
+        new connection: the peer, or an idle timeout, can close a connection while it waits in the pool, and the
+        close can be noticed only after the connection was handed out for the request.
+
         @param method HTTP method
         @param scheme URL scheme
         @param host target hostname
@@ -539,8 +544,8 @@ public:
         @param xsink exception sink
         @param event_sink optional event sink for the protocol events of this request
         @param reused if not nullptr, set to true if the request was submitted on a connection that had been used
-            before, so a request that fails because the peer closed the connection before responding can be
-            repeated on a new connection
+            before and was not repeated because the connection was found closed, so a request that fails because
+            the peer closed the connection before responding can be repeated on a new connection
         @return stream ID on success, -1 on error
         @note The overload without this argument retains its existing C++ linker symbol.
     */
@@ -719,6 +724,17 @@ private:
     DLLLOCAL QoreHashNode* requestOnce(const char* method, const char* scheme, const char* host, int port,
         const char* path, const QoreHashNode* headers, const void* body, size_t body_len, int timeout_ms,
         ExceptionSink* xsink, HttpClientEventSink* event_sink, bool* retry);
+
+    //! Makes one attempt of @ref requestStreaming
+    /** @param reused if not nullptr, set to true if the request was submitted on a connection that had been used
+        before
+        @param retry if not nullptr, set to true if the request could not be submitted because the connection that
+        it was given, which had served a request, is closed, in which case the request can be repeated on a new
+        connection; nullptr if the request must not be repeated
+    */
+    DLLLOCAL int64_t requestStreamingOnce(const char* method, const char* scheme, const char* host, int port,
+        const char* path, const QoreHashNode* headers, const void* body, size_t body_len, QoreChannel*& channel_out,
+        ExceptionSink* xsink, HttpClientEventSink* event_sink, bool* reused, bool* retry);
     HttpClientConnectionManagerBase& operator=(const HttpClientConnectionManagerBase&) = delete;
 
     //! Internal: the network sandbox of the calling code and its decisions on the connections of a pool scan

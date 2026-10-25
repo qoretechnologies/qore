@@ -6099,19 +6099,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             int64_t stream_id = mgr.requestStreaming(meth, scheme,
                 this_connection.host.c_str(), this_connection.port,
                 msgpath, *nh, body_ptr, body_len, channel_raw, xsink, event_sink, &conn_reused);
+            // a request that could not be submitted because its reused connection was found closed has been
+            // repeated on a new connection by the connection manager, which then reports no reused connection
             if (*xsink || stream_id < 0 || !channel_raw) {
-                // a reused connection that the peer closed while it waited in the pool
-                if (*xsink && HttpClientConnectionManagerBase::isConnectionClosedError(*xsink)
-                        && canRepeatOnNewConnection(meth, conn_reused, stream_retried)) {
-                    xsink->clear();
-                    if (channel_raw) {
-                        ExceptionSink cxsink;
-                        channel_raw->deref(&cxsink);
-                        cxsink.clear();
-                    }
-                    stream_retried = true;
-                    continue;
-                }
                 return nullptr;
             }
             // ReferenceHolder ensures deref on all exit paths

@@ -8649,6 +8649,209 @@ static void ut_manager_request_keeps_open_connection_that_refuses(UnitTestCounte
     xsink.clear();
 }
 
+//! A pooled connection that is found closed when a streaming request is submitted on it
+/** Models a connection that an idle timeout, or the peer, closed after the pool handed it out for a request and
+    before the request was submitted: it marks itself closed and refuses the request with the error that a closed
+    connection without an error of its own raises.
+*/
+class UtClosedAtSubmitConnection : public HttpClientConnectionBase {
+public:
+    DLLLOCAL UtClosedAtSubmitConnection(const char* host, int port, bool served)
+        : HttpClientConnectionBase(host, port, false) {
+        onConnectionReady();
+        if (served) {
+            setServedRequest();
+        }
+    }
+
+    DLLLOCAL HttpClientProtocol getProtocol() const override {
+        return HttpClientProtocol::H1;
+    }
+
+    DLLLOCAL int64_t submitRequestStreaming(const char* method, const char* path,
+            const QoreHashNode* headers, const void* body, size_t body_len,
+            QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink) override {
+        ++submit_calls;
+        setClosed();
+        raiseClosedSubmitError("cannot submit streaming request: connection is closed", xsink);
+        return -1;
+    }
+
+    DLLLOCAL int getSubmitCalls() const {
+        return submit_calls;
+    }
+
+private:
+    int submit_calls = 0;
+};
+
+//! Serves one request on a connection with a "Connection: close" response, and counts the connections it accepted
+struct UtCountingH1Server : public UtH1Server {
+    std::atomic<int> accepted{0};
+
+    void serveOneResponse() {
+        serveOnce([this](int cfd) {
+            char buf[4096];
+            // the connection of wakeUnused() sends no request and gets no response
+            if (ut_read_request_headers(cfd, buf, sizeof(buf)) <= 0) {
+                return;
+            }
+            ++accepted;
+            static const char* resp =
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/plain\r\n"
+                "Content-Length: 5\r\n"
+                "Connection: close\r\n"
+                "\r\n"
+                "hello";
+            send(cfd, resp, strlen(resp), 0);
+        });
+    }
+
+    //! stops a server that was sent no request, so that its thread ends
+    void wakeUnused() {
+        if (accepted.load()) {
+            return;
+        }
+        int fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (fd < 0) {
+            return;
+        }
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        addr.sin_port = htons(port);
+        connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+        ::close(fd);
+    }
+};
+
+//! Reads the response headers of a streaming request from its channel; returns the status code or -1
+static int64 ut_read_streaming_status(QoreChannel* channel, ExceptionSink* xsink) {
+    while (true) {
+        bool timed_out = false;
+        bool has_value = false;
+        ValueHolder rv(channel->recv(5000, xsink, timed_out, has_value), xsink);
+        if (*xsink || timed_out || !has_value) {
+            return -1;
+        }
+        if (rv->getType() != NT_HASH) {
+            continue;
+        }
+        const QoreHashNode* h = rv->get<const QoreHashNode>();
+        QoreValue sc = h->getKeyValue("status_code");
+        if (!sc.isNullOrNothing()) {
+            return sc.getAsBigInt();
+        }
+        if (!h->getKeyValue("err").isNullOrNothing()) {
+            return -1;
+        }
+    }
+}
+
+// An idempotent streaming request that cannot be submitted because the reused connection it was given is found
+// closed, without an error of its own, is repeated once on a new connection, as by request().  HTTPClient's
+// streaming receive path reported the refusal (HTTPCLIENT-STATE-ERROR "connection is closed") as the request's
+// failure, as in HttpClientResponseLimit.qtest "streaming delivery" on Alpine arm64.
+static void ut_manager_streaming_repeats_on_closed_reused_connection(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    UtCountingH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    server.serveOneResponse();
+
+    HttpClientConnectionManagerBase::Options opts;
+    opts.connect_timeout_ms = 5000;
+    opts.request_timeout_ms = 5000;
+    ReferenceHolder<UtCloseQueueManager> mgr(new UtCloseQueueManager(opts, &xsink), &xsink);
+    ReferenceHolder<UtClosedAtSubmitConnection> conn(
+        new UtClosedAtSubmitConnection("127.0.0.1", server.port, true), &xsink);
+    UT_ASSERT(c, !xsink, "closed-at-submit fixtures construct");
+    if (xsink || !mgr || !conn) {
+        xsink.clear();
+        server.wakeUnused();
+        return;
+    }
+    mgr->addPooledForOrigin(*conn, "127.0.0.1", server.port, false);
+
+    QoreChannel* channel_raw = nullptr;
+    bool reused = true;
+    int64_t stream_id = mgr->requestStreaming("GET", "http", "127.0.0.1", server.port, "/", nullptr, nullptr, 0,
+        channel_raw, &xsink, nullptr, &reused);
+    ReferenceHolder<QoreChannel> channel(channel_raw, &xsink);
+    UT_ASSERT(c, !xsink, "the request is repeated instead of failing on the closed connection");
+    UT_ASSERT(c, stream_id >= 0 && channel_raw, "the repeated request is submitted");
+    if (channel_raw) {
+        UT_ASSERT_EQ(c, (int64)200, ut_read_streaming_status(channel_raw, &xsink),
+            "the repeated request is answered on a new connection");
+        channel_raw->close();
+    }
+    xsink.clear();
+    UT_ASSERT_EQ(c, 1, conn->getSubmitCalls(), "the closed connection was given the request once");
+    UT_ASSERT_EQ(c, 1, server.accepted.load(), "the request was repeated on one new connection");
+    UT_ASSERT(c, !reused, "a repeated request is not reported as submitted on a reused connection");
+    server.wakeUnused();
+    mgr->closeAll(&xsink);
+    xsink.clear();
+}
+
+// The repeat is limited as in request(): a request that is not idempotent, or whose closed connection had not
+// served a request, fails with the connection's refusal, and the closed connection is evicted.
+static void ut_manager_streaming_does_not_repeat_unsafe_requests(UnitTestCounters& c) {
+    struct {
+        const char* method;
+        bool served;
+        const char* label;
+    } cases[] = {
+        {"POST", true, "a POST request"},
+        {"GET", false, "a request on a connection that served none"},
+    };
+    for (auto& tc : cases) {
+        ExceptionSink xsink;
+        UtCountingH1Server server;
+        if (server.start() != 0) {
+            UT_ASSERT(c, false, "test server bind/listen failed");
+            return;
+        }
+        server.serveOneResponse();
+        HttpClientConnectionManagerBase::Options opts;
+        opts.connect_timeout_ms = 5000;
+        opts.request_timeout_ms = 5000;
+        ReferenceHolder<UtCloseQueueManager> mgr(new UtCloseQueueManager(opts, &xsink), &xsink);
+        ReferenceHolder<UtClosedAtSubmitConnection> conn(
+            new UtClosedAtSubmitConnection("127.0.0.1", server.port, tc.served), &xsink);
+        UT_ASSERT(c, !xsink, "closed-at-submit fixtures construct");
+        if (xsink || !mgr || !conn) {
+            xsink.clear();
+            server.wakeUnused();
+            return;
+        }
+        mgr->addPooledForOrigin(*conn, "127.0.0.1", server.port, false);
+
+        QoreChannel* channel_raw = nullptr;
+        int64_t stream_id = mgr->requestStreaming(tc.method, "http", "127.0.0.1", server.port, "/", nullptr,
+            nullptr, 0, channel_raw, &xsink, nullptr, nullptr);
+        ReferenceHolder<QoreChannel> channel(channel_raw, &xsink);
+        std::string label = tc.label;
+        UT_ASSERT(c, stream_id < 0 && !channel_raw, (label + " fails").c_str());
+        UT_ASSERT(c, xsink.isException(), (label + ": the refusal reaches the caller").c_str());
+        if (xsink.isException()) {
+            QoreStringValueHelper err(xsink.getExceptionErr());
+            UT_ASSERT(c, !strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR"),
+                (label + ": the error of the closed connection").c_str());
+        }
+        xsink.clear();
+        UT_ASSERT_EQ(c, 1, conn->getSubmitCalls(), (label + ": the closed connection was used once").c_str());
+        UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), (label + ": the closed connection is evicted").c_str());
+        UT_ASSERT_EQ(c, 0, server.accepted.load(), (label + ": the request is not repeated").c_str());
+        server.wakeUnused();
+        mgr->closeAll(&xsink);
+        xsink.clear();
+    }
+}
+
 static void ut_manager_acquire_first_request(UnitTestCounters& c) {
     ExceptionSink xsink;
 
@@ -11923,6 +12126,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_http1_onclosed_hook_app_thread_close(c);
     ut_manager_request_evicts_connection_closed_on_submit(c);
     ut_manager_request_keeps_open_connection_that_refuses(c);
+    ut_manager_streaming_repeats_on_closed_reused_connection(c);
+    ut_manager_streaming_does_not_repeat_unsafe_requests(c);
     ut_manager_abandon_h1_evicts_connection(c);
     ut_manager_abandon_multiplexed_keeps_connection(c);
     ut_manager_abandon_completed_request_is_a_no_op(c);
@@ -13009,18 +13214,20 @@ struct Http1DeferClose {
     Counter* deferred = nullptr;
     //! the connection whose close was deferred, with a reference of its own
     AbstractHttpPollConnectionPriv* conn = nullptr;
+    //! true if the close of a connection that a response ends is deferred, false for the close of a failed one
+    bool clean = false;
 };
 
 Http1DeferClose http1_defer_close;
 
 //! runs in the I/O thread, which holds a reference to the connection; disarms itself and does not block
-bool dbg_http1_defer_close_hook(AbstractHttpPollConnectionPriv* conn) {
+bool dbg_http1_defer_close_hook(AbstractHttpPollConnectionPriv* conn, bool failed) {
     Http1DeferClose& h = http1_defer_close;
     ExceptionSink xsink;
     ReferenceHolder<Counter> deferred(&xsink);
     {
         std::lock_guard<std::mutex> l(h.m);
-        if (!h.deferred || h.conn) {
+        if (!h.deferred || h.conn || h.clean == failed) {
             return false;
         }
         conn->ref();
@@ -13038,14 +13245,22 @@ bool dbg_http1_defer_close_hook(AbstractHttpPollConnectionPriv* conn) {
 }
 }
 
-//! makes the next HTTP/1 client connection that fails leave marking itself closed to the caller
+//! makes the next HTTP/1 client connection that fails, or that a response ends, leave marking itself closed to the
+//! caller
 /** When an HTTP/1 client poll operation fails (for example because the server closed an idle keep-alive
     connection), it publishes the failure and then marks its connection closed.  Once armed, the next such failure
     publishes the failure but leaves the connection looking open until dbg_release_http1_connection_close() is
     called: tests use it to hold open the window in which a request can be submitted to a connection whose poll
     operation has already failed while the connection manager still considers it reusable.
 
+    With \a clean, the close that is deferred is the one of the next connection that a response ends (with
+    \c Connection: \c close): the response is completed, and the connection is left open until
+    dbg_release_http1_connection_close() is called, so that tests can check that it is not handed out for another
+    request in that time.
+
     @param deferred decremented once a connection's close has been deferred
+    @param clean true to defer the close of a connection that a response ends, false (the default) to defer the
+    close of a failed connection
 
     @throw DBG-ARGUMENT-ERROR the hook is already armed, or a deferred close has not been released
 */
@@ -13055,6 +13270,7 @@ static QoreValue f_dbg_defer_http1_connection_close(const QoreListNode* params, 
     if (*xsink) {
         return QoreValue();
     }
+    bool clean = get_param_value(params, 1).getAsBool();
     Http1DeferClose& h = http1_defer_close;
     std::lock_guard<std::mutex> l(h.m);
     if (h.deferred || h.conn) {
@@ -13062,6 +13278,7 @@ static QoreValue f_dbg_defer_http1_connection_close(const QoreListNode* params, 
         return QoreValue();
     }
     h.deferred = deferred.release();
+    h.clean = clean;
     qore_dbg_http1_defer_close_hook.store(dbg_http1_defer_close_hook);
     return QoreValue();
 }
@@ -13749,7 +13966,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_closure_var_collections", f_dbg_get_closure_var_collections,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 0);
     qns.addBuiltinVariant("dbg_defer_http1_connection_close", f_dbg_defer_http1_connection_close,
-        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "deferred");
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "deferred",
+        softBoolOrNothingTypeInfo, QORE_PARAM_NO_ARG, "clean");
     qns.addBuiltinVariant("dbg_release_http1_connection_close", f_dbg_release_http1_connection_close,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 0);
     qns.addBuiltinVariant("dbg_release_http1_connection_on_close", f_dbg_release_http1_connection_on_close,

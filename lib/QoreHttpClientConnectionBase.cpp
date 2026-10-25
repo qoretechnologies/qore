@@ -88,6 +88,13 @@ bool HttpClientConnectionBase::tryReserveStream(bool streaming_send) {
     if (max && (getActiveStreamCount() + pending_stream_count) >= max) {
         return false;
     }
+    // A connection stops accepting requests (it is draining) before it releases the stream of the response that
+    // ends it, so a stream count that shows the released stream is followed by the draining state: checked after
+    // the count, a connection that the response ends is not reserved, even if it was found accepting requests
+    // before its stream was released
+    if (isDraining() || isClosed()) {
+        return false;
+    }
     ++pending_stream_count;
     if (streaming_send) {
         ++pending_streaming_send_count;

@@ -1491,6 +1491,32 @@ int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
         const QoreHashNode* headers, const void* body, size_t body_len,
         QoreChannel*& channel_out, ExceptionSink* xsink,
         HttpClientEventSink* event_sink, bool* reused) {
+    // As in request(): an idempotent request whose connection is found closed when the request is submitted, after
+    // the connection served a request and waited in the pool, is repeated once on a new connection (RFC 9110
+    // section 9.2.2).  The close of a pooled connection becomes visible to the pool only when it has been marked
+    // closed, which can happen between the checkout of the connection and the submit, without an error of its own
+    // when the connection was ended by an idle timeout.
+    bool can_retry = isIdempotentMethod(method);
+    for (int attempt = 0; ; ++attempt) {
+        bool retry = false;
+        int64_t rv = requestStreamingOnce(method, scheme, host, port, path, headers, body, body_len, channel_out,
+            xsink, event_sink, reused, can_retry && !attempt ? &retry : nullptr);
+        if (!retry) {
+            // a request that has been repeated is not repeated again by the caller
+            if (attempt && reused) {
+                *reused = false;
+            }
+            return rv;
+        }
+        assert(rv < 0);
+        xsink->clear();
+    }
+}
+
+int64_t HttpClientConnectionManagerBase::requestStreamingOnce(const char* method, const char* scheme,
+        const char* host, int port, const char* path, const QoreHashNode* headers, const void* body,
+        size_t body_len, QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink,
+        bool* reused, bool* retry) {
     HttpClientConnectionBase* conn = acquireConnection(scheme, host, port, xsink);
     if (!conn || *xsink) {
         return -1;
@@ -1498,6 +1524,10 @@ int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
 
     if (reused) {
         *reused = conn->hasServedRequest();
+    }
+    // a request on a connection that has not served one fails for a reason of its own and is not repeated
+    if (retry && !conn->hasServedRequest()) {
+        retry = nullptr;
     }
     // a strong reference for the duration of the call: evicting the connection below releases the pool's
     // reference, and the I/O thread can release the connection's own at any time
@@ -1510,13 +1540,17 @@ int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
         releaseConnection(conn);
         // As in requestOnce(): a connection that refused the request because it is closed must not stay in the
         // pool.  The protocol poll operation publishes its closed error before its callback marks the pooled
-        // connection closed, so a submit in that window fails while the connection still looks reusable; the
-        // caller repeats an idempotent request on a reused connection, and without the eviction that repeat can
-        // be handed the same dead connection, fail the same way and be reported as final.
+        // connection closed, so a submit in that window fails while the connection still looks reusable; without
+        // the eviction, the repeat of the request can be handed the same dead connection, fail the same way and
+        // be reported as final.
         if (conn->isClosed() || (*xsink && isConnectionClosedError(*xsink))) {
             ExceptionSink evict_xsink;
             closeAndEvict(conn, &evict_xsink);
             evict_xsink.clear();
+            // a reused connection closed while it waited in the pool, with or without an error of its own
+            if (retry) {
+                *retry = true;
+            }
         }
         return -1;
     }

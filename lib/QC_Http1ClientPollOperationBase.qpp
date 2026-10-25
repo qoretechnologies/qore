@@ -2334,6 +2334,20 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
         return awaitBufferedSend(xsink);
     }
 
+    bool close = connection_close;
+    // Full-duplex streaming: a response delivered while the chunked request
+    // body is still open means the connection cannot be safely reused — force
+    // close (see dispatchStreamingEnd() for the same rationale).
+    if (send_state != SendState::INACTIVE && send_state != SendState::DONE) {
+        close = true;
+    }
+    // A connection that this response ends accepts no further request from the moment its stream is released
+    // below, which makes it look idle: the connection manager would hand it out to a thread that is not waiting for
+    // this response before it is marked closed below
+    if (close) {
+        drainConnectionPriv(xsink);
+    }
+
     // Take ownership of stream_action atomically and clear stream_action /
     // active_stream_count / active_sid in the same critical section.  This
     // closes a race against abort() / notifyPendingStreams() which read
@@ -2398,13 +2412,6 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
     printd(5, "Http1ClientPollOperationPriv::dispatchResponse() stream_id=%d status=%d\n",
         stream_id, response_status_code);
 
-    bool close = connection_close;
-    // Full-duplex streaming: a response delivered while the chunked request
-    // body is still open means the connection cannot be safely reused — force
-    // close (see dispatchStreamingEnd() for the same rationale).
-    if (send_state != SendState::INACTIVE && send_state != SendState::DONE) {
-        close = true;
-    }
     req_state = ReqState::IDLE;
     releaseCurrentOp(xsink);
     resetResponseState(xsink);
@@ -2524,6 +2531,12 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
             "open (send_state=%d) - forcing close fd=%d\n", (int)send_state,
             sock_obj ? sock_obj->getSocket() : -1);
         close = true;
+    }
+    // see dispatchResponse(): the connection that this response ends accepts no further request before its stream
+    // is released; the caller of the request can have stopped reading the response, and its next request must not
+    // be given the connection in the time until it is marked closed below
+    if (close) {
+        drainConnectionPriv(xsink);
     }
     {
         AutoLocker al(stream_lock);
@@ -2736,12 +2749,30 @@ void Http1ClientPollOperationPriv::closeConnectionPriv(bool failed, ExceptionSin
         return;
     }
 #ifdef DEBUG
-    // tests defer marking a failed connection closed to hold open the window in which the failure is published but
-    // the pooled connection still looks reusable
-    qore_dbg_http1_defer_close_hook_t hook = failed ? qore_dbg_http1_defer_close_hook.load() : nullptr;
-    if (!hook || !hook(conn))
+    // tests defer marking a connection closed to hold open the window in which a failure is published, or the last
+    // response of a connection is completed, before the pooled connection is marked closed
+    qore_dbg_http1_defer_close_hook_t hook = qore_dbg_http1_defer_close_hook.load();
+    if (!hook || !hook(conn, failed))
 #endif
     conn->setClosed();
+    conn->deref(xsink);
+}
+
+void Http1ClientPollOperationPriv::drainConnectionPriv(ExceptionSink* xsink) {
+    AbstractHttpPollConnectionPriv* conn;
+    {
+        AutoLocker al(stream_lock);
+        conn = connection_priv;
+        // a connection whose last reference is gone is being destroyed; its destructor closes it
+        if (conn && !conn->optRef()) {
+            conn = nullptr;
+        }
+    }
+    if (!conn) {
+        return;
+    }
+    conn->setDraining();
+    // released without holding stream_lock, as in closeConnectionPriv()
     conn->deref(xsink);
 }
 

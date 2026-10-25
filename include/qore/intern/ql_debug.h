@@ -108,11 +108,11 @@ typedef void (*qore_dbg_closure_var_collect_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collect_hook;
 
 class AbstractHttpPollConnectionPriv;
-//! called by the HTTP/1 client poll operation when it fails and is about to mark its connection closed (holding a
-//! reference to it, but no lock of the operation); returns
-//! true if the hook took over marking it closed (holding its own reference); set by
-//! dbg_defer_http1_connection_close()
-typedef bool (*qore_dbg_http1_defer_close_hook_t)(AbstractHttpPollConnectionPriv* conn);
+//! called by the HTTP/1 client poll operation when it is about to mark its connection closed (holding a reference
+//! to it, but no lock of the operation), because it failed (\a failed true) or because a response ended the
+//! connection (\a failed false); returns true if the hook took over marking it closed (holding its own reference);
+//! set by dbg_defer_http1_connection_close()
+typedef bool (*qore_dbg_http1_defer_close_hook_t)(AbstractHttpPollConnectionPriv* conn, bool failed);
 DLLLOCAL extern std::atomic<qore_dbg_http1_defer_close_hook_t> qore_dbg_http1_defer_close_hook;
 
 //! called by AbstractHttpPollConnectionPriv::setClosed() on the first close of a connection, after the close hook and

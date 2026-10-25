@@ -9,7 +9,7 @@
 
 %exec-class HttpClientStaleConnectionTest
 
-#! A server that closes the connection after each response without announcing it with "Connection: close"
+#! A server that closes the connection after each response, by default without announcing it with "Connection: close"
 class ClosingServer {
     private {
         Socket listener();
@@ -19,9 +19,12 @@ class ClosingServer {
         #! the number of requests received
         int requests = 0;
         Mutex m();
+        #! true if each response announces the close with "Connection: close"
+        bool announce_close;
     }
 
-    constructor() {
+    constructor(bool announce_close = False) {
+        self.announce_close = announce_close;
         listener.bindINET("127.0.0.1", "0", True);
         listener.listen();
         port = listener.getSocketInfo().port;
@@ -62,11 +65,21 @@ class ClosingServer {
                 while (head !~ /\r\n\r\n/) {
                     head += s.recv(-1, 5s);
                 }
+                # the request body is read, so that the close does not reset the connection before the client has
+                # read the response
+                *string length = (head =~ x/\r\ncontent-length:\s*([0-9]+)/i)[0];
+                if (length) {
+                    int remaining = length.toInt() - (head.size() - (head.find("\r\n\r\n") + 4));
+                    while (remaining > 0) {
+                        remaining -= s.recvBinary(-1, 5s).size();
+                    }
+                }
                 {
                     AutoLock al(m);
                     ++requests;
                 }
-                s.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok");
+                s.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n"
+                    + (announce_close ? "Connection: close\r\n" : "") + "\r\nok");
             } catch (hash<ExceptionInfo> ex) {
                 # the client closed the connection
             }
@@ -142,6 +155,7 @@ public class HttpClientStaleConnectionTest inherits QUnit::Test {
         # first: the hook it arms reacts to the next connection failure in the process
         addTestCase("streamed request repeated when the pool has not seen the close", \streamedUnreflectedCloseTest());
         addTestCase("connection destroyed by the thread that marks it closed", \releasedOnCloseTest());
+        addTestCase("a connection that a response ends is not used again", \endedConnectionTest());
         addTestCase("buffered requests", \bufferedTest());
         addTestCase("streamed responses", \streamedTest());
         set_return_value(main());
@@ -202,6 +216,51 @@ public class HttpClientStaleConnectionTest inherits QUnit::Test {
         assertEq(binary("ok"), os.getData(), "request after the unreflected close");
         assertTrue(call_function("dbg_release_http1_connection_close"), "a connection close was deferred");
         assertEq(2, server.getRequests());
+    }
+
+    # A response with "Connection: close" ends its connection, which is marked closed in the pool after the response
+    # has been completed.  The stream of the response was released before, so in between the connection looked idle,
+    # and the pool handed it out to a request that did not wait for the response: of another thread, or of the
+    # caller after it stopped reading the response, as after HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE in
+    # HttpClientResponseLimit "streaming delivery", which then failed with HTTPCLIENT-STATE-ERROR on Alpine arm64.
+    # A request that cannot be repeated failed on it.  A debug hook holds the window open: the connection that a
+    # response ends stays unmarked until it is released, and the next request must get a new connection.
+    endedConnectionTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hook that defers marking an ended connection closed is only in debug builds");
+        }
+        ClosingServer server(True);
+        on_exit server.shutdown();
+        HTTPClient hc({"url": sprintf("http://127.0.0.1:%d", server.getPort()), "timeout": 10s});
+
+        foreach bool streamed in ((False, True)) {
+            string label = streamed ? "streamed" : "buffered";
+            Counter deferred(1);
+            call_function("dbg_defer_http1_connection_close", deferred, True);
+            on_exit call_function("dbg_release_http1_connection_close");
+
+            # the response ends the connection, whose close is deferred
+            if (streamed) {
+                BinaryOutputStream os();
+                hc.send(os, NOTHING, "GET", "/");
+                assertEq(binary("ok"), os.getData(), label + ": the response that ends the connection");
+            } else {
+                assertEq("ok", hc.get("/"), label + ": the response that ends the connection");
+            }
+            assertEq(0, deferred.waitForZero(10s), label + ": the close of the ended connection is deferred");
+
+            # a request that cannot be repeated is sent on a new connection, not on the one that was ended
+            if (streamed) {
+                BinaryOutputStream os();
+                hc.send(os, "body", "POST", "/");
+                assertEq(binary("ok"), os.getData(), label + ": a request after the ended connection");
+            } else {
+                assertEq("ok", hc.post("/", "body"), label + ": a request after the ended connection");
+            }
+            assertTrue(call_function("dbg_release_http1_connection_close"),
+                label + ": the ended connection was not marked closed before it was released");
+        }
+        assertEq(4, server.getRequests(), "each request was received once");
     }
 
     # When the connection manager evicts a closed connection while the I/O thread is marking it closed, the I/O
