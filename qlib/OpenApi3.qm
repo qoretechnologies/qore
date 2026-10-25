@@ -5243,7 +5243,7 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
     */
     private:internal hash<auto> serializeMembers(*hash<auto> members) {
         return {"composition_keyword": composition_keyword, "schemas": schemas, "for_request": for_request,
-            "multipart_wire_types": multipart_wire_types, "documents": map $1.tryGetDocument(), schemas};
+            "multipart_wire_types": multipart_wire_types, "documents": (map $1.tryGetDocument(), schemas, $1.tryGetDocument()) ?? NOTHING};
     }
 
     #! Returns a union of the same kind over the given alternatives
@@ -5480,8 +5480,7 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
     and it needs its document: keep the document while using its schema objects.  Once the document has been
     destroyed, building a type from a schema object or resolving one of its references throws a
     \c SCHEMA-DOCUMENT-DESTROYED exception.  A type that a schema object has built does not need the document: it
-    validates and describes values after the document has been destroyed; only a serialized snapshot of the type
-    needs the document to exist when it is made.
+    validates, describes and serializes values after the document has been destroyed.
 */
 public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::AbstractRestSchemaObject {
     public {
@@ -5600,8 +5599,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     }
 
     private {
-        #! Weak reference to the document, owned by schema-backed data types when used independently
-        OpenApi3Schema openapi3;
+        #! Weak reference to the document; no value in a snapshot made after the document was destroyed
+        *OpenApi3Schema openapi3;
 
         #! Resolved discriminator branches, retained when the weak document reference is serialized away
         hash<string, SchemaObject> mappedSchemas = {};

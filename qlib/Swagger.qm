@@ -4039,8 +4039,7 @@ public class SwaggerHashDataType inherits HashDataType {
     and it needs its document: keep the document while using its schema objects.  Once the document has been
     destroyed, building a type from a schema object or resolving one of its references throws a
     \c SCHEMA-DOCUMENT-DESTROYED exception.  A type that a schema object has built does not need the document: it
-    validates and describes values after the document has been destroyed; only a serialized snapshot of the type
-    needs the document to exist when it is made.
+    validates, describes and serializes values after the document has been destroyed.
 */
 public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::AbstractRestSchemaObject {
     public {
@@ -4085,7 +4084,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     }
 
     private {
-        SwaggerSchema swagger;
+        #! Weak reference to the document; no value in a snapshot made after the document was destroyed
+        *SwaggerSchema swagger;
 
         #! If the schema only describes a use of the one object schema it refers to; see isDescribedReference()
         bool described_reference = False;

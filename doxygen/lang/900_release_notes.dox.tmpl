@@ -5012,6 +5012,9 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - serializing an object with a weak reference whose target has been destroyed raised an
+      \c OBJECT-ALREADY-DELETED exception; the reference is now serialized as no value, as a weak reference to an
+      object that no longer exists has none (see @ref Qore::Serializable "Serializable")
     - zoneinfo files are read with their 64-bit data and the time zone rule at the end of the file, as RFC 9636
       describes: local times were UTC with "slim" zoneinfo files, which \c zic writes by default, and with all
       zoneinfo files, local times after 2037 had no daylight saving time, and many local times before 1970 had the

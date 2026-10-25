@@ -412,20 +412,32 @@ QoreValue QoreSerializable::serializeValue(const QoreValue val, QoreInternalSeri
             return *xsink ? QoreValue() : rv.release();
         }
 
+        // a weak reference does not keep its target alive: a reference whose target no longer exists is no value,
+        // as reading it gives, and is serialized as no value
         case NT_WEAKREF: {
-            ValueHolder rv(serializeObjectToData(*val.get<WeakReferenceNode>()->get(), true, context, xsink), xsink);
+            const QoreObject* obj = val.get<WeakReferenceNode>()->get();
+            if (!obj || !obj->isValid()) {
+                return QoreValue();
+            }
+            ValueHolder rv(serializeObjectToData(*obj, true, context, xsink), xsink);
             return *xsink ? QoreValue() : rv.release();
         }
 
         case NT_WEAKREF_HASH: {
-            ValueHolder rv(serializeHashToData(*val.get<WeakHashReferenceNode>()->get(), true, context, xsink),
-                xsink);
+            const QoreHashNode* h = val.get<WeakHashReferenceNode>()->get();
+            if (!h) {
+                return QoreValue();
+            }
+            ValueHolder rv(serializeHashToData(*h, true, context, xsink), xsink);
             return *xsink ? QoreValue() : rv.release();
         }
 
         case NT_WEAKREF_LIST: {
-            ValueHolder rv(serializeListToData(*val.get<WeakListReferenceNode>()->get(), true, context, xsink),
-                xsink);
+            const QoreListNode* l = val.get<WeakListReferenceNode>()->get();
+            if (!l) {
+                return QoreValue();
+            }
+            ValueHolder rv(serializeListToData(*l, true, context, xsink), xsink);
             return *xsink ? QoreValue() : rv.release();
         }
 

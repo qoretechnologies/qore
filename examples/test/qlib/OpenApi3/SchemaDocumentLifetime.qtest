@@ -58,6 +58,11 @@ class SchemaDocumentLifetimeTest inherits QUnit::Test {
         assertEq(("name", "pet", "code", "friend"), keys owner.getFields().friend.getType().getFields());
         AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(owner.getInfoGraph());
         assertEq(owner.getInfoGraph(), restored.getInfoGraph());
+        # a snapshot of the type does not need the document either
+        AbstractDataProviderType copy = Serializable::deserialize(Serializable::serialize(owner));
+        assertEq({"code": 7}, copy.acceptsValue({"code": 7}));
+        assertEq({"pet": {"kind": "dog", "bark": 1}}, copy.acceptsValue({"pet": {"kind": "dog", "bark": 1}}));
+        assertThrows("RUNTIME-TYPE-ERROR", \copy.acceptsValue(), {"pet": {"kind": "dog", "bark": "x"}});
     }
 
     openApiSchemaTest() {
@@ -76,6 +81,8 @@ class SchemaDocumentLifetimeTest inherits QUnit::Test {
         assertThrows("RUNTIME-TYPE-ERROR", \owner.acceptsValue(), {"friend": {"name": (1,)}});
         assertThrows("RUNTIME-TYPE-ERROR", \owner.acceptsValue(), {"friend": {"friend": {"name": (1,)}}});
         assertEq(("name", "friend"), keys owner.getFields().friend.getType().getFields());
+        AbstractDataProviderType copy = Serializable::deserialize(Serializable::serialize(owner));
+        assertEq({"friend": {"name": "Bob"}}, copy.acceptsValue({"friend": {"name": "Bob"}}));
     }
 
     swaggerSchemaTest() {
