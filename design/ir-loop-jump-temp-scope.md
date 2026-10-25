@@ -105,8 +105,12 @@ execution modes.  It asserts, via `dbg_get_ir_cleanup_entries()` (the IR cleanup
 interpreter), that the vector does not grow across a loop whose body ends in a `continue` with a method call in
 the condition (the reported case), a `continue` out of a `switch` over a live temporary, or a `break` out of an
 inner loop nested in such a `switch`; and that no mode keeps an object alive past the frame that ran the loop.
-With the fix reverted, the growth checks report one leaked entry per iteration for the `continue`'s own mark and
-two for the `switch` case, in the ir and tiered modes.
+
+The counter reports the vector of the innermost running IR frame, so each measured function reads it itself.  The
+checks first read it through a helper function, which runs in its own IR frame: they measured the helper's vector,
+which does not change with the loop, and could not fail.  The ir worker also asserts that a `switch` over a live
+temporary adds entries to the vector that the function running it reads, so the growth checks measure the loop's
+frame.
 
 ## The list of instantiated locals
 

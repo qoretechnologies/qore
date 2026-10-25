@@ -34,23 +34,17 @@ LjtsCounted sub ljts_make() {
     return new LjtsCounted();
 }
 
-#! the size of the IR cleanup vector, or 0 outside the IR interpreter
+#! the debug introspection function that reports the size of the innermost IR frame's cleanup vector
 /** dbg_get_ir_cleanup_entries() is registered only in a \c DEBUG build of the library (like the other
     dbg_get_*() counters), which the Linux CI builds are but a non-debug build such as the macOS CI build is not.
-    It is resolved dynamically so a build without it parses, and its absence reads as "no vector" (0): the growth
-    checks then pass trivially there while still running wherever the counter exists, which includes every
-    execution mode on glibc and musl.
+    It is called by name, and only when Option::HAVE_LIBRARY_DEBUGGING is set, so a build without it parses and
+    the checks read 0 ("no vector") there.  It is 0 outside the IR interpreter, so the growth checks read as "no
+    growth" in ast and native code.
+
+    Each measured function calls it directly: a helper function that called it would run in its own IR frame and
+    report that frame's vector, which does not change with the loop being measured.
 */
-int sub ljts_cleanup_entries() {
-    try {
-        return call_function("dbg_get_ir_cleanup_entries");
-    } catch (hash<ExceptionInfo> ex) {
-        if (ex.err == "NO-FUNCTION") {
-            return 0;
-        }
-        rethrow;
-    }
-}
+const LjtsCleanupFunc = "dbg_get_ir_cleanup_entries";
 
 #! growth of the cleanup vector across an indexed for loop whose body ends in "continue" with a method call in the
 #! condition (the reported case: the continue statement's own temp scope is left undrained)
@@ -60,8 +54,8 @@ int sub ljts_if_continue_growth() {
     int hi = 0;
     for (int i = 0; i < LoopJumpIters; ++i) {
         if (s.find("og") < 0) {
-            if (i == LoopJumpSampleLow) { lo = ljts_cleanup_entries(); }
-            if (i == LoopJumpSampleHigh) { hi = ljts_cleanup_entries(); }
+            if (Option::HAVE_LIBRARY_DEBUGGING && i == LoopJumpSampleLow) { lo = call_function(LjtsCleanupFunc); }
+            if (Option::HAVE_LIBRARY_DEBUGGING && i == LoopJumpSampleHigh) { hi = call_function(LjtsCleanupFunc); }
             continue;
         }
     }
@@ -77,8 +71,8 @@ int sub ljts_switch_continue_growth() {
     for (int i = 0; i < LoopJumpIters; ++i) {
         switch (s + "x") {
             default:
-                if (i == LoopJumpSampleLow) { lo = ljts_cleanup_entries(); }
-                if (i == LoopJumpSampleHigh) { hi = ljts_cleanup_entries(); }
+                if (Option::HAVE_LIBRARY_DEBUGGING && i == LoopJumpSampleLow) { lo = call_function(LjtsCleanupFunc); }
+                if (Option::HAVE_LIBRARY_DEBUGGING && i == LoopJumpSampleHigh) { hi = call_function(LjtsCleanupFunc); }
                 continue;
         }
     }
@@ -94,13 +88,33 @@ int sub ljts_break_growth() {
         switch (s + "x") {
             default:
                 for (int j = 0; j < 1; ++j) {
-                    if (i == LoopJumpSampleLow) { lo = ljts_cleanup_entries(); }
-                    if (i == LoopJumpSampleHigh) { hi = ljts_cleanup_entries(); }
+                    if (Option::HAVE_LIBRARY_DEBUGGING && i == LoopJumpSampleLow) { lo = call_function(LjtsCleanupFunc); }
+                    if (Option::HAVE_LIBRARY_DEBUGGING && i == LoopJumpSampleHigh) { hi = call_function(LjtsCleanupFunc); }
                     break;
                 }
         }
     }
     return hi - lo;
+}
+
+#! the entries that a switch over a live temporary adds to the cleanup vector of the frame that runs it
+/** More than 0 in the IR interpreter, where the switch value's temp scope is on the vector: this shows that the
+    growth checks read the vector of the frame that runs the measured loop.
+*/
+int sub ljts_switch_scope_recorded() {
+    string s = "line";
+    int outside = 0;
+    int inside = 0;
+    if (Option::HAVE_LIBRARY_DEBUGGING) {
+        outside = call_function(LjtsCleanupFunc);
+    }
+    switch (s + "x") {
+        default:
+            if (Option::HAVE_LIBRARY_DEBUGGING) {
+                inside = call_function(LjtsCleanupFunc);
+            }
+    }
+    return inside - outside;
 }
 
 #! runs a loop that continues out of a switch over a counted object; returns the objects still alive right after
@@ -121,5 +135,6 @@ hash<string, int> sub ljts_growth_results() {
         "if-continue-growth": ljts_if_continue_growth(),
         "switch-continue-growth": ljts_switch_continue_growth(),
         "break-growth": ljts_break_growth(),
+        "switch-scope-recorded": ljts_switch_scope_recorded(),
     };
 }
