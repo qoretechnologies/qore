@@ -1,0 +1,102 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# ProviderIndexOptionTypeFixture.qm registers an app whose actions share option types that count their descriptions
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%requires DataProvider
+
+module ProviderIndexOptionTypeFixture {
+    version = "1.0";
+    desc = "ProviderIndex option type description fixture";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        ProviderIndexOptionTypeFixture::registerFixture();
+    };
+}
+
+#! The fixture's app, types and helpers
+public namespace ProviderIndexOptionTypeFixture {
+#! The app of the fixture
+public const App = "QoreTestIndexOptionTypes";
+
+#! A record type that counts how often it is described
+public class CountingRecordType inherits HashDataType {
+    public {
+        #! type name -> the number of getInfo() calls
+        static hash<string, int> calls = {};
+    }
+
+    constructor(string name, hash<string, AbstractDataField> fields) : HashDataType(name, fields) {
+    }
+
+    hash<DataTypeInfo> getInfo(*bool simple) {
+        ++calls{getName()};
+        return HashDataType::getInfo(simple);
+    }
+}
+
+#! An address, the type of two fields of an order
+public const AddressType = new CountingRecordType("FixtureAddress", {
+    "street": new QoreDataField("street", "the street", StringType),
+    "city": new QoreDataField("city", "the city", StringType),
+});
+
+#! An order, the type of the record option of three actions
+public const OrderType = new CountingRecordType("FixtureOrder", {
+    "id": new QoreDataField("id", "the order ID", StringType),
+    "billing": new QoreDataField("billing", "the billing address", AddressType),
+    "shipping": new QoreDataField("shipping", "the shipping address", AddressType),
+});
+
+#! A key, the type of three options of two actions
+public const KeyType = new CountingRecordType("FixtureKey", {
+    "id": new QoreDataField("id", "the key", StringType),
+});
+
+#! The actions of the fixture and the types of their options
+public const Actions = {
+    "create": {"record": OrderType},
+    "update": {"record": OrderType, "key": KeyType},
+    "upsert": {"record": OrderType},
+    "lookup": {"key": KeyType, "other_key": KeyType},
+};
+
+#! Registers the fixture app and its actions
+sub registerFixture() {
+    DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+        "name": App,
+        "display_name": App,
+        "short_desc": "option type fixture",
+        "desc": "option type fixture",
+        "groups": (AppGroup::DataTransformation,),
+        "logo": "fixture",
+        "logo_mime_type": "image/svg+xml",
+        "logo_file_name": "fixture.svg",
+    });
+    foreach hash<auto> action in (Actions.pairIterator()) {
+        hash<string, hash<ActionOptionInfo>> options = {};
+        foreach hash<auto> option in (action.value.pairIterator()) {
+            options{option.key} = <ActionOptionInfo>{
+                "display_name": option.key,
+                "short_desc": "fixture option",
+                "desc": "fixture option",
+                "type": option.value,
+            };
+        }
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": App,
+            "action": action.key,
+            "path": "/" + action.key,
+            "display_name": action.key,
+            "short_desc": "option type fixture action",
+            "desc": "option type fixture action",
+            "action_code": DPAT_API,
+            "options": options,
+            "output_type": AbstractDataProviderType::get(AutoHashType),
+        });
+    }
+}
+}

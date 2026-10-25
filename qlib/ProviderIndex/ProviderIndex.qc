@@ -108,6 +108,42 @@ public hashdecl ProviderIndexCreateOptions {
     bool write_canonical_yaml = False;
 }
 
+#! Replaces the unique keys in one type description with keys that do not depend on the process
+/** Unique keys are derived from object addresses; within one description they only need to identify the same type
+    or field consistently, which a recursive type description relies on to refer to an enclosing type.  Each key is
+    replaced by its position in the order in which the keys first occur.  The map of keys is a member, so the walk
+    passes no reference and builds no closure for each node of the description.
+*/
+class ProviderIndexUniqueKeys {
+    private {
+        #! original key -> replacement
+        hash<string, string> key_map = {};
+    }
+
+    #! Returns the description or part of it with its unique keys replaced
+    auto replace(auto value) {
+        switch (value.typeCode()) {
+            case NT_HASH:
+                foreach string key in (keys value) {
+                    if (key == "unique_key" && value{key}.typeCode() == NT_STRING) {
+                        string original = value{key};
+                        *string replacement = key_map{original};
+                        if (!exists replacement) {
+                            replacement = key_map{original} = (key_map.size() + 1).toString();
+                        }
+                        value{key} = replacement;
+                    } else {
+                        value{key} = replace(value{key});
+                    }
+                }
+                return value;
+            case NT_LIST:
+                return map replace($1), value;
+        }
+        return value;
+    }
+}
+
 #! The main API class
 public class ProviderIndex inherits ProviderIndexUtil {
     public {}
@@ -484,6 +520,8 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     private static int snapshotIndex(reference<hash<DataProviderIndexInfo>> index,
             DataProviderDiscoverySession discovery, *list<string> app_filter,
             reference<list<hash<auto>>> type_info_mismatches) {
+        # the description of each option type of this build, made once per type; see getOptionTypeDescription()
+        hash<string, hash<auto>> option_types = {};
         # Finish deferred registration, output-type resolution, and scheme loading before starting the authoritative
         # snapshot. These calls are allowed to advance the revision; the second getIndexApps() below is the actual
         # checked-point read.
@@ -553,7 +591,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
             index.appinfomap{app.name} = app;
             # add to app action info map (skip apps with no actions)
             if (*hash<string, hash<auto>> actions = getSerializableAppActions(app.name, discovery,
-                    \type_info_mismatches)) {
+                    \type_info_mismatches, \option_types)) {
                 index.actioninfomap{app.name} = actions;
             }
             if (!index.appmap{app.name}) {
@@ -615,7 +653,8 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         (see @ref DataProvider::DataProviderStaticMetadataHelper "DataProviderStaticMetadataHelper")
     */
     private static *hash<string, hash<auto>> getSerializableAppActions(string app,
-            DataProviderDiscoverySession discovery, reference<list<hash<auto>>> type_info_mismatches) {
+            DataProviderDiscoverySession discovery, reference<list<hash<auto>>> type_info_mismatches,
+            reference<hash<string, hash<auto>>> option_types) {
         hash<string, hash<auto>> rv;
         # the index is static metadata, so dynamic type and default value callbacks must not run
         DataProviderStaticMetadataHelper static_metadata();
@@ -642,11 +681,14 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                     throw "DATA-PROVIDER-OUTPUT-TYPE-UNAVAILABLE", sprintf("no output type for %s/%s", app,
                         action.action);
                 }
+                # the paths of the option type descriptions already known to be plain data
+                hash<string, bool> plain = {};
                 hash<auto> entry = (action - ("get_dynamic_options", "get_output_type", "output_type")) + {
-                    "options": getSerializableActionOptions(app, action, \type_info_mismatches),
+                    "options": getSerializableActionOptions(app, action, \type_info_mismatches, \option_types,
+                        \plain),
                     "data_provider_info": getSerializableDataProviderInfo(action.data_provider_info),
                 };
-                checkPlainData(entry, "");
+                checkPlainData(entry, "", plain);
                 rv{action.action} = entry;
             } catch (hash<ExceptionInfo> ex) {
                 DataProviderActionCatalog::reportDiscoveryFailure(discovery, "action", "serialize-action-metadata",
@@ -687,8 +729,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                     continue;
                 }
                 # unique keys identify objects by address, so they are replaced to make builds reproducible
-                hash<string, string> key_map;
-                hash<auto> info = replaceUniqueKeys(factory.getInfoAsData(True), \key_map);
+                hash<auto> info = (new ProviderIndexUniqueKeys()).replace(factory.getInfoAsData(True));
                 checkPlainData(info, "");
                 rv{name} = info;
             } catch (hash<ExceptionInfo> ex) {
@@ -717,66 +758,87 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     }
 
     #! Get YAML-serializable action options
+    /** @param app the app
+        @param action the action
+        @param type_info_mismatches option types whose descriptions do not restore an equivalent type are added here
+        @param option_types the descriptions of the option types of the build; see getOptionTypeDescription()
+        @param plain the path of each option type description in the action's index entry that is plain data is
+            added here, so that checkPlainData() does not walk it again
+    */
     private static *hash<auto> getSerializableActionOptions(string app, hash<DataProviderActionInfo> action,
-            reference<list<hash<auto>>> type_info_mismatches) {
+            reference<list<hash<auto>>> type_info_mismatches, reference<hash<string, hash<auto>>> option_types,
+            reference<hash<string, bool>> plain) {
         hash<auto> rv;
         foreach hash<auto> i in (action.options.pairIterator()) {
-            hash<DataTypeInfo> type_info = i.value.type.getInfo();
-            # unique keys identify objects by address, so they are replaced to make builds reproducible
-            hash<string, string> key_map;
-            type_info = replaceUniqueKeys(type_info, \key_map);
-            if (*hash<auto> mismatch = checkTypeInfo(type_info)) {
-                push type_info_mismatches, {"app": app, "action": action.action, "option": i.key} + mismatch;
+            hash<auto> description = getOptionTypeDescription(i.value.type, \option_types);
+            if (description.mismatch) {
+                push type_info_mismatches, {"app": app, "action": action.action, "option": i.key}
+                    + description.mismatch;
+            }
+            if (description.plain) {
+                plain{".options." + i.key + ".type_info"} = True;
             }
             rv{i.key} = (i.value - "type") + {
-                "type_info": type_info,
+                "type_info": description.type_info,
             };
         }
         return rv;
     }
 
-    #! Replaces the unique keys in a type description with keys that do not depend on the process
-    /** Unique keys are derived from object addresses; within one description they only need to identify the same
-        type or field consistently, which a recursive type description relies on to refer to an enclosing type.
+    #! Returns the description of an option type, made once per type and build
+    /** The same type object is the type of many options, for example an app's record type is the type of the
+        options of its create, update and upsert actions, and the descriptions of some types have millions of nodes.
+        The description, with its unique keys replaced (see ProviderIndexUniqueKeys), whether it restores an
+        equivalent type (checkTypeInfo()) and whether it is plain data depend only on the type, so they are made the
+        first time the type is described in a build and reused for every other option of the type.  The type is kept
+        with its description, so that its identity cannot be reused by another object while the build runs.
 
-        @param value the description or part of it
-        @param key_map maps each original key to its replacement
+        @param type the option type; a value that is not a type is described as before, and fails as before
+        @param option_types the descriptions made so far in the build, by type identity
 
-        @return the description with replaced unique keys
+        @return \c type_info: the description; \c mismatch: the result of checkTypeInfo(); \c plain: @ref True if
+        the description is plain data
     */
-    private static auto replaceUniqueKeys(auto value, reference<hash<string, string>> key_map) {
-        switch (value.typeCode()) {
-            case NT_HASH:
-                foreach string key in (keys value) {
-                    if (key == "unique_key" && value{key}.typeCode() == NT_STRING) {
-                        value{key} = key_map{value{key}}
-                            ?? (key_map{value{key}} = (key_map.size() + 1).toString());
-                    } else {
-                        value{key} = replaceUniqueKeys(value{key}, \key_map);
-                    }
-                }
-                return value;
-            case NT_LIST:
-                return map replaceUniqueKeys($1, \key_map), value;
+    private static hash<auto> getOptionTypeDescription(auto type, reference<hash<string, hash<auto>>> option_types) {
+        *string key = type instanceof AbstractDataProviderType ? type.uniqueHash() : NOTHING;
+        if (key && (*hash<auto> description = option_types{key})) {
+            return description;
         }
-        return value;
+        # unique keys identify objects by address, so they are replaced to make builds reproducible
+        hash<DataTypeInfo> type_info = (new ProviderIndexUniqueKeys()).replace(type.getInfo());
+        hash<auto> description = {
+            "type": type,
+            "type_info": type_info,
+            "mismatch": checkTypeInfo(type_info),
+            "plain": isPlainData(type_info),
+        };
+        if (key) {
+            option_types{key} = description;
+        }
+        return description;
     }
 
     #! Checks that the given value contains only plain data that can be written to the index
     /** @param value the value to check
         @param path the path of the value in the action's index entry
+        @param plain the paths of values known to be plain data, which are not walked again
 
         @throw PROVIDER-INDEX-ERROR the value contains an object or a call reference, such as a type option set to
         a closure
     */
-    private static checkPlainData(auto value, string path) {
+    private static checkPlainData(auto value, string path, *hash<string, bool> plain) {
         switch (value.typeCode()) {
             case NT_HASH:
-                map checkPlainData($1.value, path + "." + $1.key), value.pairIterator();
+                foreach hash<auto> i in (value.pairIterator()) {
+                    string child = path + "." + i.key;
+                    if (!plain{child}) {
+                        checkPlainData(i.value, child, plain);
+                    }
+                }
                 return;
             case NT_LIST:
                 for (int i = 0; i < value.size(); ++i) {
-                    checkPlainData(value[i], sprintf("%s[%d]", path, i));
+                    checkPlainData(value[i], sprintf("%s[%d]", path, i), plain);
                 }
                 return;
             case NT_OBJECT:
@@ -787,6 +849,30 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
             throw "PROVIDER-INDEX-ERROR", sprintf("%s: a call reference cannot be indexed",
                 path.val() ? path.substr(1) : "<root>");
         }
+    }
+
+    #! Returns @ref True if the given value contains only plain data that can be written to the index
+    /** The test of checkPlainData(), without the path of each value, which only an error needs */
+    private static bool isPlainData(auto value) {
+        switch (value.typeCode()) {
+            case NT_HASH:
+                foreach auto v in (value.iterator()) {
+                    if (!isPlainData(v)) {
+                        return False;
+                    }
+                }
+                return True;
+            case NT_LIST:
+                foreach auto v in (value) {
+                    if (!isPlainData(v)) {
+                        return False;
+                    }
+                }
+                return True;
+            case NT_OBJECT:
+                return False;
+        }
+        return !value.callp();
     }
 
     #! Checks that a type description restores an equivalent type

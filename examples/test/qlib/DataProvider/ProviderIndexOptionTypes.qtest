@@ -1,0 +1,144 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ProviderIndex
+%requires ./ProviderIndexOptionTypeFixture.qm
+
+%requires yaml
+
+%try-module msgpack
+%define NoMsgPack
+%endtry
+
+%exec-class ProviderIndexOptionTypesTest
+
+#! Tests that an index build describes each option type once
+/** An app's record type is the type of the options of several of its actions, and the descriptions of some types
+    have millions of nodes; the build describes each type once and gives the description to every option of the type
+*/
+public class ProviderIndexOptionTypesTest inherits QUnit::Test {
+    constructor() : Test("ProviderIndex option types test", "1.0") {
+        addTestCase("each option type is described once per build", \describedOnceTest());
+        addTestCase("the options of a type have its description, with unique keys replaced", \descriptionTest());
+        addTestCase("a repeated build writes the same index", \repeatTest());
+        set_return_value(main());
+    }
+
+    private checkModules() {
+%ifdef NoMsgPack
+        testSkip("no MessagePack support");
+%endif
+    }
+
+    #! Returns the options of a single-process build of the fixture app
+    private static hash<ProviderIndexCreateOptions> getOptions() {
+        return <ProviderIndexCreateOptions>{
+            "load_known_factories": False,
+            "load_environment": False,
+            "load_typescript_actions": False,
+            "apps": (ProviderIndexOptionTypeFixture::App,),
+        };
+    }
+
+    #! Builds the index of the fixture app in a new directory and returns the directory
+    private static string build() {
+        string dir = make_tmp_dir();
+        ProviderIndex::createDataProviderIndex(NOTHING, dir, getOptions());
+        return dir;
+    }
+
+    describedOnceTest() {
+        checkModules();
+%ifndef NoMsgPack
+        ProviderIndexOptionTypeFixture::CountingRecordType::calls = {};
+        string dir = build();
+        on_exit remove_tree(dir);
+        # the order is the type of 3 options and the key of 3; the address is the type of 2 fields of the order, so
+        # one description of the order describes it twice
+        assertEq({"FixtureOrder": 1, "FixtureKey": 1, "FixtureAddress": 2},
+            ProviderIndexOptionTypeFixture::CountingRecordType::calls,
+            "each type is described once, however many options have it");
+%endif
+    }
+
+    descriptionTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = build();
+        on_exit remove_tree(dir);
+        hash<auto> chunk = readIndex(dir);
+        hash<auto> actions = chunk.actioninfomap{ProviderIndexOptionTypeFixture::App};
+        assertEq(("create", "lookup", "update", "upsert"), sort(keys actions));
+        hash<auto> order = actions.create.options.record.type_info;
+        assertEq("FixtureOrder", order.name);
+        foreach string action in (("update", "upsert")) {
+            assertEq(order, actions{action}.options.record.type_info, action);
+        }
+        hash<auto> key = actions.lookup.options.key.type_info;
+        assertEq("FixtureKey", key.name);
+        assertEq(key, actions.lookup.options.other_key.type_info);
+        assertEq(key, actions.update.options.key.type_info);
+        # unique keys are numbered in the order in which they occur in each description, from 1
+        assertEq(order.fields.billing.type, order.fields.shipping.type, "the fields of one type");
+        list<int> keys_found = sort(map $1.toInt(), uniqueKeys(order));
+        assertEq((map $1, xrange(1, keys_found.size() + 1)), keys_found,
+            "the keys of a description are 1 to its number of keys");
+%endif
+    }
+
+    repeatTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string first = build();
+        on_exit remove_tree(first);
+        string second = build();
+        on_exit remove_tree(second);
+        assertEq(readIndexFiles(first), readIndexFiles(second));
+%endif
+    }
+
+    #! Reads the published index of the fixture app with its complete option type descriptions
+    private static hash<auto> readIndex(string dir) {
+        return ProviderIndexUtil::readSerializedDataProviderIndex(dir).index;
+    }
+
+    #! Returns every unique key in a description
+    private static list<string> uniqueKeys(auto value) {
+        list<string> rv = ();
+        switch (value.typeCode()) {
+            case NT_HASH:
+                foreach hash<auto> i in (value.pairIterator()) {
+                    if (i.key == "unique_key" && i.value.typeCode() == NT_STRING) {
+                        rv += i.value;
+                    } else {
+                        rv += uniqueKeys(i.value);
+                    }
+                }
+                break;
+            case NT_LIST:
+                map rv += uniqueKeys($1), value;
+                break;
+        }
+        return keys (map {$1: True}, rv);
+    }
+
+    #! Returns the contents of all index files in a directory
+    private static hash<string, binary> readIndexFiles(string dir) {
+        hash<string, binary> rv = {};
+        Dir d();
+        d.chdir(dir);
+        foreach string file in (d.listFiles()) {
+            rv{file} = ReadOnlyFile::readBinaryFile(dir + DirSep + file);
+        }
+        return rv;
+    }
+}
