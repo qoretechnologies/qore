@@ -5256,22 +5256,8 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* l
     // check for typedef first (both simple names and scoped names)
     TypedefEntry* td = qore_root_ns_private::parseFindTypedef(cscope);
     if (td) {
-        // resolve the typedef's underlying type
-        const QoreTypeInfo* rv;
-        if (td->typeInfo) {
-            // already resolved
-            rv = td->typeInfo;
-        } else if (td->parseTypeInfo) {
-            // resolve the parse type info
-            rv = td->parseTypeInfo->resolve(loc, err);
-            // cache the resolved type for future lookups
-            td->typeInfo = rv;
-        } else {
-            // should not happen - typedef without type info
-            parse_error(*loc, "internal error: typedef '%s' has no type information", cscope.ostr);
-            err = -1;
-            return autoTypeInfo;
-        }
+        // the typedef's underlying type, resolved in the namespace that declares the typedef
+        const QoreTypeInfo* rv = td->parseResolve(cscope.ostr, err);
 
         // apply or_nothing if needed and the underlying type doesn't already accept NOTHING
         if (or_nothing && !QoreTypeInfo::parseAcceptsReturns(rv, NT_NOTHING)) {

@@ -1037,6 +1037,16 @@ void QoreNamespaceList::deleteAllConstants(ExceptionSink* xsink) {
         i->second->priv->constant.deleteAll(xsink);
 }
 
+int QoreNamespaceList::parseInitTypedefs() {
+    int err = 0;
+    for (auto& i : nsmap) {
+        if (i.second->priv->parseInitTypedefs() && !err) {
+            err = -1;
+        }
+    }
+    return err;
+}
+
 int QoreNamespaceList::parseInit() {
     int err = 0;
     for (auto& i : nsmap) {
@@ -3180,7 +3190,13 @@ void qore_ns_private::parseAddGlobalVarDecl(const QoreProgramLocation* loc, char
 }
 
 int qore_root_ns_private::parseInit() {
-    int err = qore_ns_private::parseInitGlobalVars();
+    // the typedefs declared in this parse are resolved first, each in the namespace that declares it, before the
+    // declarations that use them: a use resolves a typedef in the context of the use otherwise, and a module would
+    // export, and an AOT module would serialize, only the typedefs that it uses itself
+    int err = qore_ns_private::parseInitTypedefs();
+    if (qore_ns_private::parseInitGlobalVars() && !err) {
+        err = -1;
+    }
     if (qore_ns_private::parseInitConstants() && !err) {
         err = -1;
     }
@@ -3348,6 +3364,30 @@ int qore_ns_private::parseInitConstants() {
        err = -1;
    }
    return err;
+}
+
+int qore_ns_private::parseInitTypedefs() {
+    int err = 0;
+    size_t count = 0;
+    for (const std::string& tdname : pending_typedef_names) {
+        if (count && !(count % 100) && qore_check_cancel(nullptr, "typedef resolution")) {
+            return -1;
+        }
+        ++count;
+        typedef_map_t::iterator i = typedefMap.find(tdname);
+        if (i == typedefMap.end()) {
+            continue;
+        }
+        int terr = 0;
+        i->second->parseResolve(tdname.c_str(), terr);
+        if (terr) {
+            err = -1;
+        }
+    }
+    if (nsl.parseInitTypedefs() && !err) {
+        err = -1;
+    }
+    return err;
 }
 
 int qore_ns_private::parseInit() {
@@ -3672,9 +3712,50 @@ TypedefEntry* qore_ns_private::parseAddTypedef(const QoreProgramLocation* loc, c
 
     // Add the typedef
     TypedefEntry* entry = new TypedefEntry(loc, typeInfo, pti_holder.release(), pub);
+    entry->parse_ns = this;
     typedefMap[tdname] = entry;
     pending_typedef_names.push_back(tdname);
     return entry;
+}
+
+const QoreTypeInfo* TypedefEntry::parseResolve(const char* name, int& err) {
+    if (typeInfo) {
+        return typeInfo;
+    }
+    if (!parseTypeInfo) {
+        parse_error(loc ? *loc : get_runtime_location_safe(), "internal error: typedef '%s' has no type information",
+            name);
+        err = -1;
+        return autoTypeInfo;
+    }
+    if (resolving) {
+        parse_error(loc ? *loc : get_runtime_location_safe(), "typedef '%s' refers to itself", name);
+        err = -1;
+        return autoTypeInfo;
+    }
+    // the flag is cleared on every exit
+    struct ResolvingGuard {
+        bool& flag;
+        DLLLOCAL ResolvingGuard(bool& flag) : flag(flag) {
+            flag = true;
+        }
+        DLLLOCAL ~ResolvingGuard() {
+            flag = false;
+        }
+    } resolving_guard(resolving);
+    const QoreTypeInfo* rv;
+    if (parse_ns) {
+        // a name in the type refers to what it refers to in the namespace that declares the typedef
+        NamespaceParseContextHelper nspch(parse_ns);
+        rv = QoreParseTypeInfo::resolve(parseTypeInfo, loc, err);
+    } else {
+        rv = QoreParseTypeInfo::resolve(parseTypeInfo, loc, err);
+    }
+    // a typedef that refers to itself has been given a type by the inner resolution, which raised the error
+    if (!typeInfo) {
+        typeInfo = rv;
+    }
+    return typeInfo;
 }
 
 // only called while parsing inside unattached namespaces
@@ -4443,7 +4524,8 @@ void qore_ns_private::parseAssimilate(QoreNamespace* ans) {
             i = pns->typedefMap.erase(i);
             continue;
         }
-        // move typedef to this namespace
+        // move typedef to this namespace, which declares it from now on
+        i->second->parse_ns = this;
         typedefMap[i->first] = i->second;
         pending_typedef_names.push_back(i->first);
         i = pns->typedefMap.erase(i);
@@ -4535,6 +4617,7 @@ void qore_ns_private::runtimeAssimilate(QoreNamespace* ans) {
         if (skip) {
             delete i.second;
         } else {
+            i.second->parse_ns = this;
             typedefMap[i.first] = i.second;
         }
     }

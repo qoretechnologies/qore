@@ -152,6 +152,7 @@ public:
 
     DLLLOCAL qore_ns_private* runtimeAdd(QoreNamespace* ot, qore_ns_private* parent);
 
+    DLLLOCAL int parseInitTypedefs();
     DLLLOCAL int parseInitConstants();
 
     DLLLOCAL int parseInitGlobalVars();
