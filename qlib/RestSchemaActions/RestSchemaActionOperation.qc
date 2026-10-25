@@ -1683,6 +1683,21 @@ public class RestSchemaActionOperation {
             rv = rebuildField(rv, ov, codec_desc, type_replaced);
         }
 
+        # an action may offer a narrower choice than the API accepts, never a wider one: a value the schema
+        # rejects could be chosen, but never sent.  A codec or a type override makes the choices values of what
+        # the action presents, which the schema does not describe.
+        if (!type_replaced) {
+            AbstractDataProviderType schema_type = field.getType();
+            if (exists ov.allowed_values) {
+                checkOverlayChoices(schema_type, ov.allowed_values, "allowed_values");
+            }
+            if (exists ov.element_allowed_values) {
+                if (*AbstractDataProviderType element_type = schema_type.getElementType()) {
+                    checkOverlayChoices(element_type, ov.element_allowed_values, "element_allowed_values");
+                }
+            }
+        }
+
         # the overlay's own allowed values and default describe what the action presents, so they are set
         # after any rebuild that dropped the schema's, which describe what the wire carries
         if (exists ov.default_value) {
@@ -1704,6 +1719,35 @@ public class RestSchemaActionOperation {
             rv.setElementAllowedValues(ov.element_allowed_values, ov.element_allowed_values_creatable);
         }
         return rv;
+    }
+
+    #! Throws an exception if the schema-derived type rejects a value an overlay offers
+    /** An overlay that applies to the alternatives of a union applies to each of them, so a choice that only
+        one alternative accepts is refused for the others: the alternatives of a discriminated union each accept
+        only their own discriminator value.
+
+        @param type the schema-derived type of the field, or of its elements
+        @param choices the values the overlay offers: raw values or @ref DataProvider::AllowedValueInfo
+        "AllowedValueInfo" records, as for @ref DataProvider::AbstractDataField::setAllowedValues()
+        "AbstractDataField::setAllowedValues()"
+        @param key the overlay key that offers them
+
+        @throw REST-SCHEMA-ACTION-ERROR the schema-derived type rejects a value the overlay offers
+    */
+    private static checkOverlayChoices(AbstractDataProviderType type, list<auto> choices, string key) {
+        bool records = choices[0] instanceof hash<AllowedValueInfo>
+            || (choices[0].typeCode() == NT_HASH && choices[0].hasKey("value")
+                && (type.getBaseTypeCode() != NT_HASH));
+        foreach auto choice in (choices) {
+            auto value = records ? choice.value : choice;
+            try {
+                type.acceptsValue(value);
+            } catch (hash<ExceptionInfo> ex) {
+                throw "REST-SCHEMA-ACTION-ERROR", sprintf("%s offers %y, which the schema does not accept (%s: "
+                    "%s); an action may offer a narrower choice than the API, never a wider one", key, value,
+                    ex.err, ex.desc);
+            }
+        }
     }
 
     #! Applies nested field overrides to a derived type without replacing the type

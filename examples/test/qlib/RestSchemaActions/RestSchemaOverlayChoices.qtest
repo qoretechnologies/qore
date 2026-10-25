@@ -1,0 +1,172 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires OpenApi3
+%requires RestSchemaActions
+%requires json
+%exec-class RestSchemaOverlayChoicesTest
+
+#! The choices an overlay offers are values the schema accepts, in every alternative the overlay applies to
+class RestSchemaOverlayChoicesTest inherits QUnit::Test {
+    public {
+        const Action = "create-widget";
+
+        const Schemas = {
+            "Widget": {"type": "object", "properties": {
+                "status": {"type": "string", "enum": ("ACTIVE", "ARCHIVED", "DELETED")},
+                "code": {"type": "string", "maxLength": 2},
+                "tags": {"type": "array", "items": {"type": "string", "enum": ("red", "green")}},
+                "tools": {"type": "array", "items": {"$ref": "#/components/schemas/Tool"}},
+            }},
+            "Tool": {"oneOf": (
+                {"$ref": "#/components/schemas/FunctionTool"},
+                {"$ref": "#/components/schemas/ConnectorTool"},
+            )},
+            "FunctionTool": {"type": "object", "additionalProperties": False, "required": ("function",),
+                "properties": {
+                    "type": {"type": "string", "enum": ("function",), "default": "function"},
+                    "function": {"type": "string"},
+                },
+            },
+            "ConnectorTool": {"type": "object", "additionalProperties": False, "required": ("connector_id",),
+                "properties": {
+                    "type": {"type": "string", "enum": ("connector",), "default": "connector"},
+                    "connector_id": {"type": "string"},
+                },
+            },
+        };
+    }
+
+    constructor() : Test("REST schema overlay choices", "1.0", \ARGV) {
+        addTestCase("a narrower choice than the schema's is offered", \narrowerTest());
+        addTestCase("a value outside the schema's enumeration is refused", \enumTest());
+        addTestCase("a value outside another constraint of the schema is refused", \constraintTest());
+        addTestCase("element choices are values of the schema's elements", \elementTest());
+        addTestCase("a choice applies to every alternative of a union that declares the field", \unionTest());
+        addTestCase("a type override's choices are values of the type it gives", \typeOverrideTest());
+        set_return_value(main());
+    }
+
+    narrowerTest() {
+        hash<string, AbstractDataField> fields = operation({
+            "status": <RestSchemaFieldOverlayInfo>{
+                "allowed_values": (<AllowedValueInfo>{"value": "ACTIVE", "display_name": "Active"},
+                    <AllowedValueInfo>{"value": "ARCHIVED", "display_name": "Archived"}),
+            },
+            "code": <RestSchemaFieldOverlayInfo>{"allowed_values": ("AB", "CD"), "allowed_values_creatable": True},
+            "tags": <RestSchemaFieldOverlayInfo>{"element_allowed_values": ("red",)},
+        }).getRequestFields();
+        assertEq(("ACTIVE", "ARCHIVED"), map $1.value, fields.status.getAllowedValues());
+        assertEq(("AB", "CD"), map $1.value, fields.code.getAllowedValues());
+        assertEq(("red",), map $1.value, fields.tags.getElementAllowedValues());
+        assertEq("ACTIVE", fields.status.acceptsValue("ACTIVE"));
+        assertThrows("FIELD-VALUE-ERROR", \fields.status.acceptsValue(), "DELETED");
+    }
+
+    enumTest() {
+        assertThrows("REST-SCHEMA-ACTION-ERROR",
+            "allowed_values offers \"UNKNOWN\", which the schema does not accept.*narrower choice.*status",
+            \RestSchemaOverlayChoicesTest::operation(), {
+                "status": <RestSchemaFieldOverlayInfo>{
+                    "allowed_values": (<AllowedValueInfo>{"value": "ACTIVE"}, <AllowedValueInfo>{"value": "UNKNOWN"}),
+                },
+            });
+        # a choice the user may extend is still a choice offered
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "allowed_values offers \"UNKNOWN\"",
+            \RestSchemaOverlayChoicesTest::operation(), {
+                "status": <RestSchemaFieldOverlayInfo>{
+                    "allowed_values": ("UNKNOWN",),
+                    "allowed_values_creatable": True,
+                },
+            });
+    }
+
+    constraintTest() {
+        assertThrows("REST-SCHEMA-ACTION-ERROR", "allowed_values offers \"ABC\", which the schema does not accept",
+            \RestSchemaOverlayChoicesTest::operation(), {
+                "code": <RestSchemaFieldOverlayInfo>{"allowed_values": ("AB", "ABC")},
+            });
+    }
+
+    elementTest() {
+        assertThrows("REST-SCHEMA-ACTION-ERROR",
+            "element_allowed_values offers \"blue\", which the schema does not accept",
+            \RestSchemaOverlayChoicesTest::operation(), {
+                "tags": <RestSchemaFieldOverlayInfo>{"element_allowed_values": ("red", "blue")},
+            });
+    }
+
+    unionTest() {
+        # the discriminator of each alternative accepts only its own value, so a choice given to the field is
+        # refused for the alternative it does not name
+        assertThrows("REST-SCHEMA-ACTION-ERROR",
+            "allowed_values offers \"connector\", which the schema does not accept.*alternative \"FunctionTool\"",
+            \RestSchemaOverlayChoicesTest::operation(), {
+                "tools": <RestSchemaFieldOverlayInfo>{
+                    "fields": {
+                        "type": <RestSchemaFieldOverlayInfo>{"allowed_values": ("connector",)},
+                    },
+                },
+            });
+
+        # an overlay of a field only one alternative declares leaves the other alternatives as they are
+        AbstractDataProviderType tools = operation({
+            "tools": <RestSchemaFieldOverlayInfo>{
+                "fields": {
+                    "connector_id": <RestSchemaFieldOverlayInfo>{"short_desc": "The connector to call"},
+                },
+            },
+        }).getRequestFields().tools.getType();
+        list<AbstractDataProviderType> alternatives =
+            cast<QoreUnionDataType>(tools.getElementType()).getUnionTypes();
+        assertEq(("FunctionTool", "ConnectorTool"), map $1.getName(), alternatives);
+        assertEq(("function",), map $1.value, alternatives[0].getFields().type.getAllowedValues());
+        assertEq(("connector",), map $1.value, alternatives[1].getFields().type.getAllowedValues());
+        assertEq("The connector to call", alternatives[1].getFields().connector_id.getShortDescription());
+        assertEq("function", tools.acceptsValue(({"type": "function", "function": "f"},))[0].type);
+        assertEq("connector", tools.acceptsValue(({"type": "connector", "connector_id": "c"},))[0].type);
+    }
+
+    typeOverrideTest() {
+        # the override's type is what the action presents; the schema describes the wire value it replaces
+        hash<string, AbstractDataField> fields = operation({
+            "status": <RestSchemaFieldOverlayInfo>{
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": ("pending",),
+            },
+        }).getRequestFields();
+        assertEq(("pending",), map $1.value, fields.status.getAllowedValues());
+    }
+
+    #! Returns the operation that creates a widget, with the given field overlays
+    private static RestSchemaActionOperation operation(*hash<string, hash<RestSchemaFieldOverlayInfo>> fields) {
+        OpenApi3Schema doc = OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3", "info": {"title": "Overlay choices", "version": "1"},
+            "paths": {"/widgets": {"post": {
+                "operationId": "createWidget",
+                "requestBody": {"content": {"application/json": {"schema": {
+                    "$ref": "#/components/schemas/Widget",
+                }}}},
+                "responses": {"204": {"description": "Created"}},
+            }}},
+            "components": {"schemas": Schemas},
+        }), True);
+        RestSchemaActionOperation rv = new RestSchemaActionSet(doc, (<RestSchemaActionInfo>{
+            "action": Action,
+            "method": "POST",
+            "path": "/widgets",
+            "display_name": "Create Widget",
+            "short_desc": "Creates a widget",
+            "desc": "Creates a widget",
+            "fields": fields,
+        },)).getOperationEx(Action);
+        # the overlays are applied when the fields are published
+        rv.getRequestFields();
+        return rv;
+    }
+}

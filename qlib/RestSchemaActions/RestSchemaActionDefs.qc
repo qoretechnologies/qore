@@ -329,6 +329,14 @@ public hashdecl RestSchemaFieldOverlayInfo {
     auto default_value;
 
     #! Static allowed values for the field
+    /** They replace the schema's enumeration on the published field and may be narrower than it, never wider:
+        unless @ref codec or @ref type replaces the schema-derived type, every value must be one that type
+        accepts, or the action is refused with \c REST-SCHEMA-ACTION-ERROR.  An overlay of a union applies to
+        every alternative that declares the field, so a value only one alternative accepts, such as the value of
+        a discriminator, cannot be given here; such a value is labelled where its schema declares it, with
+        @ref OpenApi3::SchemaObject::setEnumDisplayNames() "SchemaObject::setEnumDisplayNames()" or the
+        \c x-enumNames extension.
+    */
     *softlist<auto> allowed_values;
 
     #! Whether values outside @ref allowed_values may also be supplied
@@ -341,6 +349,8 @@ public hashdecl RestSchemaFieldOverlayInfo {
 
         This is the static counterpart of @ref element_ref_data, exactly as @ref allowed_values is of
         @ref ref_data.
+
+        As for @ref allowed_values, every value must be one the schema-derived element type accepts.
     */
     *softlist<auto> element_allowed_values;
 

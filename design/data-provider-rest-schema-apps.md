@@ -1151,6 +1151,19 @@ that exist on one cloud and not another. And where the same field appears inside
 overlay reaches it: an entry is applied to every alternative that declares the field, and one no
 alternative declares is refused, which is what proves the overlay was applied rather than ignored.
 
+**An overlay offers a narrower choice than the schema, never a wider one.** The overlay's values replace
+the schema's enumeration on the published field, so nothing downstream of the overlay would notice a value
+the API never accepts: the request type still enforces the schema, and the choice fails on every use.
+`RestSchemaActionOperation` therefore checks each `allowed_values` and `element_allowed_values` entry
+against the schema-derived type before the overlay replaces it, and refuses the manifest with
+`REST-SCHEMA-ACTION-ERROR` naming the value; a codec or a `type` override is exempt, because its choices
+are values of the type it gives. In a union this is what stops a choice given to a discriminator: Mistral's
+tool alternatives each accept only their own `type`, and one `connector` choice applied to all seven made
+every other kind of tool unusable. Such a value is labelled where its schema declares it instead
+(`SchemaObject::setEnumDisplayNames()`, which Mistral's `MistralManifest::EnumDisplayNames` feeds), so that it
+shows the same label wherever an action reaches the schema. Unstructured's workflow schedule offered
+`every day` where the schema says `daily`, which local validation refused before the request was sent.
+
 **Read a composition before assuming it is a union.** Three of Pinecone's request bodies are an object
 declaring every property it accepts, plus an `anyOf` of branches that *narrow* those properties, plus a
 `not` excluding combinations it will not take:
