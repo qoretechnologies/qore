@@ -513,6 +513,7 @@ struct BatchCalleeInfo {
         //!< Exact body-proven boxed runtime kind
     std::string fast_name;               //!< Fast entry function name (if eligible)
     std::vector<AOTCallbackFastEntry> callback_fast_entries; //!< Private callback argument specializations
+    std::string callback_runtime_config_name; //!< Private callback target entry with a borrowed live RuntimeConfig
     std::string fast_contract_hash;      //!< Native fast-call ABI/effect contract hash
     bool preloaded_fast_entry = false;   //!< fast_name came from an immutable sibling artifact
     std::string specialization_key;      //!< Concrete generic receiver/type-argument tuple

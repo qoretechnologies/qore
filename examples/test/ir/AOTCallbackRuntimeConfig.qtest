@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class CallbackRuntimeConfigTest
+
+class CallbackRuntimeConfigTest inherits QUnit::Test {
+    private {
+        string libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string behavior = get_script_dir() + "/AOTCallbackBodyTarget.qr";
+    }
+    constructor() : Test("Private AOT callback RuntimeConfig arguments", "1.0", \ARGV) {
+        addTestCase("live context forwarding and null fallback", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(prefix
+            + "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + (map quote($1), args).join(" "));
+        assertEq(0, result.rc, result.out);
+        return result.out;
+    }
+    private check() {
+        TmpDir dir("qore-callback-runtime-config-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_CALLBACK_RUNTIME_CONFIG=1 ",
+                "QORE_CONTROL_AOT_NULL_CALLBACK_RUNTIME_CONFIG=1 ", "QORE_AOT_EH=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/behavior";
+                string generated = run((qcc, level, "--strip-source", "-o", executable, behavior),
+                    prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
+                if (level == "-O0" && !prefix.contains("QCC_SPLIT_THRESHOLD")) {
+                    bool selected = !prefix.startsWith("QORE_DISABLE_");
+                    int companions = 0;
+                    int callers = 0;
+                    int ordinary = 0;
+                    foreach string definition in (generated.split("\ndefine ")) {
+                        string header = definition.split("\n")[0];
+                        string body = definition.split("\n}")[0];
+                        if (header.contains("_runtime_config(")) {
+                            ++companions;
+                            assertTrue(body.contains("@qore_rt_check_stack_v2(ptr %xsink, ptr %native_runtime_config)"));
+                            assertTrue(body.contains("@qore_rt_get_native_entry_slots_v2"));
+                            assertTrue(body.contains("@qore_rt_get_cancel_poll_state_v1(ptr %native_runtime_config"));
+                            assertTrue(body.contains("@qore_rt_check_cancel_v2"));
+                            assertTrue(body.contains("load atomic"));
+                            assertFalse(body.contains("@qore_rt_get_loop_runtime_config("));
+                            assertFalse(body.contains("@qore_rt_get_native_entry_slots("));
+                            assertFalse(body.contains("@qore_rt_check_stack("));
+                        } else if (header.contains("@bodyStep_") && header.contains("_fast_")) {
+                            ++ordinary;
+                            assertTrue(body.contains("@qore_rt_check_stack("), "ordinary ABI remains callable");
+                        }
+                        if (header.contains("_cb2_bodyStep_")) {
+                            ++callers;
+                            assertEq(selected, body.contains("known_callref_rc_result"));
+                            assertEq(selected, body.contains("callref_without_context"));
+                            assertTrue(body.contains("known_callref_result = call double @bodyStep_"));
+                            assertTrue(body.contains("@qore_rt_push_native_call_frame_aot_named"));
+                            assertTrue(body.contains("@qore_rt_pop_native_call_frame"));
+                        }
+                    }
+                    assertEq(selected ? 3 : 0, companions);
+                    assertEq(1, ordinary);
+                    assertEq(1, callers);
+                }
+                assertEq("callback-body-target: ok\n", run((executable,)), prefix + level);
+            }
+        }
+    }
+}

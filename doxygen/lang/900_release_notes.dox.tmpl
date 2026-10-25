@@ -230,6 +230,8 @@
     argument cleanup, guarded fallback, boxed result or runtime-local reload is needed.
     Known same-Program float callbacks can also use native fast entries for context-independent bodies with loops,
     retaining call frames, exception checks, stack checks and cancellation polling.
+    Eligible AOT callback loop targets can now receive a live RuntimeConfig through private native entries,
+    reducing repeated context lookup while preserving ordinary-entry fallback and runtime checks.
 
     AOT-compiled modules record the AOT runtime identity of the %Qore library that compiled them, and a module
     compiled by a library with a different generated-code contract is refused when it is loaded, with an error that

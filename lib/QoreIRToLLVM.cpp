@@ -11822,9 +11822,12 @@ void QoreIRToLLVM::emitCancellationCheck(llvm::Module& module, llvm::Function* l
             // state even after nested calls enter/leave other Programs.
             llvm::BasicBlock& entry = *block_map.at(current_ir_func->blocks.front().get());
             llvm::IRBuilder<> eb(&entry, entry.getFirstInsertionPt());
-            auto acquire = module.getOrInsertFunction("qore_rt_get_loop_runtime_config",
-                llvm::FunctionType::get(ptr_type, {}, false));
-            loop_runtime_config = eb.CreateCall(acquire, {}, "loop_runtime_config");
+            loop_runtime_config = native_runtime_config;
+            if (!loop_runtime_config) {
+                auto acquire = module.getOrInsertFunction("qore_rt_get_loop_runtime_config",
+                    llvm::FunctionType::get(ptr_type, {}, false));
+                loop_runtime_config = eb.CreateCall(acquire, {}, "loop_runtime_config");
+            }
             if (!q_env_is_set("QORE_DISABLE_LLVM_INLINE_CANCEL_POLL")) {
                 // Describe QoreCancelPollStateV1 using target pointer sizes.
                 // Initialize/read the descriptor after context acquisition so
@@ -13122,6 +13125,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     local_allocas.clear();
     aot_call_target_contexts.clear();
     fast_runtime_config = receiver_runtime_config;
+    native_call_runtime_config = nullptr;
     loop_runtime_config = nullptr;
     loop_cancel_deferral = nullptr;
     loop_cancel_requested = nullptr;
@@ -13329,11 +13333,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
         builder->SetInsertPoint(stack_check_bb);
         llvm::Value* err;
-        if (receiver_runtime_config || dynamic_closure_runtime_config) {
+        if (native_runtime_config || receiver_runtime_config || dynamic_closure_runtime_config) {
             auto check_fn = module.getOrInsertFunction("qore_rt_check_stack_v2",
                 llvm::FunctionType::get(i32_type, {ptr_type, ptr_type}, false));
             err = builder->CreateCall(check_fn, {xsink_arg,
-                receiver_runtime_config ? receiver_runtime_config : dynamic_closure_runtime_config});
+                native_runtime_config ? native_runtime_config
+                    : receiver_runtime_config ? receiver_runtime_config : dynamic_closure_runtime_config});
         } else {
             auto check_fn = module.getOrInsertFunction("qore_rt_check_stack",
                 llvm::FunctionType::get(i32_type, {ptr_type}, false));
@@ -13470,8 +13475,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             llvm::IRBuilder<> ab(&entry, entry.getFirstInsertionPt());
             slots = ab.CreateAlloca(slots_type, nullptr, "native_entry_slots");
         }
-        llvm::Value* explicit_rc = dynamic_closure_runtime_config
-            ? dynamic_closure_runtime_config : receiver_runtime_config;
+        llvm::Value* explicit_rc = native_runtime_config ? native_runtime_config
+            : dynamic_closure_runtime_config ? dynamic_closure_runtime_config : receiver_runtime_config;
         if (explicit_rc) {
             builder->CreateCall(module.getOrInsertFunction("qore_rt_get_native_entry_slots_v2",
                 llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false)), {slots, explicit_rc});
@@ -28166,8 +28171,58 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             fast_fn, &summary_nothrow);
                         const bool inline_body = fast_result;
                         if (!fast_result) {
-                            fast_result = builder->CreateCall(
-                                fast_fn, call_args, "known_callref_result");
+                            auto* runtime_entry = callee->second.callback_runtime_config_name.empty() ? nullptr
+                                : module.getFunction(callee->second.callback_runtime_config_name);
+                            if (runtime_entry) {
+                                llvm::Value* rc = native_runtime_config;
+                                if (!rc) {
+                                    if (!native_call_runtime_config) {
+                                        if (q_env_is_set("QORE_CONTROL_AOT_NULL_CALLBACK_RUNTIME_CONFIG")) {
+                                            native_call_runtime_config = llvm::Constant::getNullValue(ptr_type);
+                                        } else if (loop_runtime_config) {
+                                            native_call_runtime_config = loop_runtime_config;
+                                        } else {
+                                            auto* entry = block_map.at(current_ir_func->blocks.front().get());
+                                            llvm::IRBuilder<> eb(entry, entry->getFirstInsertionPt());
+                                            auto acquire = module.getOrInsertFunction("qore_rt_get_loop_runtime_config",
+                                                llvm::FunctionType::get(ptr_type, {}, false));
+                                            native_call_runtime_config = eb.CreateCall(acquire, {},
+                                                "callback_runtime_config");
+                                        }
+                                    }
+                                    rc = native_call_runtime_config;
+                                }
+                                std::vector<llvm::Value*> runtime_args(call_args);
+                                runtime_args.insert(runtime_args.begin() + callee->second.num_params, rc);
+                                if (native_runtime_config) {
+                                    fast_result = builder->CreateCall(runtime_entry, runtime_args,
+                                        "known_callref_rc_result");
+                                } else {
+                                    // Optional acquisition preserves teardown behavior. Only a non-null
+                                    // live view reaches helpers whose explicit-context ABI requires one.
+                                    auto* supplied = llvm::BasicBlock::Create(ctx, "callref_with_context", llvm_func);
+                                    auto* fallback = llvm::BasicBlock::Create(ctx, "callref_without_context", llvm_func);
+                                    auto* merge = llvm::BasicBlock::Create(ctx, "callref_context_done", llvm_func);
+                                    builder->CreateCondBr(builder->CreateIsNotNull(rc), supplied, fallback,
+                                        llvm::MDBuilder(ctx).createBranchWeights(999, 1));
+                                    builder->SetInsertPoint(supplied);
+                                    auto* supplied_result = builder->CreateCall(runtime_entry, runtime_args,
+                                        "known_callref_rc_result");
+                                    builder->CreateBr(merge);
+                                    builder->SetInsertPoint(fallback);
+                                    auto* ordinary_result = builder->CreateCall(fast_fn, call_args,
+                                        "known_callref_result");
+                                    builder->CreateBr(merge);
+                                    builder->SetInsertPoint(merge);
+                                    auto* result = builder->CreatePHI(supplied_result->getType(), 2,
+                                        "known_callref_context_result");
+                                    result->addIncoming(supplied_result, supplied);
+                                    result->addIncoming(ordinary_result, fallback);
+                                    fast_result = result;
+                                }
+                            } else {
+                                fast_result = builder->CreateCall(fast_fn, call_args, "known_callref_result");
+                            }
                         }
                         endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module);
                         if (has_arg_cleanups) {

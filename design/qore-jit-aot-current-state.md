@@ -4517,3 +4517,42 @@ The loop-callback profile still samples context/entry acquisition, stack checkin
 and named call-frame helpers. Preserve current stack, cancellation and exception
 contracts, and retain ordinary entries for unsupported/cross-Program paths.
 No global performance ceiling has been established.
+
+
+## Private callback RuntimeConfig entries (2026-10-25)
+
+Bounded known same-Program native float loop targets can receive a borrowed live
+RuntimeConfig through a private companion. The caller acquires optional context
+once, guards non-null and otherwise retains the ordinary entry. Existing v2 stack
+and native-entry helpers consume the supplied context; cancellation descriptors
+retain live addresses and every poll. O3 inlines the measured target into its
+private callback consumer. Frames, exception checks and stack behavior remain.
+The companion is bounded to 32 blocks/512 instructions, one per target, within the
+existing 64-specialization cap. QORE_DISABLE_AOT_CALLBACK_RUNTIME_CONFIG disables
+it; QORE_CONTROL_AOT_NULL_CALLBACK_RUNTIME_CONFIG exercises null fallback.
+Private BatchCalleeInfo layout changes; ordinary native ABI, public helpers,
+serialized metadata and IR/JIT execution remain unchanged.
+
+Optimized confirmation: loop callback 13.431923 to 8.569874 ns/item, 36.20% less
+time (1.57x), with the gain repeated in all layouts versus before and disabled.
+The broad boxed-float method aggregate cost repeats at +3.76% versus before,
+-0.33% versus disabled; reverse layout is +5.72% before with disjoint ranges.
+Mixed callback pipeline remains +2.15% before/+0.47% disabled in broad follow-up.
+The screen's large boxed-float fallback and CSV flags do not repeat. All controls
+are retained under the authorized tradeoff, including prior committed costs.
+Broad candidate/disabled file-backed sections match byte-for-byte before
+relocation and use the same runtime; this does not explain observed differences.
+
+Fresh Java ratios: simple direct unary/result loops 1.27x/1.47x, callbacks
+1.62x/1.69x; loop-containing direct/callback cases 20.14x/5.26x Java time.
+Whole-kernel comparisons, not isolated calls; direct loops still use ordinary
+entries. Java parity and production-wide throughput gains are unestablished.
+Release passes 20 fixtures, 7598 assertions, 391 qmods and 1110 IR/AOT references,
+with eight Linux skips. All 2232 jobs/6696 windows independently replayed; see
+RESULTS.md and results-aot-callback-runtime-config-macos-arm64.json.
+
+Next use the updated profile to evaluate sharing already-acquired native-entry
+and cancellation-descriptor data and reducing named frame setup/teardown. Keep
+live stack/exception visibility, null fallback and every cancellation checkpoint.
+Consider extending the same private-context proof to direct calls. No global
+performance ceiling is established.

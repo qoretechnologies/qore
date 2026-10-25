@@ -15934,6 +15934,32 @@ static bool declareAOTCallbackFastEntries(llvm::Module& module,
                         llvm::Function::InternalLinkage, spec.name, module);
                     fn->addFnAttr(llvm::Attribute::InlineHint);
                     specs.push_back(std::move(spec));
+                    // Keep the public/ordinary ABI intact. A bounded loop target can additionally
+                    // receive the caller's live context through a private, non-null companion entry.
+                    auto target_body = bodies.find(ref->second);
+                    if (!q_env_is_set("QORE_DISABLE_AOT_CALLBACK_RUNTIME_CONFIG")
+                            && target->second.callback_runtime_config_name.empty()
+                            && target_body != bodies.end() && target_body->second->blocks.size() <= 32) {
+                        size_t target_instructions = 0;
+                        bool has_loop = false;
+                        for (const auto& tb : target_body->second->blocks) {
+                            target_instructions += tb->instructions.size();
+                            has_loop |= tb->is_loop_header;
+                        }
+                        llvm::Function* target_fn = module.getFunction(target->second.fast_name);
+                        if (has_loop && target_instructions <= 512 && target_fn
+                                && target_fn->arg_size() == target->second.num_params + 2) {
+                            auto* type = target_fn->getFunctionType();
+                            std::vector<llvm::Type*> params(type->param_begin(), type->param_end());
+                            params.insert(params.begin() + target->second.num_params,
+                                llvm::PointerType::get(module.getContext(), 0));
+                            target->second.callback_runtime_config_name = target->second.fast_name + "_runtime_config";
+                            auto* companion = llvm::Function::Create(
+                                llvm::FunctionType::get(type->getReturnType(), params, false),
+                                llvm::Function::InternalLinkage, target->second.callback_runtime_config_name, module);
+                            companion->addFnAttr(llvm::Attribute::InlineHint);
+                        }
+                    }
                     if (++entries == 64) {
                         return true;
                     }
@@ -16495,9 +16521,12 @@ static bool auditAOTBatchFastEntryDefinitions(llvm::Module& module,
                 || info.preloaded_fast_entry) {
             continue;
         }
-        // The ordinary entry and its at-most-four private callback entries must all have bodies if used.
-        for (size_t entry = 0; entry <= info.callback_fast_entries.size(); ++entry) {
-            const std::string& name = entry ? info.callback_fast_entries[entry - 1].name : info.fast_name;
+        // The ordinary entry, at most four callback entries and one context companion need bodies if used.
+        size_t entry_count = 1 + info.callback_fast_entries.size() + !info.callback_runtime_config_name.empty();
+        for (size_t entry = 0; entry < entry_count; ++entry) {
+            const std::string& name = entry > info.callback_fast_entries.size()
+                ? info.callback_runtime_config_name
+                : entry ? info.callback_fast_entries[entry - 1].name : info.fast_name;
             llvm::Function* fn = module.getFunction(name);
             if (!fn || !fn->isDeclaration()) {
                 continue;
@@ -21109,13 +21138,19 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     // Compile fast entry for AOT Approach B.
                     if (std_entry_ok && fast_entry_eligible) {
                         auto callback_info = aot_batch_callee_map->find(variant);
-                        unsigned entry_count = 1 + (callback_info == aot_batch_callee_map->end() ? 0
-                            : callback_info->second.callback_fast_entries.size());
-                        // At most four private callback entries, sharing the original ABI and runtime slots.
+                        unsigned callback_count = callback_info == aot_batch_callee_map->end() ? 0
+                            : callback_info->second.callback_fast_entries.size();
+                        bool has_runtime_entry = callback_info != aot_batch_callee_map->end()
+                            && !callback_info->second.callback_runtime_config_name.empty();
+                        unsigned entry_count = 1 + callback_count + has_runtime_entry;
+                        // Callback consumers share the original ABI; a target companion adds a live context.
                         for (unsigned entry = 0; entry < entry_count; ++entry) {
-                            const AOTCallbackFastEntry* callback_spec = entry
+                            bool runtime_entry = entry > callback_count;
+                            const AOTCallbackFastEntry* callback_spec = entry && !runtime_entry
                                 ? &callback_info->second.callback_fast_entries[entry - 1] : nullptr;
-                            const std::string& entry_name = callback_spec ? callback_spec->name : fast_entry_name;
+                            const std::string& entry_name = runtime_entry
+                                ? callback_info->second.callback_runtime_config_name
+                                : callback_spec ? callback_spec->name : fast_entry_name;
                             const UserSignature* sig = uvb->getUserSignature();
                             unsigned num_params = sig->numParams();
                             llvm::Function* fast_fn = module.getFunction(entry_name);
@@ -21170,6 +21205,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             fast_lowerer.setFastEntryMode(entry_name, &param_map,
                                     &param_kind_map, &borrowed_param_map, fast_return_kind,
                                     fast_return_type);
+                            if (runtime_entry) {
+                                fast_fn->getArg(num_params)->setName("native_runtime_config");
+                                fast_lowerer.setNativeRuntimeConfig(fast_fn->getArg(num_params));
+                            }
                             if (callback_spec) {
                                 fast_lowerer.setKnownCallbackParameter(sig->lv[callback_spec->param_index],
                                     callback_spec->target);

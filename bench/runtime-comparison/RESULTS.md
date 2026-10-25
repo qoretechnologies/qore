@@ -22107,3 +22107,124 @@ All runtime builds use -O3 -DNDEBUG with allocation tracking OFF; AOT uses -O3 -
 Release qualification: all targets and 391 qmods; 19 fixtures (15 QUnit, four standalone), 37 cases / 7460 assertions, 1110 IR/AOT references; eight Linux-only RSS skips. Fresh target/broad artifacts pass 3510 / 7047 references. The new fixture covers special floats and small/empty loops, unary/zero-argument targets, dynamic/reassigned references, division errors with target frames, and successful reuse afterward, in AST/IR/JIT/tiered and AOT O0/O3/disabled/EH/split modes. Existing context, optional/sparse, cross-Program, continuation, stack and cancellation fixtures pass. No full-suite/Debug/sanitizer/cross-platform claim.
 
 [results-aot-float-callback-bodies-macos-arm64.json](results-aot-float-callback-bodies-macos-arm64.json) embeds raw results, reference outputs, fingerprints, plans, sources, drivers and all 62 audit checks. Next investigate forwarding live RuntimeConfig/native-entry data through a private native calling convention: the complex callback profile still shows repeated TLS/context acquisition, stack checks and frame helper calls. Preserve stack/exception visibility and cancellation frequency. No global performance ceiling has been established.
+
+
+## Private AOT callback RuntimeConfig entries (2026-10-25)
+
+A known same-Program native float callback with a context-independent loop body can now receive a borrowed live RuntimeConfig through a private companion entry. The caller acquires its optional context once and selects the ordinary native entry on null. The companion uses existing explicit-context stack, native-entry-slot and cancellation helpers. Its RuntimeConfig argument precedes ctx/xsink; language arguments and the ordinary native ABI are unchanged. O3 inlines the measured companion into the private callback consumer. Frames, exception checks, live stack checks and every cancellation checkpoint remain.
+
+Admission remains restricted to already-proven immutable zero/unary native-float targets. A companion requires a loop, at most 32 IR blocks and 512 instructions; there is at most one companion per target within the existing 64-specialization plan. QORE_DISABLE_AOT_CALLBACK_RUNTIME_CONFIG disables this addition, and QORE_CONTROL_AOT_NULL_CALLBACK_RUNTIME_CONFIG forces the ordinary fallback for testing. Private BatchCalleeInfo layout gains a compilation-only field. Public helpers, serialized metadata and ordinary native entries are unchanged. IR/JIT execution is unchanged.
+
+Five-fork, three-layout confirmation (whole-kernel ns/item):
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate vs before
+|mixed:callback_pipeline|86.480649|88.591039|89.235039|+2.44%
+|original:callback_local_float_result|0.875440|0.865186|0.857010|-1.17%
+|original:callback_local_float_return|1.055102|1.060491|1.045108|+0.51%
+|original:callback_loop_float_return|13.431923|8.569874|13.489451|-36.20%
+|original:direct_float_add|0.825780|0.824288|0.841833|-0.18%
+|original:direct_local_float_result|0.743451|0.754817|0.783490|+1.53%
+|original:direct_local_float_return|0.839945|0.836665|0.821166|-0.39%
+|original:direct_loop_float_return|13.840829|13.817938|13.699579|-0.17%
+|original:result_float_add|0.862057|0.875040|0.871554|+1.51%
+|original:static_float_add|0.799296|0.803227|0.800044|+0.49%
+|original:typed_local_float_unary|0.919170|0.913552|0.918815|-0.61%
+|original:typed_local_int_unary|7.380512|7.372100|7.311644|-0.11%
+|target:direct_local_float_result|0.864008|0.850704|0.861274|-1.54%
+
+The targeted loop callback improves 13.431923 to 8.569874 ns/item: 36.20% less time, or 1.57x throughput. Its initial screen was 12.756913 to 8.164609 (36.00%). All 12 primary comparisons (two rounds, three layouts, before and disabled) meet the prospective 10% gain requirement. No confirmation control meets the >3% disjoint-fork-range flag criterion. The mixed callback pipeline still costs +2.44% versus before and -0.72% versus disabled across layouts; the screen shuffle flag (+4.85% versus before) does not repeat. The lexical direct-result aggregate disabled-control loss from screening is included in confirmation and does not repeat. Absolute timings changed between rounds; no samples or slower controls are excluded.
+
+Broad default-layout screen, 55 workloads and three independent processes:
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate vs before
+|arithmetic|1.580429|1.619776|1.648572|+2.49%
+|direct_call|1.589227|1.609925|1.621273|+1.30%
+|method_call|1.712684|1.725826|1.715201|+0.77%
+|indirect_call|7.761794|7.602546|7.674235|-2.05%
+|polymorphic_call|24.597547|25.099127|24.448054|+2.04%
+|polymorphic_expression_call|11.854808|11.522514|11.830225|-2.80%
+|monomorphic_call|3.971731|4.277756|4.109488|+7.71%
+|optional_method_call|11.816026|11.594645|11.449009|-1.87%
+|polymorphic_float_call|25.419514|25.706663|25.543870|+1.13%
+|polymorphic_float_expression_call|11.489030|11.578011|11.573712|+0.77%
+|monomorphic_float_call|4.518407|4.461267|4.434845|-1.26%
+|optional_float_method_call|11.717578|11.783895|12.272123|+0.57%
+|boxed_float_method_call|21.779850|22.490918|22.099653|+3.26%
+|dynamic_int_result_call|11.480029|11.230261|11.540113|-2.18%
+|dynamic_int_result_fallback|22.287626|21.764001|21.868390|-2.35%
+|boxed_int_method_call|17.690820|18.212829|18.047896|+2.95%
+|boxed_int_method_fallback|35.454444|37.234357|36.074061|+5.02%
+|boxed_float_method_fallback|37.371985|46.081524|39.135602|+23.30%
+|boxed_int_method_effect|96.520043|98.731008|98.510310|+2.29%
+|dynamic_float_result_call|12.417771|13.393011|12.238662|+7.85%
+|indirect_wide|7.760984|7.888611|7.909060|+1.64%
+|indirect_float|9.012075|8.674692|8.598887|-3.74%
+|indirect_int_result|7.994128|7.998550|8.029954|+0.06%
+|indirect_float_result|8.281845|8.397013|8.362465|+1.39%
+|indirect_tagged_float|8.066609|8.116877|8.234009|+0.62%
+|indirect_branch_float|8.879450|9.022855|9.211912|+1.62%
+|indirect_affine|7.754798|7.683870|7.788852|-0.91%
+|indirect_affine_wide|7.821119|7.763936|8.020861|-0.73%
+|indirect_branch_int|7.585517|7.652744|7.838196|+0.89%
+|dispatch_control|1.969304|1.962304|1.978787|-0.36%
+|list_read|3.023295|2.936539|2.951448|-2.87%
+|list_build|27.281810|27.504986|27.612716|+0.82%
+|list_mutate|191.467534|198.068819|190.100229|+3.45%
+|temporary_list|1.735916|1.681619|1.755811|-3.13%
+|temporary_hash|344.693036|340.204582|338.697859|-1.30%
+|closure_call|18.060841|18.233141|18.449345|+0.95%
+|closure_capture|23.676708|23.972447|24.178188|+1.25%
+|object_loop|178.555426|179.620299|180.660595|+0.60%
+|object_short|1150.890839|1169.493727|1173.498975|+1.62%
+|float_loop|186.110108|189.182829|190.067566|+1.65%
+|float_short|1137.578097|1153.542027|1123.907532|+1.40%
+|string_loop|375.306421|385.616748|379.484010|+2.75%
+|string_short|1269.859540|1302.611302|1311.378517|+2.58%
+|effect_loop|354.048553|353.874777|369.097444|-0.05%
+|effect_short|1295.581035|1333.266251|1337.243143|+2.91%
+|two_read_loop|404.090518|401.675843|397.520181|-0.60%
+|two_read_short|1363.382752|1363.791491|1386.130905|+0.03%
+|default_loop|706.255342|704.532382|726.888151|-0.24%
+|default_short|1672.258902|1688.671841|1734.325326|+0.98%
+|string_result_loop|443.383989|427.325059|461.614990|-3.62%
+|string_result_short|1412.795310|1434.260442|1456.239503|+1.52%
+|csv_report|975.528115|1035.573324|999.955210|+6.16%
+|object_orders|1837.711589|1905.822540|1933.072488|+3.71%
+|callback_pipeline|88.081692|90.382975|90.640313|+2.61%
+|text_index|1421.775535|1438.275036|1428.447933|+1.16%
+
+The prospective follow-up includes every disjoint-range flag and every >=3% aggregate loss, plus arithmetic and callback-pipeline controls. Five processes across three layouts:
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate vs before
+|arithmetic|1.584472|1.571032|1.594072|-0.85%
+|monomorphic_call|3.996961|3.931603|3.995338|-1.64%
+|boxed_float_method_call|21.456597|22.262932|22.336344|+3.76%
+|boxed_int_method_fallback|35.530256|36.083195|35.162078|+1.56%
+|boxed_float_method_fallback|36.235370|36.826726|37.596177|+1.63%
+|dynamic_float_result_call|12.105332|12.321026|12.281310|+1.78%
+|list_mutate|192.122481|193.716575|192.964719|+0.83%
+|csv_report|968.347968|959.551950|966.556963|-0.91%
+|object_orders|1868.522135|1897.745768|1912.076395|+1.56%
+|callback_pipeline|86.395510|88.256447|87.844314|+2.15%
+
+Boxed-float method calls retain an aggregate cost of +3.76% versus before and -0.33% versus disabled (21.456597 / 22.336344 to 22.262932 ns/item). The reverse layout is +5.72% versus before with disjoint fork ranges. Its initial default-layout cost was +3.26%; the aggregate cost repeats although the flagged layout changes. The mixed callback pipeline remains +2.15% versus before / +0.47% versus disabled. The initial 23.30% boxed-float fallback and 6.16% CSV flags do not repeat; confirmation aggregate changes are +1.63% and -0.91% versus before. The other selected losses fall below 3% in the aggregate.
+
+All broad generated LLVM function bodies match after explicit metadata-length/debug/private-constant normalization. Candidate/disabled on-disk file-backed sections are byte-identical for every suite and layout and use the same frozen runtime. Before/candidate benchmark machine instructions match as well: micro differs by one byte in main for the metadata-length argument, while probe/mixed text matches exactly. Runtime libraries differ. These checks do not establish equal relocated addresses or execution environments, or explain observed costs; they do not justify discarding measurements. The 36.20% targeted gain is retained under the authorized overall workload tradeoff. Previously committed layout-specific call and temporary-hash costs remain documented in the preceding checkpoint; this experiment does not retroactively remove them. No overall production throughput improvement is claimed.
+
+Fresh optimized Java checkpoint:
+
+|!Workload|!Qore AOT ns/item|!Java ns/item|!Qore / Java
+|direct_local_float_return|0.809445|0.635918|1.273x
+|callback_local_float_return|0.883715|0.544213|1.624x
+|direct_local_float_result|0.744953|0.505802|1.473x
+|callback_local_float_result|0.840551|0.496683|1.692x
+|direct_loop_float_return|13.535818|0.671988|20.143x
+|callback_loop_float_return|8.505433|1.617268|5.259x
+
+Temurin 25.0.2 / JMH 1.37; 90 independent references and separate proof of C2 compilation, hot helper/callback inlining and checksum consumption. Simple direct unary/result loops take 1.27x/1.47x Java time, callbacks 1.62x/1.69x. The loop-containing direct/callback cases take 20.14x/5.26x Java time. Direct and callback cases have different dependencies; compare each with its matching language implementation. These are whole-kernel ratios with different harness overhead, not isolated call latencies. This addition affects the callback case; the direct loop target still uses its ordinary native entry. Java parity has not been reached.
+
+Runtime builds use -O3 -DNDEBUG with allocation tracking OFF; AOT uses -O3 --strip-source. Before is merged performance commit c3a587c7d6 containing origin/develop 5d028a187e, not pure develop. Qore phases use 4096 items, seed 7, one warmup and three 150 ms samples; Java pairing uses three warmups and three 300 ms samples in both languages. Main and follow-up phases use default/reverse/shuffle-487 layouts; only the broad screen uses default alone. Jobs are randomized in paired blocks. Java layout names identify the paired Qore layout, with a fresh JMH fork per Java job. All 2232 jobs/6696 windows are independently replayed. No other owned work overlaps timing; external host load, clocks and thermals are uncontrolled.
+
+Validation: all-target optimized Release build and 391 qmods; 20 fixtures (16 QUnit, four standalone), 38 cases/7598 assertions, 1110 IR/AOT references; eight Linux-only RSS skips. New O0/O3/default/disabled/forced-null/EH/split testing reuses the float callback body fixture, including special floats, empty/small loops, unary/zero-argument targets, dynamic/reassigned references, division exceptions with target frames and subsequent reuse. Existing AST/IR/JIT/tiered behavior, context, optional/sparse, cross-Program, namespace, continuation, stack and cancellation fixtures pass. Fresh target/broad artifacts pass 3510/7047 references. No full-suite, Debug, sanitizer or cross-platform claim.
+
+[results-aot-callback-runtime-config-macos-arm64.json](results-aot-callback-runtime-config-macos-arm64.json) contains raw timings/references, plans, sources, reproduction drivers, dependency fingerprints and all 62 audit checks. The updated native profile still samples named call-frame push/pop, repeated native-entry and cancellation-descriptor acquisition, and stack helpers inside the callback loop. Next evaluate forwarding already-acquired invocation data and reducing frame setup work while preserving asynchronous stack visibility, exceptions and every cancellation poll. Also assess extending the proven private-context path to direct calls. No global performance ceiling is established.

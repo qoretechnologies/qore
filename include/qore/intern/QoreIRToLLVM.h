@@ -233,6 +233,12 @@ public:
         receiver_runtime_config = runtime_config;
     }
 
+    //! Forward a non-null, borrowed same-thread context to a private native callback target.
+    //! @param runtime_config live invocation-owned view; the caller retains the ordinary entry on null
+    void setNativeRuntimeConfig(llvm::Value* runtime_config) {
+        native_runtime_config = runtime_config;
+    }
+
     //! Set invocation arguments for a separately proven pure, single-member scalar body.
     //! @param object borrowed live receiver
     //! @param class_ctx method's defining class context
@@ -354,6 +360,11 @@ private:
     // Borrowed live execution context, acquired once only in functions using
     // the explicit-context callback ABI; never shared between invocations.
     llvm::Value* fast_runtime_config = nullptr;
+
+    // Only private callback target companions receive this non-null argument.
+    llvm::Value* native_runtime_config = nullptr;
+    // Nullable caller-owned view acquired once for guarded companion calls.
+    llvm::Value* native_call_runtime_config = nullptr;
 
     // Optional live view for cancellation; null at runtime retains the legacy
     // teardown behavior. Distinct from the non-null callback ABI's context.
