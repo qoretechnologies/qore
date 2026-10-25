@@ -372,6 +372,7 @@ private:
     llvm::Value* native_entry_state = nullptr;
     llvm::Value* native_call_entry_state = nullptr;
     llvm::Instruction* native_entry_slots_anchor = nullptr;
+    bool shared_callback_inline_used = false; //!< At most one forced inline site per private specialization
 
     // Optional live view for cancellation; null at runtime retains the legacy
     // teardown behavior. Distinct from the non-null callback ABI's context.
@@ -1669,7 +1670,8 @@ private:
 
     // Call a private native companion with borrowed entry state, retaining the null-context fallback.
     llvm::Value* emitAOTNativeRuntimeCall(const BatchCalleeInfo& info, llvm::Function* fast_fn,
-        const std::vector<llvm::Value*>& call_args, llvm::Module& module, llvm::Function* llvm_func);
+        const std::vector<llvm::Value*>& call_args, llvm::Module& module, llvm::Function* llvm_func,
+        bool inline_shared_callback = false);
 
     //! The storage of the frames of the native calls of the function being lowered, created by the first one
     /** One is enough: a native call's frame is popped before the function makes another call. */

@@ -11507,7 +11507,8 @@ llvm::Value* QoreIRToLLVM::getNativeCallEntryState(llvm::Module& module, llvm::F
 }
 
 llvm::Value* QoreIRToLLVM::emitAOTNativeRuntimeCall(const BatchCalleeInfo& info, llvm::Function* fast_fn,
-        const std::vector<llvm::Value*>& call_args, llvm::Module& module, llvm::Function* llvm_func) {
+        const std::vector<llvm::Value*>& call_args, llvm::Module& module, llvm::Function* llvm_func,
+        bool inline_shared_callback) {
     auto* runtime_entry = info.callback_runtime_config_name.empty() ? nullptr
         : module.getFunction(info.callback_runtime_config_name);
     if (runtime_entry) {
@@ -11535,9 +11536,21 @@ llvm::Value* QoreIRToLLVM::emitAOTNativeRuntimeCall(const BatchCalleeInfo& info,
             runtime_args.insert(runtime_args.begin() + info.num_params + 1,
                 getNativeCallEntryState(module, llvm_func, rc));
         }
+        auto emit_runtime_call = [&]() {
+            auto* call = builder->CreateCall(runtime_entry, runtime_args, "known_callref_rc_result");
+            // Sharing the bounded companion with direct callers can prevent LLVM's previous
+            // single-use callback inlining. Restore one site per private specialization;
+            // ordinary direct callers keep the optimizer's normal cost policy.
+            if (inline_shared_callback && info.callback_runtime_config_entry && info.direct_runtime_config_entry
+                    && !shared_callback_inline_used && runtime_entry != llvm_func
+                    && !q_env_is_set("QORE_DISABLE_AOT_SHARED_CALLBACK_INLINE")) {
+                call->addFnAttr(llvm::Attribute::AlwaysInline);
+                shared_callback_inline_used = true;
+            }
+            return call;
+        };
         if (native_runtime_config) {
-            return builder->CreateCall(runtime_entry, runtime_args,
-                "known_callref_rc_result");
+            return emit_runtime_call();
         } else {
             // Optional acquisition preserves teardown behavior. Only a non-null
             // live view reaches helpers whose explicit-context ABI requires one.
@@ -11547,8 +11560,7 @@ llvm::Value* QoreIRToLLVM::emitAOTNativeRuntimeCall(const BatchCalleeInfo& info,
             builder->CreateCondBr(builder->CreateIsNotNull(rc), supplied, fallback,
                 llvm::MDBuilder(ctx).createBranchWeights(999, 1));
             builder->SetInsertPoint(supplied);
-            auto* supplied_result = builder->CreateCall(runtime_entry, runtime_args,
-                "known_callref_rc_result");
+            auto* supplied_result = emit_runtime_call();
             builder->CreateBr(merge);
             builder->SetInsertPoint(fallback);
             auto* ordinary_result = builder->CreateCall(fast_fn, call_args,
@@ -13228,6 +13240,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     native_call_runtime_config = nullptr;
     native_call_entry_state = nullptr;
     native_entry_slots_anchor = nullptr;
+    shared_callback_inline_used = false;
     loop_runtime_config = nullptr;
     loop_cancel_deferral = nullptr;
     loop_cancel_requested = nullptr;
@@ -28296,7 +28309,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         const bool inline_body = fast_result;
                         if (!fast_result) {
                             fast_result = callee->second.callback_runtime_config_entry
-                                ? emitAOTNativeRuntimeCall(callee->second, fast_fn, call_args, module, llvm_func)
+                                ? emitAOTNativeRuntimeCall(callee->second, fast_fn, call_args, module, llvm_func,
+                                    known_callback_parameter && known_callback_target == variant)
                                 : builder->CreateCall(fast_fn, call_args, "known_callref_result");
                         }
                         endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module);

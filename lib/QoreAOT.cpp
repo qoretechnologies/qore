@@ -15841,6 +15841,13 @@ static bool declareAOTDirectRuntimeEntries(llvm::Module& module,
                 }
                 if (declareAOTNativeRuntimeEntry(module, info, *body->second)) {
                     info.direct_runtime_config_entry = true;
+                    // Inlining the callback site changes the placement of this still-callable
+                    // target. Give shared companions stable minimum alignment without padding
+                    // every ordinary native function.
+                    if (info.callback_runtime_config_entry
+                            && !q_env_is_set("QORE_DISABLE_AOT_SHARED_CALLBACK_INLINE")) {
+                        module.getFunction(info.callback_runtime_config_name)->setAlignment(llvm::Align(16));
+                    }
                     // Callback admission keeps its existing budget. Direct admission adds at most 64
                     // targets and reuses any companion already declared for a callback target.
                     if (++entries == 64) {

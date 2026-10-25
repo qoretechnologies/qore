@@ -22483,3 +22483,117 @@ and extend proven admission to qmods and more signatures. Java parity and a glob
 performance ceiling are not established.
 
 Evidence: [results-aot-direct-runtime-config-macos-arm64.json](results-aot-direct-runtime-config-macos-arm64.json); [all 62 audit checks](audit-aot-direct-runtime-config.md).
+
+
+## Bounded shared callback inlining and target alignment (2026-10-25)
+
+Retain one forced inline site per eligible private callback specialization when its
+native companion is shared with direct callers. This restores callback inlining
+lost after direct RuntimeConfig forwarding. Shared companions receive minimum
+16-byte alignment; ordinary direct calls retain LLVM's normal cost policy.
+QORE_DISABLE_AOT_SHARED_CALLBACK_INLINE disables both changes. Existing same-Program,
+single-variant, zero/unary native-float, context-independent admission and budgets
+remain. No new public/ordinary ABI, serialized metadata or qmod admission. The
+private compiler C++ layout changes. IR/JIT regression coverage is not a speed claim.
+
+The optimized baseline is performance branch 6003182ec6, including develop
+7ecf4fcbab; it is not pure develop. Runtime Release -O3 -DNDEBUG, allocation tracking
+OFF; qcc -O3 --strip-source. Each target measurement uses 4096 items, seed 7,
+one warmup and three 150ms measured windows, randomized before/candidate/disabled
+process order and default/reverse/shuffle-487 layouts. Screen uses three forks;
+confirmation uses five. Report medians of fork means and then layout medians.
+All samples and costs are retained. External load/frequency/thermals are uncontrolled;
+no owned build, test, profile, analysis or edit process ran during timing.
+
+The initial unaligned implementation improved the callback loop 5.24% but repeatedly
+cost about 11% on default-layout direct calls. It was held. A separately planned
+LLVM regeneration diagnostic tried unchanged IR and 16/32/64-byte alignment;
+16 was the smallest tested alignment satisfying its direct/callback gates.
+Regeneration itself moves code, so this was only a lead. A fresh source implementation,
+Release rebuild, qualification and two timing rounds supply the final evidence.
+Four strict diagnostic comparison attempts failed on relocated bytes, literal
+addresses, inter-function padding and a moved data segment; each is preserved.
+The final diagnostic comparison retains instruction operands and compares relocated
+references by contents/segment-relative target, excluding only trailing padding.
+It does not claim byte identity or prove placement effects on every platform.
+
+Final source confirmation:
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate vs before
+|mixed:callback_pipeline|91.141889|91.172678|91.382556|+0.03%
+|original:callback_local_float_result|0.861041|0.859748|0.859961|-0.15%
+|original:callback_local_float_return|0.903565|0.907436|0.891898|+0.43%
+|original:callback_loop_float_return|7.255059|6.857313|7.278918|-5.48%
+|original:direct_float_add|0.831298|0.826664|0.826004|-0.56%
+|original:direct_local_float_result|0.744695|0.738536|0.752954|-0.83%
+|original:direct_local_float_return|0.817168|0.820880|0.812843|+0.45%
+|original:direct_loop_float_return|7.052248|7.110224|7.065676|+0.82%
+|original:result_float_add|0.881644|0.882004|0.883052|+0.04%
+|original:static_float_add|0.824525|0.826790|0.826937|+0.27%
+|original:typed_local_float_unary|0.938266|0.941893|0.936343|+0.39%
+|original:typed_local_int_unary|7.579626|7.817548|7.625720|+3.14%
+
+The callback loop improves 5.48% (7.255059 to 6.857313 ns/item), exceeding 3%
+against before and disabled in every layout in both rounds. Direct loop aggregate
+is +0.82%; every layout stays within the predeclared 3% cost limit against both
+controls. The previous 11% default-layout direct regression does not repeat.
+The integer callback aggregate is +3.14% before/+2.52% disabled; default-layout
+cost repeats at +7.68%/+7.29% with disjoint fork ranges. It remains a measured cost.
+Mixed pipeline confirmation is +0.03% before/-0.23% disabled.
+
+All 55 broad workloads were screened. Every disjoint >3% flag and >=3% aggregate
+cost, plus arithmetic and callback_pipeline, was followed up: seven workloads,
+five forks and three layouts, 315 jobs. Final broad follow-up:
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate vs before
+|arithmetic|1.567618|1.570120|1.563917|+0.16%
+|monomorphic_call|3.859050|3.809585|3.934051|-1.28%
+|boxed_int_method_fallback|34.090216|35.197485|34.783797|+3.25%
+|boxed_float_method_fallback|34.877852|36.497143|36.221286|+4.64%
+|closure_call|19.238052|19.682070|19.633735|+2.31%
+|closure_capture|24.948962|26.356254|26.313172|+5.64%
+|callback_pipeline|90.738443|90.312723|89.811652|-0.47%
+
+Boxed integer/float fallback costs are +3.25%/+4.64% versus before, but +1.19%/+0.76%
+versus disabled. Captured closure cost is +5.64% before/+0.16% disabled; its default,
+reverse and shuffled before ranges remain disjoint. The float fallback also flags
+all layouts; integer fallback flags shuffled layout. Closure-call and monomorphic
+screen flags do not repeat. All broad optimized function bodies match controls;
+compiler/runtime placement remains a possible cause, not an established explanation.
+These repeated costs remain part of the authorized broader tradeoff. No overall
+application-throughput improvement is inferred from this targeted optimization.
+
+Fresh optimized Java checkpoint: Temurin 25.0.2+10, JMH 1.37, verified C2 compilation,
+hot helper inlining and consumed results. Three forks, three 300ms warmup and measured
+windows. Layout labels refer to paired Qore executables, not imposed Java code order.
+Different harness overheads remain; numbers are whole-kernel ns/item, not isolated
+call latency.
+
+|!Workload|!Qore AOT ns/item|!Java ns/item|!Qore/Java
+|direct_local_float_return|0.806779|0.629686|1.28x
+|callback_local_float_return|0.895547|0.536909|1.67x
+|direct_local_float_result|0.728519|0.491187|1.48x
+|callback_local_float_result|0.850717|0.492986|1.73x
+|direct_loop_float_return|6.989533|0.668770|10.45x
+|callback_loop_float_return|6.788088|1.581966|4.29x
+
+Default executable text grows 396 bytes (117100 to 117496), with unchanged whole-file
+size 180088 bytes. Ordered layouts add more padding (candidate text 118016/118000).
+The callback consumer grows 308 to 405 ARM64 instructions and 320 to 368 bytes of
+stack; direct caller remains 165 instructions/320 bytes and companion 125/96.
+Minimum 16-byte alignment bounds alignment, not absolute placement or performance.
+
+Final qualification passes 15 fixtures (14 QUnit, one standalone), 35 cases,
+1827 assertions, zero skips, 1110 IR/AOT reference values and all 391 rebuilt qmods.
+The new fixture covers AST/IR/JIT/tiered, O0/O3, enabled/disabled/direct-disabled/
+callback-disabled/entry-state-disabled/null/EH/split variants, live frame cancellation,
+recovery, float edge values and a two-site consumer limited to one forced site.
+Target/broad/Java final preparations check 3510/7047/90 values. All 2538 jobs and
+7614 measured windows across initial, alignment diagnostic and final campaigns
+are independently replayed, with actual parent exits and waited child receipts.
+
+Next investigate native frame setup/teardown while retaining asynchronous stack
+visibility, then extend proven paths to qmods and more scalar signatures. Java
+parity and a global performance ceiling remain unestablished.
+
+Evidence: [results-aot-shared-callback-inline-macos-arm64.json](results-aot-shared-callback-inline-macos-arm64.json); [all 62 audit checks](audit-aot-shared-callback-inline.md).

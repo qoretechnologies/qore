@@ -1,0 +1,83 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class SharedCallbackInlineTest
+
+class SharedCallbackInlineTest inherits QUnit::Test {
+    private {
+        string libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string behavior = get_script_dir() + "/AOTSharedCallbackInline.qr";
+    }
+    constructor() : Test("Bounded shared AOT callback inlining", "1.0", \ARGV) {
+        addTestCase("shared targets preserve frames, cancellation and fallback", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(prefix
+            + "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + (map quote($1), args).join(" "));
+        assertEq(0, result.rc, result.out);
+        return result.out;
+    }
+    private check() {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq("callback-body-target: ok\n", run((qore, "--exec-mode=" + mode, behavior)), mode);
+        }
+        TmpDir dir("qore-shared-callback-inline-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_SHARED_CALLBACK_INLINE=1 ",
+                "QORE_DISABLE_AOT_DIRECT_RUNTIME_CONFIG=1 ",
+                "QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION=1 ",
+                "QORE_DISABLE_AOT_CALLBACK_ENTRY_STATE=1 ",
+                "QORE_CONTROL_AOT_NULL_CALLBACK_RUNTIME_CONFIG=1 ", "QORE_AOT_EH=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/behavior";
+                string generated = run((qcc, level, "--strip-source", "-o", executable, behavior),
+                    prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
+                if (level == "-O0" && !prefix.contains("QCC_SPLIT_THRESHOLD")
+                        && !prefix.contains("QORE_AOT_EH")) {
+                    string attribute;
+                    foreach string line in (generated.split("\n")) {
+                        if (line.startsWith("attributes #") && line.contains("alwaysinline")) {
+                            attribute = line.split(" ")[1];
+                        }
+                    }
+                    bool specialized = !prefix.contains("QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION");
+                    bool selected = specialized && !prefix.contains("QORE_DISABLE_AOT_SHARED_CALLBACK_INLINE")
+                        && !prefix.contains("QORE_DISABLE_AOT_DIRECT_RUNTIME_CONFIG");
+                    int consumers = 0;
+                    foreach string definition in (generated.split("\ndefine ")) {
+                        string header = definition.split("\n")[0];
+                        if (header.contains("_runtime_config(")) {
+                            assertEq(selected, header.contains(" align 16 "), "shared target alignment");
+                        }
+                        if (!header.contains("@bodyHofTwice_") || !header.contains("_cb1_bodyStep_")) {
+                            continue;
+                        }
+                        ++consumers;
+                        int sites = 0;
+                        foreach string line in (definition.split("\n}")[0].split("\n")) {
+                            if (attribute && line.contains("call double @bodyStep_")
+                                    && line.contains("_runtime_config(") && line.contains(") " + attribute)) {
+                                ++sites;
+                            }
+                        }
+                        assertEq(selected ? 1 : 0, sites, "two callback sites share one forced-inline budget");
+                    }
+                    assertEq(specialized ? 1 : 0, consumers);
+                }
+                assertEq("callback-body-target: ok\n", run((executable,)), prefix + level);
+            }
+        }
+    }
+}

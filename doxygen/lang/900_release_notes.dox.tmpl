@@ -252,6 +252,8 @@
     Standalone AOT direct calls to eligible same-program native float loop targets also forward live
     RuntimeConfig and entry state through bounded private entries, preserving ordinary fallback, call frames,
     exceptions, stack checks and cancellation polling.
+    Private callback specializations sharing those targets with direct callers use bounded call-site inlining
+    and minimum target alignment to recover callback performance while retaining runtime observability.
 
     AOT-compiled modules record the AOT runtime identity of the %Qore library that compiled them, and a module
     compiled by a library with a different generated-code contract is refused when it is loaded, with an error that

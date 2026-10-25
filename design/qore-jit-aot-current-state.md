@@ -4625,3 +4625,30 @@ Next recover callback inlining under a bounded code-growth policy, then optimize
 native frame setup/teardown without losing asynchronous stack visibility. Extend
 proven admission to qmods and additional scalar signatures after measurement.
 No global performance ceiling has been established.
+
+
+## Shared callback inlining and target alignment (2026-10-25)
+
+Eligible standalone AOT private callback specializations force at most one call site
+inline when their native companion is shared with direct callers. Shared companions
+receive minimum 16-byte alignment; ordinary direct sites keep LLVM's cost policy.
+QORE_DISABLE_AOT_SHARED_CALLBACK_INLINE disables both. Existing admission bounds,
+frames, live cancellation polls, stack checks, exceptions and null fallback remain.
+Public/ordinary ABI and serialized metadata stay unchanged; private compiler layout
+changes. This does not extend qmod admission.
+
+Fresh Release confirmation recovers callback loop time from 7.255059 to 6.857313
+ns/item (-5.48%). The initial unaligned candidate's repeated 11% direct-layout cost
+is resolved; final direct aggregate is +0.82% with every layout within 3% of both
+controls. Integer callback aggregate costs 3.14%, with default cost 7.68% before/
+7.29% disabled. Broad boxed fallbacks and captured closures remain 3.25-5.64% above
+before, only 0.16-1.19% above disabled. Costs are published under the authorized
+broader tradeoff; mixed pipeline is essentially unchanged.
+
+Optimized Java ratios are 1.28x/1.48x for simple direct unary/result, 1.67x/1.73x
+for callbacks, 10.45x direct loop and 4.29x callback loop. These are whole-kernel
+ns/item on one host. Validation: 1827 assertions, 1110 IR/AOT references, 391 qmods;
+2538 timing jobs/7614 windows including initial and diagnostic trials are retained.
+See RESULTS.md and results-aot-shared-callback-inline-macos-arm64.json for raw evidence,
+code growth, layout costs and all 62 audit checks. Next reduce native-frame overhead
+and investigate qmod/signature coverage; no global ceiling has been established.
