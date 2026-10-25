@@ -11514,7 +11514,7 @@ extern "C" DLLEXPORT __attribute__((aligned(64))) int qore_rt_try_funcref_int_in
     runtime location; the frame restores the caller's when it is popped.  The caller gets the thread's data once
     when it is entered, so pushing and popping, which happen on every such call, make no thread-local lookup.
 */
-class QoreNativeCallStackLocation : public QoreStackLocation {
+class QoreNativeCallStackLocation final : public QoreStackLocation {
 public:
     //! Pushes the frame
     /** @param call_loc the location of the call, or nullptr for the caller's current location: the JIT keeps the

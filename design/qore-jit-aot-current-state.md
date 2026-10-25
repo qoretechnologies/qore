@@ -4656,3 +4656,11 @@ and investigate qmod/signature coverage; no global ceiling has been established.
 ### Develop 54a6a86070 integration checkpoint
 
 The Release merge preserves the branch's SnapshotInt/SnapshotFloat IDs and reads upstream v21 return-check opcode 409 using the header maximum to distinguish the histories. Eight binary round trips cover v20/v21/v22 snapshots and old/new return checks. Native cache integration keeps weak-reference reads separate from raw storage ownership. Apple embedded-runtime tests and static AOT linking include the frameworks used by module loading. See `bench/runtime-comparison/results-merge-54a6.json` and its audit for selected regression evidence. Prior performance numbers precede this merge.
+
+## Native frame destructor devirtualization (2026-10-25)
+
+The internal native-call frame class is final, allowing the removal helper to perform the existing restoration directly. Publication, reader synchronization and exception/stack behavior remain live; exported signatures and frame layout are unchanged. This removes virtual destructor dispatch in the shared native AOT/JIT helper; AOT measurements are confirmed, with no measured IR/JIT speedup claim.
+
+Against optimized merged performance b83c2cdac1, direct loop time falls 6.822840 to 6.578522 ns/item (-3.58%), callback loop 6.577569 to 6.343294 (-3.56%). Both improve in all three layouts in two independent rounds. A 52-workload screen finds no repeated >3% disjoint-range cost; temporary_hash +3.88% screens at +0.77% on repeat. Fresh optimized Java ratios are 1.41x/1.65x for simple direct unary/result, 1.84x for callbacks, 11.15x for direct loop bodies and 4.45x for callback loop bodies. These are whole-kernel observations on one host, not isolated latency or pure-develop comparisons.
+
+Seventeen targeted cases/451 assertions, 1110 IR/AOT references, 391 qmods, 4680 frozen-runtime reference checks and 90 Java references pass. All 1134 timing jobs/3402 windows are retained. See RESULTS.md, results-native-frame-final-macos-arm64.json and audit-native-frame-final.md. Next examine preparation of immutable frame entry metadata and call names, then qmod and scalar-signature coverage. No global ceiling is established.

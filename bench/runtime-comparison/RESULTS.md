@@ -22603,3 +22603,84 @@ Evidence: [results-aot-shared-callback-inline-macos-arm64.json](results-aot-shar
 The optimized merge retains snapshots 409/410, appends CheckReturnValue 411, and distinguishes upstream v21 opcode 409 from older performance artifacts using the header maximum. Eight binary round trips and phase0 metadata checks pass. Native local-cache conflicts preserve weak-target reads and raw ownership operations. Apple embedded-runtime tests and static AOT linking include the required system frameworks.
 
 Qualification: 34 passing QUnit fixtures, 460 reported cases (449 executed), 11493 assertions, 11 skips; 391 qmods and 1110 IR/AOT reference checks. Presentation passed with source fallback for separately installed GrpcUtil and SalesforcePubSubDataProvider qmods built with the old metadata format; rebuild those external qmods after installing. Schema digests were refreshed after exact agreement for 276 actions across native/source execution and upstream sources on old/current runtimes, with the parent matching its saved reference. These are correctness checks, not fresh timing. The earlier Java and before/after numbers remain pre-merge measurements. [Audit](audit-merge-54a6.md); [evidence](results-merge-54a6.json).
+
+## Native frame destructor devirtualization (2026-10-25)
+
+The internal QoreNativeCallStackLocation class is final. The explicit destruction helper now restores the frame directly instead of loading the vtable and branching indirectly. Frame publication, asynchronous-reader synchronization, restoration order, stack checks, cancellation and exceptions are preserved. Public helper signatures and measured frame layout remain unchanged. The helper is shared by native AOT/JIT paths; these performance measurements cover AOT only.
+
+Baseline: optimized merged performance commit b83c2cdac1, not pure develop. Release uses -O3 -DNDEBUG, allocation tracking off, Apple M4/macOS arm64. Identical AOT executables run against frozen before/candidate runtimes across default, reverse and shuffled symbol orders. Each screen has three forks, one warmup and three measured 150 ms windows per fork, 4096 items and seed 7; independent confirmation has five forks. Values are median fork means, then median across layouts. Whole-kernel ns/item, not isolated call latency. No exclusive-host, frequency or thermal control.
+
+|!Confirmed target/control|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_loop_float_return|6.577569|6.343294|-3.56%
+|float:direct_loop_float_return|6.822840|6.578522|-3.58%
+|micro:temporary_hash|326.637952|329.158804|+0.77%
+
+The 52-workload screen found temporary_hash +3.88% in the aggregate; confirmation is +0.77%. No >3% disjoint-fork-range cost was flagged in either round. All smaller observed differences remain below; they are observations from the screen, not separate confirmed effects.
+
+|!Screen workload|!Before ns/item|!Candidate ns/item|!Change
+|float:direct_local_float_return|0.794833|0.793222|-0.20%
+|float:callback_local_float_return|0.875671|0.877160|+0.17%
+|float:direct_local_float_result|0.731035|0.744080|+1.78%
+|float:callback_local_float_result|0.857102|0.829013|-3.28%
+|float:direct_loop_float_return|6.826858|6.560999|-3.89%
+|float:callback_loop_float_return|6.573043|6.343249|-3.50%
+|float:direct_float_add|0.796411|0.801357|+0.62%
+|float:static_float_add|0.796276|0.805924|+1.21%
+|float:typed_local_int_unary|6.979487|7.005016|+0.37%
+|float:typed_local_float_unary|0.907721|0.908859|+0.13%
+|float:result_float_add|0.859539|0.861231|+0.20%
+|micro:arithmetic|1.514590|1.518177|+0.24%
+|micro:direct_call|1.518689|1.521676|+0.20%
+|micro:method_call|1.595626|1.598235|+0.16%
+|micro:indirect_call|7.615701|7.591716|-0.31%
+|micro:polymorphic_call|24.149832|23.768027|-1.58%
+|micro:polymorphic_expression_call|11.135488|11.230803|+0.86%
+|micro:monomorphic_call|4.119628|4.110951|-0.21%
+|micro:optional_method_call|11.059691|11.097981|+0.35%
+|micro:polymorphic_float_call|23.756390|23.880087|+0.52%
+|micro:polymorphic_float_expression_call|11.313167|11.095849|-1.92%
+|micro:monomorphic_float_call|4.086367|4.114010|+0.68%
+|micro:optional_float_method_call|11.123391|11.212106|+0.80%
+|micro:boxed_float_method_call|20.120426|20.177965|+0.29%
+|micro:dynamic_int_result_call|11.000373|10.988524|-0.11%
+|micro:dynamic_int_result_fallback|20.891308|21.044671|+0.73%
+|micro:boxed_int_method_call|16.925921|16.927803|+0.01%
+|micro:boxed_int_method_fallback|32.389583|33.282119|+2.76%
+|micro:boxed_float_method_fallback|35.401220|34.457557|-2.67%
+|micro:boxed_int_method_effect|87.977503|89.558080|+1.80%
+|micro:dynamic_float_result_call|11.765005|11.921672|+1.33%
+|micro:indirect_wide|7.458593|7.348375|-1.48%
+|micro:indirect_float|7.959573|7.984702|+0.32%
+|micro:indirect_int_result|7.424093|7.404326|-0.27%
+|micro:indirect_float_result|7.839117|7.825981|-0.17%
+|micro:indirect_tagged_float|7.775099|7.707930|-0.86%
+|micro:indirect_branch_float|8.042141|7.973682|-0.85%
+|micro:indirect_affine|7.662050|7.750793|+1.16%
+|micro:indirect_affine_wide|7.502603|7.392518|-1.47%
+|micro:indirect_branch_int|7.383207|7.432759|+0.67%
+|micro:dispatch_control|1.859289|1.868783|+0.51%
+|micro:list_read|2.846078|2.842756|-0.12%
+|micro:list_build|28.456912|28.691521|+0.82%
+|micro:list_mutate|192.504906|194.291181|+0.93%
+|micro:temporary_list|1.622297|1.627437|+0.32%
+|micro:temporary_hash|330.513200|343.338456|+3.88%
+|micro:closure_call|19.150190|19.067526|-0.43%
+|micro:closure_capture|24.999593|24.534722|-1.86%
+|mixed:csv_report|947.038960|955.543453|+0.90%
+|mixed:object_orders|1728.744441|1751.030816|+1.29%
+|mixed:callback_pipeline|85.949136|86.740648|+0.92%
+|mixed:text_index|1314.584716|1315.900530|+0.10%
+
+Fresh Java checkpoint: Temurin 25.0.2+10, JMH 1.37, C2 and hot helper inlining verified in separate untimed diagnostics; returned checksums consumed. Three fresh forks for each paired Qore layout, three warmup and three measured 300 ms windows, 4096 items/seed 7. Java layout names identify the Qore pairing; Java symbol order is not forced.
+
+|!Kernel|!Qore AOT ns/item|!Java C2 ns/item|!Qore/Java
+|direct_local_float_return|0.780592|0.552602|1.41x
+|callback_local_float_return|0.867691|0.472660|1.84x
+|direct_local_float_result|0.732685|0.445161|1.65x
+|callback_local_float_result|0.821630|0.447412|1.84x
+|direct_loop_float_return|6.553138|0.587564|11.15x
+|callback_loop_float_return|6.311443|1.419863|4.45x
+
+Validation: 391 rebuilt qmods; seven targeted QUnit runs (17 cases, 451 assertions, zero skips), 1110 IR/AOT references, 2340 references per frozen runtime and 90 Java references. All 1134 waited timing jobs/3402 windows are retained and independently replayed. This is a measured incremental improvement; Java parity and a global performance ceiling have not been established. Next investigate native frame entry metadata preparation and repeated call-name readiness checks while preserving lifetime and asynchronous visibility.
+
+[Evidence](results-native-frame-final-macos-arm64.json); [all 62 audit checks](audit-native-frame-final.md).
