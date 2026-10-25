@@ -6511,6 +6511,13 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                 case QoreIROpcode::PushTempMark:
                 case QoreIROpcode::DiscardTemps:
                     break;
+                case QoreIROpcode::AddAssignFloat:
+                    // Like AddFloat, this operates on SSA values; the separate local load/store
+                    // checks still prove that no caller-context slot is accessed.
+                    if (q_env_is_set("QORE_DISABLE_AOT_FLOAT_BODY_FAST_PATHS")) {
+                        return false;
+                    }
+                    break;
                 case QoreIROpcode::ConstString:
                 case QoreIROpcode::ToString:
                 case QoreIROpcode::AddAny:
@@ -15834,7 +15841,11 @@ static bool declareAOTCallbackFastEntries(llvm::Module& module,
                     if (target == callees.end() || !target_uvb || target_uvb->pgm != uvb->pgm
                             || !target->second.single_variant_function || target->second.preloaded_fast_entry
                             || !target->second.approach_b_eligible || !target->second.context_independent_fast_entry
-                            || target->second.generic_specialized_fast_entry || !target->second.float_expression
+                            || target->second.generic_specialized_fast_entry
+                            // A context-independent body can use its ordinary native fast entry when
+                            // no expression summary applies; that path retains the frame and exception check.
+                            || (!target->second.float_expression
+                                && q_env_is_set("QORE_DISABLE_AOT_FLOAT_BODY_FAST_PATHS"))
                             || target->second.return_kind != BatchCalleeReturnKind::NativeFloat
                             || target->second.num_params > 1 || !local || local->closureUse() || local->isTopLevel()
                             || QoreTypeInfo::isReference(local->getTypeInfo()) || body->second->isAstVisibleLocal(local)

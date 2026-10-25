@@ -4482,3 +4482,38 @@ contain loops and therefore have no expression summary. The complex callback
 still costs about 148 ns/item. Preserve its actual call-frame, stack, cancellation
 and exception semantics. Prior combined-poll and general proved-clear sink
 experiments were rejected; neither is revived by this change. No global ceiling.
+
+
+## Native float callback body targets (2026-10-25)
+
+Bounded standalone callback entries now admit known context-independent native
+zero/unary float targets without expression summaries. Ordinary native call-frame,
+exception, stack and cancellation behavior remains. AddAssignFloat is admitted
+by the context proof as SSA arithmetic, with existing independent local-safety
+checks unchanged. QORE_DISABLE_AOT_FLOAT_BODY_FAST_PATHS disables both additions.
+Same-Program, immutable-reference, signature and code-growth limits remain.
+No public helper ABI or serialization change; IR/JIT execution is unchanged.
+
+Optimized confirmation: complex callbacks 146.749303 to 12.775376 ns/item
+(11.49x), typed float callbacks 7.904420 to 0.879619 (8.99x), repeatable across
+three layouts versus before and disabled. Three specific targeted layout costs
+repeat (about 7% integer callback, 7% float-result, 17% lexical direct-result).
+Temporary hashes remain +5.90% versus before / +4.16% versus disabled across
+layouts. Candidate/disabled default micro file-backed sections match before relocation and
+use the same runtime; the cause of that observed cost remains unresolved. These
+costs are retained under the authorized workload tradeoff, not discarded noise.
+
+Fresh optimized Java comparison: simple direct unary/zero-argument loops take
+1.40x/1.61x Java time; corresponding callbacks 1.73x/1.81x. Loop-containing
+functions take 21.92x direct / 8.93x callback time. Whole-kernel comparisons,
+not isolated call latency. No Java parity or production-wide throughput claim.
+Release passes 19 fixtures, 7460 assertions, 391 qmods, 1110 IR/AOT references,
+with eight Linux skips. 2007 jobs / 6021 timing windows independently replayed;
+see RESULTS.md and results-aot-float-callback-bodies-macos-arm64.json.
+
+Next examine a private native entry that forwards live RuntimeConfig and native
+entry data instead of reacquiring them through TLS on each same-Program call.
+The loop-callback profile still samples context/entry acquisition, stack checking
+and named call-frame helpers. Preserve current stack, cancellation and exception
+contracts, and retain ordinary entries for unsupported/cross-Program paths.
+No global performance ceiling has been established.
