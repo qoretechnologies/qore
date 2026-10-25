@@ -3359,20 +3359,26 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     // options (e.g., PO_STRICT_ARGS from an outer %modern program leaking
     // into a sub-program without it).
     // RAII guard ensures restore even if an unexpected C++ exception propagates.
+    // As with QoreProgramLocationHelper, the stack is checked when the location is set, with the caller's exception
+    // sink, and not when it is restored
     class RuntimePoGuard {
     public:
-        RuntimePoGuard(const QoreParseOptions& new_po) {
-            swap_runtime_statement_location(nullptr, nullptr, nullptr, new_po, saved_stmt, saved_loc, saved_po);
+        //! sets the parse options; raises STACK-LIMIT-EXCEEDED in xsink if the stack limit has been reached
+        RuntimePoGuard(ExceptionSink* xsink, const QoreParseOptions& new_po) {
+            swap_runtime_statement_location(xsink, nullptr, nullptr, new_po, saved_stmt, saved_loc, saved_po);
         }
         ~RuntimePoGuard() {
-            swap_runtime_statement_location(nullptr, saved_stmt, saved_loc, saved_po, saved_stmt, saved_loc, saved_po);
+            update_runtime_statement_location(saved_stmt, saved_loc, saved_po);
         }
     private:
         const AbstractStatement* saved_stmt = nullptr;
         const QoreProgramLocation* saved_loc = nullptr;
         QoreParseOptions saved_po;
     };
-    RuntimePoGuard po_guard(priv->pwo.parse_options);
+    RuntimePoGuard po_guard(xsink, priv->pwo.parse_options);
+    if (*xsink) {
+        return QoreValue();
+    }
     return priv->sb.exec(xsink);
 }
 

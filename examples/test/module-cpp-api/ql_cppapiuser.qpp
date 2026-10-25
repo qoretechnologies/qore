@@ -27,6 +27,7 @@
 #include "cppapiuser-module.h"
 #include <qore/OutputStream.h>
 
+#include <alloca.h>
 #include <atomic>
 #include <cerrno>
 #include <climits>
@@ -1253,6 +1254,34 @@ int cpp_api_thread_stack_used() [flags=CONSTANT;dom=THREAD_INFO] {
 */
 int cpp_api_thread_stack_remaining() [flags=CONSTANT;dom=THREAD_INFO] {
     return static_cast<int64>(q_thread_stack_remaining());
+}
+
+//! calls code with about the given number of bytes of stack left before the current thread's stack limit
+/** The stack between the current position and \a remaining bytes before the stack limit is consumed before the code
+    is called, so a test can run code with a given amount of stack left: the code is called with \a remaining bytes
+    left, less the stack that the call itself uses
+
+    @param remaining the number of bytes of stack to leave before the stack limit
+    @param c the code to call
+
+    @return the value returned by the code
+
+    @throw STACK-REMAINING-ERROR \a remaining is negative, or less stack than \a remaining bytes is left
+*/
+auto cpp_api_call_with_stack_remaining(int remaining, code c) [dom=THREAD_CONTROL] {
+    int64 left = static_cast<int64>(q_thread_stack_remaining());
+    if (remaining < 0 || left < remaining) {
+        xsink->raiseException("STACK-REMAINING-ERROR", "cannot leave " QLLD " bytes of stack before the stack limit; "
+            QLLD " bytes are left", remaining, left);
+        return QoreValue();
+    }
+    size_t consumed = static_cast<size_t>(left - remaining);
+    if (consumed) {
+        // the stack is consumed until this function returns; the write keeps the allocation
+        volatile char* buf = static_cast<volatile char*>(alloca(consumed));
+        buf[0] = 0;
+    }
+    return c->execValue(nullptr, xsink);
 }
 
 //! creates a child process with the C library's fork() (not Qore's fork()) that runs Qore code, and waits for it

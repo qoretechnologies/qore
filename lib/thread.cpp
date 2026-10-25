@@ -2550,7 +2550,8 @@ int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatemen
     td->runtime_po = apply_runtime_po_override(td, po);
 
 #ifdef QORE_MANAGE_STACK
-    return check_stack_intern(xsink, td);
+    // a caller that gives no exception sink, such as one that restores a location, cannot receive the exception
+    return xsink ? check_stack_intern(xsink, td) : 0;
 #else
     return 0;
 #endif
