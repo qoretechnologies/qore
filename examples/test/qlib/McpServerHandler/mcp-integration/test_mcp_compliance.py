@@ -18,12 +18,12 @@ Example:
 
 import asyncio
 import sys
+import time
 import json
 import traceback
 import argparse
 from dataclasses import dataclass
 from typing import Optional, List, Any
-from datetime import datetime
 from contextlib import asynccontextmanager
 
 try:
@@ -123,16 +123,17 @@ class McpComplianceTest:
 
     async def _timed_test(self, name: str, test_func):
         """Run a test and record timing."""
-        start = datetime.now()
+        # a monotonic clock: a local wall-clock time goes back an hour when daylight saving time ends
+        start = time.monotonic()
         try:
             await test_func()
-            duration = (datetime.now() - start).total_seconds() * 1000
+            duration = (time.monotonic() - start) * 1000
             self._add_result(name, True, "OK", duration)
         except AssertionError as e:
-            duration = (datetime.now() - start).total_seconds() * 1000
+            duration = (time.monotonic() - start) * 1000
             self._add_result(name, False, str(e), duration)
         except Exception as e:
-            duration = (datetime.now() - start).total_seconds() * 1000
+            duration = (time.monotonic() - start) * 1000
             self._add_result(name, False, f"Exception: {e}", duration)
             traceback.print_exc()
 
