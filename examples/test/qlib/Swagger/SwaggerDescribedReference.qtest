@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires Swagger
+%requires json
+%exec-class SwaggerDescribedReferenceTest
+
+#! A property written as {allOf: [{$ref: X}]} beside a description has X's type, with X's name
+/** Swagger 2.0 ignores the siblings of a \c "$ref", so a property of a reusable object type that has a description
+    of its own is written as a one-member \c allOf of the reference.  Such a property accepts what \c X accepts: its
+    type is \c X's type, and its description is the field's.
+*/
+class SwaggerDescribedReferenceTest inherits QUnit::Test {
+    constructor() : Test("Swagger described references", "1.0", \ARGV) {
+        addTestCase("a described reference has the type of the definition it refers to", \typeTest());
+        addTestCase("the field keeps what the use declares", \fieldTest());
+        addTestCase("x-nullable gives the \"or nothing\" variant of the referenced type", \nullableTest());
+        addTestCase("same-named properties referring to different definitions have different types",
+            \distinctDefinitionsTest());
+        addTestCase("the referenced definition's required properties stay required", \requiredTest());
+        addTestCase("a schema with constraints of its own beside the reference has a type of its own",
+            \ownConstraintsTest());
+        addTestCase("a definition that only refers to another one has its type", \aliasTest());
+        addTestCase("a schema referring back to itself through a described reference", \recursionTest());
+        set_return_value(main());
+    }
+
+    typeTest() {
+        SwaggerSchema doc = document();
+        AbstractDataProviderType chunk = type(doc, "Chunk");
+        AbstractDataProviderType span = fieldType(chunk, "pageSpan");
+        assertEq("*ChunkSpan", span.getName(), "the type has the referenced definition's name");
+        assertTrue(span === doc.definitions.ChunkSpan.getDataType(False),
+            "an optional property has the referenced definition's \"or nothing\" type");
+        assertTrue(fieldType(chunk, "span") === doc.definitions.ChunkSpan.getDataType(),
+            "a required property has the referenced definition's type");
+        assertTrue(fieldType(chunk, "typed") === span, "\"type\": \"object\" beside the reference adds nothing");
+        assertTrue(fieldType(fieldType(chunk, "header"), "pageSpan") === span,
+            "two described references to one definition have one type");
+    }
+
+    fieldTest() {
+        SwaggerSchema doc = document();
+        hash<string, AbstractDataField> fields = type(doc, "Chunk").getFields();
+        assertEq("Page span of the chunk.", fields.pageSpan.getDescription(), "the field has the use's description");
+        assertEq("Page span of the header.",
+            fieldType(type(doc, "Chunk"), "header").getFields().pageSpan.getDescription());
+        assertEq("Page where chunk starts", fields.pageSpan.getType().getFields().pageStart.getDescription(),
+            "the fields of the type are the referenced definition's");
+        assertTrue(fields.readonly.getType() === doc.definitions.ChunkSpan.getDataType(False),
+            "a read-only use has the referenced definition's type");
+        # read-only is a property of the use, which the schema declaring the property validates
+        SchemaObject chunk = doc.definitions.Chunk;
+        hash<auto> value = {"span": {"pageStart": 1}, "readonly": {"pageStart": 2}};
+        assertThrows("SCHEMA-VALIDATION-ERROR", "read-only", \chunk.check(), (False, True, "/chunks", "POST",
+            "body", \value));
+    }
+
+    nullableTest() {
+        SwaggerSchema doc = document();
+        AbstractDataField field = type(doc, "Chunk").getFields().nullable;
+        assertTrue(field.getType() === doc.definitions.ChunkSpan.getDataType(False),
+            "a required x-nullable property has the referenced definition's \"or nothing\" type");
+        assertTrue(field.getAttributes().required, "and the field stays required");
+    }
+
+    distinctDefinitionsTest() {
+        SwaggerSchema doc = document();
+        AbstractDataProviderType chunk_span = fieldType(type(doc, "Chunk"), "pageSpan");
+        AbstractDataProviderType block_span = fieldType(type(doc, "Block"), "pageSpan");
+        assertEq("*BlockSpan", block_span.getName(),
+            "a same-named property referring to another definition has that definition's type and name");
+        assertFalse(chunk_span === block_span);
+        assertEq("Page where block starts", block_span.getFields().pageStart.getDescription());
+        assertNeq(DataProviderPresentation::typePresentationIdentity(chunk_span),
+            DataProviderPresentation::typePresentationIdentity(block_span));
+    }
+
+    requiredTest() {
+        SwaggerSchema doc = document();
+        AbstractDataProviderType span = fieldType(type(doc, "Chunk"), "pageSpan");
+        assertTrue(span.getFields().pageStart.isMandatory(),
+            "a property the referenced definition requires is mandatory in the type");
+        assertFalse(span.getFields().pageEnd.isMandatory());
+        assertThrows("MISSING-VALUE-ERROR", "pageStart", \span.acceptsValue(), {"pageEnd": 2});
+    }
+
+    ownConstraintsTest() {
+        SwaggerSchema doc = document();
+        hash<string, AbstractDataField> fields = type(doc, "Chunk").getFields();
+        assertEq("*extended", fields.extended.getType().getName());
+        assertEq(("pageEnd", "pageStart", "pageTotal"), sort(keys fields.extended.getType().getFields()),
+            "properties of its own extend the referenced definition");
+        assertEq("*required", fields.required.getType().getName());
+        assertTrue(fields.required.getType().getFields().pageEnd.isMandatory(),
+            "a required set of its own");
+    }
+
+    aliasTest() {
+        SwaggerSchema doc = document();
+        assertTrue(type(doc, "Alias") === type(doc, "ChunkSpan"),
+            "a definition that only refers to another definition has that definition's type");
+        assertEq("ChunkSpan", type(doc, "Alias").getName());
+    }
+
+    recursionTest() {
+        SwaggerSchema doc = document();
+        AbstractDataProviderType node = type(doc, "Node");
+        assertTrue(fieldType(node, "parent") === doc.definitions.Node.getDataType(False),
+            "a property referring back to the definition declaring it has that definition's \"or nothing\" type");
+        assertEq("Parent node.", node.getFields().parent.getDescription());
+    }
+
+    #! Returns a document with described references to definitions with the same property names
+    private static SwaggerSchema document() {
+        hash<auto> span_ref = {"allOf": ({"$ref": "#/definitions/ChunkSpan"},)};
+        return SwaggerLoader::fromString(make_json({
+            "swagger": "2.0", "info": {"title": "Described references", "version": "1"}, "paths": {},
+            "definitions": {
+                "ChunkSpan": {"type": "object", "required": ("pageStart",), "properties": {
+                    "pageStart": {"type": "integer", "description": "Page where chunk starts"},
+                    "pageEnd": {"type": "integer", "description": "Page where chunk ends"},
+                }},
+                "BlockSpan": {"type": "object", "properties": {
+                    "pageStart": {"type": "integer", "description": "Page where block starts"},
+                }},
+                "Alias": {"allOf": ({"$ref": "#/definitions/ChunkSpan"},)},
+                "Node": {"type": "object", "properties": {
+                    "name": {"type": "string"},
+                    "parent": {"allOf": ({"$ref": "#/definitions/Node"},), "description": "Parent node."},
+                }},
+                "Chunk": {"type": "object", "required": ("span", "nullable"), "properties": {
+                    "pageSpan": span_ref + {"description": "Page span of the chunk."},
+                    "span": span_ref + {"description": "The required span of the chunk."},
+                    "typed": span_ref + {"description": "Typed.", "type": "object"},
+                    "header": {"type": "object", "properties": {
+                        "pageSpan": span_ref + {"description": "Page span of the header."},
+                    }},
+                    "readonly": span_ref + {"description": "Read only.", "readOnly": True,
+                        "example": {"pageStart": 7}},
+                    "nullable": span_ref + {"description": "Nullable.", "x-nullable": True},
+                    "extended": span_ref + {"description": "Extended.",
+                        "properties": {"pageTotal": {"type": "integer"}}},
+                    "required": span_ref + {"description": "Required.", "required": ("pageEnd",)},
+                }},
+                "Block": {"type": "object", "properties": {
+                    "pageSpan": {"allOf": ({"$ref": "#/definitions/BlockSpan"},),
+                        "description": "Page span of the block."},
+                }},
+            },
+        }), True);
+    }
+
+    #! Returns the type of a definition
+    private static AbstractDataProviderType type(SwaggerSchema doc, string definition) {
+        return doc.definitions{definition}.getDataType();
+    }
+
+    #! Returns the type of a field of a type
+    private static AbstractDataProviderType fieldType(AbstractDataProviderType type, string field) {
+        return type.getFields(){field}.getType();
+    }
+}

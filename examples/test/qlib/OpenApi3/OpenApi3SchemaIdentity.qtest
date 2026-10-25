@@ -46,8 +46,8 @@ class OpenApi3SchemaIdentityTest inherits QUnit::Test {
         AbstractDataProviderType chunk_span = fieldType(type(doc, "Chunk"), "pageSpan");
         AbstractDataProviderType block_span = fieldType(type(doc, "Block"), "pageSpan");
         AbstractDataProviderType header_span = fieldType(fieldType(type(doc, "Chunk"), "header"), "pageSpan");
-        assertEq("pageSpan", chunk_span.getName().substr(-8),
-            "the type of a described reference is built for the property");
+        assertEq("*ChunkSpan", chunk_span.getName(),
+            "the type of a described reference is the type of the schema it refers to");
         assertEq("#/components/schemas/ChunkSpan", chunk_span.getSchemaIdentity());
         assertEq("#/components/schemas/BlockSpan", block_span.getSchemaIdentity(),
             "a described reference to another schema with the same name and properties has its own identity");

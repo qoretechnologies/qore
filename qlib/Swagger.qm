@@ -145,6 +145,10 @@ RestHandler handler(NOTHING, swagger);
       (@ref RestSchemaValidator::AbstractRestSchemaObject::getSchemaIdentity() "getSchemaIdentity()"): a definition
       by its name, a schema that only adds to one schema it refers to by that schema, and a schema declared in place
       by its location below the schema or parameter that declares it
+    - a property that only describes a use of the object definition it refers to, a one-member \c allOf of a
+      \c "$ref" beside a description, an example, \c readOnly or vendor extensions such as \c x-nullable, has the
+      definition's type, with its name, and the description is the field's; it had a copy of the type named after
+      the property, in which the definition's required properties were optional
     - fixed data types and fields depending on the order in which they were first requested: the mandatory and
       optional variants of a type or field are each built from the schema instead of one being copied from the
       other, so their names, null handling and required attributes are always what the schema specifies; a
@@ -3900,6 +3904,24 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
 
     private {
         SwaggerSchema swagger;
+
+        #! If the schema only describes a use of the one object schema it refers to; see isDescribedReference()
+        bool described_reference = False;
+
+        #! The keywords that describe a use of a schema rather than the values the schema accepts
+        /** Beside these, only vendor extensions (\c "x-...") and a \c type naming the referenced schema's own type
+            leave a one-member \c allOf of a \c "$ref" the schema it refers to; see isDescribedReference()
+        */
+        const ReferenceUseKeywords = {
+            "allOf": True,
+            "description": True,
+            "title": True,
+            "example": True,
+            "default": True,
+            "readOnly": True,
+            "externalDocs": True,
+            "xml": True,
+        };
     }
 
     #! private constructor; use newSchemaObject() instead
@@ -4014,6 +4036,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                         # properties are the referenced schema's
                         if (allOfList.size() == 1) {
                             schema_identity = so.getSchemaIdentity() ?? schema_identity;
+                            described_reference = SchemaObject::isDescribedReference(oh, so);
                         }
                     } else if (val.type == "object" && val.properties) {
                         addProperties(val.properties, opt_flags);
@@ -4100,6 +4123,56 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     AbstractDataProviderType getSchemaType(string path, string typestr, *string format,
             *AbstractSchemaObject arrayItems, bool required) {
         return swagger.getType(path, typestr, format, arrayItems, required);
+    }
+
+    #! Returns the data type for the schema
+    /** A described reference (see isDescribedReference()) has the type of the schema it refers to; each variant is
+        that schema's own variant, which it builds from itself.
+    */
+    AbstractDataProviderType getDataType(bool required = True, *object rest) {
+        if (!described_reference) {
+            return AbstractRestSchemaObject::getDataType(required, rest);
+        }
+        if (*AbstractDataProviderType t = getReplacedDataType(required)) {
+            return t;
+        }
+        if (required) {
+            if (!dataType) {
+                setCachedDataType(True, allOf[0].getDataType(True, rest));
+            }
+            return dataType;
+        }
+        if (!orNothingDataType) {
+            setCachedDataType(False, allOf[0].getDataType(False, rest));
+        }
+        return orNothingDataType;
+    }
+
+    #! Returns @ref True if a schema only describes a use of the one object schema it refers to
+    /** A schema declared as \c {allOf: [{$ref: X}]}, beside nothing but what describes its use - a description, an
+        example, a default, \c readOnly, documentation and vendor extensions such as \c x-nullable - is how a
+        property of a reusable type is described, because the siblings of a \c "$ref" are ignored.  It accepts what
+        \c X accepts, so its type is \c X's type, with \c X's name; the description is the field's.  A \c type
+        naming \c X's own type adds nothing either.
+
+        Only an object schema is followed: a schema with an \c allOf is validated as an object.
+
+        @param oh the schema as written
+        @param member the schema that the only \c allOf member refers to
+
+        @return @ref True if the schema is a described reference
+    */
+    private static bool isDescribedReference(hash<auto> oh, SchemaObject member) {
+        if (member.type != "object") {
+            return False;
+        }
+        foreach hash<auto> i in (oh.pairIterator()) {
+            if (ReferenceUseKeywords{i.key} || i.key =~ /^x-/ || (i.key == "type" && i.value == member.type)) {
+                continue;
+            }
+            return False;
+        }
+        return True;
     }
 
     #! returns example Qore code for the object

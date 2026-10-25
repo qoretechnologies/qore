@@ -32,7 +32,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--fresh", type=Path, help="fresh recursive extraction root.json")
 args = parser.parse_args()
 root = messages(CATALOGS / "root.json", "root")
-assert len(root) == 4963, "review recursive inventory changes before updating the count"
+assert len(root) == 3973, "review recursive inventory changes before updating the count"
 assert {p.stem for p in CATALOGS.glob("*.json")} == {"root", *LOCALES}
 if args.fresh:
     assert root == messages(args.fresh, "root"), "committed root differs from fresh recursive extraction"

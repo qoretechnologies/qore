@@ -13679,47 +13679,47 @@
           "source": "Placement policy to use when scheduling the deployment.",
           "message": "Placement policy to use when scheduling the deployment."
         },
-        "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.option.cGxhY2VtZW50.union.SGFzaERhdGFUeXBlOipERS5QbGFjZW1lbnRPbmVPZiMxZWIxNGI3YjI2MzMxNDhmNmNhNGQxZTg0NjUyNzhjY2Q0NWMyZDNjNDUxZmIwMTQ1NGRkNDI0MTE3YzdlZmVi.field.aW5saW5l.display_name": {
+        "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.option.cGxhY2VtZW50.union.SGFzaERhdGFUeXBlOipERS5QbGFjZW1lbnRPbmVPZiMyODZiZjNmOWZjZjlmYjVlNGYxMWVhNzdlNGUyZTkwZmNmYjBjMDk2NTVlNWUwNGMyOGMyODdiOWFjODFmYmYx.field.aW5saW5l.display_name": {
           "source": "Inline",
           "message": "Inline"
         },
-        "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.option.cGxhY2VtZW50.union.SGFzaERhdGFUeXBlOipERS5QbGFjZW1lbnRPbmVPZiMxZWIxNGI3YjI2MzMxNDhmNmNhNGQxZTg0NjUyNzhjY2Q0NWMyZDNjNDUxZmIwMTQ1NGRkNDI0MTE3YzdlZmVi.field.aW5saW5l.short_desc": {
+        "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.option.cGxhY2VtZW50.union.SGFzaERhdGFUeXBlOipERS5QbGFjZW1lbnRPbmVPZiMyODZiZjNmOWZjZjlmYjVlNGYxMWVhNzdlNGUyZTkwZmNmYjBjMDk2NTVlNWUwNGMyOGMyODdiOWFjODFmYmYx.field.aW5saW5l.short_desc": {
           "source": "Inline placement parameters evaluated at deploy time",
           "message": "Inline placement parameters evaluated at deploy time"
         },
-        "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.option.cGxhY2VtZW50.union.SGFzaERhdGFUeXBlOipERS5QbGFjZW1lbnRPbmVPZiMxZWIxNGI3YjI2MzMxNDhmNmNhNGQxZTg0NjUyNzhjY2Q0NWMyZDNjNDUxZmIwMTQ1NGRkNDI0MTE3YzdlZmVi.field.aW5saW5l.desc": {
+        "app.VG9nZXRoZXJBaQ.action.ZGVkaWNhdGVkLWNyZWF0ZS1kZXBsb3ltZW50.option.cGxhY2VtZW50.union.SGFzaERhdGFUeXBlOipERS5QbGFjZW1lbnRPbmVPZiMyODZiZjNmOWZjZjlmYjVlNGYxMWVhNzdlNGUyZTkwZmNmYjBjMDk2NTVlNWUwNGMyOGMyODdiOWFjODFmYmYx.field.aW5saW5l.desc": {
           "source": "Inline placement parameters evaluated at deploy time.",
           "message": "Inline placement parameters evaluated at deploy time."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpPcGVuQXBpM0hhc2hEYXRhVHlwZTppbmxpbmUjODQ0N2RlMjc4NjNhYjViZjAwMTIxNmU3YmRjNDY4NTVlMmVhMGU5YjQ1OThlMzNkMDE0Mjg5ZTE5MDA4NzM1OA.field.Y29uc3RyYWludA.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpIYXNoRGF0YVR5cGU6REUuSW5saW5lUGxhY2VtZW50I2VmOGViM2I3YTRjMjAxOWMzYTFlMjZiMDk1NGU0MDQ4YmViODYxODU5YjYxY2IxZWM5ODM1NWExYzI5ZjZjOWY.field.Y29uc3RyYWludA.display_name": {
           "source": "Constraint",
           "message": "Constraint"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpPcGVuQXBpM0hhc2hEYXRhVHlwZTppbmxpbmUjODQ0N2RlMjc4NjNhYjViZjAwMTIxNmU3YmRjNDY4NTVlMmVhMGU5YjQ1OThlMzNkMDE0Mjg5ZTE5MDA4NzM1OA.field.Y29uc3RyYWludA.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpIYXNoRGF0YVR5cGU6REUuSW5saW5lUGxhY2VtZW50I2VmOGViM2I3YTRjMjAxOWMzYTFlMjZiMDk1NGU0MDQ4YmViODYxODU5YjYxY2IxZWM5ODM1NWExYzI5ZjZjOWY.field.Y29uc3RyYWludA.short_desc": {
           "source": "How strictly the regions list is enforced",
           "message": "How strictly the regions list is enforced"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpPcGVuQXBpM0hhc2hEYXRhVHlwZTppbmxpbmUjODQ0N2RlMjc4NjNhYjViZjAwMTIxNmU3YmRjNDY4NTVlMmVhMGU5YjQ1OThlMzNkMDE0Mjg5ZTE5MDA4NzM1OA.field.Y29uc3RyYWludA.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpIYXNoRGF0YVR5cGU6REUuSW5saW5lUGxhY2VtZW50I2VmOGViM2I3YTRjMjAxOWMzYTFlMjZiMDk1NGU0MDQ4YmViODYxODU5YjYxY2IxZWM5ODM1NWExYzI5ZjZjOWY.field.Y29uc3RyYWludA.desc": {
           "source": "How strictly the regions list is enforced.",
           "message": "How strictly the regions list is enforced."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpPcGVuQXBpM0hhc2hEYXRhVHlwZTppbmxpbmUjODQ0N2RlMjc4NjNhYjViZjAwMTIxNmU3YmRjNDY4NTVlMmVhMGU5YjQ1OThlMzNkMDE0Mjg5ZTE5MDA4NzM1OA.field.Y29uc3RyYWludA.allowed-value.c3RyaW5nOkVORk9SQ0VNRU5UX1JFUVVJUkVE.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpIYXNoRGF0YVR5cGU6REUuSW5saW5lUGxhY2VtZW50I2VmOGViM2I3YTRjMjAxOWMzYTFlMjZiMDk1NGU0MDQ4YmViODYxODU5YjYxY2IxZWM5ODM1NWExYzI5ZjZjOWY.field.Y29uc3RyYWludA.allowed-value.c3RyaW5nOkVORk9SQ0VNRU5UX1JFUVVJUkVE.display_name": {
           "source": "Enforcement Required",
           "message": "Enforcement Required"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpPcGVuQXBpM0hhc2hEYXRhVHlwZTppbmxpbmUjODQ0N2RlMjc4NjNhYjViZjAwMTIxNmU3YmRjNDY4NTVlMmVhMGU5YjQ1OThlMzNkMDE0Mjg5ZTE5MDA4NzM1OA.field.Y29uc3RyYWludA.allowed-value.c3RyaW5nOkVORk9SQ0VNRU5UX1BSRUZFUlJFRA.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpIYXNoRGF0YVR5cGU6REUuSW5saW5lUGxhY2VtZW50I2VmOGViM2I3YTRjMjAxOWMzYTFlMjZiMDk1NGU0MDQ4YmViODYxODU5YjYxY2IxZWM5ODM1NWExYzI5ZjZjOWY.field.Y29uc3RyYWludA.allowed-value.c3RyaW5nOkVORk9SQ0VNRU5UX1BSRUZFUlJFRA.display_name": {
           "source": "Enforcement Preferred",
           "message": "Enforcement Preferred"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpPcGVuQXBpM0hhc2hEYXRhVHlwZTppbmxpbmUjODQ0N2RlMjc4NjNhYjViZjAwMTIxNmU3YmRjNDY4NTVlMmVhMGU5YjQ1OThlMzNkMDE0Mjg5ZTE5MDA4NzM1OA.field.cmVnaW9ucw.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpIYXNoRGF0YVR5cGU6REUuSW5saW5lUGxhY2VtZW50I2VmOGViM2I3YTRjMjAxOWMzYTFlMjZiMDk1NGU0MDQ4YmViODYxODU5YjYxY2IxZWM5ODM1NWExYzI5ZjZjOWY.field.cmVnaW9ucw.display_name": {
           "source": "Regions",
           "message": "Regions"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpPcGVuQXBpM0hhc2hEYXRhVHlwZTppbmxpbmUjODQ0N2RlMjc4NjNhYjViZjAwMTIxNmU3YmRjNDY4NTVlMmVhMGU5YjQ1OThlMzNkMDE0Mjg5ZTE5MDA4NzM1OA.field.cmVnaW9ucw.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpIYXNoRGF0YVR5cGU6REUuSW5saW5lUGxhY2VtZW50I2VmOGViM2I3YTRjMjAxOWMzYTFlMjZiMDk1NGU0MDQ4YmViODYxODU5YjYxY2IxZWM5ODM1NWExYzI5ZjZjOWY.field.cmVnaW9ucw.short_desc": {
           "source": "Regions where the deployment is allowed to run",
           "message": "Regions where the deployment is allowed to run"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpPcGVuQXBpM0hhc2hEYXRhVHlwZTppbmxpbmUjODQ0N2RlMjc4NjNhYjViZjAwMTIxNmU3YmRjNDY4NTVlMmVhMGU5YjQ1OThlMzNkMDE0Mjg5ZTE5MDA4NzM1OA.field.cmVnaW9ucw.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxa1pYQnNiM2x0Wlc1MDpIYXNoRGF0YVR5cGU6REUuSW5saW5lUGxhY2VtZW50I2VmOGViM2I3YTRjMjAxOWMzYTFlMjZiMDk1NGU0MDQ4YmViODYxODU5YjYxY2IxZWM5ODM1NWExYzI5ZjZjOWY.field.cmVnaW9ucw.desc": {
           "source": "Regions where the deployment is allowed to run. Multiple regions allow best-effort replica spreading.",
           "message": "Regions where the deployment is allowed to run. Multiple regions allow best-effort replica spreading."
         },
@@ -14771,35 +14771,35 @@
           "source": "Regression evaluation criteria. Mutually exclusive with thresholdCheck.",
           "message": "Regression evaluation criteria. Mutually exclusive with thresholdCheck."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOipyZWdyZXNzaW9uQ2hlY2sjNDlhZjIxMGZjMzIxZjc5NWI1YjZkNGY3Njk1ZTk3MDY4MzY5MjU0NDdiNmYwNmU5NmUwMDQ1NDY0NDBjNWUxOA.field.ZGlyZWN0aW9u.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuUmVncmVzc2lvbkNoZWNrI2U3YTRhYzZlZTUzZjVjZTY3MTM4ZmNmOWI0NzFiYmJhZDA4NWQ0YmZiMzhhYzIzNWQzNjk3N2JkN2EzNzBmODM.field.ZGlyZWN0aW9u.display_name": {
           "source": "Direction",
           "message": "Direction"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOipyZWdyZXNzaW9uQ2hlY2sjNDlhZjIxMGZjMzIxZjc5NWI1YjZkNGY3Njk1ZTk3MDY4MzY5MjU0NDdiNmYwNmU5NmUwMDQ1NDY0NDBjNWUxOA.field.ZGlyZWN0aW9u.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuUmVncmVzc2lvbkNoZWNrI2U3YTRhYzZlZTUzZjVjZTY3MTM4ZmNmOWI0NzFiYmJhZDA4NWQ0YmZiMzhhYzIzNWQzNjk3N2JkN2EzNzBmODM.field.ZGlyZWN0aW9u.short_desc": {
           "source": "Required direction that indicates whether higher or lower metric values are…",
           "message": "Required direction that indicates whether higher or lower metric values are…"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOipyZWdyZXNzaW9uQ2hlY2sjNDlhZjIxMGZjMzIxZjc5NWI1YjZkNGY3Njk1ZTk3MDY4MzY5MjU0NDdiNmYwNmU5NmUwMDQ1NDY0NDBjNWUxOA.field.ZGlyZWN0aW9u.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuUmVncmVzc2lvbkNoZWNrI2U3YTRhYzZlZTUzZjVjZTY3MTM4ZmNmOWI0NzFiYmJhZDA4NWQ0YmZiMzhhYzIzNWQzNjk3N2JkN2EzNzBmODM.field.ZGlyZWN0aW9u.desc": {
           "source": "Required direction that indicates whether higher or lower metric values are worse.",
           "message": "Required direction that indicates whether higher or lower metric values are worse."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOipyZWdyZXNzaW9uQ2hlY2sjNDlhZjIxMGZjMzIxZjc5NWI1YjZkNGY3Njk1ZTk3MDY4MzY5MjU0NDdiNmYwNmU5NmUwMDQ1NDY0NDBjNWUxOA.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOlJFR1JFU1NJT05fRElSRUNUSU9OX0hJR0hFUl9JU19XT1JTRQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuUmVncmVzc2lvbkNoZWNrI2U3YTRhYzZlZTUzZjVjZTY3MTM4ZmNmOWI0NzFiYmJhZDA4NWQ0YmZiMzhhYzIzNWQzNjk3N2JkN2EzNzBmODM.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOlJFR1JFU1NJT05fRElSRUNUSU9OX0hJR0hFUl9JU19XT1JTRQ.display_name": {
           "source": "Regression Direction Higher Is Worse",
           "message": "Regression Direction Higher Is Worse"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOipyZWdyZXNzaW9uQ2hlY2sjNDlhZjIxMGZjMzIxZjc5NWI1YjZkNGY3Njk1ZTk3MDY4MzY5MjU0NDdiNmYwNmU5NmUwMDQ1NDY0NDBjNWUxOA.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOlJFR1JFU1NJT05fRElSRUNUSU9OX0xPV0VSX0lTX1dPUlNF.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuUmVncmVzc2lvbkNoZWNrI2U3YTRhYzZlZTUzZjVjZTY3MTM4ZmNmOWI0NzFiYmJhZDA4NWQ0YmZiMzhhYzIzNWQzNjk3N2JkN2EzNzBmODM.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOlJFR1JFU1NJT05fRElSRUNUSU9OX0xPV0VSX0lTX1dPUlNF.display_name": {
           "source": "Regression Direction Lower Is Worse",
           "message": "Regression Direction Lower Is Worse"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOipyZWdyZXNzaW9uQ2hlY2sjNDlhZjIxMGZjMzIxZjc5NWI1YjZkNGY3Njk1ZTk3MDY4MzY5MjU0NDdiNmYwNmU5NmUwMDQ1NDY0NDBjNWUxOA.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuUmVncmVzc2lvbkNoZWNrI2U3YTRhYzZlZTUzZjVjZTY3MTM4ZmNmOWI0NzFiYmJhZDA4NWQ0YmZiMzhhYzIzNWQzNjk3N2JkN2EzNzBmODM.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.display_name": {
           "source": "Max Regression Percent",
           "message": "Max Regression Percent"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOipyZWdyZXNzaW9uQ2hlY2sjNDlhZjIxMGZjMzIxZjc5NWI1YjZkNGY3Njk1ZTk3MDY4MzY5MjU0NDdiNmYwNmU5NmUwMDQ1NDY0NDBjNWUxOA.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuUmVncmVzc2lvbkNoZWNrI2U3YTRhYzZlZTUzZjVjZTY3MTM4ZmNmOWI0NzFiYmJhZDA4NWQ0YmZiMzhhYzIzNWQzNjk3N2JkN2EzNzBmODM.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.short_desc": {
           "source": "Required maximum allowed regression percentage",
           "message": "Required maximum allowed regression percentage"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOipyZWdyZXNzaW9uQ2hlY2sjNDlhZjIxMGZjMzIxZjc5NWI1YjZkNGY3Njk1ZTk3MDY4MzY5MjU0NDdiNmYwNmU5NmUwMDQ1NDY0NDBjNWUxOA.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuUmVncmVzc2lvbkNoZWNrI2U3YTRhYzZlZTUzZjVjZTY3MTM4ZmNmOWI0NzFiYmJhZDA4NWQ0YmZiMzhhYzIzNWQzNjk3N2JkN2EzNzBmODM.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.desc": {
           "source": "Required maximum allowed regression percentage.",
           "message": "Required maximum allowed regression percentage."
         },
@@ -14843,43 +14843,43 @@
           "source": "Threshold evaluation criteria. Mutually exclusive with regressionCheck.",
           "message": "Threshold evaluation criteria. Mutually exclusive with regressionCheck."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.b3BlcmF0b3I.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.b3BlcmF0b3I.display_name": {
           "source": "Operator",
           "message": "Operator"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.b3BlcmF0b3I.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.b3BlcmF0b3I.short_desc": {
           "source": "Required comparison operator applied to the target metric value",
           "message": "Required comparison operator applied to the target metric value"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.b3BlcmF0b3I.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.b3BlcmF0b3I.desc": {
           "source": "Required comparison operator applied to the target metric value.",
           "message": "Required comparison operator applied to the target metric value."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9HVA.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9HVA.display_name": {
           "source": "Threshold Operator Gt",
           "message": "Threshold Operator Gt"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9HVEU.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9HVEU.display_name": {
           "source": "Threshold Operator Gte",
           "message": "Threshold Operator Gte"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9MVA.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9MVA.display_name": {
           "source": "Threshold Operator Lt",
           "message": "Threshold Operator Lt"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9MVEU.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9MVEU.display_name": {
           "source": "Threshold Operator Lte",
           "message": "Threshold Operator Lte"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.dmFsdWU.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Value"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.dmFsdWU.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.dmFsdWU.short_desc": {
           "source": "Required numeric threshold value",
           "message": "Required numeric threshold value"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOk9wZW5BcGkzSGFzaERhdGFUeXBlOip0aHJlc2hvbGRDaGVjayNiNzc2YjU5ZGI5MTAxNGQ4YzI5ZDRlNjlhYTI1ZmM0NjZlOGMzMzQxMDQyNDFjY2JhOTJjZjdmN2EwOTU1Nzdl.field.dmFsdWU.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxeWIyeHNiM1YwOkhhc2hEYXRhVHlwZToqREUuVGhyZXNob2xkQ2hlY2sjYmU1NzQ1NDY3NDg0OWEwN2EwNjRmMTIwY2EyZDMxMmUwMDQwNTlkYzA0NTFiZjVlYzMyMzkyZjM0NDhhYWQ2MQ.field.dmFsdWU.desc": {
           "source": "Required numeric threshold value.",
           "message": "Required numeric threshold value."
         },
@@ -15123,35 +15123,35 @@
           "source": "Regression evaluation criteria. Mutually exclusive with thresholdCheck.",
           "message": "Regression evaluation criteria. Mutually exclusive with thresholdCheck."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnJlZ3Jlc3Npb25DaGVjayM0OWFmMjEwZmMzMjFmNzk1YjViNmQ0Zjc2OTVlOTcwNjgzNjkyNTQ0N2I2ZjA2ZTk2ZTAwNDU0NjQ0MGM1ZTE4.field.ZGlyZWN0aW9u.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5SZWdyZXNzaW9uQ2hlY2sjZTdhNGFjNmVlNTNmNWNlNjcxMzhmY2Y5YjQ3MWJiYmFkMDg1ZDRiZmIzOGFjMjM1ZDM2OTc3YmQ3YTM3MGY4Mw.field.ZGlyZWN0aW9u.display_name": {
           "source": "Direction",
           "message": "Direction"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnJlZ3Jlc3Npb25DaGVjayM0OWFmMjEwZmMzMjFmNzk1YjViNmQ0Zjc2OTVlOTcwNjgzNjkyNTQ0N2I2ZjA2ZTk2ZTAwNDU0NjQ0MGM1ZTE4.field.ZGlyZWN0aW9u.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5SZWdyZXNzaW9uQ2hlY2sjZTdhNGFjNmVlNTNmNWNlNjcxMzhmY2Y5YjQ3MWJiYmFkMDg1ZDRiZmIzOGFjMjM1ZDM2OTc3YmQ3YTM3MGY4Mw.field.ZGlyZWN0aW9u.short_desc": {
           "source": "Required direction that indicates whether higher or lower metric values are…",
           "message": "Required direction that indicates whether higher or lower metric values are…"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnJlZ3Jlc3Npb25DaGVjayM0OWFmMjEwZmMzMjFmNzk1YjViNmQ0Zjc2OTVlOTcwNjgzNjkyNTQ0N2I2ZjA2ZTk2ZTAwNDU0NjQ0MGM1ZTE4.field.ZGlyZWN0aW9u.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5SZWdyZXNzaW9uQ2hlY2sjZTdhNGFjNmVlNTNmNWNlNjcxMzhmY2Y5YjQ3MWJiYmFkMDg1ZDRiZmIzOGFjMjM1ZDM2OTc3YmQ3YTM3MGY4Mw.field.ZGlyZWN0aW9u.desc": {
           "source": "Required direction that indicates whether higher or lower metric values are worse.",
           "message": "Required direction that indicates whether higher or lower metric values are worse."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnJlZ3Jlc3Npb25DaGVjayM0OWFmMjEwZmMzMjFmNzk1YjViNmQ0Zjc2OTVlOTcwNjgzNjkyNTQ0N2I2ZjA2ZTk2ZTAwNDU0NjQ0MGM1ZTE4.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOlJFR1JFU1NJT05fRElSRUNUSU9OX0hJR0hFUl9JU19XT1JTRQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5SZWdyZXNzaW9uQ2hlY2sjZTdhNGFjNmVlNTNmNWNlNjcxMzhmY2Y5YjQ3MWJiYmFkMDg1ZDRiZmIzOGFjMjM1ZDM2OTc3YmQ3YTM3MGY4Mw.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOlJFR1JFU1NJT05fRElSRUNUSU9OX0hJR0hFUl9JU19XT1JTRQ.display_name": {
           "source": "Regression Direction Higher Is Worse",
           "message": "Regression Direction Higher Is Worse"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnJlZ3Jlc3Npb25DaGVjayM0OWFmMjEwZmMzMjFmNzk1YjViNmQ0Zjc2OTVlOTcwNjgzNjkyNTQ0N2I2ZjA2ZTk2ZTAwNDU0NjQ0MGM1ZTE4.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOlJFR1JFU1NJT05fRElSRUNUSU9OX0xPV0VSX0lTX1dPUlNF.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5SZWdyZXNzaW9uQ2hlY2sjZTdhNGFjNmVlNTNmNWNlNjcxMzhmY2Y5YjQ3MWJiYmFkMDg1ZDRiZmIzOGFjMjM1ZDM2OTc3YmQ3YTM3MGY4Mw.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOlJFR1JFU1NJT05fRElSRUNUSU9OX0xPV0VSX0lTX1dPUlNF.display_name": {
           "source": "Regression Direction Lower Is Worse",
           "message": "Regression Direction Lower Is Worse"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnJlZ3Jlc3Npb25DaGVjayM0OWFmMjEwZmMzMjFmNzk1YjViNmQ0Zjc2OTVlOTcwNjgzNjkyNTQ0N2I2ZjA2ZTk2ZTAwNDU0NjQ0MGM1ZTE4.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5SZWdyZXNzaW9uQ2hlY2sjZTdhNGFjNmVlNTNmNWNlNjcxMzhmY2Y5YjQ3MWJiYmFkMDg1ZDRiZmIzOGFjMjM1ZDM2OTc3YmQ3YTM3MGY4Mw.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.display_name": {
           "source": "Max Regression Percent",
           "message": "Max Regression Percent"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnJlZ3Jlc3Npb25DaGVjayM0OWFmMjEwZmMzMjFmNzk1YjViNmQ0Zjc2OTVlOTcwNjgzNjkyNTQ0N2I2ZjA2ZTk2ZTAwNDU0NjQ0MGM1ZTE4.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5SZWdyZXNzaW9uQ2hlY2sjZTdhNGFjNmVlNTNmNWNlNjcxMzhmY2Y5YjQ3MWJiYmFkMDg1ZDRiZmIzOGFjMjM1ZDM2OTc3YmQ3YTM3MGY4Mw.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.short_desc": {
           "source": "Required maximum allowed regression percentage",
           "message": "Required maximum allowed regression percentage"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnJlZ3Jlc3Npb25DaGVjayM0OWFmMjEwZmMzMjFmNzk1YjViNmQ0Zjc2OTVlOTcwNjgzNjkyNTQ0N2I2ZjA2ZTk2ZTAwNDU0NjQ0MGM1ZTE4.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5SZWdyZXNzaW9uQ2hlY2sjZTdhNGFjNmVlNTNmNWNlNjcxMzhmY2Y5YjQ3MWJiYmFkMDg1ZDRiZmIzOGFjMjM1ZDM2OTc3YmQ3YTM3MGY4Mw.field.bWF4UmVncmVzc2lvblBlcmNlbnQ.desc": {
           "source": "Required maximum allowed regression percentage.",
           "message": "Required maximum allowed regression percentage."
         },
@@ -15195,43 +15195,43 @@
           "source": "Threshold evaluation criteria. Mutually exclusive with regressionCheck.",
           "message": "Threshold evaluation criteria. Mutually exclusive with regressionCheck."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.b3BlcmF0b3I.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.b3BlcmF0b3I.display_name": {
           "source": "Operator",
           "message": "Operator"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.b3BlcmF0b3I.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.b3BlcmF0b3I.short_desc": {
           "source": "Required comparison operator applied to the target metric value",
           "message": "Required comparison operator applied to the target metric value"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.b3BlcmF0b3I.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.b3BlcmF0b3I.desc": {
           "source": "Required comparison operator applied to the target metric value.",
           "message": "Required comparison operator applied to the target metric value."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9HVA.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9HVA.display_name": {
           "source": "Threshold Operator Gt",
           "message": "Threshold Operator Gt"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9HVEU.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9HVEU.display_name": {
           "source": "Threshold Operator Gte",
           "message": "Threshold Operator Gte"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9MVA.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9MVA.display_name": {
           "source": "Threshold Operator Lt",
           "message": "Threshold Operator Lt"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9MVEU.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOlRIUkVTSE9MRF9PUEVSQVRPUl9MVEU.display_name": {
           "source": "Threshold Operator Lte",
           "message": "Threshold Operator Lte"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.dmFsdWU.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Value"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.dmFsdWU.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.dmFsdWU.short_desc": {
           "source": "Required numeric threshold value",
           "message": "Required numeric threshold value"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocmVzaG9sZENoZWNrI2I3NzZiNTlkYjkxMDE0ZDhjMjlkNGU2OWFhMjVmYzQ2NmU4YzMzNDEwNDI0MWNjYmE5MmNmN2Y3YTA5NTU3N2U.field.dmFsdWU.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYQnlaWFpwWlhjdGNtOXNiRzkxZEMxa1pXWmhkV3gwY3c6SGFzaERhdGFUeXBlOipERS5UaHJlc2hvbGRDaGVjayNiZTU3NDU0Njc0ODQ5YTA3YTA2NGYxMjBjYTJkMzEyZTAwNDA1OWRjMDQ1MWJmNWVjMzIzOTJmMzQ0OGFhZDYx.field.dmFsdWU.desc": {
           "source": "Required numeric threshold value.",
           "message": "Required numeric threshold value."
         },
@@ -16279,159 +16279,159 @@
           "source": "Endpoint-level source that samples traffic at the API gateway.",
           "message": "Endpoint-level source that samples traffic at the API gateway."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6ZW5kcG9pbnQjM2I5MmI5MWRhZGI5YzE3MzUwNzE4NTFlNTk0NDU0YmFhMjc3ZjRkYWQyZDYwOTBkOGRhMGQ3NzFmM2ZkZjgwMw.field.c2FtcGxpbmc.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRFbmRwb2ludFNvdXJjZSM4MTc5MjM3OTVhMmIyNzVlMzYxMjFiOWM0NmI4N2I4ZDQ5ODM5ZGY0NGZmM2JiZGQyMzIzOGM5NjYzNjYxM2I1.field.c2FtcGxpbmc.display_name": {
           "source": "Sampling",
           "message": "Sampling"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6ZW5kcG9pbnQjM2I5MmI5MWRhZGI5YzE3MzUwNzE4NTFlNTk0NDU0YmFhMjc3ZjRkYWQyZDYwOTBkOGRhMGQ3NzFmM2ZkZjgwMw.field.c2FtcGxpbmc.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRFbmRwb2ludFNvdXJjZSM4MTc5MjM3OTVhMmIyNzVlMzYxMjFiOWM0NmI4N2I4ZDQ5ODM5ZGY0NGZmM2JiZGQyMzIzOGM5NjYzNjYxM2I1.field.c2FtcGxpbmc.short_desc": {
           "source": "Sampling strategy applied to endpoint traffic",
           "message": "Sampling strategy applied to endpoint traffic"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6ZW5kcG9pbnQjM2I5MmI5MWRhZGI5YzE3MzUwNzE4NTFlNTk0NDU0YmFhMjc3ZjRkYWQyZDYwOTBkOGRhMGQ3NzFmM2ZkZjgwMw.field.c2FtcGxpbmc.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRFbmRwb2ludFNvdXJjZSM4MTc5MjM3OTVhMmIyNzVlMzYxMjFiOWM0NmI4N2I4ZDQ5ODM5ZGY0NGZmM2JiZGQyMzIzOGM5NjYzNjYxM2I1.field.c2FtcGxpbmc.desc": {
           "source": "Sampling strategy applied to endpoint traffic.",
           "message": "Sampling strategy applied to endpoint traffic."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2JkNzZkMzljZTRmYjJmN2JlMDhlNjgyNTAyNTkxYmY1MjU1ZWNmMjQwNDA3NWFkOTQxMzNlODhhNzNhYjZkNmQ.field.dW5pZm9ybQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2YzZmQ4MzA3ODFkNDEzZDNiMTRhMjQ3MDQwZmRhNjJhMmUyNTc2M2Y5OGEwMzI4MjQ1ZDAzNzJhMzM4ZTg2YTU.field.dW5pZm9ybQ.display_name": {
           "source": "Uniform",
           "message": "Uniform"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2JkNzZkMzljZTRmYjJmN2JlMDhlNjgyNTAyNTkxYmY1MjU1ZWNmMjQwNDA3NWFkOTQxMzNlODhhNzNhYjZkNmQ.field.dW5pZm9ybQ.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2YzZmQ4MzA3ODFkNDEzZDNiMTRhMjQ3MDQwZmRhNjJhMmUyNTc2M2Y5OGEwMzI4MjQ1ZDAzNzJhMzM4ZTg2YTU.field.dW5pZm9ybQ.short_desc": {
           "source": "Fixed random request sampling",
           "message": "Fixed random request sampling"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2JkNzZkMzljZTRmYjJmN2JlMDhlNjgyNTAyNTkxYmY1MjU1ZWNmMjQwNDA3NWFkOTQxMzNlODhhNzNhYjZkNmQ.field.dW5pZm9ybQ.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2YzZmQ4MzA3ODFkNDEzZDNiMTRhMjQ3MDQwZmRhNjJhMmUyNTc2M2Y5OGEwMzI4MjQ1ZDAzNzJhMzM4ZTg2YTU.field.dW5pZm9ybQ.desc": {
           "source": "Fixed random request sampling.",
           "message": "Fixed random request sampling."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6dW5pZm9ybSM3NDg2YTM4YzliZDAxZjZkMzVmMjhkYTY3ZjBmOThlMTBmMGU4MTFkOTNlM2Q3NGM5MmRmOGM0ZTBkYmMzM2Vi.field.cmF0ZQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRVbmlmb3JtU2FtcGxpbmcjMWI1OWI4ZmI1NmRhZDhmNWE5N2ZiYWIwYjEyZTIzMmFlZjhlMmEwNTY4M2QxMmQwZmY2MDA5MWMzYzU2NDA0ZQ.field.cmF0ZQ.display_name": {
           "source": "Rate",
           "message": "Rate"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6dW5pZm9ybSM3NDg2YTM4YzliZDAxZjZkMzVmMjhkYTY3ZjBmOThlMTBmMGU4MTFkOTNlM2Q3NGM5MmRmOGM0ZTBkYmMzM2Vi.field.cmF0ZQ.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRVbmlmb3JtU2FtcGxpbmcjMWI1OWI4ZmI1NmRhZDhmNWE5N2ZiYWIwYjEyZTIzMmFlZjhlMmEwNTY4M2QxMmQwZmY2MDA5MWMzYzU2NDA0ZQ.field.cmF0ZQ.short_desc": {
           "source": "Required fraction of requests to sample, from 0.0 to 1.0",
           "message": "Required fraction of requests to sample, from 0.0 to 1.0"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6dW5pZm9ybSM3NDg2YTM4YzliZDAxZjZkMzVmMjhkYTY3ZjBmOThlMTBmMGU4MTFkOTNlM2Q3NGM5MmRmOGM0ZTBkYmMzM2Vi.field.cmF0ZQ.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRVbmlmb3JtU2FtcGxpbmcjMWI1OWI4ZmI1NmRhZDhmNWE5N2ZiYWIwYjEyZTIzMmFlZjhlMmEwNTY4M2QxMmQwZmY2MDA5MWMzYzU2NDA0ZQ.field.cmF0ZQ.desc": {
           "source": "Required fraction of requests to sample, from 0.0 to 1.0.",
           "message": "Required fraction of requests to sample, from 0.0 to 1.0."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2NlNWU0NTIyNmJhYTU1MWFiMzI2MzRhMjM0NWQzMzg2ZDM0Zjg1MWRhODYzMjU0ZmQ5ZjAwYzRlODVjN2IyMWI.field.a2V5QmFzZWQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU1MTBkMzQ2YmEyZmQ2M2I2NDM5ZjRmZWUwZDdkZGE2MmFiNWYyMjI5M2UyZmU2NjQxMDhhNmIzYTAzN2FiY2M.field.a2V5QmFzZWQ.display_name": {
           "source": "Key Based",
           "message": "Key Based"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2NlNWU0NTIyNmJhYTU1MWFiMzI2MzRhMjM0NWQzMzg2ZDM0Zjg1MWRhODYzMjU0ZmQ5ZjAwYzRlODVjN2IyMWI.field.a2V5QmFzZWQ.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU1MTBkMzQ2YmEyZmQ2M2I2NDM5ZjRmZWUwZDdkZGE2MmFiNWYyMjI5M2UyZmU2NjQxMDhhNmIzYTAzN2FiY2M.field.a2V5QmFzZWQ.short_desc": {
           "source": "Fixed sampling by a sticky request key",
           "message": "Fixed sampling by a sticky request key"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2NlNWU0NTIyNmJhYTU1MWFiMzI2MzRhMjM0NWQzMzg2ZDM0Zjg1MWRhODYzMjU0ZmQ5ZjAwYzRlODVjN2IyMWI.field.a2V5QmFzZWQ.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU1MTBkMzQ2YmEyZmQ2M2I2NDM5ZjRmZWUwZDdkZGE2MmFiNWYyMjI5M2UyZmU2NjQxMDhhNmIzYTAzN2FiY2M.field.a2V5QmFzZWQ.desc": {
           "source": "Fixed sampling by a sticky request key.",
           "message": "Fixed sampling by a sticky request key."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.a2V5.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.a2V5.display_name": {
           "source": "Key",
           "message": "Key"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.a2V5.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.a2V5.short_desc": {
           "source": "Required request-body field used as the sticky sampling key",
           "message": "Required request-body field used as the sticky sampling key"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.a2V5.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.a2V5.desc": {
           "source": "Required request-body field used as the sticky sampling key.",
           "message": "Required request-body field used as the sticky sampling key."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.cmF0ZQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.cmF0ZQ.display_name": {
           "source": "Rate",
           "message": "Rate"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.cmF0ZQ.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.cmF0ZQ.short_desc": {
           "source": "Required fraction of distinct key values to sample, from 0.0 to 1.0",
           "message": "Required fraction of distinct key values to sample, from 0.0 to 1.0"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.cmF0ZQ.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.cmF0ZQ.desc": {
           "source": "Required fraction of distinct key values to sample, from 0.0 to 1.0.",
           "message": "Required fraction of distinct key values to sample, from 0.0 to 1.0."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2MzZGM5MTk2MzZkZmIwYjU4YjkzNGRiODYzYjhkNDI1MjFhZTFlZTYxODhhZDQ0YzQ3N2UwZTI4MzAxNTc2OGM.field.YWRhcHRpdmVVbmlmb3Jt.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU3MjZjZWNiMTRmMDA3NWQ4YjVmODBhZWRmYjE0OTAxYTJhZTRhZDAyYTZjZWQ0ZTVmN2VjYzkwZjlhYjFiMjE.field.YWRhcHRpdmVVbmlmb3Jt.display_name": {
           "source": "Adaptive Uniform",
           "message": "Adaptive Uniform"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2MzZGM5MTk2MzZkZmIwYjU4YjkzNGRiODYzYjhkNDI1MjFhZTFlZTYxODhhZDQ0YzQ3N2UwZTI4MzAxNTc2OGM.field.YWRhcHRpdmVVbmlmb3Jt.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU3MjZjZWNiMTRmMDA3NWQ4YjVmODBhZWRmYjE0OTAxYTJhZTRhZDAyYTZjZWQ0ZTVmN2VjYzkwZjlhYjFiMjE.field.YWRhcHRpdmVVbmlmb3Jt.short_desc": {
           "source": "Adaptive random sampling toward a target QPS",
           "message": "Adaptive random sampling toward a target QPS"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2MzZGM5MTk2MzZkZmIwYjU4YjkzNGRiODYzYjhkNDI1MjFhZTFlZTYxODhhZDQ0YzQ3N2UwZTI4MzAxNTc2OGM.field.YWRhcHRpdmVVbmlmb3Jt.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU3MjZjZWNiMTRmMDA3NWQ4YjVmODBhZWRmYjE0OTAxYTJhZTRhZDAyYTZjZWQ0ZTVmN2VjYzkwZjlhYjFiMjE.field.YWRhcHRpdmVVbmlmb3Jt.desc": {
           "source": "Adaptive random sampling toward a target QPS.",
           "message": "Adaptive random sampling toward a target QPS."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.dGFyZ2V0UXBz.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.dGFyZ2V0UXBz.display_name": {
           "source": "Target Qps",
           "message": "Target Qps"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.dGFyZ2V0UXBz.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.dGFyZ2V0UXBz.short_desc": {
           "source": "Required per-gateway-replica target QPS for adaptive sampling",
           "message": "Required per-gateway-replica target QPS for adaptive sampling"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.dGFyZ2V0UXBz.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.dGFyZ2V0UXBz.desc": {
           "source": "Required per-gateway-replica target QPS for adaptive sampling.",
           "message": "Required per-gateway-replica target QPS for adaptive sampling."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.d2luZG93.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.d2luZG93.display_name": {
           "source": "Window",
           "message": "Window"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.d2luZG93.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.d2luZG93.short_desc": {
           "source": "Optional sliding window for QPS observation",
           "message": "Optional sliding window for QPS observation"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.d2luZG93.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.d2luZG93.desc": {
           "source": "Optional sliding window for QPS observation. Defaults to 60s and must not be negative.",
           "message": "Optional sliding window for QPS observation. Defaults to 60s and must not be negative."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzFjZWNlMmQ1MDBhOGY2MThkY2Q4MWYyNTE3ZjI5YjJhMGY3YTAyOTQwNWRjMGY0ZGQ4YjI2OTZkNDIyYTBiNGQ.field.YWRhcHRpdmVLZXlCYXNlZA.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2ZlYTA3NTg4NTY0MDhlMWFjMTM4YTY1MjU4MDkyMDUwYjE4YWMzYjg2MjdlZjJmZjFmYmVmNDRlZDhiODY2MGI.field.YWRhcHRpdmVLZXlCYXNlZA.display_name": {
           "source": "Adaptive Key Based",
           "message": "Adaptive Key Based"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzFjZWNlMmQ1MDBhOGY2MThkY2Q4MWYyNTE3ZjI5YjJhMGY3YTAyOTQwNWRjMGY0ZGQ4YjI2OTZkNDIyYTBiNGQ.field.YWRhcHRpdmVLZXlCYXNlZA.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2ZlYTA3NTg4NTY0MDhlMWFjMTM4YTY1MjU4MDkyMDUwYjE4YWMzYjg2MjdlZjJmZjFmYmVmNDRlZDhiODY2MGI.field.YWRhcHRpdmVLZXlCYXNlZA.short_desc": {
           "source": "Adaptive sticky-key sampling toward a target QPS",
           "message": "Adaptive sticky-key sampling toward a target QPS"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzFjZWNlMmQ1MDBhOGY2MThkY2Q4MWYyNTE3ZjI5YjJhMGY3YTAyOTQwNWRjMGY0ZGQ4YjI2OTZkNDIyYTBiNGQ.field.YWRhcHRpdmVLZXlCYXNlZA.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2ZlYTA3NTg4NTY0MDhlMWFjMTM4YTY1MjU4MDkyMDUwYjE4YWMzYjg2MjdlZjJmZjFmYmVmNDRlZDhiODY2MGI.field.YWRhcHRpdmVLZXlCYXNlZA.desc": {
           "source": "Adaptive sticky-key sampling toward a target QPS.",
           "message": "Adaptive sticky-key sampling toward a target QPS."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.a2V5.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.a2V5.display_name": {
           "source": "Key",
           "message": "Key"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.a2V5.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.a2V5.short_desc": {
           "source": "Required request-body field used as the sticky sampling key",
           "message": "Required request-body field used as the sticky sampling key"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.a2V5.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.a2V5.desc": {
           "source": "Required request-body field used as the sticky sampling key.",
           "message": "Required request-body field used as the sticky sampling key."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.dGFyZ2V0UXBz.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.dGFyZ2V0UXBz.display_name": {
           "source": "Target Qps",
           "message": "Target Qps"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.dGFyZ2V0UXBz.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.dGFyZ2V0UXBz.short_desc": {
           "source": "Required per-gateway-replica target QPS for adaptive sampling",
           "message": "Required per-gateway-replica target QPS for adaptive sampling"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.dGFyZ2V0UXBz.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.dGFyZ2V0UXBz.desc": {
           "source": "Required per-gateway-replica target QPS for adaptive sampling.",
           "message": "Required per-gateway-replica target QPS for adaptive sampling."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.d2luZG93.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.d2luZG93.display_name": {
           "source": "Window",
           "message": "Window"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.d2luZG93.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.d2luZG93.short_desc": {
           "source": "Optional sliding window for QPS observation",
           "message": "Optional sliding window for QPS observation"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.d2luZG93.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xXTnlaV0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.d2luZG93.desc": {
           "source": "Optional sliding window for QPS observation. Defaults to 60s and must not be negative.",
           "message": "Optional sliding window for QPS observation. Defaults to 60s and must not be negative."
         },
@@ -16567,159 +16567,159 @@
           "source": "Endpoint-level source that samples traffic at the API gateway.",
           "message": "Endpoint-level source that samples traffic at the API gateway."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6ZW5kcG9pbnQjM2I5MmI5MWRhZGI5YzE3MzUwNzE4NTFlNTk0NDU0YmFhMjc3ZjRkYWQyZDYwOTBkOGRhMGQ3NzFmM2ZkZjgwMw.field.c2FtcGxpbmc.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRFbmRwb2ludFNvdXJjZSM4MTc5MjM3OTVhMmIyNzVlMzYxMjFiOWM0NmI4N2I4ZDQ5ODM5ZGY0NGZmM2JiZGQyMzIzOGM5NjYzNjYxM2I1.field.c2FtcGxpbmc.display_name": {
           "source": "Sampling",
           "message": "Sampling"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6ZW5kcG9pbnQjM2I5MmI5MWRhZGI5YzE3MzUwNzE4NTFlNTk0NDU0YmFhMjc3ZjRkYWQyZDYwOTBkOGRhMGQ3NzFmM2ZkZjgwMw.field.c2FtcGxpbmc.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRFbmRwb2ludFNvdXJjZSM4MTc5MjM3OTVhMmIyNzVlMzYxMjFiOWM0NmI4N2I4ZDQ5ODM5ZGY0NGZmM2JiZGQyMzIzOGM5NjYzNjYxM2I1.field.c2FtcGxpbmc.short_desc": {
           "source": "Sampling strategy applied to endpoint traffic",
           "message": "Sampling strategy applied to endpoint traffic"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6ZW5kcG9pbnQjM2I5MmI5MWRhZGI5YzE3MzUwNzE4NTFlNTk0NDU0YmFhMjc3ZjRkYWQyZDYwOTBkOGRhMGQ3NzFmM2ZkZjgwMw.field.c2FtcGxpbmc.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRFbmRwb2ludFNvdXJjZSM4MTc5MjM3OTVhMmIyNzVlMzYxMjFiOWM0NmI4N2I4ZDQ5ODM5ZGY0NGZmM2JiZGQyMzIzOGM5NjYzNjYxM2I1.field.c2FtcGxpbmc.desc": {
           "source": "Sampling strategy applied to endpoint traffic.",
           "message": "Sampling strategy applied to endpoint traffic."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2JkNzZkMzljZTRmYjJmN2JlMDhlNjgyNTAyNTkxYmY1MjU1ZWNmMjQwNDA3NWFkOTQxMzNlODhhNzNhYjZkNmQ.field.dW5pZm9ybQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2YzZmQ4MzA3ODFkNDEzZDNiMTRhMjQ3MDQwZmRhNjJhMmUyNTc2M2Y5OGEwMzI4MjQ1ZDAzNzJhMzM4ZTg2YTU.field.dW5pZm9ybQ.display_name": {
           "source": "Uniform",
           "message": "Uniform"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2JkNzZkMzljZTRmYjJmN2JlMDhlNjgyNTAyNTkxYmY1MjU1ZWNmMjQwNDA3NWFkOTQxMzNlODhhNzNhYjZkNmQ.field.dW5pZm9ybQ.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2YzZmQ4MzA3ODFkNDEzZDNiMTRhMjQ3MDQwZmRhNjJhMmUyNTc2M2Y5OGEwMzI4MjQ1ZDAzNzJhMzM4ZTg2YTU.field.dW5pZm9ybQ.short_desc": {
           "source": "Fixed random request sampling",
           "message": "Fixed random request sampling"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2JkNzZkMzljZTRmYjJmN2JlMDhlNjgyNTAyNTkxYmY1MjU1ZWNmMjQwNDA3NWFkOTQxMzNlODhhNzNhYjZkNmQ.field.dW5pZm9ybQ.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2YzZmQ4MzA3ODFkNDEzZDNiMTRhMjQ3MDQwZmRhNjJhMmUyNTc2M2Y5OGEwMzI4MjQ1ZDAzNzJhMzM4ZTg2YTU.field.dW5pZm9ybQ.desc": {
           "source": "Fixed random request sampling.",
           "message": "Fixed random request sampling."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6dW5pZm9ybSM3NDg2YTM4YzliZDAxZjZkMzVmMjhkYTY3ZjBmOThlMTBmMGU4MTFkOTNlM2Q3NGM5MmRmOGM0ZTBkYmMzM2Vi.field.cmF0ZQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRVbmlmb3JtU2FtcGxpbmcjMWI1OWI4ZmI1NmRhZDhmNWE5N2ZiYWIwYjEyZTIzMmFlZjhlMmEwNTY4M2QxMmQwZmY2MDA5MWMzYzU2NDA0ZQ.field.cmF0ZQ.display_name": {
           "source": "Rate",
           "message": "Rate"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6dW5pZm9ybSM3NDg2YTM4YzliZDAxZjZkMzVmMjhkYTY3ZjBmOThlMTBmMGU4MTFkOTNlM2Q3NGM5MmRmOGM0ZTBkYmMzM2Vi.field.cmF0ZQ.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRVbmlmb3JtU2FtcGxpbmcjMWI1OWI4ZmI1NmRhZDhmNWE5N2ZiYWIwYjEyZTIzMmFlZjhlMmEwNTY4M2QxMmQwZmY2MDA5MWMzYzU2NDA0ZQ.field.cmF0ZQ.short_desc": {
           "source": "Required fraction of requests to sample, from 0.0 to 1.0",
           "message": "Required fraction of requests to sample, from 0.0 to 1.0"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6dW5pZm9ybSM3NDg2YTM4YzliZDAxZjZkMzVmMjhkYTY3ZjBmOThlMTBmMGU4MTFkOTNlM2Q3NGM5MmRmOGM0ZTBkYmMzM2Vi.field.cmF0ZQ.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRVbmlmb3JtU2FtcGxpbmcjMWI1OWI4ZmI1NmRhZDhmNWE5N2ZiYWIwYjEyZTIzMmFlZjhlMmEwNTY4M2QxMmQwZmY2MDA5MWMzYzU2NDA0ZQ.field.cmF0ZQ.desc": {
           "source": "Required fraction of requests to sample, from 0.0 to 1.0.",
           "message": "Required fraction of requests to sample, from 0.0 to 1.0."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2NlNWU0NTIyNmJhYTU1MWFiMzI2MzRhMjM0NWQzMzg2ZDM0Zjg1MWRhODYzMjU0ZmQ5ZjAwYzRlODVjN2IyMWI.field.a2V5QmFzZWQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU1MTBkMzQ2YmEyZmQ2M2I2NDM5ZjRmZWUwZDdkZGE2MmFiNWYyMjI5M2UyZmU2NjQxMDhhNmIzYTAzN2FiY2M.field.a2V5QmFzZWQ.display_name": {
           "source": "Key Based",
           "message": "Key Based"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2NlNWU0NTIyNmJhYTU1MWFiMzI2MzRhMjM0NWQzMzg2ZDM0Zjg1MWRhODYzMjU0ZmQ5ZjAwYzRlODVjN2IyMWI.field.a2V5QmFzZWQ.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU1MTBkMzQ2YmEyZmQ2M2I2NDM5ZjRmZWUwZDdkZGE2MmFiNWYyMjI5M2UyZmU2NjQxMDhhNmIzYTAzN2FiY2M.field.a2V5QmFzZWQ.short_desc": {
           "source": "Fixed sampling by a sticky request key",
           "message": "Fixed sampling by a sticky request key"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2NlNWU0NTIyNmJhYTU1MWFiMzI2MzRhMjM0NWQzMzg2ZDM0Zjg1MWRhODYzMjU0ZmQ5ZjAwYzRlODVjN2IyMWI.field.a2V5QmFzZWQ.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU1MTBkMzQ2YmEyZmQ2M2I2NDM5ZjRmZWUwZDdkZGE2MmFiNWYyMjI5M2UyZmU2NjQxMDhhNmIzYTAzN2FiY2M.field.a2V5QmFzZWQ.desc": {
           "source": "Fixed sampling by a sticky request key.",
           "message": "Fixed sampling by a sticky request key."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.a2V5.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.a2V5.display_name": {
           "source": "Key",
           "message": "Key"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.a2V5.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.a2V5.short_desc": {
           "source": "Required request-body field used as the sticky sampling key",
           "message": "Required request-body field used as the sticky sampling key"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.a2V5.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.a2V5.desc": {
           "source": "Required request-body field used as the sticky sampling key.",
           "message": "Required request-body field used as the sticky sampling key."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.cmF0ZQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.cmF0ZQ.display_name": {
           "source": "Rate",
           "message": "Rate"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.cmF0ZQ.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.cmF0ZQ.short_desc": {
           "source": "Required fraction of distinct key values to sample, from 0.0 to 1.0",
           "message": "Required fraction of distinct key values to sample, from 0.0 to 1.0"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6a2V5QmFzZWQjMjEwZGE0NWE2MTgzMTYyZGQwMDZiMDFlZjYyYjA0YmVhNDg5ZTIyYWJiZWY5NDAxOTk1N2ZiZTk4NzY2NzdmZg.field.cmF0ZQ.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRLZXlCYXNlZFNhbXBsaW5nI2VjZDY1ODY1Y2U5YTJkNWY5ZDEwNzZiYjFkZGVjOWIyYWNlMTZlZjBiZDljY2YwMGVlNGFlMjdkYjVhYWUyNDU.field.cmF0ZQ.desc": {
           "source": "Required fraction of distinct key values to sample, from 0.0 to 1.0.",
           "message": "Required fraction of distinct key values to sample, from 0.0 to 1.0."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2MzZGM5MTk2MzZkZmIwYjU4YjkzNGRiODYzYjhkNDI1MjFhZTFlZTYxODhhZDQ0YzQ3N2UwZTI4MzAxNTc2OGM.field.YWRhcHRpdmVVbmlmb3Jt.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU3MjZjZWNiMTRmMDA3NWQ4YjVmODBhZWRmYjE0OTAxYTJhZTRhZDAyYTZjZWQ0ZTVmN2VjYzkwZjlhYjFiMjE.field.YWRhcHRpdmVVbmlmb3Jt.display_name": {
           "source": "Adaptive Uniform",
           "message": "Adaptive Uniform"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2MzZGM5MTk2MzZkZmIwYjU4YjkzNGRiODYzYjhkNDI1MjFhZTFlZTYxODhhZDQ0YzQ3N2UwZTI4MzAxNTc2OGM.field.YWRhcHRpdmVVbmlmb3Jt.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU3MjZjZWNiMTRmMDA3NWQ4YjVmODBhZWRmYjE0OTAxYTJhZTRhZDAyYTZjZWQ0ZTVmN2VjYzkwZjlhYjFiMjE.field.YWRhcHRpdmVVbmlmb3Jt.short_desc": {
           "source": "Adaptive random sampling toward a target QPS",
           "message": "Adaptive random sampling toward a target QPS"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2MzZGM5MTk2MzZkZmIwYjU4YjkzNGRiODYzYjhkNDI1MjFhZTFlZTYxODhhZDQ0YzQ3N2UwZTI4MzAxNTc2OGM.field.YWRhcHRpdmVVbmlmb3Jt.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzU3MjZjZWNiMTRmMDA3NWQ4YjVmODBhZWRmYjE0OTAxYTJhZTRhZDAyYTZjZWQ0ZTVmN2VjYzkwZjlhYjFiMjE.field.YWRhcHRpdmVVbmlmb3Jt.desc": {
           "source": "Adaptive random sampling toward a target QPS.",
           "message": "Adaptive random sampling toward a target QPS."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.dGFyZ2V0UXBz.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.dGFyZ2V0UXBz.display_name": {
           "source": "Target Qps",
           "message": "Target Qps"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.dGFyZ2V0UXBz.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.dGFyZ2V0UXBz.short_desc": {
           "source": "Required per-gateway-replica target QPS for adaptive sampling",
           "message": "Required per-gateway-replica target QPS for adaptive sampling"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.dGFyZ2V0UXBz.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.dGFyZ2V0UXBz.desc": {
           "source": "Required per-gateway-replica target QPS for adaptive sampling.",
           "message": "Required per-gateway-replica target QPS for adaptive sampling."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.d2luZG93.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.d2luZG93.display_name": {
           "source": "Window",
           "message": "Window"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.d2luZG93.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.d2luZG93.short_desc": {
           "source": "Optional sliding window for QPS observation",
           "message": "Optional sliding window for QPS observation"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVVbmlmb3JtIzU2OTAxOTIwMmY5ZjM4YjIxZTg5ZGUxNzc1NDA3MGVmYTRiZGYxYjI1MGNlMDAyNWY4OGYwMjYxZDNmMmM2OTc.field.d2luZG93.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZVVuaWZvcm1TYW1wbGluZyMyYmI0MzAxOGU0ZDZjNWMyNmRjODE5NWEwNzQ4YTEwODUyNWIzNmNlOGYwOGVlZTVlMmMzNGYxNmFmMGQwOWFm.field.d2luZG93.desc": {
           "source": "Optional sliding window for QPS observation. Defaults to 60s and must not be negative.",
           "message": "Optional sliding window for QPS observation. Defaults to 60s and must not be negative."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzFjZWNlMmQ1MDBhOGY2MThkY2Q4MWYyNTE3ZjI5YjJhMGY3YTAyOTQwNWRjMGY0ZGQ4YjI2OTZkNDIyYTBiNGQ.field.YWRhcHRpdmVLZXlCYXNlZA.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2ZlYTA3NTg4NTY0MDhlMWFjMTM4YTY1MjU4MDkyMDUwYjE4YWMzYjg2MjdlZjJmZjFmYmVmNDRlZDhiODY2MGI.field.YWRhcHRpdmVLZXlCYXNlZA.display_name": {
           "source": "Adaptive Key Based",
           "message": "Adaptive Key Based"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzFjZWNlMmQ1MDBhOGY2MThkY2Q4MWYyNTE3ZjI5YjJhMGY3YTAyOTQwNWRjMGY0ZGQ4YjI2OTZkNDIyYTBiNGQ.field.YWRhcHRpdmVLZXlCYXNlZA.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2ZlYTA3NTg4NTY0MDhlMWFjMTM4YTY1MjU4MDkyMDUwYjE4YWMzYjg2MjdlZjJmZjFmYmVmNDRlZDhiODY2MGI.field.YWRhcHRpdmVLZXlCYXNlZA.short_desc": {
           "source": "Adaptive sticky-key sampling toward a target QPS",
           "message": "Adaptive sticky-key sampling toward a target QPS"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mIzFjZWNlMmQ1MDBhOGY2MThkY2Q4MWYyNTE3ZjI5YjJhMGY3YTAyOTQwNWRjMGY0ZGQ4YjI2OTZkNDIyYTBiNGQ.field.YWRhcHRpdmVLZXlCYXNlZA.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRTYW1wbGluZ09uZU9mI2ZlYTA3NTg4NTY0MDhlMWFjMTM4YTY1MjU4MDkyMDUwYjE4YWMzYjg2MjdlZjJmZjFmYmVmNDRlZDhiODY2MGI.field.YWRhcHRpdmVLZXlCYXNlZA.desc": {
           "source": "Adaptive sticky-key sampling toward a target QPS.",
           "message": "Adaptive sticky-key sampling toward a target QPS."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.a2V5.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.a2V5.display_name": {
           "source": "Key",
           "message": "Key"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.a2V5.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.a2V5.short_desc": {
           "source": "Required request-body field used as the sticky sampling key",
           "message": "Required request-body field used as the sticky sampling key"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.a2V5.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.a2V5.desc": {
           "source": "Required request-body field used as the sticky sampling key.",
           "message": "Required request-body field used as the sticky sampling key."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.dGFyZ2V0UXBz.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.dGFyZ2V0UXBz.display_name": {
           "source": "Target Qps",
           "message": "Target Qps"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.dGFyZ2V0UXBz.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.dGFyZ2V0UXBz.short_desc": {
           "source": "Required per-gateway-replica target QPS for adaptive sampling",
           "message": "Required per-gateway-replica target QPS for adaptive sampling"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.dGFyZ2V0UXBz.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.dGFyZ2V0UXBz.desc": {
           "source": "Required per-gateway-replica target QPS for adaptive sampling.",
           "message": "Required per-gateway-replica target QPS for adaptive sampling."
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.d2luZG93.display_name": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.d2luZG93.display_name": {
           "source": "Window",
           "message": "Window"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.d2luZG93.short_desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.d2luZG93.short_desc": {
           "source": "Optional sliding window for QPS observation",
           "message": "Optional sliding window for QPS observation"
         },
-        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6YWRhcHRpdmVLZXlCYXNlZCMzNzFlYzMzYTg4YjhmYmRkYjQ2MWJmMTk2MWUxNTg3ZTMxZDRkN2QyMWM0MWNkZjRmZTkyOWU5ZWFkOWFiNDgx.field.d2luZG93.desc": {
+        "app.VG9nZXRoZXJBaQ.type.YWN0aW9uOlpHVmthV05oZEdWa0xYVndaR0YwWlMxemFHRmtiM2N0Wlhod1pYSnBiV1Z1ZEE6SGFzaERhdGFUeXBlOkRFLlNoYWRvd0V4cGVyaW1lbnRBZGFwdGl2ZUtleUJhc2VkU2FtcGxpbmcjMjY2YjFmMjdlNzA5NmRmN2Y3OGIzZWU2YWE2M2VhYjc4MDRmOGM2NjFhYTIwYWNmMTYyZWEyODlkZTRhOTI4OQ.field.d2luZG93.desc": {
           "source": "Optional sliding window for QPS observation. Defaults to 60s and must not be negative.",
           "message": "Optional sliding window for QPS observation. Defaults to 60s and must not be negative."
         },

@@ -6029,6 +6029,14 @@ while (*binary chunk = input.read(65536)) {
 
     - @ref restschemavalidatorintro "RestSchemaValidator", @ref openapi3intro "OpenApi3", and
       @ref swaggerintro "Swagger" modules
+      - the type of a described schema reference keeps the referenced schema's name: a property written as a
+        one-member \c allOf of a \c "$ref" with a description of its own, which is how a document describes one use of
+        a reusable schema, has the referenced schema's type, and its description is the field's.  Each such property
+        had a copy of the type named after the property, so that two different schemas could appear under one type
+        name and one schema under several, and the copy did not apply all of the referenced schema's rules: its
+        required properties (Swagger 2.0), its \c oneOf, \c anyOf and discriminator alternatives (OpenAPI 3), and the
+        rejection of undeclared properties.  A \c nullable or \c x-nullable property has the "or nothing" variant of
+        the referenced type
       - schema fields prefer valid declared examples; generated examples are validated against their types, and
         omitted when constraints cannot be satisfied
       - schema data types describe and enforce the schema's validation constraints, so a value violating them is

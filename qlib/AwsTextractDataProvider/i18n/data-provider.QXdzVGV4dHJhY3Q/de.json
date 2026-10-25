@@ -587,26 +587,6 @@
           "source": "Content declarations used to route the document for human review.",
           "message": "Inhaltsdeklarationen, mit denen das Dokument zur menschlichen Überprüfung weitergeleitet wird."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzg1NDkwYTZlNjcwNWRmYzI5MTQ3MGVmMDQxMjFiMTI3MWMwNjMxNmJjMDU3ZWI1Zjg1N2Q2ODNlNmI5NzJiNGI.field.Q29udGVudENsYXNzaWZpZXJz.display_name": {
-          "source": "Content Classifiers",
-          "message": "Inhaltsklassifikatoren"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzg1NDkwYTZlNjcwNWRmYzI5MTQ3MGVmMDQxMjFiMTI3MWMwNjMxNmJjMDU3ZWI1Zjg1N2Q2ODNlNmI5NzJiNGI.field.Q29udGVudENsYXNzaWZpZXJz.short_desc": {
-          "source": "Content declarations for the human review workflow",
-          "message": "Inhaltsdeklarationen für den menschlichen Überprüfungsworkflow"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzg1NDkwYTZlNjcwNWRmYzI5MTQ3MGVmMDQxMjFiMTI3MWMwNjMxNmJjMDU3ZWI1Zjg1N2Q2ODNlNmI5NzJiNGI.field.Q29udGVudENsYXNzaWZpZXJz.desc": {
-          "source": "Content declarations for the human review workflow.",
-          "message": "Inhaltsdeklarationen für den menschlichen Überprüfungsworkflow."
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzg1NDkwYTZlNjcwNWRmYzI5MTQ3MGVmMDQxMjFiMTI3MWMwNjMxNmJjMDU3ZWI1Zjg1N2Q2ODNlNmI5NzJiNGI.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZlBlcnNvbmFsbHlJZGVudGlmaWFibGVJbmZvcm1hdGlvbg.display_name": {
-          "source": "Free of Personally Identifiable Information",
-          "message": "Ohne personenbezogene Daten"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzg1NDkwYTZlNjcwNWRmYzI5MTQ3MGVmMDQxMjFiMTI3MWMwNjMxNmJjMDU3ZWI1Zjg1N2Q2ODNlNmI5NzJiNGI.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZkFkdWx0Q29udGVudA.display_name": {
-          "source": "Free of Adult Content",
-          "message": "Ohne Inhalte für Erwachsene"
-        },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.Rmxvd0RlZmluaXRpb25Bcm4.display_name": {
           "source": "Flow Definition Arn",
           "message": "Flow Definition ARN"
@@ -731,42 +711,6 @@
           "source": "Source object in an S3 bucket in the connection's AWS region.",
           "message": "Quellobjekt in einem S3-Bucket in der AWS-Region der Verbindung."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.QnVja2V0.display_name": {
-          "source": "Bucket",
-          "message": "Bucket"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.QnVja2V0.short_desc": {
-          "source": "Name of the S3 bucket containing the source document",
-          "message": "Name des S3-Buckets, der das Quelldokument enthält"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.QnVja2V0.desc": {
-          "source": "Name of the S3 bucket containing the source document.",
-          "message": "Name des S3-Buckets, der das Quelldokument enthält."
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.TmFtZQ.display_name": {
-          "source": "Name",
-          "message": "Name"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.TmFtZQ.short_desc": {
-          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
-          "message": "Objektschlüssel im S3-Bucket, zum Beispiel „invoices/sample.pdf“"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.TmFtZQ.desc": {
-          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
-          "message": "Objektschlüssel im S3-Bucket, zum Beispiel `invoices/sample.pdf`."
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.VmVyc2lvbg.display_name": {
-          "source": "Version",
-          "message": "Version"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.VmVyc2lvbg.short_desc": {
-          "source": "Version of the selected resource",
-          "message": "Version der ausgewählten Ressource"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.VmVyc2lvbg.desc": {
-          "source": "Version of the selected resource.",
-          "message": "Version der ausgewählten Ressource."
-        },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.display_name": {
           "source": "Analyze ID",
           "message": "ID analysieren"
@@ -814,42 +758,6 @@
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.UzNPYmplY3Q.desc": {
           "source": "Source object in an S3 bucket in the connection's AWS region.",
           "message": "Quellobjekt in einem S3-Bucket in der AWS-Region der Verbindung."
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.QnVja2V0.display_name": {
-          "source": "Bucket",
-          "message": "Bucket"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.QnVja2V0.short_desc": {
-          "source": "Name of the S3 bucket containing the source document",
-          "message": "Name des S3-Buckets, der das Quelldokument enthält"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.QnVja2V0.desc": {
-          "source": "Name of the S3 bucket containing the source document.",
-          "message": "Name des S3-Buckets, der das Quelldokument enthält."
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.TmFtZQ.display_name": {
-          "source": "Name",
-          "message": "Name"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.TmFtZQ.short_desc": {
-          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
-          "message": "Objektschlüssel im S3-Bucket, zum Beispiel „invoices/sample.pdf“"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.TmFtZQ.desc": {
-          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
-          "message": "Objektschlüssel im S3-Bucket, zum Beispiel `invoices/sample.pdf`."
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.VmVyc2lvbg.display_name": {
-          "source": "Version",
-          "message": "Version"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.VmVyc2lvbg.short_desc": {
-          "source": "Version of the selected resource",
-          "message": "Version der ausgewählten Ressource"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCNmNjYzYmQzMjdiMGUyNjVhZGEwMDBmNDEzOWFiMjBkODY4NWRjODU5NmE2MjdiYjA0NzcyMTNjMWIzODAzMWEw.field.VmVyc2lvbg.desc": {
-          "source": "Version of the selected resource.",
-          "message": "Version der ausgewählten Ressource."
         },
         "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.display_name": {
           "source": "Create Adapter",
@@ -1615,42 +1523,6 @@
           "source": "Source object in an S3 bucket in the connection's AWS region.",
           "message": "Quellobjekt in einem S3-Bucket in der AWS-Region der Verbindung."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.QnVja2V0.display_name": {
-          "source": "Bucket",
-          "message": "Bucket"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.QnVja2V0.short_desc": {
-          "source": "Name of the S3 bucket containing the source document",
-          "message": "Name des S3-Buckets, der das Quelldokument enthält"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.QnVja2V0.desc": {
-          "source": "Name of the S3 bucket containing the source document.",
-          "message": "Name des S3-Buckets, der das Quelldokument enthält."
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.TmFtZQ.display_name": {
-          "source": "Name",
-          "message": "Name"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.TmFtZQ.short_desc": {
-          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
-          "message": "Objektschlüssel im S3-Bucket, zum Beispiel „invoices/sample.pdf“"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.TmFtZQ.desc": {
-          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
-          "message": "Objektschlüssel im S3-Bucket, zum Beispiel `invoices/sample.pdf`."
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.VmVyc2lvbg.display_name": {
-          "source": "Version",
-          "message": "Version"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.VmVyc2lvbg.short_desc": {
-          "source": "Version of the selected resource",
-          "message": "Version der ausgewählten Ressource"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjZDU5ZGQ1YWI2OGY5MTZiZTE3OTU0ZWNjNTAxMGY2MmI0NGJlMjI5M2M1YTYzY2U4NGE0NGI3NDE3MTI1ZTllNg.field.VmVyc2lvbg.desc": {
-          "source": "Version of the selected resource.",
-          "message": "Version der ausgewählten Ressource."
-        },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.display_name": {
           "source": "Feature Types",
           "message": "Merkmalstypen"
@@ -1931,42 +1803,6 @@
           "source": "Source object in an S3 bucket in the connection's AWS region.",
           "message": "Quellobjekt in einem S3-Bucket in der AWS-Region der Verbindung."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.display_name": {
-          "source": "Bucket",
-          "message": "Bucket"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.short_desc": {
-          "source": "Name of the S3 bucket containing the source document",
-          "message": "Name des S3-Buckets, der das Quelldokument enthält"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.desc": {
-          "source": "Name of the S3 bucket containing the source document.",
-          "message": "Name des S3-Buckets, der das Quelldokument enthält."
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.display_name": {
-          "source": "Name",
-          "message": "Name"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.short_desc": {
-          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
-          "message": "Objektschlüssel im S3-Bucket, zum Beispiel „invoices/sample.pdf“"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.desc": {
-          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
-          "message": "Objektschlüssel im S3-Bucket, zum Beispiel `invoices/sample.pdf`."
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.display_name": {
-          "source": "Version",
-          "message": "Version"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.short_desc": {
-          "source": "Version of the selected resource",
-          "message": "Version der ausgewählten Ressource"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.desc": {
-          "source": "Version of the selected resource.",
-          "message": "Version der ausgewählten Ressource."
-        },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
           "source": "Client Request Token",
           "message": "Client-Anfrage-Token"
@@ -2111,42 +1947,6 @@
           "source": "Source object in an S3 bucket in the connection's AWS region.",
           "message": "Quellobjekt in einem S3-Bucket in der AWS-Region der Verbindung."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.display_name": {
-          "source": "Bucket",
-          "message": "Bucket"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.short_desc": {
-          "source": "Name of the S3 bucket containing the source document",
-          "message": "Name des S3-Buckets, der das Quelldokument enthält"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.desc": {
-          "source": "Name of the S3 bucket containing the source document.",
-          "message": "Name des S3-Buckets, der das Quelldokument enthält."
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.display_name": {
-          "source": "Name",
-          "message": "Name"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.short_desc": {
-          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
-          "message": "Objektschlüssel im S3-Bucket, zum Beispiel „invoices/sample.pdf“"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.desc": {
-          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
-          "message": "Objektschlüssel im S3-Bucket, zum Beispiel `invoices/sample.pdf`."
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.display_name": {
-          "source": "Version",
-          "message": "Version"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.short_desc": {
-          "source": "Version of the selected resource",
-          "message": "Version der ausgewählten Ressource"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.desc": {
-          "source": "Version of the selected resource.",
-          "message": "Version der ausgewählten Ressource."
-        },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
           "source": "Client Request Token",
           "message": "Client-Anfrage-Token"
@@ -2282,42 +2082,6 @@
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.desc": {
           "source": "Source object in an S3 bucket in the connection's AWS region.",
           "message": "Quellobjekt in einem S3-Bucket in der AWS-Region der Verbindung."
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.display_name": {
-          "source": "Bucket",
-          "message": "Bucket"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.short_desc": {
-          "source": "Name of the S3 bucket containing the source document",
-          "message": "Name des S3-Buckets, der das Quelldokument enthält"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.QnVja2V0.desc": {
-          "source": "Name of the S3 bucket containing the source document.",
-          "message": "Name des S3-Buckets, der das Quelldokument enthält."
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.display_name": {
-          "source": "Name",
-          "message": "Name"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.short_desc": {
-          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
-          "message": "Objektschlüssel im S3-Bucket, zum Beispiel „invoices/sample.pdf“"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.TmFtZQ.desc": {
-          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
-          "message": "Objektschlüssel im S3-Bucket, zum Beispiel `invoices/sample.pdf`."
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.display_name": {
-          "source": "Version",
-          "message": "Version"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.short_desc": {
-          "source": "Version of the selected resource",
-          "message": "Version der ausgewählten Ressource"
-        },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNkNTlkZDVhYjY4ZjkxNmJlMTc5NTRlY2M1MDEwZjYyYjQ0YmUyMjkzYzVhNjNjZTg0YTQ0Yjc0MTcxMjVlOWU2.field.VmVyc2lvbg.desc": {
-          "source": "Version of the selected resource.",
-          "message": "Version der ausgewählten Ressource."
         },
         "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
           "source": "Client Request Token",
@@ -2550,6 +2314,242 @@
         "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.allowed-value.c3RyaW5nOkRJU0FCTEVE.display_name": {
           "source": "Disabled",
           "message": "Deaktiviert"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOipIdW1hbkxvb3BEYXRhQXR0cmlidXRlcyM3YmZiNGJiZDAzNGUxZmEwOWRkMTg3OTY1MGQzODAwMTdkZTViYmIwYTFmM2VjOGYxOTkyOWM3YWFmMTI1MDUy.field.Q29udGVudENsYXNzaWZpZXJz.display_name": {
+          "source": "Content Classifiers",
+          "message": "Inhaltsklassifikatoren"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOipIdW1hbkxvb3BEYXRhQXR0cmlidXRlcyM3YmZiNGJiZDAzNGUxZmEwOWRkMTg3OTY1MGQzODAwMTdkZTViYmIwYTFmM2VjOGYxOTkyOWM3YWFmMTI1MDUy.field.Q29udGVudENsYXNzaWZpZXJz.short_desc": {
+          "source": "Content declarations for the human review workflow",
+          "message": "Inhaltsdeklarationen für den menschlichen Überprüfungsworkflow"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOipIdW1hbkxvb3BEYXRhQXR0cmlidXRlcyM3YmZiNGJiZDAzNGUxZmEwOWRkMTg3OTY1MGQzODAwMTdkZTViYmIwYTFmM2VjOGYxOTkyOWM3YWFmMTI1MDUy.field.Q29udGVudENsYXNzaWZpZXJz.desc": {
+          "source": "Content declarations for the human review workflow.",
+          "message": "Inhaltsdeklarationen für den menschlichen Überprüfungsworkflow."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOipIdW1hbkxvb3BEYXRhQXR0cmlidXRlcyM3YmZiNGJiZDAzNGUxZmEwOWRkMTg3OTY1MGQzODAwMTdkZTViYmIwYTFmM2VjOGYxOTkyOWM3YWFmMTI1MDUy.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZlBlcnNvbmFsbHlJZGVudGlmaWFibGVJbmZvcm1hdGlvbg.display_name": {
+          "source": "Free of Personally Identifiable Information",
+          "message": "Ohne personenbezogene Daten"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOipIdW1hbkxvb3BEYXRhQXR0cmlidXRlcyM3YmZiNGJiZDAzNGUxZmEwOWRkMTg3OTY1MGQzODAwMTdkZTViYmIwYTFmM2VjOGYxOTkyOWM3YWFmMTI1MDUy.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZkFkdWx0Q29udGVudA.display_name": {
+          "source": "Free of Adult Content",
+          "message": "Ohne Inhalte für Erwachsene"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Name des S3-Buckets, der das Quelldokument enthält"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Name des S3-Buckets, der das Quelldokument enthält."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Objektschlüssel im S3-Bucket, zum Beispiel „invoices/sample.pdf“"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Objektschlüssel im S3-Bucket, zum Beispiel `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Version"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Version der ausgewählten Ressource"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Version der ausgewählten Ressource."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Name des S3-Buckets, der das Quelldokument enthält"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Name des S3-Buckets, der das Quelldokument enthält."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Objektschlüssel im S3-Bucket, zum Beispiel „invoices/sample.pdf“"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Objektschlüssel im S3-Bucket, zum Beispiel `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Version"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Version der ausgewählten Ressource"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Version der ausgewählten Ressource."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Name des S3-Buckets, der das Quelldokument enthält"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Name des S3-Buckets, der das Quelldokument enthält."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Objektschlüssel im S3-Bucket, zum Beispiel „invoices/sample.pdf“"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Objektschlüssel im S3-Bucket, zum Beispiel `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Version"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Version der ausgewählten Ressource"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Version der ausgewählten Ressource."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Name des S3-Buckets, der das Quelldokument enthält"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Name des S3-Buckets, der das Quelldokument enthält."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Objektschlüssel im S3-Bucket, zum Beispiel „invoices/sample.pdf“"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Objektschlüssel im S3-Bucket, zum Beispiel `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Version"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Version der ausgewählten Ressource"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Version der ausgewählten Ressource."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Name des S3-Buckets, der das Quelldokument enthält"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Name des S3-Buckets, der das Quelldokument enthält."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Objektschlüssel im S3-Bucket, zum Beispiel „invoices/sample.pdf“"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Objektschlüssel im S3-Bucket, zum Beispiel `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Version"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Version der ausgewählten Ressource"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Version der ausgewählten Ressource."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Name des S3-Buckets, der das Quelldokument enthält"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Name des S3-Buckets, der das Quelldokument enthält."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Objektschlüssel im S3-Bucket, zum Beispiel „invoices/sample.pdf“"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Objektschlüssel im S3-Bucket, zum Beispiel `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Version"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Version der ausgewählten Ressource"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Version der ausgewählten Ressource."
         }
       }
     }
