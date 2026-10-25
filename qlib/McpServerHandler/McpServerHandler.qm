@@ -44,7 +44,7 @@
 %modern
 
 module McpServerHandler {
-    version = "1.0";
+    version = "1.1";
     desc = "McpServerHandler module for use with the Qore HttpServer module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -229,11 +229,13 @@ module McpServerHandler {
 
     @section McpServerHandler_relnotes McpServerHandler Release Notes
 
-    @subsection McpServerHandler_1_0 McpServerHandler v1.0
-    - initial release
+    @subsection McpServerHandler_1_1 McpServerHandler v1.1
     - a tool's input schema describes each type with fields that its input type refers to more than once, including
       a recursive type, once in the schema's \c "$defs" and refers to it with \c "$ref", so that the schema grows
       with the number of distinct types instead of describing a type again at every path to it
+
+    @subsection McpServerHandler_1_0 McpServerHandler v1.0
+    - initial release
 */
 
 #! the %McpServerHandler namespace holds all public definitions in the %McpServerHandler module
