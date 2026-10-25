@@ -140,6 +140,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \mechanicalRekeyToolTest());
         addTestCase("qore-data-provider-i18n carries the translations of a renamed type from its action",
             \rekeyRenamedTypeToolTest());
+        addTestCase("qore-data-provider-i18n re-keys only the catalogs of the owners it is given",
+            \rekeySelectedOwnerToolTest());
         addTestCase("qore-data-provider-i18n re-keys nothing when texts conflict",
             \rekeyConflictToolTest());
         addTestCase("qore-data-provider-i18n refuses re-key requests it does not support",
@@ -2036,6 +2038,126 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 RekeyOwnerModule), \out), "the re-keyed tree passes the source-tree check: " + out);
     }
 
+    #! The tool re-keys only the catalogs of the owners that --owner and --module name, and loads only those owners
+    /** It loaded and extracted every owner below the output and re-keyed every catalog, whatever --owner and --module
+        named: re-keying two apps of the Qore tree loaded its 264 provider modules and re-keyed its 285 catalogs.  A
+        selected catalog is re-keyed from its owner's extraction and the translations beside it alone, so it is
+        re-keyed exactly as a re-key of the whole tree re-keys it.
+    */
+    rekeySelectedOwnerToolTest() {
+        string root = sourceRoot();
+        string work = make_tmp_dir("data-provider-i18n-rekey-selected-");
+        on_exit remove_tree(work);
+        hash<auto> fx = rekeyFixture(root, work);
+        string extracted = join_paths(work, "pattern-catalog");
+        mkdir(extracted);
+        assertEq(0, runOwnerExtraction(root, extracted, PatternOwnerModule), "the tool extracts the pattern catalog");
+        string pattern_domain = DataProviderPresentation::defaultCatalogDomain(PatternOwnerApp);
+        hash<auto> pattern_catalog = parse_json(ReadOnlyFile::readTextFile(join_paths(extracted, pattern_domain,
+            "root.json")));
+        # a message of an action that the owner no longer has: re-keying the pattern owner's root drops it
+        hash<auto> stale_pattern_catalog = pattern_catalog;
+        stale_pattern_catalog.locales.root.messages{DataProviderPresentation::actionMessageId(PatternOwnerApp,
+            "removed-action", "display_name")} = {"source": "Removed", "message": "Removed"};
+
+        # a canonical tree with the catalogs of both owners, each beside the source of its module
+        code make_tree = string sub (string name) {
+            string lib = join_paths(work, name, "qlib");
+            foreach list<string> owner in (((RekeyOwnerModule, fx.domain), (PatternOwnerModule, pattern_domain))) {
+                string dir = join_paths(lib, owner[0] + ".i18n", owner[1]);
+                mkdir_ex(dir, 0755, True);
+                File module();
+                module.open2(join_paths(lib, owner[0] + ".qm"), O_CREAT | O_WRONLY | O_TRUNC);
+                module.write(ReadOnlyFile::readTextFile(join_paths(get_script_dir(), owner[0] + ".qm")));
+                module.close();
+                if (owner[0] == RekeyOwnerModule) {
+                    writeJson(join_paths(dir, "root.json"), {
+                        "schema_version": fx.root_catalog.schema_version,
+                        "locales": {"root": {"messages": fx.old_messages}},
+                    });
+                    writeJson(join_paths(dir, "cs.json"), {
+                        "schema_version": fx.root_catalog.schema_version,
+                        "locales": {"cs": {"messages": fx.cs}},
+                    });
+                } else {
+                    writeJson(join_paths(dir, "root.json"), stale_pattern_catalog);
+                }
+            }
+            return join_paths(work, name);
+        };
+        string rekey_root = join_paths("qlib", RekeyOwnerModule + ".i18n", fx.domain, "root.json");
+        string pattern_root = join_paths("qlib", PatternOwnerModule + ".i18n", pattern_domain, "root.json");
+
+        string selected = make_tree("selected");
+        hash<string, string> before = readTreeFiles(selected);
+        string out;
+        assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree -v -o %s --owner %s", shellQuote(selected),
+            RekeyOwnerModule), \out), "re-keying one owner succeeds: " + out);
+        assertRegex("(?m)^loading provider module " + RekeyOwnerModule + "$", out, "the selected owner is loaded");
+        assertFalse(regex(out, "(?m)^loading provider module " + PatternOwnerModule + "$"),
+            "the other owner is not loaded: " + out);
+        assertRegex("(?m)^re-keyed 1 domain\\(s\\), 1 re-keyed; ", out, "one catalog is re-keyed");
+        hash<string, string> after_owner = readTreeFiles(selected);
+        assertEq(before{pattern_root}, after_owner{pattern_root}, "the other owner's catalog is left as it is");
+        assertEq(fx.root_catalog, parse_json(after_owner{rekey_root}), "the selected owner's catalog is re-keyed");
+
+        assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree -v -o %s -m %s", shellQuote(selected),
+            PatternOwnerModule), \out), "re-keying the catalog of a module succeeds: " + out);
+        assertRegex("(?m)^loading provider module " + PatternOwnerModule + "$", out, "the selected module is loaded");
+        assertFalse(regex(out, "(?m)^loading provider module " + RekeyOwnerModule + "$"),
+            "the other owner is not loaded: " + out);
+        hash<string, string> after_module = readTreeFiles(selected);
+        assertEq(after_owner - pattern_root, after_module - pattern_root,
+            "the files of the other owner are left as they are");
+        assertEq(pattern_catalog, parse_json(after_module{pattern_root}), "the module's catalog is re-keyed");
+
+        assertThrows("TEST-ERROR", "no source-owned provider root catalogs of owner module",
+            sub () {
+                if (runI18nTool(root, sprintf("--rekey-source-tree -o %s --owner NoSuchOwner",
+                        shellQuote(selected)), \out)) {
+                    throw "TEST-ERROR", out;
+                }
+            });
+
+        # a connection catalog also has the messages of other modules' schemes that keep its owner's options, so it
+        # is extracted with every owner of the tree loaded
+        string connection_owner = "ConnectionPresentationFixture";
+        string connection_extracted = join_paths(work, "connection-catalog");
+        mkdir(connection_extracted);
+        assertEq(0, runI18nTool(root, sprintf("-o %s --owner %s", shellQuote(connection_extracted),
+            connection_owner), \out), "the tool extracts the connection catalog: " + out);
+        string connection_domain = ConnectionPresentation::domain(connection_owner);
+        string connection_lib = join_paths(selected, "qlib");
+        mkdir_ex(join_paths(connection_lib, connection_owner + ".i18n", connection_domain), 0755, True);
+        File connection_module();
+        connection_module.open2(join_paths(connection_lib, connection_owner + ".qm"), O_CREAT | O_WRONLY | O_TRUNC);
+        connection_module.write(ReadOnlyFile::readTextFile(join_paths(get_script_dir(), connection_owner + ".qm")));
+        connection_module.close();
+        writeJson(join_paths(connection_lib, connection_owner + ".i18n", connection_domain, "root.json"),
+            parse_json(ReadOnlyFile::readTextFile(join_paths(connection_extracted, connection_domain, "root.json"))));
+        hash<string, string> before_connection = readTreeFiles(selected);
+        assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree -v -o %s --owner %s", shellQuote(selected),
+            connection_owner), \out), "re-keying a connection catalog succeeds: " + out);
+        foreach string module_name in ((connection_owner, RekeyOwnerModule, PatternOwnerModule)) {
+            assertRegex("(?m)^loading provider module " + module_name + "$", out,
+                sprintf("%s is loaded to extract the connection catalog", module_name));
+        }
+        assertRegex("(?m)^re-keyed 1 domain\\(s\\), 0 re-keyed; ", out, "only the connection catalog is re-keyed");
+        assertEq(before_connection, readTreeFiles(selected), "the up-to-date connection catalog is left as it is");
+        remove_tree(join_paths(connection_lib, connection_owner + ".i18n"));
+        unlink(join_paths(connection_lib, connection_owner + ".qm"));
+
+        # the whole tree, re-keyed at once, has the same files
+        string full = make_tree("full");
+        assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree -v -o %s", shellQuote(full)), \out),
+            "re-keying the whole tree succeeds: " + out);
+        assertRegex("(?m)^loading provider module " + PatternOwnerModule + "$", out);
+        assertRegex("(?m)^loading provider module " + RekeyOwnerModule + "$", out);
+        assertRegex("(?m)^re-keyed 2 domain\\(s\\), 2 re-keyed; ", out, "both catalogs are re-keyed");
+        assertEq(readTreeFiles(full), after_module,
+            "re-keying the owners one at a time gives the files that re-keying the whole tree gives");
+    }
+
     #! Re-keying the committed roots gives the same catalogs as re-keying to the extracted roots
     mechanicalRekeyToolTest() {
         string root = sourceRoot();
@@ -2326,6 +2448,23 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 "locales": {entry.key: {"messages": entry.value}},
             });
         }
+    }
+
+    #! Returns the contents of the files below a tree, by path below the tree
+    private static hash<string, string> readTreeFiles(string tree, string path = "") {
+        hash<string, string> rv = {};
+        Dir dir();
+        if (!dir.chdir(join_paths(tree, path))) {
+            throw "TEST-ERROR", sprintf("cannot read %y", join_paths(tree, path));
+        }
+        foreach string file in (dir.listFiles()) {
+            string rel = path.val() ? join_paths(path, file) : file;
+            rv{rel} = ReadOnlyFile::readTextFile(join_paths(tree, rel));
+        }
+        foreach string child in (dir.listDirs()) {
+            rv += readTreeFiles(tree, path.val() ? join_paths(path, child) : child);
+        }
+        return rv;
     }
 
     #! Returns the contents of the catalog files of the domains below a source tree, by path below the tree

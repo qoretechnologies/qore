@@ -635,9 +635,18 @@ class QoreDataProviderI18nCmd {
         Conflicting texts for one new id (or a conflict reported by the extraction) are reported for each domain;
         then nothing is written, and the program exits with status 2.
 
+        Owners named with \a explicit_owners or \a extra_modules select the roots that are re-keyed: only the roots
+        of those owners are re-keyed, and only those owners and \a extra_modules are loaded and extracted.  A root's
+        new messages are its owner's extraction and its translations are carried from the files beside it alone, so a
+        selected root is re-keyed exactly as a re-key of the whole tree re-keys it.  The one exception is a
+        connection catalog: the schemes of other modules that keep its owner's option references contribute to it,
+        so when a selected root is a connection catalog, every owner of a provider registration in the tree is
+        loaded, as without a selection; only the selected owners are extracted.  Without a selection, every owner of
+        a provider registration in the tree is loaded and extracted, and every root is re-keyed.
+
         @param output the source tree
-        @param extra_modules more modules to load
-        @param explicit_owners the owner of a noncanonical source tree
+        @param extra_modules more modules to load, whose roots are re-keyed as well
+        @param explicit_owners the owners whose roots are re-keyed, or the owner of a noncanonical source tree
         @param mechanical re-key the committed root messages instead of extracting the roots
         @param dry_run report only; write nothing
         @param verbose report every domain, also domains without changes
@@ -658,10 +667,6 @@ class QoreDataProviderI18nCmd {
         hash<string, hash<string, hash<auto>>> owner_catalogs;
         hash<string, string> owner_errors;
         if (!mechanical) {
-            hash<string, bool> owner_modules = map {$1: True}, explicit_owners;
-            foreach string source_root in (source_roots) {
-                collectProviderSourceOwners(source_root, \owner_modules);
-            }
             foreach hash<auto> root in (\roots) {
                 *string module_name = sourceOwnerModule(root.search_root);
                 if (!module_name.val()) {
@@ -672,10 +677,42 @@ class QoreDataProviderI18nCmd {
                     }
                     module_name = explicit_owners.first();
                 }
-                owner_modules{module_name} = True;
                 root.owner = module_name;
             }
-            hash<string, bool> modules_to_load = owner_modules;
+            # the owners whose catalogs are extracted
+            hash<string, bool> owner_modules = {};
+            # the owners of provider registrations in the tree
+            hash<string, bool> source_owners = {};
+            # --owner and --module select the owners whose roots are re-keyed.  An app catalog is re-keyed from its
+            # owner's extraction and the translations beside it alone, so the roots of the other owners are left as
+            # they are, and the other owners are neither loaded nor extracted
+            hash<string, bool> selection = map {$1: True}, explicit_owners + extra_modules;
+            if (selection) {
+                roots = select roots, selection{$1.owner};
+                if (!roots) {
+                    throw "DATA-PROVIDER-I18N-ERROR", sprintf("no source-owned provider root catalogs of owner "
+                        "module(s) %y found below %y", keys selection, output);
+                }
+                # a connection catalog also has the messages of the schemes of other modules that use its owner's
+                # options unchanged, which keep its owner's references, so it is extracted with every owner of the
+                # tree loaded, as without a selection
+                foreach hash<auto> root in (roots) {
+                    if (root.domain == ConnectionPresentation::domain(root.owner)) {
+                        foreach string source_root in (source_roots) {
+                            collectProviderSourceOwners(source_root, \source_owners);
+                        }
+                        break;
+                    }
+                }
+            } else {
+                # without a selection, every owner of a provider registration in the tree is loaded and extracted,
+                # as when the tree is checked
+                foreach string source_root in (source_roots) {
+                    collectProviderSourceOwners(source_root, \owner_modules);
+                }
+            }
+            map owner_modules{$1.owner} = True, roots;
+            hash<string, bool> modules_to_load = owner_modules + source_owners;
             map modules_to_load{$1} = True, extra_modules;
             foreach string module_name in (sort(keys modules_to_load)) {
                 if (verbose) {
@@ -1436,7 +1473,8 @@ class QoreDataProviderI18nCmd {
         printf("                     Load source owners once and rewrite every root catalog\n");
         printf("      --rekey-source-tree\n");
         printf("                     Re-key every catalog for the per-action type identities and carry\n");
-        printf("                     the translations of unchanged texts to the new ids\n");
+        printf("                     the translations of unchanged texts to the new ids; with --owner\n");
+        printf("                     or --module, only the catalogs of those owners, loading only them\n");
         printf("      --mechanical   With --rekey-source-tree: re-key the committed roots without\n");
         printf("                     loading the source owners\n");
         printf("      --dry-run      With --rekey-source-tree: report only, write nothing\n");
