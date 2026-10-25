@@ -73,6 +73,7 @@ class DatasourcePoolDeleteInUseTest inherits QUnit::Test {
         }, SQL_MUTATION_MASK_ALL);
 
         string outcome;
+        *string resource_err;
         background sub () {
             on_exit progress.push("done");
             try {
@@ -81,6 +82,14 @@ class DatasourcePoolDeleteInUseTest inherits QUnit::Test {
                 outcome = "ok";
             } catch (hash<ExceptionInfo> ex) {
                 outcome = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            # the transaction that exec() started is still the thread's on the deleted pool: the pool rolls it back
+            # when the thread's resources are released, with a notice that is raised here instead of at the exit of
+            # the thread, where nothing would handle it
+            try {
+                throw_thread_resource_exceptions();
+            } catch (hash<ExceptionInfo> ex) {
+                resource_err = ex.err;
             }
         }();
 
@@ -97,6 +106,9 @@ class DatasourcePoolDeleteInUseTest inherits QUnit::Test {
         }
         release.dec();
         assertEq("done", progress.get(), "the worker finished");
+        if (resource_err) {
+            assertEq("DATASOURCEPOOL-LOCK-EXCEPTION", resource_err, "the transaction of the worker is rolled back");
+        }
         return outcome;
     }
 
