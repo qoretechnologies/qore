@@ -1596,6 +1596,8 @@ fetch
     - @ref DataProvider::HashDataType::isAssignableFrom() "HashDataType::isAssignableFrom()" terminates for
       recursive types, which it compared until the stack was exhausted
     - added @ref DataProvider::HashDataType::setFields() "HashDataType::setFields()"
+    - provider catalog extraction also covers the fields of the type of the other fields of a hash type, which a
+      hash keyed by names that its user chooses describes its values with, as it covers those of an element type
     - the soft equivalents of all scalar types keep the validation constraints of the type, and a soft float, number,
       boolean, binary or date type checks the value it converts from a string against them
     - a record type (@ref DataProvider::HashDataType "HashDataType") whose added fields all have default values is

@@ -1084,6 +1084,16 @@ string desc = DataProviderPresentation::describeMessageId(
                 element_type, field_path, union_path, type_path,
                 option_scoped, \type_seen);
         }
+        # a hash keyed by names its user chooses describes its values with the type of its other fields, whose
+        # presentation is reached like an element type's
+        if (type instanceof HashDataType) {
+            if (*AbstractDataProviderType other_type
+                    = cast<HashDataType>(type).getDefaultOtherFieldType()) {
+                addTypeMessages(\messages, catalog_app, action, option,
+                    other_type, field_path, union_path, type_path,
+                    option_scoped, \type_seen);
+            }
+        }
     }
 
     private static addRecordMessages(reference<hash<auto>> messages,
