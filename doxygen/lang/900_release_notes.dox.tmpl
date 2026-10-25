@@ -4087,6 +4087,8 @@ while (*binary chunk = input.read(65536)) {
         sanitizes authentication failures, bounds token requests, and isolates metadata caches by endpoint
 
     - @ref geminibodyshapeintro "GeminiBodyShape" module
+      - repeated response structures use shared schema definitions on Vertex AI, reducing request size while
+        preserving their fields, types, and validation requirements
       - structured responses with boolean, numeric, or empty-string allowed values no longer fail before generation; values
         retain their declared types and remain subject to the caller's validation
       - new shared module for the Gemini \c generateContent wire format: request/response shapers plus the \

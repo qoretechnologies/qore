@@ -345,17 +345,20 @@ public string sub bareModelName(string model) {
         @ref shapeToolParameters() and return its \c parameters; use
         @ref shapeToolParameters() directly to also get the arguments that
         are declared as JSON strings
+    @param share_references use native \c defs / \c ref for repeated, pure references to schemas without further
+        references, when the transport supports them (Vertex AI response schemas). Other references retain their
+        existing expansion, including recursive references and references refined by sibling keywords.
 
     @return the sanitized schema (or @ref nothing if input was empty)
 */
-public *hash<auto> sub sanitizeSchema(*hash<auto> schema, bool compact = False) {
+public *hash<auto> sub sanitizeSchema(*hash<auto> schema, bool compact = False, bool share_references = False) {
     if (!schema) {
         return NOTHING;
     }
     if (compact) {
         return GeminiBodyShape::shapeToolParameters(schema).parameters;
     }
-    GeminiSchemaShaper shaper(schema, False);
+    GeminiSchemaShaper shaper(schema, False, share_references);
     return shaper.shapeRoot();
 }
 
@@ -536,11 +539,22 @@ class GeminiSchemaShaper {
         list<list<*string>> stringified = ();
         #! the references being expanded on the current path, to detect recursion
         hash<string, bool> expanding = {};
+        #! Counts pure reference candidates; only transports supporting native response references populate it
+        hash<string, int> reference_counts = {};
+        #! Leaf-reference qualification is cached independently of the number of occurrences
+        hash<string, bool> shareable = {};
+        #! Native names assigned to reusable references
+        hash<string, string> reference_names = {};
+        #! Sanitized leaf schemas shared by native references
+        hash<string, hash<auto>> native_definitions = {};
     }
 
-    constructor(hash<auto> root, bool tool) {
+    constructor(hash<auto> root, bool tool, bool share_references = False) {
         self.root = root;
         self.tool = tool;
+        if (!tool && share_references) {
+            countReferences(root);
+        }
     }
 
     #! Returns the shaped root schema
@@ -548,7 +562,37 @@ class GeminiSchemaShaper {
         auto rv = shape(root, 1, (), False);
         # a hash input is always shaped to a hash: only member positions are stringified
         @assert(rv.typeCode() == NT_HASH);
+        if (native_definitions) {
+            rv.defs = native_definitions;
+        }
         return cast<hash>(rv);
+    }
+
+    #! Counts reference occurrences without expanding definitions
+    private countReferences(auto value) {
+        if (value.typeCode() == NT_HASH) {
+            if (value."$ref".typeCode() == NT_STRING) {
+                reference_counts{value."$ref"} = (reference_counts{value."$ref"} ?? 0) + 1;
+            }
+            foreach auto child in (hash_values(value)) { countReferences(child); }
+        } else if (value.typeCode() == NT_LIST) {
+            foreach auto child in (value) { countReferences(child); }
+        }
+    }
+
+    #! A leaf definition has no context-dependent reference expansion
+    private static bool containsReference(auto value) {
+        if (value.typeCode() == NT_HASH) {
+            if (value."$ref".typeCode() == NT_STRING) { return True; }
+            foreach auto child in (hash_values(value)) {
+                if (GeminiSchemaShaper::containsReference(child)) { return True; }
+            }
+        } else if (value.typeCode() == NT_LIST) {
+            foreach auto child in (value) {
+                if (GeminiSchemaShaper::containsReference(child)) { return True; }
+            }
+        }
+        return False;
     }
 
     #! Returns the paths of the values declared as JSON strings
@@ -570,6 +614,9 @@ class GeminiSchemaShaper {
 
         if (node."$ref".typeCode() == NT_STRING) {
             string ref = node."$ref";
+            if (node.size() == 1 && reference_names{ref}) {
+                return {"ref": "#/defs/" + reference_names{ref}};
+            }
             *hash<auto> target = expanding{ref} ? NOTHING : resolveRef(ref);
             if (!exists target) {
                 if (tool && member) {
@@ -578,6 +625,17 @@ class GeminiSchemaShaper {
                 # Gemini has no references: an unresolvable one is dropped
                 remove node."$ref";
             } else {
+                if (node.size() == 1 && reference_counts{ref} > 1) {
+                    if (!shareable.hasKey(ref)) {
+                        shareable{ref} = !GeminiSchemaShaper::containsReference(target);
+                    }
+                    if (shareable{ref}) {
+                        string name = sprintf("schema_%d", native_definitions.size() + 1);
+                        native_definitions{name} = shape(target, depth, path, member);
+                        reference_names{ref} = name;
+                        return {"ref": "#/defs/" + name};
+                    }
+                }
                 expanding{ref} = True;
                 on_exit remove expanding{ref};
                 # sibling keywords (e.g. a description) refine the referenced schema
@@ -1818,6 +1876,8 @@ public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messag
           \c systemInstruction, \c tools and \c toolConfig, which must be part of
           the cached content instead (see @ref applyCachedContent()); system
           messages are therefore not sent
+        - \c response_schema_references (\c *bool): share repeated leaf schema definitions using the native
+          response-schema \c defs / \c ref contract when supported by the transport
 
     Tool parameter schemas are shaped with @ref shapeToolParameters(); the arguments of the assistant tool calls
     in \a messages are replayed in the shaped form (see @ref encodeToolArguments()).
@@ -1942,7 +2002,7 @@ public hash<GeminiChatRequest> sub shapeChatRequest(list<hash<QoreLlmUtils::Chat
     if (output_schema) {
         generation_config.responseMimeType = "application/json";
         generation_config.responseSchema = GeminiBodyShape::sanitizeSchema(
-            output_schema);
+            output_schema, False, resolved.response_schema_references ?? False);
     }
     body.generationConfig = generation_config;
 
@@ -2472,6 +2532,13 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         return getMode();
     }
 
+    #! Whether this transport supports native references in response schemas
+    /** @return False by default; Vertex AI enables its documented \c defs / \c ref contract
+    */
+    bool supportsResponseSchemaReferences() {
+        return False;
+    }
+
     #! Resolves the model for this request, falling back to @ref getDefaultModel()
     string getModelName(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
         return getRequestModel(opts) ?? getDefaultModel();
@@ -2860,6 +2927,7 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
             "reasoning_effort": getRequestReasoningEffort(opts),
             "disable_reasoning": getRequestDisableReasoning(opts),
             "cached_content": cached_content,
+            "response_schema_references": supportsResponseSchemaReferences(),
         };
         hash<GeminiChatRequest> request = GeminiBodyShape::shapeChatRequest(messages, tools,
             output_schema, resolved);

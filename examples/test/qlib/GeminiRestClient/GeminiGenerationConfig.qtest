@@ -63,6 +63,8 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
         addTestCase("chat shaping handles reasoning effort", \shaping());
         addTestCase("both providers resolve options before normalization", \providers());
         addTestCase("response enums keep their types and use the native string-only contract", \responseEnums());
+        addTestCase("Vertex shares repeated response definitions without changing their expanded schema",
+            \responseReferences());
         set_return_value(main());
     }
 
@@ -122,6 +124,62 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
             assertEq((" ",), shaped.properties.blank."enum", "nonempty whitespace stays an exact string choice");
             assertEq(original, schema, "the strict caller schema is unchanged");
         }
+    }
+
+    responseReferences() {
+        hash<auto> schema = {"type": "object", "$defs": {
+            "record": {"type": "object", "properties": {
+                "identifikátor": {"type": "string"},
+                "confirmed": {"type": "boolean", "enum": (True,)},
+                "rows": {"type": "array", "items": {"type": "string", "enum": ("new", "old")}},
+                "ref": {"type": "string"}, "defs": {"type": "string"},
+            }, "required": ("identifikátor", "confirmed", "rows", "ref", "defs")},
+        }, "properties": {
+            "first": {"$ref": "#/$defs/record"},
+            "second": {"$ref": "#/$defs/record"},
+            "refined": {"$ref": "#/$defs/record", "description": "a distinct local description"},
+        }, "required": ("first", "second", "refined")};
+        hash<auto> original = schema;
+        hash<auto> expanded = GeminiBodyShape::sanitizeSchema(schema);
+        CaptureGenerationRest rest();
+        hash<QoreLlmUtils::LlmBackendConfig> config = <QoreLlmUtils::LlmBackendConfig>{
+            "model": "gemini-3.5-flash", "api_key": "test-only-key", "max_retries": 0,
+            "provider_options": {"gcp_project_id": "test-project"},
+        };
+        foreach GeminiBodyShape::AbstractGeminiModelProvider provider in ((
+                new CaptureGeminiProvider(config, rest), new CaptureVertexProvider(config, rest))) {
+            provider.chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "fixture"},), NOTHING,
+                <QoreLlmUtils::LlmRequestOptions>{"output_schema": schema});
+            hash<auto> shaped = rest.body.generationConfig.responseSchema;
+            if (provider.getMode() == "vertex-ai") {
+                assertEq(1, shaped.defs.size());
+                assertEq({"ref": "#/defs/schema_1"}, shaped.properties.first);
+                assertEq(shaped.properties.first, shaped.properties.second);
+                assertEq(expanded.properties.first, shaped.defs.schema_1);
+                assertEq(expanded.properties.refined, shaped.properties.refined, "siblings retain their refinement");
+                shaped.properties.first = shaped.defs.schema_1;
+                shaped.properties.second = shaped.defs.schema_1;
+                remove shaped.defs;
+            } else {
+                assertFalse(shaped.hasKey("defs"), "other transports retain the existing representation");
+            }
+            assertEq(expanded, shaped, "expanding the references reproduces the complete original native schema");
+            assertEq(original, schema, "the strict caller schema is unchanged");
+        }
+        # Recursive and missing references retain the existing finite expansion; native references never
+        # introduce a cycle, and a single use does not pay the overhead of a separate definition.
+        foreach hash<auto> other in ((
+                {"type": "object", "$defs": {"node": {"type": "object", "properties": {
+                    "child": {"$ref": "#/$defs/node"}}}}, "properties": {
+                        "a": {"$ref": "#/$defs/node"}, "b": {"$ref": "#/$defs/node"}}},
+                {"type": "object", "properties": {
+                    "a": {"$ref": "#/$defs/missing"}, "b": {"$ref": "#/$defs/missing"}}},
+                {"type": "object", "$defs": {"record": schema."$defs".record}, "properties": {
+                    "single": {"$ref": "#/$defs/record"}}})) {
+            assertEq(GeminiBodyShape::sanitizeSchema(other), GeminiBodyShape::sanitizeSchema(other, False, True));
+        }
+        assertEq(GeminiBodyShape::sanitizeSchema(schema, True),
+            GeminiBodyShape::sanitizeSchema(schema, True, True), "tool parameter shaping is unchanged");
     }
 
     models() {
