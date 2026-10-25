@@ -35,6 +35,7 @@
 #include <qore/AsyncCompletionAction.h>
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 
 #include <cassert>
 #include <unordered_map>
@@ -75,7 +76,7 @@ int HttpClientConnectionBase::checkSandboxUse(QoreSandboxManager* sm, ExceptionS
     }
     // the connection is still being made: its connect checks it against the sandbox it was opened for, so it can be
     // used by code under the same sandbox only
-    return opener_policy == sm ? 0 : 1;
+    return QoreSandboxComposition::same(opener_policy, sm) ? 0 : 1;
 }
 
 bool HttpClientConnectionBase::tryReserveStream(bool streaming_send) {

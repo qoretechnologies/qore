@@ -36,6 +36,7 @@
 #include "qore/QoreTypeSafeReferenceHelper.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/QoreFormatBounds.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #ifdef QORE_HAVE_ALLOC_TRACKING
@@ -150,6 +151,7 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
         in_destructor(false),
         recursive_ref_found(false),
         obj(n_obj) {
+    std::unique_ptr<QoreSandboxContext> provenance(qore_capture_sandbox_provenance());
     //printd(5, "qore_object_private::qore_object_private() this: %p obj: %p '%s'\n", this, obj, oc->getName());
 #ifdef QORE_DEBUG_OBJ_REFS
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::qore_object_private() this: %p obj: %p pgm: %p class: %s "
@@ -180,6 +182,7 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
     // allow the wrapper to be deleted, leaving "theclass" dangling for objects that outlive the Program that
     // created them (ex: system objects, which hold no weak Program reference)
     qore_class_private::refClass(*const_cast<QoreClass*>(oc));
+    sandbox_provenance = provenance.release();
 }
 
 QoreStringNode* QoreObject::getUniqueHash() const {
@@ -202,6 +205,9 @@ QoreStringNode* QoreObject::getUniqueHash() const {
 }
 
 qore_object_private::~qore_object_private() {
+    if (sandbox_provenance) {
+        sandbox_provenance->deref();
+    }
     //printd(5, "qore_object_private::~qore_object_private() this: %p obj: %p '%s' pgm: %p\n", this, obj, theclass ? theclass->getName() : "<n/a>", pgm);
     assert(!cdmap);
     assert(!data);

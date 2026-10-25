@@ -1027,7 +1027,7 @@ DLLLOCAL extern std::atomic<unsigned> qore_dgc_node_watch_count;
 
 //! Returns true if nodes of the given type can be watched
 DLLLOCAL inline bool qore_dgc_watchable_type(qore_type_t t) {
-    return t == NT_LIST || t == NT_HASH || t == NT_RUNTIME_CLOSURE || t == NT_REFERENCE;
+    return t == NT_LIST || t == NT_HASH || t == NT_RUNTIME_CLOSURE || t == NT_REFERENCE || t == NT_FUNCREF;
 }
 
 //! Called after a reference to a list, hash, closure or reference was released while nodes are watched
@@ -1113,6 +1113,7 @@ private:
         List,
         Hash,
         Closure,
+        BoundCallback,
         Reference,
     };
 

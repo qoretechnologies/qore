@@ -88,8 +88,10 @@ code sub get_starter(string kind) {
 }
 
 # starts a thread that waits on a gate; the result queue receives how the wait ended
-list<auto> sub start_waiter(Queue gate) {
-    Queue result();
+list<auto> sub start_waiter(Queue gate, *Queue result) {
+    if (!result) {
+        result = new Queue();
+    }
     code f = sub () {
         try {
             result.push(gate.get(30s));
@@ -178,8 +180,8 @@ auto sub run(code starter, auto arg) {
     return starter(arg);
 }
 
-list<auto> sub run_waiter(code starter, Queue gate) {
-    return starter(gate);
+list<auto> sub run_waiter(code starter, Queue gate, *Queue result) {
+    return starter(gate, result);
 }
 
 bool sub cancel(int tid) {
@@ -362,7 +364,11 @@ code sub get_reader() {
         Program p = getSandboxed(sm);
         Program u = getTrusted();
         Queue gate();
-        list<auto> l = p.callFunction("run_waiter", u.callFunction("get_function_ref", "start_waiter"), gate);
+        # The host owns the result channel so it can inspect completion after the tenant is interrupted.
+        # A queue created inside the tenant also carries its interruption provenance.
+        Queue result();
+        list<auto> l = p.callFunction("run_waiter", u.callFunction("get_function_ref", "start_waiter"), gate, result);
+        on_exit { sm.clearInterrupt(); }
         sm.requestInterrupt();
         assertEq("PROGRAM-INTERRUPTED", l[1].get(60s));
         sm.clearInterrupt();

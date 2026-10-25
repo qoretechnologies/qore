@@ -4666,7 +4666,7 @@ static int qore_socket_exec_send_http_chunked_body_callback(QoreSocket* s,
             return *xsink ? -1 : 0;
         }
 
-        ValueHolder res(send_callback->execValue(nullptr, xsink), xsink);
+        ValueHolder res(send_callback->invoke(nullptr, xsink), xsink);
         if (*xsink) {
             return -1;
         }

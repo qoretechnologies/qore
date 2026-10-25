@@ -81,13 +81,13 @@ public:
             return QoreValue();
         }
         SandboxScope sandbox_scope(sandbox_context);
-        return code->execValue(0, xsink);
+        return code->invoke(0, xsink);
     }
 
     DLLLOCAL void cancel(ExceptionSink* xsink) {
         if (cancelCode) {
             SandboxScope sandbox_scope(sandbox_context);
-            cancelCode->execValue(0, xsink).discard(xsink);
+            cancelCode->invoke(0, xsink).discard(xsink);
         }
     }
 

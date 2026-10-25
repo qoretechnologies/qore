@@ -54,7 +54,7 @@ QoreValue QoreDotEvalOperatorNode::evalWithBase(QoreValue base, ExceptionSink* x
             // FIXME: inefficient
             const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), m->getName());
             if (ref) {
-                return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->execValue(m->getArgs(), xsink);
+                return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(m->getArgs(), xsink);
             }
             break;
         }
@@ -68,7 +68,7 @@ QoreValue QoreDotEvalOperatorNode::evalWithBase(QoreValue base, ExceptionSink* x
         case NT_HASH: {
             const AbstractQoreNode* ref = check_call_ref(base.getInternalNode(), m->getName());
             if (ref) {
-                return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->execValue(m->getArgs(), xsink);
+                return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(m->getArgs(), xsink);
             }
             break;
         }

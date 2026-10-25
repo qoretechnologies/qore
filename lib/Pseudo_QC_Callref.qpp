@@ -76,7 +76,7 @@ bool <callref>::val() [const;flags=CONSTANT] {
     @return the return value of the code called
 */
 auto <callref>::exec(...) {
-    c->execValue(args, xsink);
+    c->invoke(args, xsink);
 }
 
 //! Returns @ref True because this is a callable type

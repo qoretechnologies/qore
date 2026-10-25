@@ -1186,7 +1186,7 @@ void qore_program_private::doThreadInit(ExceptionSink* xsink) {
         ti = thr_init ? thr_init->refRefSelf() : 0;
     }
     if (ti) {
-        ValueHolder v(ti->execValue(0, xsink), xsink);
+        ValueHolder v(ti->invoke(0, xsink), xsink);
     }
 }
 

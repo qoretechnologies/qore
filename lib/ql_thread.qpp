@@ -89,7 +89,7 @@ static void call_async_thread(ExceptionSink* xsink, void* arg) {
     if (pgm) {
         QoreExternalProgramContextHelper pch(xsink, pgm);
         if (!*xsink) {
-            QoreValue rv = params->code->execValue(params->args, xsink);
+            QoreValue rv = params->code->invoke(params->args, xsink);
             if (*xsink) {
                 // Capture exception info from the sink
                 ExceptionSink xs;
@@ -1293,7 +1293,7 @@ auto defer_thread_cancel(code cleanup, ...) [dom=THREAD_CONTROL] {
     if (num_args(args) > 1) {
         vargs = args->copyListFrom(1);
     }
-    return cleanup->execValue(*vargs, xsink);
+    return cleanup->invoke(*vargs, xsink);
 }
 
 //! Calls the given code in a background thread and returns a Future for the result
@@ -1487,7 +1487,7 @@ static void parallel_exec_worker(ExceptionSink* xsink, void* arg) {
         call_args->push(item, xsink);
 
         // Execute function
-        QoreValue rv = const_cast<ResolvedCallReferenceNode*>(state->func)->execValue(*call_args, xsink);
+        QoreValue rv = const_cast<ResolvedCallReferenceNode*>(state->func)->invoke(*call_args, xsink);
         if (*xsink) {
             parallel_capture_exception(state, xsink);
             rv.discard(xsink);
@@ -1604,7 +1604,7 @@ list<auto> parallel_map(code callable, list<auto> items, int thread_count = 0) [
             QoreValue item = l->getReferencedEntry(i);
             ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
             call_args->push(item, xsink);
-            QoreValue rv = const_cast<ResolvedCallReferenceNode*>(callable)->execValue(*call_args, xsink);
+            QoreValue rv = const_cast<ResolvedCallReferenceNode*>(callable)->invoke(*call_args, xsink);
             if (*xsink) {
                 rv.discard(xsink);
                 return QoreValue();
@@ -1746,7 +1746,7 @@ nothing parallel_foreach(code callable, list<auto> items, int thread_count = 0) 
             QoreValue item = l->getReferencedEntry(i);
             ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
             call_args->push(item, xsink);
-            QoreValue rv = const_cast<ResolvedCallReferenceNode*>(callable)->execValue(*call_args, xsink);
+            QoreValue rv = const_cast<ResolvedCallReferenceNode*>(callable)->invoke(*call_args, xsink);
             rv.discard(xsink);
             if (*xsink) {
                 return QoreValue();

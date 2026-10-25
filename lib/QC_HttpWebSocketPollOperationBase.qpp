@@ -708,7 +708,7 @@ void HttpWebSocketPollOperationPriv::dispatchFrameCallback(ExceptionSink* xsink)
         }
     }
     if (cb) {
-        ValueHolder rv(cb->execValue(nullptr, xsink), xsink);
+        ValueHolder rv(cb->invoke(nullptr, xsink), xsink);
     }
 }
 

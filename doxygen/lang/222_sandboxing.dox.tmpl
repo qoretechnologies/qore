@@ -154,6 +154,47 @@ p.parse(user_code, "user_script");
 auto result = p.callFunction("main");
     @endcode
 
+    @subsection sandbox_provenance Objects, Callbacks, and Trusted Resources
+
+    An object or runtime call reference created under a sandbox retains that context. Calling its methods or
+    invoking the reference later also enforces its creation policy, even when trusted code makes the call and
+    the method is implemented in a shared module. The nearest calling Program's policy still applies; an access
+    must satisfy both it and every active creation policy. Copies, asynchronous callbacks, and bound callbacks
+    preserve this protection. A manager's interrupt and thread limits remain effective as well.
+
+    Creation provenance does not track later changes to a shared object. When a tenant configures an existing
+    handler, keep its interface Program wrapper or bind its callback while executing in that interface:
+
+    @code{.py}
+code registered_handler = SandboxManager::bindCall(\handler.handleRequest());
+    @endcode
+
+    The returned callback retains the registering context without changing the shared handler. Objects and
+    references retain their original managers, not their creating Programs. Replacing a Program's manager affects
+    future creations; restrict or interrupt the old manager to revoke existing objects and callbacks. Configure
+    filesystem/network rules while their users are quiescent; interruption and thread-limit changes are thread-safe.
+
+    @ref Qore::SandboxManager::callWithSystemPolicy() masks inherited caller policy but cannot remove provenance.
+    Trusted infrastructure that must read a system credential or open a system listener registers a fixed operation
+    with @ref Qore::SandboxManager::createSystemPolicyCall() during trusted startup:
+
+    @code{.py}
+# Trusted initialization: authenticate_provider uses a system-owned credential path.
+code authenticate = SandboxManager::createSystemPolicyCall(\authenticate_provider());
+# Later, while serving a sandboxed caller:
+authenticate();
+    @endcode
+
+    Only code executing outside every sandbox can register such a capability. Its fixed callback must validate its
+    arguments; a capability for an arbitrary file reader grants that operation to everyone holding it. Tenant
+    callbacks invoked within the operation regain their own provenance and Program policy. Interrupts and thread
+    accounting are preserved. Initialize shared system resources before invoking tenant code; first initialization
+    under a tenant intentionally captures that tenant's context.
+
+    Native modules invoke callbacks with ResolvedCallReferenceNode::invoke(), or apply QoreSandboxProvenanceHelper
+    around direct native implementations. Foreign runtime I/O that does not use Qore's policy checks remains outside
+    this mechanism; provenance is execution context, not data taint tracking.
+
     @section sandbox_filesystem Filesystem Security
 
     The filesystem security system controls which paths can be accessed by sandboxed code. It supports:

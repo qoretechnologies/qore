@@ -128,7 +128,7 @@ bool QoreYamlSaxParser::emitEvent(ParseState& state, yaml_event_t& event) {
     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), state.xsink);
     args->push(event_hash.release(), state.xsink);
 
-    ValueHolder rv(state.callback->execValue(*args, state.xsink), state.xsink);
+    ValueHolder rv(state.callback->invoke(*args, state.xsink), state.xsink);
     return !*state.xsink;
 }
 

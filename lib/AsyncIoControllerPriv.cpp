@@ -1845,7 +1845,7 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                 case DT_CALLBACK: {
                     method_name = "callback";
                     if (async_item.callback) {
-                        ValueHolder rv(async_item.callback->execValue(async_item.args, &work_xsink),
+                        ValueHolder rv(async_item.callback->invoke(async_item.args, &work_xsink),
                             &work_xsink);
                     }
                     break;

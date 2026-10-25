@@ -204,6 +204,8 @@ public:
     // member data
     QoreHashNode* data;
     QoreProgram* pgm;
+    //! Immutable creation context; does not retain a Program or any Qore object
+    QoreSandboxContext* sandbox_provenance = nullptr;
     cdmap_t* cdmap = nullptr;
 
     // used for garbage collection

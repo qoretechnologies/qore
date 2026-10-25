@@ -36,6 +36,7 @@
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreSandboxInterrupt.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 
 #include <cassert>
 #include <cctype>
@@ -69,7 +70,24 @@ struct PathRule {
 */
 static constexpr unsigned qore_sandbox_max_symlinks = 40;
 
+struct QoreSandboxMembers {
+    const std::vector<QoreSandboxManager*> managers;
+
+    explicit QoreSandboxMembers(std::vector<QoreSandboxManager*> managers) : managers(std::move(managers)) {
+        for (auto* manager : this->managers) {
+            manager->ref();
+        }
+    }
+
+    ~QoreSandboxMembers() {
+        for (auto* manager : managers) {
+            manager->deref(nullptr);
+        }
+    }
+};
+
 struct qore_fs_security_private {
+    std::shared_ptr<const QoreSandboxMembers> composition;
     std::vector<PathRule> allowed_paths;
     std::vector<std::string> denied_paths;
     std::string sandbox_root;
@@ -340,6 +358,18 @@ bool QoreFilesystemSecurityManager::getDefaultPolicy() const {
 }
 
 bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, ExceptionSink* xsink) {
+    if (priv->composition) {
+        unsigned checked = 0;
+        for (auto* manager : priv->composition->managers) {
+            if (!(checked++ % 100) && qore_check_cancel(xsink, "sandbox policy intersection")) {
+                return false;
+            }
+            if (!manager->filesystem().checkAccess(path, mode, xsink)) {
+                return false;
+            }
+        }
+        return true;
+    }
     // Canonicalize the path; a path that cannot be resolved is a resolution failure and not a
     // policy decision, so SANDBOX-PATH-ERROR is propagated rather than reported as a denial
     std::string canon = priv->canonicalize(path, xsink);
@@ -421,6 +451,7 @@ QoreHashNode* QoreFilesystemSecurityManager::getConfiguration(ExceptionSink* xsi
 
 QoreFilesystemSecurityManager* QoreFilesystemSecurityManager::copy() const {
     QoreFilesystemSecurityManager* result = new QoreFilesystemSecurityManager();
+    result->priv->composition = priv->composition;
     result->priv->allowed_paths = priv->allowed_paths;
     result->priv->denied_paths = priv->denied_paths;
     result->priv->sandbox_root = priv->sandbox_root;
@@ -436,6 +467,7 @@ void QoreFilesystemSecurityManager::reset() {
 }
 
 void QoreFilesystemSecurityManager::copyFrom(const QoreFilesystemSecurityManager& other) {
+    priv->composition = other.priv->composition;
     priv->allowed_paths = other.priv->allowed_paths;
     priv->denied_paths = other.priv->denied_paths;
     priv->sandbox_root = other.priv->sandbox_root;
@@ -488,6 +520,7 @@ struct PortRange {
 };
 
 struct qore_net_security_private {
+    std::shared_ptr<const QoreSandboxMembers> composition;
     std::vector<std::string> allowed_hosts;
     std::vector<CIDRRange> allowed_ranges;
     std::vector<CIDRRange> denied_ranges;
@@ -815,6 +848,18 @@ bool QoreNetworkSecurityManager::checkConnect(const struct sockaddr* addr, sockl
 
 bool QoreNetworkSecurityManager::checkConnect(const char* hostname, const struct sockaddr* addr, socklen_t len,
                                                int proto, ExceptionSink* xsink) {
+    if (priv->composition) {
+        unsigned checked = 0;
+        for (auto* manager : priv->composition->managers) {
+            if (!(checked++ % 100) && qore_check_cancel(xsink, "sandbox policy intersection")) {
+                return false;
+            }
+            if (!manager->checkNetworkAccess(hostname, addr, len, proto, xsink)) {
+                return false;
+            }
+        }
+        return true;
+    }
     struct sockaddr_storage storage;
     addr = qore_net_security_private::normalizeAddr(addr, storage, true);
 
@@ -863,6 +908,18 @@ bool QoreNetworkSecurityManager::checkConnect(const char* hostname, const struct
 
 bool QoreNetworkSecurityManager::checkBind(const struct sockaddr* addr, socklen_t len,
                                             int proto, ExceptionSink* xsink) {
+    if (priv->composition) {
+        unsigned checked = 0;
+        for (auto* manager : priv->composition->managers) {
+            if (!(checked++ % 100) && qore_check_cancel(xsink, "sandbox policy intersection")) {
+                return false;
+            }
+            if (!manager->checkNetworkBind(addr, len, proto, xsink)) {
+                return false;
+            }
+        }
+        return true;
+    }
     struct sockaddr_storage storage;
     addr = qore_net_security_private::normalizeAddr(addr, storage, false);
 
@@ -950,6 +1007,7 @@ QoreHashNode* QoreNetworkSecurityManager::getConfiguration(ExceptionSink* xsink)
 
 QoreNetworkSecurityManager* QoreNetworkSecurityManager::copy() const {
     QoreNetworkSecurityManager* result = new QoreNetworkSecurityManager();
+    result->priv->composition = priv->composition;
     result->priv->allowed_hosts = priv->allowed_hosts;
     result->priv->allowed_ranges = priv->allowed_ranges;
     result->priv->denied_ranges = priv->denied_ranges;
@@ -967,6 +1025,7 @@ void QoreNetworkSecurityManager::reset() {
 }
 
 void QoreNetworkSecurityManager::copyFrom(const QoreNetworkSecurityManager& other) {
+    priv->composition = other.priv->composition;
     priv->allowed_hosts = other.priv->allowed_hosts;
     priv->allowed_ranges = other.priv->allowed_ranges;
     priv->denied_ranges = other.priv->denied_ranges;
@@ -1007,12 +1066,27 @@ const QoreNetworkSecurityManager& QoreSandboxManager::network() const {
     return net_mgr;
 }
 
+// Enforcement views report the tightest positive constituent limit; zero means unlimited.
+template <typename T>
+static T sandbox_intersection_limit(const QoreSandboxManager* manager, T own,
+        T (QoreSandboxManager::*get)() const) {
+    if (const auto* members = QoreSandboxComposition::members(manager)) {
+        for (const auto* member : *members) {
+            T limit = (member->*get)();
+            if (limit > 0 && (own <= 0 || limit < own)) {
+                own = limit;
+            }
+        }
+    }
+    return own;
+}
+
 void QoreSandboxManager::setMemoryLimit(size_t bytes) {
     memory_limit = bytes;
 }
 
 size_t QoreSandboxManager::getMemoryLimit() const {
-    return memory_limit;
+    return sandbox_intersection_limit<size_t>(this, memory_limit, &QoreSandboxManager::getMemoryLimit);
 }
 
 void QoreSandboxManager::setCPUTimeLimit(int64 ms) {
@@ -1020,7 +1094,7 @@ void QoreSandboxManager::setCPUTimeLimit(int64 ms) {
 }
 
 int64 QoreSandboxManager::getCPUTimeLimit() const {
-    return cpu_time_limit;
+    return sandbox_intersection_limit<int64>(this, cpu_time_limit, &QoreSandboxManager::getCPUTimeLimit);
 }
 
 void QoreSandboxManager::setWallTimeLimit(int64 ms) {
@@ -1028,7 +1102,7 @@ void QoreSandboxManager::setWallTimeLimit(int64 ms) {
 }
 
 int64 QoreSandboxManager::getWallTimeLimit() const {
-    return wall_time_limit;
+    return sandbox_intersection_limit<int64>(this, wall_time_limit, &QoreSandboxManager::getWallTimeLimit);
 }
 
 void QoreSandboxManager::setMaxThreads(int count) {
@@ -1036,10 +1110,24 @@ void QoreSandboxManager::setMaxThreads(int count) {
 }
 
 int QoreSandboxManager::getMaxThreads() const {
-    return max_threads;
+    return sandbox_intersection_limit<int>(this, max_threads.load(), &QoreSandboxManager::getMaxThreads);
 }
 
 int QoreSandboxManager::acquireThreadSlot(ExceptionSink* xsink) {
+    if (const auto* managers = QoreSandboxComposition::members(this)) {
+        size_t acquired = 0;
+        for (auto* manager : *managers) {
+            if ((!(acquired % 100) && qore_check_cancel(xsink, "sandbox thread reservation"))
+                    || manager->acquireThreadSlot(xsink)) {
+                while (acquired) {
+                    (*managers)[--acquired]->releaseThreadSlot();
+                }
+                return -1;
+            }
+            ++acquired;
+        }
+        return 0;
+    }
     int count = active_threads.load();
     while (true) {
         int max = max_threads.load();
@@ -1055,6 +1143,12 @@ int QoreSandboxManager::acquireThreadSlot(ExceptionSink* xsink) {
 }
 
 void QoreSandboxManager::releaseThreadSlot() {
+    if (const auto* managers = QoreSandboxComposition::members(this)) {
+        for (auto* manager : *managers) {
+            manager->releaseThreadSlot();
+        }
+        return;
+    }
     int prev = active_threads.fetch_sub(1);
     assert(prev > 0);
     (void)prev;
@@ -1065,7 +1159,7 @@ void QoreSandboxManager::setMaxRecursionDepth(int depth) {
 }
 
 int QoreSandboxManager::getMaxRecursionDepth() const {
-    return max_recursion;
+    return sandbox_intersection_limit<int>(this, max_recursion, &QoreSandboxManager::getMaxRecursionDepth);
 }
 
 void QoreSandboxManager::requestInterrupt() {
@@ -1114,15 +1208,47 @@ void QoreSandboxManager::clearInterrupt() {
 }
 
 bool QoreSandboxManager::isInterruptRequested() const {
+    if (const auto* managers = QoreSandboxComposition::members(this)) {
+        for (auto* manager : *managers) {
+            if (manager->isInterruptRequested()) {
+                return true;
+            }
+        }
+    }
     return interrupt_requested.load(std::memory_order_seq_cst);
 }
 
 void QoreSandboxManager::registerCancelCallback(void* context, cancel_callback_t callback) {
+    if (const auto* managers = QoreSandboxComposition::members(this)) {
+        auto invoked = std::make_shared<std::atomic<bool>>(false);
+        cancel_callback_t once = [invoked, callback = std::move(callback)]() {
+            return !invoked->exchange(true) && callback();
+        };
+        size_t registered = 0;
+        try {
+            for (auto* manager : *managers) {
+                manager->registerCancelCallback(context, once);
+                ++registered;
+            }
+        } catch (...) {
+            while (registered) {
+                (*managers)[--registered]->unregisterCancelCallback(context);
+            }
+            throw;
+        }
+        return;
+    }
     std::lock_guard<std::mutex> lock(cancel_mutex);
     cancel_callbacks.emplace_back(context, std::move(callback));
 }
 
 void QoreSandboxManager::unregisterCancelCallback(void* context) {
+    if (const auto* managers = QoreSandboxComposition::members(this)) {
+        for (auto* manager : *managers) {
+            manager->unregisterCancelCallback(context);
+        }
+        return;
+    }
     std::lock_guard<std::mutex> lock(cancel_mutex);
     cancel_callbacks.erase(
         std::remove_if(cancel_callbacks.begin(), cancel_callbacks.end(),
@@ -1131,7 +1257,7 @@ void QoreSandboxManager::unregisterCancelCallback(void* context) {
 }
 
 bool QoreSandboxManager::checkIOInterrupt(ExceptionSink* xsink, const char* operation) const {
-    if (interrupt_requested.load(std::memory_order_seq_cst)) {
+    if (isInterruptRequested()) {
         xsink->raiseException("PROGRAM-INTERRUPTED",
             "program execution was interrupted during %s", operation);
         return true;
@@ -1305,6 +1431,63 @@ QoreSandboxManager* qore_program_private::getSandboxManagerRef() {
 //------------------------------------------------------------------------------
 // QoreSandboxManagerHelper implementation
 //------------------------------------------------------------------------------
+
+const std::vector<QoreSandboxManager*>* QoreSandboxComposition::members(const QoreSandboxManager* manager) {
+    return manager && manager->fs_mgr.priv->composition
+        ? &manager->fs_mgr.priv->composition->managers : nullptr;
+}
+
+bool QoreSandboxComposition::same(const QoreSandboxManager* a, const QoreSandboxManager* b) {
+    if (a == b) {
+        return true;
+    }
+    const auto* am = members(a);
+    const auto* bm = members(b);
+    return am && bm && *am == *bm;
+}
+
+QoreSandboxManager* QoreSandboxComposition::combine(const std::vector<QoreSandboxManager*>& managers) {
+    QoreSandboxManager* first = nullptr;
+    bool identical = true;
+    for (auto* manager : managers) {
+        if (!manager) {
+            continue;
+        }
+        if (!first) {
+            first = manager;
+        } else if (first != manager) {
+            identical = false;
+        }
+    }
+    if (identical) {
+        if (first) {
+            first->ref();
+        }
+        return first;
+    }
+    std::vector<QoreSandboxManager*> flat;
+    for (auto* manager : managers) {
+        if (const auto* entries = members(manager)) {
+            flat.insert(flat.end(), entries->begin(), entries->end());
+        } else if (manager) {
+            flat.push_back(manager);
+        }
+    }
+    std::sort(flat.begin(), flat.end(), std::less<QoreSandboxManager*>());
+    flat.erase(std::unique(flat.begin(), flat.end()), flat.end());
+    for (auto* manager : managers) {
+        const auto* entries = members(manager);
+        if ((entries && *entries == flat) || (flat.size() == 1 && manager == flat.front())) {
+            manager->ref();
+            return manager;
+        }
+    }
+    auto composition = std::make_shared<const QoreSandboxMembers>(std::move(flat));
+    ReferenceHolder<QoreSandboxManager> result(new QoreSandboxManager, nullptr);
+    result->fs_mgr.priv->composition = composition;
+    result->net_mgr.priv->composition = std::move(composition);
+    return result.release();
+}
 
 QoreSandboxManagerHelper::QoreSandboxManagerHelper() {
     // Resolve the active manager across the thread's program-context (call) stack so that

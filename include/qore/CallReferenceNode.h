@@ -136,6 +136,19 @@ public:
     */
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const = 0;
 
+    //! Invokes the callback under its creation sandbox, including native subclasses
+    /** @param args arguments to pass to the callback, or nullptr
+        @param xsink receives any exception raised by the callback
+        @return the callback result, owned by the caller
+        @note Native callback implementations keep overriding execValue(); callers use invoke().
+        @par Example:
+        @code{.cpp}
+        ValueHolder result(callback->invoke(args, xsink), xsink);
+        @endcode
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreValue invoke(const QoreListNode* args, ExceptionSink* xsink) const;
+
     //! returns a pointer to the QoreProgram object associated with this reference (can be nullptr)
     /** this function is not exported in the library's public interface
         @return a pointer to the QoreProgram object associated with this reference (can be nullptr)

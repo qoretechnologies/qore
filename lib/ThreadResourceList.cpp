@@ -116,7 +116,7 @@ void ThreadResourceList::purge(const QoreProgram* pgm, ExceptionSink* xsink) {
 
             // issue #3571: make sure that every time we run the callback, we run with a clean xsink
             ExceptionSink xsink2;
-            rcr->execValue(*args, &xsink2).discard(&xsink2);
+            rcr->invoke(*args, &xsink2).discard(&xsink2);
             rcr->deref(&xsink2);
             if (xsink2) {
                 xsink->assimilate(xsink2);

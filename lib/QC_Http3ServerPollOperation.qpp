@@ -1479,7 +1479,7 @@ nothing Http3ServerPollOperation::onStreamSendResult(string stream_key, bool sen
     }
     ReferenceHolder<QoreListNode> cb_args(new QoreListNode(autoTypeInfo), xsink);
     cb_args->push(sent, xsink);
-    ValueHolder rv(cb->get<ResolvedCallReferenceNode>()->execValue(*cb_args, xsink), xsink);
+    ValueHolder rv(cb->get<ResolvedCallReferenceNode>()->invoke(*cb_args, xsink), xsink);
 }
 
 //! Returns True if the given stream can no longer carry data to the peer
@@ -1665,7 +1665,7 @@ nothing Http3ServerPollOperation::notifyStreamListenersClosed() {
                 ExceptionSink call_xsink;
                 ReferenceHolder<QoreListNode> cb_args(new QoreListNode(autoTypeInfo), &call_xsink);
                 cb_args->push(false, &call_xsink);
-                ValueHolder rv(val.get<ResolvedCallReferenceNode>()->execValue(*cb_args, &call_xsink),
+                ValueHolder rv(val.get<ResolvedCallReferenceNode>()->invoke(*cb_args, &call_xsink),
                     &call_xsink);
                 // the callbacks handle their own errors; the remaining callbacks must still be called
                 call_xsink.clear();
