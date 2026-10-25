@@ -1,0 +1,122 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# the results of the checks in temporary-lifetime-checks.qi with the AST interpreter, which every execution mode
+# must give; temporary-lifetime.qtest also checks them against the rule that they illustrate
+
+public namespace TemporaryLifetimeChecks {
+    #! the result of each check with the AST interpreter: name -> result
+    public const AstResults = {
+        "01 member chain": "+member state(member)=alive ~member",
+        "02 brace member chain": "+brace state(brace)=alive ~brace",
+        "03 dynamic key chain": "+dynamic state(dynamic)=alive ~dynamic",
+        "04 list index chain": "+index state(index)=alive ~index",
+        "05 method chain": "+method state(method)=alive ~method",
+        "06 new and method chain": "+new state(new)=alive ~new",
+        "07 method and index chain": "+method-index state(method-index)=alive ~method-index",
+        "08 pseudo-method chain": "+pseudo state(pseudo)=alive ~pseudo",
+        "09 cast chain": "+cast state(cast)=alive ~cast",
+        "10 hash slice chain": "+slice state(slice)=alive ~slice",
+        "11 member of a temporary as an argument": "+member-arg report state(member-arg)=alive ~member-arg",
+        "12 method result of a temporary as an argument": "+method-arg report state(method-arg)=alive ~method-arg",
+        "13 the temporary as an argument": "+temp-arg report_doc state(temp-arg)=alive ~temp-arg log(alive)",
+        "14 chain in an argument": "+chain-arg state(chain-arg)=alive log(alive) ~chain-arg",
+        "15 foreach over a member of a temporary":
+            "+foreach ~foreach body 0 state(foreach)=OBJECT-ALREADY-DELETED body 1 "
+            "state(foreach)=OBJECT-ALREADY-DELETED",
+        "16 foreach over a method result of a temporary":
+            "+foreach-method ~foreach-method body 0 state(foreach-method)=OBJECT-ALREADY-DELETED body 1 "
+            "state(foreach-method)=OBJECT-ALREADY-DELETED",
+        "17 member of a temporary assigned":
+            "+assign ~assign after the assignment state(assign)=OBJECT-ALREADY-DELETED",
+        "18 two chains in one statement":
+            "+two-1 state(two-1)=alive +two-2 state(two-2)=alive log(alive,alive) ~two-2 ~two-1",
+        "19 plain member": "+plain-member log(plain-member) ~plain-member",
+        "20 plain method": "+plain-method log(alive) ~plain-method",
+        "21 map over a member of a temporary": "+map state(map)=alive state(map)=alive ~map map alive,alive",
+        "22 select over a member of a temporary": "+select state(select)=alive state(select)=alive ~select selected 2",
+        "23 switch": "+switch state(switch)=alive ~switch case alive",
+        "24 if": "+if state(if)=alive ~if if alive",
+        "25 ternary": "+ternary state(ternary)=alive log(alive) ~ternary",
+        "26 while condition":
+            "+while-0 getName(while-0) ~while-0 while body 0 +while-1 getName(while-1) ~while-1 while body 1 "
+            "+while-2 getName(while-2) ~while-2",
+        "27 return": "+local +ret state(ret)=alive ~ret on_exit ~local log(alive)",
+        "28 return in try": "+local2 +ret-try state(ret-try)=alive ~ret-try ~local2 log(alive)",
+        "29 map evaluating a temporary per element":
+            "+map-1 getName(map-1) +map-2 ~map-1 getName(map-2) +map-3 ~map-2 getName(map-3) "
+            "log(map-1,map-2,map-3) ~map-3",
+        "30 map whose value is not used":
+            "+map-statement-1 getName(map-statement-1) ~map-statement-1 +map-statement-2 getName(map-statement-2) "
+            "~map-statement-2 +map-statement-3 getName(map-statement-3) ~map-statement-3",
+        "31 foreach over map":
+            "+lazy-1 getName(lazy-1) lazy body lazy-1 +lazy-2 ~lazy-1 getName(lazy-2) lazy body lazy-2 ~lazy-2",
+        "32 closure of a temporary called in the chain": "+closure log(self=closure) ~closure",
+        "33 closure of a temporary passed to a call": "+closure-arg log(self=closure-arg) ~closure-arg",
+        "34 closure of a temporary assigned": "+closure-assigned ~closure-assigned OBJECT-ALREADY-DELETED",
+        "35 call reference to a method of a temporary": "+call-ref getName(call-ref) log(call-ref) ~call-ref",
+        "36 for":
+            "+for-init getName(for-init) ~for-init +for-cond-for-init getName(for-cond-for-init) "
+            "~for-cond-for-init for body for-init +for-iter getName(for-iter) ~for-iter +for-cond-for-iterx "
+            "getName(for-cond-for-iterx) ~for-cond-for-iterx for body for-iterx",
+        "37 do while condition": "do body 0 +do-1 getName(do-1) ~do-1 do body 1 +do-2 getName(do-2) ~do-2",
+        "38 throw": "+throw getName(throw) ~throw on_error caught throw",
+        "39 assignment to a member":
+            "+old-member +member-assign +new-member ~member-assign ~old-member after the member assignment "
+            "~new-member",
+        "40 assignment to a variable":
+            "+old-variable +variable-assign +new-variable ~old-variable ~variable-assign after the variable "
+            "assignment ~new-variable",
+        "41 compound assignment": "+compound ~compound log(2)",
+        "42 push": "+push ~push after the push",
+        "43 exception in a chain": "+exception ~exception caught CHAIN-ERROR",
+        "44 chains in a hash":
+            "+hash-1 getName(hash-1) +hash-2 getName(hash-2) log({a: \"hash-1\", b: \"hash-2\"}) ~hash-2 ~hash-1",
+        "45 nested temporaries":
+            "+nested-outer +nested-inner state(nested-inner)=alive log(alive) ~nested-inner ~nested-outer",
+        "46 on_exit handler": "body +on-exit state(on-exit)=alive log(alive) ~on-exit",
+        "47 foreach over map with a member chain":
+            "+lazy-member-1 state(lazy-member-1)=alive lazy body alive +lazy-member-2 ~lazy-member-1 "
+            "state(lazy-member-2)=alive lazy body alive ~lazy-member-2",
+        "48 member of self replaced by its method":
+            "+member +replacement replaced log(member) ~member after the call ~replacement",
+        "49 return in a foreach over a list of temporaries":
+            "+list-1 +list-2 getName(list-1) ~list-2 ~list-1 on_exit log(list-1)",
+        "50 on_error handler of a nested block": "+nested-error ~nested-error nested on_error caught CHAIN-ERROR",
+        "51 the temporary as a method argument":
+            "+receiver +method-arg ~method-arg log(method-arg) next statement ~receiver",
+        "52 the temporary as a static method argument": "+static-arg ~static-arg log(static-arg)",
+        "53 the temporary as a closure argument": "+closure-call-arg ~closure-call-arg log(closure-call-arg)",
+        "54 the temporary as a constructor argument": "+constructor-arg ~constructor-arg log(constructor-arg)",
+        "55 temporary arguments in a try block":
+            "+try-receiver +try-method-arg ~try-method-arg log(try-method-arg) +try-function-arg report_doc "
+            "state(try-function-arg)=alive ~try-function-arg log(alive) +try-static-arg ~try-static-arg "
+            "log(try-static-arg) ~try-receiver",
+        "56 break in a foreach over a list of temporaries":
+            "+break-list-1 +break-list-2 ~break-list-2 ~break-list-1 after the break",
+        "57 exception in a foreach over a list of temporaries":
+            "+throw-list-1 +throw-list-2 ~throw-list-2 ~throw-list-1 on_error caught FOREACH-ERROR",
+        "58 return in nested foreach statements":
+            "+outer +inner getName(outer) getName(inner) ~inner inner on_exit ~outer on_exit log(outer,inner)",
+        "59 return in a foreach over a map":
+            "+map-src-1 +map-src-2 getName(map-src-1) ~map-src-1 ~map-src-2 on_exit log(map-src-1)",
+        "60 return in a foreach with a variable of the function":
+            "+outer-var-1 +outer-var-2 getName(outer-var-1) ~outer-var-2 on_exit ~outer-var-1 log(outer-var-1)",
+        "61 return in a foreach over the list returned by a call":
+            "+call-list-1 +call-list-2 getName(call-list-1) ~call-list-2 ~call-list-1 on_exit log(call-list-1)",
+        "62 break in a foreach over a map":
+            "+map-break-1 +map-break-2 getName(map-break-1) map break body map-break-1 ~map-break-1 ~map-break-2 "
+            "after the break",
+        "loop member": "{alive: 1500}",
+        "loop method": "{alive: 1500}",
+        "weak live":
+            "exists typed=True exists self.typed=True exists untyped=True exists self.untyped=True exists "
+            "h.t=True typed.describe()=alive self.typed.describe()=alive untyped.describe()=alive "
+            "self.untyped.describe()=alive h.t.describe()=alive",
+        "weak destroyed":
+            "exists typed=False exists self.typed=True exists untyped=False exists self.untyped=True exists "
+            "h.t=True typed.describe()=PSEUDO-METHOD-DOES-NOT-EXIST self.typed.describe()=OBJECT-ALREADY-DELETED "
+            "untyped.describe()=PSEUDO-METHOD-DOES-NOT-EXIST self.untyped.describe()=OBJECT-ALREADY-DELETED "
+            "h.t.describe()=OBJECT-ALREADY-DELETED",
+        "weak destroyed local": "exists lw=True lw.describe()=OBJECT-ALREADY-DELETED",
+    };
+}

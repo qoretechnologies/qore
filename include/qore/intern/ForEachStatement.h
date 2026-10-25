@@ -61,8 +61,11 @@ public:
     }
 
     //! @see AbstractStatement::mayHaveNestedScopeLocals()
+    /** The loop variables declared by the statement are locals of a nested scope: they are destroyed when the
+        statement ends, before the handlers of the enclosing blocks run.
+    */
     DLLLOCAL virtual bool mayHaveNestedScopeLocals(unsigned depth) const {
-        return code && code->mayHaveNestedScopeLocals(depth);
+        return (lvars && lvars->size()) || (code && code->mayHaveNestedScopeLocals(depth));
     }
 
     DLLLOCAL StatementBlock* getCode() const {

@@ -15,12 +15,12 @@
 #! Tests that a closure created in a method does not prolong its object's lifetime in any execution mode
 /** A closure created in an object's method encapsulates the object's state but holds no strong reference to the
     object: once the object is destroyed, \c self reads no value and member accesses and method calls raise
-    \c OBJECT-ALREADY-DELETED.  A temporary object (<tt>new C().getClosure()</tt>) is destroyed as soon as the
-    method call that uses it returns.
+    \c OBJECT-ALREADY-DELETED.  A temporary object (<tt>new C().getClosure()</tt>) lives until the end of the
+    statement that created it: a closure that the statement uses sees the object, one that a later statement calls
+    does not.
 
-    The IR interpreter (\c ir and \c tiered execution) kept a temporary method-call receiver until the end of the
-    statement, and AOT-compiled code captured \c self as a closure variable, which kept the object alive for the
-    closure's lifetime; both made such a closure see a live object where the interpreter's AST mode and JIT do not.
+    AOT-compiled code captured \c self as a closure variable, which kept the object alive for the closure's lifetime,
+    so a closure called after the end of the statement saw a live object where the other execution modes do not.
 */
 class ObjectClosureLifetimeTest inherits QUnit::Test {
     public {
@@ -74,7 +74,7 @@ sub t(string label, code c) {
     }
 }
 
-# a temporary receiver is destroyed when the method call returns, before the closure is used
+# a temporary receiver lives until the end of the statement, so the closure that the statement passes to t() sees it
 t("temporary self", new C("t1").getSelf());
 t("temporary member", new C("t2").getMember());
 t("temporary method call", new C("t3").getCall());
@@ -169,9 +169,10 @@ printf("done\n");
         hash<auto> rv = run(sprintf("%s %s -b --exec-mode=ast %s", env, qore_bin, writeScript(tmp.path)));
         assertEq(0, rv.rc, rv.err);
         list<string> lines = rv.out.split("\n");
-        # temporaries are destroyed before the closure is called; no closure sees a destroyed object
-        foreach string line in (("temporary self: null", "temporary member: OBJECT-ALREADY-DELETED",
-                "temporary method call: OBJECT-ALREADY-DELETED", "temporary no object reference: 1",
+        # a temporary lives until the end of the statement: the closure that the statement calls sees it, one called
+        # by a later statement does not; no closure sees a destroyed object
+        foreach string line in (("temporary self: object t1", "temporary member: 7",
+                "temporary method call: 2", "temporary no object reference: 1",
                 "temporary assigned self: null", "block self: null", "block member: OBJECT-ALREADY-DELETED",
                 "deleted member: OBJECT-ALREADY-DELETED", "deleted self: null", "live self: object live",
                 "live member: 7", "live method call: 2", "call now: 14", "background live member: 7",
@@ -179,8 +180,10 @@ printf("done\n");
                 "destroyed iteration 2")) {
             assertTrue(inlist(line, lines), line + ": " + rv.out);
         }
-        # each object is destroyed before its closure is used
-        assertBefore(lines, "destroyed t1", "temporary self: null");
+        # a temporary is destroyed at the end of the statement that used its closure, before the next statement
+        assertBefore(lines, "temporary self: object t1", "destroyed t1");
+        assertBefore(lines, "destroyed t1", "temporary member: 7");
+        # each other object is destroyed before its closure is used
         assertBefore(lines, "destroyed t5", "temporary assigned");
         assertBefore(lines, "destroyed block", "after block");
         assertBefore(lines, "destroyed in function", "in function");

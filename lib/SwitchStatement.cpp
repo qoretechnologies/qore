@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include <qore/QoreEnumDecl.h>
 #include "qore/intern/SwitchStatement.h"
 #include "qore/intern/StatementBlock.h"
@@ -128,7 +129,12 @@ int SwitchStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
-    ValueEvalOptimizedRefHolder se(sexp, xsink);
+    // the value is kept while the cases run, but the temporaries created by its expression are released first
+    ValueEvalOptimizedRefHolder se(xsink);
+    {
+        QoreStatementTempScope temps(xsink);
+        se.eval(sexp);
+    }
 
     if (!*xsink) {
         // find match
@@ -166,7 +172,12 @@ int SwitchStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Except
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
-    ValueEvalRefHolder se(rc, sexp, xsink);
+    // the value is kept while the cases run, but the temporaries created by its expression are released first
+    ValueEvalRefHolder se(xsink);
+    {
+        QoreStatementTempScope temps(xsink);
+        se.eval(rc, sexp);
+    }
 
     if (!*xsink) {
         // find match

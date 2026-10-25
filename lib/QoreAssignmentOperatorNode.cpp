@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/LocalVar.h"
@@ -606,7 +607,8 @@ QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& nee
         for the variable assignment - however it does need to be
         copied/referenced for the return value
     */
-    ValueEvalOptimizedRefHolder new_value(right, xsink);
+    // the operand is a statement of its own where the other execution modes evaluate it so
+    QoreMutationOperandHolder new_value(left, right, true, xsink);
     if (*xsink)
         return QoreValue();
 

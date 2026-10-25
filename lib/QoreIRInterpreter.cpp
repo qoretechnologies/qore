@@ -80,7 +80,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 409,
+static_assert(QORE_IR_MAX_OPCODE == 411,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -1909,14 +1909,20 @@ static bool raiseInterpreterAnalysisCancel(ExceptionSink* xsink) {
 
 static bool buildValueUseCounts(const QoreIRFunction& func,
         std::vector<uint32_t>& counts, std::vector<uint8_t>& dot_eval_only_bases,
-        std::vector<uint8_t>& consumed_method_call_bases, ExceptionSink* xsink) {
+        std::vector<uint8_t>& consumed_call_args, ExceptionSink* xsink) {
     counts.assign(func.max_value_id + 1, 0);
     std::vector<uint8_t> dot_eval_base_candidates(counts.size(), 0);
     std::vector<uint8_t> non_dot_eval_uses(counts.size(), 0);
-    // method call bases used by a call in the block that defines them, before the use
-    std::vector<uint8_t> same_block_call_bases(counts.size(), 0);
-    // the block defining each value seen so far
+    // values used as call arguments by a call in the block or the temp scope (the statement) that defines them,
+    // after the definition: a call in a try block is an invoke that ends its block, and its arguments are defined
+    // in the blocks before it; a loop invariant hoisted out of a loop is defined in a temp scope of its own
+    std::vector<uint8_t> same_block_call_args(counts.size(), 0);
+    // the block and the temp scope defining each value seen so far
     std::vector<const QoreIRBasicBlock*> def_block(counts.size(), nullptr);
+    std::vector<uint32_t> def_scope(counts.size(), 0);
+    // values created by a call: the temporaries whose release is observable; a value loaded from a variable or a
+    // constant is not a temporary, and the interpreter can read it again from its slot
+    std::vector<uint8_t> def_by_call(counts.size(), 0);
     size_t inst_count = 0;
     for (const auto& block : func.blocks) {
         for (const auto& inst_uptr : block->instructions) {
@@ -1930,6 +1936,21 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             }, &inst_count, "IR interpreter analysis")) {
                 return raiseInterpreterAnalysisCancel(xsink);
             }
+            int arg_start = qore_ir_call_arg_start(inst);
+            if (arg_start >= 0) {
+                for (size_t i = static_cast<size_t>(arg_start); i < inst->operands.size(); ++i) {
+                    if (((++inst_count % 100) == 0)
+                            && qore_check_cancel(xsink, "IR interpreter analysis")) {
+                        return false;
+                    }
+                    QoreIRValue arg = inst->operands[i];
+                    if (arg.isValid() && arg.id < def_block.size() && def_by_call[arg.id]
+                            && (def_block[arg.id] == block.get()
+                                || (def_scope[arg.id] && def_scope[arg.id] == inst->temp_scope_id))) {
+                        same_block_call_args[arg.id] = 1;
+                    }
+                }
+            }
 
             bool dot_eval = inst->opcode == QoreIROpcode::DotEvalMethodDirect
                 || inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect;
@@ -1941,10 +1962,6 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
 
             if (dot_eval && !inst->operands.empty()) {
                 markIRValueUse(dot_eval_base_candidates, inst->operands[0]);
-                QoreIRValue base = inst->operands[0];
-                if (base.isValid() && base.id < def_block.size() && def_block[base.id] == block.get()) {
-                    same_block_call_bases[base.id] = 1;
-                }
                 for (size_t i = 1; i < inst->operands.size(); ++i) {
                     if (((++inst_count % 100) == 0)
                             && qore_check_cancel(xsink, "IR interpreter analysis")) {
@@ -1961,11 +1978,13 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             }
             if (inst->result.isValid() && inst->result.id < def_block.size()) {
                 def_block[inst->result.id] = block.get();
+                def_scope[inst->result.id] = inst->temp_scope_id;
+                def_by_call[inst->result.id] = arg_start >= 0;
             }
         }
     }
     dot_eval_only_bases.assign(counts.size(), 0);
-    consumed_method_call_bases.assign(counts.size(), 0);
+    consumed_call_args.assign(counts.size(), 0);
     for (size_t i = 0; i < dot_eval_base_candidates.size(); ++i) {
         if (i && ((i % 100) == 0) && qore_check_cancel(xsink, "IR interpreter analysis")) {
             return false;
@@ -1973,8 +1992,8 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
         if (dot_eval_base_candidates[i] && !non_dot_eval_uses[i]) {
             dot_eval_only_bases[i] = 1;
         }
-        if (same_block_call_bases[i] && counts[i] == 1) {
-            consumed_method_call_bases[i] = 1;
+        if (same_block_call_args[i] && counts[i] == 1) {
+            consumed_call_args[i] = 1;
         }
     }
     return true;
@@ -1995,8 +2014,8 @@ static bool interpreterEffectSummaryStatsEnabled() {
 static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* xsink) {
     std::vector<uint32_t> value_use_counts;
     std::vector<uint8_t> dot_eval_only_bases;
-    std::vector<uint8_t> consumed_method_call_bases;
-    if (!buildValueUseCounts(func, value_use_counts, dot_eval_only_bases, consumed_method_call_bases, xsink)) {
+    std::vector<uint8_t> consumed_call_args;
+    if (!buildValueUseCounts(func, value_use_counts, dot_eval_only_bases, consumed_call_args, xsink)) {
         return false;
     }
     std::vector<int32_t> operand_use_counts(func.max_value_id + 1, 0);
@@ -2141,7 +2160,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     }
     func.interpreter_value_use_counts = std::move(value_use_counts);
     func.interpreter_dot_eval_only_bases = std::move(dot_eval_only_bases);
-    func.interpreter_consumed_method_call_bases = std::move(consumed_method_call_bases);
+    func.interpreter_consumed_call_args = std::move(consumed_call_args);
     func.interpreter_operand_use_counts = std::move(operand_use_counts);
     func.interpreter_param_slot_ids = std::move(param_slot_ids);
     func.interpreter_param_local_vars = std::move(param_local_vars);
@@ -5343,8 +5362,15 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::CreateCallRef:
             return fromBits(qore_rt_create_call_ref(toBits(inv->expr), xsink));
 
-        case QoreIROpcode::CreateMethodRef:
+        case QoreIROpcode::CreateMethodRef: {
+            // the object expression has been evaluated (operand 0); it is not evaluated again
+            const auto* omref = dynamic_cast<const ParseObjectMethodReferenceNode*>(inv->expr.getInternalNode());
+            if (omref && !inv->operands.empty()) {
+                return fromBits(qore_rt_create_object_method_ref(omref, toBits(getIRValue(values, inv->operands[0])),
+                    xsink));
+            }
             return fromBits(qore_rt_create_method_ref(toBits(inv->expr), xsink));
+        }
 
         case QoreIROpcode::CreateParseRef: {
             if (auto* parse_ref = dynamic_cast<const ParseReferenceNode*>(inv->expr.getInternalNode())) {
@@ -5811,7 +5837,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     cleanup.setSlotOwned(&func.interpreter_slot_owned_values);
     const std::vector<uint32_t>& value_use_counts = func.interpreter_value_use_counts;
     const std::vector<uint8_t>& dot_eval_only_bases = func.interpreter_dot_eval_only_bases;
-    const std::vector<uint8_t>& consumed_method_call_bases = func.interpreter_consumed_method_call_bases;
+    const std::vector<uint8_t>& consumed_call_args = func.interpreter_consumed_call_args;
     auto isDotEvalOnlyBase = [&](const QoreIRInstruction* i) -> bool {
         return i && i->result.isValid() && i->result.id < dot_eval_only_bases.size()
             && dot_eval_only_bases[i->result.id];
@@ -6847,27 +6873,36 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         values[id] = QoreValue();
     };
 
-    // Releases the base of a completed method call when the call consumes it (its only use, in the block that
-    // defines it; see buildValueUseCounts()), as AST evaluation and native code do: a temporary object (e.g.
-    // "new C().m()") must not outlive the call, or it outlives what a closure created by the method can observe (a
-    // closure holds no strong reference to its object) and its destructor runs later than in every other execution
-    // mode.  A value defined outside the block, such as a loop invariant hoisted out of a loop, is used again by
-    // each execution of the block and is never released here.  Borrowed and weak-load temporaries are released by
-    // their own bookkeeping and are not touched here.  Returns false if the release raised an exception (from a
-    // destructor).
-    auto releaseDeadMethodCallBase = [&](QoreIRValue base) -> bool {
-        uint32_t id = base.id;
-        if (!base.isValid() || id >= values.size() || id >= consumed_method_call_bases.size()
-                || !consumed_method_call_bases[id]
-                || !hasCleanupEntry(cleanup, id) || weak_load_temp_slots.count(id)
-                || (id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
-            return true;
+    // Releases the temporary arguments of a completed call that the call consumes (their only use, in the block that
+    // defines them; see buildValueUseCounts()), as the AST interpreter releases the argument list of a call when
+    // the call returns: a temporary argument does not live until the end of the statement.  A value defined outside
+    // the block, such as a loop invariant hoisted out of a loop, is used again by each execution of the block and is
+    // never released here; borrowed and weak-load temporaries are released by their own bookkeeping.  A path that
+    // passed the arguments in a list has released its slots already.
+    auto releaseConsumedCallArgs = [&](const QoreIRInstruction* call_inst) {
+        int arg_start = qore_ir_call_arg_start(call_inst);
+        if (arg_start < 0) {
+            return;
         }
-        removeAllCleanupEntries(cleanup, id);
-        QoreValue v = values[id];
-        values[id] = QoreValue();
-        v.discard(xsink);
-        return !(xsink && *xsink);
+        for (size_t i = static_cast<size_t>(arg_start); i < call_inst->operands.size(); ++i) {
+            // a cancelled release leaves the remaining arguments to the end of the statement (DiscardTemps)
+            if (i > static_cast<size_t>(arg_start) && !((i - arg_start) % 100)
+                    && qore_check_cancel(xsink, "IR call argument cleanup")) {
+                return;
+            }
+            uint32_t id = call_inst->operands[i].id;
+            if (!call_inst->operands[i].isValid() || id >= values.size() || id >= consumed_call_args.size()
+                    || !consumed_call_args[id]
+                    || !hasCleanupEntry(cleanup, id) || weak_load_temp_slots.count(id)
+                    || (id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
+                continue;
+            }
+            removeAllCleanupEntries(cleanup, id);
+            QoreValue v = values[id];
+            values[id] = QoreValue();
+            // an exception raised by a destructor is added to any exception raised by the call, as in the AST
+            v.discard(xsink);
+        }
     };
 
     auto trackWeakLoadTemp = [&](uint32_t id) {
@@ -7859,6 +7894,12 @@ next_instruction:
                 } else if (!used_inline_ir || inline_may_invalidate_external_caches) {
                     invalidateExternalCaches();
                 }
+                // a temporary argument of the call is released when the call returns, as in the AST
+                releaseConsumedCallArgs(inst);
+                if (xsink && *xsink) {
+                    result.discard(xsink);
+                    return returnAfterUnhandledException();
+                }
                 if (resultValueIsNeeded(inst->result)) {
                     setValueSlot(values, inst->result.id, result, xsink);
                     if (result.needsRef()) {
@@ -8056,6 +8097,8 @@ next_instruction:
                     || inv->invoke_opcode == QoreIROpcode::LoadSelfMember
                     || inv->invoke_opcode == QoreIROpcode::LoadStaticVar) && isDotEvalOnlyBase(inst);
                 QoreValue res = evalInvoke(inv, values, xsink, &func, block, ip, preserve_hash_key_weak_result);
+                // a temporary argument of a call is released when the call returns, as in the AST
+                releaseConsumedCallArgs(inv);
                 // Post-invalidation: ensure slot cache is cleared after the lvalue
                 // operation modifies TLS. Always invalidate (not repopulate) since
                 // the invoke expression may be a complex lvalue.
@@ -9932,9 +9975,11 @@ load_local_done:
                     return false;
                 }
                 // Dot-eval method dispatch handles weak refs itself. Preserve the raw
-                // reference when this load is only used as a dot-eval base.
+                // reference when this load is only used as a dot-eval base; a weak reference to a destroyed
+                // object is read as no value, as the AST interpreter reads a member without "self."
                 bool needs_eval = !isDotEvalOnlyBase(inst) && val->needsEval();
-                QoreValue out = needs_eval ? val->eval(xsink) : val.release();
+                QoreValue out = needs_eval ? val->eval(xsink)
+                    : (qore_weak_reference_target_destroyed(*val) ? QoreValue() : val.release());
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
@@ -10113,6 +10158,12 @@ load_local_done:
                 // Constructor may call closures that modify captured variables
                 invalidateExternalCaches();
                 QoreValue out = fromBits(rv);
+                // a temporary argument of the call is released when the call returns, as in the AST
+                releaseConsumedCallArgs(no_inst);
+                if (xsink && *xsink) {
+                    out.discard(xsink);
+                    return returnAfterUnhandledException();
+                }
                 setValueSlot(values, no_inst->result.id, out, xsink);
                 if (out.needsRef()) {
                     cleanup.push_back(no_inst->result.id);
@@ -10256,9 +10307,16 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                QoreValue out = ref_expr.getInternalNode()->eval(needs_deref, xsink);
-                if (!needs_deref && out.needsRef()) {
-                    out = out.refSelf();
+                QoreValue out;
+                // the object expression has been evaluated (operand 0); it is not evaluated again
+                const auto* omref = dynamic_cast<const ParseObjectMethodReferenceNode*>(ref_expr.getInternalNode());
+                if (omref && !mr_inst->operands.empty()) {
+                    out = omref->makeReference(getIRValue(values, mr_inst->operands[0]), xsink);
+                } else {
+                    out = ref_expr.getInternalNode()->eval(needs_deref, xsink);
+                    if (!needs_deref && out.needsRef()) {
+                        out = out.refSelf();
+                    }
                 }
                 ref_expr.discard(xsink);
                 if (xsink && *xsink) {
@@ -12227,6 +12285,34 @@ load_local_done:
                 // without tying lifetime to source lines, because a single
                 // expression can span multiple lines.
                 ephemeral_weak_ref_slots.clear();
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::IteratorRelease:
+            case QoreIROpcode::ReleaseOwnedTemp: {
+                // a return or break leaves a foreach statement: its iterator, or the reference that the function owns
+                // to a temporary of an enclosing statement, is released on this path only, as the AST interpreter
+                // releases it when the statement ends; the slot is cleared, so the release at the end of the frame
+                // finds nothing (see design/temporary-lifetime.md)
+                uint32_t id = inst->operands.front().id;
+                if (inst->opcode == QoreIROpcode::IteratorRelease) {
+                    FunctionalOperatorInterface* iter = reinterpret_cast<FunctionalOperatorInterface*>(
+                        getIRValue(values, inst->operands.front()).getAsBigInt());
+                    if (iter) {
+                        setValueSlotDirect(values, id, QoreValue(static_cast<int64_t>(0)));
+                        active_iterators.erase(iter);
+                        delete iter;
+                    }
+                } else if (id < values.size() && hasCleanupEntry(cleanup, id) && !weak_load_temp_slots.count(id)
+                        && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
+                    removeAllCleanupEntries(cleanup, id);
+                    QoreValue v = values[id];
+                    values[id] = QoreValue();
+                    v.discard(xsink);
+                }
+                // no exception check: the instruction also runs on the path of an exception, which stays raised; an
+                // exception raised by a destructor is added to it, and the CheckException that follows the releases
+                // of a statement's exit, as UninstantiateLocal, branches to the handler
                 ++ip;
                 break;
             }
@@ -14746,6 +14832,12 @@ load_local_done:
                         } else {
                             invalidateExternalCaches();
                         }
+                        // a temporary argument of the call is released when the call returns, as in the AST
+                        releaseConsumedCallArgs(inst);
+                        if (xsink && *xsink) {
+                            res.discard(xsink);
+                            return returnAfterUnhandledException();
+                        }
                         setValueSlot(values, inst->result.id, res, xsink);
                         if (res.needsRef()) {
                             cleanup.push_back(inst->result.id);
@@ -14791,6 +14883,12 @@ load_local_done:
                         cleanupLocalCaches();
                     } else if (!used_inline_ir || inline_may_invalidate_external_caches) {
                         invalidateExternalCaches();
+                    }
+                    // a temporary argument of the call is released when the call returns, as in the AST
+                    releaseConsumedCallArgs(inst);
+                    if (xsink && *xsink) {
+                        res.discard(xsink);
+                        return returnAfterUnhandledException();
                     }
                     setValueSlot(values, inst->result.id, res, xsink);
                     if (res.needsRef()) {
@@ -15030,6 +15128,12 @@ load_local_done:
                             invalidateExternalCaches();
                         }
                     }
+                    // a temporary argument of the call is released when the call returns, as in the AST
+                    releaseConsumedCallArgs(direct_inst);
+                    if (xsink && *xsink) {
+                        res.discard(xsink);
+                        return returnAfterUnhandledException();
+                    }
                     setValueSlot(values, direct_inst->result.id, res, xsink);
                     if (res.needsRef()) {
                         cleanup.push_back(direct_inst->result.id);
@@ -15080,6 +15184,12 @@ load_local_done:
                 if (!method->isBuiltin() || direct_inst->has_ref_args) {
                     invalidateExternalCaches();
                 }
+                // a temporary argument of the call is released when the call returns, as in the AST
+                releaseConsumedCallArgs(direct_inst);
+                if (xsink && *xsink) {
+                    res.discard(xsink);
+                    return returnAfterUnhandledException();
+                }
                 setValueSlot(values, direct_inst->result.id, res, xsink);
                 if (res.needsRef()) {
                     cleanup.push_back(direct_inst->result.id);
@@ -15125,7 +15235,11 @@ load_local_done:
                             invalidateExternalCaches();
                         }
                     }
+                    // a temporary argument of the call is released when the call returns, as in the AST
+                    releaseConsumedCallArgs(invoke_inst);
                     if (xsink && *xsink) {
+                        res.discard(xsink);
+                        res = QoreValue();
                         // On exception, branch to exception target
                         if (!invoke_inst->exception_target) {
                             return returnAfterUnhandledException(true);
@@ -15188,7 +15302,11 @@ load_local_done:
                     invalidateExternalCaches();
                 }
 
+                // a temporary argument of the call is released when the call returns, as in the AST
+                releaseConsumedCallArgs(invoke_inst);
                 if (xsink && *xsink) {
+                    res.discard(xsink);
+                    res = QoreValue();
                     // On exception, branch to exception target
                     if (!invoke_inst->exception_target) {
                         return returnAfterUnhandledException(true);
@@ -15348,7 +15466,10 @@ load_local_done:
                 if (called_external) {
                     invalidateExternalCaches();
                 }
-                if (!releaseDeadMethodCallBase(direct_inst->operands[0])) {
+                // the base, if a temporary, lives until the end of the statement (DiscardTemps), as in the AST; a
+                // temporary argument is released now
+                releaseConsumedCallArgs(direct_inst);
+                if (xsink && *xsink) {
                     res.discard(xsink);
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
@@ -15482,11 +15603,12 @@ load_local_done:
                     invalidateExternalCaches();
                 }
 
-                if (!(xsink && *xsink) && !releaseDeadMethodCallBase(de_invoke_inst->operands[0])) {
+                // the base, if a temporary, lives until the end of the statement (DiscardTemps), as in the AST; a
+                // temporary argument is released now
+                releaseConsumedCallArgs(de_invoke_inst);
+                if (xsink && *xsink) {
                     res.discard(xsink);
                     res = QoreValue();
-                }
-                if (xsink && *xsink) {
                     // On exception, branch to exception target
                     if (!de_invoke_inst->exception_target) {
                         return returnAfterUnhandledException(true);

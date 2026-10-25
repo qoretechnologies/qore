@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_program_private.h"
 
 QoreString QoreUnshiftOperatorNode::unshift_str("unshift operator expression");
@@ -99,7 +100,8 @@ int QoreUnshiftOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 }
 
 QoreValue QoreUnshiftOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder res(right, xsink);
+    // the operand is a statement of its own where the other execution modes evaluate it so
+    QoreMutationOperandHolder res(left, right, false, xsink);
     if (*xsink)
         return QoreValue();
 

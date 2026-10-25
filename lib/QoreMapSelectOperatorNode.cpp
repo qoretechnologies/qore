@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/qore_program_private.h"
@@ -268,7 +269,9 @@ bool QoreFunctionalMapSelectListOperator::getNextImpl(ValueOptionalRefHolder& va
         if (!result->getAsBool())
             continue;
 
-        ValueEvalOptimizedRefHolder tval(map->e[0], xsink);
+        // when the value of the map is not used, each element is a statement of its own, as in the other
+        // execution modes
+        QoreScopedEvalHolder tval(map->e[0], !map->needsReturnValue(), xsink);
         if (!*xsink && map->ref_rv) {
             tval.ensureReferencedValue();
             val.takeValueFrom(tval);
@@ -294,7 +297,9 @@ bool QoreFunctionalMapSelectSingleValueOperator::getNextImpl(ValueOptionalRefHol
     if (!result->getAsBool())
         return true;
 
-    ValueEvalOptimizedRefHolder tval(map->e[0], xsink);
+    // when the value of the map is not used, each element is a statement of its own, as in the other
+        // execution modes
+        QoreScopedEvalHolder tval(map->e[0], !map->needsReturnValue(), xsink);
     if (!*xsink && map->ref_rv) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
@@ -326,7 +331,9 @@ bool QoreFunctionalMapSelectIteratorOperator::getNextImpl(ValueOptionalRefHolder
         if (!result->getAsBool())
             continue;
 
-        ValueEvalOptimizedRefHolder tval(map->e[0], xsink);
+        // when the value of the map is not used, each element is a statement of its own, as in the other
+        // execution modes
+        QoreScopedEvalHolder tval(map->e[0], !map->needsReturnValue(), xsink);
         if (!*xsink && map->ref_rv) {
             tval.ensureReferencedValue();
             val.takeValueFrom(tval);
@@ -356,7 +363,9 @@ bool QoreFunctionalMapSelectOperator::getNextImpl(ValueOptionalRefHolder& val, E
         if (!result->getAsBool())
             continue;
 
-        ValueEvalOptimizedRefHolder tval(map->e[0], xsink);
+        // when the value of the map is not used, each element is a statement of its own, as in the other
+        // execution modes
+        QoreScopedEvalHolder tval(map->e[0], !map->needsReturnValue(), xsink);
         if (!*xsink && map->ref_rv) {
             tval.ensureReferencedValue();
             val.takeValueFrom(tval);

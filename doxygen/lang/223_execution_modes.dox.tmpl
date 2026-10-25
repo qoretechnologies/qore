@@ -22,7 +22,8 @@
 
     AST mode is the traditional tree-walking interpreter. It is the default for
     legacy non-@ref modern "%modern" code and remains available for modern
-    programs when selected explicitly.
+    programs when selected explicitly.  Its behavior defines the semantics of
+    every other execution mode.
 
     @code{.sh}
 qore --exec-mode=ast oldstyle.q
@@ -46,8 +47,9 @@ qore --exec-mode=ast oldstyle.q
 qore --exec-mode=ir script.qr
     @endcode
 
-    IR mode is also the semantic baseline for JIT and AOT; native paths must
-    preserve IR behavior exactly.
+    IR, JIT, tiered and AOT execution behave exactly as AST execution does: the
+    AST interpreter is the semantic baseline of every execution mode, including
+    @ref temporary_lifetime "the lifetime of temporary values".
 
     @section exec_mode_jit JIT Execution Mode
 

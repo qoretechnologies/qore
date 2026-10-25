@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/qore_program_private.h"
@@ -296,7 +297,9 @@ bool QoreFunctionalMapListOperator::getNextImpl(ValueOptionalRefHolder& val, Exc
     // set offset in thread-local data for "$#"
     ImplicitElementHelper eh(index());
     SingleArgvContextHelper argv_helper(getReferencedValue(), xsink);
-    ValueEvalOptimizedRefHolder tval(map->left, xsink);
+    // when the value of the map is not used, each element is a statement of its own, as in the other
+    // execution modes
+    QoreScopedEvalHolder tval(map->left, !map->needsReturnValue(), xsink);
     if (!*xsink && map->ref_rv) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
@@ -312,7 +315,9 @@ bool QoreFunctionalMapSingleValueOperator::getNextImpl(ValueOptionalRefHolder& v
 
     SingleArgvContextHelper argv_helper(v, xsink);
     v.clear();
-    ValueEvalOptimizedRefHolder tval(map->left, xsink);
+    // when the value of the map is not used, each element is a statement of its own, as in the other
+    // execution modes
+    QoreScopedEvalHolder tval(map->left, !map->needsReturnValue(), xsink);
     if (!*xsink && map->ref_rv) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
@@ -335,7 +340,9 @@ bool QoreFunctionalMapIteratorOperator::getNextImpl(ValueOptionalRefHolder& val,
     if (*xsink)
         return false;
     SingleArgvContextHelper argv_helper(iv.release(), xsink);
-    ValueEvalOptimizedRefHolder tval(map->left, xsink);
+    // when the value of the map is not used, each element is a statement of its own, as in the other
+    // execution modes
+    QoreScopedEvalHolder tval(map->left, !map->needsReturnValue(), xsink);
     if (!*xsink && map->ref_rv) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
@@ -352,7 +359,9 @@ bool QoreFunctionalMapOperator::getNextImpl(ValueOptionalRefHolder& val, Excepti
 
     ImplicitElementHelper eh(index++);
     SingleArgvContextHelper argv_helper(iv.takeReferencedValue(), xsink);
-    ValueEvalOptimizedRefHolder tval(map->left, xsink);
+    // when the value of the map is not used, each element is a statement of its own, as in the other
+    // execution modes
+    QoreScopedEvalHolder tval(map->left, !map->needsReturnValue(), xsink);
     if (!*xsink && map->ref_rv) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);

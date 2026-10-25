@@ -23,8 +23,8 @@ Relevant code:
 ## The bug
 
 `lowerStatementBlock()` brackets every statement that can create a node temp with a `PushTempMark` /
-`DiscardTemps` pair, so the statement's expression temps are released at its end (matching AST-mode
-`ValueEvalRefHolder` timing).  `DiscardTemps` is emitted at the end of the statement, on its normal, fall-through
+`DiscardTemps` pair, so the statement's expression temps are released at its end (a temporary lives until the end of
+the statement that created it, as in the AST interpreter; see `design/temporary-lifetime.md`).  `DiscardTemps` is emitted at the end of the statement, on its normal, fall-through
 path.
 
 A `break` or `continue` does not reach the end of its statement, or of the statements it is nested in up to the
@@ -73,7 +73,9 @@ Two complementary changes:
    typed `foreach` iterator temp — are preserved.
 
 `return` needs none of this: it leaves the frame, and frame exit drains the whole cleanup vector, so its open
-scopes are released there.  `break`/`continue` stay in the frame, which is why they alone accumulated.
+scopes are released there.  `break`/`continue` stay in the frame, which is why they alone accumulated.  What a
+`return` does release before the handlers of the blocks it leaves is the iterator, the list and the variables of each
+value `foreach` it leaves, through the loop's `ForeachSource` cleanup entry (see temporary-lifetime.md).
 
 ## Interpreter vs. native code
 

@@ -343,6 +343,10 @@ public:
         @param exception_target the handler of the error in this frame, if any
         @param loc the location of the return statement
     */
+    //! Releases the iterator of a foreach statement on a path that leaves the loop (QoreIROpcode::IteratorRelease)
+    QoreIRInstruction* createIteratorRelease(QoreIRValue iterator, const QoreProgramLocation* loc = nullptr);
+    //! Releases a temporary that the function owns on the path of a return (QoreIROpcode::ReleaseOwnedTemp)
+    QoreIRInstruction* createReleaseOwnedTemp(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createCheckReturnValue(QoreIRValue value, const QoreTypeInfo* return_type,
         QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc);
 

@@ -107,6 +107,17 @@ public:
     DLLLOCAL const std::string& getMethodName() const {
         return method;
     }
+
+    //! Returns a reference to the method of the object that the object expression gave
+    /** The IR interpreter and native code evaluate the object expression themselves and use this to create the
+        reference, so the expression is evaluated once, as in the AST interpreter
+
+        @param val the value of the object expression
+        @param xsink for the exception raised if the value is not an object or the method cannot be referred to
+
+        @return a RunTimeObjectMethodReference, or no value if an exception was raised
+    */
+    DLLLOCAL QoreValue makeReference(QoreValue val, ExceptionSink* xsink) const;
 };
 
 class ParseSelfMethodReferenceNode : public AbstractParseObjectMethodReferenceNode {

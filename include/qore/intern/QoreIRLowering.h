@@ -598,7 +598,7 @@ private:
         //! non-local exit inside the handler body cannot re-enter the same
         //! handler range. Cleanup entries below that Scope still run.
         enum Type { Scope, Lvars, RefForeachRecord, RefForeach, Context, HandlerBarrier, CatchVar,
-            ForeachElement };
+            ForeachElement, ForeachSource };
         Type type;
         uint32_t scope_id = 0;                    //!< scope ID for Scope entries
         size_t handler_start = 0;                 //!< index into block_handlers at scope entry (for inline lowering)
@@ -609,6 +609,9 @@ private:
         QoreValue var_expr;                        //!< loop variable expression for RefForeachRecord
         QoreIRValue context_state;                 //!< Context* handle for Context entries
         LocalVar* catch_var = nullptr;             //!< single local for CatchVar entries (try-catch exception param)
+        QoreIRValue foreach_iterator;              //!< iterator handle released by a ForeachSource entry, if any
+        QoreIRValue foreach_list;                  //!< list temporary released by a ForeachSource entry, if any
+        QoreIRValue foreach_element;               //!< current element released by a ForeachSource entry, if any
         size_t temp_scope_depth = 0;               //!< temp scopes open when the entry was pushed
     };
     //! Unified cleanup stack tracking scope exits, block-scoped locals, and ref foreach state
@@ -643,6 +646,21 @@ private:
         (LocalVar::isWeakAssigned()) are changed through the variable itself, as they can hold a weak reference.
     */
     DLLLOCAL bool changesThroughLValue(const VarRefNode* var) const;
+
+    //! Returns true if evaluating \a expr reads, other than as its own value, a local variable that can hold a weak
+    //! reference to an object (the variable of a foreach loop, or one assigned with := or @=)
+    /** A load of such a variable takes a strong reference of its own, a temporary of the statement that must be
+        released before the variable is destroyed when a return statement leaves its block.
+    */
+    DLLLOCAL bool expressionReadsWeakCapableLocal(const QoreValue& expr) const;
+
+    //! Emits the block that an exception leaving the body of a value foreach loop goes to before \a outer_target
+    /** Releases the iterator, the list and the loop variables, as the AST's foreach statement does when an exception
+        unwinds it, before the handler of the enclosing try block or block with handlers runs.
+    */
+    DLLLOCAL void emitForeachExceptionCleanup(QoreIRBasicBlock* cleanup_block, QoreIRBasicBlock* outer_target,
+            QoreIRValue iterator, QoreIRValue list, QoreIRValue element, const LVList* lvars,
+            const QoreProgramLocation* loc);
 
     //! Top-level handlers saved before block_handlers is erased
     /** Used by compileAllHandlerIRs() to iterate over handlers that would otherwise

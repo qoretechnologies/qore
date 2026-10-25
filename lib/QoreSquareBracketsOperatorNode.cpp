@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/qore_string_private.h"
@@ -372,6 +373,8 @@ QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
     ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink)
         return QoreValue();
+    // a temporary read from lives until the end of the statement, so the rest of the chain can use it
+    QoreStatementTempScope::holdReceiver(left, lh, xsink);
 
     // do not evalute RHS if it's a list with ranges
     if (rhs_list_range)

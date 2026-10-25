@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/WhileStatement.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
@@ -56,12 +57,9 @@ int WhileStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
             break;
         }
 
-        ValueEvalOptimizedRefHolder val(cond, xsink);
-        if (*xsink) {
-            break;
-        }
-
-        if (!val->getAsBool()) {
+        // the condition and its temporaries are released before the body runs
+        bool b;
+        if (qore_eval_condition(cond, b, xsink) || !b) {
             break;
         }
 
@@ -95,12 +93,9 @@ int WhileStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Excepti
             break;
         }
 
-        ValueEvalRefHolder val(rc, cond, xsink);
-        if (*xsink) {
-            break;
-        }
-
-        if (!val->getAsBool()) {
+        // the condition and its temporaries are released before the body runs
+        bool b;
+        if (qore_eval_condition(cond, b, xsink, rc) || !b) {
             break;
         }
 

@@ -326,10 +326,11 @@ The structured diagnostic ID is `MISSING-NEW-CONSTRUCTOR`; it includes the resol
 a machine-applicable insertion of `new `. This check also applies to qualified names such as
 `Ns::C()` and does not fire if a reachable function with the same name exists.
 
-Separately: never take a call reference on a temporary object
-(`\obj.getChild("x").doRequest()`) — the temporary is released before the call runs and you get
-`OBJECT-ALREADY-DELETED`. Bind the receiver to a local first. This matters most in `assertThrows()`,
-where the whole call is written as a reference.
+Separately: a call reference to a method of a temporary object (`\obj.getChild("x").doRequest()`) holds the
+object weakly, and the temporary lives only until the end of the statement that created it (see
+`design/temporary-lifetime.md`).  Calling the reference in the same statement works - `assertThrows()` takes the
+whole call as a reference and calls it before the statement ends - but a reference stored and called by a later
+statement raises `OBJECT-ALREADY-DELETED`; bind the receiver to a local first in that case.
 The same weak reference is what breaks a `background` thread reached through a call reference; see
 [trap 16](#16-background-keeps-an-object-alive-but-a-method-call-reference-does-not).
 
@@ -413,7 +414,8 @@ when the thread reaches the object through a **call reference**: `\method()` and
 only a weak reference to their object by design, so the object is destroyed on schedule and the thread
 fails on its first member or method access.
 
-This is the same weak reference that breaks a call reference taken on a temporary receiver — see
+This is the same weak reference that breaks a call reference taken on a temporary receiver and called after the
+statement that created the receiver has ended — see
 [trap 11](#11-constructing-an-object-in-an-expression-requires-new) — reached here on a different path.
 
 | Background expression | Object kept alive | Why |

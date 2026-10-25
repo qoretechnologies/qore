@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreAndEqualsOperatorNode::op_str("&= operator expression");
 
@@ -37,7 +38,8 @@ int QoreAndEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
 }
 
 QoreValue QoreAndEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder val(right, xsink);
+    // the operand is a statement of its own where the other execution modes evaluate it so
+    QoreMutationOperandHolder val(left, right, false, xsink);
     if (*xsink)
         return QoreValue();
 

@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/ParserSupport.h"
@@ -304,7 +305,11 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
                             ex_helper.reset(new CatchExceptionHelper(except));
                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                         }
-                        nrc = (*i).second->execImpl(rc, return_value, &obe_xsink);
+                        {
+                            // the handler is a statement of its own
+                            QoreStatementTempScope temps(&obe_xsink);
+                            nrc = (*i).second->execImpl(rc, return_value, &obe_xsink);
+                        }
                         if (type == OBE_Error) {
                             if (qore_es_private::get(obe_xsink)->rethrown) {
                                 xsink->clear();

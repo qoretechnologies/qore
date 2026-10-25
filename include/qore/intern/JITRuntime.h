@@ -914,6 +914,14 @@ uint64_t qore_rt_create_object_method_ref_aot(uint64_t object_bits, const char* 
 uint64_t qore_rt_create_object_method_ref_aot_throwing(uint64_t object_bits, const char* method_name,
     ExceptionSink* xsink);
 
+class ParseObjectMethodReferenceNode;
+//! Create a reference to a method of the object that the object expression of the node gave, which the caller
+//! evaluated; the expression is evaluated once, as in the AST interpreter; returns NaN-boxed QoreValue
+uint64_t qore_rt_create_object_method_ref(const ParseObjectMethodReferenceNode* node, uint64_t object_bits,
+    ExceptionSink* xsink);
+uint64_t qore_rt_create_object_method_ref_throwing(const ParseObjectMethodReferenceNode* node, uint64_t object_bits,
+    ExceptionSink* xsink);
+
 //! Create a parse reference (\var); returns NaN-boxed QoreValue
 uint64_t qore_rt_create_parse_ref(const ParseReferenceNode* node, ExceptionSink* xsink);
 uint64_t qore_rt_create_parse_ref_resolved_hash_key(const ParseReferenceNode* node, uint64_t key_bits,

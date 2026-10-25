@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreClassIntern.h"
@@ -746,6 +747,8 @@ QoreValue QoreHashDeclCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSin
     if (*xsink) {
         return QoreValue();
     }
+    // a temporary converted lives until the end of the statement, as in the other execution modes
+    QoreStatementTempScope::holdReceiver(exp, rv, xsink);
 
     if (QoreHashDeclCastOperatorNode::checkValue(xsink, *rv, false)) {
         return -1;
@@ -840,6 +843,8 @@ QoreValue QoreComplexHashCastOperatorNode::evalImpl(bool& needs_deref, Exception
     if (*xsink) {
         return QoreValue();
     }
+    // a temporary converted lives until the end of the statement, as in the other execution modes
+    QoreStatementTempScope::holdReceiver(exp, rv, xsink);
 
     if (QoreComplexHashCastOperatorNode::checkValue(xsink, *rv, false)) {
         return QoreValue();
@@ -917,6 +922,8 @@ QoreValue QoreComplexListCastOperatorNode::evalImpl(bool& needs_deref, Exception
     if (*xsink) {
         return QoreValue();
     }
+    // a temporary converted lives until the end of the statement, as in the other execution modes
+    QoreStatementTempScope::holdReceiver(exp, rv, xsink);
 
     if (checkValue(xsink, *rv, false)) {
         return QoreValue();

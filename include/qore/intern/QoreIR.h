@@ -811,7 +811,28 @@ enum class QoreIROpcode : uint16_t {
     //! checks whose value facts prove the value is accepted as it is.
     CheckReturnValue = 409,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (410, 411, ...)
+    //! Release the iterator of a foreach statement that a return or break leaves before the iterator is exhausted.
+    //!
+    //! operands[0] = the iterator handle of IteratorCreate; no result.  The AST interpreter destroys the iterator of
+    //! a foreach statement, with the reference that it holds to the list, when the statement ends
+    //! (ForEachStatement::execImpl()), so the list is released before the on_exit handlers of the blocks that a return
+    //! statement leaves run, and before the statement after a break runs.  The instruction releases the iterator on
+    //! the path that leaves the loop only and clears its handle, so an exhausted iterator, which IteratorNext has
+    //! released, and the release at the end of the frame find nothing to release.  See design/temporary-lifetime.md.
+    IteratorRelease = 410,
+
+    //! Release on a path that a return statement takes the reference that the function holds to a temporary of an
+    //! enclosing statement, such as the list of a foreach statement.
+    //!
+    //! operands[0] = the temporary; no result.  The AST interpreter releases the temporaries of each statement that a
+    //! return statement leaves when that statement ends, before the on_exit handlers of the enclosing blocks run, while
+    //! the compiled tiers release them at the end of their statement's temp scope, which a return does not reach, or at
+    //! the end of the frame.  The instruction releases the reference only when the function holds it as a temporary
+    //! that it owns, and only on the path that it is on: the slot of the temporary is cleared, so the release at the
+    //! end of the frame finds nothing to release.  See design/temporary-lifetime.md.
+    ReleaseOwnedTemp = 411,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (412, 413, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -820,8 +841,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::CheckReturnValue);
-static_assert(QORE_IR_MAX_OPCODE == 409, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ReleaseOwnedTemp);
+static_assert(QORE_IR_MAX_OPCODE == 411, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -2992,6 +3013,39 @@ public:
     const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
 };
 
+//! Returns the index of the first argument operand of a call instruction, or -1 if the instruction is no call
+/** The operands before it are the receiver of a method call or the value called; an Invoke instruction has the
+    operands of its invoke opcode.  A temporary argument that the call consumes is released when the call returns,
+    as the AST interpreter releases the argument list of a call (the IR interpreter's releaseConsumedCallArgs(),
+    QoreIRToLLVM::releaseConsumedCallArgs())
+*/
+inline int qore_ir_call_arg_start(const QoreIRInstruction* inst) {
+    QoreIROpcode op = inst->opcode;
+    if (op == QoreIROpcode::Invoke) {
+        op = static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode;
+        if (isDotEvalInvokeOpcode(op)) {
+            return 1;
+        }
+    }
+    switch (op) {
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallClosureDirect:
+            return 1;
+        case QoreIROpcode::CallDirect:
+        case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::CallMethodDirect:
+        case QoreIROpcode::InvokeMethodDirect:
+        case QoreIROpcode::NewObject:
+            return 0;
+        default:
+            return -1;
+    }
+}
+
 //! LandingPad instruction - marks the entry point of an exception handler (catch block)
 //! Stores the scope stack depth at the try-catch entry so the IR interpreter can
 //! execute on_error/on_exit handlers for scopes entered within the try body.
@@ -3520,9 +3574,9 @@ public:
     mutable std::atomic<bool> interpreter_analysis_ready{false};
     mutable std::vector<uint32_t> interpreter_value_use_counts;
     mutable std::vector<uint8_t> interpreter_dot_eval_only_bases;
-    //! method call bases that the call consumes: their only use is a method call in the block that defines them,
-    //! so the value cannot be needed again (a later execution of the block recomputes it first)
-    mutable std::vector<uint8_t> interpreter_consumed_method_call_bases;
+    //! call arguments that the call consumes: their only use is a call in the block that defines them, so the value
+    //! cannot be needed again (a later execution of the block recomputes it first)
+    mutable std::vector<uint8_t> interpreter_consumed_call_args;
     mutable std::vector<int32_t> interpreter_operand_use_counts;
     mutable std::vector<uint32_t> interpreter_param_slot_ids;
     mutable std::vector<const LocalVar*> interpreter_param_local_vars;

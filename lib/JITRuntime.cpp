@@ -426,6 +426,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_create_self_method_ref_aot", reinterpret_cast<void*>(&qore_rt_create_self_method_ref_aot) },
     { "qore_rt_create_self_method_ref_aot_throwing",
         reinterpret_cast<void*>(&qore_rt_create_self_method_ref_aot_throwing) },
+    { "qore_rt_create_object_method_ref", reinterpret_cast<void*>(&qore_rt_create_object_method_ref) },
+    { "qore_rt_create_object_method_ref_throwing",
+        reinterpret_cast<void*>(&qore_rt_create_object_method_ref_throwing) },
     { "qore_rt_create_object_method_ref_aot", reinterpret_cast<void*>(&qore_rt_create_object_method_ref_aot) },
     { "qore_rt_create_object_method_ref_aot_throwing",
         reinterpret_cast<void*>(&qore_rt_create_object_method_ref_aot_throwing) },
@@ -2547,6 +2550,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_self_member_for_call(const char* memb
     if (*xsink) {
         return toBits(QoreValue());
     }
+    // a member read without "self." reads a weak reference to a destroyed object as no value, as the AST
+    // interpreter does (SelfVarrefNode, WeakReferenceNode::evalImpl()), so a method call on it fails as one on no
+    // value does
+    if (qore_weak_reference_target_destroyed(*val)) {
+        return toBits(QoreValue());
+    }
     return toBits(val.release());
 }
 
@@ -3327,6 +3336,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
         return toBits(QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, obj, method)));
     }
     return toBits(QoreValue(new RunTimeObjectMethodReferenceNode(&loc_builtin, obj, method_name)));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref(const ParseObjectMethodReferenceNode* node,
+        uint64_t object_bits, ExceptionSink* xsink) {
+    return toBits(node->makeReference(fromBits(object_bits), xsink));
 }
 
 // --- Parse reference creation helper ---
@@ -19747,6 +19761,15 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_parse_ref
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_parse_ref_resolved_hash_key_throwing(
         const ParseReferenceNode* node, uint64_t key_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_create_parse_ref_resolved_hash_key(node, key_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_object_method_ref_throwing(
+        const ParseObjectMethodReferenceNode* node, uint64_t object_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_create_object_method_ref(node, object_bits, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

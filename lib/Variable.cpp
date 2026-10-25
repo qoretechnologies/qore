@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/qore_debug_narrowing.h"
@@ -916,7 +917,13 @@ static int raise_negative_list_or_buffer_index(const QoreSquareBracketsOperatorN
 
 int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove) {
     // first get index
-    ValueEvalOptimizedRefHolder rh(op->getRight(), vl.xsink);
+    // the key or index is a statement of its own: its temporaries are released before the lvalue is changed, as
+    // in the other execution modes
+    ValueEvalOptimizedRefHolder rh(vl.xsink);
+    {
+        QoreStatementTempScope temps(vl.xsink);
+        rh.eval(op->getRight());
+    }
     if (*vl.xsink)
         return -1;
 
@@ -1054,7 +1061,13 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
 
 int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove) {
     // first get index
-    ValueEvalOptimizedRefHolder rh(op->getRight(), vl.xsink);
+    // the key or index is a statement of its own: its temporaries are released before the lvalue is changed, as
+    // in the other execution modes
+    ValueEvalOptimizedRefHolder rh(vl.xsink);
+    {
+        QoreStatementTempScope temps(vl.xsink);
+        rh.eval(op->getRight());
+    }
     if (*vl.xsink) {
         return -1;
     }
@@ -1358,7 +1371,13 @@ int LValueHelper::doObjLValue(QoreObject* o, const char* mem, bool for_remove, c
 }
 
 int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove) {
-    ValueEvalOptimizedRefHolder rh(op->getRight(), vl.xsink);
+    // the key or index is a statement of its own: its temporaries are released before the lvalue is changed, as
+    // in the other execution modes
+    ValueEvalOptimizedRefHolder rh(vl.xsink);
+    {
+        QoreStatementTempScope temps(vl.xsink);
+        rh.eval(op->getRight());
+    }
     if (*vl.xsink) {
         return -1;
     }
@@ -1396,7 +1415,13 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
 }
 
 int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove) {
-    ValueEvalOptimizedRefHolder rh(op->getRight(), vl.xsink);
+    // the key or index is a statement of its own: its temporaries are released before the lvalue is changed, as
+    // in the other execution modes
+    ValueEvalOptimizedRefHolder rh(vl.xsink);
+    {
+        QoreStatementTempScope temps(vl.xsink);
+        rh.eval(op->getRight());
+    }
     if (*vl.xsink) {
         return -1;
     }

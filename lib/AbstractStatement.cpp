@@ -32,8 +32,116 @@
 #include "qore/intern/AbstractStatement.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 #include <typeinfo>
+
+//! the innermost temporary scope of the thread
+static thread_local QoreStatementTempScope* current_temp_scope = nullptr;
+
+QoreStatementTempScope::QoreStatementTempScope(ExceptionSink* xsink) : prev(current_temp_scope), xsink(xsink) {
+    current_temp_scope = this;
+}
+
+QoreStatementTempScope::~QoreStatementTempScope() {
+    release();
+    assert(current_temp_scope == this);
+    current_temp_scope = prev;
+}
+
+void QoreStatementTempScope::release() {
+    // a destructor run here executes its own statements, which hold their temporaries in their own scopes; the loop
+    // handles a value held here all the same.  It must release every value, so it is not cancelled: it runs once for
+    // each temporary that the statement holds
+    site_index.reset();
+    while (!entries.empty()) {
+        QoreValue v = entries.back().value;
+        entries.pop_back();
+        v.discard(xsink);
+    }
+}
+
+size_t QoreStatementTempScope::find(const void* site) {
+    if (site_index) {
+        auto i = site_index->find(site);
+        return i == site_index->end() ? entries.size() : i->second;
+    }
+    // the value created by the same expression for the previous element is usually the latest one
+    for (size_t i = entries.size(); i; --i) {
+        if (entries[i - 1].site == site) {
+            return i - 1;
+        }
+    }
+    return entries.size();
+}
+
+QoreValue QoreStatementTempScope::put(const void* site, QoreValue value) {
+    size_t pos = find(site);
+    if (pos == entries.size()) {
+        // a new site: nothing is changed if the vector or the index cannot grow
+        entries.push_back({site, value});
+        if (site_index) {
+            try {
+                site_index->emplace(site, pos);
+            } catch (...) {
+                entries.pop_back();
+                throw;
+            }
+        } else if (entries.size() > IndexThreshold) {
+            auto index = std::make_unique<std::unordered_map<const void*, size_t>>();
+            try {
+                index->reserve(entries.size() * 2);
+                for (size_t i = 0; i < entries.size(); ++i) {
+                    index->emplace(entries[i].site, i);
+                }
+            } catch (...) {
+                entries.pop_back();
+                throw;
+            }
+            site_index = std::move(index);
+        }
+        return QoreValue();
+    }
+    // the site held a value: the new one takes the latest position, as the previous one is released after it
+    QoreValue replaced = entries[pos].value;
+    if (pos == entries.size() - 1) {
+        entries[pos].value = value;
+        return replaced;
+    }
+    // the moves below cannot allocate: the vector and the index keep their sizes
+    for (size_t i = pos + 1; i < entries.size(); ++i) {
+        entries[i - 1] = entries[i];
+        if (site_index) {
+            (*site_index)[entries[i - 1].site] = i - 1;
+        }
+    }
+    entries.back() = {site, value};
+    if (site_index) {
+        (*site_index)[site] = entries.size() - 1;
+    }
+    return replaced;
+}
+
+void QoreStatementTempScope::hold(const void* site, ValueOptionalRefHolder& holder, ExceptionSink* xsink) {
+    if (!holder.isTemp() || !current_temp_scope || !isObservable(*holder)) {
+        return;
+    }
+    if (hold(site, *holder, xsink)) {
+        holder.clearTemp();
+    }
+}
+
+bool QoreStatementTempScope::hold(const void* site, QoreValue value, ExceptionSink* xsink) {
+    QoreStatementTempScope* scope = current_temp_scope;
+    if (!scope) {
+        return false;
+    }
+    // the value that the same expression created before in this scope, for an earlier element, is released after
+    // the new one is held
+    QoreValue replaced = scope->put(site, value);
+    replaced.discard(xsink);
+    return true;
+}
 
 QoreBreakpointList_t::QoreBreakpointList_t() {
 }
@@ -99,6 +207,8 @@ int AbstractStatement::exec(RuntimeConfig& rc, QoreValue& return_value, Exceptio
     if (*xsink) {
         return 0;
     }
+    // the temporaries of the statement live until it ends
+    QoreStatementTempScope temps(xsink);
     return execImpl(rc, return_value, xsink);
 }
 

@@ -683,6 +683,33 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Temporary Values Live Until the End of Their Statement
+    @parblock
+    An object or other value that an expression creates and that nothing else refers to, such as the object that a
+    call returns or \c new creates in <tt>getDocument().components.schemas.Pet.getDataType()</tt> or
+    <tt>new MyClass().getClosure()()</tt>, now lives until the end of the statement that created it, so every part of
+    a chain of member accesses, element accesses, casts and method calls can use it: a weak reference to it, a
+    closure created by one of its methods and a call reference to one of its methods work until the statement ends.
+    Before, such a value was destroyed as soon as the member access, element access, cast or method call that used it
+    returned.  A value passed to a call as an argument is still released when the call returns.  This applies in every
+    @ref execution_modes "execution mode".
+
+    The condition of an \c if, \c while, \c do or \c for statement, the initializer and the iterator of a \c for
+    statement, the list of a \c foreach statement and the value of a \c switch statement are statements of their own:
+    their temporary values are destroyed before the code that they select or that follows them runs.  So are the
+    expression of a \c map whose value is not used, for each element, and the value assigned to a member or an
+    element of a container or combined with a variable by a compound assignment, \c push or \c unshift, whose
+    temporary values are destroyed before the container or variable is changed.
+
+    A \c foreach statement that a \c return, a \c break or an exception leaves releases the list that it iterates and
+    then its loop variables before the code after it runs, such as the \c on_exit and \c on_error handlers of the
+    enclosing blocks; in the IR, JIT, tiered and AOT execution modes, the list and the loop variables were released
+    after those handlers had run, or when the function returned.
+
+    Code that relied on a temporary object being destroyed before the rest of its statement ran, for example on its
+    destructor, must assign the object to a variable and release it in a separate statement.
+    @endparblock
+
     @par Data Provider Types Restored From Their Descriptions Can Be Cyclic and Shared
     @parblock
     \c DataProvider::AbstractDataProviderType::get() restores each type of a type description once: a recursive

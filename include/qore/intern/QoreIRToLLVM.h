@@ -585,6 +585,9 @@ private:
     bool invoke_cleanup_array_overflow = false;
     // Map from value ID to invoke-result alloca (for clearing at Return)
     std::unordered_map<uint32_t, llvm::Value*> invoke_alloca_map;
+    //! the output slot of each IteratorNext, by its result id: it holds a reference to the current element, which
+    //! ReleaseOwnedTemp releases when a return or an exception leaves the loop
+    std::unordered_map<uint32_t, llvm::Value*> iterator_element_allocas;
     // Cleanup allocas whose lifetime is tied to a local cache rather than an
     // expression temporary.  They are cleaned on function/error exits, but
     // discard.temps must not clear them while the local alloca still borrows
@@ -646,6 +649,10 @@ private:
         but that use runs on every iteration.
     */
     std::unordered_map<uint32_t, const QoreIRBasicBlock*> value_def_block;
+    // the temp scope (QoreIRInstruction::temp_scope_id) of the instruction defining each value
+    std::unordered_map<uint32_t, uint32_t> value_def_temp_scope;
+    // the values created by a call instruction (qore_ir_call_arg_start() >= 0)
+    std::unordered_set<uint32_t> value_defined_by_call;
 
     // Single-use or nonescaping stored closure values consumed directly by
     // CallClosureDirect. Their creation can be fused into the call without
@@ -1195,6 +1202,21 @@ private:
     // Emit qore_rt_decref calls for tracked runtime call results
     void emitInvokeCleanup(llvm::Module& module);
 
+    // Releases the temporaries of the statements still running when the function exits - the tracked call
+    // results that are not persistent cleanups (local reload trackers) and the pending SSA cleanups - and the
+    // iterators of the foreach statements left, before the on_block_exit handlers of the function's blocks run, as
+    // the AST interpreter releases them when the statements unwind; the persistent cleanups follow in
+    // emitInvokeCleanup()
+    void emitExitStatementCleanup(llvm::Module& module, bool pending_ssa);
+
+    // Returns the block that an exception raised by \a inst branches to on its way to the in-frame handler
+    // \a handler: a block that first releases the temporaries of the raising statement - the tracked call results
+    // registered since the mark of the instruction's temp scope - as the AST interpreter releases them when the
+    // statement unwinds and the IR interpreter drains them (cleanupToTempScope()) before the handler runs; or
+    // \a handler itself if there are none.  Pending SSA cleanups are promoted to cleanup allocas first.
+    llvm::BasicBlock* getExceptionEdgeTarget(llvm::Module& module, llvm::Function* llvm_func,
+            const QoreIRInstruction* inst, llvm::BasicBlock* handler);
+
     // Emit statement/condition-boundary temp cleanup for values tracked since
     // the latest PushTempMark.
     //! Releases the temps registered since the mark of \a scope_id; \a statement_end also releases the local
@@ -1610,11 +1632,19 @@ private:
     void consumeValueUse(uint32_t value_id, llvm::Module& module,
             bool release_weak_load = true);
 
-    // Dot-eval calls consume their base during the call.  EH invoke lowerers
-    // create a terminator before lowerFunction's post-instruction cleanup can
-    // emit IR, so release a last-use base at the call boundary.
+    // A dot-eval call whose base is the strong reference that a load of a weak
+    // local took releases it at its last use; EH invoke lowerers create a
+    // terminator before lowerFunction's post-instruction cleanup can emit IR, so
+    // it is released at the call boundary.  Any other base is a temporary that
+    // lives until the end of the statement (DiscardTemps), as in the AST.
     void releaseDotEvalBaseIfCurrentUseIsLast(const QoreIRInstruction* inst,
             llvm::Module& module);
+
+    // Releases the temporary arguments of a call that the call consumes - their last use, in the block that
+    // defines them - as the AST interpreter releases the argument list of a call when it returns; \a use_pending
+    // is true when the uses of the call's operands have not been consumed yet (in an invoke lowerer).  Returns true
+    // if any was released, as releasing can raise an exception
+    bool releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::Module& module, bool use_pending);
 
     // Build an entry-block alloca'd array of NaN-boxed args from operands[arg_start..].
     // Sets args_array and nargs.  Returns false on error.

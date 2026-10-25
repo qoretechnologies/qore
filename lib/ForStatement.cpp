@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/ForStatement.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
@@ -52,7 +53,12 @@ int ForStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
 
     // evaluate assignment expression and discard results if any
     if (assignment) {
-        ValueEvalOptimizedRefHolder tmp(assignment, xsink);
+        // the initializer is a statement of its own: its temporaries are released before the loop runs
+        QoreStatementTempScope temps(xsink);
+        {
+            ValueEvalOptimizedRefHolder tmp(assignment, xsink);
+        }
+        temps.release();
         if (*xsink) {
             return 0;
         }
@@ -69,8 +75,8 @@ int ForStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
 
         // check conditional expression, exit "for" loop if condition is false
         if (cond) {
-            ValueEvalOptimizedRefHolder val(cond, xsink);
-            if (*xsink || !val->getAsBool()) {
+            bool b;
+            if (qore_eval_condition(cond, b, xsink) || !b) {
                 break;
             }
         }
@@ -92,7 +98,12 @@ int ForStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
 
         // evaluate iterator expression and discard results if any
         if (iterator) {
-            ValueEvalOptimizedRefHolder tmp(iterator, xsink);
+            // the iterator is a statement of its own: its temporaries are released before the condition runs
+            QoreStatementTempScope temps(xsink);
+            {
+                ValueEvalOptimizedRefHolder tmp(iterator, xsink);
+            }
+            temps.release();
             if (*xsink) {
                 break;
             }
@@ -108,7 +119,12 @@ int ForStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Exception
 
     // evaluate assignment expression and discard results if any
     if (assignment) {
-        ValueEvalRefHolder tmp(rc, assignment, xsink);
+        // the initializer is a statement of its own: its temporaries are released before the loop runs
+        QoreStatementTempScope temps(xsink);
+        {
+            ValueEvalRefHolder tmp(rc, assignment, xsink);
+        }
+        temps.release();
         if (*xsink) {
             return 0;
         }
@@ -125,8 +141,8 @@ int ForStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Exception
 
         // check conditional expression, exit "for" loop if condition is false
         if (cond) {
-            ValueEvalRefHolder val(rc, cond, xsink);
-            if (*xsink || !val->getAsBool()) {
+            bool b;
+            if (qore_eval_condition(cond, b, xsink, rc) || !b) {
                 break;
             }
         }
@@ -148,7 +164,12 @@ int ForStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Exception
 
         // evaluate iterator expression and discard results if any
         if (iterator) {
-            ValueEvalRefHolder tmp(rc, iterator, xsink);
+            // the iterator is a statement of its own: its temporaries are released before the condition runs
+            QoreStatementTempScope temps(xsink);
+            {
+                ValueEvalRefHolder tmp(rc, iterator, xsink);
+            }
+            temps.release();
             if (*xsink) {
                 break;
             }

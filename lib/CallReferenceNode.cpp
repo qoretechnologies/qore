@@ -30,6 +30,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -212,6 +213,9 @@ QoreValue CallReferenceCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, 
     if (*xsink) {
         return QoreValue();
     }
+    // a temporary call reference or closure that is called lives until the end of the statement, as a temporary
+    // receiver does
+    QoreStatementTempScope::holdReceiver(exp, lv, xsink);
 
     ResolvedCallReferenceNode* r = dynamic_cast<ResolvedCallReferenceNode*>(lv->getInternalNode());
     if (!r) {
@@ -372,11 +376,18 @@ QoreValue ParseObjectMethodReferenceNode::evalImpl(RuntimeConfig& rc, bool& need
     if (*xsink) {
         return QoreValue();
     }
+    // the reference holds its object weakly; a temporary object lives until the end of the statement, so the
+    // statement can call the reference
+    QoreStatementTempScope::holdReceiver(exp, lv, xsink);
 
-    QoreObject* o = lv->getType() == NT_OBJECT ? lv->get<QoreObject>() : nullptr;
+    return makeReference(*lv, xsink);
+}
+
+QoreValue ParseObjectMethodReferenceNode::makeReference(QoreValue val, ExceptionSink* xsink) const {
+    QoreObject* o = val.getType() == NT_OBJECT ? val.get<QoreObject>() : nullptr;
     if (!o) {
         xsink->raiseException(*loc, "OBJECT-METHOD-REFERENCE-ERROR", QoreValue(),
-                              "expression does not evaluate to an object; got type '%s' instead", lv->getTypeName());
+                              "expression does not evaluate to an object; got type '%s' instead", val.getTypeName());
         return QoreValue();
     }
 

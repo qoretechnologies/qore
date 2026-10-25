@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreOrEqualsOperatorNode::op_str("|= operator expression");
 
@@ -37,7 +38,8 @@ int QoreOrEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pa
 }
 
 QoreValue QoreOrEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder new_right(right, xsink);
+    // the operand is a statement of its own where the other execution modes evaluate it so
+    QoreMutationOperandHolder new_right(left, right, false, xsink);
     if (*xsink)
         return QoreValue();
     int64 val = new_right->getAsBigInt();

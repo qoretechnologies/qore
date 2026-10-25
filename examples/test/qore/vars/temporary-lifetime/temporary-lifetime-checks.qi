@@ -1,0 +1,731 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks of the lifetime of temporary values, which every execution mode must give as the AST interpreter does;
+# included by temporary-lifetime-worker.q, so that the checks run in the execution mode of the worker, by
+# temporary-lifetime.qtest, so that they run in the mode of the test, and by TemporaryLifetimeChecks.qm for the
+# compiled module
+#
+# Each case records the events of one statement shape in a trace: "+name" when a document is created, "~name" when
+# it is destroyed, and what the code running in the statement sees.  A temporary lives until the end of the statement
+# that created it; a condition, the list of a foreach statement and the value of a switch statement are statements of
+# their own, and so is each iteration of a map or select whose value is not used.  The temporaries that a statement
+# holds when it ends are destroyed in the reverse order of their creation.
+
+public namespace TemporaryLifetimeChecks {
+    #! the trace of the current case
+    public class Trace {
+        public {
+            static list<string> lines;
+        }
+
+        static add(string line) {
+            push Trace::lines, line;
+        }
+
+        static list<string> take() {
+            list<string> rv = Trace::lines ?? ();
+            Trace::lines = ();
+            return rv;
+        }
+    }
+
+    #! a document that creates schema objects, which refer to it through weak references
+    public class Doc {
+        public {
+            string name;
+            hash<auto> components;
+            list<auto> items;
+        }
+
+        constructor(string name) {
+            self.name = name;
+            Trace::add("+" + name);
+            components = {"schemas": {"X": new Schema(self)}};
+            items = (new Schema(self), new Schema(self));
+        }
+
+        destructor() {
+            Trace::add("~" + name);
+        }
+
+        Schema getSchema() {
+            return components.schemas.X;
+        }
+
+        list<auto> getItems() {
+            return items;
+        }
+
+        string getName() {
+            Trace::add("getName(" + name + ")");
+            return name;
+        }
+
+        string describe() {
+            return "alive";
+        }
+
+        code getClosure() {
+            return string sub () {
+                return exists self ? "self=" + name : "self=NOTHING";
+            };
+        }
+
+        Doc getOther(string other) {
+            return new Doc(other);
+        }
+
+        string fail() {
+            throw "CHAIN-ERROR", name;
+        }
+
+        string nameOf(Doc other) {
+            return other.name;
+        }
+
+        static string staticNameOf(Doc other) {
+            return other.name;
+        }
+
+        string replaceIn(DocHolder h) {
+            h.doc = new Doc("replacement");
+            Trace::add("replaced");
+            return name;
+        }
+    }
+
+    #! takes a document as a constructor argument
+    public class ArgTaker {
+        public {
+            string name;
+        }
+
+        constructor(Doc d) {
+            name = d.name;
+        }
+    }
+
+    #! holds a document in a member
+    public class DocHolder {
+        public {
+            Doc doc;
+        }
+
+        constructor(string name) {
+            doc = new Doc(name);
+        }
+
+        #! calls a method of the member that replaces the member
+        string run() {
+            return log(doc.replaceIn(self));
+        }
+    }
+
+    #! refers to its document through a weak reference
+    public class Schema {
+        public {
+            *Doc doc;
+            string name;
+        }
+
+        constructor(Doc doc) {
+            self.doc := doc;
+            name = doc.name;
+        }
+
+        #! records whether the document still exists, as the weak reference to it gives it, and returns it
+        string state() {
+            string call;
+            try {
+                call = self.doc.describe();
+            } catch (hash<ExceptionInfo> ex) {
+                call = ex.err;
+            }
+            string rv = sprintf("state(%s)=%s", name, call);
+            Trace::add(rv);
+            return call;
+        }
+    }
+
+    #! the target of weak references for the checks of weak member reads
+    public class Target {
+        public {
+            string name;
+        }
+
+        constructor(string name) {
+            self.name = name;
+        }
+
+        string describe() {
+            return "alive";
+        }
+    }
+
+    #! holds weak references to a target in several ways
+    public class WeakHolder {
+        public {
+            *Target typed;
+            auto untyped;
+            hash<auto> h;
+        }
+
+        constructor(Target t) {
+            typed := t;
+            untyped := t;
+            h.t := t;
+        }
+
+        #! returns how each weak reference reads, as "read=result" strings
+        list<string> reads() {
+            list<string> rv = ();
+            push rv, sprintf("exists typed=%y", exists typed);
+            push rv, sprintf("exists self.typed=%y", exists self.typed);
+            push rv, sprintf("exists untyped=%y", exists untyped);
+            push rv, sprintf("exists self.untyped=%y", exists self.untyped);
+            push rv, sprintf("exists h.t=%y", exists h.t);
+            try {
+                push rv, "typed.describe()=" + typed.describe();
+            } catch (hash<ExceptionInfo> ex) {
+                push rv, "typed.describe()=" + ex.err;
+            }
+            try {
+                push rv, "self.typed.describe()=" + self.typed.describe();
+            } catch (hash<ExceptionInfo> ex) {
+                push rv, "self.typed.describe()=" + ex.err;
+            }
+            try {
+                push rv, "untyped.describe()=" + untyped.describe();
+            } catch (hash<ExceptionInfo> ex) {
+                push rv, "untyped.describe()=" + ex.err;
+            }
+            try {
+                push rv, "self.untyped.describe()=" + self.untyped.describe();
+            } catch (hash<ExceptionInfo> ex) {
+                push rv, "self.untyped.describe()=" + ex.err;
+            }
+            try {
+                push rv, "h.t.describe()=" + h.t.describe();
+            } catch (hash<ExceptionInfo> ex) {
+                push rv, "h.t.describe()=" + ex.err;
+            }
+            return rv;
+        }
+    }
+
+    Doc sub make(string name) {
+        return new Doc(name);
+    }
+
+    string sub log(string s) {
+        Trace::add("log(" + s + ")");
+        return s;
+    }
+
+    sub report(Schema s) {
+        Trace::add("report");
+        s.state();
+    }
+
+    string sub report_doc(Doc d) {
+        Trace::add("report_doc");
+        return d.getSchema().state();
+    }
+
+    string sub call(code c) {
+        return c();
+    }
+
+    string sub ret_chain() {
+        Doc local("local");
+        on_exit Trace::add("on_exit");
+        return make("ret").getSchema().state();
+    }
+
+    string sub ret_chain_in_try() {
+        Doc local("local2");
+        try {
+            return make("ret-try").components.schemas.X.state();
+        } catch (hash<ExceptionInfo> ex) {
+            Trace::add(ex.err);
+        }
+        return "";
+    }
+
+    string sub throw_chain() {
+        on_error Trace::add("on_error");
+        throw "ERR", make("throw").getName();
+    }
+
+    string sub nested_on_error() {
+        try {
+            {
+                on_error Trace::add("nested on_error");
+                make("nested-error").getSchema().doc.fail();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            Trace::add("caught " + ex.err);
+        }
+        return "";
+    }
+
+    string sub return_in_foreach() {
+        on_exit Trace::add("on_exit");
+        foreach Doc d in ((make("list-1"), make("list-2"))) {
+            return d.getName();
+        }
+        return "";
+    }
+
+    string sub return_in_nested_foreach() {
+        on_exit Trace::add("on_exit");
+        foreach Doc d in ((make("outer"),)) {
+            on_exit Trace::add("inner on_exit");
+            foreach Doc e in ((make("inner"),)) {
+                return d.getName() + "," + e.getName();
+            }
+        }
+        return "";
+    }
+
+    string sub return_in_foreach_over_map() {
+        on_exit Trace::add("on_exit");
+        foreach string s in (map $1.getName(), (make("map-src-1"), make("map-src-2"))) {
+            return s;
+        }
+        return "";
+    }
+
+    string sub return_in_foreach_with_outer_variable() {
+        on_exit Trace::add("on_exit");
+        Doc d;
+        foreach d in ((make("outer-var-1"), make("outer-var-2"))) {
+            return d.getName();
+        }
+        return "";
+    }
+
+    list<Doc> sub make_list(string prefix) {
+        return (make(prefix + "-1"), make(prefix + "-2"));
+    }
+
+    string sub return_in_foreach_over_call() {
+        on_exit Trace::add("on_exit");
+        foreach Doc d in (make_list("call-list")) {
+            return d.getName();
+        }
+        return "";
+    }
+
+    sub throw_in_foreach() {
+        on_error Trace::add("on_error");
+        foreach Doc d in ((make("throw-list-1"), make("throw-list-2"))) {
+            throw "FOREACH-ERROR", d.name;
+        }
+    }
+
+    string sub on_exit_chain() {
+        on_exit log(make("on-exit").getSchema().state());
+        Trace::add("body");
+        return "";
+    }
+
+    string sub member_chain() {
+        return make("m").components.schemas.X.state();
+    }
+
+    string sub method_chain() {
+        return make("c").getSchema().state();
+    }
+
+    #! returns the trace of each case: case -> trace
+    public hash<string, list<string>> sub get_traces() {
+        hash<string, list<string>> rv = {};
+        Trace::take();
+
+        # chains: the document lives in the chained call and is destroyed at the end of the statement
+        make("member").components.schemas.X.state();
+        rv."01 member chain" = Trace::take();
+
+        make("brace"){"components"}{"schemas"}{"X"}.state();
+        rv."02 brace member chain" = Trace::take();
+
+        {
+            string key = "components";
+            make("dynamic"){key}.schemas.X.state();
+        }
+        rv."03 dynamic key chain" = Trace::take();
+
+        make("index").items[0].state();
+        rv."04 list index chain" = Trace::take();
+
+        make("method").getSchema().state();
+        rv."05 method chain" = Trace::take();
+
+        (new Doc("new")).getSchema().state();
+        rv."06 new and method chain" = Trace::take();
+
+        make("method-index").getItems()[1].state();
+        rv."07 method and index chain" = Trace::take();
+
+        make("pseudo").getItems().first().state();
+        rv."08 pseudo-method chain" = Trace::take();
+
+        cast<Schema>(make("cast").items[0]).state();
+        rv."09 cast chain" = Trace::take();
+
+        make("slice").components{("schemas",)}.schemas.X.state();
+        rv."10 hash slice chain" = Trace::take();
+
+        # arguments
+        report(make("member-arg").components.schemas.X);
+        rv."11 member of a temporary as an argument" = Trace::take();
+
+        report(make("method-arg").getSchema());
+        rv."12 method result of a temporary as an argument" = Trace::take();
+
+        log(report_doc(make("temp-arg")));
+        rv."13 the temporary as an argument" = Trace::take();
+
+        log(make("chain-arg").components.schemas.X.state());
+        rv."14 chain in an argument" = Trace::take();
+
+        # statements
+        foreach Schema s in (make("foreach").items) {
+            Trace::add("body " + $#);
+            s.state();
+        }
+        rv."15 foreach over a member of a temporary" = Trace::take();
+
+        foreach Schema s in (make("foreach-method").getItems()) {
+            Trace::add("body " + $#);
+            s.state();
+        }
+        rv."16 foreach over a method result of a temporary" = Trace::take();
+
+        {
+            Schema s = make("assign").components.schemas.X;
+            Trace::add("after the assignment");
+            s.state();
+        }
+        rv."17 member of a temporary assigned" = Trace::take();
+
+        log(make("two-1").components.schemas.X.state() + "," + make("two-2").getSchema().state());
+        rv."18 two chains in one statement" = Trace::take();
+
+        log(make("plain-member").name);
+        rv."19 plain member" = Trace::take();
+
+        log(make("plain-method").describe());
+        rv."20 plain method" = Trace::take();
+
+        {
+            list<string> l = map $1.state(), make("map").items;
+            Trace::add("map " + l.join(","));
+        }
+        rv."21 map over a member of a temporary" = Trace::take();
+
+        {
+            list<auto> l = select make("select").items, $1.state() == "alive";
+            Trace::add("selected " + l.size());
+        }
+        rv."22 select over a member of a temporary" = Trace::take();
+
+        switch (make("switch").items[0].state()) {
+            case "alive":
+                Trace::add("case alive");
+                break;
+            default:
+                Trace::add("case other");
+                break;
+        }
+        rv."23 switch" = Trace::take();
+
+        if (make("if").items[0].state() == "alive") {
+            Trace::add("if alive");
+        } else {
+            Trace::add("if other");
+        }
+        rv."24 if" = Trace::take();
+
+        log(make("ternary").items[1].state() == "alive" ? "alive" : "other");
+        rv."25 ternary" = Trace::take();
+
+        {
+            int i = 0;
+            while (make("while-" + i).getName() != "while-2") {
+                Trace::add("while body " + i);
+                ++i;
+            }
+        }
+        rv."26 while condition" = Trace::take();
+
+        log(ret_chain());
+        rv."27 return" = Trace::take();
+
+        log(ret_chain_in_try());
+        rv."28 return in try" = Trace::take();
+
+        log(foldl $1 + "," + $2, (map make("map-" + $1).getName(), (1, 2, 3)));
+        rv."29 map evaluating a temporary per element" = Trace::take();
+
+        map make("map-statement-" + $1).getName(), (1, 2, 3);
+        rv."30 map whose value is not used" = Trace::take();
+
+        foreach string s in (map make("lazy-" + $1).getName(), (1, 2)) {
+            Trace::add("lazy body " + s);
+        }
+        rv."31 foreach over map" = Trace::take();
+
+        try {
+            log(make("closure").getClosure()());
+        } catch (hash<ExceptionInfo> ex) {
+            Trace::add(ex.err);
+        }
+        rv."32 closure of a temporary called in the chain" = Trace::take();
+
+        try {
+            log(call(make("closure-arg").getClosure()));
+        } catch (hash<ExceptionInfo> ex) {
+            Trace::add(ex.err);
+        }
+        rv."33 closure of a temporary passed to a call" = Trace::take();
+
+        {
+            code c = make("closure-assigned").getClosure();
+            try {
+                log(c());
+            } catch (hash<ExceptionInfo> ex) {
+                Trace::add(ex.err);
+            }
+        }
+        rv."34 closure of a temporary assigned" = Trace::take();
+
+        try {
+            log(call(\make("call-ref").getName()));
+        } catch (hash<ExceptionInfo> ex) {
+            Trace::add(ex.err);
+        }
+        rv."35 call reference to a method of a temporary" = Trace::take();
+
+        for (string s = make("for-init").getName(); make("for-cond-" + s).getName() != "for-cond-xx";
+                s = make("for-iter").getName() + "x") {
+            Trace::add("for body " + s);
+            if (s.size() > 8) {
+                break;
+            }
+        }
+        rv."36 for" = Trace::take();
+
+        {
+            int i = 0;
+            do {
+                Trace::add("do body " + i);
+                ++i;
+            } while (make("do-" + i).getName() != "do-2");
+        }
+        rv."37 do while condition" = Trace::take();
+
+        try {
+            throw_chain();
+        } catch (hash<ExceptionInfo> ex) {
+            Trace::add("caught " + ex.desc);
+        }
+        rv."38 throw" = Trace::take();
+
+        {
+            hash<auto> h = {"k": new Doc("old-member")};
+            h.k = make("member-assign").getOther("new-member");
+            Trace::add("after the member assignment");
+        }
+        rv."39 assignment to a member" = Trace::take();
+
+        {
+            Doc d("old-variable");
+            d = make("variable-assign").getOther("new-variable");
+            Trace::add("after the variable assignment");
+        }
+        rv."40 assignment to a variable" = Trace::take();
+
+        {
+            list<auto> l = ();
+            log(sprintf("%d", (l += make("compound").getItems()).size()));
+        }
+        rv."41 compound assignment" = Trace::take();
+
+        {
+            list<auto> l = ();
+            push l, make("push").getSchema();
+            Trace::add("after the push");
+        }
+        rv."42 push" = Trace::take();
+
+        try {
+            make("exception").getSchema().doc.fail();
+        } catch (hash<ExceptionInfo> ex) {
+            Trace::add("caught " + ex.err);
+        }
+        rv."43 exception in a chain" = Trace::take();
+
+        log(sprintf("%y", {"a": make("hash-1").getName(), "b": make("hash-2").getName()}));
+        rv."44 chains in a hash" = Trace::take();
+
+        log(make("nested-outer").getOther("nested-inner").getSchema().state());
+        rv."45 nested temporaries" = Trace::take();
+
+        on_exit_chain();
+        rv."46 on_exit handler" = Trace::take();
+
+        foreach string s in (map make("lazy-member-" + $1).components.schemas.X.state(), (1, 2)) {
+            Trace::add("lazy body " + s);
+        }
+        rv."47 foreach over map with a member chain" = Trace::take();
+
+        {
+            DocHolder h("member");
+            h.run();
+            Trace::add("after the call");
+        }
+        rv."48 member of self replaced by its method" = Trace::take();
+
+        log(return_in_foreach());
+        rv."49 return in a foreach over a list of temporaries" = Trace::take();
+
+        nested_on_error();
+        rv."50 on_error handler of a nested block" = Trace::take();
+
+        {
+            Doc r("receiver");
+            log(r.nameOf(make("method-arg")));
+            Trace::add("next statement");
+        }
+        rv."51 the temporary as a method argument" = Trace::take();
+
+        log(Doc::staticNameOf(make("static-arg")));
+        rv."52 the temporary as a static method argument" = Trace::take();
+
+        {
+            code name_of = string sub (Doc d) {
+                return d.name;
+            };
+            log(name_of(make("closure-call-arg")));
+        }
+        rv."53 the temporary as a closure argument" = Trace::take();
+
+        log((new ArgTaker(make("constructor-arg"))).name);
+        rv."54 the temporary as a constructor argument" = Trace::take();
+
+        try {
+            Doc r("try-receiver");
+            log(r.nameOf(make("try-method-arg")));
+            log(report_doc(make("try-function-arg")));
+            log(Doc::staticNameOf(make("try-static-arg")));
+        } catch (hash<ExceptionInfo> ex) {
+            Trace::add("caught " + ex.err);
+        }
+        rv."55 temporary arguments in a try block" = Trace::take();
+
+        foreach Doc d in ((make("break-list-1"), make("break-list-2"))) {
+            break;
+        }
+        Trace::add("after the break");
+        rv."56 break in a foreach over a list of temporaries" = Trace::take();
+
+        try {
+            throw_in_foreach();
+        } catch (hash<ExceptionInfo> ex) {
+            Trace::add("caught " + ex.err);
+        }
+        rv."57 exception in a foreach over a list of temporaries" = Trace::take();
+
+        log(return_in_nested_foreach());
+        rv."58 return in nested foreach statements" = Trace::take();
+
+        log(return_in_foreach_over_map());
+        rv."59 return in a foreach over a map" = Trace::take();
+
+        log(return_in_foreach_with_outer_variable());
+        rv."60 return in a foreach with a variable of the function" = Trace::take();
+
+        log(return_in_foreach_over_call());
+        rv."61 return in a foreach over the list returned by a call" = Trace::take();
+
+        foreach string s in (map $1.getName(), (make("map-break-1"), make("map-break-2"))) {
+            Trace::add("map break body " + s);
+            break;
+        }
+        Trace::add("after the break");
+        rv."62 break in a foreach over a map" = Trace::take();
+
+        return rv;
+    }
+
+    #! returns the results of the same chains run many times in a function: name -> result
+    public hash<string, string> sub get_loop_results() {
+        Trace::take();
+        hash<string, int> member = {};
+        hash<string, int> method = {};
+        for (int i = 0; i < 1500; ++i) {
+            ++member{member_chain()};
+            ++method{method_chain()};
+            Trace::take();
+        }
+        return {
+            "member": sprintf("%y", member),
+            "method": sprintf("%y", method),
+        };
+    }
+
+    #! returns how weak references to a live and to a destroyed target read: name -> result
+    public hash<string, list<string>> sub get_weak_reads() {
+        hash<string, list<string>> rv = {};
+        WeakHolder w;
+        {
+            Target t("t");
+            w = new WeakHolder(t);
+            rv.live = w.reads();
+        }
+        rv.destroyed = w.reads();
+        # a weak reference in a local variable
+        {
+            *Target t = new Target("local");
+            *Target lw := t;
+            delete t;
+            list<string> l = ();
+            push l, sprintf("exists lw=%y", exists lw);
+            try {
+                push l, "lw.describe()=" + lw.describe();
+            } catch (hash<ExceptionInfo> ex) {
+                push l, "lw.describe()=" + ex.err;
+            }
+            rv."destroyed local" = l;
+        }
+        return rv;
+    }
+
+    #! prints the results of every check, one per line, as "name: result"; the checks run twice so that tiered
+    #! execution runs them after promoting their code, and both runs must give the same results
+    public sub print_results() {
+        list<string> out = TemporaryLifetimeChecks::get_lines();
+        list<string> second = TemporaryLifetimeChecks::get_lines();
+        if (out != second) {
+            printf("the second run gave different results:\n%s\n", second.join("\n"));
+        }
+        printf("%s\n", out.join("\n"));
+    }
+
+    #! returns the results of every check as lines: "name: result"
+    public list<string> sub get_lines() {
+        list<string> rv = ();
+        foreach hash<auto> i in (TemporaryLifetimeChecks::get_traces().pairIterator()) {
+            push rv, sprintf("%s: %s", i.key, i.value.join(" "));
+        }
+        foreach hash<auto> i in (TemporaryLifetimeChecks::get_loop_results().pairIterator()) {
+            push rv, sprintf("loop %s: %s", i.key, i.value);
+        }
+        foreach hash<auto> i in (TemporaryLifetimeChecks::get_weak_reads().pairIterator()) {
+            push rv, sprintf("weak %s: %s", i.key, i.value.join(" "));
+        }
+        return rv;
+    }
+}

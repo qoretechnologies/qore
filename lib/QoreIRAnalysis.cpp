@@ -5751,7 +5751,7 @@ static size_t qore_ir_eliminate_common_pure_calls(QoreIRFunction& func, size_t& 
                 }
             }
             if (inst->opcode == QoreIROpcode::DiscardTemps || inst->opcode == QoreIROpcode::DiscardTempsKeep
-                    || inst->opcode == QoreIROpcode::UnwindTemps) {
+                    || inst->opcode == QoreIROpcode::UnwindTemps || inst->opcode == QoreIROpcode::ReleaseOwnedTemp) {
                 // an owned call result is released here, so a call before this point must not be
                 // reused after it
                 available.clear();
@@ -6289,7 +6289,7 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
             }
 
             if (inst.opcode == QoreIROpcode::DiscardTemps || inst.opcode == QoreIROpcode::DiscardTempsKeep
-                    || inst.opcode == QoreIROpcode::UnwindTemps) {
+                    || inst.opcode == QoreIROpcode::UnwindTemps || inst.opcode == QoreIROpcode::ReleaseOwnedTemp) {
                 scoped_expressions.clear();
                 scoped_loads.clear();
             }
@@ -11528,7 +11528,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             const QoreIRInstruction* instruction = instructions[offset].get();
             if (instruction->opcode == QoreIROpcode::DiscardTemps
                     || instruction->opcode == QoreIROpcode::DiscardTempsKeep
-                    || instruction->opcode == QoreIROpcode::UnwindTemps) {
+                    || instruction->opcode == QoreIROpcode::UnwindTemps
+                    || instruction->opcode == QoreIROpcode::ReleaseOwnedTemp) {
                 discarded = true;
             }
         }

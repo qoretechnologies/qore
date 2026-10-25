@@ -445,6 +445,24 @@ static bool expressionMayCreateIntermediateNodeTemp(const QoreValue& val) {
     });
 }
 
+//! Returns true if evaluating \a val may create a value with a call (a function, method or closure call or an object
+//! construction) besides the value of the expression itself: a temporary whose release can be observed, unlike a value
+//! read from a variable or a member
+static bool expressionMayCreateIntermediateCallTemp(const QoreValue& val) {
+    return anyOperandMayCreateTemp(val, [](const QoreValue& operand) {
+        const AbstractQoreNode* node = operand.getInternalNode();
+        if (!node || operand.isValue()) {
+            return false;
+        }
+        if (dynamic_cast<const FunctionCallBase*>(node) || dynamic_cast<const QoreDotEvalOperatorNode*>(node)
+                || dynamic_cast<const CallReferenceCallNode*>(node)
+                || dynamic_cast<const ScopedObjectCallNode*>(node) || dynamic_cast<const NewObjectCallNode*>(node)) {
+            return true;
+        }
+        return expressionMayCreateIntermediateCallTemp(operand);
+    });
+}
+
 //! Returns true if evaluating \a val may create a temp besides its own value that is or can hold a container
 /** A value of any type other than a hash, list, or object holds no container, so such a temp cannot make a
     container shared.
@@ -727,6 +745,24 @@ static bool isSharedVar(const VarRefNode* var) {
         default:
             return false;
     }
+}
+
+static bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth = 0);
+
+// documented in QoreIRLowering.h
+bool QoreIRLowering::expressionReadsWeakCapableLocal(const QoreValue& expr) const {
+    return anyOperandMayCreateTemp(expr, [this](const QoreValue& operand) {
+        const AbstractQoreNode* node = operand.getInternalNode();
+        if (!node || operand.isValue()) {
+            return false;
+        }
+        if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+            return var->ref.id && (var->getType() == VT_LOCAL || var->getType() == VT_CLOSURE)
+                && (foreach_element_locals.count(var->ref.id) || var->ref.id->isWeakAssigned())
+                && qore_ir_type_may_hold_object(var->ref.id->getTypeInfo());
+        }
+        return expressionReadsWeakCapableLocal(operand);
+    });
 }
 
 // documented in QoreIRLowering.h
@@ -1450,7 +1486,7 @@ static const LocalVar* qore_ir_get_returned_local(const QoreValue& expr) {
 }
 
 //! Returns true if a value of the type can be or hold an object, whose destructor can run when it is released
-static bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth = 0) {
+static bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth) {
     if (!QoreTypeInfo::needsScan(ti)) {
         return false;
     }
@@ -1552,9 +1588,27 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // the statement loop breaks on RC_RETURN.  The return expression may
         // reference resources (files, connections) that on_exit handlers clean up,
         // so we must preserve this ordering in the IR path.
+        // The temporaries of the expression live until the end of the return statement, which ends before the
+        // on_exit handlers run and the local variables are destroyed, as in the AST interpreter; they are released
+        // after the value is checked against the return type, which the statement does first.  When nothing that
+        // can observe the order runs between the statement and the Return - no handler, no local variable that can
+        // hold an object - the Return releases them, so the body keeps the plain form that the callee summaries of
+        // compiled code recognize
+        // A variable that can hold a weak reference - the variable of a foreach loop, or one assigned with := or @= -
+        // is read with a strong reference of its own, which is a temporary of the statement as well: it is released
+        // with the others, before the variable is destroyed when the statement leaves its block.
+        bool ret_temp_scope = builder.getExceptionTempScopeId()
+            && (expressionMayCreateIntermediateCallTemp(expr) || expressionReadsWeakCapableLocal(expr))
+            && returnCleanupObservesError(qore_ir_get_returned_local(expr));
+        if (ret_temp_scope) {
+            builder.createPushTempMark(nullptr);
+        }
         QoreIRValue lowered = lowerExpression(expr, error);
-        if (!lowered.isValid()) {
-            return false;
+        if (!lowered.isValid() || blockHasTerminator(builder.getBlock())) {
+            if (ret_temp_scope) {
+                builder.abandonTempScope();
+            }
+            return lowered.isValid();
         }
         // the value is checked against the declared return type in the return statement, as the AST interpreter
         // checks it (ReturnStatement::execImpl()): when the statement leaves something whose behaviour depends on
@@ -1569,6 +1623,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 && returnCleanupObservesError(qore_ir_get_returned_local(expr))) {
             builder.createCheckReturnValue(lowered, return_type, getCurrentExceptionTarget(), stmt->loc);
         }
+        if (ret_temp_scope) {
+            QoreIRInstruction* keep = builder.createDiscardTempsKeep(lowered, stmt->loc);
+            if (QoreIRBasicBlock* handler = getCurrentExceptionTarget()) {
+                keep->exception_target = handler;
+            }
+            lowered = keep->result;
+        }
         bool cleanup_before_return = catch_cleanup_depth > 0;
         if (!cleanup_before_return) {
             for (const auto& entry : cleanup_stack) {
@@ -1577,6 +1638,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                         || entry.type == BlockCleanupEntry::CatchVar
                         || entry.type == BlockCleanupEntry::RefForeachRecord
                         || entry.type == BlockCleanupEntry::RefForeach
+                        || entry.type == BlockCleanupEntry::ForeachSource
                         || entry.type == BlockCleanupEntry::Context) {
                     cleanup_before_return = true;
                     break;
@@ -1847,7 +1909,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.setBlock(cond_block);
         // Bracket the condition with PushTempMark/DiscardTemps so per-iteration
         // node temps (e.g., LoadLocal of a weak-ref local in the condition) get
-        // cleaned up every iteration, matching AST-mode ValueEvalRefHolder timing.
+        // cleaned up every iteration: the condition is a statement of its own, as
+        // in the AST interpreter (qore_eval_condition(), QoreStatementTempScope).
         // Without this, condition temps accumulate in the cleanup vector across
         // iterations and any refSelf'd node values hold the object alive
         // indefinitely (thread-object.qtest transparent thread pattern: worker
@@ -2043,11 +2106,27 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         builder.setBlock(iter_block);
         if (iter_expr && !iter_expr.isNothing()) {
+            // the value of the iterator is not used: it and its temps are released before the condition runs again,
+            // as in the AST, where the iterator is a statement of its own, as the initializer is
+            bool iter_scope = builder.getExceptionTempScopeId() && expressionMayCreateNodeTemp(iter_expr);
+            if (iter_scope) {
+                builder.createPushTempMark(nullptr);
+            }
             QoreIRValue lowered = lowerExpression(iter_expr, error);
             if (!lowered.isValid()) {
+                if (iter_scope) {
+                    builder.abandonTempScope();
+                }
                 current_loop_exit = prev_loop_exit;
                 pop_invariant_hoists();
                 return false;
+            }
+            if (iter_scope) {
+                if (blockHasTerminator(builder.getBlock())) {
+                    builder.abandonTempScope();
+                } else {
+                    builder.createDiscardTemps(stmt->loc);
+                }
             }
         }
         current_loop_exit = prev_loop_exit;
@@ -2508,6 +2587,34 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // for break/continue stops above it and will not double-pop, while a return
         // walks the whole cleanup stack and fires it.  Matches the reference foreach,
         // which pops $# from its RefForeachRecord cleanup entry.
+        // A return from the body leaves the foreach statement before its iterator is exhausted: as in the AST
+        // interpreter, where ForEachStatement::execImpl() returns before the enclosing blocks run their cleanups, the
+        // iterator and the list are released first, then the loop variables, and then the cleanups of the enclosing
+        // blocks run, such as their on_exit handlers.  Only a loop whose list or variables can hold an object, whose
+        // destructor shows when it is released, has these entries; a typed loop over a list of scalars has none.
+        // Break and continue do not visit them (ft.cleanup_stack_depth is captured above them): the loop exit
+        // releases the iterator and the variables, and the temp scope of the statement the list.
+        size_t foreach_source_entries = 0;
+        if (!direct_typed_list && iter_val.isValid() && qore_ir_type_may_hold_object(element_type)) {
+            if (const LVList* loop_lvars = foreach_stmt->getLVList()) {
+                BlockCleanupEntry lvars_entry;
+                lvars_entry.type = BlockCleanupEntry::Lvars;
+                lvars_entry.lvars = loop_lvars;
+                lvars_entry.loc = stmt->loc;
+                pushBlockCleanup(lvars_entry);
+                ++foreach_source_entries;
+            }
+            BlockCleanupEntry source_entry;
+            source_entry.type = BlockCleanupEntry::ForeachSource;
+            source_entry.foreach_iterator = iter_val;
+            source_entry.foreach_list = list_val;
+            // the reference that the loop holds to the element besides the variable's
+            source_entry.foreach_element = value_val;
+            source_entry.loc = stmt->loc;
+            pushBlockCleanup(source_entry);
+            ++foreach_source_entries;
+        }
+
         BlockCleanupEntry elem_entry;
         elem_entry.type = BlockCleanupEntry::ForeachElement;
         elem_entry.old_implicit_element = old_element;
@@ -2517,6 +2624,22 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Lower the loop body with proper break/continue targets
         // break → exit_block (break handler pops $# via old_implicit_element)
         // continue → latch_block (pops $# and increments index)
+        // an exception that leaves the body for a handler of this function - a catch block, or the anchor of a block
+        // with handlers (see lowerStatementBlock()) - releases the iterator, the list and the loop variables first, as
+        // the AST's foreach statement does when the exception unwinds it
+        QoreIRBasicBlock* foreach_exception_cleanup_block = nullptr;
+        QoreIRBasicBlock* foreach_saved_exception_target = foreach_source_entries
+            ? getCurrentExceptionTarget() : nullptr;
+        if (foreach_saved_exception_target) {
+            foreach_exception_cleanup_block = createBlock("foreach.exception.cleanup");
+            if (!foreach_exception_cleanup_block) {
+                error = "IR builder failed to create the foreach exception cleanup block";
+                cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);
+                return false;
+            }
+            exception_stack.push_back(foreach_exception_cleanup_block);
+        }
+
         FlowTarget ft;
         ft.break_target = exit_block;
         ft.continue_target = latch_block;
@@ -2570,14 +2693,20 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 --loop_depth;
                 virtual_implicit = saved_implicit;
                 flow_stack.pop_back();
-                cleanup_stack.pop_back();  // ForeachElement
+                cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);  // ForeachElement, source
+                if (foreach_exception_cleanup_block) {
+                    exception_stack.pop_back();
+                }
                 return false;
             }
             --loop_depth;
         }
         virtual_implicit = saved_implicit;
         flow_stack.pop_back();
-        cleanup_stack.pop_back();  // ForeachElement
+        cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);  // ForeachElement, source
+        if (foreach_exception_cleanup_block) {
+            exception_stack.pop_back();
+        }
 
         bool elide_implicit_element = analyze_implicit_element
             && implicit_observers_before != std::numeric_limits<size_t>::max()
@@ -2636,6 +2765,15 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 decref->exception_target = exception_stack.back();
             }
         }
+        // the list is released when the statement ends, before its loop variables, as in the AST interpreter: a break
+        // leaves the loop before the iterator is exhausted, so the iterator is released here with the reference that
+        // it holds to the list, and not at the end of the frame (an exhausted iterator has been released by
+        // IteratorNext, which cleared its handle), and the list temporary is released before the variables rather
+        // than at the end of the statement's temp scope
+        if (foreach_source_entries) {
+            builder.createIteratorRelease(iter_val, stmt->loc);
+            builder.createReleaseOwnedTemp(list_val, stmt->loc);
+        }
 
         // Foreach loop variables live for the duration of the foreach
         // statement. Clean them up at the loop exit so nested block locals
@@ -2645,6 +2783,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             for (int i = static_cast<int>(loop_lvars->size()) - 1; i >= 0; --i) {
                 builder.createUninstantiateLocal(loop_lvars->lv[i], stmt->loc);
             }
+        }
+        // a destructor that the releases ran raises its exception here, as a block's exit does
+        if (foreach_source_entries) {
+            builder.createCheckException(stmt->loc)->exception_target = getCurrentExceptionTarget();
+        }
+        if (foreach_exception_cleanup_block) {
+            emitForeachExceptionCleanup(foreach_exception_cleanup_block, foreach_saved_exception_target, iter_val,
+                list_val, value_val, foreach_stmt->getLVList(), stmt->loc);
         }
         return true;
     }
@@ -3758,7 +3904,9 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         }
         // Bracket each statement with PushTempMark / DiscardTemps so expression
         // temps created during the statement destruct at end of statement —
-        // matching AST-mode ValueEvalRefHolder destructor timing (fixes
+        // a temporary lives until the end of the statement that created it, as
+        // in the AST interpreter, whose statements hold their temporaries in a
+        // QoreStatementTempScope (AbstractStatement::exec()) (fixes
         // pipe.qtest pattern: `InputStream is = new StreamPipe().getInputStream();`
         // where the temp StreamPipe must destruct at statement end so its
         // internal PipeOutputStream dtor sets pipe->broken).  The marker lets
@@ -4086,6 +4234,21 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 // Value (iterator-based) foreach: restore $# to the caller's value
                 // on a non-local exit (return / thread_exit) out of the loop body.
                 builder.createPopImplicitElement(entry.old_implicit_element, entry.loc);
+                break;
+            case BlockCleanupEntry::ForeachSource:
+                // Value foreach left by a return: the iterator and the list are released when the statement ends,
+                // before the cleanups of the enclosing blocks run, as in the AST interpreter, where the iterator of
+                // ForEachStatement::execImpl() is destroyed when the statement returns.  Break and continue do not
+                // visit this entry: the loop exit releases the iterator, and the statement's temp scope the list.
+                if (entry.foreach_element.isValid()) {
+                    builder.createReleaseOwnedTemp(entry.foreach_element, entry.loc);
+                }
+                if (entry.foreach_iterator.isValid()) {
+                    builder.createIteratorRelease(entry.foreach_iterator, entry.loc);
+                }
+                if (entry.foreach_list.isValid()) {
+                    builder.createReleaseOwnedTemp(entry.foreach_list, entry.loc);
+                }
                 break;
             case BlockCleanupEntry::RefForeachRecord: {
                 // Pop implicit element ($#) and record modified loop variable value
@@ -18449,7 +18612,9 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     const QoreProgramLocation* loc = foreach_stmt->loc;
     std::vector<LazyPipelineStage> stages = source_stages;
 
-    QoreIRValue source = lowerExpression(base_source, error);
+    // only the source iterated is kept while the loop runs, as in the AST, where the iterator of the functional
+    // operator holds the source (the temporaries of its expression are released before the body runs)
+    QoreIRValue source = lowerExpressionInTempScope(base_source, loc, error, true);
     if (!source.isValid()) {
         return false;
     }
@@ -18770,6 +18935,44 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         }
     }
 
+    // a return from the body releases the iterator, which holds the source, and the source, then the loop
+    // variables, before the cleanups of the enclosing blocks run, as for the other value foreach loops (see
+    // lowerStatement()); only a loop whose source can hold an object has these entries
+    size_t foreach_source_entries = 0;
+    if (qore_ir_type_may_hold_object(getExprTypeInfo(base_source))) {
+        if (const LVList* loop_lvars = foreach_stmt->getLVList()) {
+            BlockCleanupEntry lvars_entry;
+            lvars_entry.type = BlockCleanupEntry::Lvars;
+            lvars_entry.lvars = loop_lvars;
+            lvars_entry.loc = loc;
+            pushBlockCleanup(lvars_entry);
+            ++foreach_source_entries;
+        }
+        BlockCleanupEntry source_entry;
+        source_entry.type = BlockCleanupEntry::ForeachSource;
+        source_entry.foreach_iterator = iter_val;
+        source_entry.foreach_list = source;
+        // the element of the source that the stages evaluated the loop's value from
+        source_entry.foreach_element = next_inst->result;
+        source_entry.loc = loc;
+        pushBlockCleanup(source_entry);
+        ++foreach_source_entries;
+    }
+
+    // an exception that leaves the body for a handler of this function releases the iterator, the source and the
+    // loop variables first, as for the other value foreach loops
+    QoreIRBasicBlock* foreach_exception_cleanup_block = nullptr;
+    QoreIRBasicBlock* foreach_saved_exception_target = foreach_source_entries ? getCurrentExceptionTarget() : nullptr;
+    if (foreach_saved_exception_target) {
+        foreach_exception_cleanup_block = createBlock("foreach.fused.exception.cleanup");
+        if (!foreach_exception_cleanup_block) {
+            error = "IR builder failed to create the fused foreach exception cleanup block";
+            cleanup_stack.resize(cleanup_stack.size() - foreach_source_entries);
+            return false;
+        }
+        exception_stack.push_back(foreach_exception_cleanup_block);
+    }
+
     FlowTarget ft;
     ft.break_target = exit_block;
     ft.continue_target = latch_block;
@@ -18784,11 +18987,19 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         if (!lowerStatementBlock(body, error)) {
             --loop_depth;
             flow_stack.pop_back();
+            cleanup_stack.resize(cleanup_stack.size() - foreach_source_entries);
+            if (foreach_exception_cleanup_block) {
+                exception_stack.pop_back();
+            }
             return false;
         }
         --loop_depth;
     }
     flow_stack.pop_back();
+    cleanup_stack.resize(cleanup_stack.size() - foreach_source_entries);
+    if (foreach_exception_cleanup_block) {
+        exception_stack.pop_back();
+    }
 
     if (!blockHasTerminator(builder.getBlock())) {
         builder.createBranch(latch_block, loc);
@@ -18844,12 +19055,56 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     builder.getFunction()->moveBlockToEnd(exit_block);
     builder.setBlock(exit_block);
 
+    // a break or a stage that ends the loop early leaves the iterator unexhausted: it is released here with the
+    // source, before the loop variables, as when the AST's foreach statement ends
+    if (foreach_source_entries) {
+        // the source element that the stages evaluated the last value from is released first, as the AST's
+        // functional iterator releases it before the source (an exhausted loop has no element)
+        builder.createReleaseOwnedTemp(next_inst->result, loc);
+        builder.createIteratorRelease(iter_val, loc);
+        builder.createReleaseOwnedTemp(source, loc);
+    }
+
     if (const LVList* loop_lvars = foreach_stmt->getLVList()) {
         for (int i = static_cast<int>(loop_lvars->size()) - 1; i >= 0; --i) {
             builder.createUninstantiateLocal(loop_lvars->lv[i], loc);
         }
     }
+    // a destructor that the releases ran raises its exception here, as a block's exit does
+    if (foreach_source_entries) {
+        builder.createCheckException(loc)->exception_target = getCurrentExceptionTarget();
+    }
+    if (foreach_exception_cleanup_block) {
+        emitForeachExceptionCleanup(foreach_exception_cleanup_block, foreach_saved_exception_target, iter_val, source,
+            next_inst->result, foreach_stmt->getLVList(), loc);
+    }
     return true;
+}
+
+// documented in QoreIRLowering.h
+void QoreIRLowering::emitForeachExceptionCleanup(QoreIRBasicBlock* cleanup_block, QoreIRBasicBlock* outer_target,
+        QoreIRValue iterator, QoreIRValue list, QoreIRValue element, const LVList* lvars,
+        const QoreProgramLocation* loc) {
+    QoreIRBasicBlock* after_block = builder.getBlock();
+    builder.getFunction()->moveBlockToEnd(cleanup_block);
+    builder.setBlock(cleanup_block);
+    // the exception that the block handles stays raised: the releases below add any exception that a destructor
+    // raises, and the handler then gets them all, as the AST interpreter's foreach statement unwinds
+    if (element.isValid()) {
+        builder.createReleaseOwnedTemp(element, loc);
+    }
+    builder.createIteratorRelease(iterator, loc);
+    builder.createReleaseOwnedTemp(list, loc);
+    if (lvars) {
+        for (int i = static_cast<int>(lvars->size()) - 1; i >= 0; --i) {
+            auto* ui = builder.createUninstantiateLocal(lvars->lv[i], loc);
+            ui->is_block_exit = true;
+        }
+    }
+    auto* check_inst = builder.createCheckException(loc);
+    check_inst->exception_target = outer_target;
+    builder.createBranch(outer_target, loc);
+    builder.setBlock(after_block);
 }
 
 QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode* op, const QoreValue& expr,

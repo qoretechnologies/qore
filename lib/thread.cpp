@@ -32,6 +32,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include <qore/QoreSandboxManager.h>
 #include <openssl/err.h>
 
@@ -4664,8 +4665,12 @@ namespace {
                     if (tlpd) {
                         tlpd->dbgAttach(&xsink);
                     }
-                    // run thread expression
-                    rv = btp->exec(&xsink);
+                    // run thread expression; it is the statement of the thread, so its temporaries live until it
+                    // returns
+                    {
+                        QoreStatementTempScope temps(&xsink);
+                        rv = btp->exec(&xsink);
+                    }
                     // the thread expression has returned; everything from here on is teardown
                     end_thread_cancellation(true);
                     if (tlpd) {

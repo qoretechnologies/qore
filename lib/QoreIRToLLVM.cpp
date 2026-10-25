@@ -49,7 +49,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 409,
+static_assert(QORE_IR_MAX_OPCODE == 411,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -2279,6 +2279,8 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     closure_pre_inst_flags.clear();
     operand_remaining_uses.clear();
     value_def_block.clear();
+    value_def_temp_scope.clear();
+    value_defined_by_call.clear();
     immediate_closure_creates.clear();
     known_function_call_refs.clear();
     stored_closure_capture_allocas.clear();
@@ -3268,6 +3270,84 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
     }
 }
 
+void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_ssa) {
+    if (!invoke_result_allocas.empty()) {
+        auto helper = module.getOrInsertFunction("qore_rt_decref",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        size_t count = 0;
+        for (auto it = invoke_result_allocas.rbegin(); it != invoke_result_allocas.rend(); ++it) {
+            if (!(++count % 100)) {
+                (void)qore_check_cancel(nullptr, "LLVM function exit temp release");
+            }
+            llvm::Value* alloca_ptr = *it;
+            if (persistent_cleanup_allocas.count(alloca_ptr)) {
+                continue;
+            }
+            llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
+            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
+            builder->CreateCall(helper, {val, xsink_arg});
+        }
+    }
+    if (pending_ssa) {
+        emitPendingSsaCleanup(module);
+    }
+    emitIteratorCleanup(module);
+}
+
+llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llvm::Function* llvm_func,
+        const QoreIRInstruction* inst, llvm::BasicBlock* handler) {
+    if (!inst || !inst->temp_scope_id || temp_cleanup_marks.empty()) {
+        return handler;
+    }
+    const TempCleanupMark* mark = nullptr;
+    for (size_t i = temp_cleanup_marks.size(); i > 0; --i) {
+        if (temp_cleanup_marks[i - 1].scope_id == inst->temp_scope_id) {
+            mark = &temp_cleanup_marks[i - 1];
+            break;
+        }
+    }
+    if (!mark) {
+        return handler;
+    }
+    // the temporaries of the statement must be in cleanup allocas to be released on the exception edge only
+    if (pending_ssa_cleanup.size() > mark->pending_ssa_count) {
+        promotePendingSsaToAllocas(module, llvm_func);
+    }
+    size_t start = mark->invoke_alloca_count;
+    std::vector<llvm::Value*> temps;
+    for (size_t i = invoke_result_allocas.size(); i > start; --i) {
+        if (!((invoke_result_allocas.size() - i + 1) % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM exception edge temp release");
+        }
+        llvm::Value* alloca_ptr = invoke_result_allocas[i - 1];
+        if (!persistent_cleanup_allocas.count(alloca_ptr)) {
+            temps.push_back(alloca_ptr);
+        }
+    }
+    if (temps.empty()) {
+        return handler;
+    }
+    llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
+    auto saved_ip = builder->GetInsertPoint();
+    llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "exception_temps", llvm_func);
+    builder->SetInsertPoint(edge);
+    auto helper = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    // in the reverse order of their creation, as DiscardTemps releases them
+    size_t count = 0;
+    for (llvm::Value* alloca_ptr : temps) {
+        if (!(++count % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM exception edge temp release");
+        }
+        llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
+        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
+        builder->CreateCall(helper, {val, xsink_arg});
+    }
+    builder->CreateBr(handler);
+    builder->SetInsertPoint(saved_insert, saved_ip);
+    return edge;
+}
+
 void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
     if (invoke_result_allocas.empty()) {
         return;
@@ -3951,8 +4031,9 @@ void QoreIRToLLVM::finalizeFunctionCommonCleanup(llvm::Module& module) {
     // Per-temp SSA decrefs were handled per-LP before branching here.
     // invoke_result_allocas still carries non-per-temp allocas (coerce,
     // reload tracker, promoted per-temps if any) — always decref them.
+    // the temporaries of the statements left are released before the on_block_exit handlers run, as in the AST
+    emitExitStatementCleanup(module, false);
     emitOnBlockExitExec(module);
-    emitIteratorCleanup(module);
     emitPreinstantiatedCleanup(module);
     emitInvokeCleanup(module);
     emitPreInstClosureReInstantiation(module);
@@ -4874,7 +4955,12 @@ void QoreIRToLLVM::releaseDotEvalBaseIfCurrentUseIsLast(
         return;
     }
 
+    // only the strong reference that a load of a weak reference took is released at its last use; a temporary
+    // receiver lives until the end of the statement, as in the AST interpreter
     uint32_t base_id = inst->operands[0].id;
+    if (!weak_load_result_ids.count(base_id)) {
+        return;
+    }
     auto uses_it = operand_remaining_uses.find(base_id);
     if (uses_it == operand_remaining_uses.end() || uses_it->second > 1) {
         return;
@@ -4882,6 +4968,49 @@ void QoreIRToLLVM::releaseDotEvalBaseIfCurrentUseIsLast(
 
     releaseCleanupForValueId(base_id, module);
     weak_load_result_ids.erase(base_id);
+}
+
+bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::Module& module,
+        bool use_pending) {
+    int arg_start = qore_ir_call_arg_start(inst);
+    if (arg_start < 0) {
+        return false;
+    }
+    bool released = false;
+    for (size_t i = static_cast<size_t>(arg_start); i < inst->operands.size(); ++i) {
+        if (i > static_cast<size_t>(arg_start) && !((i - arg_start) % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM call argument release");
+        }
+        uint32_t id = inst->operands[i].id;
+        // only a value created by a call is a temporary whose release is observable; a value loaded from a
+        // variable or a constant is not
+        if (!id || weak_load_result_ids.count(id) || !value_defined_by_call.count(id)
+                || invoke_alloca_map.find(id) == invoke_alloca_map.end()) {
+            continue;
+        }
+        auto uses_it = operand_remaining_uses.find(id);
+        if (uses_it == operand_remaining_uses.end() || uses_it->second > (use_pending ? 1 : 0)) {
+            continue;
+        }
+        // a value defined outside the block, such as a loop invariant hoisted out of a loop, is used again by each
+        // execution of the block; one defined in another block of the same temp scope (statement) is not: a call in
+        // a try block is an invoke that ends its block, and its arguments are defined in the blocks before it,
+        // while a hoisted invariant is defined in a temp scope of its own
+        auto def_it = value_def_block.find(id);
+        if (def_it == value_def_block.end()) {
+            continue;
+        }
+        if (def_it->second != current_lowering_block_) {
+            auto scope_it = value_def_temp_scope.find(id);
+            if (scope_it == value_def_temp_scope.end() || !scope_it->second
+                    || scope_it->second != inst->temp_scope_id) {
+                continue;
+            }
+        }
+        releaseCleanupForValueId(id, module);
+        released = true;
+    }
+    return released;
 }
 
 bool QoreIRToLLVM::buildArgsArray(const QoreIRInstruction* inst, int arg_start,
@@ -9525,8 +9654,9 @@ void QoreIRToLLVM::finalizeFunctionUnwindLP(llvm::Module& module) {
 
     // Same cleanup sequence as error_return_block to keep the unwind path
     // and the normal-check error path identical in behavior.
+    // the temporaries of the statements left are released before the on_block_exit handlers run, as in the AST
+    emitExitStatementCleanup(module, false);
     emitOnBlockExitExec(module);
-    emitIteratorCleanup(module);
     emitPreinstantiatedCleanup(module);
     emitInvokeCleanup(module);
     emitPreInstClosureReInstantiation(module);
@@ -9563,7 +9693,7 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
     if (!force_function_error && inst->exception_target) {
         auto except_it = block_map.find(inst->exception_target);
         if (except_it != block_map.end()) {
-            exception_block = except_it->second;
+            exception_block = getExceptionEdgeTarget(module, llvm_func, inst, except_it->second);
         }
     }
     if (!exception_block) {
@@ -10685,6 +10815,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     invoke_cleanup_array_count = 0;
     invoke_cleanup_array_overflow = false;
     invoke_alloca_map.clear();
+    iterator_element_allocas.clear();
     iterator_cleanup_allocas.clear();
     pending_phis.clear();
 
@@ -10934,6 +11065,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // that are only used as DotEval bases (safe for _for_call variant).
     operand_remaining_uses.clear();
     value_def_block.clear();
+    value_def_temp_scope.clear();
+    value_defined_by_call.clear();
     immediate_closure_creates.clear();
     known_function_call_refs.clear();
     stored_closure_capture_allocas.clear();
@@ -11136,6 +11269,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
             if (inst_ptr->result.isValid()) {
                 value_def_block[inst_ptr->result.id] = block.get();
+                value_def_temp_scope[inst_ptr->result.id] = inst_ptr->temp_scope_id;
+                if (qore_ir_call_arg_start(inst_ptr.get()) >= 0) {
+                    value_defined_by_call.insert(inst_ptr->result.id);
+                }
             }
             if (inst_ptr->opcode == QoreIROpcode::ToBool
                     && inst_ptr->operands.size() == 1) {
@@ -12287,47 +12424,26 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 aot_hash_string_extraction_cache.clear();
             }
 
-            // Release DotEval BASE cleanup allocas at last use: when the base
-            // operand (operands[0]) of a DotEvalMethodDirect or InvokeDotEvalMethodDirect
-            // reaches its last use, release its cleanup alloca immediately.
-            // This is critical for weak member dereferences (LoadSelfMember on
-            // WeakReferenceNode members) — without early release, the temporary strong
-            // reference keeps the target object alive for the entire function lifetime,
-            // preventing destructor calls and causing shutdown hangs.
-            // We ONLY apply this for DotEval base values because:
-            // (1) DotEval results are independent of the base (no borrowing)
-            // (2) The method call is complete — base is fully consumed
-            // (3) Other instructions (StoreLocal) may produce results that BORROW
-            //     from their operand's cleanup alloca — releasing those is unsafe.
             // Decrement use counts for operands after the instruction has
             // consumed them.  Terminator-only operands such as BrIf/Switch
             // conditions are handled inside their lowerers so cleanup IR can be
-            // emitted before the branch/switch terminator.
+            // emitted before the branch/switch terminator.  A temporary that the
+            // instruction used - a method call's receiver, the container read by a
+            // member or element access - is not released here: it lives until the
+            // end of the statement (DiscardTemps), as in the AST interpreter, so a
+            // chain such as f().a.b() can use it throughout
             for (const auto& op : inst->operands) {
                 consumeValueUse(op.id, module, false);
             }
 
-            // Release DotEval BASE cleanup allocas at last use.
-            // Also covers Invoke instructions with DotEval invoke_opcodes
-            // (e.g., parent.logDebug(...) compiled as Invoke + DotEvalAny/DotEvalHash).
-            bool is_dot_eval_base_release = false;
-            if (inst->opcode == QoreIROpcode::DotEvalMethodDirect
-                    || inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect) {
-                is_dot_eval_base_release = true;
-            } else if (inst->opcode == QoreIROpcode::Invoke && !inst->operands.empty()) {
-                const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst);
-                if (isDotEvalInvokeOpcode(inv->invoke_opcode)) {
-                    is_dot_eval_base_release = true;
-                }
-            }
-            if (is_dot_eval_base_release
-                    && !inst->operands.empty()
-                    && !qoreGetTerminator(builder->GetInsertBlock())) {
-                uint32_t base_id = inst->operands[0].id;
-                auto uses_it = operand_remaining_uses.find(base_id);
-                if (uses_it != operand_remaining_uses.end() && uses_it->second <= 0) {
-                    releaseCleanupForValueId(base_id, module);
-                }
+            // A temporary argument that a call consumes is released when the call returns, as the AST
+            // interpreter releases the argument list of a call; an invoke lowerer releases them before its
+            // terminator.  A call path that passed the cleanups to its callee has released them already: the
+            // release of a cleared slot is a no-op
+            if (!qoreGetTerminator(builder->GetInsertBlock())
+                    && releaseConsumedCallArgs(inst, module, false)) {
+                // the destructor of an argument can raise
+                emitExceptionCheck(module, llvm_func, inst);
             }
 
             // Weak-assigned LoadLocal resolves a WeakReferenceNode to a
@@ -12569,8 +12685,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     llvm::pred_begin(error_return_block),
                     llvm::pred_end(error_return_block))));
         builder->SetInsertPoint(error_return_block);
+        // the temporaries of the statements left are released before the on_block_exit handlers run, as in the
+        // AST
+        emitExitStatementCleanup(module, false);
         emitOnBlockExitExec(module);
-        emitIteratorCleanup(module);
         emitPreinstantiatedCleanup(module);
         emitInvokeCleanup(module);
         emitLocalUninstantiation(module);
@@ -16192,19 +16310,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateCall(incref_fn, {return_value});
                 }
             }
-            // Execute on_block_exit handlers before cleanup
+            // Release the temporaries of the statements left - Invoke/ConstString result refs that are not
+            // persistent, the SSA-direct cleanup entries that dominate this return site (the incref above ensured
+            // the returned value's pending entry, if any, cancels out to net-zero ref change) and the active
+            // iterators (from foreach body early exit) - before the on_block_exit handlers run, as the AST
+            // interpreter releases them when the statements unwind
+            emitExitStatementCleanup(module, true);
+            // Execute on_block_exit handlers before the remaining cleanup
             emitOnBlockExitExec(module);
-            // Delete active iterators (from foreach body early exit)
-            emitIteratorCleanup(module);
             // Release entry-load refs for pre-instantiated locals (tiered compilation)
             emitPreinstantiatedCleanup(module);
-            // Release Invoke/ConstString result refs
+            // Release the remaining (persistent) Invoke result refs
             emitInvokeCleanup(module);
-            // Phase 2B — release SSA-direct cleanup entries that dominate
-            // this return site.  The incref above ensured the returned
-            // value's pending entry (if any) cancels out to net-zero ref
-            // change; other entries are unwound here.
-            emitPendingSsaCleanup(module);
             // Uninstantiate locals before returning (pre-instantiated locals are skipped internally)
             emitLocalUninstantiation(module);
             // Outlined-helper return token: set immediately before the ret so
@@ -16259,11 +16376,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(void_type, {i64_type}, false));
                 builder->CreateCall(incref_fn, {return_value});
             }
+            // the temporaries of the statements left are released before the on_block_exit handlers run, as in
+            // the AST
+            emitExitStatementCleanup(module, true);
             emitOnBlockExitExec(module);
-            emitIteratorCleanup(module);
             emitPreinstantiatedCleanup(module);
             emitInvokeCleanup(module);
-            emitPendingSsaCleanup(module);
             emitLocalUninstantiation(module);
             // Outlined-helper return token — see the Return case above
             if (aot_mode && static_cast<const QoreIRReturnInstruction*>(
@@ -17783,6 +17901,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         error = "unsupported AOT method reference lowering: unsupported method reference node";
                         return false;
                     }
+                } else if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(
+                        inv->expr.getInternalNode()); omr && !inv->operands.empty()) {
+                    // the object expression has been evaluated (operand 0); it is not evaluated again
+                    llvm::Value* obj_val = getVal(inv->operands[0].id, error);
+                    if (!obj_val) {
+                        return false;
+                    }
+                    llvm::Value* obj_boxed = boxValue(obj_val, inv->operands[0].id);
+                    llvm::Value* node_const = builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(omr)), ptr_type);
+                    auto helper = module.getOrInsertFunction("qore_rt_create_object_method_ref",
+                            llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {node_const, obj_boxed, xsink_arg});
                 } else {
                     QoreValue expr_val = inv->expr;
                     uint64_t bits;
@@ -18560,7 +18691,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* ex_check = builder->CreateCall(has_ex, {xsink_arg});
             llvm::Value* has_exception = builder->CreateICmpNE(ex_check,
                     llvm::ConstantInt::get(i64_type, 0));
-            builder->CreateCondBr(has_exception, except_it->second, normal_it->second);
+            // a temporary argument of the call is released when the call returns, on both edges, as in the AST; the
+            // release can raise, so the exception is checked after it
+            if (releaseConsumedCallArgs(inst, module, true)) {
+                ex_check = builder->CreateCall(has_ex, {xsink_arg});
+                has_exception = builder->CreateICmpNE(ex_check, llvm::ConstantInt::get(i64_type, 0));
+            }
+            builder->CreateCondBr(has_exception,
+                    getExceptionEdgeTarget(module, llvm_func, inst, except_it->second), normal_it->second);
             return true;
         }
 
@@ -18640,20 +18778,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::FunctionType::get(void_type, {ptr_type, i64_type}, false));
                 builder->CreateCall(helper, {xsink_arg, val_boxed});
             }
-            // Branch to exception target if present
+            // Branch to exception target if present; the temporaries of the statement are released first
             if (throw_inst->exception_target) {
                 auto it = block_map.find(throw_inst->exception_target);
                 if (it != block_map.end()) {
-                    builder->CreateBr(it->second);
+                    builder->CreateBr(getExceptionEdgeTarget(module, llvm_func, inst, it->second));
                     return true;
                 }
             }
             // No exception target: execute on_block_exit, uninstantiate locals and return NOTHING
+            // the temporaries of the statements left are released before the on_block_exit handlers run, as in
+            // the AST
+            emitExitStatementCleanup(module, true);
             emitOnBlockExitExec(module);
-            emitIteratorCleanup(module);
             emitPreinstantiatedCleanup(module);
             emitInvokeCleanup(module);
-            emitPendingSsaCleanup(module);
             emitLocalUninstantiation(module);
             builder->CreateRet(getNothingReturnValue());
             return true;
@@ -18698,16 +18837,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (rethrow_inst->exception_target) {
                 auto it = block_map.find(rethrow_inst->exception_target);
                 if (it != block_map.end()) {
-                    builder->CreateBr(it->second);
+                    builder->CreateBr(getExceptionEdgeTarget(module, llvm_func, inst, it->second));
                     return true;
                 }
             }
             // No outer handler: return from function; caller sees exception in xsink
+            // the temporaries of the statements left are released before the on_block_exit handlers run, as in
+            // the AST
+            emitExitStatementCleanup(module, true);
             emitOnBlockExitExec(module);
-            emitIteratorCleanup(module);
             emitPreinstantiatedCleanup(module);
             emitInvokeCleanup(module);
-            emitPendingSsaCleanup(module);
             emitLocalUninstantiation(module);
             builder->CreateRet(getNothingReturnValue());
             return true;
@@ -21067,7 +21207,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 error = "invoke.method.direct exception target block not found";
                 return false;
             }
-            builder->CreateCondBr(has_exception, except_it->second, normal_it->second);
+            // a temporary argument of the call is released when the call returns, on both edges, as in the AST; the
+            // release can raise, so the exception is checked after it
+            if (releaseConsumedCallArgs(inst, module, true)) {
+                ex_check = builder->CreateCall(has_ex, {xsink_arg});
+                has_exception = builder->CreateICmpNE(ex_check, llvm::ConstantInt::get(i64_type, 0));
+            }
+            builder->CreateCondBr(has_exception,
+                    getExceptionEdgeTarget(module, llvm_func, inst, except_it->second), normal_it->second);
             return true;
         }
 
@@ -23164,7 +23311,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* ex_check = builder->CreateCall(has_ex, {xsink_arg});
             llvm::Value* has_exception = builder->CreateICmpNE(ex_check,
                     llvm::ConstantInt::get(i64_type, 0));
-            builder->CreateCondBr(has_exception, except_it->second, normal_it->second);
+            // a temporary argument of the call is released when the call returns, on both edges, as in the AST; the
+            // release can raise, so the exception is checked after it
+            if (releaseConsumedCallArgs(inst, module, true)) {
+                ex_check = builder->CreateCall(has_ex, {xsink_arg});
+                has_exception = builder->CreateICmpNE(ex_check, llvm::ConstantInt::get(i64_type, 0));
+            }
+            builder->CreateCondBr(has_exception,
+                    getExceptionEdgeTarget(module, llvm_func, inst, except_it->second), normal_it->second);
             return true;
         }
 
@@ -27091,6 +27245,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     error = "unsupported AOT method reference lowering: unsupported method reference node";
                     return false;
                 }
+            } else if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(
+                    mrinst->expr.getInternalNode()); omr && !mrinst->operands.empty()) {
+                // the object expression has been evaluated (operand 0); it is not evaluated again
+                llvm::Value* obj_val = getVal(mrinst->operands[0].id, error);
+                if (!obj_val) {
+                    return false;
+                }
+                llvm::Value* obj_boxed = boxValue(obj_val, mrinst->operands[0].id);
+                llvm::Value* node_const = builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                    reinterpret_cast<uint64_t>(omr)), ptr_type);
+                auto mr_ft = llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_create_object_method_ref", mr_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_create_object_method_ref_throwing", mr_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {node_const, obj_boxed, xsink_arg}, module, llvm_func, inst);
             } else {
                 QoreValue expr_val = mrinst->expr;
                 uint64_t bits;
@@ -30629,11 +30799,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(void_type, {ptr_type}, false));
             builder->CreateCall(helper, {xsink_arg});
             // Thread exit raises an exception; execute on_block_exit, uninstantiate locals and return
+            // the temporaries of the statements left are released before the on_block_exit handlers run, as in
+            // the AST
+            emitExitStatementCleanup(module, true);
             emitOnBlockExitExec(module);
-            emitIteratorCleanup(module);
             emitPreinstantiatedCleanup(module);
             emitInvokeCleanup(module);
-            emitPendingSsaCleanup(module);
             emitLocalUninstantiation(module);
             builder->CreateRet(getNothingReturnValue());
             return true;
@@ -30756,6 +30927,65 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateCall(decref_nothrow, {boxed});
             }
             emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::IteratorRelease: {
+            // a return or break leaves a foreach statement before its iterator is exhausted: the iterator, with the
+            // reference that it holds to the list, is released on this path, as the AST interpreter releases it when
+            // the statement ends.  Its cleanup slot is cleared, so the release at the end of the frame and the next
+            // IteratorCreate of the loop find nothing; the compile-time slot map is not changed, since the other
+            // paths of the loop still use the slot (see design/temporary-lifetime.md)
+            if (inst->operands.empty()) {
+                error = "IteratorRelease: missing operand";
+                return false;
+            }
+            auto alloca_it = invoke_alloca_map.find(inst->operands[0].id);
+            if (alloca_it != invoke_alloca_map.end() && alloca_it->second) {
+                llvm::Value* iter_ptr = builder->CreateLoad(ptr_type, alloca_it->second);
+                builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::get(ctx, 0)),
+                    alloca_it->second);
+                auto cleanup_helper = module.getOrInsertFunction("qore_rt_iterator_cleanup",
+                        llvm::FunctionType::get(void_type, {ptr_type}, false));
+                builder->CreateCall(cleanup_helper, {iter_ptr});
+            }
+            return true;
+        }
+        case QoreIROpcode::ReleaseOwnedTemp: {
+            // a return leaves a statement whose temporary the function owns, such as the list of a foreach
+            // statement: the reference is released on this path, as the AST interpreter releases it when the
+            // statement ends.  Only a reference held in a cleanup slot is released, and only on this path: the slot is
+            // cleared, so the release at the end of the frame finds nothing, and the compile-time slot map is not
+            // changed, since the other paths still release the slot themselves.  A value without a slot of its own is
+            // left to its usual release (see design/temporary-lifetime.md)
+            if (inst->operands.empty()) {
+                error = "ReleaseOwnedTemp: missing operand";
+                return false;
+            }
+            uint32_t value_id = inst->operands[0].id;
+            if (aot_mode && elided_typed_foreach_refself_values.count(value_id)) {
+                return true;
+            }
+            // the element of an iterator lives in the iterator's output slot, which the next IteratorNext and the end
+            // of the frame release
+            llvm::Value* slot = nullptr;
+            auto element_it = iterator_element_allocas.find(value_id);
+            if (element_it != iterator_element_allocas.end()) {
+                slot = element_it->second;
+            } else {
+                auto alloca_it = invoke_alloca_map.find(value_id);
+                if (alloca_it == invoke_alloca_map.end() || !alloca_it->second || !nanboxed_values.count(value_id)
+                        || weak_load_result_ids.count(value_id)) {
+                    return true;
+                }
+                slot = alloca_it->second;
+            }
+            auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                    llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+            llvm::Value* old_val = builder->CreateLoad(i64_type, slot);
+            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), slot);
+            builder->CreateCall(decref_fn, {old_val, xsink_arg});
+            // no exception check: the instruction also runs on the path of an exception, which stays raised (see
+            // the interpreter)
             return true;
         }
         case QoreIROpcode::UnwindTemps: {
@@ -31171,6 +31401,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             nanboxed_values.insert(inst->result.id);
             // Track alloca for cleanup at function exit (decrefs last value or NOTHING)
             registerInvokeCleanupAlloca(static_cast<llvm::AllocaInst*>(out_val_ptr));
+            // a return or an exception that leaves the loop releases the element's reference with ReleaseOwnedTemp
+            iterator_element_allocas[inst->result.id] = out_val_ptr;
             // Branch based on done_flag
             auto done_it = block_map.find(iter_inst->done_target);
             auto cont_it = block_map.find(iter_inst->continue_target);

@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
@@ -308,6 +309,8 @@ QoreValue QoreHashObjectDereferenceOperatorNode::evalImpl(bool& needs_deref, Exc
     ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink)
         return QoreValue();
+    // a temporary read from lives until the end of the statement, so the rest of the chain can use it
+    QoreStatementTempScope::holdReceiver(left, lh, xsink);
     ValueEvalOptimizedRefHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();

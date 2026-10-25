@@ -1,0 +1,214 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%allow-weak-references
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%include temporary-lifetime-checks.qi
+%include temporary-lifetime-results.qi
+
+%exec-class TemporaryLifetimeTest
+
+#! Tests that a temporary value lives until the end of the statement that created it, in every execution mode
+/** The AST interpreter is the benchmark for the semantics of the other execution modes.  Each case in
+    temporary-lifetime-checks.qi records the events of one statement shape: when the temporary documents are created
+    and destroyed, and what the code that runs in the statement sees of them, also through weak references, closures
+    and call references; temporary-lifetime-results.qi has the traces of the AST interpreter.  The checks run in this
+    program, in a worker in each execution mode, in an AOT-compiled program and from a compiled module, and each
+    must give the traces of the AST interpreter.
+*/
+class TemporaryLifetimeTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("TemporaryLifetimeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+
+        addTestCase("the AST interpreter's traces follow the statement rule", \testRule());
+        addTestCase("checks in this program", \testInProgram());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+        addTestCase("AOT program", \testAotProgram());
+
+        set_return_value(main());
+    }
+
+    #! checks the recorded AST traces against the rule they illustrate, so that the results file cannot drift
+    testRule() {
+        hash<string, string> r = TemporaryLifetimeChecks::AstResults;
+        # every chain sees its document and destroys it at the end of the statement
+        foreach string name in (("01 member chain", "02 brace member chain", "03 dynamic key chain",
+                "04 list index chain", "05 method chain", "06 new and method chain", "07 method and index chain",
+                "08 pseudo-method chain", "09 cast chain", "10 hash slice chain")) {
+            *list<*string> parts = (r{name} =~ x/^\+([-a-z]+) state\(([-a-z]+)\)=alive ~([-a-z]+)$/);
+            assertEq(3, parts.size(), name + ": " + r{name});
+            assertEq(parts[0], parts[1], name);
+            assertEq(parts[0], parts[2], name);
+        }
+        # the document of a chain in an argument is alive in the call and destroyed after the statement's last call
+        assertEq("+chain-arg state(chain-arg)=alive log(alive) ~chain-arg", r."14 chain in an argument");
+        # the list of a foreach statement is a statement of its own
+        assertRegex("^\\+foreach ~foreach body 0", r."15 foreach over a member of a temporary");
+        # the condition of an if statement is a statement of its own
+        assertEq("+if state(if)=alive ~if if alive", r."24 if");
+        # the temporaries of a return statement are released before the on_exit handler and the local variables
+        assertEq("+local +ret state(ret)=alive ~ret on_exit ~local log(alive)", r."27 return");
+        # a foreach statement that a return, a break or an exception leaves releases its list, then its variable,
+        # before the code after it runs: the on_exit and on_error handlers of the enclosing blocks, or the next
+        # statement; a variable of the function keeps its value
+        assertEq("+list-1 +list-2 getName(list-1) ~list-2 ~list-1 on_exit log(list-1)",
+            r."49 return in a foreach over a list of temporaries");
+        assertEq("+break-list-1 +break-list-2 ~break-list-2 ~break-list-1 after the break",
+            r."56 break in a foreach over a list of temporaries");
+        assertEq("+throw-list-1 +throw-list-2 ~throw-list-2 ~throw-list-1 on_error caught FOREACH-ERROR",
+            r."57 exception in a foreach over a list of temporaries");
+        assertEq("+outer +inner getName(outer) getName(inner) ~inner inner on_exit ~outer on_exit log(outer,inner)",
+            r."58 return in nested foreach statements");
+        assertEq("+outer-var-1 +outer-var-2 getName(outer-var-1) ~outer-var-2 on_exit ~outer-var-1 log(outer-var-1)",
+            r."60 return in a foreach with a variable of the function");
+        # the temporaries held at the end of a statement are released in the reverse order of their creation
+        assertRegex("log\\(alive,alive\\) ~two-2 ~two-1$", r."18 two chains in one statement");
+        # a temporary created per element releases the previous one; nothing accumulates
+        assertEq("+map-1 getName(map-1) +map-2 ~map-1 getName(map-2) +map-3 ~map-2 getName(map-3) "
+            "log(map-1,map-2,map-3) ~map-3", r."29 map evaluating a temporary per element");
+        # a closure and a call reference of a temporary work in its statement
+        assertEq("+closure log(self=closure) ~closure", r."32 closure of a temporary called in the chain");
+        assertEq("+call-ref getName(call-ref) log(call-ref) ~call-ref",
+            r."35 call reference to a method of a temporary");
+        # a closure called by a later statement does not see the destroyed temporary
+        assertEq("+closure-assigned ~closure-assigned OBJECT-ALREADY-DELETED",
+            r."34 closure of a temporary assigned");
+        # an on_exit handler is a statement of its own
+        assertEq("body +on-exit state(on-exit)=alive log(alive) ~on-exit", r."46 on_exit handler");
+        # an element that a foreach statement gets from a map one by one releases the temporary of the previous one
+        assertEq("+lazy-member-1 state(lazy-member-1)=alive lazy body alive +lazy-member-2 ~lazy-member-1 "
+            "state(lazy-member-2)=alive lazy body alive ~lazy-member-2", r."47 foreach over map with a member chain");
+        # a member of self read for a call keeps its value until the end of the statement
+        assertEq("+member +replacement replaced log(member) ~member after the call ~replacement",
+            r."48 member of self replaced by its method");
+        # a temporary passed to a call as an argument is released when the call returns
+        assertEq("+temp-arg report_doc state(temp-arg)=alive ~temp-arg log(alive)",
+            r."13 the temporary as an argument");
+        foreach string name in (("51 the temporary as a method argument",
+                "52 the temporary as a static method argument", "53 the temporary as a closure argument",
+                "54 the temporary as a constructor argument")) {
+            *list<*string> parts = (r{name} =~ x/\+([-a-z]+) ~([-a-z]+) log\(([-a-z]+)\)/);
+            assertEq(3, parts.size(), name + ": " + r{name});
+            assertEq(parts[0], parts[1], name);
+        }
+        # the temporaries of a statement that raises are released before the handler that catches the exception runs,
+        # and before the on_error handlers of the blocks that the exception leaves
+        assertEq("+throw getName(throw) ~throw on_error caught throw", r."38 throw");
+        assertEq("+exception ~exception caught CHAIN-ERROR", r."43 exception in a chain");
+        assertEq("+nested-error ~nested-error nested on_error caught CHAIN-ERROR",
+            r."50 on_error handler of a nested block");
+        assertEq("{alive: 1500}", r."loop member");
+        assertEq("{alive: 1500}", r."loop method");
+    }
+
+    #! the checks in the execution mode that the test is run in
+    testInProgram() {
+        hash<string, string> results = {};
+        foreach string line in (TemporaryLifetimeChecks::get_lines()) {
+            hash<string, string> h = TemporaryLifetimeTest::parseLine(line);
+            results += h;
+        }
+        checkResults("in-program", results);
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            checkWorkerOutput(mode, runWorker("temporary-lifetime-worker.q", get_script_dir(), "--exec-mode=" + mode));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-temporary-lifetime-");
+        string qmod_path = tmp.path + DirSep + "TemporaryLifetimeChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "TemporaryLifetimeChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot module", runWorker("temporary-lifetime-module-worker.q", tmp.path));
+    }
+
+    testAotProgram() {
+        if (!qcc_bin) {
+            testSkip("the in-tree qcc executable is not available; set QCC to test compiled code");
+        }
+        TmpDir tmp("qore-temporary-lifetime-");
+        string exe = tmp.path + DirSep + "temporary-lifetime";
+        string src = get_script_dir() + DirSep + "temporary-lifetime-worker.q";
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -o %s %s 2>&1", libqore_dir,
+            libqore_dir, qcc_bin, exe, src));
+        assertTrue(is_file(exe), "compiled program: " + out);
+        checkWorkerOutput("aot program", backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1",
+            libqore_dir, libqore_dir, exe)));
+    }
+
+    #! a run with an execution mode runs through ExecModeHarness, which checks its native compilation
+    private string runWorker(string worker_name, string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + worker_name;
+        return ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s %s",
+            libqore_dir, module_dir, qore_bin, opts, worker));
+    }
+
+    #! returns the result of one line printed by the checks: name -> result
+    private static hash<string, string> parseLine(string line) {
+        *list<*string> parts = (line =~ x/^([^:]+): (.*)$/);
+        if (!parts) {
+            throw "UNEXPECTED-OUTPUT", sprintf("unexpected output line: %y", line);
+        }
+        return {parts[0]: parts[1] ?? ""};
+    }
+
+    #! parses the lines printed by the worker and checks them
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            try {
+                results += TemporaryLifetimeTest::parseLine(line);
+            } catch (hash<ExceptionInfo> ex) {
+                fail(sprintf("%s: %s: %y", label, ex.desc, out));
+            }
+        }
+        checkResults(label, results);
+    }
+
+    #! every check gives the result it gives with the AST interpreter
+    private checkResults(string label, hash<string, string> results) {
+        assertEq(sort(keys TemporaryLifetimeChecks::AstResults), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (TemporaryLifetimeChecks::AstResults.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}
