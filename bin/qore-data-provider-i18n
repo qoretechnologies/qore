@@ -625,10 +625,12 @@ class QoreDataProviderI18nCmd {
         that differ are reported as variants, and the most frequent one (the first one in the file for a tie) is
         kept.  A new root message without such a translation takes the translation of the same text of the same
         field and member of a type with the same class and name in the same action, whose id changed with its shape
-        or schema identity (see digestFreeMessageId()), chosen in the same way, and otherwise the translation that
-        the locale gives the same text for the same field and member under another id, if there is exactly one;
-        the others are reported as missing.  A root text that the old root does not have is reported as a new
-        text.
+        or schema identity (see digestFreeMessageId()), chosen in the same way; otherwise the translation that the
+        locale gives the same text for the same field and member in the same action, if there is exactly one, which
+        carries the texts of a type that has a new name, such as a property type that now has the name of the schema
+        it refers to; and otherwise the translation that the locale gives the same text for the same field and
+        member under another id, if there is exactly one.  The others are reported as missing.  A root text that
+        the old root does not have is reported as a new text.
 
         Conflicting texts for one new id (or a conflict reported by the extraction) are reported for each domain;
         then nothing is written, and the program exits with status 2.
@@ -784,6 +786,8 @@ class QoreDataProviderI18nCmd {
                 hash<string, hash<string, int>> by_type_first = {};
                 # (field, member, source) -> translations
                 hash<string, hash<string, bool>> by_text = {};
+                # (action, field, member, source) -> translations
+                hash<string, hash<string, bool>> by_action_text = {};
                 int pos = 0;
                 foreach hash<auto> entry in (translations.pairIterator()) {
                     pos = pos + 1;
@@ -792,7 +796,11 @@ class QoreDataProviderI18nCmd {
                         continue;
                     }
                     string message = entry.value.message;
-                    by_text{textKey(entry.key, entry.value.source)}{message} = True;
+                    string text_key = textKey(entry.key, entry.value.source);
+                    by_text{text_key}{message} = True;
+                    if (*string action = messageAction(entry.key)) {
+                        by_action_text{action + "|" + text_key}{message} = True;
+                    }
                     string type_key = digestFreeMessageId(entry.key) + "|" + entry.value.source;
                     if (exists by_type{type_key}{message}) {
                         by_type{type_key}{message} = by_type{type_key}{message} + 1;
@@ -839,7 +847,19 @@ class QoreDataProviderI18nCmd {
                         ++matched;
                         continue;
                     }
-                    *hash<string, bool> same_text = by_text{textKey(entry.key, entry.value.source)};
+                    string text_key = textKey(entry.key, entry.value.source);
+                    # the same text of the same field and member in the same action: a type of the action has a new
+                    # name, and the action can translate a text that the domain translates in more than one way
+                    if (*string action = messageAction(entry.key)) {
+                        *hash<string, bool> same_action_text = by_action_text{action + "|" + text_key};
+                        if (same_action_text.size() == 1) {
+                            placed += {"id": entry.key, "pos": unplaced,
+                                "value": {"source": entry.value.source, "message": same_action_text.firstKey()}};
+                            ++reused;
+                            continue;
+                        }
+                    }
+                    *hash<string, bool> same_text = by_text{text_key};
                     if (same_text.size() == 1) {
                         placed += {"id": entry.key, "pos": unplaced,
                             "value": {"source": entry.value.source, "message": same_text.firstKey()}};
@@ -933,6 +953,34 @@ class QoreDataProviderI18nCmd {
             }
         }
         return parts.join(".");
+    }
+
+    #! Returns the action of a message id, or @ref nothing if it is not the id of a text of an action
+    /** @param id a message id: \c "app.<app>.action.<action>...", or \c "app.<app>.type.<identity>..." with an
+        action-scoped type identity (see DataProviderPresentation::actionTypePresentationIdentity())
+
+        @return the app and action segments of the id, as they are written in an action's ids
+    */
+    static *string messageAction(string id) {
+        list<string> parts = id.split(".");
+        if (parts.size() < 4 || parts[0] != "app") {
+            return NOTHING;
+        }
+        if (parts[2] == "action") {
+            return parts[1] + "." + parts[3];
+        }
+        if (parts[2] != "type") {
+            return NOTHING;
+        }
+        # the identity is "action:<action segment>:<class>:<name>#<digest>"
+        *list<*string> m;
+        try {
+            m = regex_extract(parse_base64_url_string_to_string(parts[3]), "^action:([A-Za-z0-9_-]+):");
+        } catch (hash<ExceptionInfo> ex) {
+            # a segment that does not decode has no action
+            return NOTHING;
+        }
+        return m ? parts[1] + "." + m[0] : NOTHING;
     }
 
     #! Returns the key of a text for a field and member: the last two components of the id and the source text
