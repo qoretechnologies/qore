@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%include if-condition-local-checks.qi
+
+%exec-class IfConditionLocalTest
+
+#! Regression test for the lifetime of a local declared in the condition of an if statement
+/** The AST interpreter releases such a local when the if statement ends, by its end, a break, continue or return
+    out of one of its branches, or an exception; the IR, JIT and tiered modes released it only when the function
+    returned.  The checks in if-condition-local-checks.qi record the order of the events and destructions of each
+    case, in this program and in a worker in each execution mode, and compare it with the AST interpreter's.
+*/
+class IfConditionLocalTest inherits QUnit::Test {
+    public {
+        #! the execution modes the worker is run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("IfConditionLocalTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("if-condition locals are released as in AST mode in this program", \testInProgram());
+        addTestCase("if-condition locals are released as in AST mode in each mode", \testExecModes());
+
+        set_return_value(main());
+    }
+
+    testInProgram() {
+        checkResults("in-program", icl_results());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            checkResults(mode, runWorker(mode));
+        }
+    }
+
+    #! compares the events of each check with the AST interpreter's
+    private checkResults(string label, hash<string, string> results) {
+        foreach hash<auto> i in (IclExpected.pairIterator()) {
+            assertEq(i.value, results{i.key}, label + ": " + i.key);
+        }
+    }
+
+    #! runs the worker in the given mode and parses its "name=events" output
+    private hash<string, string> runWorker(string mode) {
+        string worker = get_script_dir() + DirSep + "if-condition-local-worker.q";
+        string cmd = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, mode, worker);
+        string out = backquote(cmd);
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", mode, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        assertEq(IclExpected.size(), results.size(), mode + ": worker produced results (" + out + ")");
+        return results;
+    }
+}

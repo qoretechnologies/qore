@@ -133,10 +133,8 @@ hash<string, int> sub llu_list_locals() {
 
     @return "placed": the number of values placed; "placement-growth": the growth of the list between two iterations
     of the first round; "placement-round-growth": the growth between the start of the second and of the last round.
-    The rounds are compared from the second one on: the locals that the first round instantiates for the rest of the
-    function, such as a local declared in the condition of an if statement, which the IR interpreter keeps
-    instantiated until the function returns, stay in the list once, and the entries of the locals that the first
-    round instantiates before them stay with them
+    The rounds are compared from the second one on, so that a local that the first round instantiates for the rest
+    of the function would stay in the list once without counting as growth
 */
 hash<string, int> sub llu_placement() {
     hash<string, string> sources = map {sprintf("key %d", $1): sprintf("text %d", $1 % 7)}, xrange(LluIters);

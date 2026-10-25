@@ -57,6 +57,10 @@ public:
 
     //! @see AbstractStatement::mayHaveNestedScopeLocals()
     DLLLOCAL virtual bool mayHaveNestedScopeLocals(unsigned depth) const {
+        // the locals declared in the condition are the statement's own scope, released when it ends
+        if (depth && lvars && lvars->size()) {
+            return true;
+        }
         return (if_code && if_code->mayHaveNestedScopeLocals(depth))
             || (else_code && else_code->mayHaveNestedScopeLocals(depth));
     }

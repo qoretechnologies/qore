@@ -149,10 +149,16 @@ form is ready, from its next call on, so a single long call such as `rekeySource
 `UninstantiateLocal` now scans only for a local that is instantiated (the list has exactly one entry for each one),
 and drops the cleared entries at the end of the list.  A block uninstantiates its locals in the reverse order of
 their instantiation, so the list stays at the locals that are instantiated.  An entry can stay behind a local that
-remains instantiated, but only once per local, not once per iteration: a local declared in the condition of an `if`
-statement is never uninstantiated by the IR (it stays instantiated until the function returns, unlike in AST mode,
-where it is released when the `if` statement ends), so the entries of the first loop pass's locals that precede it
-stay in the list once.  Native code keeps no such list.
+remains instantiated, but only once per local, not once per iteration.  Native code keeps no such list.
+
+A local declared in the condition of an `if` statement (`if (*T v = ...)`) belongs to the statement: AST mode
+releases it when the statement ends (`IfStatement::execImpl()`).  The IR did not release it at all, so it stayed
+instantiated until the function returned, holding its value (an object was destroyed one loop iteration late, or at
+function return), and the entries of a loop's first pass that preceded it stayed in the list.  The lowering of an
+`if` statement now releases these locals at the end of the statement, through a block cleanup entry for a `break`,
+`continue` or `return` out of a branch, and in an exception cleanup block on the way of an exception to an enclosing
+target, in reverse order and after the branch's own locals; `examples/test/ir/if-condition-local/` compares the
+order of the events and destructions of each of these exits with AST mode, in every execution mode.
 
 `examples/test/ir/loop-local-uninstantiate/` asserts, via `dbg_get_ir_instantiated_local_entries()` (the size of the
 innermost IR frame's list, 0 outside the IR interpreter), that the list does not grow across the iterations of loops

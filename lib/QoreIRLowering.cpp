@@ -1610,6 +1610,47 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* if_stmt = dynamic_cast<const IfStatement*>(stmt)) {
+        // The locals declared in the condition (if (*T v = ...)) belong to the if statement: AST mode instantiates
+        // them for the statement and releases them when it ends (IfStatement::execImpl()), on every way out of it.
+        // They are released here at the end of the statement, by the block cleanups of a break, continue or return
+        // that leaves one of its branches, and on the way of an exception out of it to an enclosing catch.
+        const LVList* if_lvars = if_stmt->getLVList();
+        if (if_lvars && !if_lvars->size()) {
+            if_lvars = nullptr;
+        }
+        QoreIRBasicBlock* if_lvar_exception_cleanup_block = nullptr;
+        QoreIRBasicBlock* if_saved_exception_target = nullptr;
+        if (if_lvars) {
+            BlockCleanupEntry lvars_entry;
+            lvars_entry.type = BlockCleanupEntry::Lvars;
+            lvars_entry.lvars = if_lvars;
+            lvars_entry.loc = if_stmt->loc;
+            pushBlockCleanup(lvars_entry);
+            // a closure-use local has to be on the closure stack before the condition can capture it
+            for (unsigned i = 0; i < if_lvars->size(); ++i) {
+                if (if_lvars->lv[i]->closureUse()) {
+                    builder.createInstantiateLocal(if_lvars->lv[i], if_stmt->loc);
+                }
+            }
+            if ((if_saved_exception_target = getCurrentExceptionTarget())) {
+                if_lvar_exception_cleanup_block = createBlock("if.lvars.exception.cleanup");
+                if (!if_lvar_exception_cleanup_block) {
+                    cleanup_stack.pop_back();
+                    error = "IR builder failed to create the exception cleanup block of an if statement's locals";
+                    return false;
+                }
+                exception_stack.push_back(if_lvar_exception_cleanup_block);
+            }
+        }
+        // pops the compile-time state pushed for the condition's locals on a lowering failure
+        auto abandon_if_lvars = [&]() {
+            if (if_lvar_exception_cleanup_block) {
+                exception_stack.pop_back();
+            }
+            if (if_lvars) {
+                cleanup_stack.pop_back();
+            }
+        };
         // Match AST-mode condition lifetime: temporaries created while
         // evaluating the condition must be released before either branch body
         // mutates state.  Otherwise a condition such as `if (!h{k})` can keep
@@ -1621,6 +1662,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         QoreIRValue cond = lowerConditionValue(if_stmt->getCond(), error);
         if (!cond.isValid()) {
+            abandon_if_lvars();
             return false;
         }
         QoreIRValue cond_bool = !condition_needs_cleanup || conditionValueSurvivesDiscardTemps(if_stmt->getCond())
@@ -1633,6 +1675,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreIRBasicBlock* merge_block = createBlock("if.merge");
         QoreIRBasicBlock* else_block = if_stmt->getElseCode() ? createBlock("if.else") : merge_block;
         if (!then_block || !merge_block || !else_block) {
+            abandon_if_lvars();
             error = "IR builder failed to create blocks for if";
             return false;
         }
@@ -1640,6 +1683,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         builder.setBlock(then_block);
         if (!lowerStatementBlock(if_stmt->getIfCode(), error)) {
+            abandon_if_lvars();
             return false;
         }
         if (!blockHasTerminator(builder.getBlock())) {
@@ -1649,6 +1693,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (if_stmt->getElseCode()) {
             builder.setBlock(else_block);
             if (!lowerStatementBlock(if_stmt->getElseCode(), error)) {
+                abandon_if_lvars();
                 return false;
             }
             if (!blockHasTerminator(builder.getBlock())) {
@@ -1660,6 +1705,34 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // invoke.cont blocks created during the then/else body lowering.
         builder.getFunction()->moveBlockToEnd(merge_block);
         builder.setBlock(merge_block);
+        if (if_lvars) {
+            if (if_lvar_exception_cleanup_block) {
+                exception_stack.pop_back();
+            }
+            // released in reverse order, after the branch's own locals, as in AST mode
+            for (int i = static_cast<int>(if_lvars->size()) - 1; i >= 0; --i) {
+                auto* ui = builder.createUninstantiateLocal(if_lvars->lv[i], if_stmt->loc);
+                // in a loop body the statement runs again in the next iteration, as a block's locals do
+                ui->is_block_exit = (loop_depth == 0);
+            }
+            auto* check_inst = builder.createCheckException(if_stmt->loc);
+            check_inst->exception_target = getCurrentExceptionTarget();
+            cleanup_stack.pop_back();
+            if (if_lvar_exception_cleanup_block) {
+                // an exception out of the statement releases its locals before it reaches the enclosing target
+                QoreIRBasicBlock* after_block = builder.getBlock();
+                builder.getFunction()->moveBlockToEnd(if_lvar_exception_cleanup_block);
+                builder.setBlock(if_lvar_exception_cleanup_block);
+                for (int i = static_cast<int>(if_lvars->size()) - 1; i >= 0; --i) {
+                    auto* ui = builder.createUninstantiateLocal(if_lvars->lv[i], if_stmt->loc);
+                    ui->is_block_exit = true;
+                }
+                auto* ex_check = builder.createCheckException(if_stmt->loc);
+                ex_check->exception_target = if_saved_exception_target;
+                builder.createBranch(if_saved_exception_target, if_stmt->loc);
+                builder.setBlock(after_block);
+            }
+        }
         return true;
     }
     if (auto* do_stmt = dynamic_cast<const DoWhileStatement*>(stmt)) {
