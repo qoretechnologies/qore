@@ -43,10 +43,29 @@
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/HttpClientConnectionManagerTestHooks.h"
 
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+
+#ifdef DEBUG
+std::atomic<void (*)(HttpClientConnectionBase*)> qore_http_manager_new_connection_hook{nullptr};
+#endif
+
+//! Raises the error of a new connection that closed before its first request, as its connect failed
+static void raise_new_connection_error(HttpClientConnectionBase* conn, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> err(conn->getReferencedErrorInfo(), xsink);
+    if (*xsink) {
+        return;
+    }
+    // note: the values can be held in inline short string storage, which has no QoreStringNode; the helpers must stay
+    // in scope while the char pointers are used
+    QoreStringDataHelper ev(err ? err->getKeyValue("err") : QoreValue());
+    QoreStringDataHelper dv(err ? err->getKeyValue("desc") : QoreValue());
+    xsink->raiseException(ev ? ev.c_str() : "HTTPCLIENT-CONNECT-ERROR", "%s",
+        dv ? dv.c_str() : "the new connection closed before its first request could be sent");
+}
 
 // ============================================================
 // Construction / destruction
@@ -529,12 +548,28 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         if (*xsink || !conn) {
             return nullptr;
         }
+#ifdef DEBUG
+        if (void (*hook)(HttpClientConnectionBase*) = qore_http_manager_new_connection_hook.load()) {
+            hook(*conn);
+        }
+#endif
 
-        // 5. Add to pool under write lock and reserve a stream slot
-        // for the creator.  Re-check shutdown_ in case closeAll raced
-        // with us.
+        // 5. Reserve a stream slot for the creator and add the
+        // connection to the pool under write lock.  Re-check shutdown_
+        // in case closeAll raced with us.
+        //
+        // A connection that is not ready when it is created
+        // (acquireConnectionAsync()) can have closed already: its
+        // non-blocking connect runs on the I/O thread and can fail
+        // before this point, as a connect to a UNIX socket that does
+        // not exist or to a port with no listener does.  The
+        // reservation is refused on the closed connection; it is not
+        // added to the pool, and the caller gets the connection's
+        // error.  The connection has no pool key then, so its close
+        // notification does not reach the pool either.
         HttpClientConnectionBase* conn_raw = conn.release();
         bool reserved;
+        bool closed = false;
         {
             std::unique_lock<std::shared_mutex> wl(pool_lock_);
             if (shutdown_) {
@@ -547,16 +582,27 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
                     "connection manager is shutting down");
                 return nullptr;
             }
-            conn_raw->setPoolKey(key);
-            pool_[key].push_back(conn_raw);
-            // Record the observed protocol in the sticky bitmask — see
-            // hasEverObservedProtocol() docs for the race this guards
-            // against (H2 eviction between response arrival and the
-            // test's isHttp2Active() check).
-            observed_protocols_.fetch_or(
-                1u << static_cast<unsigned>(conn_raw->getProtocol()),
-                std::memory_order_release);
             reserved = conn_raw->tryReserveStream(streaming_send);
+            if (!reserved && (conn_raw->isClosed() || conn_raw->isDraining())) {
+                closed = true;
+            } else {
+                conn_raw->setPoolKey(key);
+                pool_[key].push_back(conn_raw);
+                // Record the observed protocol in the sticky bitmask — see
+                // hasEverObservedProtocol() docs for the race this guards
+                // against (H2 eviction between response arrival and the
+                // test's isHttp2Active() check).
+                observed_protocols_.fetch_or(
+                    1u << static_cast<unsigned>(conn_raw->getProtocol()),
+                    std::memory_order_release);
+            }
+        }
+
+        if (closed) {
+            // the reference of the creator, which the pool would have taken
+            ReferenceHolder<HttpClientConnectionBase> closed_holder(conn_raw, xsink);
+            raise_new_connection_error(conn_raw, xsink);
+            return nullptr;
         }
 
         // The newly-created connection has 0 active streams and 0

@@ -57,6 +57,7 @@
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QoreHttp1ClientConnection.h"
+#include "qore/intern/HttpClientConnectionManagerTestHooks.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/qore_socket_private.h"
@@ -8955,6 +8956,60 @@ static void ut_manager_streaming_abandon_releases_connection(UnitTestCounters& c
     UT_ASSERT(c, closed_by_client.load(), "the server sees the client close the connection");
 }
 
+// the calls of the hook of ut_manager_new_connection_closed_before_reservation()
+static std::atomic<int> ut_new_connection_hook_calls{0};
+
+//! waits until the connect of a new connection has failed: its connection is refused
+static void ut_wait_for_connect_failure(HttpClientConnectionBase* conn) {
+    ++ut_new_connection_hook_calls;
+    ExceptionSink xs;
+    // a refused connect closes the connection; -1 = no time limit
+    conn->waitForReadyOrError(-1, &xs);
+    xs.clear();
+}
+
+// A non-blocking connect can fail before the manager adds the new connection to its pool and reserves its first stream:
+// the reservation is refused on the closed connection.  acquireConnectionAsync() reported that as
+// "HTTPCLIENT-CAPACITY-ERROR: freshly-created connection unexpectedly at capacity", which hid the error of the connect,
+// and left the closed connection in the pool.  The caller gets the error of the connection, and the pool does not
+// keep it.
+static void ut_manager_new_connection_closed_before_reservation(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    int port = ut_reserve_closed_port();
+    if (port <= 0) {
+        UT_ASSERT(c, false, "reserve a port with no listener");
+        return;
+    }
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H1;
+    opts.connect_timeout_ms = 5000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "closed-before-reservation fixture manager constructs");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+    ut_new_connection_hook_calls = 0;
+    qore_http_manager_new_connection_hook = ut_wait_for_connect_failure;
+    HttpClientConnectionBase* conn = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+    qore_http_manager_new_connection_hook = nullptr;
+    UT_ASSERT_EQ(c, 1, ut_new_connection_hook_calls.load(), "the connect failed before the reservation");
+    UT_ASSERT(c, !conn, "no connection is returned for a connection whose connect failed");
+    UT_ASSERT(c, xsink.isException(), "the failed connect raises an error");
+    if (xsink.isException()) {
+        QoreStringValueHelper err(xsink.getExceptionErr());
+        UT_ASSERT(c, strcmp(err->c_str(), "HTTPCLIENT-CAPACITY-ERROR") != 0,
+            (std::string("the error is the connect error, not a capacity error: ") + err->c_str()).c_str());
+        QoreStringValueHelper desc(xsink.getExceptionDesc());
+        UT_ASSERT(c, strstr(desc->c_str(), "refused") != nullptr,
+            (std::string("the description is that of the refused connect: ") + desc->c_str()).c_str());
+    }
+    xsink.clear();
+    UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "the closed connection is not in the pool");
+    mgr->closeAll(&xsink);
+    xsink.clear();
+}
+
 static void ut_manager_acquire_first_request(UnitTestCounters& c) {
     ExceptionSink xsink;
 
@@ -12232,6 +12287,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_streaming_repeats_on_closed_reused_connection(c);
     ut_manager_streaming_does_not_repeat_unsafe_requests(c);
     ut_manager_streaming_abandon_releases_connection(c);
+    ut_manager_new_connection_closed_before_reservation(c);
     ut_manager_abandon_h1_evicts_connection(c);
     ut_manager_abandon_multiplexed_keeps_connection(c);
     ut_manager_abandon_completed_request_is_a_no_op(c);
