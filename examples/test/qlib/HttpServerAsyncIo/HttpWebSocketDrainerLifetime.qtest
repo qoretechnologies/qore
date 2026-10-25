@@ -1,0 +1,393 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+
+%exec-class HttpWebSocketDrainerLifetimeTest
+
+# The frames of an HTTP/1.1 WebSocket connection are processed by a drainer on a handler-pool thread.  Once the
+# operation has ended, its handler thread lets it go, and so does the I/O controller once it has handed the result
+# to a drainer; a queued or running drainer is then the only code that still uses the operation.  The drainer must
+# keep it alive until it has returned: otherwise the operation is destroyed under it, the drainer fails with
+# OBJECT-ALREADY-DELETED on the handler-pool thread, and the operation is never finished.
+
+#! The events of a test, in the order in which they happen, from any thread
+class EventLog {
+    private {
+        Mutex m();
+        list<string> events();
+    }
+
+    add(string event) {
+        AutoLock al(m);
+        push events, event;
+    }
+
+    list<string> get() {
+        AutoLock al(m);
+        return events;
+    }
+}
+
+#! A gate that a handler-pool thread waits at until the test opens it
+class TestGate {
+    private {
+        #! released when the thread has arrived
+        Counter arrived(1);
+        #! released when the test opens the gate
+        Counter opened(1);
+        #! serializes open()
+        Mutex m();
+        #! True once the gate is open
+        bool is_open;
+    }
+
+    #! Called by the thread: reports its arrival and waits until the gate is open
+    pass() {
+        arrived.dec();
+        opened.waitForZero();
+    }
+
+    #! Called by the test: waits until the thread has arrived
+    waitForArrival() {
+        arrived.waitForZero();
+    }
+
+    #! Opens the gate; a gate that is open stays open
+    /** A failed assertion ends a test case before it opens its gate; the gate is then opened when the test case
+        ends, so that the handler thread is not left blocked for the next test case
+    */
+    open() {
+        AutoLock al(m);
+        if (!is_open) {
+            is_open = True;
+            opened.dec();
+        }
+    }
+}
+
+#! A controller that records what escapes a handler-pool task and the results that operations report
+class RecordingController inherits HttpAsyncSocketIoController {
+    private {
+        Mutex record_m();
+        list<hash<ExceptionInfo>> escaped_exceptions();
+        list<string> reported_results();
+    }
+
+    constructor(AsyncSocketIoController io_ctrl) : HttpAsyncSocketIoController(io_ctrl, NOTHING,
+            # one handler thread: the tasks run one after the other, in the order in which they are submitted
+            {"max_handler_threads": 1}) {
+    }
+
+    submitToHandlerPool(HttpAsyncTarget target, code<nothing()> body) {
+        HttpAsyncSocketIoController::submitToHandlerPool(target, sub () {
+            try {
+                body();
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(record_m);
+                push escaped_exceptions, ex;
+            }
+        });
+    }
+
+    handleConnectionResult(hash<SocketPollResultInfo> result, string uh, string orig_state) {
+        AutoLock al(record_m);
+        push reported_results, sprintf("%s %s", uh, orig_state);
+    }
+
+    #! Forgets what earlier test cases recorded
+    clear() {
+        AutoLock al(record_m);
+        escaped_exceptions = ();
+        reported_results = ();
+    }
+
+    list<hash<ExceptionInfo>> getEscaped() {
+        AutoLock al(record_m);
+        return escaped_exceptions;
+    }
+
+    list<string> getResults() {
+        AutoLock al(record_m);
+        return reported_results;
+    }
+
+    #! Waits until every task submitted before has run
+    sync(HttpAsyncTarget target) {
+        Counter done(1);
+        submitToHandlerPool(target, sub () {
+            done.dec();
+        });
+        done.waitForZero();
+    }
+}
+
+class TestTarget inherits HttpAsyncTarget {
+    hash<HttpRequestResultInfo> onHttpRequest(hash<HttpConnectionInfo> info) {
+        return <HttpRequestResultInfo>{"close": True};
+    }
+
+    onIdleTimeout(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+    }
+
+    onError(Socket sock, hash<ExceptionInfo> ex, *HttpServer::HttpListenerInterface listener, *hash<auto> cx) {
+    }
+
+    onSseDisconnect(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+    }
+
+    onWebSocketFrame(Socket sock, hash<WebSocketFrameInfo> frame, *HttpServer::HttpListenerInterface listener,
+            hash<auto> cx) {
+    }
+
+    onWebSocketClose(Socket sock, int code, string reason, *HttpServer::HttpListenerInterface listener,
+            hash<auto> cx) {
+    }
+}
+
+#! The poll operation; its destruction is an event
+class TestPollOperation inherits HttpWebSocketPollOperation {
+    private {
+        EventLog log;
+    }
+
+    constructor(Socket sock, EventLog log) : HttpWebSocketPollOperation(sock) {
+        self.log = log;
+    }
+
+    destructor() {
+        log.add("operation destroyed");
+    }
+}
+
+#! The WebSocket connection that the operation dispatches frames to
+class TestConnection {
+    private {
+        EventLog log;
+        *TestGate message_gate;
+    }
+
+    constructor(EventLog log, *TestGate message_gate) {
+        self.log = log;
+        self.message_gate = message_gate;
+    }
+
+    bool validateRsvBits(bool rsv1, bool rsv2, bool rsv3) {
+        return True;
+    }
+
+    int gotRawMessage(hash<auto> h) {
+        return 0;
+    }
+
+    applyIncomingExtensions(reference<auto> msg, hash<auto> ctx) {
+    }
+
+    validateIncomingMessage(reference<auto> msg) {
+    }
+
+    gotMessage(auto msg) {
+        log.add("message " + msg);
+        if (message_gate) {
+            message_gate.pass();
+        }
+        log.add("message processed");
+    }
+
+    notifyIo() {
+        log.add("notified");
+    }
+}
+
+#! The handler of the connection
+class TestHandler {
+    private {
+        EventLog log;
+    }
+
+    constructor(EventLog log) {
+        self.log = log;
+    }
+
+    logError(string fmt, ...) {
+        log.add("error " + vsprintf(fmt, argv));
+    }
+
+    int getMaxMessageSize() {
+        return 0;
+    }
+
+    *hash<auto> saveThreadLocalData() {
+    }
+
+    restoreThreadLocalData(*hash<auto> data) {
+    }
+}
+
+class HttpWebSocketDrainerLifetimeTest inherits QUnit::Test {
+    public {
+        const Uh = "test-connection";
+        const State = "websocket";
+    }
+
+    private {
+        AsyncSocketIoController io_ctrl;
+        RecordingController ctrl;
+        TestTarget target();
+        Socket listener();
+        list<Socket> sockets();
+    }
+
+    constructor() : QUnit::Test("HttpWebSocketDrainerLifetime", "1.0") {
+        addTestCase("a queued drainer keeps the operation", \testQueuedDrainer());
+        addTestCase("a queued drainer finishes an operation that ended", \testQueuedCompletion());
+        addTestCase("a running drainer keeps the operation", \testRunningDrainer());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        io_ctrl = new AsyncSocketIoController(False);
+        ctrl = new RecordingController(io_ctrl);
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+    }
+
+    setUp() {
+        ctrl.clear();
+    }
+
+    globalTearDown() {
+        delete ctrl;
+        io_ctrl.stop();
+        map $1.close(), sockets;
+        listener.close();
+    }
+
+    #! Returns the server side of a connected socket pair, and the client side in \a client
+    private Socket connect(reference<Socket> client) {
+        client = new Socket();
+        client.connect("127.0.0.1:" + listener.getSocketInfo().port);
+        Socket server = listener.accept();
+        push sockets, client;
+        push sockets, server;
+        return server;
+    }
+
+    #! Creates an operation that dispatches to the connection through the controller's handler pool
+    private TestPollOperation createOperation(Socket server, EventLog log, TestConnection conn) {
+        TestPollOperation op(server, log);
+        op.setCompletionContext(ctrl, Uh, State, target);
+        op.setConnection(conn, new TestHandler(log));
+        return op;
+    }
+
+    #! Occupies the handler thread until the gate is opened
+    private TestGate blockHandlerPool() {
+        TestGate gate();
+        ctrl.submitToHandlerPool(target, sub () {
+            gate.pass();
+        });
+        gate.waitForArrival();
+        return gate;
+    }
+
+    #! The operation is let go while its drainer waits for the handler thread
+    testQueuedDrainer() {
+        EventLog log();
+        Socket client;
+        TestConnection conn(log);
+        *TestPollOperation op = createOperation(connect(\client), log, conn);
+        assertEq(("notified",), log.get(), "setConnection() processes the frames that arrived before it");
+
+        TestGate gate = blockHandlerPool();
+        # a failed assertion must not leave the handler thread blocked or busy for the next test case
+        on_exit {
+            gate.open();
+            ctrl.sync(target);
+        }
+        # a frame notification queues a drainer behind the blocked handler thread
+        op.onPollComplete();
+        # the operation's last other reference goes
+        op = NOTHING;
+        assertEq(("notified",), log.get(), "the queued drainer keeps the operation");
+
+        gate.open();
+        ctrl.sync(target);
+        assertEq((), ctrl.getEscaped(), "nothing escapes the drainer");
+        assertEq(("notified", "notified", "operation destroyed"), log.get(),
+            "the drainer runs, and the operation is destroyed when it has returned");
+    }
+
+    #! The operation ends while its drainer waits for the handler thread; the drainer finishes it
+    testQueuedCompletion() {
+        EventLog log();
+        Socket client;
+        TestConnection conn(log);
+        Socket server = connect(\client);
+        *TestPollOperation op = createOperation(server, log, conn);
+        Counter done(1);
+        op.setDone(done);
+
+        TestGate gate = blockHandlerPool();
+        # a failed assertion must not leave the handler thread blocked or busy for the next test case
+        on_exit {
+            gate.open();
+            ctrl.sync(target);
+        }
+        op.onPollComplete();
+        # the I/O controller reports the end of the operation; a drainer holds the claim, so it gets the result
+        op.onComplete(<SocketPollResultInfo>{"sock": server, "spop": op});
+        assertEq(1, done.getCount(), "the operation is not finished while the drainer is queued");
+        op = NOTHING;
+
+        gate.open();
+        ctrl.sync(target);
+        assertEq((), ctrl.getEscaped(), "nothing escapes the drainer");
+        assertEq(0, done.getCount(), "the drainer releases the handler thread");
+        assertEq((Uh + " " + State,), ctrl.getResults(), "the drainer reports the result to the controller once");
+        assertEq(("notified", "operation destroyed"), log.get(),
+            "the operation is destroyed when the drainer has finished it");
+    }
+
+    #! The operation is let go while its drainer runs the connection's message handler
+    testRunningDrainer() {
+        EventLog log();
+        Socket client;
+        TestGate message_gate();
+        on_exit {
+            message_gate.open();
+            ctrl.sync(target);
+        }
+        TestConnection conn(log, message_gate);
+        Socket server = connect(\client);
+        *TestPollOperation op = createOperation(server, log, conn);
+
+        # the I/O thread's part: the operation decodes a text frame that the client sends (masked with a zero key)
+        client.send(<81850000000068656c6c6f>);
+        while (True) {
+            *hash<SocketPollInfo> info = op.continuePoll();
+            if (op.hasReceivedFrames()) {
+                break;
+            }
+            assertTrue(exists info, "the operation waits for the rest of the frame");
+            assertTrue(boolean(Socket::poll((info,), 60000)), "the frame arrives");
+        }
+
+        op.onPollComplete();
+        message_gate.waitForArrival();
+        op = NOTHING;
+        assertEq(("notified", "message hello"), log.get(), "the running drainer keeps the operation");
+
+        message_gate.open();
+        ctrl.sync(target);
+        assertEq((), ctrl.getEscaped(), "nothing escapes the drainer");
+        assertEq(("notified", "message hello", "message processed", "notified", "operation destroyed"), log.get(),
+            "the drainer finishes the frame and notifies the connection before the operation is destroyed");
+    }
+}
