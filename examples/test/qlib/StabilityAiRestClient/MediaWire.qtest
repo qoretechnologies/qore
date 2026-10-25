@@ -158,9 +158,16 @@ class StabilityMediaWireTest inherits QUnit::Test {
                 {"action": "generate-sd3", "options": {"prompt": "cube", "mode": "image-to-image", "image": Png}},
                 {"action": "generate-ultra", "options": {"prompt": "cube", "strength": 0}},
                 {"action": "outpaint-image", "options": {"image": Png, "left": 0, "right": 0}},
-                {"action": "get-image-result", "options": {"job_id": "https://wrong.example"}})) {
+                # as long as a job ID, which the schema requires, but a URL
+                {"action": "get-image-result", "options": {"job_id": "https://wrong.example/" + strmul("a", 42)}})) {
             StabilityAiOperation operation(item.action, new StabilityAiRestClientIo(options));
             assertThrows("STABILITYAI-INPUT-ERROR", sub () { operation.doRequest(item.options); });
+        }
+        # a value the schema refuses, a job ID that is not 64 characters long, is refused by the option's type
+        {
+            StabilityAiOperation operation("get-image-result", new StabilityAiRestClientIo(options));
+            assertThrows("RUNTIME-TYPE-ERROR", "\"job_id\".*requires at least 64 characters; got 21",
+                sub () { operation.doRequest({"job_id": "https://wrong.example"}); });
         }
         StabilityAiDataProvider::StabilityAiDataProvider root(new StabilityAiRestClientIo(options));
         foreach string name in (("generate-image", "generate-core")) {

@@ -142,13 +142,17 @@ class DocumentAiWireTest inherits QUnit::Test {
         action("get-processor").doRequest({"processor_id": Processor});
         assertEq("/v1/" + Processor, last().path);
         int count = handler.calls.size();
-        foreach string id in (("../other", "p?admin=1", "p%2Fother", "p#fragment", "",
+        foreach string id in (("../other", "p?admin=1", "p%2Fother", "p#fragment",
                 "projects/other/locations/us/processors/p", "projects/fixture-project/locations/eu/processors/p")) {
             assertThrows("GOOGLE-DOCUMENTAI-REQUEST-ERROR", sub () {
                 action("get-processor").doRequest({"processor_id": id});
             });
         }
-        assertEq(count, handler.calls.size());
+        # the schema requires at least one character, which the option's type enforces
+        assertThrows("RUNTIME-TYPE-ERROR", "\"processor_id\".*requires at least 1 character; got 0", sub () {
+            action("get-processor").doRequest({"processor_id": ""});
+        });
+        assertEq(count, handler.calls.size(), "invalid identities fail before transport");
     }
 
     private projectAliasTest() {

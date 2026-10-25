@@ -81,6 +81,8 @@ public class StabilityAiOperation inherits RestSchemaActionDataProvider {
         @param request_options transport options
         @return structured account data or a typed media/job result
         @throw STABILITYAI-INPUT-ERROR invalid conditional parameters
+        @throw RUNTIME-TYPE-ERROR an option does not fit its schema, such as a job ID that is not 64 characters long;
+        the type of the option refuses it before the conditional parameters are checked
     */
     auto doRequest(auto req, *hash<auto> request_options) {
         if (req.typeCode() != NT_HASH) {
