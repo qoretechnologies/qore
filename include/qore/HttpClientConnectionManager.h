@@ -120,7 +120,10 @@ public:
         //! Per-connection concurrent stream cap; 0 = unlimited (advisory for H1)
         int max_streams_per_connection = 0;
 
-        //! Connection establishment timeout in milliseconds.
+        //! Connection establishment timeout in milliseconds
+        /** 0 is an immediate timeout: a caller that has to wait for a new connection to be established gives up
+            at once; a negative value waits without a limit
+        */
         int connect_timeout_ms = 30000;
 
         //! Per-request timeout in milliseconds (used by @ref request).
