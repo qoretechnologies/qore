@@ -34,8 +34,29 @@
 
 #include <cstring>
 
+//! Retain a binding path only when it differs from the function's unqualified name.
+static std::shared_ptr<const std::string> functionReferencePath(const FunctionEntry& entry) {
+    std::string path;
+    if (entry.getNamespace()) {
+        entry.getNamespace()->getPath(path);
+    }
+    if (!path.empty()) {
+        path += "::";
+    }
+    path += entry.getName();
+    if (path == entry.getFunction()->getName()) {
+        return {};
+    }
+    return std::make_shared<const std::string>(std::move(path));
+}
+
 ResolvedCallReferenceNode* FunctionEntry::makeCallReference(const QoreProgramLocation* loc) const {
-   return new LocalFunctionCallReferenceNode(loc, func);
+    return new LocalFunctionCallReferenceNode(loc, func, functionReferencePath(*this));
+}
+
+FunctionCallReferenceNode* FunctionEntry::makeRuntimeCallReference(const QoreProgramLocation* loc,
+        QoreProgram* pgm) const {
+    return new FunctionCallReferenceNode(loc, func, pgm, functionReferencePath(*this));
 }
 
 ModuleImportedFunctionEntry::ModuleImportedFunctionEntry(const FunctionEntry& old, qore_ns_private* ns, bool builtin)

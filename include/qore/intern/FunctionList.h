@@ -37,6 +37,8 @@
 
 #include "qore/intern/Function.h"
 
+class FunctionCallReferenceNode;
+
 #include <map>
 #include <string>
 
@@ -117,6 +119,10 @@ public:
     }
 
     DLLLOCAL ResolvedCallReferenceNode* makeCallReference(const QoreProgramLocation* loc) const;
+
+    //! Make an evaluated reference retaining this entry's resolved namespace/alias identity.
+    DLLLOCAL FunctionCallReferenceNode* makeRuntimeCallReference(const QoreProgramLocation* loc,
+        QoreProgram* pgm) const;
 
     DLLLOCAL bool isPublic() const {
         return func->hasPublic();

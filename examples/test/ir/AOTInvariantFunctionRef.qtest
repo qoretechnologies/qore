@@ -92,8 +92,11 @@ class InvariantFunctionRefTest inherits QUnit::Test {
                 "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
+                # Exercise the invariant runtime helper itself. Callback argument specialization has its own
+                # coverage in AOTCallbackSpecialization and can remove these floating helper calls entirely.
                 string generated = run((ENV.QCC ?? libdir + "/qcc", level, "--strip-source",
-                    "-o", executable, source), prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
+                    "-o", executable, source), prefix
+                    + "QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION=1 QORE_DUMP_IR_AFTER_OPT=1 ");
                 bool selected = level == "-O3" && !prefix.startsWith("QORE_DISABLE_");
                 foreach string signature in (("int_0", "int_int", "float_0", "float_float")) {
                     assertEq(selected, generated.contains("call i32 @qore_rt_try_funcref_" + signature + "_v9("),

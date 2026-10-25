@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class FunctionReferencePathTest
+
+class FunctionReferencePathTest inherits QUnit::Test {
+    private {
+        string libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("Qualified AOT function references", "1.0", \ARGV) {
+        addTestCase("nested function references survive module serialization", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private static write(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+    private string run(list<string> args, string module_path) {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(
+            "QORE_MODULE_DIR=" + quote(module_path) + " LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " " + (map quote($1), args).join(" "));
+        # The consumer is top-level code; its module functions are already AOT compiled.
+        if (result.mode) { ExecModeHarness::check_native(result, ExecModeHarness::NativeCheck::Jit); }
+        assertEq(0, result.rc, result.out);
+        return result.out;
+    }
+    private check() {
+        TmpDir dir("qore-function-reference-path-");
+        mkdir(dir.path + "/source");
+        mkdir(dir.path + "/modules");
+        string source = dir.path + "/source/AOTReferencePaths.qm";
+        write(source, "%modern
+module AOTReferencePaths {
+    version = \"1.0\"; desc = \"Qualified function reference regression\";
+    author = \"Qore\"; license = \"MIT\";
+}
+public namespace AOTReferencePaths {
+    public int sub step(int value) { return value + 100; }
+    public namespace Nested {
+        public int sub step(int value) { return value + 200; }
+    }
+    public code<int(int)> sub make() { return \\Nested::step(); }
+    public int sub defaulted(code<int(int)> fn = \\Nested::step()) { return fn(3); }
+    public list<auto> sub refs() { return (\\step(), \\Nested::step()); }
+    public class Holder {
+        private {
+            code<int(int)> callback = \\Nested::step();
+        }
+        public int value() { return callback(3); }
+    }
+}
+");
+        string consumer = dir.path + "/consumer.qr";
+        write(consumer, "%modern
+%no-child-restrictions
+%requires AOTReferencePaths
+int sub step(int value) { return value + 1; }
+code<int(int)> callback = AOTReferencePaths::make();
+list<auto> refs = AOTReferencePaths::refs();
+AOTReferencePaths::Holder holder();
+printf(\"%d %d %d %d %d\\n\", callback(3), AOTReferencePaths::defaulted(), refs[0](3), refs[1](3), holder.value());
+Program child(PO_NO_CHILD_PO_RESTRICTIONS);
+child.setExecMode(EM_IR);
+child.importFunction(\"AOTReferencePaths::Nested::step\", \"renamed\");
+child.parse(\"%modern\\ncode<int(int)> sub make() { return \\\\renamed(); }\", \"alias reference\");
+code<int(int)> alias = child.callFunction(\"make\");
+printf(\"%d\\n\", alias(3));
+");
+        string expected = "203 203 103 203 203\n203\n";
+        string tail = ":" + (ENV.QORE_MODULE_DIR ?? "");
+        assertEq(expected, run((qore, "--exec-mode=ast", consumer), dir.path + "/source" + tail));
+        string artifact = dir.path + "/modules/AOTReferencePaths.qmod";
+        run((qore, "--compile-module", "--output", artifact, source), dir.path + "/source" + tail);
+        assertTrue(is_file(artifact));
+        string modules = dir.path + "/modules" + tail;
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, consumer), modules), mode);
+        }
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/consumer";
+            run((qcc, level, "--strip-source", "-o", executable, consumer), modules);
+            assertEq(expected, run((executable,), modules), level);
+        }
+    }
+}

@@ -489,6 +489,13 @@ struct AOTGlobalIntInfo {
     }
 };
 
+//! Private, same-compilation fast entry for one immutable callback argument.
+struct AOTCallbackFastEntry {
+    unsigned param_index = 0;
+    const AbstractQoreFunctionVariant* target = nullptr;
+    std::string name;
+};
+
 struct BatchCalleeInfo {
     std::string name;                    //!< Standard entry function name
     std::string call_ref_path;           //!< Canonical Qore function path for exact call-reference dispatch
@@ -505,6 +512,7 @@ struct BatchCalleeInfo {
     BatchCalleeBoxedReturnKind boxed_return_kind = BatchCalleeBoxedReturnKind::Unknown;
         //!< Exact body-proven boxed runtime kind
     std::string fast_name;               //!< Fast entry function name (if eligible)
+    std::vector<AOTCallbackFastEntry> callback_fast_entries; //!< Private callback argument specializations
     std::string fast_contract_hash;      //!< Native fast-call ABI/effect contract hash
     bool preloaded_fast_entry = false;   //!< fast_name came from an immutable sibling artifact
     std::string specialization_key;      //!< Concrete generic receiver/type-argument tuple

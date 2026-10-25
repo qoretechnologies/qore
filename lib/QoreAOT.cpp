@@ -15741,6 +15741,198 @@ static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
             batch_callees);
 }
 
+using AOTCallbackSpecializationCandidates = std::vector<
+    std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>;
+
+//! Declare bounded private entries without changing the ordinary callable entry or its contract.
+static bool declareAOTCallbackFastEntries(llvm::Module& module,
+        const AOTCallbackSpecializationCandidates& candidates,
+        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& callees) {
+    if (q_env_is_set("QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION")) {
+        return true;
+    }
+    std::unordered_map<const AbstractQoreFunctionVariant*, const QoreIRFunction*> bodies;
+    std::unordered_map<std::string, const AbstractQoreFunctionVariant*> paths;
+    size_t checks = 0;
+    for (const auto& [variant, info] : callees) {
+        if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT callback target indexing")) {
+            return false;
+        }
+        if (info.single_variant_function && !info.call_ref_path.empty()) {
+            auto [it, inserted] = paths.emplace(info.call_ref_path, variant);
+            if (!inserted && it->second != variant) {
+                it->second = nullptr;
+            }
+        }
+    }
+    for (const auto& [variant, ir] : candidates) {
+        if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT callback body indexing")) {
+            return false;
+        }
+        bodies.emplace(variant, ir.get());
+    }
+    unsigned entries = 0;
+    for (const auto& [owner, ir] : candidates) {
+        if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT callback candidate analysis")) {
+            return false;
+        }
+        const auto* owner_uvb = owner->getUserVariantBase();
+        if (!owner_uvb || !ir || ir->has_opaque_ast_local_access) {
+            continue;
+        }
+        std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*> known;
+        if (!QoreIRToLLVM::collectKnownCallReferenceValues(*ir, callees, known, &paths)) {
+            return false;
+        }
+        if (known.empty()) {
+            continue;
+        }
+        for (const auto& block : ir->blocks) {
+            if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT callback candidate block analysis")) {
+                return false;
+            }
+            for (const auto& ip : block->instructions) {
+                if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT callback call-site analysis")) {
+                    return false;
+                }
+                if (ip->opcode != QoreIROpcode::CallDirect) {
+                    continue;
+                }
+                const auto* call = static_cast<const QoreIRCallDirectInstruction*>(ip.get());
+                auto callee = callees.find(call->variant);
+                auto body = bodies.find(call->variant);
+                const auto* uvb = call->variant ? call->variant->getUserVariantBase() : nullptr;
+                const auto* sig = uvb ? uvb->getUserSignature() : nullptr;
+                if (!sig || uvb->pgm != owner_uvb->pgm || callee == callees.end() || body == bodies.end()
+                        || !callee->second.approach_b_eligible || callee->second.preloaded_fast_entry
+                        || !callee->second.single_variant_function || callee->second.generic_specialized_fast_entry
+                        || dynamic_cast<const MethodVariantBase*>(call->variant)
+                        || sig->needsTypeParameterSubstitution() || call->has_ref_args
+                        || call->explicit_type_param_inst || call->operands.size() != sig->numParams()
+                        || body->second->has_opaque_ast_local_access || body->second->blocks.size() > 32
+                        || callee->second.callback_fast_entries.size() >= 4) {
+                    continue;
+                }
+                size_t instructions = 0;
+                for (const auto& cb : body->second->blocks) {
+                    instructions += cb->instructions.size();
+                }
+                if (instructions > 512) {
+                    continue;
+                }
+                for (unsigned index = 0; index < call->operands.size(); ++index) {
+                    if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT callback argument candidate")) {
+                        return false;
+                    }
+                    auto ref = known.find(call->operands[index].id);
+                    if (ref == known.end()) {
+                        continue;
+                    }
+                    auto target = callees.find(ref->second);
+                    const auto* target_uvb = ref->second->getUserVariantBase();
+                    const LocalVar* local = sig->lv[index];
+                    if (target == callees.end() || !target_uvb || target_uvb->pgm != uvb->pgm
+                            || !target->second.single_variant_function || target->second.preloaded_fast_entry
+                            || !target->second.approach_b_eligible || !target->second.context_independent_fast_entry
+                            || target->second.generic_specialized_fast_entry || !target->second.float_expression
+                            || target->second.return_kind != BatchCalleeReturnKind::NativeFloat
+                            || target->second.num_params > 1 || !local || local->closureUse() || local->isTopLevel()
+                            || QoreTypeInfo::isReference(local->getTypeInfo()) || body->second->isAstVisibleLocal(local)
+                            || index >= callee->second.param_kinds.size()
+                            || callee->second.param_kinds[index] != BatchCalleeParamKind::Boxed) {
+                        continue;
+                    }
+                    if (target->second.num_params && (target->second.param_kinds.size() != 1
+                            || target->second.param_kinds.front() != BatchCalleeParamKind::NativeFloat)) {
+                        continue;
+                    }
+                    auto& specs = callee->second.callback_fast_entries;
+                    if (specs.size() >= 4 || std::any_of(specs.begin(), specs.end(), [&](const auto& s) {
+                            return s.param_index == index && s.target == ref->second;
+                        })) {
+                        continue;
+                    }
+                    std::unordered_set<uint32_t> loads;
+                    bool valid = true;
+                    for (const auto& cb : body->second->blocks) {
+                        for (const auto& ci : cb->instructions) {
+                            if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT callback parameter proof")) {
+                                return false;
+                            }
+                            if (ci->opcode != QoreIROpcode::UninstantiateLocal
+                                    && qore_ir_get_written_local(ci.get()) == local) {
+                                valid = false;
+                            }
+                            if (ci->opcode == QoreIROpcode::CreateParseRef || (ci->opcode == QoreIROpcode::Invoke
+                                    && static_cast<const QoreIRInvokeInstruction*>(ci.get())->invoke_opcode
+                                        == QoreIROpcode::CreateParseRef)) {
+                                valid = false;
+                            }
+                            if (ci->opcode == QoreIROpcode::LoadLocal) {
+                                const auto* load = static_cast<const QoreIRLocalInstruction*>(ci.get());
+                                if (load->local == local) {
+                                    if (load->is_ref || load->is_closure) {
+                                        valid = false;
+                                    }
+                                    loads.insert(load->result.id);
+                                }
+                            }
+                        }
+                    }
+                    if (!valid || loads.empty()) {
+                        continue;
+                    }
+                    std::unordered_map<uint32_t, unsigned> uses;
+                    for (const auto& cb : body->second->blocks) {
+                        for (const auto& ci : cb->instructions) {
+                            if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT callback use analysis")) {
+                                return false;
+                            }
+                            if (!qore_ir_visit_value_operands(*ci, [&](QoreIRValue value) {
+                                    if (loads.count(value.id)) {
+                                        ++uses[value.id];
+                                        if (ci->opcode != QoreIROpcode::CallClosureDirect
+                                                || ci->operands.empty() || ci->operands.front().id != value.id) {
+                                            valid = false;
+                                        }
+                                    }
+                                }, &checks, "AOT callback parameter use proof")) {
+                                return false;
+                            }
+                        }
+                    }
+                    for (uint32_t load : loads) {
+                        if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT callback use count proof")) {
+                            return false;
+                        }
+                        valid = valid && uses[load] == 1;
+                    }
+                    if (!valid) {
+                        continue;
+                    }
+                    llvm::Function* ordinary = module.getFunction(callee->second.fast_name);
+                    if (!ordinary) {
+                        continue;
+                    }
+                    AOTCallbackFastEntry spec;
+                    spec.param_index = index;
+                    spec.target = ref->second;
+                    spec.name = callee->second.fast_name + "_cb" + std::to_string(index) + "_"
+                        + target->second.fast_name;
+                    auto* fn = llvm::Function::Create(ordinary->getFunctionType(),
+                        llvm::Function::InternalLinkage, spec.name, module);
+                    fn->addFnAttr(llvm::Attribute::InlineHint);
+                    specs.push_back(std::move(spec));
+                    if (++entries == 64) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return true;
+}
+
 static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         llvm::LLVMContext& ctx, llvm::Module& module,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& aot_batch_callee_map,
@@ -15749,7 +15941,8 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         const char* compile_file,
         const std::unordered_set<std::string>* keep_modules,
         const std::unordered_set<std::string>* compile_files,
-        AOTGenericSpecializationCandidates* generic_specializations = nullptr) {
+        AOTGenericSpecializationCandidates* generic_specializations = nullptr,
+        AOTCallbackSpecializationCandidates* callback_specializations = nullptr) {
     AOTGenericSpecializationCandidates local_generic_specializations;
     bool owns_generic_specializations = !generic_specializations;
     if (!generic_specializations) {
@@ -16231,7 +16424,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         if (ni.second) {
             if (!declareAOTBatchFastEntries(qore_ns_private::get(*ni.second), pgm, ctx, module,
                     aot_batch_callee_map, declared_keys, compile_module, compile_file,
-                    keep_modules, compile_files, generic_specializations)) {
+                    keep_modules, compile_files, generic_specializations, callback_specializations)) {
                 return false;
             }
         }
@@ -16241,6 +16434,21 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                 module, *generic_specializations,
                 aot_batch_callee_map)) {
         return false;
+    }
+    if (callback_specializations) {
+        size_t moved = 0;
+        for (auto& candidate : context_candidates) {
+            if (++moved % 100 == 0 && qore_check_cancel(nullptr, "AOT callback body collection")) {
+                return false;
+            }
+            callback_specializations->push_back(std::move(candidate));
+        }
+        for (auto& candidate : effect_only_candidates) {
+            if (++moved % 100 == 0 && qore_check_cancel(nullptr, "AOT callback body collection")) {
+                return false;
+            }
+            callback_specializations->push_back(std::move(candidate));
+        }
     }
     return true;
 }
@@ -16276,18 +16484,22 @@ static bool auditAOTBatchFastEntryDefinitions(llvm::Module& module,
                 || info.preloaded_fast_entry) {
             continue;
         }
-        llvm::Function* fn = module.getFunction(info.fast_name);
-        if (!fn || !fn->isDeclaration()) {
-            continue;
+        // The ordinary entry and its at-most-four private callback entries must all have bodies if used.
+        for (size_t entry = 0; entry <= info.callback_fast_entries.size(); ++entry) {
+            const std::string& name = entry ? info.callback_fast_entries[entry - 1].name : info.fast_name;
+            llvm::Function* fn = module.getFunction(name);
+            if (!fn || !fn->isDeclaration()) {
+                continue;
+            }
+            if (fn->use_empty()) {
+                fn->eraseFromParent();
+                continue;
+            }
+            error = "internal AOT error: no body was emitted for the fast entry of '"
+                + (info.call_ref_path.empty() ? info.name : info.call_ref_path)
+                + "' (symbol '" + name + "'), but a compiled caller calls it";
+            return false;
         }
-        if (fn->use_empty()) {
-            fn->eraseFromParent();
-            continue;
-        }
-        error = "internal AOT error: no body was emitted for the fast entry of '"
-            + (info.call_ref_path.empty() ? info.name : info.call_ref_path)
-            + "' (symbol '" + info.fast_name + "'), but a compiled caller calls it";
-        return false;
     }
     return true;
 }
@@ -20885,80 +21097,93 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
 
                     // Compile fast entry for AOT Approach B.
                     if (std_entry_ok && fast_entry_eligible) {
-                        const UserSignature* sig = uvb->getUserSignature();
-                        unsigned num_params = sig->numParams();
-                        llvm::Function* fast_fn = module.getFunction(fast_entry_name);
-                        assert(fast_fn);
+                        auto callback_info = aot_batch_callee_map->find(variant);
+                        unsigned entry_count = 1 + (callback_info == aot_batch_callee_map->end() ? 0
+                            : callback_info->second.callback_fast_entries.size());
+                        // At most four private callback entries, sharing the original ABI and runtime slots.
+                        for (unsigned entry = 0; entry < entry_count; ++entry) {
+                            const AOTCallbackFastEntry* callback_spec = entry
+                                ? &callback_info->second.callback_fast_entries[entry - 1] : nullptr;
+                            const std::string& entry_name = callback_spec ? callback_spec->name : fast_entry_name;
+                            const UserSignature* sig = uvb->getUserSignature();
+                            unsigned num_params = sig->numParams();
+                            llvm::Function* fast_fn = module.getFunction(entry_name);
+                            assert(fast_fn);
 
-                        // Build param mapping: LocalVar* → LLVM function arg value
-                        std::unordered_map<const void*, llvm::Value*> param_map;
-                        std::unordered_map<const void*, BatchCalleeParamKind> param_kind_map;
-                        std::unordered_set<const void*> borrowed_param_map;
-                        for (unsigned i = 0; i < num_params; ++i) {
-                            if (i && !(i % 100)
-                                    && qore_check_cancel(nullptr,
-                                        "AOT function fast-entry parameter mapping")) {
+                            // Build param mapping: LocalVar* → LLVM function arg value
+                            std::unordered_map<const void*, llvm::Value*> param_map;
+                            std::unordered_map<const void*, BatchCalleeParamKind> param_kind_map;
+                            std::unordered_set<const void*> borrowed_param_map;
+                            for (unsigned i = 0; i < num_params; ++i) {
+                                if (i && !(i % 100)
+                                        && qore_check_cancel(nullptr,
+                                            "AOT function fast-entry parameter mapping")) {
+                                    ++failed_count;
+                                    setAOTCompileFatal(fatal_error, "function", variant_key,
+                                        "fast-entry parameter mapping", "cancelled");
+                                    fn_outliner.undo();
+                                    delete ir_func;
+                                    return;
+                                }
+                                const void* key = reinterpret_cast<const void*>(sig->lv[i]);
+                                param_map[key] = fast_fn->getArg(i);
+                                param_kind_map[key] = i < fast_entry_param_kinds.size()
+                                    ? fast_entry_param_kinds[i] : BatchCalleeParamKind::Boxed;
+                                auto callee_it = aot_batch_callee_map->find(variant);
+                                if (callee_it != aot_batch_callee_map->end()
+                                        && i < callee_it->second.param_noescape.size()
+                                        && callee_it->second.param_noescape[i]
+                                        && param_kind_map[key] == BatchCalleeParamKind::Boxed) {
+                                    borrowed_param_map.insert(key);
+                                }
+                                fast_fn->getArg(i)->setName(
+                                        std::string("arg") + std::to_string(i));
+                            }
+
+                            QoreIRToLLVM fast_lowerer(ctx);
+                            fast_lowerer.setAOTMode(&slots);
+                            fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                            fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
+                            fast_lowerer.setDeferredExceptionChecking(false);
+                            if (aot_batch_callee_map && !aot_batch_callee_map->empty()) {
+                                fast_lowerer.setBatchCallees(aot_batch_callee_map);
+                            }
+                            auto fast_info_it = aot_batch_callee_map->find(variant);
+                            BatchCalleeReturnKind fast_return_kind
+                                = fast_info_it == aot_batch_callee_map->end()
+                                    ? BatchCalleeReturnKind::Boxed
+                                    : fast_info_it->second.return_kind;
+                            const QoreTypeInfo* fast_return_type =
+                                fast_ir_func->specializeType(
+                                    sig->getReturnTypeInfo());
+                            fast_lowerer.setFastEntryMode(entry_name, &param_map,
+                                    &param_kind_map, &borrowed_param_map, fast_return_kind,
+                                    fast_return_type);
+                            if (callback_spec) {
+                                fast_lowerer.setKnownCallbackParameter(sig->lv[callback_spec->param_index],
+                                    callback_spec->target);
+                            }
+                            if (self_rec_eligible) {
+                                fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name,
+                                        fe, &fast_entry_param_kinds,
+                                        &fast_entry_param_rejects_nothing, fast_return_kind);
+                            }
+                            std::string fast_error;
+                            if (!fast_lowerer.lowerFunction(
+                                    *fast_ir_func, module, fast_error)) {
+                                printd(2, "AOT: fast entry '%s' lowering failed: %s\n",
+                                    entry_name.c_str(), fast_error.c_str());
+                                if (q_env_is_set("QORE_AOT_DEBUG")) {
+                                    fprintf(stderr, "AOT: fast entry '%s' lowering failed: %s\n",
+                                        entry_name.c_str(), fast_error.c_str());
+                                }
                                 ++failed_count;
                                 setAOTCompileFatal(fatal_error, "function", variant_key,
-                                    "fast-entry parameter mapping", "cancelled");
+                                    "fast-entry LLVM lowering", fast_error);
                                 fn_outliner.undo();
                                 delete ir_func;
                                 return;
                             }
-                            const void* key = reinterpret_cast<const void*>(sig->lv[i]);
-                            param_map[key] = fast_fn->getArg(i);
-                            param_kind_map[key] = i < fast_entry_param_kinds.size()
-                                ? fast_entry_param_kinds[i] : BatchCalleeParamKind::Boxed;
-                            auto callee_it = aot_batch_callee_map->find(variant);
-                            if (callee_it != aot_batch_callee_map->end()
-                                    && i < callee_it->second.param_noescape.size()
-                                    && callee_it->second.param_noescape[i]
-                                    && param_kind_map[key] == BatchCalleeParamKind::Boxed) {
-                                borrowed_param_map.insert(key);
-                            }
-                            fast_fn->getArg(i)->setName(
-                                    std::string("arg") + std::to_string(i));
-                        }
-
-                        QoreIRToLLVM fast_lowerer(ctx);
-                        fast_lowerer.setAOTMode(&slots);
-                        fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
-                        fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
-                        fast_lowerer.setDeferredExceptionChecking(false);
-                        if (aot_batch_callee_map && !aot_batch_callee_map->empty()) {
-                            fast_lowerer.setBatchCallees(aot_batch_callee_map);
-                        }
-                        auto fast_info_it = aot_batch_callee_map->find(variant);
-                        BatchCalleeReturnKind fast_return_kind
-                            = fast_info_it == aot_batch_callee_map->end()
-                                ? BatchCalleeReturnKind::Boxed
-                                : fast_info_it->second.return_kind;
-                        const QoreTypeInfo* fast_return_type =
-                            fast_ir_func->specializeType(
-                                sig->getReturnTypeInfo());
-                        fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
-                                &param_kind_map, &borrowed_param_map, fast_return_kind,
-                                fast_return_type);
-                        if (self_rec_eligible) {
-                            fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name,
-                                    fe, &fast_entry_param_kinds,
-                                    &fast_entry_param_rejects_nothing, fast_return_kind);
-                        }
-                        std::string fast_error;
-                        if (!fast_lowerer.lowerFunction(
-                                *fast_ir_func, module, fast_error)) {
-                            printd(2, "AOT: fast entry '%s' lowering failed: %s\n",
-                                fast_entry_name.c_str(), fast_error.c_str());
-                            if (q_env_is_set("QORE_AOT_DEBUG")) {
-                                fprintf(stderr, "AOT: fast entry '%s' lowering failed: %s\n",
-                                    fast_entry_name.c_str(), fast_error.c_str());
-                            }
-                            ++failed_count;
-                            setAOTCompileFatal(fatal_error, "function", variant_key,
-                                "fast-entry LLVM lowering", fast_error);
-                            fn_outliner.undo();
-                            delete ir_func;
-                            return;
                         }
                     }
                 }
@@ -23835,9 +24060,12 @@ bool QoreAOT::compile(QoreProgram* pgm,
     std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>
         executable_batch_callees;
     std::set<std::string> declared_fast_keys;
+    AOTCallbackSpecializationCandidates callback_candidates;
+    auto* callback_candidates_ptr = q_env_is_set("QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION")
+        ? nullptr : &callback_candidates;
     if (!declareAOTBatchFastEntries(root_ns, pgm, ctx, *module,
             executable_batch_callees, declared_fast_keys, "", nullptr,
-            local_module_names.empty() ? nullptr : &local_module_names, nullptr)) {
+            local_module_names.empty() ? nullptr : &local_module_names, nullptr, nullptr, callback_candidates_ptr)) {
         error = "operation cancelled during executable AOT fast-entry discovery";
         return false;
     }
@@ -23857,12 +24085,18 @@ bool QoreAOT::compile(QoreProgram* pgm,
     for (auto& root : local_module_roots) {
         if (!declareAOTBatchFastEntries(root.second, pgm, ctx, *module,
                 executable_batch_callees, declared_fast_keys, root.first.c_str(),
-                nullptr, nullptr, nullptr)) {
+                nullptr, nullptr, nullptr, nullptr, callback_candidates_ptr)) {
             error = "operation cancelled during executable AOT embedded-module "
                 "fast-entry discovery";
             return false;
         }
     }
+
+    if (!declareAOTCallbackFastEntries(*module, callback_candidates, executable_batch_callees)) {
+        error = "operation cancelled during executable AOT callback specialization";
+        return false;
+    }
+    callback_candidates.clear();
 
     // Pass "" as compile_module to filter out module-originated functions/classes;
     // module functions are available at runtime via runTimeLoadModule().  Relative
@@ -35029,8 +35263,7 @@ class ExprTreeSerializer {
         }
         if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_FUNC_REF));
-            QoreFunction* f = fcr->getFunction();
-            writeStr(f ? f->getName() : "");
+            writeStr(fcr->getFunctionPath());
             writeU16(0);
             return true;
         }
@@ -36183,8 +36416,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
         id.kind = AOTExprKind::FUNC_CALL_REF;
-        QoreFunction* f = fcr->getFunction();
-        id.ref1 = f ? f->getName() : "";
+        id.ref1 = fcr->getFunctionPath();
         return id;
     }
     if (auto* smr = dynamic_cast<const ParseSelfMethodReferenceNode*>(node)) {

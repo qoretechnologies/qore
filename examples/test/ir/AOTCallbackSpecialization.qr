@@ -1,0 +1,170 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+
+sub expect(auto expected, auto actual) {
+    if (type(expected) != type(actual) || (type(expected) == "float"
+            ? (expected.nanp() ? !actual.nanp() : expected != actual
+                || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual)))
+            : expected != actual)) {
+        throw "CALLBACK-SPECIALIZATION", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+float sub step(float value) { float result = 65535.0 - value; return result; }
+float sub identity(float value) { return value; }
+float sub result() { float value = 17.5; return value; }
+float sub resultOther() { return -3.5; }
+float sub resultThree() { return 3.0; }
+float sub resultFour() { return 4.0; }
+float sub resultFive() { return 5.0; }
+float sub resultSix() { return 6.0; }
+float sub hofUnary(float seed, int count, code<float(float)> callback) {
+    float value = seed;
+    float sum = 0.0;
+    for (int i = 0; i < count; ++i) { value = callback(value); sum += value; }
+    return sum;
+}
+float sub hofIdentity(float seed, int count, code<float(float)> callback) {
+    float value = seed;
+    for (int i = 0; i < count; ++i) { value = callback(value); }
+    return value;
+}
+float sub hofResult(int count, code<float()> callback) {
+    float sum = 0.0;
+    for (int i = 0; i < count; ++i) { sum += float(callback()); }
+    return sum;
+}
+# The unconverted compound assignment currently needs a runtime-visible local and retains ordinary dispatch.
+float sub hofBoxedResult(int count, code<float()> callback) {
+    float sum = 0.0;
+    for (int i = 0; i < count; ++i) { sum += callback(); }
+    return sum;
+}
+float sub knownUnary(float seed, int count) {
+    code<float(float)> callback = \step();
+    return hofUnary(seed, count, callback);
+}
+float sub knownIdentity(float seed, int count) {
+    code<float(float)> callback = \identity();
+    return hofIdentity(seed, count, callback);
+}
+float sub knownResult(int count) {
+    code<float()> callback = \result();
+    return hofResult(count, callback);
+}
+float sub knownResultOther(int count) { return hofResult(count, \resultOther()); }
+float sub knownBoxedResult(int count) { return hofBoxedResult(count, \result()); }
+float sub boundedTargets(int count) {
+    return hofResult(count, \resultThree()) + hofResult(count, \resultFour())
+        + hofResult(count, \resultFive()) + hofResult(count, \resultSix());
+}
+float sub dynamicUnary(float seed, int count, code<float(float)> callback) {
+    return hofUnary(seed, count, callback);
+}
+float sub mutatedCaller(bool replace) {
+    code<float(float)> callback = \identity();
+    if (replace) { callback = \step(); }
+    return hofIdentity(1.5, 3, callback);
+}
+float sub mutatedParameter(float seed, code<float(float)> callback) {
+    callback = \step();
+    return callback(seed);
+}
+float sub callMutatedParameter(float seed) { return mutatedParameter(seed, \identity()); }
+float sub referenceRebind() {
+    code<float(float)> callback = \identity();
+    reference<code<float(float)>> alias = \callback;
+    alias = \step();
+    return hofIdentity(1.5, 3, callback);
+}
+float sub optionalArgument(*float value, code<float(float)> callback) { return callback(value); }
+string sub callOptional(*float value) {
+    code<float(float)> callback = \identity();
+    try { return string(optionalArgument(value, callback)); }
+    catch (hash<ExceptionInfo> e) { return e.err; }
+}
+string sub callUnassigned(bool assigned) {
+    code<float(float)> callback = \identity();
+    float value;
+    if (assigned) { value = 1.5; }
+    try { return string(optionalArgument(value, callback)); }
+    catch (hash<ExceptionInfo> e) { return e.err; }
+}
+string sub callSparse() {
+    list<float> values = (1.5, 2.5);
+    delete values[1];
+    code<float(float)> callback = \identity();
+    try { return string(optionalArgument(values[1], callback)); }
+    catch (hash<ExceptionInfo> e) { return e.err; }
+}
+float sub overloaded(float value) { return value + 2.0; }
+float sub overloaded(int value) { return float(value) + 3.0; }
+float sub callOverloaded(float value) {
+    code<float(float)> callback = \overloaded();
+    return hofIdentity(value, 1, callback);
+}
+thread_local int calls = 0;
+float sub observable(float value) {
+    ++calls;
+    if (value == 0.0) { throw "EXPECTED", "zero"; }
+    return value;
+}
+float sub callObservable(float value) {
+    code<float(float)> callback = \observable();
+    return hofIdentity(value, 3, callback);
+}
+namespace Other {
+    float sub step(float value) { return value + 1.0; }
+}
+float sub namespaced(float value) {
+    code<float(float)> callback = \Other::step();
+    return hofIdentity(value, 3, callback);
+}
+foreach float value in ((0.0, -0.0, 1.5, -1.5, -3.0e307, @inf@, -@inf@, @nan@, -@nan@)) {
+    foreach int count in ((0, 1, 2, 17, 257)) {
+        float current = value;
+        float sum = 0.0;
+        for (int i = 0; i < count; ++i) { current = 65535.0 - current; sum += current; }
+        expect(sum, knownUnary(value, count));
+        expect(sum, dynamicUnary(value, count, \step()));
+        expect(value, knownIdentity(value, count));
+        expect(float(count) * 17.5, knownResult(count));
+        expect(float(count) * 17.5, knownBoxedResult(count));
+        expect(count ? float(count) * -3.5 : 0.0, knownResultOther(count));
+    }
+}
+# The same higher-order function remains callable with a different dynamic target.
+expect(6.0, dynamicUnary(1.5, 4, \identity()));
+expect(54.0, boundedTargets(3));
+float offset = 0.5;
+code<float(float)> captured = float sub (float value) { return value + offset; };
+expect(3.5, hofIdentity(1.5, 4, captured));
+code<float(float, int, code<float(float)>)> indirect = \hofIdentity();
+expect(3.5, indirect(1.5, 4, captured));
+expect(1.5, mutatedCaller(False));
+expect(65533.5, mutatedCaller(True));
+expect(65533.5, callMutatedParameter(1.5));
+expect(65533.5, referenceRebind());
+expect("1.5", callOptional(1.5));
+expect("1.5", callUnassigned(True));
+foreach string err in ((callOptional(NOTHING), callUnassigned(False), callSparse())) {
+    expect(True, err.regex("^RUNTIME-(TYPE|OVERLOAD)-ERROR$"));
+}
+expect(3.5, callOverloaded(1.5));
+expect(4.5, namespaced(1.5));
+expect(1.5, callObservable(1.5));
+expect(3, calls);
+bool caught = False;
+try { callObservable(0.0); }
+catch (hash<ExceptionInfo> e) { expect("EXPECTED", e.err); caught = True; }
+expect(True, caught);
+expect(4, calls);
+Program foreign(PO_NO_CHILD_PO_RESTRICTIONS);
+foreign.setExecMode(EM_IR);
+foreign.parse("%modern\nfloat sub step(float value) { return value + 2.0; }\n"
+    "code<float(float)> sub callback() { return \\step(); }", "callback-specialization-foreign");
+code<float(float)> foreignCallback = foreign.callFunction("callback");
+expect(7.5, hofIdentity(1.5, 3, foreignCallback));
+expect(16.5, dynamicUnary(1.5, 3, foreignCallback));
+printf("callback-specialization: ok\n");

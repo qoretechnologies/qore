@@ -1548,7 +1548,7 @@ QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* iden
 
     const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*getRootNS(), name->c_str());
     if (fe) {
-        return new FunctionCallReferenceNode(&loc_builtin, fe->getFunction(), ::getProgram());
+        return fe->makeRuntimeCallReference(&loc_builtin, ::getProgram());
     }
 
     xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve \"%s\" to any callable reference", name->c_str());

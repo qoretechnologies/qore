@@ -652,6 +652,132 @@ void QoreIRToLLVM::emitNativeMethodBinding(llvm::Module& module, llvm::Function*
     }
 }
 
+bool QoreIRToLLVM::collectKnownCallReferenceValues(const QoreIRFunction& func,
+        const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& callees,
+        std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>& result,
+        const std::unordered_map<std::string, const AbstractQoreFunctionVariant*>* paths,
+        const std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>* definitions) {
+    if (func.blocks.empty() || func.has_opaque_ast_local_access) {
+        return true;
+    }
+    size_t checks = 0;
+    if (definitions) {
+        for (const auto& [value, target] : *definitions) {
+            if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT callback definition collection")) {
+                return false;
+            }
+            result.emplace(value, target);
+        }
+    }
+    std::unordered_map<const LocalVar*, unsigned> writes;
+    std::unordered_map<const LocalVar*, const QoreIRLocalInstruction*> initial_stores;
+    std::unordered_map<const QoreIRInstruction*, size_t> entry_positions;
+    std::vector<const QoreIRLocalInstruction*> loads;
+    for (const auto& block : func.blocks) {
+        if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT callback block analysis")) {
+            return false;
+        }
+        size_t position = 0;
+        for (const auto& ip : block->instructions) {
+            if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT callback value analysis")) {
+                return false;
+            }
+            const auto* inst = ip.get();
+            if (!inst) {
+                continue;
+            }
+            // Reference creation can expose a local to writes through an alias. Keep the whole owner on the
+            // ordinary path rather than depending on an indirect-write alias proof here.
+            if (inst->opcode == QoreIROpcode::CreateParseRef || (inst->opcode == QoreIROpcode::Invoke
+                    && static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode
+                        == QoreIROpcode::CreateParseRef)) {
+                result.clear();
+                return true;
+            }
+            if (block.get() == func.blocks.front().get()) {
+                entry_positions.emplace(inst, position++);
+            }
+            if (inst->opcode != QoreIROpcode::UninstantiateLocal) {
+                if (const LocalVar* local = qore_ir_get_written_local(inst)) {
+                    ++writes[local];
+                }
+            }
+            if (inst->opcode == QoreIROpcode::LoadLocal) {
+                loads.push_back(static_cast<const QoreIRLocalInstruction*>(inst));
+            } else if (inst->opcode == QoreIROpcode::StoreLocal
+                    && block.get() == func.blocks.front().get()) {
+                const auto* store = static_cast<const QoreIRLocalInstruction*>(inst);
+                if (store->local && store->initial_assignment && !store->is_ref && !store->is_closure
+                        && store->mode == AssignmentMode::Normal && store->operands.size() == 1) {
+                    initial_stores.emplace(store->local, store);
+                }
+            }
+            if (definitions) {
+                continue;
+            }
+            const QoreValue* expr = nullptr;
+            if (inst->opcode == QoreIROpcode::CreateCallRef) {
+                expr = &static_cast<const QoreIRCreateCallRefInstruction*>(inst)->expr;
+            } else if (inst->opcode == QoreIROpcode::Invoke) {
+                const auto* invoke = static_cast<const QoreIRInvokeInstruction*>(inst);
+                if (invoke->invoke_opcode == QoreIROpcode::CreateCallRef) {
+                    expr = &invoke->expr;
+                }
+            }
+            if (!expr || !expr->hasNode() || !inst->result.isValid()) {
+                continue;
+            }
+            const AbstractQoreFunctionVariant* target = nullptr;
+            const auto* ref = dynamic_cast<const LocalFunctionCallReferenceNode*>(expr->getInternalNode());
+            if (ref && ref->getFunction() && ref->getFunction()->numVariants() == 1) {
+                target = ref->getFunction()->first();
+            } else if (const auto* deferred = dynamic_cast<const DeferredFunctionCallReferenceNode*>(
+                    expr->getInternalNode())) {
+                std::string path = deferred->getFunctionName();
+                size_t prefix = 0;
+                while (path.size() >= prefix + 2 && path[prefix] == ':' && path[prefix + 1] == ':') {
+                    prefix += 2;
+                    if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT callback path normalization")) {
+                        return false;
+                    }
+                }
+                if (paths) {
+                    auto found = paths->find(path.substr(prefix));
+                    if (found != paths->end()) {
+                        target = found->second;
+                    }
+                }
+            }
+            if (target && callees.count(target)) {
+                result.emplace(inst->result.id, target);
+            }
+        }
+    }
+    for (const auto* load : loads) {
+        if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT callback local analysis")) {
+            return false;
+        }
+        const LocalVar* local = load->local;
+        const auto* facts = func.getValueFacts(load->result);
+        auto store = initial_stores.find(local);
+        if (!local || local->closureUse() || local->isTopLevel() || load->is_closure || load->is_ref
+                || QoreTypeInfo::isReference(local->getTypeInfo()) || func.isAstVisibleLocal(local)
+                || writes[local] != 1 || store == initial_stores.end() || !facts
+                || facts->assigned_state != QoreIRAssignedState::Assigned || !facts->never_nothing) {
+            continue;
+        }
+        auto position = entry_positions.find(load);
+        if (position != entry_positions.end() && position->second <= entry_positions.at(store->second)) {
+            continue;
+        }
+        auto target = result.find(store->second->operands.front().id);
+        if (target != result.end()) {
+            result.emplace(load->result.id, target->second);
+        }
+    }
+    return true;
+}
+
 void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
         const QoreIRInstruction* inst, llvm::Module& module) {
     if (!aot_mode || q_env_is_set("QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY")) {
@@ -3694,6 +3820,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     immediate_closure_creates.clear();
     known_function_call_refs.clear();
     function_call_ref_definitions.clear();
+    known_callback_arguments.clear();
     stored_closure_capture_allocas.clear();
     entry_promoted_closure_captures.clear();
     guarded_stored_closure_creates.clear();
@@ -13407,6 +13534,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     std::unordered_map<uint32_t, std::vector<QoreIROpcode>> value_operand_users;
     std::unordered_set<uint32_t> hashdecl_initializer_values;
     bool function_has_loop = false;
+    bool has_callback_argument_candidate = false;
     for (const auto& block : func.blocks) {
         function_has_loop = function_has_loop || block->is_loop_header;
         bool entry_block = block.get() == func.blocks.front().get();
@@ -13419,6 +13547,13 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
             if (inst_ptr->result.isValid()) {
                 value_definitions[inst_ptr->result.id] = inst_ptr.get();
+            }
+            if (aot_mode && batch_callees && inst_ptr->opcode == QoreIROpcode::CallDirect) {
+                const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst_ptr.get());
+                auto callee = batch_callees->find(call->variant);
+                if (callee != batch_callees->end() && !callee->second.callback_fast_entries.empty()) {
+                    has_callback_argument_candidate = true;
+                }
             }
             if (inst_ptr->opcode == QoreIROpcode::LoadLocal) {
                 const auto* load = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
@@ -13954,6 +14089,27 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 }
                 known_function_call_refs.emplace(
                     load->result.id, definition->second);
+            }
+        }
+    }
+    if (aot_mode && batch_callees && (has_callback_argument_candidate || known_callback_parameter)
+            && !q_env_is_set("QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION")) {
+        if (has_callback_argument_candidate && !collectKnownCallReferenceValues(func, *batch_callees,
+                known_callback_arguments, nullptr, &function_call_ref_definitions)) {
+            error = "cancelled during AOT callback argument analysis";
+            return false;
+        }
+        if (known_callback_parameter && known_callback_target) {
+            auto loads = local_load_instructions.find(static_cast<const LocalVar*>(known_callback_parameter));
+            if (loads != local_load_instructions.end()) {
+                size_t mapped = 0;
+                for (const auto* load : loads->second) {
+                    if (++mapped % 100 == 0 && qore_check_cancel(nullptr, "AOT callback parameter mapping")) {
+                        error = "cancelled during AOT callback parameter mapping";
+                        return false;
+                    }
+                    known_function_call_refs.emplace(load->result.id, known_callback_target);
+                }
             }
         }
     }
@@ -20646,7 +20802,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             }
                             llvm::Value* function_name =
                                 qore_ir_create_global_string_ptr(builder,
-                                    func->getName(), "function_call_ref_name");
+                                    fcr->getFunctionPath(), "function_call_ref_name");
                             auto cr_ft = llvm::FunctionType::get(i64_type,
                                     {ptr_type, ptr_type}, false);
                             auto helper = module.getOrInsertFunction(
@@ -21849,6 +22005,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     aot_approach_b_fn = module.getFunction(it->second.fast_name);
                     if (aot_approach_b_fn) {
                         aot_approach_b_callee = &it->second;
+                        if (nargs == static_cast<int>(it->second.num_params)) {
+                            // This changes only the private entry target. The ordinary argument binding,
+                            // callee-context guard, fallback, and cleanup remain those of the original call.
+                            for (const auto& spec : it->second.callback_fast_entries) {
+                                auto known = known_callback_arguments.find(
+                                    inst->operands[arg_start + spec.param_index].id);
+                                if (known != known_callback_arguments.end() && known->second == spec.target
+                                        && findBatchCallee(spec.target) != batch_callees->end()) {
+                                    if (auto* specialized = module.getFunction(spec.name)) {
+                                        aot_approach_b_fn = specialized;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -30151,7 +30322,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         }
                         llvm::Value* function_name =
                             qore_ir_create_global_string_ptr(builder,
-                                func->getName(), "function_call_ref_name");
+                                fcr->getFunctionPath(), "function_call_ref_name");
                         auto cr_ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, ptr_type}, false);
                         auto helper = module.getOrInsertFunction(

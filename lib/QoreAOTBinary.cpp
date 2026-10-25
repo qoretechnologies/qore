@@ -12819,8 +12819,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     }
     if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL_REF));
-        QoreFunction* f = fcr->getFunction();
-        writer.writeStringRef(f ? f->getName() : "");
+        writer.writeStringRef(fcr->getFunctionPath());
         return true;
     }
     if (auto* smr = dynamic_cast<const ParseSelfMethodReferenceNode*>(node)) {

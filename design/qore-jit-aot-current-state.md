@@ -4415,3 +4415,36 @@ skips. Only AOT performance is measured; no new Java/develop ratio or performanc
 ceiling is claimed. Next investigate bounded specialized entries that preserve
 known callback targets across same-program function calls while keeping ordinary
 dynamic/cross-program entry behavior, then take a fresh optimized Java checkpoint.
+
+
+## Bounded AOT callback argument specialization (2026-10-25)
+
+Standalone AOT compilation can select a private entry for a proven literal callback
+passed through a same-Program function parameter. Initial scope is exact single-variant
+pure float zero/unary targets and immutable private callback values/parameters. The
+ordinary entry remains; code growth is limited to four private entries per callee and
+64 per compilation, with bounded callee IR. qmod/split/preloaded, generic, method,
+reference/closure/opaque and unsupported paths retain ordinary behavior. The control
+is QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION. Public APIs/serialization do not change.
+
+Resolved function references retain immutable shared qualified/alias paths through
+evaluation, native lowering and serialization, correcting the pre-existing AOT
+namespace collision exposed by this work. Internal node layout gains a shared field.
+
+Five-fork, three-layout optimized confirmation gives unary callbacks 7.560356 to
+1.033154 ns/item (7.32x), and zero-argument callbacks 6.604806 to 1.061565 (6.22x).
+Broad 55-workload screening flags boxed-integer fallback and temporary-hash controls;
+the independent three-layout follow-up does not repeat a >3% disjoint-range flag.
+The boxed fallback aggregate remains +1.62% versus before. All costs are retained
+in RESULTS and results-aot-callback-specialization-macos-arm64.json.
+
+Fresh optimized Temurin 25.0.2 / JMH 1.37 comparisons put direct unary/zero-argument
+float loops at 1.28x/1.43x Java time and parameter-callback loops at 1.96x/2.07x.
+These are whole-kernel measurements, not isolated call latency. Before is merged
+feature/performance commit 892d9c93bd, not pure develop. Release passes 21 fixtures,
+6,267 assertions and 391 qmods, with eight Linux RSS skips; 1,701 timed jobs / 5,103 windows
+are independently replayed. No general Java parity or performance ceiling.
+
+Next test removal of the redundant exception check after an actually inlined,
+proven-nothrow known callback summary with no cleanup or guarded fallback. The
+complex loop-callback case still costs about 149 ns/item and needs separate analysis.

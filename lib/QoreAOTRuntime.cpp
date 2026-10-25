@@ -4251,8 +4251,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (fe) {
                         QoreFunction* f = fe->getFunction();
                         if (f) {
-                            ctx->exprs[i] = toBitsNB(QoreValue(
-                                new LocalFunctionCallReferenceNode(&loc_builtin, f)));
+                            ctx->exprs[i] = toBitsNB(QoreValue(fe->makeCallReference(&loc_builtin)));
                             continue;
                         }
                     }

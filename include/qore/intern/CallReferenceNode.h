@@ -34,6 +34,7 @@
 #define _QORE_INTERN_FUNCTIONREFERENCENODE_H
 
 #include <string>
+#include <memory>
 
 class LocalFunctionCallReferenceNode;
 class FunctionCallReferenceNode;
@@ -282,7 +283,11 @@ public:
 //! a call reference to a user function from within the same QoreProgram object
 class LocalFunctionCallReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
-    DLLLOCAL LocalFunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf);
+    DLLLOCAL LocalFunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf,
+        std::shared_ptr<const std::string> n_function_path = {});
+
+    //! The resolved namespace/alias path, retained for AOT serialization; global unaliased functions use their name.
+    DLLLOCAL const char* getFunctionPath() const;
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
 
@@ -298,10 +303,12 @@ public:
 
 protected:
     const QoreFunction* uf;
+    //! Immutable binding identity, shared by evaluated references so it does not borrow a namespace's lifetime.
+    std::shared_ptr<const std::string> function_path;
 
     // constructor for subclasses
     DLLLOCAL LocalFunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf,
-            bool n_needs_eval);
+            bool n_needs_eval, std::shared_ptr<const std::string> n_function_path = {});
 
     DLLLOCAL virtual QoreValue evalImpl(bool &needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool &needs_deref, ExceptionSink* xsink) const;
@@ -311,7 +318,7 @@ protected:
 class FunctionCallReferenceNode : public LocalFunctionCallReferenceNode {
 public:
     DLLLOCAL FunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf,
-        QoreProgram* n_pgm);
+        QoreProgram* n_pgm, std::shared_ptr<const std::string> n_function_path = {});
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
 

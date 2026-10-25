@@ -162,6 +162,20 @@ public:
     const BatchCalleeInfo* getBatchCallee(
         const AbstractQoreFunctionVariant* variant) const;
 
+    //! Find literal function references and immutable entry-initialized local aliases.
+    //! Returns false only on cancellation; unknown or mutable values are omitted.
+    static bool collectKnownCallReferenceValues(const QoreIRFunction& func,
+        const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& callees,
+        std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>& result,
+        const std::unordered_map<std::string, const AbstractQoreFunctionVariant*>* paths = nullptr,
+        const std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>* definitions = nullptr);
+
+    //! Bind a callback parameter only in its separately compiled private fast entry.
+    void setKnownCallbackParameter(const void* local, const AbstractQoreFunctionVariant* target) {
+        known_callback_parameter = local;
+        known_callback_target = target;
+    }
+
     //! Attach a uniform boxed-argument adapter to an eligible opaque AOT function reference.
     void emitFunctionRefNativeEntry(llvm::Value* ref, const QoreIRInstruction* inst,
         llvm::Module& module);
@@ -796,6 +810,9 @@ private:
     std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>
         known_function_call_refs;
     std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*> function_call_ref_definitions;
+    std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*> known_callback_arguments;
+    const void* known_callback_parameter = nullptr;
+    const AbstractQoreFunctionVariant* known_callback_target = nullptr;
     // Native scalar captures cached at creation for entry-assigned stored
     // closures whose captured parameters cannot be modified by the owner.
     std::unordered_map<uint32_t, std::vector<llvm::AllocaInst*>>

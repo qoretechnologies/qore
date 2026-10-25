@@ -3426,7 +3426,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_function_call_ref_aot(const char* f
 
     RuntimeConfig& rc = rc_get_current_ref();
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : pgm;
-    return toBits(QoreValue(new FunctionCallReferenceNode(&loc_builtin, func, call_pgm)));
+    return toBits(QoreValue(fe->makeRuntimeCallReference(&loc_builtin, call_pgm)));
 }
 
 extern "C" DLLEXPORT void qore_rt_bind_function_call_ref_native(uint64_t ref_bits,
