@@ -238,6 +238,8 @@
     private locals after local promotion, enabling native direct and typed callback paths for eligible functions.
     AOT calls through known same-program function references can use native floating-point arguments established
     by local promotion, avoiding redundant boxing and dynamic dispatch while retaining guards for optional values.
+    Monolithic AOT modules can specialize eligible internal floating-point callback and direct calls using the
+    same bounded private entries as standalone executables, retaining ordinary calls for unsupported targets.
     Standalone AOT can also specialize bounded same-Program function calls for proven immutable floating-point
     callback arguments, retaining ordinary entries for dynamic calls. Qualified function references keep their
     namespace and alias identity in AOT executables and modules, including serialized defaults and initializers.

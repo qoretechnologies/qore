@@ -4748,3 +4748,23 @@ Merged the deferred-handler local-slot fix onto companion guard checkpoint 0fae3
 Optimized Release -O3 -DNDEBUG, allocation tracking off: all-target build and all 391 qmods verified. Five Release fixtures pass 12 cases/1300 assertions; four Debug fixtures pass 11 cases/378 assertions, with no skips. Handler execution covers AST, IR, JIT, tiered and source-stripped AOT modules, with related block-exit/rethrow checks and companion-call controls. All 1110 IR/AOT reference checks pass. Debug cleanup restores all 391 Release module aliases and hashes. No new timing, full-suite, module-python, module-xml or sanitizer result is claimed; preceding companion measurements remain a 0fae3afe8d source snapshot.
 
 [Audit](../bench/runtime-comparison/audit-merge-5a78.md); [evidence](../bench/runtime-comparison/results-merge-5a78.json).
+
+## Native call specialization inside qmod modules (2026-10-25)
+
+Eligible monolithic AOT modules now use the same bounded known-callback and direct RuntimeConfig entry discovery as standalone executables. Only a complete module-owned callee map participates; shared maps, per-file filters and metadata-only passes retain their existing paths. The control is QORE_DISABLE_AOT_MODULE_CALL_SPECIALIZATION. Existing admission budgets, same-Program/effect/type proofs, ordinary entries, context, cancellation and stack handling remain. Public runtime APIs and serialization do not change.
+
+Before is optimized feature/performance 620d490386 after the private-reference correctness fix, not pure develop. Actual stripped qmods wrap the same 52 kernels in three modules; timed work occurs inside the native module. Release -O3 -DNDEBUG, allocation tracking off, qcc -O3/LLVM 22.1.8, Apple M4 Pro/macOS 27.0.1. Three default/reverse/shuffled layouts, randomized paired runs, 4096 items, one warmup and three 150ms samples per fork; 3 screening forks and 5 confirmation forks. Whole-kernel ns/item, not isolated call latency.
+
+|!Confirmed workload|!Before ns/item|!Candidate ns/item|!Speedup
+|float:direct_loop_float_return|12.861214|5.966316|2.16x
+|float:callback_loop_float_return|236.736636|5.230739|45.26x
+|float:callback_local_float_return|223.468245|0.879878|253.98x
+|float:callback_local_float_result|141.908820|0.832370|170.49x
+
+All four targets improve in every layout in both rounds. No >3% disjoint-fork-range regression flag occurs. Costs remain: integer callback control 214.623 to 217.433 ns/item (+1.31%), boxed-float fallback 35.165 to 35.725 (+1.59%), boxed-int fallback 33.973 to 34.158 (+0.54%). The 52-workload screen also has direct-local-float-result +2.70% (not confirmed); mixed CSV +1.51%, object orders -0.89%, callback pipeline +0.29%, text index +0.01% (screen only). These controls do not establish general application speedup.
+
+Short invocation controls (counts 1 and 16, 3 forks/3 layouts) have no regression flags: at 1, callbacks improve 21-28% and direct loop calls 1.72% in aggregate; the latter does not meet a 2% all-layout threshold. At 16, direct loop calls improve 17.57% and callbacks 78-84%. These measurements include fixed harness/dispatch/reference-construction costs and are not isolated call latency. In the default layout, the float module grows 184376 to 185544 bytes; micro 475720 and mixed 180424 bytes stay unchanged. This is not a whole-library code-size claim.
+
+Release passes 23 QUnit cases/1049 assertions plus the non-QUnit batch-callee fixture; Debug 15 cases/397 assertions. All 391 Release qmods, 1110 IR/AOT and 780 additional module checks pass, with no skips or source fallback. Prepared before/candidate artifacts pass 6240 source/native references; actual loaded qmods and frozen runtimes are verified. All 1290 jobs/3870 windows are independently replayed. No owned build/test/profile overlaps timing; this shared host has no affinity, thermal or frequency control. No fresh Java/develop comparison or global performance ceiling. Next investigate remaining integer/dynamic module callback overhead and reference construction before revisiting cold-path register preservation.
+
+[Audit](../bench/runtime-comparison/audit-aot-module-call-specialization.md); [evidence](../bench/runtime-comparison/results-aot-module-call-specialization-macos-arm64.json).

@@ -18984,10 +18984,27 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         aot_batch_callee_map = &local_aot_batch_callee_map;
     }
     if (!metadata_only && owns_aot_batch_callee_map) {
+        // A complete module-owned map describes bodies emitted into this image.  Per-file
+        // and shared maps can include bodies emitted elsewhere, so leave those unchanged.
+        AOTCallbackSpecializationCandidates callback_candidates;
+        auto* callback_candidates_ptr = compile_module && *compile_module
+            && !compile_file && !compile_files
+            && !q_env_is_set("QORE_DISABLE_AOT_MODULE_CALL_SPECIALIZATION")
+            && !(q_env_is_set("QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION")
+                && q_env_is_set("QORE_DISABLE_AOT_DIRECT_RUNTIME_CONFIG"))
+            ? &callback_candidates : nullptr;
         std::set<std::string> declared_fast_keys;
         if (!declareAOTBatchFastEntries(ns, pgm, ctx, module, local_aot_batch_callee_map,
-                declared_fast_keys, compile_module, compile_file, keep_modules, compile_files)) {
+                declared_fast_keys, compile_module, compile_file, keep_modules, compile_files,
+                nullptr, callback_candidates_ptr)) {
             setAOTCompileFatal(fatal_error, "namespace", "<batch-callee-fast-entry>",
+                "declaration", "cancelled");
+            return;
+        }
+        if (callback_candidates_ptr
+                && (!declareAOTCallbackFastEntries(module, callback_candidates, local_aot_batch_callee_map)
+                    || !declareAOTDirectRuntimeEntries(module, callback_candidates, local_aot_batch_callee_map))) {
+            setAOTCompileFatal(fatal_error, "namespace", "<module-call-specialization>",
                 "declaration", "cancelled");
             return;
         }
