@@ -3118,7 +3118,9 @@ while (*binary chunk = input.read(65536)) {
         (@ref DataProvider::DescribedDataField "DescribedDataField")
       - added type graph descriptions, which describe each type with fields once and refer to it by key
         (@ref DataProvider::AbstractDataProviderType::getInfoGraph() "AbstractDataProviderType::getInfoGraph()",
-        @ref DataProvider::DataTypeGraphBuilder "DataTypeGraphBuilder")
+        @ref DataProvider::DataTypeGraphBuilder "DataTypeGraphBuilder"); a type description that refers to the types
+        of a type table can give the table, so that it is restored alone
+        (@ref DataProvider::DataTypeInfo::type_graph "DataTypeInfo::type_graph")
       - action option generation returns an empty hash for operations without input fields
       - fixed short-description derivation corrupting words and literal braces when help text contains quoted parameter names or numbers
       - added DPQL (Data Provider Query Language) — a human/AI-readable query syntax with a tokenizer,

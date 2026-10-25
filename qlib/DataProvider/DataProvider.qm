@@ -1571,7 +1571,9 @@ fetch
       document's components, so that it grows with the number of distinct types; the complete description of
       @ref DataProvider::AbstractDataProviderType::getInfo() "AbstractDataProviderType::getInfo()" describes a type
       again at every path to it, which is many millions of times for the record types of large REST schemas, such as
-      NetSuite's, that refer to each other
+      NetSuite's, that refer to each other; a type description that refers to the types of a type table can give
+      the table (@ref DataProvider::DataTypeInfo::type_graph "DataTypeInfo::type_graph"), so that
+      @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()" restores it alone
     - @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()" restores each type of a
       description once: a type described again, or a recursion marker referring to it, is the type already restored,
       so a recursive type is restored as a cycle, types that the description shares are shared, and restoring takes

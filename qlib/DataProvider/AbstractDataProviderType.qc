@@ -321,6 +321,17 @@ public hashdecl DataTypeInfo {
         @since DataProvider 3.11
     */
     *string type_ref;
+
+    #! The type table that the references in this description refer to, if this is the root of such a description
+    /** A description of a type of a type graph can travel without its graph description: a data provider index stores
+        the option types of an app as references into one type table of the app, and its readers give the table to
+        each option type description that refers to it, so that
+        @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()" restores the type from
+        the description alone
+
+        @since DataProvider 3.11
+    */
+    *hash<string, hash<DataTypeInfo>> type_graph;
 }
 
 #! A type graph description, in which each type with fields and each union type is described once
@@ -1535,7 +1546,8 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
 
     #! Returns an appropriate object for the given type description
     /** @param info the description of the type, as returned by getInfo(); a reference in it
-        (@ref DataProvider::DataTypeInfo::type_ref "type_ref") is only resolved by getFromGraph()
+        (@ref DataProvider::DataTypeInfo::type_ref "type_ref") is resolved in the type table that the description
+        gives in @ref DataProvider::DataTypeInfo::type_graph "type_graph", or by getFromGraph()
 
         @return the type registered with the description's \c path in this process, if any, otherwise a type
         restored from the structure in the description
@@ -1572,7 +1584,7 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
     static AbstractDataProviderType get(hash<DataTypeInfo> info) {
         bool toplevel = !rctx;
         if (toplevel) {
-            rctx = <TypeRestoreState>{};
+            rctx = <TypeRestoreState>{"graph": info.type_graph};
         }
         on_exit if (toplevel) {
             remove rctx;
