@@ -76,6 +76,7 @@ public class DataTypeRoundTripTest inherits QUnit::Test {
         addTestCase("an empty constraints hash is no constraints", \emptyConstraintsTest());
         addTestCase("a type graph description is restored with the same description", \graphRoundTripTest());
         addTestCase("a restored field gives the example that its description gives", \describedExampleTest());
+        addTestCase("a union that its alternatives refer to is restored once", \recursiveUnionTest());
         addTestCase("a restored union of discriminated alternatives accepts what the original accepts",
             \discriminatedUnionTest());
 
@@ -311,6 +312,28 @@ public class DataTypeRoundTripTest inherits QUnit::Test {
             assertEq("function", alternatives[0].getFields().type.getExampleValue());
             assertEq("connector", alternatives[1].getFields().type.getExampleValue());
             assertEq(conversation.getFields().tools.getExampleValue(), tools.getExampleValue());
+        }
+    }
+
+    recursiveUnionTest() {
+        # a filter is a group of filters or a condition, as Mistral's chat event search filters are
+        HashDataType group("RoundTripFilterGroup");
+        HashDataType condition("RoundTripFilterCondition");
+        condition.addField(new QoreDataField("field", NOTHING, AbstractDataProviderTypeMap."string"));
+        QoreUnionDataType filter((group, condition));
+        group.addField(new QoreDataField({"name": "AND", "type": new ListDataType(filter, True)}));
+        group.addField(new QoreDataField({"name": "OR", "type": new ListDataType(filter, True)}));
+        HashDataType payload("RoundTripFilterPayload");
+        payload.addField(new QoreDataField({"name": "filters", "type": filter}));
+        checkRoundTrip("a union that its alternatives refer to", payload);
+
+        foreach AbstractDataProviderType restored in ((AbstractDataProviderType::get(payload.getInfo()),
+                AbstractDataProviderType::getFromGraph(payload.getInfoGraph()))) {
+            AbstractDataProviderType restored_filter = restored.getFields().filters.getType();
+            AbstractDataProviderType restored_group = cast<QoreUnionDataType>(restored_filter).getUnionTypes()[0];
+            assertEq(restored_filter, restored_group.getFields().AND.getType().getElementType(),
+                "the union that an alternative refers to is the union");
+            assertEq(restored_filter, restored_group.getFields().OR.getType().getElementType());
         }
     }
 }

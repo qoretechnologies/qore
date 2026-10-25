@@ -1610,8 +1610,10 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
     #! Restores a type from its description in the restoration in progress, once per unique key
     private static AbstractDataProviderType getRestored(hash<DataTypeInfo> info) {
         *string key = info.unique_key.val() ? info.unique_key : NOTHING;
-        # a key is only reused with the same name, so that a description reusing keys for other types is not misread
-        if (key && (*AbstractDataProviderType t = rctx.types{key}) && t.getName() == info.name) {
+        # a key is only reused with the same name, so that a description reusing keys for other types is not misread;
+        # a type whose parts are being restored, which may not have its name yet, is the type its key refers to
+        if (key && (*AbstractDataProviderType t = rctx.types{key})
+                && (rctx.pending{key} || t.getName() == info.name)) {
             return t;
         }
         if (info.type_ref) {
@@ -1695,6 +1697,10 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
             done = True;
             if (key) {
                 rctx.types{key} = rv;
+                rctx.pending{key} = True;
+            }
+            on_exit if (key) {
+                remove rctx.pending{key};
             }
             rv.setUnionTypes(map AbstractDataProviderType::get($1), info.union_types);
             return rv;
@@ -1717,6 +1723,10 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
             done = True;
             if (key) {
                 rctx.types{key} = rv;
+                rctx.pending{key} = True;
+            }
+            on_exit if (key) {
+                remove rctx.pending{key};
             }
             rv.setFields(AbstractDataProviderType::getDataFields(info.fields ?? {}));
             AbstractDataProviderType::setHashDataTypeInfo(rv, info);
@@ -1754,6 +1764,10 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
             done = True;
             if (key) {
                 rctx.types{key} = rv;
+                rctx.pending{key} = True;
+            }
+            on_exit if (key) {
+                remove rctx.pending{key};
             }
             rv.updateElementType(AbstractDataProviderType::get(info.element_type), True);
             return rv;
@@ -2082,6 +2096,11 @@ hashdecl TypeRestoreState {
     hash<string, AbstractDataProviderType> types = {};
     #! The type table of the type graph description being restored, if any
     *hash<string, hash<DataTypeInfo>> graph;
+    #! The unique keys of the types known by their keys while what they are made of is restored
+    /** Such a type, a union in particular, whose name is made of the names of its alternatives, does not have its
+        name yet
+    */
+    hash<string, bool> pending = {};
 }
 
 #! The type graph being described in this thread, if any
