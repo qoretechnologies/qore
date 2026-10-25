@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+
+sub expect(auto expected, auto actual) {
+    if (type(expected) != type(actual) || expected != actual) {
+        throw "INTEGER-CALLBACK", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+int sub bodyIntPlus(int value) { return value + 3; }
+int sub bodyIntBranch(int value) { return value < 0 ? value - 7 : value + 11; }
+int sub bodyIntIdentity(int value) { return value; }
+int sub bodyIntResult() { return 1152921504606846979; }
+int sub bodyIntDivide(int value) { return 100 / value; }
+int sub bodyIntWide(int left, int right) { return left + right; }
+int sub bodyIntWait(int value) {
+    for (int i = 0; i < 100000000; ++i) { value += 1; }
+    return value;
+}
+int sub bodyIntUnary(int value, code<int(int)> callback) { return callback(value); }
+int sub bodyIntZero(code<int()> callback) { return callback(); }
+int sub bodyIntDivision(int value, code<int(int)> callback) { return callback(value); }
+int sub bodyIntWaiting(int value, code<int(int)> callback) { return callback(value); }
+int sub bodyIntAuto(auto value, code<int(int)> callback) { return callback(value); }
+int sub bodyIntTwo(int left, int right, code<int(int, int)> callback) { return callback(left, right); }
+int sub bodyIntKnownPlus(int value) { return bodyIntUnary(value, \bodyIntPlus()); }
+int sub bodyIntKnownBranch(int value) { return bodyIntUnary(value, \bodyIntBranch()); }
+int sub bodyIntKnownIdentity(int value) { return bodyIntUnary(value, \bodyIntIdentity()); }
+int sub bodyIntKnownResult() { return bodyIntZero(\bodyIntResult()); }
+int sub bodyIntKnownDivide(int value) { return bodyIntDivision(value, \bodyIntDivide()); }
+int sub bodyIntKnownWait() { return bodyIntWaiting(1, \bodyIntWait()); }
+int sub bodyIntKnownAuto(auto value) { return bodyIntAuto(value, \bodyIntPlus()); }
+int sub bodyIntKnownWide(int left, int right) { return bodyIntTwo(left, right, \bodyIntWide()); }
+# Deliberately dynamic callback and result types exercise native integer boxing.
+auto sub bodyIntGeneric(auto value, auto callback) { return callback(value); }
+auto sub bodyIntGenericZero(auto callback) { return callback(); }
+auto sub bodyIntKnownGeneric(auto value) { return bodyIntGeneric(value, \bodyIntIdentity()); }
+auto sub bodyIntKnownGenericResult() { return bodyIntGenericZero(\bodyIntResult()); }
+code<int(int)> sub bodyIntEscape(code<int(int)> callback) { return callback; }
+int sub bodyIntReassigned(bool branch) {
+    code<int(int)> callback = \bodyIntPlus();
+    if (branch) { callback = \bodyIntBranch(); }
+    return bodyIntUnary(2, callback);
+}
+
+expect(3, bodyIntKnownPlus(0));
+expect(281474976710659, bodyIntKnownPlus(281474976710656));
+expect(-1152921504606846973, bodyIntKnownPlus(-1152921504606846976));
+expect(-9, bodyIntKnownBranch(-2));
+expect(13, bodyIntKnownBranch(2));
+expect(9223372036854775807, bodyIntKnownIdentity(9223372036854775807));
+expect(-9223372036854775807 - 1, bodyIntKnownIdentity(-9223372036854775807 - 1));
+expect(1152921504606846979, bodyIntKnownResult());
+expect(1152921504606846979, bodyIntKnownWide(1152921504606846976, 3));
+expect(9223372036854775807, bodyIntKnownGeneric(9223372036854775807));
+expect(-9223372036854775807 - 1, bodyIntKnownGeneric(-9223372036854775807 - 1));
+expect(1152921504606846979, bodyIntKnownGenericResult());
+expect(5, bodyIntReassigned(False));
+expect(13, bodyIntReassigned(True));
+code<int(int)> escaped = bodyIntEscape(\bodyIntPlus());
+expect(7, escaped(4));
+# Compare coercion/error output with the source AST oracle in the harness.
+foreach auto value in ((NOTHING, 40, 40.5, "40")) {
+    try { printf("coerce: %y\n", bodyIntKnownAuto(value)); }
+    catch (hash<ExceptionInfo> ex) { printf("coerce-error: %s\n", ex.err); }
+}
+expect(50, bodyIntKnownDivide(2));
+bool caught = False;
+try { bodyIntKnownDivide(0); }
+catch (hash<ExceptionInfo> ex) {
+    expect("DIVISION-BY-ZERO", ex.err);
+    bool target_frame = False;
+    foreach hash<CallStackInfo> frame in (ex.callstack) {
+        if (frame.function == "bodyIntDivide") { target_frame = True; }
+    }
+    expect(True, target_frame);
+    caught = True;
+}
+expect(True, caught);
+expect(50, bodyIntKnownDivide(2));
+for (int attempt = 0; attempt < 2; ++attempt) {
+    Counter done(1);
+    string outcome;
+    bool recovered = False;
+    int tid = background (sub () {
+        on_exit done.dec();
+        try { bodyIntKnownWait(); outcome = "not cancelled"; }
+        catch (hash<ExceptionInfo> ex) {
+            clear_thread_cancel();
+            outcome = ex.err;
+            recovered = bodyIntKnownDivide(2) == 50;
+        }
+    })();
+    bool observed = False;
+    int deadline = clock_get_monotonic_us() + 10000000;
+    while (!observed && clock_get_monotonic_us() < deadline) {
+        foreach hash<CallStackInfo> frame in (get_all_thread_call_stacks(){string(tid)} ?? ()) {
+            if (frame.function == "bodyIntWait") { observed = True; break; }
+        }
+        if (!observed) { usleep(1000); }
+    }
+    bool delivered = cancel_thread(tid, "integer callback specialization test");
+    if (done.waitForZero(60s)) {
+        printf("integer callback cancellation did not complete\n");
+        exit(1);
+    }
+    expect(True, observed);
+    expect(True, delivered);
+    expect("THREAD-CANCELLED", outcome);
+    expect(True, recovered);
+}
+printf("integer-callbacks: ok\n");

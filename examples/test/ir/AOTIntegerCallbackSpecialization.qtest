@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class IntegerCallbackSpecializationTest
+
+class IntegerCallbackSpecializationTest inherits QUnit::Test {
+    private {
+        string libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string behavior = get_script_dir() + "/AOTIntegerCallbackSpecialization.qr";
+    }
+    constructor() : Test("Known integer AOT callback arguments", "1.0", \ARGV) {
+        addTestCase("integer specializations preserve native values and runtime behavior", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private static write(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+    private string run(list<string> args, string module_path, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(prefix
+            + "QORE_MODULE_DIR=" + quote(module_path) + " LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " " + (map quote($1), args).join(" "));
+        assertEq(0, result.rc, result.out);
+        return result.out;
+    }
+    private checkEntries(string generated, bool enabled) {
+        int entries = 0;
+        bool waiting = False;
+        bool zero = False;
+        foreach string definition in (generated.split("\ndefine ")) {
+            string header = definition.split("\n")[0];
+            if (!header.contains("_cb")) { continue; }
+            ++entries;
+            waiting = waiting || header.contains("bodyIntWait");
+            zero = zero || header.contains("bodyIntResult");
+            assertFalse(header.contains("bodyIntWide"), "two-argument targets retain ordinary calls");
+        }
+        assertEq(enabled, entries > 0);
+        assertEq(enabled, waiting, "cancellation must exercise the specialized target");
+        assertEq(enabled, zero, "zero-argument target is selected");
+    }
+    private check() {
+        TmpDir dir("qore-integer-callback-");
+        mkdir(dir.path + "/source");
+        mkdir(dir.path + "/modules");
+        string tail = ":" + (ENV.QORE_MODULE_DIR ?? "");
+        string modules = dir.path + "/modules" + tail;
+        string expected = run((qore, "--exec-mode=ast", behavior), modules);
+        assertTrue(expected.contains("integer-callbacks: ok\n"));
+        string body = File::readTextFile(behavior);
+        body = body.substr(body.find("%modern") + strlen("%modern"));
+        int start = body.find("\nexpect(");
+        assertTrue(start >= 0);
+        string source = dir.path + "/source/IntegerCallbackModule.qm";
+        write(source, "%modern\nmodule IntegerCallbackModule { version = \"1.0\"; "
+            + "desc = \"Integer callback regression\"; author = \"Qore\"; license = \"MIT\"; }\n"
+            + "public namespace IntegerCallbackModule {\n" + body.substr(0, start)
+            + "\npublic sub run() {\n" + body.substr(start) + "\n}\n}\n");
+        string host = dir.path + "/host.qr";
+        write(host, "%modern\n%requires IntegerCallbackModule\nIntegerCallbackModule::run();\n");
+        assertEq(expected, run((qore, "--exec-mode=ir", host), dir.path + "/source" + tail));
+        foreach string prefix in (("", "QORE_DISABLE_AOT_INTEGER_CALLBACK_SPECIALIZATION=1 ",
+                "QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION=1 ",
+                "QORE_DISABLE_AOT_MODULE_CALL_SPECIALIZATION=1 ",
+                "QORE_DISABLE_AOT_FLOAT_BODY_FAST_PATHS=1 ", "QORE_AOT_EH=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                bool inspect = level == "-O0" && !prefix.contains("QORE_AOT_EH")
+                    && !prefix.contains("QCC_SPLIT_THRESHOLD");
+                bool enabled = !prefix.contains("QORE_DISABLE_AOT_INTEGER_CALLBACK_SPECIALIZATION")
+                    && !prefix.contains("QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION");
+                string executable = dir.path + "/behavior";
+                string generated = run((qcc, level, "--strip-source", "-o", executable, behavior),
+                    modules, prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
+                if (inspect) { checkEntries(generated, enabled); }
+                assertEq(expected, run((executable,), modules), prefix + level);
+                string artifact = dir.path + "/modules/IntegerCallbackModule.qmod";
+                generated = run((qcc, level, "--strip-source", "-m", "-o", artifact, source),
+                    dir.path + "/source" + tail, prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
+                if (inspect) {
+                    checkEntries(generated, enabled && !prefix.contains("QORE_DISABLE_AOT_MODULE_CALL_SPECIALIZATION"));
+                }
+                assertEq(expected, run((qore, "--exec-mode=ir", host), modules), prefix + level);
+            }
+        }
+    }
+}

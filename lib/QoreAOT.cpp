@@ -15950,15 +15950,19 @@ static bool declareAOTCallbackFastEntries(llvm::Module& module,
                     auto target = callees.find(ref->second);
                     const auto* target_uvb = ref->second->getUserVariantBase();
                     const LocalVar* local = sig->lv[index];
+                    bool integer_target = target != callees.end()
+                        && target->second.return_kind == BatchCalleeReturnKind::NativeInt;
                     if (target == callees.end() || !target_uvb || target_uvb->pgm != uvb->pgm
                             || !target->second.single_variant_function || target->second.preloaded_fast_entry
                             || !target->second.approach_b_eligible || !target->second.context_independent_fast_entry
                             || target->second.generic_specialized_fast_entry
                             // A context-independent body can use its ordinary native fast entry when
                             // no expression summary applies; that path retains the frame and exception check.
-                            || (!target->second.float_expression
+                            || (!integer_target && !target->second.float_expression
                                 && q_env_is_set("QORE_DISABLE_AOT_FLOAT_BODY_FAST_PATHS"))
-                            || target->second.return_kind != BatchCalleeReturnKind::NativeFloat
+                            || (integer_target
+                                ? q_env_is_set("QORE_DISABLE_AOT_INTEGER_CALLBACK_SPECIALIZATION")
+                                : target->second.return_kind != BatchCalleeReturnKind::NativeFloat)
                             || target->second.num_params > 1 || !local || local->closureUse() || local->isTopLevel()
                             || QoreTypeInfo::isReference(local->getTypeInfo()) || body->second->isAstVisibleLocal(local)
                             || index >= callee->second.param_kinds.size()
@@ -15966,7 +15970,8 @@ static bool declareAOTCallbackFastEntries(llvm::Module& module,
                         continue;
                     }
                     if (target->second.num_params && (target->second.param_kinds.size() != 1
-                            || target->second.param_kinds.front() != BatchCalleeParamKind::NativeFloat)) {
+                            || target->second.param_kinds.front() != (integer_target
+                                ? BatchCalleeParamKind::NativeInt : BatchCalleeParamKind::NativeFloat))) {
                         continue;
                     }
                     auto& specs = callee->second.callback_fast_entries;
@@ -16049,7 +16054,7 @@ static bool declareAOTCallbackFastEntries(llvm::Module& module,
                     // Keep the public/ordinary ABI intact. A bounded loop target can additionally
                     // receive the caller's live context through a private, non-null companion entry.
                     auto target_body = bodies.find(ref->second);
-                    if (!q_env_is_set("QORE_DISABLE_AOT_CALLBACK_RUNTIME_CONFIG")
+                    if (!integer_target && !q_env_is_set("QORE_DISABLE_AOT_CALLBACK_RUNTIME_CONFIG")
                             && target_body != bodies.end()) {
                         target->second.callback_runtime_config_entry =
                             declareAOTNativeRuntimeEntry(module, target->second, *target_body->second);
