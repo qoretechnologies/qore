@@ -12056,23 +12056,19 @@ public namespace CorruptQmodTest {
         # run dies with signal 9 and no diagnostic at all, which is the OS
         # enforcing its own rule rather than anything this case is about.
         # Re-signing restores a loadable file with the corruption intact, so
-        # what fails is the AOT metadata -- the path under test.
+        # what fails is the AOT metadata -- the path under test; see
+        # resignQmod() for why the file cannot simply be signed again in place.
         #
         # (That the OS kill leaves a Qore user with no diagnostic is a real gap,
         # but it belongs to the module loader, not to this regression: the
         # loader would have to validate the signature itself before dlopen to
         # turn it into an error.)
         if (PlatformOS == "Darwin") {
-            string sign_out = backquote(sprintf("codesign -f -s - %s 2>&1; echo RC=$?",
-                qmod_path));
-            if (sign_out.regex("RC=0")) {
-                assertFalse(sign_out.regex("RC=[1-9]"),
-                    "corrupt-qmod-regression: re-signed the corrupted module: " + sign_out);
-            } else {
-                testSkip("cannot re-sign a corrupted .qmod on this host, and macOS "
-                    "kills the loader on an invalid signature before Qore sees the "
-                    "module: " + sign_out);
+            if (!trim(backquote("command -v codesign 2>/dev/null || true"))) {
+                testSkip("cannot re-sign a corrupted .qmod without codesign, and macOS "
+                    "kills the loader on an invalid signature before Qore sees the module");
             }
+            resignQmod(qmod_path, "corrupt-qmod-regression");
         }
 
         # Load the corrupt .qmod with -l. Before the fix this process
@@ -12105,8 +12101,83 @@ public namespace CorruptQmodTest {
             "corrupt-qmod-regression: load returned promptly (elapsed=" + elapsed.format("u") + "us): " + out);
         assertFalse(out.regex("EXIT=124"),
             "corrupt-qmod-regression: process not killed by timeout: " + out);
+        assertFalse(out.regex("EXIT=137"),
+            "corrupt-qmod-regression: the loader read the module instead of being killed mapping it: " + out);
         assertTrue(out.regex("(MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)"),
             "corrupt-qmod-regression: saw module load error: " + out);
+    }
+
+    #! Signs a qcc-built .qmod again after its bytes were changed (macOS)
+    /** qcc appends its trailers -- the module dependency trailer and the optional-module trailer, which the loader
+        reads back from the end of the file -- after the code signature that the linker attached.  codesign refuses
+        a file with data after the signature that LC_CODE_SIGNATURE describes ("main executable failed strict
+        validation"), so the trailers are moved out of the way: the file is cut at the end of that signature data,
+        signed again, and the trailers are appended to the newly signed file, where the loader finds them at its end
+        as before.
+
+        A file that is not a thin 64-bit little-endian Mach-O with an LC_CODE_SIGNATURE load command fails the test:
+        qcc on macOS always produces one.
+    */
+    private resignQmod(string qmod_path, string label) {
+        # the size of a mach_header_64: magic, cputype, cpusubtype, filetype, ncmds, sizeofcmds, flags, reserved
+        int mach_header_64_size = 32;
+        # MH_MAGIC_64 and LC_CODE_SIGNATURE from <mach-o/loader.h>
+        int mh_magic_64 = 0xfeedfacf;
+        int lc_code_signature = 0x1d;
+        int file_size = hstat(qmod_path).size;
+        *int sig_end;
+        {
+            File f();
+            f.open2(qmod_path, O_RDONLY);
+            on_exit f.close();
+            assertEq(mh_magic_64, f.readu4LSB(), label + ": the module is a thin 64-bit little-endian Mach-O");
+            f.setPos(16);
+            int ncmds = f.readu4LSB();
+            int sizeofcmds = f.readu4LSB();
+            int pos = mach_header_64_size;
+            int cmds_end = mach_header_64_size + sizeofcmds;
+            for (int i = 0; i < ncmds; ++i) {
+                # every load command starts with its type and its size, which covers both
+                assertTrue(pos + 8 <= cmds_end, sprintf("%s: load command %d of %d lies within the %d bytes "
+                    "of load commands", label, i, ncmds, sizeofcmds));
+                f.setPos(pos);
+                int cmd = f.readu4LSB();
+                int cmdsize = f.readu4LSB();
+                assertTrue(cmdsize >= 8, sprintf("%s: load command %d has a valid size: %d", label, i, cmdsize));
+                if (cmd == lc_code_signature) {
+                    # linkedit_data_command: cmd, cmdsize, dataoff, datasize
+                    int dataoff = f.readu4LSB();
+                    int datasize = f.readu4LSB();
+                    sig_end = dataoff + datasize;
+                    break;
+                }
+                pos += cmdsize;
+            }
+        }
+        assertTrue(exists sig_end, label + ": the module has an LC_CODE_SIGNATURE load command");
+        assertTrue(sig_end <= file_size, sprintf("%s: the signature data ends within the file: %d > %d", label,
+            sig_end, file_size));
+
+        binary content = ReadOnlyFile::readBinaryFile(qmod_path);
+        binary trailers = content.substr(sig_end);
+        {
+            File f();
+            f.open2(qmod_path, O_WRONLY | O_TRUNC);
+            on_exit f.close();
+            f.write(content.substr(0, sig_end));
+        }
+        int rc;
+        string sign_out = backquote(sprintf("codesign -f -s - %s 2>&1", qmod_path), \rc);
+        assertEq(0, rc, label + ": re-signed the module without its trailers: " + sign_out);
+        if (trailers) {
+            File f();
+            f.open2(qmod_path, O_WRONLY | O_APPEND);
+            on_exit f.close();
+            f.write(trailers);
+        }
+        binary resigned = ReadOnlyFile::readBinaryFile(qmod_path);
+        assertEq(trailers, resigned.substr(resigned.size() - trailers.size()),
+            label + ": the trailers end the re-signed module as before");
     }
 
     #! Exceptions escaping catch blocks must unwind catch scopes correctly
