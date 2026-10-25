@@ -4556,3 +4556,38 @@ and cancellation-descriptor data and reducing named frame setup/teardown. Keep
 live stack/exception visibility, null fallback and every cancellation checkpoint.
 Consider extending the same private-context proof to direct calls. No global
 performance ceiling is established.
+
+
+## Shared private callback entry state (2026-10-25)
+
+Private same-Program native float loop companions now borrow one stack-owned
+six-pointer descriptor beside RuntimeConfig. It carries native location slots
+and live cancellation addresses; every stack check, atomic poll, frame and
+exception path remains. QORE_DISABLE_AOT_CALLBACK_ENTRY_STATE selects the
+previous companion ABI. Admission and limits are unchanged. Ordinary/public
+native ABIs, serialized metadata and IR/JIT execution are unchanged; internal
+compiler C++ layouts change.
+
+Optimized confirmation reduces loop callback time 8.439409 to 6.817269 ns/item,
+19.22% before/18.94% disabled, repeated in all layouts. Reverse-layout integer
+callback costs remain +3.65% to +5.71% in flagged comparisons. Broad closure
+calls retain +4.97% before/-0.33% disabled and two-read object loops +3.24%/-0.27%;
+mixed callback pipeline +0.74%/+0.46%. The target benefit is retained under the
+user-authorized broader workload tradeoff; all current and prior costs remain.
+No production-wide throughput gain is claimed.
+
+Fresh optimized Java ratios are 1.27x/1.47x for simple direct unary/result loops,
+1.63x/1.70x for callbacks, and 19.71x/4.20x for loop-containing direct/callback
+kernels. Whole-kernel results are not isolated call latency. Direct loops still
+use ordinary entries. Java parity remains open.
+
+Release passes 21 fixtures, 7754 assertions, 391 qmods and 1110 IR/AOT references,
+with eight Linux-only skips. Twenty-two standalone variants also verify 44
+interruptions after observing the target frame and successful recovery. All
+2277 jobs/6831 windows are independently replayed. See RESULTS.md and
+results-aot-callback-entry-state-macos-arm64.json for raw evidence and limits.
+
+Next investigate descriptor load redundancy and named frame setup/teardown,
+keeping asynchronous stack visibility, null fallback, exceptions and every
+cancellation checkpoint. Extend the proven private-context path to direct
+calls. No global performance ceiling is established.

@@ -71,7 +71,7 @@ class CallbackBodyTargetTest inherits QUnit::Test {
                         }
                     }
                     assertEq(1, callers, "inspected native known caller");
-                    assertEq(selected ? 3 : 0, entries, "unary, zero-argument and throwing loop targets");
+                    assertEq(selected ? 4 : 0, entries, "unary, zero-argument, throwing and cancellable loop targets");
                 }
                 assertEq("callback-body-target: ok\n", run((executable,)), prefix + level);
             }

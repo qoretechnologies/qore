@@ -15953,6 +15953,11 @@ static bool declareAOTCallbackFastEntries(llvm::Module& module,
                             std::vector<llvm::Type*> params(type->param_begin(), type->param_end());
                             params.insert(params.begin() + target->second.num_params,
                                 llvm::PointerType::get(module.getContext(), 0));
+                            target->second.callback_entry_state = !q_env_is_set("QORE_DISABLE_AOT_CALLBACK_ENTRY_STATE");
+                            if (target->second.callback_entry_state) {
+                                params.insert(params.begin() + target->second.num_params + 1,
+                                    llvm::PointerType::get(module.getContext(), 0));
+                            }
                             target->second.callback_runtime_config_name = target->second.fast_name + "_runtime_config";
                             auto* companion = llvm::Function::Create(
                                 llvm::FunctionType::get(type->getReturnType(), params, false),
@@ -21207,7 +21212,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                     fast_return_type);
                             if (runtime_entry) {
                                 fast_fn->getArg(num_params)->setName("native_runtime_config");
-                                fast_lowerer.setNativeRuntimeConfig(fast_fn->getArg(num_params));
+                                llvm::Value* state = nullptr;
+                                if (callback_info->second.callback_entry_state) {
+                                    state = fast_fn->getArg(num_params + 1);
+                                    state->setName("native_entry_state");
+                                }
+                                fast_lowerer.setNativeRuntimeConfig(fast_fn->getArg(num_params), state);
                             }
                             if (callback_spec) {
                                 fast_lowerer.setKnownCallbackParameter(sig->lv[callback_spec->param_index],

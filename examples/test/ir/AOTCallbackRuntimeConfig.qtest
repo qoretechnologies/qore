@@ -31,6 +31,7 @@ class CallbackRuntimeConfigTest inherits QUnit::Test {
     private check() {
         TmpDir dir("qore-callback-runtime-config-");
         foreach string prefix in (("", "QORE_DISABLE_AOT_CALLBACK_RUNTIME_CONFIG=1 ",
+                "QORE_DISABLE_AOT_CALLBACK_ENTRY_STATE=1 ",
                 "QORE_CONTROL_AOT_NULL_CALLBACK_RUNTIME_CONFIG=1 ", "QORE_AOT_EH=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
@@ -38,7 +39,8 @@ class CallbackRuntimeConfigTest inherits QUnit::Test {
                 string generated = run((qcc, level, "--strip-source", "-o", executable, behavior),
                     prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
                 if (level == "-O0" && !prefix.contains("QCC_SPLIT_THRESHOLD")) {
-                    bool selected = !prefix.startsWith("QORE_DISABLE_");
+                    bool selected = !prefix.contains("QORE_DISABLE_AOT_CALLBACK_RUNTIME_CONFIG");
+                    bool shared_state = !prefix.contains("QORE_DISABLE_AOT_CALLBACK_ENTRY_STATE");
                     int companions = 0;
                     int callers = 0;
                     int ordinary = 0;
@@ -48,8 +50,10 @@ class CallbackRuntimeConfigTest inherits QUnit::Test {
                         if (header.contains("_runtime_config(")) {
                             ++companions;
                             assertTrue(body.contains("@qore_rt_check_stack_v2(ptr %xsink, ptr %native_runtime_config)"));
-                            assertTrue(body.contains("@qore_rt_get_native_entry_slots_v2"));
-                            assertTrue(body.contains("@qore_rt_get_cancel_poll_state_v1(ptr %native_runtime_config"));
+                            assertEq(!shared_state, body.contains("@qore_rt_get_native_entry_slots_v2"));
+                            assertEq(!shared_state,
+                                body.contains("@qore_rt_get_cancel_poll_state_v1(ptr %native_runtime_config"));
+                            assertEq(shared_state, header.contains("ptr %native_entry_state"));
                             assertTrue(body.contains("@qore_rt_check_cancel_v2"));
                             assertTrue(body.contains("load atomic"));
                             assertFalse(body.contains("@qore_rt_get_loop_runtime_config("));
@@ -68,7 +72,7 @@ class CallbackRuntimeConfigTest inherits QUnit::Test {
                             assertTrue(body.contains("@qore_rt_pop_native_call_frame"));
                         }
                     }
-                    assertEq(selected ? 3 : 0, companions);
+                    assertEq(selected ? 4 : 0, companions);
                     assertEq(1, ordinary);
                     assertEq(1, callers);
                 }

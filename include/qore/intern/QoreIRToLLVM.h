@@ -235,8 +235,10 @@ public:
 
     //! Forward a non-null, borrowed same-thread context to a private native callback target.
     //! @param runtime_config live invocation-owned view; the caller retains the ordinary entry on null
-    void setNativeRuntimeConfig(llvm::Value* runtime_config) {
+    //! @param entry_state optional borrowed native slots and cancellation addresses, never their live values
+    void setNativeRuntimeConfig(llvm::Value* runtime_config, llvm::Value* entry_state = nullptr) {
         native_runtime_config = runtime_config;
+        native_entry_state = entry_state;
     }
 
     //! Set invocation arguments for a separately proven pure, single-member scalar body.
@@ -365,6 +367,11 @@ private:
     llvm::Value* native_runtime_config = nullptr;
     // Nullable caller-owned view acquired once for guarded companion calls.
     llvm::Value* native_call_runtime_config = nullptr;
+    // Private six-pointer descriptor: thread data, location/statement slots,
+    // then QoreCancelPollStateV1 addresses. Borrowed only within this invocation.
+    llvm::Value* native_entry_state = nullptr;
+    llvm::Value* native_call_entry_state = nullptr;
+    llvm::Instruction* native_entry_slots_anchor = nullptr;
 
     // Optional live view for cancellation; null at runtime retains the legacy
     // teardown behavior. Distinct from the non-null callback ABI's context.
@@ -1658,6 +1665,7 @@ private:
     int32_t getCallDirectExprSlot(const QoreIRCallDirectInstruction& call);
     //! Creates the storage of the frames of the native calls of the function being lowered, once
     void ensureNativeCallFrameStorage(llvm::Module& module, llvm::Function* llvm_func);
+    llvm::Value* getNativeCallEntryState(llvm::Module& module, llvm::Function* llvm_func, llvm::Value* rc);
 
     //! The storage of the frames of the native calls of the function being lowered, created by the first one
     /** One is enough: a native call's frame is popped before the function makes another call. */

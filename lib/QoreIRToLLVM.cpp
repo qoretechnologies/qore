@@ -11477,6 +11477,35 @@ int32_t QoreIRToLLVM::getCallDirectExprSlot(const QoreIRCallDirectInstruction& c
     return const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
 }
 
+llvm::Value* QoreIRToLLVM::getNativeCallEntryState(llvm::Module& module, llvm::Function* llvm_func,
+        llvm::Value* rc) {
+    if (native_entry_state) {
+        return native_entry_state;
+    }
+    if (!native_call_entry_state) {
+        // Slot addresses and cancellation descriptor addresses stay valid for
+        // this same-thread invocation. The callee still reads live values at
+        // every checkpoint and restores locations through the existing frame.
+        assert(native_entry_slots_anchor);
+        auto* state_type = llvm::ArrayType::get(ptr_type, 6);
+        llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+        native_call_entry_state = ab.CreateAlloca(state_type, nullptr, "callback_entry_state");
+        llvm::IRBuilder<> eb(native_entry_slots_anchor->getParent(),
+            std::next(native_entry_slots_anchor->getIterator()));
+        eb.CreateStore(native_call_thread_data,
+            eb.CreateConstInBoundsGEP2_32(state_type, native_call_entry_state, 0, 0));
+        eb.CreateStore(loc_cache_ptr,
+            eb.CreateConstInBoundsGEP2_32(state_type, native_call_entry_state, 0, 1));
+        eb.CreateStore(stmt_cache_ptr,
+            eb.CreateConstInBoundsGEP2_32(state_type, native_call_entry_state, 0, 2));
+        auto acquire = module.getOrInsertFunction("qore_rt_get_cancel_poll_state_v1",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+        eb.CreateCall(acquire, {rc,
+            eb.CreateConstInBoundsGEP2_32(state_type, native_call_entry_state, 0, 3)});
+    }
+    return native_call_entry_state;
+}
+
 void QoreIRToLLVM::ensureNativeCallFrameStorage(llvm::Module& module, llvm::Function* llvm_func) {
     if (native_call_frame_storage) {
         return;
@@ -11829,21 +11858,32 @@ void QoreIRToLLVM::emitCancellationCheck(llvm::Module& module, llvm::Function* l
                 loop_runtime_config = eb.CreateCall(acquire, {}, "loop_runtime_config");
             }
             if (!q_env_is_set("QORE_DISABLE_LLVM_INLINE_CANCEL_POLL")) {
-                // Describe QoreCancelPollStateV1 using target pointer sizes.
-                // Initialize/read the descriptor after context acquisition so
-                // both calls dominate every generated checkpoint and handler.
-                auto* state_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, ptr_type});
-                llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
-                auto* state = ab.CreateAlloca(state_type, nullptr, "cancel_poll_state");
-                auto acquire_state = module.getOrInsertFunction("qore_rt_get_cancel_poll_state_v1",
-                    llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
-                eb.CreateCall(acquire_state, {loop_runtime_config, state});
-                loop_cancel_deferral = eb.CreateLoad(ptr_type,
-                    eb.CreateStructGEP(state_type, state, 0), "cancel_deferral_ptr");
-                loop_cancel_requested = eb.CreateLoad(ptr_type,
-                    eb.CreateStructGEP(state_type, state, 1), "cancel_requested_ptr");
-                loop_program_interrupts = eb.CreateLoad(ptr_type,
-                    eb.CreateStructGEP(state_type, state, 2), "program_interrupts_ptr");
+                if (native_entry_state) {
+                    auto* state_type = llvm::ArrayType::get(ptr_type, 6);
+                    auto load_state = [&](unsigned i, const char* name) -> llvm::Value* {
+                        return eb.CreateLoad(ptr_type,
+                            eb.CreateConstInBoundsGEP2_32(state_type, native_entry_state, 0, i), name);
+                    };
+                    loop_cancel_deferral = load_state(3, "cancel_deferral_ptr");
+                    loop_cancel_requested = load_state(4, "cancel_requested_ptr");
+                    loop_program_interrupts = load_state(5, "program_interrupts_ptr");
+                } else {
+                    // Describe QoreCancelPollStateV1 using target pointer sizes.
+                    // Initialize/read the descriptor after context acquisition so
+                    // both calls dominate every generated checkpoint and handler.
+                    auto* state_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, ptr_type});
+                    llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+                    auto* state = ab.CreateAlloca(state_type, nullptr, "cancel_poll_state");
+                    auto acquire_state = module.getOrInsertFunction("qore_rt_get_cancel_poll_state_v1",
+                        llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+                    eb.CreateCall(acquire_state, {loop_runtime_config, state});
+                    loop_cancel_deferral = eb.CreateLoad(ptr_type,
+                        eb.CreateStructGEP(state_type, state, 0), "cancel_deferral_ptr");
+                    loop_cancel_requested = eb.CreateLoad(ptr_type,
+                        eb.CreateStructGEP(state_type, state, 1), "cancel_requested_ptr");
+                    loop_program_interrupts = eb.CreateLoad(ptr_type,
+                        eb.CreateStructGEP(state_type, state, 2), "program_interrupts_ptr");
+                }
             }
         }
         auto check = module.getOrInsertFunction("qore_rt_check_cancel_v2",
@@ -13126,6 +13166,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_call_target_contexts.clear();
     fast_runtime_config = receiver_runtime_config;
     native_call_runtime_config = nullptr;
+    native_call_entry_state = nullptr;
+    native_entry_slots_anchor = nullptr;
     loop_runtime_config = nullptr;
     loop_cancel_deferral = nullptr;
     loop_cancel_requested = nullptr;
@@ -13468,28 +13510,40 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // the thread's runtime location slots and its data for the frames of native calls, got with one call
     // (QoreNativeEntrySlots)
     {
-        llvm::Type* slots_type = llvm::ArrayType::get(ptr_type, 3);
-        llvm::AllocaInst* slots;
-        {
-            llvm::BasicBlock& entry = llvm_func->getEntryBlock();
-            llvm::IRBuilder<> ab(&entry, entry.getFirstInsertionPt());
-            slots = ab.CreateAlloca(slots_type, nullptr, "native_entry_slots");
-        }
-        llvm::Value* explicit_rc = native_runtime_config ? native_runtime_config
-            : dynamic_closure_runtime_config ? dynamic_closure_runtime_config : receiver_runtime_config;
-        if (explicit_rc) {
-            builder->CreateCall(module.getOrInsertFunction("qore_rt_get_native_entry_slots_v2",
-                llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false)), {slots, explicit_rc});
+        if (native_entry_state) {
+            auto* state_type = llvm::ArrayType::get(ptr_type, 6);
+            auto load_state = [&](unsigned i, const char* name) -> llvm::Value* {
+                return builder->CreateLoad(ptr_type,
+                    builder->CreateConstInBoundsGEP2_32(state_type, native_entry_state, 0, i), name);
+            };
+            native_call_thread_data = load_state(0, "thread_data");
+            loc_cache_ptr = load_state(1, "loc_ptr");
+            stmt_cache_ptr = load_state(2, "stmt_ptr");
         } else {
-            builder->CreateCall(module.getOrInsertFunction("qore_rt_get_native_entry_slots",
-                llvm::FunctionType::get(void_type, {ptr_type}, false)), {slots});
+            llvm::Type* slots_type = llvm::ArrayType::get(ptr_type, 3);
+            llvm::AllocaInst* slots;
+            {
+                llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+                llvm::IRBuilder<> ab(&entry, entry.getFirstInsertionPt());
+                slots = ab.CreateAlloca(slots_type, nullptr, "native_entry_slots");
+            }
+            llvm::Value* explicit_rc = native_runtime_config ? native_runtime_config
+                : dynamic_closure_runtime_config ? dynamic_closure_runtime_config : receiver_runtime_config;
+            if (explicit_rc) {
+                builder->CreateCall(module.getOrInsertFunction("qore_rt_get_native_entry_slots_v2",
+                    llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false)), {slots, explicit_rc});
+            } else {
+                builder->CreateCall(module.getOrInsertFunction("qore_rt_get_native_entry_slots",
+                    llvm::FunctionType::get(void_type, {ptr_type}, false)), {slots});
+            }
+            auto load_slot = [&](unsigned i, const char* name) -> llvm::Value* {
+                return builder->CreateLoad(ptr_type, builder->CreateConstInBoundsGEP2_32(slots_type, slots, 0, i), name);
+            };
+            native_call_thread_data = load_slot(0, "thread_data");
+            loc_cache_ptr = load_slot(1, "loc_ptr");
+            stmt_cache_ptr = load_slot(2, "stmt_ptr");
         }
-        auto load_slot = [&](unsigned i, const char* name) -> llvm::Value* {
-            return builder->CreateLoad(ptr_type, builder->CreateConstInBoundsGEP2_32(slots_type, slots, 0, i), name);
-        };
-        native_call_thread_data = load_slot(0, "thread_data");
-        loc_cache_ptr = load_slot(1, "loc_ptr");
-        stmt_cache_ptr = load_slot(2, "stmt_ptr");
+        native_entry_slots_anchor = &builder->GetInsertBlock()->back();
     }
 
     // Compute remaining use counts for each register and identify registers
@@ -28194,6 +28248,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 }
                                 std::vector<llvm::Value*> runtime_args(call_args);
                                 runtime_args.insert(runtime_args.begin() + callee->second.num_params, rc);
+                                if (callee->second.callback_entry_state) {
+                                    runtime_args.insert(runtime_args.begin() + callee->second.num_params + 1,
+                                        getNativeCallEntryState(module, llvm_func, rc));
+                                }
                                 if (native_runtime_config) {
                                     fast_result = builder->CreateCall(runtime_entry, runtime_args,
                                         "known_callref_rc_result");

@@ -240,6 +240,8 @@
     argument cleanup, guarded fallback, boxed result or runtime-local reload is needed.
     Known same-Program float callbacks can also use native fast entries for context-independent bodies with loops,
     retaining call frames, exception checks, stack checks and cancellation polling.
+    Eligible AOT callback loop targets can reuse caller-owned native entry slots and cancellation flag addresses,
+    reducing per-call setup while retaining live polls, stack checks, exceptions and call frames.
     Eligible AOT callback loop targets can now receive a live RuntimeConfig through private native entries,
     reducing repeated context lookup while preserving ordinary-entry fallback and runtime checks.
 
