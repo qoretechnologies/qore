@@ -16,6 +16,7 @@
 %requires HttpServerUtil
 %requires HttpServer
 %requires Mime
+%requires ../../LoaderWarnings.qm
 
 %exec-class QgetTest
 
@@ -491,7 +492,8 @@ public *hash<auto> sub get_mod_connections() {
         string cmd = sprintf("cd %s && %s", shellQuote(dir), getQgetCommand(dir, args, extra_env));
         int rc = system(cmd);
         string out = ReadOnlyFile::readTextFile(dir + "/.stdout");
-        string err = ReadOnlyFile::readTextFile(dir + "/.stderr");
+        # qget's messages, without the module loader's warnings about the environment (see LoaderWarnings)
+        string err = LoaderWarnings::strip_loader_warnings(ReadOnlyFile::readTextFile(dir + "/.stderr"));
         if (m_options.verbose) {
             printf("%s: rc: %d stderr: %s\n", cmd, rc, err);
         }

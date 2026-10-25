@@ -342,14 +342,18 @@ printf(\"%s\\n\", make_json({
     \"index_error\": ProviderIndexUtil::getIndexReadError(),
 }));
 ");
-        string cmd = sprintf("env QORE_MODULE_DIR=%s %s=%s QORE_DATA_PROVIDERS= %s %s %s %s 2>&1",
+        # the reader's result is its standard output; its standard error, where the module loader warns of an AOT
+        # module that is loaded from its source because it is out of date, is only reported with an error
+        TmpFile err("provider-index-reader-", ".err");
+        string cmd = sprintf("env QORE_MODULE_DIR=%s %s=%s QORE_DATA_PROVIDERS= %s %s %s %s 2>%s",
             quote(module_dir + PathSep + qlib_dir + (ENV.QORE_MODULE_DIR ? PathSep + ENV.QORE_MODULE_DIR : "")),
-            ProviderIndexEnvVar, quote(index_dir), quote(qore_bin), quote(script), quote(factory), quote(mod));
+            ProviderIndexEnvVar, quote(index_dir), quote(qore_bin), quote(script), quote(factory), quote(mod),
+            quote(err.path));
         string out = backquote(cmd);
         try {
             return parse_json(out);
         } catch (hash<ExceptionInfo> ex) {
-            throw "READER-ERROR", out;
+            throw "READER-ERROR", out + (ReadOnlyFile::readTextFile(err.path) ?? "");
         }
     }
 

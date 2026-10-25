@@ -74,8 +74,11 @@ class ProviderIndexIdentityTest inherits QUnit::Test {
     }
 
     private hash<auto> runWorker(string root, string module, string mode = "build", string zone = "UTC") {
+        # the worker's result is its standard output; its standard error, where the module loader warns of an AOT
+        # module that is loaded from its source because it is out of date, is only reported with an error
+        TmpFile err("provider-index-identity-", ".err");
         string out = backquote(env(root, zone) + quote(qore_bin) + " " + quote(worker) + " "
-            + quote(module) + " " + quote(mode) + " 2>&1");
+            + quote(module) + " " + quote(mode) + " 2>" + quote(err.path));
         try {
             hash<auto> result = parse_json(out);
             if (result.index_yaml) {
@@ -85,7 +88,7 @@ class ProviderIndexIdentityTest inherits QUnit::Test {
             }
             return result;
         } catch () {
-            throw "WORKER-ERROR", out;
+            throw "WORKER-ERROR", out + (ReadOnlyFile::readTextFile(err.path) ?? "");
         }
     }
 

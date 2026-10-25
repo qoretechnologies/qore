@@ -12,6 +12,7 @@
 %requires QUnit
 %requires Util
 %requires FsUtil
+%requires ../../LoaderWarnings.qm
 
 %try-module pgsql
 %define NoPgsql
@@ -33,8 +34,10 @@ hashdecl PgsqlUpsertDiagnosticsProbeRun {
     int rc = -1;
     #! everything the probe wrote to stdout
     string stdout = "";
-    #! everything the probe wrote to stderr
+    #! everything the probe wrote to stderr, without the module loader's warnings (see LoaderWarnings)
     string stderr = "";
+    #! the module loader's warnings that the probe wrote to stderr
+    list<string> loader_warnings = ();
     #! the probe's serialized result
     hash<auto> result = {};
 }
@@ -99,6 +102,11 @@ class PgsqlUpsertDiagnosticsTest inherits QUnit::Test {
             }
         }
 
+        # AOT modules that no longer match the environment, as when the tests run with other binary modules than
+        # those that the build compiled them against, are loaded from their sources
+        if (form == "qmod" && probe.loader_warnings) {
+            testSkip(sprintf("the AOT modules cannot be used in this environment: %s", probe.loader_warnings[0]));
+        }
         string ext = form == "source" ? ".qm" : ".qmod";
         assertEq(qlib_dir + "/SqlUtil/SqlUtil" + ext, normalize_dir(probe.result.modules.SqlUtil),
             "SqlUtil module form");
@@ -225,7 +233,9 @@ class PgsqlUpsertDiagnosticsTest inherits QUnit::Test {
             form == "source" ? "-DSourceModules " : "", shellQuote(probe_path), shellQuote(result_path),
             shellQuote(stdout_path), shellQuote(stderr_path)));
         probe.stdout = ReadOnlyFile::readTextFile(stdout_path);
-        probe.stderr = ReadOnlyFile::readTextFile(stderr_path);
+        hash<auto> err = LoaderWarnings::split_loader_warnings(ReadOnlyFile::readTextFile(stderr_path));
+        probe.stderr = err.text;
+        probe.loader_warnings = err.warnings;
         probe.result = is_file(result_path)
             ? Serializable::deserialize(ReadOnlyFile::readBinaryFile(result_path))
             : {"probe_error": "the probe did not write a result"};

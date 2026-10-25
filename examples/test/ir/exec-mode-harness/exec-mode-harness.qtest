@@ -30,7 +30,19 @@ class ExecModeHarnessTest inherits QUnit::Test {
         string parse_error;
         #! a script that prints on stdout and stderr and exits with status 3
         string output;
+        #! a script that prints on stdout and stderr, and the warnings of the module loader on stderr
+        string loader_warning;
     }
+
+    #! the warning of the module loader for an AOT module that is out of date
+    const StaleWarning = "warning: AOT module '/build/qlib-qmod/QUnit.qmod' for feature 'QUnit' is out of date: its "
+        "source '/opt/lib/qore-modules/xml-api-2.0.qmod' has changed since it was compiled; loading source module "
+        "'/src/qlib/QUnit.qm' instead; rebuild the AOT module";
+
+    #! the warning of the module loader for an AOT module that cannot be loaded
+    const FallbackWarning = "warning: binary module '/build/qlib-qmod/Util.qmod' for feature 'Util' failed to load; "
+        "loading source module '/src/qlib/Util.qm' instead: LOAD-MODULE-ERROR: the module was compiled for another AOT "
+        "runtime identity";
 
     constructor() : QUnit::Test("ExecModeHarnessTest", "1.0", \ARGV) {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
@@ -43,12 +55,15 @@ class ExecModeHarnessTest inherits QUnit::Test {
             "printf(\"%d\\n\", t);\n");
         parse_error = write("parse-error.q", "%modern\nint x = ;\n");
         output = write("output.q", "%modern\nprintf(\"out\\n\");\nstderr.print(\"err\\n\");\nexit(3);\n");
+        loader_warning = write("loader-warning.q", sprintf("%%modern\nprintf(\"out\\n\");\nstderr.print(%y);\n"
+            "stderr.print(\"err\\n\");\nstderr.print(%y);\n", StaleWarning + "\n", FallbackWarning + "\n"));
 
         addTestCase("trace lines", \testTraceLines());
         addTestCase("execution mode of a command", \testGetMode());
         addTestCase("top-level code", \testTopLevel());
         addTestCase("functions", \testFunctions());
         addTestCase("output and exit status", \testOutput());
+        addTestCase("module loader warnings are not output", \testLoaderWarnings());
         addTestCase("negative: native compilation checks", \testChecks());
         set_return_value(main());
     }
@@ -124,6 +139,20 @@ class ExecModeHarnessTest inherits QUnit::Test {
         hash<ExecModeHarness::ModeRunResult> r = runScript("tiered", function);
         assertEq(1, (select r.trace, $1 =~ /^\[BG-JIT\] compiled 'f@.*' and promoted to JIT tier$/).size(),
             r.trace.join("\n"));
+    }
+
+    testLoaderWarnings() {
+        assertTrue(ExecModeHarness::is_loader_warning(StaleWarning));
+        assertTrue(ExecModeHarness::is_loader_warning(FallbackWarning));
+        assertFalse(ExecModeHarness::is_loader_warning("warning: something else"));
+        assertFalse(ExecModeHarness::is_loader_warning("err"));
+        # the warnings, which a test run with other binary modules than its build gets, are not the script's output
+        hash<ExecModeHarness::ModeRunResult> r = runScript("jit", loader_warning);
+        assertEq("out\nerr\n", r.out);
+        assertEq("out\n", r.stdout);
+        assertEq("err\n", r.stderr);
+        assertEq((StaleWarning, FallbackWarning), r.loader_warnings);
+        assertEq(0, r.rc);
     }
 
     testOutput() {
