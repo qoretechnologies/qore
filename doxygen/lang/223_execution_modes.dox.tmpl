@@ -350,17 +350,15 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     @subsection aot_exception_locations Exception Source Locations
 
     Exceptions raised from AOT-compiled code report the real source file and
-    line number for each Qore stack frame, matching interpreted execution. The
-    throwing location and the full backtrace are reconstructed lazily, only when
-    an exception is thrown, from line-number tables embedded in the artifact, so
-    code that runs without throwing pays no per-statement location-tracking cost.
-
-    Lazy reconstruction relies on the line tables emitted by default alongside
-    debug info (\c -g). Compiling with \c --strip-debug-info removes those
-    tables; such artifacts instead keep per-statement location tracking so source
-    locations remain available without the embedded tables. Source text itself is
-    not required: stripped-source artifacts still report file and line because
-    those come from the line tables, not from embedded Qore source.
+    line number for each Qore stack frame, matching interpreted execution.
+    Compiled code records the location of the code it runs as it runs: each
+    source location of a module is a constant in the artifact, and the code
+    stores it as the current location when the line changes, as JIT-compiled
+    code does.  The locations therefore do not depend on debug information:
+    compiling with \c --strip-debug-info removes the debug information that
+    native debuggers use, but does not change the locations reported.  Source
+    text is not required either: stripped-source artifacts still report file
+    and line.
 
     @subsection qcc_tool Qore Code Compiler (qcc)
 
