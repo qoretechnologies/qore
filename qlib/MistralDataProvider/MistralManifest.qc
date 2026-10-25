@@ -64,6 +64,17 @@ public class MistralManifest {
             "#/components/schemas/ToolTypes": {
                 "function": "Function",
             },
+            # the type of each kind of tool and of a connector's authorization: each alternative of a tool, and of
+            # an authorization, accepts only its own type, so an overlay of the union could not label them
+            "#/components/schemas/FunctionTool/properties/type": {"function": "Function"},
+            "#/components/schemas/WebSearchTool/properties/type": {"web_search": "Web Search"},
+            "#/components/schemas/WebSearchPremiumTool/properties/type": {"web_search_premium": "Web Search Premium"},
+            "#/components/schemas/CodeInterpreterTool/properties/type": {"code_interpreter": "Code Interpreter"},
+            "#/components/schemas/ImageGenerationTool/properties/type": {"image_generation": "Image Generation"},
+            "#/components/schemas/DocumentLibraryTool/properties/type": {"document_library": "Document Library"},
+            "#/components/schemas/CustomConnector/properties/type": {"connector": "Connector"},
+            "#/components/schemas/OAuth2TokenAuth/properties/type": {"oauth2-token": "OAuth2 Token"},
+            "#/components/schemas/APIKeyAuth/properties/type": {"api-key": "API Key"},
         };
 
         #! Account and parent-scoped resource dropdowns
@@ -378,14 +389,6 @@ public class MistralManifest {
                         "short_desc": "Tools",
                         "desc": "The `tools` value for this operation.",
                         "fields": {
-                            "type": <RestSchemaFieldOverlayInfo>{
-                                "allowed_values": (
-                                    <AllowedValueInfo>{
-                                        "value": "connector",
-                                        "display_name": "Connector",
-                                    },
-                                ),
-                            },
                             "library_ids": <RestSchemaFieldOverlayInfo>{
                                 "element_ref_data": "libraries",
                                 "supports_custom_values": True,
@@ -396,16 +399,6 @@ public class MistralManifest {
                             },
                             "authorization": <RestSchemaFieldOverlayInfo>{
                                 "sensitive": True,
-                                "fields": {
-                                    "type": <RestSchemaFieldOverlayInfo>{
-                                        "allowed_values": (
-                                            <AllowedValueInfo>{
-                                                "value": "api-key",
-                                                "display_name": "Api Key",
-                                            },
-                                        ),
-                                    },
-                                },
                             },
                         },
                     },
@@ -960,14 +953,6 @@ public class MistralManifest {
                         "display_name": "Tools",
                         "short_desc": "List of tools which are available to the model during the conversation.",
                         "fields": {
-                            "type": <RestSchemaFieldOverlayInfo>{
-                                "allowed_values": (
-                                    <AllowedValueInfo>{
-                                        "value": "connector",
-                                        "display_name": "Connector",
-                                    },
-                                ),
-                            },
                             "library_ids": <RestSchemaFieldOverlayInfo>{
                                 "element_ref_data": "libraries",
                                 "supports_custom_values": True,
@@ -978,16 +963,6 @@ public class MistralManifest {
                             },
                             "authorization": <RestSchemaFieldOverlayInfo>{
                                 "sensitive": True,
-                                "fields": {
-                                    "type": <RestSchemaFieldOverlayInfo>{
-                                        "allowed_values": (
-                                            <AllowedValueInfo>{
-                                                "value": "api-key",
-                                                "display_name": "Api Key",
-                                            },
-                                        ),
-                                    },
-                                },
                             },
                         },
                     },
@@ -1258,14 +1233,6 @@ public class MistralManifest {
                         "display_name": "Tools",
                         "short_desc": "List of tools which are available to the model during the conversation.",
                         "fields": {
-                            "type": <RestSchemaFieldOverlayInfo>{
-                                "allowed_values": (
-                                    <AllowedValueInfo>{
-                                        "value": "connector",
-                                        "display_name": "Connector",
-                                    },
-                                ),
-                            },
                             "library_ids": <RestSchemaFieldOverlayInfo>{
                                 "element_ref_data": "libraries",
                                 "supports_custom_values": True,
@@ -1276,16 +1243,6 @@ public class MistralManifest {
                             },
                             "authorization": <RestSchemaFieldOverlayInfo>{
                                 "sensitive": True,
-                                "fields": {
-                                    "type": <RestSchemaFieldOverlayInfo>{
-                                        "allowed_values": (
-                                            <AllowedValueInfo>{
-                                                "value": "api-key",
-                                                "display_name": "Api Key",
-                                            },
-                                        ),
-                                    },
-                                },
                             },
                         },
                     },

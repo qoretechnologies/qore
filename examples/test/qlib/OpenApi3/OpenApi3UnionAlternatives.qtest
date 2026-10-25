@@ -1,0 +1,116 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires OpenApi3
+%requires json
+%exec-class OpenApi3UnionAlternativesTest
+
+#! A union accepts a value that one of its alternatives accepts as it is given
+/** Stripe declares a payment method's expiry as <tt>{anyOf: [{type: integer, format: unix-time}, {type: string,
+    enum: [""]}]}</tt>.  The union checked each alternative's schema in the direction of a value read from the wire,
+    which turns a unix-time integer into a date, and then gave the alternative's integer type that date, so every
+    integer and every date was rejected and only the empty string was accepted.
+*/
+class OpenApi3UnionAlternativesTest inherits QUnit::Test {
+    constructor() : Test("OpenAPI union alternatives", "1.0", \ARGV) {
+        addTestCase("a unix-time integer alternative accepts integers and dates as given", \unixTimeTest());
+        addTestCase("a value no alternative accepts is rejected", \rejectTest());
+        addTestCase("the accepted value is serialized as the schema declares it", \serializeTest());
+        addTestCase("a oneOf alternative is also checked with the value as given", \oneOfTest());
+        addTestCase("an object's oneOf branches match formatted properties in the form its fields give them",
+            \objectBranchTest());
+        set_return_value(main());
+    }
+
+    unixTimeTest() {
+        OpenApi3Schema doc = document();
+        AbstractDataProviderType expires_at = fieldType(doc, "Konbini", "expires_at");
+        assertTrue(expires_at instanceof OpenApi3UnionDataType);
+        assertEq(100, expires_at.acceptsValue(100), "an integer is accepted as it is given");
+        assertEq(1700000000, expires_at.acceptsValue(1700000000), "a unix time is accepted as it is given");
+        date expiry = 2026-10-25T10:00:00Z;
+        assertEq(expiry, expires_at.acceptsValue(expiry), "a date is accepted as it is given");
+        assertEq("", expires_at.acceptsValue(""), "the empty string is accepted");
+        assertEq(NOTHING, expires_at.acceptsValue(NOTHING), "an optional union accepts no value");
+    }
+
+    rejectTest() {
+        OpenApi3Schema doc = document();
+        AbstractDataProviderType expires_at = fieldType(doc, "Konbini", "expires_at");
+        assertThrows("RUNTIME-TYPE-ERROR", "does not match any anyOf", \expires_at.acceptsValue(), "tomorrow");
+        assertThrows("RUNTIME-TYPE-ERROR", "does not match any anyOf", \expires_at.acceptsValue(), 1.5);
+        assertThrows("RUNTIME-TYPE-ERROR", "does not match any anyOf", \expires_at.acceptsValue(), True);
+    }
+
+    serializeTest() {
+        OpenApi3Schema doc = document();
+        SchemaObject konbini = doc.components.schemas.Konbini;
+        foreach auto given in ((1700000000, 2023-11-14T22:13:20Z, "")) {
+            hash<auto> value = {"expires_at": doc.components.schemas.Konbini.getDataType().getFields().expires_at
+                .getType().acceptsValue(given)};
+            konbini.check(True, True, "/payment_intents", "POST", "konbini", \value);
+            assertEq(given.typeCode() == NT_STRING ? "" : 1700000000, value.expires_at,
+                sprintf("%y is sent as the schema declares it", given));
+        }
+    }
+
+    oneOfTest() {
+        OpenApi3Schema doc = document();
+        AbstractDataProviderType when = fieldType(doc, "Konbini", "when");
+        assertEq(1700000000, when.acceptsValue(1700000000), "an integer matches the unix-time alternative only");
+        assertEq("soon", when.acceptsValue("soon"), "a string matches the string alternative only");
+        date expiry = 2026-10-25T10:00:00Z;
+        assertEq(expiry, when.acceptsValue(expiry), "a date matches the unix-time alternative only");
+    }
+
+    objectBranchTest() {
+        OpenApi3Schema doc = document();
+        AbstractDataProviderType window = doc.components.schemas.Window.getDataType();
+        date starts = 2026-10-25T10:00:00Z;
+        assertEq({"starts": starts}, window.acceptsValue({"starts": "2026-10-25T10:00:00Z"}),
+            "a date-time string is accepted, as the date its field gives it");
+        assertEq({"starts": starts}, window.acceptsValue({"starts": starts}), "a date is accepted as given");
+        assertEq({"content": <0102>}, window.acceptsValue({"content": "AQI="}),
+            "a base64 string is accepted, as the binary data its field gives it");
+        assertEq({"content": <0102>}, window.acceptsValue({"content": <0102>}), "binary data is accepted as given");
+        assertEq({"days": 3}, window.acceptsValue({"days": 3}));
+        assertThrows("RUNTIME-TYPE-ERROR", "multiple oneOf", \window.acceptsValue(), {"starts": starts, "days": 3});
+        assertThrows("RUNTIME-TYPE-ERROR", "any of the oneOf", \window.acceptsValue(), {});
+    }
+
+    #! Returns a document with the union shape of Stripe's payment method expiry
+    /** The schema objects of a document refer to it weakly, so a caller keeps the document while it uses them.
+    */
+    private static OpenApi3Schema document() {
+        return OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3", "info": {"title": "Union alternatives", "version": "1"}, "paths": {},
+            "components": {"schemas": {
+                "Konbini": {"type": "object", "properties": {
+                    "expires_at": {"anyOf": ({"type": "integer", "format": "unix-time"},
+                        {"type": "string", "enum": ("",)})},
+                    "when": {"oneOf": ({"type": "integer", "format": "unix-time"},
+                        {"type": "string", "maxLength": 8})},
+                }},
+                "Window": {"type": "object", "properties": {
+                    "starts": {"type": "string", "format": "date-time"},
+                    "days": {"type": "integer"},
+                    "content": {"type": "string", "format": "byte"},
+                }, "oneOf": (
+                    {"required": ("starts",), "properties": {"starts": {"type": "string", "format": "date-time"}}},
+                    {"required": ("days",), "properties": {"days": {"type": "integer"}}},
+                    {"required": ("content",), "properties": {"content": {"type": "string", "format": "byte"}}},
+                )},
+            }},
+        }), True);
+    }
+
+    #! Returns the type of a field of a component
+    private static AbstractDataProviderType fieldType(OpenApi3Schema doc, string component, string field) {
+        return doc.components.schemas{component}.getDataType().getFields(){field}.getType();
+    }
+}

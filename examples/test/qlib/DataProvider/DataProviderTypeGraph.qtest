@@ -122,6 +122,7 @@ public class DataProviderTypeGraphTest inherits QUnit::Test {
         addTestCase("a type graph description refers to each type by its key", \graphInfoReferenceTest());
         addTestCase("a type graph builder describes several types with one type table", \graphBuilderTest());
         addTestCase("a type graph is restored with its cycles", \graphRestoreTest());
+        addTestCase("a reference that gives its type table is restored by get()", \graphReferenceRestoreTest());
         addTestCase("a description is restored with one type per unique key", \infoRestoreSharedTest());
         addTestCase("recursive types are compared without recursing forever", \recursiveAssignableTest());
 
@@ -296,6 +297,31 @@ public class DataProviderTypeGraphTest inherits QUnit::Test {
         # a reference outside a type graph description cannot be restored
         hash<DataTypeInfo> ref = node.getInfoGraph().type;
         assertThrows("TYPE-ARG-ERROR", \AbstractDataProviderType::get(), ref);
+    }
+
+    #! A reference that gives its type table in type_graph, as the readers of a data provider index give it, is
+    #! restored by get() as by getFromGraph()
+    graphReferenceRestoreTest() {
+        HashDataType node("node");
+        node.addField(new QoreDataField("name", "the name", StringType));
+        node.addField(new QoreDataField("children", "the children", new ListDataType("list<node>", node)));
+        DataTypeGraphBuilder builder();
+        hash<DataTypeInfo> ref = builder.add(node);
+        # a list described in place that refers to the table
+        hash<DataTypeInfo> in_place = builder.add(new ListDataType("list<node>", node));
+        assertNothing(in_place.type_ref, "a list is described in place");
+        assertEq("1", in_place.element_type.type_ref);
+        foreach hash<DataTypeInfo> info in ((ref, in_place)) {
+            info.type_graph = builder.getTypes();
+            AbstractDataProviderType restored = AbstractDataProviderType::get(info);
+            AbstractDataProviderType restored_node = (restored instanceof ListDataType)
+                ? restored.getElementType()
+                : restored;
+            assertEq("node", restored_node.getName());
+            assertEq(restored_node, restored_node.getFields().children.getType().getElementType(),
+                "the cycle is restored");
+        }
+        assertThrows("TYPE-ARG-ERROR", \AbstractDataProviderType::get(), ref, "without the table");
     }
 
     #! get() restores each type of a description once, by its unique key, and a recursion marker as the cycle

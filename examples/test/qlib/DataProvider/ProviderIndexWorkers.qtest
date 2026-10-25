@@ -37,6 +37,10 @@ public class ProviderIndexWorkersTest inherits QUnit::Test {
         addTestCase("a worker build writes the same index as a single-process build", \equivalenceTest());
         addTestCase("a failed worker publishes nothing", \workerFailureTest());
         addTestCase("workers that describe an action differently fail the build", \conflictTest());
+        addTestCase("workers that describe an action with type tables with other keys do not conflict",
+            \sharedActionTest());
+        addTestCase("workers whose type tables describe an option type differently fail the build",
+            \deepConflictTest());
         addTestCase("a worker setup error is reported and no further workers are started", \setupErrorTest());
         addTestCase("without MessagePack, a worker build is run in the calling process", \noMessagePackTest());
         addTestCase("cancelled workers are stopped and publish nothing", \cancelTest());
@@ -262,6 +266,128 @@ public hash<string, string> sub get_data_provider_map() {
             assertEq("QoreTestConflictApp/record", conflicts[0].identity);
         }
         assertFalse(is_file(index_dir + "/qore-data-index.yaml"), "no index is published");
+    }
+
+    #! Writes two provider modules that register the same action of one app, each with another action first
+    /** The first action of a module has option types of its own, which take the first keys of the app's type table
+        in the module's worker, so the option types of the shared action have other keys in each worker
+
+        @param dir the directory to write the modules to
+        @param field_names the name of the nested field of the shared action's option type in each module
+
+        @return the registration modules of the provider modules
+    */
+    private list<string> writeSharedActionModules(string dir, list<string> field_names) {
+        list<string> registration = ();
+        File f();
+        foreach string name in (("A", "B")) {
+            string provider = sprintf("%s/ProviderIndexSharedFixture%s.qm", dir, name);
+            f.open2(provider, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(sprintf("%%modern
+%%requires DataProvider
+module ProviderIndexSharedFixture%s {
+    version = \"1.0\"; desc = \"shared action fixture\"; author = \"Qore Technologies\"; license = \"MIT\";
+    init = sub () {
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            \"name\": \"QoreTestSharedApp\", \"display_name\": \"Shared\", \"short_desc\": \"Shared\",
+            \"desc\": \"Shared\", \"groups\": (AppGroup::DataTransformation,), \"logo\": \"x\",
+            \"logo_mime_type\": \"image/svg+xml\", \"logo_file_name\": \"x.svg\",
+        });
+        # the first action of the module has %d type(s) of its own
+        hash<string, hash<ActionOptionInfo>> first_options = {};
+        for (int i = 0; i < %d; ++i) {
+            HashDataType own(sprintf(\"Own%s%%d\", i));
+            own.addField(new QoreDataField(\"value\", NOTHING, AbstractDataProviderTypeMap.\"string\"));
+            first_options{\"own\" + i} = <ActionOptionInfo>{\"display_name\": \"Own\", \"short_desc\": \"Own\",
+                \"desc\": \"Own\", \"type\": own};
+        }
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            \"app\": \"QoreTestSharedApp\", \"action\": \"first%s\", \"path\": \"/first%s\",
+            \"display_name\": \"First\", \"short_desc\": \"First\", \"desc\": \"First\",
+            \"action_code\": DPAT_API, \"options\": first_options,
+        });
+        HashDataType child(\"SharedChild\");
+        child.addField(new QoreDataField(%y, NOTHING, AbstractDataProviderTypeMap.\"int\"));
+        HashDataType record(\"SharedRecord\");
+        record.addField(new QoreDataField(\"child\", NOTHING, child));
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            \"app\": \"QoreTestSharedApp\", \"action\": \"record\", \"path\": \"/record\",
+            \"display_name\": \"Record\", \"short_desc\": \"Record\", \"desc\": \"Record\",
+            \"action_code\": DPAT_API, \"options\": {
+                \"record\": <ActionOptionInfo>{\"display_name\": \"Record\", \"short_desc\": \"Record\",
+                    \"desc\": \"Record\", \"type\": record},
+            },
+        });
+    };
+}
+", name, name == "A" ? 1 : 2, name == "A" ? 1 : 2, name, name, name, field_names[name == "A" ? 0 : 1]));
+
+            string path = sprintf("%s/ProviderIndexSharedRegistration%s.qm", dir, name);
+            f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(sprintf("%%modern
+module ProviderIndexSharedRegistration%s {
+    version = \"1.0\"; desc = \"shared action fixture\"; author = \"Qore Technologies\"; license = \"MIT\";
+}
+public hash<string, string> sub get_data_provider_map() {
+    return {\"shared\": %y};
+}
+", name, provider));
+            registration += path;
+        }
+        f.close();
+        return registration;
+    }
+
+    sharedActionTest() {
+        checkModules(True);
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        setEnv("QORE_DATA_PROVIDERS", writeSharedActionModules(dir, ("id", "id")).join(PathSep));
+
+        string index_dir = dir + "/index";
+        hash<auto> info = ProviderIndex::createDataProviderIndex(NOTHING, index_dir, getOptions(2));
+        assertEq(2, info.summary.workers.size(), "each module is loaded by its own worker");
+        assertTrue(info.summary.qualification.complete);
+        hash<auto> actions = ProviderIndexUtil::readSerializedDataProviderIndex(index_dir).index.actioninfomap
+            .QoreTestSharedApp;
+        assertEq(("firstA", "firstB", "record"), sort(keys actions));
+        # the merged index describes the shared action's option type with the app's one type table
+        hash<auto> record = actions.record.options.record.type_info;
+        assertEq(actions.firstA.options.own0.type_info.type_graph, record.type_graph,
+            "the actions of the app refer to one type table");
+        # restored from the description that a reader of the index gives, as QorusIndexedAction restores it
+        hash<DataTypeInfo> indexed = ProviderIndexUtil::readDataProviderIndex().actioninfomap.QoreTestSharedApp.record
+            .options.record.type_info;
+        AbstractDataProviderType restored = AbstractDataProviderType::get(indexed);
+        assertEq("SharedRecord", restored.getName());
+        assertEq(("id",), keys restored.getFields().child.getType().getFields());
+    }
+
+    deepConflictTest() {
+        checkModules(True);
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+        # the shared action's option type differs only in a type that it refers to
+        setEnv("QORE_DATA_PROVIDERS", writeSharedActionModules(dir, ("id", "key")).join(PathSep));
+
+        string index_dir = dir + "/index";
+        try {
+            ProviderIndex::createDataProviderIndex(NOTHING, index_dir, getOptions(2));
+            fail("conflicting workers must not be published");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DATA-PROVIDER-DISCOVERY-ERROR", ex.err);
+            list<hash<auto>> conflicts = select ex.arg.failures, $1.error == "PROVIDER-INDEX-WORKER-CONFLICT";
+            assertEq(1, conflicts.size());
+            assertEq("QoreTestSharedApp/record", conflicts[0].identity);
+            # the difference is in the nested type
+            assertRegex("first difference: options\\.record\\.type_info\\.fields\\.child\\.",
+                conflicts[0].description);
+        }
+        assertFalse(is_file(index_dir + "/qore-routing-index.yaml"), "no index is published");
     }
 
     noMessagePackTest() {

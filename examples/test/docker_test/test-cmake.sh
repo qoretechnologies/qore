@@ -32,6 +32,10 @@ if [ ! -f "${BUILD_DIR}/CMakeCache.txt" ]; then
     exit 1
 fi
 
+# The build artifact was compiled against the binary modules of the build job's qore-test-base image: a job on another
+# image (the image tag was published again during the pipeline) fails before any test runs (see ci-build-image-check.sh)
+"${QORE_SRC_DIR}/test/docker_test/ci-build-image-check.sh" "${BUILD_DIR}/qore-ci-build-artifact-info" || exit 1
+
 # the user the tests run as
 if ! id qore > /dev/null 2>&1; then
     if command -v useradd > /dev/null 2>&1; then

@@ -50,14 +50,14 @@ public class QoreBinaryDataTypeBase inherits QoreDataType {
             if (!value.val()) {
                 remove value;
             } else if (soft_type) {
-                return binary(value);
+                value = binary(value);
             }
         }
         return QoreDataType::acceptsValue(value);
     }
 
     #! returns a "soft" type equivalent to the current type
-    /** @return a "soft" type equivalent to the current type
+    /** @return a "soft" type equivalent to the current type, with the same validation constraints
     */
     AbstractDataProviderType getSoftType() {
         if (soft_type) {
@@ -65,7 +65,7 @@ public class QoreBinaryDataTypeBase inherits QoreDataType {
         }
         return new QoreBinaryDataTypeBase(base_type_hash{NT_NOTHING}
             ? SoftBinaryOrNothingType
-            : SoftBinaryType, getOptions());
+            : SoftBinaryType, getOptions()).copyWithConstraints(constraints);
     }
 }
 }

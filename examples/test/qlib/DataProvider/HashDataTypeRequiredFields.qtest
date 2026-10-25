@@ -13,6 +13,7 @@ class RequiredFieldsTest inherits QUnit::Test {
         addTestCase("Default-before-required field order preserves requiredness", \defaultFirst());
         addTestCase("Explicit optional containers retain required fields when present", \optional());
         addTestCase("Fully defaulted fields still provide a complete optional record", \defaulted());
+        addTestCase("A record made optional by its defaults is described as optional", \defaultedState());
         set_return_value(main());
     }
 
@@ -65,5 +66,60 @@ class RequiredFieldsTest inherits QUnit::Test {
         assertFalse(t.isMandatory());
         assertEq({"code": "EUR", "flag": False}, t.getDefaultValue());
         assertEq({"code": "EUR", "flag": False}, t.acceptsValue({}));
+    }
+
+    #! A record type that defaults make optional describes itself as optional, as a type created optional does, so
+    #! that the type restored from its description is the same
+    defaultedState() {
+        HashDataType t("Default invoice");
+        t.addField(new QoreDataField("code", "Invoice currency code", StringType, "EUR"));
+        assertFalse(t.isMandatory());
+        assertTrue(t.isOrNothingType());
+        hash<string, bool> accepted = t.getAcceptTypeHash();
+        assertTrue(accepted."nothing");
+        assertTrue(accepted."null");
+        assertTrue(t.getReturnTypeHash()."nothing");
+        # an "or nothing" type supports no options, like the type created optional
+        assertEq(NOTHING, t.getSupportedOptions());
+        # it keeps its name, which identifies its presentation
+        assertEq("Default invoice", t.getName());
+        assertEq({"code": "EUR"}, t.acceptsValue(NULL));
+
+        HashDataType created(AutoHashOrNothingType, "Default invoice");
+        created.addField(new QoreDataField("code", "Invoice currency code", StringType, "EUR"));
+        hash<DataTypeInfo> info = t.getInfo();
+        foreach string key in (("mandatory", "types_accepted", "types_returned", "supported_options", "options")) {
+            auto value = info{key};
+            auto expected = created.getInfo(){key};
+            if (value.typeCode() == NT_LIST) {
+                value = sort(value);
+                expected = sort(expected);
+            }
+            assertEq(expected, value, key);
+        }
+        AbstractDataProviderType restored_type = AbstractDataProviderType::get(info);
+        hash<DataTypeInfo> restored = restored_type.getInfo();
+        assertEq(sort(info.types_accepted), sort(restored.types_accepted));
+        assertEq(info.supported_options, restored.supported_options);
+        # its "or nothing" equivalent is named as one; it has no mandatory equivalent
+        AbstractDataProviderType optional = t.getOrNothingType();
+        assertEq("*Default invoice", optional.getName());
+        assertEq(sort(info.types_accepted), sort(optional.getInfo().types_accepted));
+        assertTrue(t == t.getMandatoryType());
+        # a missing record is the record of the default values
+        assertEq({"code": "EUR"}, t.acceptsValue(NOTHING));
+        # a record given is completed with them, also by the restored type
+        assertEq({"code": "EUR"}, restored_type.acceptsValue({}));
+
+        # a mandatory field added afterwards makes the record mandatory again
+        t.addField(code());
+        assertTrue(t.isMandatory());
+        assertFalse(t.isOrNothingType());
+        accepted = t.getAcceptTypeHash();
+        assertFalse(accepted.hasKey("nothing"));
+        assertFalse(accepted.hasKey("null"));
+        assertFalse(t.getReturnTypeHash().hasKey("nothing"));
+        assertEq(keys created.getMandatoryType().getSupportedOptions(), keys t.getSupportedOptions());
+        assertThrows("MISSING-VALUE-ERROR", \t.acceptsValue(), (NOTHING,));
     }
 }

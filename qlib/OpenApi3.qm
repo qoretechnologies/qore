@@ -302,7 +302,9 @@ describe an intersection nothing can satisfy, and are left unconstrained rather 
 \c writeOnly, \c deprecated, \c nullable, documentation or vendor extensions) has the type of the schema it refers \
 to, with that schema's name; the description is the field's, and \c nullable gives the "or nothing" variant
     |\c oneOf / \c anyOf|exposed as a union type that preserves the keyword's matching rule; \c "null" members are \
-excluded from the union and make it @ref RestSchemaValidator::AbstractSchemaObject::nullable "nullable" instead
+excluded from the union and make it @ref RestSchemaValidator::AbstractSchemaObject::nullable "nullable" instead.  An \
+alternative accepts a value as it is given, in its %Qore form: a \c unix-time integer alternative accepts an integer \
+or a date, and a \c date-time string property of an object alternative a date
 
     @section openapi3_security Security Requirements
 
@@ -4989,23 +4991,11 @@ public class OpenApi3HashDataType inherits HashDataType {
             return False;
         }
 
-        switch (prop.type) {
-            case "string":
-                return value.typeCode() == NT_STRING;
-            case "integer":
-                return value.typeCode() == NT_INT;
-            case "number":
-                return value.typeCode() == NT_INT || value.typeCode() == NT_FLOAT;
-            case "boolean":
-                return value.typeCode() == NT_BOOLEAN;
-            case "array":
-                return value.typeCode() == NT_LIST;
-            case "object":
-                return value.typeCode() == NT_HASH;
-            case "any":
-                return True;
-        }
-        return True;
+        # the value has been accepted by this type, whose fields convert what they are given, so a formatted
+        # property holds the form a field of its type gives it - a date-time string a date, for example - and
+        # not the JSON type of the wire; requiring the wire's type rejected every value of a composition with
+        # a formatted property
+        return SchemaObject::matchesScalarBranch(prop, value);
     }
 }
 
@@ -5255,16 +5245,12 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
         list<AbstractDataProviderType> types = getUnionTypes();
         for (int i = 0; i < types.size(); ++i) {
             try {
-                auto accepted = multipart_wire_types
+                auto candidate = multipart_wire_types
                     ? OperationObject::getMultipartWireValue("file", value, multipart_wire_types[i]) : value;
-                if (schemas && !OpenApi3UnionDataType::branchMatchesShape(schemas[i], accepted)) {
+                if (schemas && !OpenApi3UnionDataType::branchMatchesShape(schemas[i], candidate)) {
                     continue;
                 }
-                if (schemas) {
-                    schemas[i].check(False, for_request, "/", "POST", schemas[i].name, \accepted);
-                }
-                # Validate the wire representation, then retain names and media types in the accepted input.
-                accepted = types[i].acceptsValue(multipart_wire_types ? value : accepted);
+                auto accepted = acceptAlternative(i, types[i], candidate, multipart_wire_types ? value : candidate);
                 ++matches;
                 if (!have_first) {
                     first_value = accepted;
@@ -5293,6 +5279,51 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
         }
         throw "RUNTIME-TYPE-ERROR", sprintf("value of type %y does not match any anyOf schema%s", value_type,
             last_exception ? sprintf("; last error: %s", last_exception.desc) : "");
+    }
+
+    #! Returns the value that one alternative accepts, checking the value as it is given
+    /** The alternative's schema validates a copy of the value: what the schema converts a value read from the wire
+        to, such as a date for a unix-time integer, is not the value that the alternative's type is given.  Giving
+        the type the converted value made the integer alternative of Stripe's
+        <tt>{anyOf: [{type: integer, format: unix-time}, {type: string, enum: [""]}]}</tt> reject every integer, and
+        every date too.
+
+        The type accepts the value as given.  A value that the type accepts only in the form the schema sends to the
+        wire, such as a date for a unix-time integer, is accepted as given: the request is serialized from it.
+
+        @param i the index of the alternative
+        @param type the alternative's type
+        @param candidate the value as the alternative's schema validates it; for a multipart input, the wire value
+        of its files
+        @param given the value as the alternative's type is given it
+
+        @return the value that the alternative accepts
+
+        @throw RUNTIME-TYPE-ERROR the alternative's type does not accept the value
+        @throw SCHEMA-VALIDATION-ERROR the alternative's schema does not accept the value
+
+        @since OpenApi3 1.0
+    */
+    private auto acceptAlternative(int i, AbstractDataProviderType type, auto candidate, auto given) {
+        if (schemas) {
+            auto checked = candidate;
+            schemas[i].check(False, for_request, "/", "POST", schemas[i].name, \checked);
+        }
+        try {
+            return type.acceptsValue(given);
+        } catch (hash<ExceptionInfo> ex) {
+            if (!schemas || multipart_wire_types) {
+                rethrow;
+            }
+            auto wire = given;
+            schemas[i].check(True, for_request, "/", "POST", schemas[i].name, \wire);
+            if (wire.typeCode() == given.typeCode()) {
+                # the schema gives the value no other form, so the type's verdict stands
+                rethrow;
+            }
+            type.acceptsValue(wire);
+            return given;
+        }
     }
 
     #! Returns @ref True if a value is shaped like what an alternative declares
@@ -6774,7 +6805,18 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     }
 
     #! Selects a composition branch before the ordinary single-type validator can coerce its input
-    private static bool matchesScalarBranch(SchemaObject branch, auto value) {
+    /** A value matches a branch when it has the branch's JSON type, in the form that a %Qore value of the branch
+        has: a date for a \c date or \c date-time string or a \c unix-time integer, binary data for a \c byte or
+        \c binary string, and an integral float or number for an integer.
+
+        @param branch the schema of the branch
+        @param value the value
+
+        @return @ref True if the value has the shape of the branch's type
+
+        @since OpenApi3 1.0
+    */
+    static bool matchesScalarBranch(SchemaObject branch, auto value) {
         int tc = value.typeCode();
         switch (branch.type) {
             case "boolean": return tc == NT_BOOLEAN;

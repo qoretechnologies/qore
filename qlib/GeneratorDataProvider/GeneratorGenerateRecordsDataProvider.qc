@@ -71,8 +71,8 @@ public class GeneratorGenerateRecordsDataProvider inherits DataProvider::Abstrac
                     "optionally `desc` (string, field description).\n\n"
                     "If not provided, a default schema is used with fields: `id` (int), `name` "
                     "(string), `value` (float), `active` (bool), `created` (date)",
-                "type": new ListDataType("*softlist<GeneratorFieldDefinition>",
-                    new GeneratorFieldDefinitionDataType(), True),
+                # a soft list, named "*softlist<GeneratorFieldDefinition>", accepts a single definition as well
+                "type": new SoftListDataType(new GeneratorFieldDefinitionDataType(), True),
             },
             "include_nulls": <DataProviderOptionInfo>{
                 "display_name": "Include Nulls",

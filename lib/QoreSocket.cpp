@@ -12917,8 +12917,14 @@ static struct sockaddr_in qore_socket_ipv4_addr(uint32_t address, int port) {
 /** The socket that probes the address reuses it, so a connection on the port, also one in \c TIME_WAIT, does not
     refuse it, but a listening socket, or a bound datagram socket, on the address does.  An address that the sandbox
     does not allow is not probed.
+
+    The probe also reuses the port if the socket that is bound does (\a reuseport), so that it is not refused by a
+    socket that the bind shares the port with.  Since macOS 26, a bind of the IPv4 wildcard address that does not
+    reuse the port is refused when a dual-stack IPv6 socket on the IPv6 wildcard address holds the port, also if
+    that socket does not listen, whereas a dual-stack socket that reuses the port can share it with another one;
+    without the option, a dual-stack bind that reuses the port of such a socket was refused by its own probe.
 */
-static bool qore_socket_ipv4_port_used(int socktype, uint32_t address, int port,
+static bool qore_socket_ipv4_port_used(int socktype, uint32_t address, int port, bool reuseport,
         QoreSandboxManager* sandbox_manager) {
     struct sockaddr_in sin = qore_socket_ipv4_addr(address, port);
     if (!qore_socket_bind_check_allowed(sandbox_manager, sin, socktype)) {
@@ -12930,6 +12936,11 @@ static bool qore_socket_ipv4_port_used(int socktype, uint32_t address, int port,
     }
     int opt = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_ARG_4)&opt, sizeof(int));
+#ifdef SO_REUSEPORT
+    if (reuseport) {
+        setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, (SETSOCKOPT_ARG_4)&opt, sizeof(int));
+    }
+#endif
     bool used = ::bind(fd, reinterpret_cast<const struct sockaddr*>(&sin), sizeof(sin)) == QORE_SOCKET_ERROR
         && sock_get_raw_error() == EADDRINUSE;
     qore_socket_private::closeDescriptor(fd);
@@ -13290,9 +13301,11 @@ int qore_socket_bind_unshadowed(int sock, const struct sockaddr* addr, size_t ad
                 // the probes bind the port for a moment, so a concurrent bind of the port can be refused because of
                 // them; they are not made for an IPv4 socket that does not reuse the address, which macOS itself
                 // refuses a port that any socket uses
+                bool reuseport = qore_socket_has_flag(sock, SOL_SOCKET, SO_REUSEPORT);
                 if ((addr->sa_family != AF_INET || qore_socket_has_flag(sock, SOL_SOCKET, SO_REUSEADDR))
-                    && (qore_socket_ipv4_port_used(socktype, INADDR_ANY, port, sandbox_manager)
-                        || qore_socket_ipv4_port_used(socktype, INADDR_LOOPBACK, port, sandbox_manager))) {
+                    && (qore_socket_ipv4_port_used(socktype, INADDR_ANY, port, reuseport, sandbox_manager)
+                        || qore_socket_ipv4_port_used(socktype, INADDR_LOOPBACK, port, reuseport,
+                            sandbox_manager))) {
                     sock_set_raw_error(EADDRINUSE);
                     return QORE_SOCKET_ERROR;
                 }

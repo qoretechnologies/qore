@@ -15,6 +15,7 @@
 %requires UnstructuredRestClient
 %requires UnstructuredDataProvider
 %requires RestSchemaActions
+%requires json
 
 %exec-class UnstructuredDataProviderTest
 
@@ -44,6 +45,30 @@ class FakeUnstructuredRestClientIo inherits UnstructuredRestClient::Unstructured
         last_body = body;
         last_options = options;
         return canned_elements;
+    }
+}
+
+#! A Platform API client that records the body of a request and stops it there
+class FakeUnstructuredPlatformRestClientIo inherits UnstructuredRestClient::UnstructuredPlatformRestClientIo {
+    public {
+        *hash<auto> last_request;
+    }
+
+    constructor() : UnstructuredPlatformRestClientIo({"apikey": "fake-key"}) {}
+
+    RestClient::AbstractRestClient copyWithUrl(string new_url) {
+        return self;
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr) {
+        return restDoRawRequest(method, target.path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        last_request = body.val() ? parse_json(body.toString()) : NOTHING;
+        throw "TEST-REQUEST-SENT", sprintf("%s %s", method, path);
     }
 }
 
@@ -99,6 +124,7 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
         addTestCase("platform action set is generated from the vendored schema",
             \platformActionSetTest());
         addTestCase("platform action options are usable", \platformActionOptionTest());
+        addTestCase("every workflow schedule offered is one the API accepts", \platformScheduleTest());
         addTestCase("platform record tables", \platformRecordTableTest());
         addTestCase("platform job event provider", \platformEventTest());
         addTestCase("connector configuration fields", \connectorFieldsTest());
@@ -454,6 +480,39 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
         # a scoped dropdown cannot be listed before the option it is scoped by has a value, and
         # listing everything would offer files from other jobs
         assertEq(NOTHING, dlp.getReferenceData(UnstructuredPlatformManifest::RefJobOutputFile));
+    }
+
+    #! A schedule offered by a workflow action is one of the API's own, so choosing it sends the request
+    private platformScheduleTest() {
+        hash<string, hash<auto>> requests = {
+            "create-workflow": {"name": "wf", "workflow_type": "basic"},
+            "update-workflow": {"workflow_id": "00000000-0000-4000-8000-000000000001"},
+        };
+        foreach hash<auto> request in (requests.pairIterator()) {
+            hash<auto> option = DataProviderActionCatalog::getAppActionEx("UnstructuredIo", request.key)
+                .options.schedule;
+            # the create action offers a reviewed choice of schedules; the update action publishes none, as
+            # its nullable enumeration is not published as choices, but its type enforces the schema's
+            list<auto> schedules = option.allowed_values
+                ? (map $1.value, option.allowed_values)
+                : option.type.getConstraints().enum_values;
+            assertEq(request.key == "create-workflow" ? 6 : 11, schedules.size(), request.key);
+            foreach string schedule in (schedules) {
+                string ctx = sprintf("%s: %y", request.key, schedule);
+                FakeUnstructuredPlatformRestClientIo fake();
+                AbstractDataProvider prov = new UnstructuredDataProvider::UnstructuredPlatformDataProvider(fake)
+                    .getChildProviderEx(request.key);
+                assertThrows("TEST-REQUEST-SENT", \prov.doRequest(), request.value + {"schedule": schedule}, ctx);
+                assertEq(schedule, fake.last_request.schedule, ctx);
+            }
+        }
+        # the labels of the create action's own choices name the API's values
+        hash<string, string> labels = map {$1.display_name: $1.value},
+            DataProviderActionCatalog::getAppActionEx("UnstructuredIo", "create-workflow").options.schedule
+                .allowed_values;
+        assertEq("daily", labels.Daily);
+        assertEq("weekly", labels.Weekly);
+        assertEq("monthly", labels.Monthly);
     }
 
     private platformRecordTableTest() {

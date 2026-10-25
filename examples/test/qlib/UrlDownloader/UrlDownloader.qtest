@@ -17,6 +17,7 @@
 %requires HttpServer
 %requires HttpClientIo
 %requires UrlDownloader
+%requires ../../LoaderWarnings.qm
 
 %exec-class UrlDownloaderTest
 
@@ -770,8 +771,9 @@ try {
             env += sprintf("LD_LIBRARY_PATH=%s ", UrlDownloaderTest::shellQuote((foldl $1 + ":" + $2,
                 map normalize_dir($1), ld_path.split(":")) ?? ""));
         }
-        string out = backquote(sprintf("%s%s %s 2>&1", env, UrlDownloaderTest::shellQuote(qore),
-            UrlDownloaderTest::shellQuote(script_path)));
+        # the output of the script, without the module loader's warnings about the environment (see LoaderWarnings)
+        string out = LoaderWarnings::strip_loader_warnings(backquote(sprintf("%s%s %s 2>&1", env,
+            UrlDownloaderTest::shellQuote(qore), UrlDownloaderTest::shellQuote(script_path))));
         assertEq(dir.path + DirSep + "file\nDOWNLOAD-URL-ERROR", out);
         assertEq(DownloadTestHandler::Body, ReadOnlyFile::readBinaryFile(dir.path + DirSep + "file"));
     }

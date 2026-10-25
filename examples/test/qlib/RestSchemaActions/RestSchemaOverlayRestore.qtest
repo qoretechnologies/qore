@@ -1,0 +1,116 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires OpenApi3
+%requires RestSchemaActions
+%requires json
+%exec-class RestSchemaOverlayRestoreTest
+
+#! Field overlays keep the kind of the types they change, so that the types restored from their descriptions are the same
+class RestSchemaOverlayRestoreTest inherits QUnit::Test {
+    public {
+        const Action = "update-contacts";
+    }
+
+    constructor() : Test("REST schema overlay types restore", "1.0", \ARGV) {
+        addTestCase("an overlaid list keeps its kind and description", \listTest());
+        addTestCase("overlaid allowed values leave no empty constraints", \allowedValuesTest());
+        set_return_value(main());
+    }
+
+    listTest() {
+        hash<string, AbstractDataField> fields = operation().getRequestFields();
+        AbstractDataProviderType contacts = fields.Contacts.getType();
+        AbstractDataProviderType schema_contacts = operation(False).getRequestFields().Contacts.getType();
+        # the schema's list is soft; the overlay of its elements' fields does not change that
+        assertEq(schema_contacts.className(), contacts.className());
+        assertEq(schema_contacts.getName(), contacts.getName());
+        assertEq(sort(keys schema_contacts.getAcceptTypeHash()), sort(keys contacts.getAcceptTypeHash()));
+        # a single element is accepted as a list of one, as by the schema's list
+        assertEq(({"Name": "Ann"},), contacts.acceptsValue({"Name": "Ann"}));
+        # the list keeps the schema's constraints
+        assertEq(<DataTypeConstraintInfo>{"min_items": 1}, contacts.getConstraints());
+        # the overlay applies to the elements
+        assertEq("Set this to update an existing contact",
+            contacts.getElementType().getFields().ContactID.getShortDescription());
+
+        hash<DataTypeInfo> info = contacts.getInfo();
+        hash<DataTypeInfo> restored = AbstractDataProviderType::get(info).getInfo();
+        foreach string key in (("name", "types_accepted", "types_returned", "mandatory", "constraints")) {
+            auto value = info{key};
+            auto restored_value = restored{key};
+            if (value.typeCode() == NT_LIST) {
+                value = sort(value);
+                restored_value = sort(restored_value);
+            }
+            assertEq(value, restored_value, key);
+        }
+    }
+
+    allowedValuesTest() {
+        hash<string, AbstractDataField> fields = operation().getRequestFields();
+        AbstractDataProviderType status = fields.Status.getType();
+        # the overlay's allowed values replace the schema's enumeration, which leaves no constraint
+        assertEq(NOTHING, status.getConstraints());
+        hash<DataTypeInfo> info = status.getInfo();
+        assertEq(NOTHING, info.constraints);
+        assertEq(info.constraints, AbstractDataProviderType::get(info).getInfo().constraints);
+        # the other constraints of the schema are kept
+        AbstractDataProviderType code = fields.Code.getType();
+        assertEq(<DataTypeConstraintInfo>{"max_length": 8}, code.getConstraints());
+        assertEq("ACTIVE", fields.Status.acceptsValue("ACTIVE"));
+    }
+
+    #! Returns the operation whose body has a soft list of objects, overlaid if \a overlay is set
+    private static RestSchemaActionOperation operation(bool overlay = True) {
+        OpenApi3Schema doc = OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3", "info": {"title": "Overlay restore", "version": "1"},
+            "paths": {"/contacts": {"post": {
+                "operationId": "updateContacts",
+                "requestBody": {"content": {"application/json": {"schema": {
+                    "$ref": "#/components/schemas/Contacts",
+                }}}},
+                "responses": {"204": {"description": "Updated"}},
+            }}},
+            "components": {"schemas": {
+                "Contact": {"type": "object", "properties": {
+                    "ContactID": {"type": "string", "description": "The identifier of the contact"},
+                    "Name": {"type": "string", "description": "The name of the contact"},
+                }},
+                "Contacts": {"type": "object", "properties": {
+                    "Contacts": {"type": "array", "minItems": 1, "items": {"$ref": "#/components/schemas/Contact"}},
+                    "Status": {"type": "string", "enum": ("ACTIVE", "ARCHIVED", "DELETED")},
+                    "Code": {"type": "string", "maxLength": 8, "enum": ("A", "B")},
+                }},
+            }},
+        }), True);
+        return new RestSchemaActionSet(doc, (<RestSchemaActionInfo>{
+            "action": Action,
+            "method": "POST",
+            "path": "/contacts",
+            "display_name": "Update Contacts",
+            "short_desc": "Updates contacts",
+            "desc": "Updates contacts",
+            "fields": overlay ? {
+                "Contacts": <RestSchemaFieldOverlayInfo>{
+                    "fields": {
+                        "ContactID": <RestSchemaFieldOverlayInfo>{
+                            "short_desc": "Set this to update an existing contact",
+                        },
+                    },
+                },
+                "Status": <RestSchemaFieldOverlayInfo>{
+                    "allowed_values": (<AllowedValueInfo>{"value": "ACTIVE"}, <AllowedValueInfo>{"value": "ARCHIVED"}),
+                },
+                "Code": <RestSchemaFieldOverlayInfo>{
+                    "allowed_values": (<AllowedValueInfo>{"value": "A"},),
+                },
+            } : NOTHING,
+        },)).getOperationEx(Action);
+    }
+}

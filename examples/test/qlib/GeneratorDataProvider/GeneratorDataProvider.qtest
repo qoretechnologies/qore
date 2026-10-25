@@ -588,6 +588,14 @@ public class GeneratorDataProviderTest inherits QUnit::Test {
         hash<ActionOptionInfo> fields_opt = action.options.fields;
         assertFalse(fields_opt.required, "fields should not be required");
         assertTrue(fields_opt.short_desc.val(), "fields should have short_desc");
+        # a soft list of field definitions, which accepts a single definition, as its name says; the type restored
+        # from its description is the same
+        assertEq("*softlist<GeneratorFieldDefinition>", fields_opt.type.getName());
+        assertEq(({"name": "id", "type": "int"},), fields_opt.type.acceptsValue({"name": "id", "type": "int"}));
+        hash<DataTypeInfo> fields_info = fields_opt.type.getInfo();
+        hash<DataTypeInfo> fields_restored = AbstractDataProviderType::get(fields_info).getInfo();
+        assertEq(sort(fields_info.types_accepted), sort(fields_restored.types_accepted));
+        assertEq(fields_info.name, fields_restored.name);
 
         # include_nulls: not required, bool type
         hash<ActionOptionInfo> nulls_opt = action.options.include_nulls;

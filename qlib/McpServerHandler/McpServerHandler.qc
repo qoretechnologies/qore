@@ -2562,7 +2562,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         if (input) {
             # a type with fields that the description refers to more than once, including recursively, is
             # described once in the schema's "$defs" and referred to with "$ref"
-            _mcp_tddefs = <McpSchemaDefinitionState>{};
+            _mcp_tddefs = <McpSchemaDefinitionState>{"graph": input.type_graph};
             on_exit remove _mcp_tddefs;
             McpServerHandler::countTypeInfoReferences(input, \_mcp_tddefs.counts);
             hash<string, hash<auto!>> memo;
@@ -3094,12 +3094,28 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         }
     }
 
+    #! Returns the type of the description's type table that a reference refers to
+    /** @throw TOOL-ARG-ERROR the reference refers to a type that is not in the description's type table
+    */
+    private static hash<auto> getReferencedTypeInfo(hash<auto> info) {
+        *hash<auto> rv = _mcp_tddefs.graph{info.type_ref};
+        if (!rv) {
+            throw "TOOL-ARG-ERROR", sprintf("type %y refers to type %y, which is not in the type table of the "
+                "description", info.name, info.type_ref);
+        }
+        return rv;
+    }
+
     #! Counts the references to each type with fields in a type description, by unique key
     /** The descriptions below a type are counted the first time the type is reached, and a recursion marker counts
         as a reference to the enclosing type, so a type referred to from more than one place, or recursively, has a
         count of two or more
     */
     private static countTypeInfoReferences(hash<auto> info, reference<hash<string, int>> counts) {
+        # a reference to a type of the description's type table is that type, which has the reference's key
+        if (info.type_ref) {
+            info = McpServerHandler::getReferencedTypeInfo(info);
+        }
         if ((info.fields || (info.recursive && info.base_type == "hash")) && info.unique_key.val()) {
             if (counts{info.unique_key}++) {
                 return;
@@ -3164,6 +3180,10 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
     #! Returns the JSON schema for a type description, like getTypeDescriptionImpl() for a type object
     private *hash<auto> getTypeInfoDescriptionImpl(string name, hash<auto> info, *AbstractDataProvider prov,
             reference<hash<string, hash<auto!>>> memo) {
+        # a reference to a type of the description's type table is that type, which has the reference's key
+        if (info.type_ref) {
+            info = McpServerHandler::getReferencedTypeInfo(info);
+        }
         # a type that the description refers to more than once, including with a recursion marker, is described
         # once in the schema's "$defs" and referred to with "$ref"
         if ((info.fields || (info.recursive && info.base_type == "hash")) && info.unique_key.val()
@@ -5467,6 +5487,8 @@ hashdecl McpSchemaDefinitionState {
     hash<string, bool> started = {};
     #! The definitions, by name
     hash<string, hash<auto>> defs = {};
+    #! The type table of the type description being described, if it has one
+    *hash<string, hash<auto>> graph;
 }
 
 #! The definitions of the shared and recursive types of the tool input schema being built in this thread

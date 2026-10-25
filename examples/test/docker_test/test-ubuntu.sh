@@ -30,6 +30,13 @@ echo "export QORE_GID=999" >> ${ENV_FILE}
 
 ${QORE_SRC_DIR}/test/docker_test/print-ci-provenance.sh || true
 
+# The build artifact was compiled against the binary modules of the build job's qore-test-base image: a job on another
+# image (the image tag was published again during the pipeline) fails before any test runs (see ci-build-image-check.sh)
+if [ -f "${QORE_SRC_DIR}/build/CMakeCache.txt" ]; then
+    "${QORE_SRC_DIR}/test/docker_test/ci-build-image-check.sh" \
+        "${QORE_SRC_DIR}/build/qore-ci-build-artifact-info" || exit 1
+fi
+
 if [ -z "${QORE_DB_CONNSTR_PGSQL}" ]; then
     . examples/test/docker_test/postgres_lib.sh
     setup_postgres_on_host

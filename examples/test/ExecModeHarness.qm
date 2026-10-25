@@ -24,6 +24,7 @@
 
 %modern
 %requires FsUtil
+%requires ./LoaderWarnings.qm
 
 module ExecModeHarness {
     version = "1.0";
@@ -109,10 +110,17 @@ public hashdecl ModeRunResult {
     string out;
     #! the output on stdout
     string stdout;
-    #! the output on stderr that is not part of the trace
+    #! the output on stderr that is not part of the trace, nor a warning of the module loader (see loader_warnings)
     string stderr;
     #! the native compilation trace
     list<string> trace;
+    #! the warnings of the module loader on stderr that a module is loaded from its source instead of its AOT module
+    /** These warnings are about the environment, not output of the command: an AOT module of the build tree whose
+        sources, including the binary modules that it was compiled against, have changed since it was compiled (as
+        when a test runs with other binary modules than the build that compiled the module), or that cannot be
+        loaded.  The command ran the module's source.  They are also written to the standard error of the test.
+    */
+    list<string> loader_warnings;
     #! the exit status of the command
     int rc;
 }
@@ -120,6 +128,13 @@ public hashdecl ModeRunResult {
 #! returns True if the line is a line of the native compilation trace
 public bool sub is_trace_line(string line) {
     return line =~ /^\[(BG-)?JIT\] /;
+}
+
+#! returns True if the line is a warning of the module loader that a module is loaded from its source
+/** See ModeRunResult::loader_warnings and LoaderWarnings::is_loader_warning()
+*/
+public bool sub is_loader_warning(string line) {
+    return LoaderWarnings::is_loader_warning(line);
 }
 
 #! returns True if the trace line reports code compiled to native code
@@ -157,8 +172,10 @@ public hash<ModeRunResult> sub run_command(string command) {
     if (err_lines && err_lines.last() == "") {
         pop err_lines;
     }
-    list<string> errors = select err_lines, !is_trace_line($1);
+    list<string> errors = select err_lines, !is_trace_line($1) && !is_loader_warning($1);
     list<string> trace = select err_lines, is_trace_line($1);
+    list<string> loader_warnings = select err_lines, is_loader_warning($1);
+    map stderr.printf("%s\n", $1), loader_warnings;
     string err_out = errors ? errors.join("\n") + "\n" : "";
     return <ModeRunResult>{
         "mode": mode,
@@ -166,6 +183,7 @@ public hash<ModeRunResult> sub run_command(string command) {
         "stdout": out,
         "stderr": err_out,
         "trace": trace,
+        "loader_warnings": loader_warnings,
         "rc": rc,
     };
 }

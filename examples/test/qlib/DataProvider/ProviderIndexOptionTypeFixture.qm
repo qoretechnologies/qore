@@ -25,7 +25,7 @@ public const App = "QoreTestIndexOptionTypes";
 #! A record type that counts how often it is described
 public class CountingRecordType inherits HashDataType {
     public {
-        #! type name -> the number of getInfo() calls
+        #! type name -> the number of getInfo() calls that described the type, not a reference to it
         static hash<string, int> calls = {};
     }
 
@@ -33,8 +33,12 @@ public class CountingRecordType inherits HashDataType {
     }
 
     hash<DataTypeInfo> getInfo(*bool simple) {
-        ++calls{getName()};
-        return HashDataType::getInfo(simple);
+        hash<DataTypeInfo> rv = HashDataType::getInfo(simple);
+        # a reference to the type in a type graph description does not describe it
+        if (!rv.type_ref) {
+            ++calls{getName()};
+        }
+        return rv;
     }
 }
 
@@ -62,6 +66,8 @@ public const Actions = {
     "update": {"record": OrderType, "key": KeyType},
     "upsert": {"record": OrderType},
     "lookup": {"key": KeyType, "other_key": KeyType},
+    # an action without options
+    "ping": {},
 };
 
 #! Registers the fixture app and its actions

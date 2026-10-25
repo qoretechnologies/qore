@@ -1258,7 +1258,11 @@
     instead: they return the same actions with their option types described by plain data in each option's
     \c type_info, and without output types; a type object can be created from a \c type_info with
     \c DataProvider::AbstractDataProviderType::get(), and the exact types are available from the registered action
-    with \c DataProvider::DataProviderActionCatalog::getAppAction(), which loads the app's modules.
+    with \c DataProvider::DataProviderActionCatalog::getAppAction(), which loads the app's modules.  The option types
+    of an app are described with one type table: the \c type_info of a type with fields or a union type refers to
+    the type in the table by its key (\c DataProvider::DataTypeInfo::type_ref) and gives the table in
+    \c DataProvider::DataTypeInfo::type_graph, so code that reads the fields of a \c type_info finds them in the
+    table.
     @endparblock
 
     @par PostgreSQL Lists Only the Connection's Schemas
@@ -1857,6 +1861,26 @@ val = "string";      # OK
     <tt>//!</tt> line) was built without the restriction or code flag note in its documentation.  The output files of
     a failed run are removed, so the next build runs \c qpp again.  A problem that leaves the output complete is
     reported as a warning and does not fail the build.
+    @endparblock
+
+    @par REST Action Options Enforce the Constraints of Their Schema
+    @parblock
+    The options and fields of REST schema actions (OpenAPI and Swagger) now enforce the constraints of their schema,
+    such as \c maxLength, \c maximum, \c pattern and \c enum, before the request is sent, also when they convert a
+    value from a string, and their type descriptions give the constraints.  Such options were only
+    checked by the remote API, so a value that the API rejects (for example a Stripe merchant category code longer
+    than 4 characters) is now refused with a \c RUNTIME-TYPE-ERROR or \c TYPE-VALUE-ERROR exception before the
+    request is made.  The soft (converting) equivalents of all data provider scalar types keep the constraints of the
+    type.
+    @endparblock
+
+    @par Records Whose Fields All Have Default Values Are Consistently Optional
+    @parblock
+    A data provider record type (@ref DataProvider::HashDataType "HashDataType") whose added fields all have default
+    values, which is optional and gives the record of the default values when no value is provided, now also
+    describes itself as optional: it accepts \c NOTHING and \c NULL in its accepted types, supports no type options,
+    like any other optional type, and its description restores an optional type.  It was described as accepting only
+    a hash.
     @endparblock
 
     @subsection qore_3_0_0_new_features New Features in Qore
@@ -3142,7 +3166,9 @@ while (*binary chunk = input.read(65536)) {
         (@ref DataProvider::DescribedDataField "DescribedDataField")
       - added type graph descriptions, which describe each type with fields once and refer to it by key
         (@ref DataProvider::AbstractDataProviderType::getInfoGraph() "AbstractDataProviderType::getInfoGraph()",
-        @ref DataProvider::DataTypeGraphBuilder "DataTypeGraphBuilder")
+        @ref DataProvider::DataTypeGraphBuilder "DataTypeGraphBuilder"); a type description that refers to the types
+        of a type table can give the table, so that it is restored alone
+        (@ref DataProvider::DataTypeInfo::type_graph "DataTypeInfo::type_graph")
       - action option generation returns an empty hash for operations without input fields
       - fixed short-description derivation corrupting words and literal braces when help text contains quoted parameter names or numbers
       - added DPQL (Data Provider Query Language) — a human/AI-readable query syntax with a tokenizer,
@@ -5959,6 +5985,10 @@ while (*binary chunk = input.read(65536)) {
       - the index describes each action option's type completely with plain data, including nested fields,
         structured choices, and media/job results, instead of by the name of its base type
       - an option type whose description does not restore an equivalent type is reported in the index summary
+      - the index describes the option types of an app with one type table, in which each type with fields and each
+        union type is described once and which is stored once per app, so the index of record types that refer to
+        each other, such as NetSuite's, is built, stored, and read in time and memory in proportion to their
+        distinct types
       - the canonical index file \c qore-data-index.yaml is no longer published by default (see
         @ref qore_3_0_0_compatibility "Changes That Can Affect Backwards-Compatibility"); for a large index, this
         saves hundreds of megabytes per index directory, and the memory and time to write and hash the file at the

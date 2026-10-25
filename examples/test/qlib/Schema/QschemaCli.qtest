@@ -10,6 +10,7 @@
 %requires QUnit
 %requires Util
 %requires FsUtil
+%requires ../../LoaderWarnings.qm
 
 %exec-class QschemaCliTest
 
@@ -75,7 +76,10 @@ class QschemaCliTest inherits QUnit::Test {
         return {
             "rc": rc,
             "stdout": is_file(stdout_path) ? ReadOnlyFile::readTextFile(stdout_path) : "",
-            "stderr": is_file(stderr_path) ? ReadOnlyFile::readTextFile(stderr_path) : "",
+            # the command's messages, without the module loader's warnings about the environment (see LoaderWarnings)
+            "stderr": is_file(stderr_path)
+                ? LoaderWarnings::strip_loader_warnings(ReadOnlyFile::readTextFile(stderr_path))
+                : "",
         };
     }
 

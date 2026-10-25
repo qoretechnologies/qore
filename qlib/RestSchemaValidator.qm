@@ -82,6 +82,8 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - the type of a field for a scalar property enforces and describes the constraints of the property's schema, such
+      as \c maxLength, \c maximum, \c pattern and \c enum, as the data type of the schema does
     - added @ref RestSchemaValidator::AbstractRestSchemaObject::getSchemaIdentity() "getSchemaIdentity()", the
       location of a schema in its document; an object type built from the schema has it as its
       @ref DataProvider::AbstractDataProviderType::getSchemaIdentity() "schema identity", so that two schemas with
@@ -2065,7 +2067,9 @@ public namespace RestSchemaValidator {
             if (type == "object" || hasSchemaCompositionFeatures()) {
                 field.updateFieldType(getDataType(required_value, rest));
             } else {
-                field.updateFieldType(getSchemaType(path, type, format, items, required_value));
+                # the field's type enforces and describes the schema's constraints, as the schema's data type does
+                field.updateFieldType(getSchemaType(path, type, format, items, required_value)
+                    .copyWithConstraints(getConstraintInfo()));
             }
             return field;
         }

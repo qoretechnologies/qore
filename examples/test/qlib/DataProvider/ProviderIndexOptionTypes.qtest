@@ -23,15 +23,18 @@
 
 #! Tests that an index build describes each option type once
 /** An app's record type is the type of the options of several of its actions, and the descriptions of some types
-    have millions of nodes; the build describes each type once and gives the description to every option of the type
+    have millions of nodes; the build describes the option types of an app with one type table, in which each type
+    with fields is described once, and gives each option a description that refers to the table
 */
 public class ProviderIndexOptionTypesTest inherits QUnit::Test {
     constructor() : Test("ProviderIndex option types test", "1.0") {
-        addTestCase("each option type is described once per build", \describedOnceTest());
-        addTestCase("the options of a type have its description, with unique keys replaced", \descriptionTest());
+        addTestCase("each option type is described once per app", \describedOnceTest());
+        addTestCase("the options of a type have its description, which refers to the app's type table",
+            \descriptionTest());
         addTestCase("a repeated build writes the same index", \repeatTest());
-        addTestCase("a subtree that a description repeats is replaced once, with the same result",
-            \repeatedSubtreeTest());
+        addTestCase("the type table of an app is stored once, with the types its options refer to",
+            \storedTableTest());
+        addTestCase("a restored option type is the type described", \restoredTypeTest());
         set_return_value(main());
     }
 
@@ -64,11 +67,11 @@ public class ProviderIndexOptionTypesTest inherits QUnit::Test {
         ProviderIndexOptionTypeFixture::CountingRecordType::calls = {};
         string dir = build();
         on_exit remove_tree(dir);
-        # the order is the type of 3 options and the key of 3; the address is the type of 2 fields of the order, so
-        # one description of the order describes it twice
-        assertEq({"FixtureOrder": 1, "FixtureKey": 1, "FixtureAddress": 2},
+        # the order is the type of 3 options and the key of 3; the address is the type of 2 fields of the order, and
+        # is described once too
+        assertEq({"FixtureOrder": 1, "FixtureKey": 1, "FixtureAddress": 1},
             ProviderIndexOptionTypeFixture::CountingRecordType::calls,
-            "each type is described once, however many options have it");
+            "each type is described once, however many options and fields have it");
 %endif
     }
 
@@ -77,11 +80,15 @@ public class ProviderIndexOptionTypesTest inherits QUnit::Test {
 %ifndef NoMsgPack
         string dir = build();
         on_exit remove_tree(dir);
-        hash<auto> chunk = readIndex(dir);
-        hash<auto> actions = chunk.actioninfomap{ProviderIndexOptionTypeFixture::App};
-        assertEq(("create", "lookup", "update", "upsert"), sort(keys actions));
+        hash<auto> actions = readIndex(dir).actioninfomap{ProviderIndexOptionTypeFixture::App};
+        assertEq(("create", "lookup", "ping", "update", "upsert"), sort(keys actions));
+        # an action without options is indexed without them
+        assertNothing(actions.ping.options);
         hash<auto> order = actions.create.options.record.type_info;
         assertEq("FixtureOrder", order.name);
+        # a type with fields is a reference to the app's type table, which the description gives
+        assertTrue(order.type_ref.val());
+        hash<auto> table = order.type_graph;
         foreach string action in (("update", "upsert")) {
             assertEq(order, actions{action}.options.record.type_info, action);
         }
@@ -89,11 +96,15 @@ public class ProviderIndexOptionTypesTest inherits QUnit::Test {
         assertEq("FixtureKey", key.name);
         assertEq(key, actions.lookup.options.other_key.type_info);
         assertEq(key, actions.update.options.key.type_info);
-        # unique keys are numbered in the order in which they occur in each description, from 1
-        assertEq(order.fields.billing.type, order.fields.shipping.type, "the fields of one type");
-        list<int> keys_found = sort(map $1.toInt(), uniqueKeys(order));
-        assertEq((map $1, xrange(1, keys_found.size() + 1)), keys_found,
-            "the keys of a description are 1 to its number of keys");
+        assertEq(table, key.type_graph, "the options of an app share its type table");
+        # the address that two fields of the order have is one type of the table
+        hash<auto> order_type = table{order.type_ref};
+        assertEq("FixtureOrder", order_type.name);
+        assertEq(order_type.fields.billing.type.type_ref, order_type.fields.shipping.type.type_ref);
+        assertEq("FixtureAddress", table{order_type.fields.billing.type.type_ref}.name);
+        # the keys are numbered from 1 in the order in which the actions, by name, refer to them
+        assertEq(("1", "2", "3"), keys table);
+        assertEq("1", order.type_ref);
 %endif
     }
 
@@ -108,70 +119,74 @@ public class ProviderIndexOptionTypesTest inherits QUnit::Test {
 %endif
     }
 
-    repeatedSubtreeTest() {
+    storedTableTest() {
         checkModules();
 %ifndef NoMsgPack
-        hash<string, int> before = ProviderIndex::getUniqueKeyReplacementCounts();
         string dir = build();
         on_exit remove_tree(dir);
-        hash<string, int> after = ProviderIndex::getUniqueKeyReplacementCounts();
-        # the order, the key and the description of the fixture app's info and of its factory, if any
-        assertGt(0, after.descriptions - before.descriptions);
-        # the order describes the address twice, by its billing and its shipping field, and each field's string
-        # type; each repeated subtree is replaced by the replacement made before
-        assertGt(0, after.reused - before.reused, "repeated subtrees are reused");
-        assertEq(1, after.most_walks, "no subtree of a description is walked twice");
-
-        # the result is that of replacing every key of the complete description in the order of its occurrence
-        hash<auto> order = readIndex(dir).actioninfomap{ProviderIndexOptionTypeFixture::App}.create.options.record
-            .type_info;
-        hash<string, string> key_map = {};
-        assertEq(replaceEveryKey(ProviderIndexOptionTypeFixture::OrderType.getInfo(), \key_map), order);
+        hash<auto> chunk = readChunk(dir);
+        # the chunk stores the app's type table once, as positions in its table of type descriptions
+        assertEq(("1", "2", "3"), keys chunk.type_graph);
+        map assertEq(Type::Int, $1.type()), chunk.type_graph.iterator();
+        # each option refers to the position of its description, which refers to the type table by key
+        hash<auto> record = chunk.types[chunk.index.actioninfomap{ProviderIndexOptionTypeFixture::App}.create.options
+            .record.type_info];
+        assertEq("1", record.type_ref);
+        assertEq(NOTHING, record.type_graph);
+        hash<auto> order = chunk.types[chunk.type_graph."1"];
+        assertEq("FixtureOrder", order.name);
 %endif
     }
 
-    #! Replaces the unique keys of a description by walking every node, as the index build did before it reused
-    #! repeated subtrees
-    private static auto replaceEveryKey(auto value, reference<hash<string, string>> key_map) {
-        switch (value.typeCode()) {
-            case NT_HASH:
-                foreach string key in (keys value) {
-                    if (key == "unique_key" && value{key}.typeCode() == NT_STRING) {
-                        value{key} = key_map{value{key}} ?? (key_map{value{key}} = (key_map.size() + 1).toString());
-                    } else {
-                        value{key} = replaceEveryKey(value{key}, \key_map);
-                    }
-                }
-                return value;
-            case NT_LIST:
-                return map replaceEveryKey($1, \key_map), value;
-        }
-        return value;
+    restoredTypeTest() {
+        checkModules();
+%ifndef NoMsgPack
+        string dir = build();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+        list<hash<auto>> actions = ProviderIndexUtil::tryGetActionMetadataForApp(ProviderIndexOptionTypeFixture::App);
+        hash<DataTypeInfo> record = (map $1, actions, $1.action == "create")[0].options.record.type_info;
+        # restored from the description alone, as QorusIndexedAction restores option types
+        AbstractDataProviderType order = AbstractDataProviderType::get(record);
+        assertEq(ProviderIndexOptionTypeFixture::OrderType.getInfoGraph(), order.getInfoGraph());
+        # the address of the two fields is one restored type
+        assertEq(order.getFields().billing.getType(), order.getFields().shipping.getType());
+%endif
     }
 
-    #! Reads the published index of the fixture app with its complete option type descriptions
+    #! Reads the published index of the fixture app in the serialized form
     private static hash<auto> readIndex(string dir) {
         return ProviderIndexUtil::readSerializedDataProviderIndex(dir).index;
     }
 
-    #! Returns every unique key in a description
-    private static list<string> uniqueKeys(auto value) {
-        list<string> rv = ();
-        switch (value.typeCode()) {
-            case NT_HASH:
-                foreach hash<auto> i in (value.pairIterator()) {
-                    if (i.key == "unique_key" && i.value.typeCode() == NT_STRING) {
-                        rv += i.value;
-                    } else {
-                        rv += uniqueKeys(i.value);
-                    }
-                }
-                break;
-            case NT_LIST:
-                map rv += uniqueKeys($1), value;
-                break;
-        }
-        return keys (map {$1: True}, rv);
+    #! Returns the unpacked metadata cache chunk of the fixture app
+    private static hash<auto> readChunk(string dir) {
+        hash<auto> routing = parse_yaml(ReadOnlyFile::readTextFile(dir + DirSep + "qore-routing-index.yaml"));
+        hash<auto> manifest = msgpack_unpack(ReadOnlyFile::readBinaryFile(sprintf("%s%sqore-data-index-manifest-%s"
+            ".msgpack", dir, DirSep, routing.metadata_cache_sha256)), MSGPACK_QORE_MODE);
+        string path = sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep,
+            manifest.apps{ProviderIndexOptionTypeFixture::App}.sha256);
+        return msgpack_unpack(uncompress_to_binary(ReadOnlyFile::readBinaryFile(path)), MSGPACK_QORE_MODE);
+    }
+
+    #! Makes the given directory the index directory; returns code that restores the previous directory
+    private static code useIndexDir(string dir) {
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        ProviderIndexUtil::setBuildMode(True);
+        ProviderIndexUtil::setBuildMode(False);
+        return sub () {
+            if (had_env) {
+                ProviderIndexUtil::setEnvironmentVariable(old_env);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+            ProviderIndexUtil::setBuildMode(True);
+            ProviderIndexUtil::setBuildMode(False);
+        };
     }
 
     #! Returns the contents of all index files in a directory

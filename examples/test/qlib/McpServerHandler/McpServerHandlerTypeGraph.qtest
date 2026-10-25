@@ -101,6 +101,8 @@ public class McpServerHandlerTypeGraphTest inherits QUnit::Test {
         addTestCase("recursive input types are described once in $defs", \recursiveDefinitionsTest());
         addTestCase("a recursive type description is described once in $defs", \recursiveTypeInfoTest());
         addTestCase("a schema with definitions is shaped for Gemini without references", \geminiShapeTest());
+        addTestCase("a type description with a type table is described with its definitions",
+            \typeGraphInfoTest());
         addTestCase("wildcard fields are published as values of any type", \wildcardFieldSchemaTest());
         addTestCase("wildcard tool inputs keep their calling convention", \wildcardInputSchemaTest());
 
@@ -249,6 +251,20 @@ public class McpServerHandlerTypeGraphTest inherits QUnit::Test {
         assertEq(-1, json.find("$defs"), "no definitions are sent to Gemini");
         assertEq("object", shaped.parameters.properties.a.type, "a definition is expanded in place");
         assertTrue(shaped.stringified.size() > 0, "the recursion is sent as JSON text");
+    }
+
+    #! A description whose references refer to its type table, as an index reader gives it, is described like the
+    #! type itself
+    typeGraphInfoTest() {
+        TypeGraphMcpServerHandler handler(getLogger(), getSharedSubtypeDag(1), getCyclicType());
+        AbstractDataProviderType top = getCyclicSharedGraph(3);
+        hash<DataTypeGraphInfo> graph = top.getInfoGraph();
+        hash<DataTypeInfo> info = graph.type;
+        info.type_graph = graph.types;
+        handler.addToolWithTypeInfo("graph-info-tool", info);
+        handler.addTool("graph-tool", top);
+        assertEq(handler.getToolInputSchema("graph-tool"), handler.getToolInputSchema("graph-info-tool"),
+            "the same schema as for the type");
     }
 
     #! A recursion marker in a type description refers to the definition of the enclosing type

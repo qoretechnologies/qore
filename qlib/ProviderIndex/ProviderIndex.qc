@@ -187,6 +187,162 @@ class ProviderIndexUniqueKeys {
     }
 }
 
+#! Compares type descriptions that refer to the types of two type tables
+/** Two descriptions are equal if they describe the same types: the members of each type are compared, ignoring
+    unique keys, and a reference to a type of one table corresponds to a reference to a type of the other, whose
+    descriptions are compared once.  The types of one table must correspond one to one to the types of the other, so
+    that two types restored from one described type, or one restored from two, are a difference.
+*/
+class ProviderIndexTypeGraphComparison {
+    private {
+        #! The type tables
+        hash<string, hash<auto>> a_types;
+        hash<string, hash<auto>> b_types;
+        #! The key in the other table of each key of a table
+        hash<string, string> a_to_b = {};
+        hash<string, string> b_to_a = {};
+        #! The first difference of each pair of keys compared, or @ref nothing if they are equal or being compared
+        hash<string, *string> pairs = {};
+    }
+
+    #! Creates the object with the type tables of the descriptions to compare
+    constructor(hash<auto> a_types, hash<auto> b_types) {
+        self.a_types = a_types;
+        self.b_types = b_types;
+    }
+
+    #! Returns the path of the first difference between two descriptions, if any
+    *string getDifference(auto a, auto b) {
+        return diff(a, b, "");
+    }
+
+    #! Returns @ref True if the value is a reference to a type of a type table
+    private static bool isReference(auto info) {
+        return info.typeCode() == NT_HASH && info.hasKey("type_ref") && info.type_ref.typeCode() == NT_STRING
+            && info.type_ref.val();
+    }
+
+    #! Returns the path of a difference as reported
+    private static string getPath(string path) {
+        return path.val() ? path.substr(1) : "<root>";
+    }
+
+    #! Returns the path of the first difference between two values of the descriptions, if any
+    /** @param a a value of a description that refers to the types of the first table
+        @param b the corresponding value of a description that refers to the types of the second table
+        @param path the path of the values, each key preceded by a dot
+    */
+    private *string diff(auto a, auto b, string path) {
+        bool a_ref = ProviderIndexTypeGraphComparison::isReference(a);
+        bool b_ref = ProviderIndexTypeGraphComparison::isReference(b);
+        if (a_ref || b_ref) {
+            if (!a_ref || !b_ref) {
+                return ProviderIndexTypeGraphComparison::getPath(path + ".type_ref");
+            }
+            # the members that a reference describes besides the type it refers to
+            if (*string rv = diffHash(a - ("type_ref", "unique_key"), b - ("type_ref", "unique_key"), path)) {
+                return rv;
+            }
+            string a_key = a.type_ref;
+            string b_key = b.type_ref;
+            if ((a_to_b.hasKey(a_key) && a_to_b{a_key} != b_key) || (b_to_a.hasKey(b_key) && b_to_a{b_key} != a_key)) {
+                return ProviderIndexTypeGraphComparison::getPath(path + ".type_ref");
+            }
+            string pair = a_key + "|" + b_key;
+            if (pairs.hasKey(pair)) {
+                # a pair being compared is equal unless a difference is found
+                return pairs{pair};
+            }
+            a_to_b{a_key} = b_key;
+            b_to_a{b_key} = a_key;
+            pairs{pair} = NOTHING;
+            *hash<auto> a_entry = a_types{a_key};
+            *hash<auto> b_entry = b_types{b_key};
+            *string rv = (a_entry && b_entry)
+                ? diff(a_entry, b_entry, path)
+                : ProviderIndexTypeGraphComparison::getPath(path + ".type_ref");
+            if (rv) {
+                pairs{pair} = rv;
+            }
+            return rv;
+        }
+        if (a.typeCode() == NT_HASH && b.typeCode() == NT_HASH) {
+            return diffHash(a, b, path);
+        }
+        if (a.typeCode() == NT_LIST && b.typeCode() == NT_LIST && a.size() == b.size()) {
+            # accepted and returned types are sets; their order is that of the hash they are the keys of
+            if (path =~ /\.types_(accepted|returned)$/) {
+                return sort(a) == sort(b) ? NOTHING : ProviderIndexTypeGraphComparison::getPath(path);
+            }
+            for (int i = 0; i < a.size(); ++i) {
+                if (*string rv = diff(a[i], b[i], sprintf("%s[%d]", path, i))) {
+                    return rv;
+                }
+            }
+            return;
+        }
+        return a === b ? NOTHING : ProviderIndexTypeGraphComparison::getPath(path);
+    }
+
+    #! Returns the path of the first difference between the members of two hashes of the descriptions, if any
+    private *string diffHash(hash<auto> a, hash<auto> b, string path) {
+        foreach string key in (keys (a + b)) {
+            # unique keys identify objects; the type table is that of the comparison
+            if (key == "unique_key" || key == "type_graph") {
+                continue;
+            }
+            if (*string rv = diff(a{key}, b{key}, path + "." + key)) {
+                return rv;
+            }
+        }
+    }
+}
+
+#! The option types of one app of an index build, described with one type table
+/** The same type object is the type of many options, for example an app's record type is the type of the options of
+    its create, update and upsert actions, and the types of some apps refer to each other by so many paths that their
+    complete descriptions have millions of nodes.  The option types of an app are described with one type table
+    (@ref DataProvider::DataTypeGraphBuilder "DataTypeGraphBuilder"), in which each type with fields and each union
+    type is described once, so the descriptions of an app take as much as its distinct types do; each type is
+    described once per app, and kept with its description, so that its identity cannot be reused by another object
+    while the build runs.
+*/
+class ProviderIndexAppTypes {
+    public {
+        #! The type table of the app
+        DataTypeGraphBuilder builder();
+
+        #! The description of each option type of the app, by type identity: \c type: the type; \c type_info: its
+        #! description, which refers to the types of the type table
+        hash<string, hash<auto>> described = {};
+
+        #! The identity of the type of each option, by action and option
+        hash<string, hash<string, string>> option_types = {};
+    }
+
+    #! Returns the description of the type of an option, made once per type and app
+    /** @param action the action name
+        @param option the option name
+        @param type the option type; a value that is not a type fails
+
+        @return the description, which refers to the types of the app's type table
+    */
+    hash<DataTypeInfo> describe(string action, string option, auto type) {
+        *string key = type instanceof AbstractDataProviderType ? type.uniqueHash() : NOTHING;
+        if (key && (*hash<auto> description = described{key})) {
+            option_types{action}{option} = key;
+            return description.type_info;
+        }
+        hash<DataTypeInfo> type_info = builder.add(type);
+        described{key} = {
+            "type": type,
+            "type_info": type_info,
+        };
+        option_types{action}{option} = key;
+        return type_info;
+    }
+}
+
 #! The main API class
 public class ProviderIndex inherits ProviderIndexUtil {
     public {}
@@ -217,7 +373,8 @@ public class ProviderIndex inherits ProviderIndexUtil {
     }
 
     #! Returns what the replacement of the unique keys of type descriptions did in this process
-    /** For diagnostics and tests: the work of an index build on large type descriptions shows here.
+    /** For diagnostics and tests: the work of an index build on the type descriptions of factory info shows here;
+        option types are described with a type table per app, whose keys do not depend on the process.
 
         @return \c descriptions: the descriptions whose unique keys were replaced; \c walked: the hash nodes walked;
         \c reused: the subtrees that were found again and replaced by the replacement made before; \c most_walks:
@@ -432,7 +589,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
             tryLoadTypeScriptActionInterface(discovery);
         }
 
-        # Option types whose descriptions do not restore an equivalent type; see checkTypeInfo()
+        # Option types whose descriptions do not restore an equivalent type; see checkAppTypes()
         list<hash<auto>> type_info_mismatches = ();
         int scheme_registry_revision = snapshotIndex(\index, discovery, opts.apps, \type_info_mismatches);
 
@@ -607,8 +764,6 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     private static int snapshotIndex(reference<hash<DataProviderIndexInfo>> index,
             DataProviderDiscoverySession discovery, *list<string> app_filter,
             reference<list<hash<auto>>> type_info_mismatches) {
-        # the description of each option type of this build, made once per type; see getOptionTypeDescription()
-        hash<string, hash<auto>> option_types = {};
         # Finish deferred registration, output-type resolution, and scheme loading before starting the authoritative
         # snapshot. These calls are allowed to advance the revision; the second getIndexApps() below is the actual
         # checked-point read.
@@ -678,7 +833,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
             index.appinfomap{app.name} = app;
             # add to app action info map (skip apps with no actions)
             if (*hash<string, hash<auto>> actions = getSerializableAppActions(app.name, discovery,
-                    \type_info_mismatches, \option_types)) {
+                    \type_info_mismatches)) {
                 index.actioninfomap{app.name} = actions;
             }
             if (!index.appmap{app.name}) {
@@ -737,12 +892,20 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     /** Output-schema resolution failures are reported as unavailable actions and retried on later builds.
         Option types are described by plain data, and output types are not indexed, so reading the index never
         requires the provider modules that define the types; dynamic type and default value callbacks are not run
-        (see @ref DataProvider::DataProviderStaticMetadataHelper "DataProviderStaticMetadataHelper")
+        (see @ref DataProvider::DataProviderStaticMetadataHelper "DataProviderStaticMetadataHelper").
+
+        The option types of the app are described with one type table (see ProviderIndexAppTypes); each option
+        type description that refers to the types of the table gives the table in
+        @ref DataProvider::DataTypeInfo::type_graph "type_graph", so that
+        @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()" restores it from the
+        description alone, and the index stores the table once (see ProviderIndexUtil).  The keys of the table do
+        not depend on the process, so the same index is always written identically.
     */
     private static *hash<string, hash<auto>> getSerializableAppActions(string app,
-            DataProviderDiscoverySession discovery, reference<list<hash<auto>>> type_info_mismatches,
-            reference<hash<string, hash<auto>>> option_types) {
+            DataProviderDiscoverySession discovery, reference<list<hash<auto>>> type_info_mismatches) {
         hash<string, hash<auto>> rv;
+        # the option types of the app, described with one type table
+        ProviderIndexAppTypes types();
         # the index is static metadata, so dynamic type and default value callbacks must not run
         DataProviderStaticMetadataHelper static_metadata();
         *list<hash<DataProviderActionInfo>> actions;
@@ -771,8 +934,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                 # the paths of the option type descriptions already known to be plain data
                 hash<string, bool> plain = {};
                 hash<auto> entry = (action - ("get_dynamic_options", "get_output_type", "output_type")) + {
-                    "options": getSerializableActionOptions(app, action, \type_info_mismatches, \option_types,
-                        \plain),
+                    "options": getSerializableActionOptions(action, types, \plain),
                     "data_provider_info": getSerializableDataProviderInfo(action.data_provider_info),
                 };
                 checkPlainData(entry, "", plain);
@@ -782,7 +944,108 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                     app + "/" + action.action, ex.err, ex.desc, ex.arg, app, action.action);
             }
         }
-        return rv;
+        return finishAppTypes(app, rv, types, discovery, \type_info_mismatches);
+    }
+
+    #! Checks the option types of an app and gives their descriptions the app's type table
+    /** - the types of the type table must be plain data: an action whose option types refer to a type that is not
+          is reported as a failure and left out, like an action whose option is not plain data
+        - every option type description must restore an equivalent type (see checkAppTypes())
+        - every option type description that refers to the types of the table gives the table in
+          @ref DataProvider::DataTypeInfo::type_graph "type_graph"
+
+        @param app the app
+        @param actions the app's serialized actions, whose option type descriptions refer to the app's type table
+        @param types the app's option types
+        @param discovery the open discovery generation
+        @param type_info_mismatches option types whose descriptions do not restore an equivalent type are added here
+
+        @return the actions that are indexed
+    */
+    private static *hash<string, hash<auto>> finishAppTypes(string app, *hash<string, hash<auto>> actions,
+            ProviderIndexAppTypes types, DataProviderDiscoverySession discovery,
+            reference<list<hash<auto>>> type_info_mismatches) {
+        if (!actions) {
+            return actions;
+        }
+        hash<string, hash<DataTypeInfo>> table = types.builder.getTypes();
+
+        # a type of the table that is not plain data cannot be indexed, nor can any action whose option types refer
+        # to it
+        hash<string, string> not_plain = {};
+        foreach hash<auto> i in (table.pairIterator()) {
+            if (!isPlainData(i.value)) {
+                try {
+                    checkPlainData(i.value, ".type_graph." + i.key);
+                } catch (hash<ExceptionInfo> ex) {
+                    not_plain{i.key} = sprintf("%s: %s", ex.err, ex.desc);
+                }
+            }
+        }
+        if (not_plain) {
+            # the types of the table that each option type refers to, by type identity
+            hash<string, *string> reached = {};
+            foreach string action_name in (keys actions) {
+                foreach hash<auto> i in (types.option_types{action_name}.pairIterator()) {
+                    if (!reached.hasKey(i.value)) {
+                        reached{i.value} = getNotPlainType(types.described{i.value}.type_info, table, not_plain);
+                    }
+                    if (*string key = reached{i.value}) {
+                        DataProviderActionCatalog::reportDiscoveryFailure(discovery, "action",
+                            "serialize-action-metadata", app + "/" + action_name, "PROVIDER-INDEX-ERROR",
+                            sprintf("option %y: %s", i.key, not_plain{key}), NOTHING, app, action_name);
+                        remove actions{action_name};
+                        break;
+                    }
+                }
+            }
+        }
+
+        # the descriptions of the option types of the indexed actions
+        hash<string, bool> keys_used = {};
+        foreach string action_name in (keys actions) {
+            map keys_used{$1} = True, types.option_types{action_name}.iterator();
+        }
+        hash<string, hash<DataTypeInfo>> roots = map {$1: types.described{$1}.type_info}, keys keys_used;
+        hash<string, hash<auto>> mismatches = checkAppTypes(roots, table);
+        foreach hash<auto> action in (actions.pairIterator()) {
+            # an action without options is indexed without them
+            *hash<auto> options = action.value.options;
+            if (!options) {
+                continue;
+            }
+            foreach hash<auto> i in (types.option_types{action.key}.pairIterator()) {
+                if (*hash<auto> mismatch = mismatches{i.value}) {
+                    push type_info_mismatches, {"app": app, "action": action.key, "option": i.key} + mismatch;
+                }
+                if (refersToTypeGraph(options{i.key}.type_info)) {
+                    options{i.key}.type_info.type_graph = table;
+                }
+            }
+            actions{action.key}.options = options;
+        }
+        return actions;
+    }
+
+    #! Returns the key of the first type that is not plain data that a description refers to, if any
+    private static *string getNotPlainType(hash<auto> info, hash<string, hash<DataTypeInfo>> table,
+            hash<string, string> not_plain) {
+        hash<string, bool> seen = {};
+        list<string> todo = ();
+        addTypeRefs(info, \todo);
+        while (todo) {
+            string key = shift todo;
+            if (seen{key}) {
+                continue;
+            }
+            seen{key} = True;
+            if (not_plain{key}) {
+                return key;
+            }
+            if (*hash<auto> entry = table{key}) {
+                addTypeRefs(entry, \todo);
+            }
+        }
     }
 
     #! Returns the serializable info of the given data provider factories that are registered
@@ -845,64 +1108,25 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     }
 
     #! Get YAML-serializable action options
-    /** @param app the app
-        @param action the action
-        @param type_info_mismatches option types whose descriptions do not restore an equivalent type are added here
-        @param option_types the descriptions of the option types of the build; see getOptionTypeDescription()
+    /** @param action the action
+        @param types the option types of the action's app; each option type is described with the app's type table
         @param plain the path of each option type description in the action's index entry that is plain data is
-            added here, so that checkPlainData() does not walk it again
+            added here, so that checkPlainData() does not walk it again; the types of the table are checked by
+            finishAppTypes()
     */
-    private static *hash<auto> getSerializableActionOptions(string app, hash<DataProviderActionInfo> action,
-            reference<list<hash<auto>>> type_info_mismatches, reference<hash<string, hash<auto>>> option_types,
-            reference<hash<string, bool>> plain) {
+    private static *hash<auto> getSerializableActionOptions(hash<DataProviderActionInfo> action,
+            ProviderIndexAppTypes types, reference<hash<string, bool>> plain) {
         hash<auto> rv;
         foreach hash<auto> i in (action.options.pairIterator()) {
-            hash<auto> description = getOptionTypeDescription(i.value.type, \option_types);
-            if (description.mismatch) {
-                push type_info_mismatches, {"app": app, "action": action.action, "option": i.key}
-                    + description.mismatch;
-            }
-            if (description.plain) {
+            hash<DataTypeInfo> type_info = types.describe(action.action, i.key, i.value.type);
+            if (isPlainData(type_info)) {
                 plain{".options." + i.key + ".type_info"} = True;
             }
             rv{i.key} = (i.value - "type") + {
-                "type_info": description.type_info,
+                "type_info": type_info,
             };
         }
         return rv;
-    }
-
-    #! Returns the description of an option type, made once per type and build
-    /** The same type object is the type of many options, for example an app's record type is the type of the
-        options of its create, update and upsert actions, and the descriptions of some types have millions of nodes.
-        The description, with its unique keys replaced (see ProviderIndexUniqueKeys), whether it restores an
-        equivalent type (checkTypeInfo()) and whether it is plain data depend only on the type, so they are made the
-        first time the type is described in a build and reused for every other option of the type.  The type is kept
-        with its description, so that its identity cannot be reused by another object while the build runs.
-
-        @param type the option type; a value that is not a type is described as before, and fails as before
-        @param option_types the descriptions made so far in the build, by type identity
-
-        @return \c type_info: the description; \c mismatch: the result of checkTypeInfo(); \c plain: @ref True if
-        the description is plain data
-    */
-    private static hash<auto> getOptionTypeDescription(auto type, reference<hash<string, hash<auto>>> option_types) {
-        *string key = type instanceof AbstractDataProviderType ? type.uniqueHash() : NOTHING;
-        if (key && (*hash<auto> description = option_types{key})) {
-            return description;
-        }
-        # unique keys identify objects by address, so they are replaced to make builds reproducible
-        hash<DataTypeInfo> type_info = replaceUniqueKeys(type.getInfo());
-        hash<auto> description = {
-            "type": type,
-            "type_info": type_info,
-            "mismatch": checkTypeInfo(type_info),
-            "plain": isPlainData(type_info),
-        };
-        if (key) {
-            option_types{key} = description;
-        }
-        return description;
     }
 
     #! Checks that the given value contains only plain data that can be written to the index
@@ -962,27 +1186,104 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         return !value.callp();
     }
 
-    #! Checks that a type description restores an equivalent type
+    #! Checks that the option type descriptions of an app restore equivalent types
     /** Index consumers that need a type object create it from the indexed description with
-        @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()"; a
-        description that does not restore an equivalent type is recorded in the index summary so that the loss of
-        fidelity is visible rather than silent.
+        @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()"; a description that does
+        not restore an equivalent type is recorded in the index summary so that the loss of fidelity is visible
+        rather than silent.
 
-        @param type_info the type description
+        The types are restored in one restoration, so that each type of the app's type table is restored once, and
+        the restored types are described with one type table of their own.  Each description is compared with the
+        description of the type restored from it; the keys of the two tables are matched as the descriptions refer
+        to them, and a restored type must correspond to one described type, so that the time and memory the check
+        takes are proportional to the distinct types of the app.
 
-        @return @ref nothing if the restored type has the same description, otherwise a hash with a \c path key
-        giving the first differing key of the description, or an \c error key if the type cannot be restored
+        @param roots the option type descriptions, by type identity
+        @param table the app's type table
+
+        @return the descriptions that do not restore an equivalent type, by type identity: a hash with a \c path
+        key giving the first differing key of the description, or an \c error key if the type cannot be restored
     */
-    private static *hash<auto> checkTypeInfo(hash<DataTypeInfo> type_info) {
-        hash<DataTypeInfo> restored;
+    private static hash<string, hash<auto>> checkAppTypes(hash<string, hash<DataTypeInfo>> roots,
+            hash<string, hash<DataTypeInfo>> table) {
+        hash<string, hash<auto>> rv = {};
+        if (!roots) {
+            return rv;
+        }
+        hash<string, AbstractDataProviderType> restored;
         try {
-            restored = AbstractDataProviderType::get(type_info).getInfo();
+            restored = restoreAppTypes(roots, table);
         } catch (hash<ExceptionInfo> ex) {
-            return {"error": sprintf("%s: %s", ex.err, ex.desc)};
+            # the types that cannot be restored are found by restoring each on its own; each is compared on its own,
+            # since types restored separately do not share the types they refer to
+            foreach hash<auto> i in (roots.pairIterator()) {
+                hash<DataTypeInfo> info = i.value;
+                info.type_graph = table;
+                if (*hash<auto> mismatch = checkRestoredTypes({i.key: info}, table,
+                        hash<string, AbstractDataProviderType> sub () {
+                            return {i.key: AbstractDataProviderType::get(info)};
+                        }){i.key}) {
+                    rv{i.key} = mismatch;
+                }
+            }
+            return rv;
         }
-        if (*string path = getTypeInfoDifference(type_info, restored, "")) {
-            return {"path": path};
+        return checkRestoredTypes(roots, table, hash<string, AbstractDataProviderType> sub () { return restored; });
+    }
+
+    #! Compares option type descriptions with the descriptions of the types restored from them
+    /** @param roots the option type descriptions, by type identity
+        @param table the app's type table
+        @param restore returns the types restored from the descriptions, by type identity
+
+        @return the descriptions that do not restore an equivalent type, by type identity
+    */
+    private static hash<string, hash<auto>> checkRestoredTypes(hash<string, hash<DataTypeInfo>> roots,
+            hash<string, hash<DataTypeInfo>> table, code<hash<string, AbstractDataProviderType>()> restore) {
+        hash<string, hash<auto>> rv = {};
+        hash<string, AbstractDataProviderType> restored;
+        try {
+            restored = restore();
+        } catch (hash<ExceptionInfo> ex) {
+            map rv{$1} = {"error": sprintf("%s: %s", ex.err, ex.desc)}, keys roots;
+            return rv;
         }
+        # the restored types are described with one type table, whose types correspond to those of the app's table
+        DataTypeGraphBuilder builder();
+        hash<string, hash<DataTypeInfo>> descriptions = {};
+        foreach hash<auto> i in (restored.pairIterator()) {
+            try {
+                descriptions{i.key} = builder.add(i.value);
+            } catch (hash<ExceptionInfo> ex) {
+                rv{i.key} = {"error": sprintf("%s: %s", ex.err, ex.desc)};
+            }
+        }
+        ProviderIndexTypeGraphComparison comparison(table, builder.getTypes());
+        foreach hash<auto> i in (descriptions.pairIterator()) {
+            if (*string path = comparison.getDifference(roots{i.key}, i.value)) {
+                rv{i.key} = {"path": path};
+            }
+        }
+        return rv;
+    }
+
+    #! Restores the option types of an app in one restoration
+    /** @param roots the option type descriptions, by type identity
+        @param table the app's type table
+
+        @return the restored types, by type identity
+    */
+    private static hash<string, AbstractDataProviderType> restoreAppTypes(hash<string, hash<DataTypeInfo>> roots,
+            hash<string, hash<DataTypeInfo>> table) {
+        # the types are the types of the fields of a hash type, which is restored with the type table
+        HashDataType holder("ProviderIndexRestoreCheck");
+        hash<DataTypeInfo> info = holder.getInfo();
+        hash<DataFieldInfo> field = new QoreDataField("type", NOTHING, AbstractDataProviderTypeMap."auto").getInfo();
+        remove field.example_value;
+        info.fields = map {$1.key: field + {"name": $1.key, "display_name": $1.key, "type": $1.value}},
+            roots.pairIterator();
+        info.type_graph = table;
+        return map {$1.key: $1.value.getType()}, AbstractDataProviderType::get(info).getFields().pairIterator();
     }
 
     #! Returns the path of the first difference between two type descriptions, ignoring unique keys
@@ -1311,8 +1612,9 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
         hash<auto> apps = {};
         foreach string app in (keys index.appinfomap) {
             *hash<auto> actions = index.actioninfomap{app};
-            # the fragment has the format of the app's metadata cache chunk
-            binary data = packMetadataCacheChunk(app, index.appinfomap{app}, actions);
+            # the fragment has the format of the app's metadata cache chunk; its actions refer to one type table
+            *hash<auto> stored = exists actions ? getStoredAppActions(actions) : NOTHING;
+            binary data = packStoredMetadataCacheChunk(app, index.appinfomap{app}, stored);
             string file = sprintf("%s%s.msgpack", batch.prefix, digest("sha256", app).toHex());
             writeFileAtomic(batch.staging_dir + DirSep + file, data);
             apps{app} = {
@@ -1321,8 +1623,13 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                 "sha256": digest("sha256", data).toHex(),
                 "info_sha256": digest("sha256", packIndexData(index.appinfomap{app})).toHex(),
                 "has_actions": exists actions,
+                # the digest of each action in the stored form, whose option type descriptions refer to the types
+                # of the fragment's type table, and the digest of the table
                 "action_sha256": (map {$1.key: digest("sha256", packIndexData($1.value)).toHex()},
-                    actions.pairIterator()) ?? {},
+                    stored.actions.pairIterator()) ?? {},
+                "type_graph_sha256": stored.type_graph
+                    ? digest("sha256", packIndexData(stored.type_graph)).toHex()
+                    : NOTHING,
             };
         }
         return {
@@ -1460,6 +1767,10 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
         hash<string, string> app_info_sha256 = {};
         hash<string, hash<string, string>> action_sha256 = {};
         hash<string, list<hash<auto>>> app_sources = {};
+        # the first description of each action: its digests and fragment
+        hash<string, hash<string, hash<auto>>> action_sources = {};
+        # the actions that two workers describe with other digests, which are compared when the fragments are read
+        list<hash<auto>> action_rechecks = ();
 
         code conflict = sub (string kind, string identity, string desc, *string app, *string action) {
             failures += <DataProviderDiscoveryFailureInfo>{
@@ -1582,15 +1893,27 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                     app_info_sha256{app} = i.value.info_sha256;
                     appinfomap{app} = result.appinfomap{app};
                 }
+                hash<auto> source = {
+                    "fragment": i.value{"file", "size", "sha256"},
+                    "type_graph_sha256": i.value.type_graph_sha256,
+                    "worker": batch.id,
+                };
                 foreach hash<auto> j in (i.value.action_sha256.pairIterator()) {
-                    if (*string sha256 = action_sha256{app}{j.key}) {
-                        if (sha256 != j.value) {
-                            conflict("action", app + "/" + j.key, sprintf("data provider action %y of app %y is "
-                                "described differently by two index workers (the second is worker %s)", j.key, app,
-                                batch.id), app, j.key);
+                    if (*hash<auto> first = action_sources{app}{j.key}) {
+                        # the option type descriptions refer to the types of the type table of each fragment, whose
+                        # keys depend on the other actions of the fragment, so descriptions with other digests are
+                        # compared when the fragments are read
+                        if (first.sha256 != j.value || first.type_graph_sha256 !== source.type_graph_sha256) {
+                            push action_rechecks, {
+                                "app": app,
+                                "action": j.key,
+                                "first": first,
+                                "second": source + {"sha256": j.value},
+                            };
                         }
                     } else {
                         action_sha256{app}{j.key} = j.value;
+                        action_sources{app}{j.key} = source + {"sha256": j.value};
                     }
                 }
                 if (i.value.has_actions) {
@@ -1599,6 +1922,29 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             }
         }
         map index.factorymap{$1.key} = $1.value.module, worker_factories.pairIterator();
+        # the actions that two workers describe with other digests conflict if they describe them differently
+        if (action_rechecks) {
+            # the actions of each fragment read, by file
+            hash<string, *hash<auto>> fragment_actions = {};
+            foreach hash<auto> recheck in (action_rechecks) {
+                *string difference;
+                try {
+                    hash<auto> first = getFragmentAction(staging_dir, recheck.app, recheck.action,
+                        recheck.first.fragment, \fragment_actions);
+                    hash<auto> second = getFragmentAction(staging_dir, recheck.app, recheck.action,
+                        recheck.second.fragment, \fragment_actions);
+                    difference = getActionDifference(first, second);
+                } catch (hash<ExceptionInfo> ex) {
+                    difference = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                if (difference) {
+                    conflict("action", recheck.app + "/" + recheck.action, sprintf("data provider action %y of app "
+                        "%y is described differently by two index workers (the second is worker %s); first "
+                        "difference: %s", recheck.action, recheck.app, recheck.second.worker, difference),
+                        recheck.app, recheck.action);
+                }
+            }
+        }
         if (not_run) {
             failures += <DataProviderDiscoveryFailureInfo>{
                 "generation": 0,
@@ -1696,6 +2042,62 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
         logFailures(maps.failuremap);
         return rv;
 %endif
+    }
+
+    #! Returns an action of an app as described in an index worker's fragment
+    /** @param staging_dir the build's staging directory
+        @param app the app
+        @param action the action
+        @param fragment the fragment's file, size and digest
+        @param fragment_actions the actions of the fragments read, by file
+
+        @return the action in the self-contained form
+
+        @throw PROVIDER-INDEX-WORKER-ERROR the fragment is corrupt or does not describe the action
+    */
+    private static hash<auto> getFragmentAction(string staging_dir, string app, string action, hash<auto> fragment,
+            reference<hash<string, *hash<auto>>> fragment_actions) {
+        if (!fragment_actions.hasKey(fragment.file)) {
+            binary data = ReadOnlyFile::readBinaryFile(staging_dir + DirSep + fragment.file);
+            if (data.size() != fragment.size || digest("sha256", data).toHex() != fragment.sha256) {
+                throw "PROVIDER-INDEX-WORKER-ERROR", sprintf("index worker metadata for app %y in %y is corrupt", app,
+                    fragment.file);
+            }
+            fragment_actions{fragment.file} = unpackMetadataCacheChunk(data).actioninfomap{app};
+        }
+        *hash<auto> rv = fragment_actions{fragment.file}{action};
+        if (!rv) {
+            throw "PROVIDER-INDEX-WORKER-ERROR", sprintf("index worker metadata for app %y in %y does not describe "
+                "action %y", app, fragment.file, action);
+        }
+        return rv;
+    }
+
+    #! Returns the first difference between two descriptions of an action in the self-contained form, if any
+    /** The option type descriptions are compared as they describe their types, independently of the keys of the
+        type tables they refer to
+    */
+    private static *string getActionDifference(hash<auto> a, hash<auto> b) {
+        if (*string rv = getTypeInfoDifference(a - "options", b - "options", "")) {
+            return rv;
+        }
+        hash<auto> a_options = a.options ?? {};
+        hash<auto> b_options = b.options ?? {};
+        if (keys a_options != keys b_options) {
+            return "options";
+        }
+        foreach hash<auto> i in (a_options.pairIterator()) {
+            auto other = b_options{i.key};
+            if (*string rv = getTypeInfoDifference(i.value - "type_info", other - "type_info",
+                    ".options." + i.key)) {
+                return rv;
+            }
+            ProviderIndexTypeGraphComparison comparison(i.value.type_info.type_graph ?? {},
+                other.type_info.type_graph ?? {});
+            if (*string rv = comparison.getDifference(i.value.type_info, other.type_info)) {
+                return "options." + i.key + ".type_info." + rv;
+            }
+        }
     }
 
     #! Returns the error of a worker that failed outright, if any

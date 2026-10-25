@@ -31,6 +31,11 @@ export MAKE_JOBS=${MAKE_JOBS:-6}
 
 ${QORE_SRC_DIR}/test/docker_test/print-ci-provenance.sh || true
 
+# The build artifact was compiled against the binary modules of the build job's qore-test-base image: a job on another
+# image (the image tag was published again during the pipeline) fails before any test runs (see ci-build-image-check.sh)
+"${QORE_SRC_DIR}/test/docker_test/ci-build-image-check.sh" \
+    "${QORE_SRC_DIR}/build/qore-ci-build-artifact-info" || exit 1
+
 # install from pre-built artifact
 #
 # Use `cmake --install` directly instead of `make install`.  The build-perf

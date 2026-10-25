@@ -21,6 +21,7 @@ class SchemaExamplesTest inherits QUnit::Test {
         addTestCase("generic constrained types", \typeTest());
         addTestCase("shared type graph examples remain bounded", \graphTest());
         addTestCase("Swagger examples", \swaggerTest());
+        addTestCase("soft schema fields keep their constraints", \softFieldTest());
         set_return_value(main());
     }
 
@@ -180,5 +181,36 @@ class SchemaExamplesTest inherits QUnit::Test {
             "name": "id", "in": "query", "type": "string", "pattern": "^id_[0-9]+$",
         }, doc);
         assertNothing(parameter.getExampleValue());
+    }
+
+    #! The soft type of a schema field enforces and describes the schema's constraints, so that a field restored
+    #! from the description of its soft type has the same example as the original
+    softFieldTest() {
+        hash<string, OpenApi3::SchemaObject> s = schemas({
+            "Code": {"type": "string", "maxLength": 4},
+            "Count": {"type": "integer", "maximum": 10},
+            "Ratio": {"type": "number", "maximum": 1},
+        });
+        # each schema, a value its soft type converts, and one that the schema's constraints reject
+        hash<string, list<auto>> values = {
+            "Code": ("5734", "12345"),
+            "Count": ("10", "11"),
+            "Ratio": ("0.5", "1.5"),
+        };
+        foreach hash<auto> i in (values.pairIterator()) {
+            AbstractDataField field = s{i.key}.getField("value", NOTHING).getSoftType();
+            AbstractDataProviderType soft = field.getType();
+            assertEq(s{i.key}.getConstraintInfo(), soft.getConstraints(), i.key);
+            assertEq(i.value[0].toString(), soft.acceptsValue(i.value[0]).toString(), i.key);
+            assertThrows("RUNTIME-TYPE-ERROR", \soft.acceptsValue(), (i.value[1],), i.key);
+
+            # the description of a type with the soft field restores a field with the same example
+            HashDataType record("Record");
+            record.addField(field);
+            hash<DataTypeInfo> info = record.getInfo();
+            hash<DataTypeInfo> restored = AbstractDataProviderType::get(info).getInfo();
+            assertEq(info.fields.value.example_value, restored.fields.value.example_value, i.key);
+            assertEq(info.fields.value.type.constraints, restored.fields.value.type.constraints, i.key);
+        }
     }
 }

@@ -451,10 +451,11 @@ public class QoreDataType inherits AbstractDataProviderType {
     /** The base class method returns the same type; this method must be overridden in child classes to return a
         usable mandatory type
 
-        @return a mandatory (i.e. not "or nothing") type equivalent to the current type
+        @return a mandatory (i.e. not "or nothing") type equivalent to the current type; a type whose value type
+        accepts @ref nothing in any case, such as \c auto, has no mandatory equivalent and is returned itself
     */
     AbstractDataProviderType getMandatoryType() {
-        if (or_nothing_type) {
+        if (or_nothing_type && !type.getMandatoryType().isOrNothingType()) {
             QoreDataType rv = self.copy();
             if (rv.name && rv.name =~ /^\*/) {
                 rv.name = rv.name[1..];

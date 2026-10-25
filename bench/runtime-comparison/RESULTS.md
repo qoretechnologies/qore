@@ -22764,3 +22764,13 @@ Validation: 391 rebuilt qmods; seven targeted QUnit runs, 17 executed cases, 451
 Next investigate the separate named-frame cache used by callbacks, then redundant frame metadata with artifact compatibility review. Ordinary language loops retain per-iteration cancellation; a known small loop bound does not justify dropping those checks. Java parity and a global performance ceiling remain unestablished.
 
 [Evidence](results-native-frame-cache-macos-arm64.json); [all 62 audit checks](audit-native-frame-cache.md).
+
+## Develop merge a9df2443b6 after cached frame construction
+
+The 15 incoming commits add provider type-table/schema fixes, loader-warning handling, pipeline measurement controls and the macOS dual-stack reuse-port fix. The cached native-frame implementation remains identical to 5ac3369d66. The only merge conflict was the generated schema fixture: 156 incoming entries disagreed with current behavior. Full digests for all 276 actions agree across merged native/source, exact upstream source on the old and merged runtimes, and a fresh optimized unmodified develop runtime. Parent source still matches its saved fixture; 221 actions intentionally change from that parent. The fixture is refreshed to verified current behavior. No runtime semantics were changed to satisfy it.
+
+Release qualification rebuilds all 391 qmods. Across 41 QUnit fixture runs, 722 cases are reported: 719 executed, 718 succeeded and one known pre-existing failure; 7653 assertions, 7652 succeeded. Totals include PipelineMemory child and parent QUnit summaries. Three skips cover two unavailable-dependency scenarios when those dependencies are installed, and static AOT linking with no static library built. Six CI image-check tests and 1110 IR/AOT references pass. SocketSpecificBind's cross-process case reports a successful loopback bind where rejection was expected; the same single failure occurs on the merged runtime, exact unmodified develop and the previously installed b83 runtime. The test remains unchanged. Other socket bind/handoff and native stack/call fixtures pass.
+
+Presentation retains source fallbacks for the separately installed GrpcUtil and SalesforcePubSubDataProvider qmods in the older metadata format; those external qmods still need rebuilding. Two loader warnings in the harness are deliberate synthetic test inputs. Initial digest-test failure, warning-reviewer errors and the known socket failure are preserved in the evidence. These are correctness/integration checks, not fresh performance measurements. The isolated develop build is available for subsequent optimized comparisons.
+
+[Audit](audit-merge-a9df.md); [evidence](results-merge-a9df.json).

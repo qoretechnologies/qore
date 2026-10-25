@@ -118,6 +118,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \sourceCatalogTest());
         addTestCase("source catalogs recursively cover nested option types",
             \nestedSourceCatalogTest());
+        addTestCase("source catalogs cover the type of the other fields of a hash",
+            \otherFieldTypeSourceCatalogTest());
         addTestCase("a nested type's texts have one identity whatever option or path reaches them",
             \actionScopedTypeIdentityTest());
         addTestCase("a nested type's texts have one message per action",
@@ -1341,6 +1343,44 @@ class DataProviderPresentationTest inherits QUnit::Test {
             DataProviderPresentation::buildSourceCatalogs(app(),
                 (source_action + {"app": "別のアプリ"},));
         }, NOTHING, "source extraction rejects cross-app action metadata");
+    }
+
+    #! A hash keyed by names that its user chooses describes its values with the type of its other fields
+    otherFieldTypeSourceCatalogTest() {
+        HashDataType entry("KeyedEntry");
+        entry.addField(new QoreDataField(<auto>{
+            "name": "alias",
+            "display_name": "Alias",
+            "short_desc": "Alias záznamu",
+            "desc": "Jeden alias záznamu.",
+            "type": new QoreStringDataType(),
+        }));
+        # the option's values are keyed by names, and their values by names again
+        HashDataType by_value(AutoHashType, "EntriesByValue");
+        by_value.setDefaultOtherFieldType(entry);
+        HashDataType by_kind(AutoHashOrNothingType, "EntriesByKind");
+        by_kind.setDefaultOtherFieldType(by_value);
+        hash<auto> source_action = action() + {
+            "options": {
+                Option: option() + {"type": by_kind},
+            },
+        };
+        hash<auto> source_messages =
+            DataProviderPresentation::buildSourceCatalogs(app(),
+                (source_action,)){Domain}.locales.root.messages;
+        assertEq("Alias záznamu", source_messages{
+                DataProviderPresentation::nestedFieldMessageId(App, Action,
+                    Option, ("alias",), "short_desc")}.source,
+            "a field of the type of a hash's other fields is extracted under the option");
+        assertEq("Alias", source_messages{
+                DataProviderPresentation::nestedFieldMessageId(App, Action,
+                    Option, ("alias",), "display_name")}.source);
+
+        # a recursive type of other fields ends
+        HashDataType tree(AutoHashType, "Tree");
+        tree.setDefaultOtherFieldType(tree);
+        source_action.options{Option}.type = tree;
+        assertEq("hash", DataProviderPresentation::buildSourceCatalogs(app(), (source_action,)).type());
     }
 
     nestedSourceCatalogTest() {

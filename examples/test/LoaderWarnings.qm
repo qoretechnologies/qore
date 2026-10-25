@@ -1,0 +1,87 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file LoaderWarnings.qm tells the warnings of the module loader apart from the output of a child process
+
+/*  LoaderWarnings.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module LoaderWarnings {
+    version = "1.0";
+    desc    = "tells the warnings of the module loader apart from the output of a child process";
+    author  = "David Nichols <david@qore.org>";
+    url     = "http://qore.org";
+    license = "MIT";
+}
+
+/** When an AOT module of the build tree no longer matches its environment, the module loader loads its source module
+    instead and warns on standard error:
+    - <tt>warning: AOT module '...' for feature '...' is out of date: its source '...' has changed since it was
+      compiled; loading source module '...' instead; rebuild the AOT module</tt>, when a source of the module, which
+      includes the binary modules that it was compiled against, has changed, as when the tests run with other binary
+      modules than those of the build that compiled the AOT modules
+    - <tt>warning: binary module '...' for feature '...' failed to load; loading source module '...' instead: ...</tt>,
+      when the AOT module cannot be loaded
+
+    The warnings are about the environment, not output of the program, which ran the source module.  A test that reads
+    the standard error of a child process as its output separates them with split_loader_warnings() or removes them
+    with strip_loader_warnings(); they are written to the standard error of the test, where they stay visible.
+*/
+public namespace LoaderWarnings {
+    #! returns True if the line is a warning of the module loader that a module is loaded from its source
+    /** @param line a line, with or without its line break
+    */
+    public bool sub is_loader_warning(string line) {
+        return line =~ /^warning: AOT module '.*' for feature '.*' is out of date: /
+            || line =~ /^warning: binary module '.*' for feature '.*' failed to load; loading source module '.*' /;
+    }
+
+    #! separates the module loader warnings from the other lines of a text
+    /** @param text the output of a child process
+
+        @return a hash with \c text, the other lines of the text, and \c warnings, the module loader warnings without
+        their line breaks; the warnings are also written to the standard error of this process
+    */
+    public hash<auto> sub split_loader_warnings(string text) {
+        string rest = "";
+        list<string> warnings = ();
+        int start = 0;
+        while (start < text.size()) {
+            int end = text.find("\n", start);
+            string line = end < 0 ? text.substr(start) : text.substr(start, end - start + 1);
+            start = end < 0 ? text.size() : end + 1;
+            if (is_loader_warning(line)) {
+                stderr.print(line);
+                push warnings, trim(line, "\n");
+                continue;
+            }
+            rest += line;
+        }
+        return {"text": rest, "warnings": warnings};
+    }
+
+    #! returns the text without the module loader warnings, which are written to the standard error of this process
+    /** @param text the output of a child process
+    */
+    public string sub strip_loader_warnings(string text) {
+        return split_loader_warnings(text).text;
+    }
+}

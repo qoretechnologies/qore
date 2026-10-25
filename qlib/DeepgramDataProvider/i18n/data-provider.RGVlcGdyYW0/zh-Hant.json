@@ -375,126 +375,6 @@
           "source": "The audio file to transcribe, uploaded as the request body; used when `url` is not given.  The file's `mime_type` (e.g. `audio/wav`, `audio/mpeg`, `audio/flac`) is sent as the request `Content-Type`; when it is `auto`, it is derived from the file `name`, falling back to `application/octet-stream`.  Upstream steps can pass either a file hash (`name`, `content`, `mime_type`) or the raw audio bytes as a `binary` value.\n\nExactly one of `url` or `audio` must be provided.",
           "message": "要轉錄的音訊檔案，以請求主體上傳；在未提供 `url` 時使用。檔案的 `mime_type`（例如 `audio/wav`、`audio/mpeg`、`audio/flac`）會作為請求的 `Content-Type` 傳送；若為 `auto`，則會從檔案名稱 `name` 推斷，否則使用 `application/octet-stream`。上游步驟可以傳入檔案雜湊（`name`、`content`、`mime_type`）或以 `binary` 值傳入原始音訊位元組。\n\n`url` 與 `audio` 必須恰好提供其中之一。"
         },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.Y29udGVudA.display_name": {
-          "source": "File Data",
-          "message": "檔案資料"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.Y29udGVudA.short_desc": {
-          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
-          "message": "Base64 編碼的檔案資料或原始資料，將以 Base64 編碼"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.Y29udGVudA.desc": {
-          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
-          "message": "Base64 編碼的檔案資料或原始資料，將以 Base64 編碼"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.display_name": {
-          "source": "MIME Type",
-          "message": "MIME 類型"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.short_desc": {
-          "source": "The MIME type string for the file",
-          "message": "檔案的 MIME 類型字串"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.desc": {
-          "source": "The MIME type string for the file",
-          "message": "檔案的 MIME 類型字串"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
-          "source": "Autodetect",
-          "message": "自動偵測"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
-          "source": "Autodetect from the file name; valid only on input",
-          "message": "根據檔案名稱自動偵測；僅在輸入時有效"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
-          "source": "Autodetect from the file name; valid only on input",
-          "message": "根據檔案名稱自動偵測；僅在輸入時有效"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
-          "source": "text/plain",
-          "message": "text/plain"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
-          "source": "Plain text",
-          "message": "純文字"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
-          "source": "Plain text",
-          "message": "純文字"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
-          "source": "text/html",
-          "message": "text/html"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
-          "source": "HTML text",
-          "message": "HTML 文字"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
-          "source": "HTML text",
-          "message": "HTML 文字"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
-          "source": "application/pdf",
-          "message": "application/pdf"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
-          "source": "PDF file",
-          "message": "PDF檔案"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
-          "source": "PDF file",
-          "message": "PDF檔案"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
-          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
-          "source": "MS Word docx document",
-          "message": "MS Word docx 文件"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
-          "source": "MS Word `docx` document",
-          "message": "MS Word `docx` 文件"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
-          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
-          "source": "MS PowerPoint pptx document",
-          "message": "MS PowerPoint pptx 文件"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
-          "source": "MS PowerPoint `pptx` document",
-          "message": "MS PowerPoint `pptx` 文件"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
-          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
-          "source": "MS Excel xlsx document",
-          "message": "MS Excel xlsx 文件"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
-          "source": "MS Excel `xlsx` document",
-          "message": "MS Excel `xlsx` 文件"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bmFtZQ.display_name": {
-          "source": "Filename",
-          "message": "檔案名稱"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bmFtZQ.short_desc": {
-          "source": "The filename",
-          "message": "檔案名稱"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bmFtZQ.desc": {
-          "source": "The filename",
-          "message": "檔案名稱"
-        },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.display_name": {
           "source": "Model",
           "message": "模型"
@@ -762,6 +642,126 @@
         "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.allowed-value.c3RyaW5nOm5vbmU.display_name": {
           "source": "None (raw)",
           "message": "無 (原始資料)"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "檔案資料"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64 編碼的檔案資料或原始資料，將以 Base64 編碼"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Base64 編碼的檔案資料或原始資料，將以 Base64 編碼"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "MIME 類型"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "檔案的 MIME 類型字串"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "檔案的 MIME 類型字串"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "自動偵測"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "根據檔案名稱自動偵測；僅在輸入時有效"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "根據檔案名稱自動偵測；僅在輸入時有效"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "純文字"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "純文字"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTML 文字"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTML 文字"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "PDF檔案"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "PDF檔案"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "MS Word docx 文件"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "MS Word `docx` 文件"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "MS PowerPoint pptx 文件"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "MS PowerPoint `pptx` 文件"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "MS Excel xlsx 文件"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "MS Excel `xlsx` 文件"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "檔案名稱"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "檔案名稱"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "檔案名稱"
         }
       }
     }

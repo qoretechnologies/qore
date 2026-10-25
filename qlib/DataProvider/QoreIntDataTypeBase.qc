@@ -109,13 +109,14 @@ public class QoreIntDataTypeBase inherits QoreDataType {
     }
 
     #! returns a "soft" type equivalent to the current type
-    /** @return a "soft" type equivalent to the current type
+    /** @return a "soft" type equivalent to the current type, with the same validation constraints
     */
     AbstractDataProviderType getSoftType() {
         if (soft_type) {
             return self;
         }
-        return new QoreIntDataTypeBase(base_type_hash{NT_NOTHING} ? SoftIntOrNothingType : SoftIntType, getOptions());
+        return new QoreIntDataTypeBase(base_type_hash{NT_NOTHING} ? SoftIntOrNothingType : SoftIntType,
+            getOptions()).copyWithConstraints(constraints);
     }
 }
 }
