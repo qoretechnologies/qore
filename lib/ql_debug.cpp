@@ -9010,6 +9010,91 @@ static void ut_manager_new_connection_closed_before_reservation(UnitTestCounters
     xsink.clear();
 }
 
+// When the async I/O controller drives an HTTP client operation that follows a redirect, a callback worker acquires the
+// connection for the redirect target in a task, and the I/O thread takes the error of the acquisition from the request
+// state's sink.  That sink was counted as a sink of the thread that raised into it: the error stayed counted on the
+// worker, whose thread ended with an active exception at process exit (the assertion in q_run_thread()), and the I/O
+// thread's count went below zero when it handled the error.  The redirect target here is a port with no listener, and
+// qore_http_manager_new_connection_hook waits until its connect has failed, so that the error is raised in the task;
+// a thread whose count would go below zero now fails the assertion in inc_active_exceptions() at once.
+static void ut_async_redirect_task_error_counted_on_driving_thread(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    int dead_port = ut_reserve_closed_port();
+    if (dead_port <= 0) {
+        UT_ASSERT(c, false, "reserve a port with no listener");
+        return;
+    }
+    QoreProgram* pgm = new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS);
+    pgm->parse("%modern\n"
+        "string sub redirect_to_dead_port(int port) {\n"
+        "    HTTPClient hc({\"url\": \"http://127.0.0.1:\" + port, \"timeout\": 30s, \"connect_timeout\": 30s});\n"
+        "    # the async I/O thread drives the operation, and a callback worker acquires the redirect connection\n"
+        "    hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{\"sock\": hc,\n"
+        "        \"spop\": hc.startPollSendRecv(\"GET\", \"/\"), \"owner\": \"ut-async-redirect\", \"to\": 30s});\n"
+        "    return result.ex ? result.ex.desc : \"no error\";\n"
+        "}\n",
+        "async-redirect-task-error", &xsink, nullptr, 0);
+    UT_ASSERT(c, !xsink, "the redirect program parses");
+    if (xsink) {
+        xsink.handleExceptions();
+        pgm->waitForTerminationAndDeref(&xsink);
+        xsink.clear();
+        return;
+    }
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "redirect server bind/listen failed");
+        pgm->waitForTerminationAndDeref(&xsink);
+        xsink.clear();
+        return;
+    }
+    server.serveOnce([dead_port](int cfd) {
+        char buf[4096];
+        if (ut_read_request_headers(cfd, buf, sizeof(buf)) <= 0) {
+            return;
+        }
+        char resp[256];
+        snprintf(resp, sizeof(resp), "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:%d/target\r\n"
+            "Content-Length: 0\r\n\r\n", dead_port);
+        send(cfd, resp, strlen(resp), 0);
+        // the client closes the connection when its operation ends
+        char b;
+        while (recv(cfd, &b, 1, 0) > 0) {
+        }
+    });
+
+    UT_ASSERT(c, !q_active_exception(), "no exception is active on this thread before the request");
+    {
+        ut_new_connection_hook_calls = 0;
+        qore_http_manager_new_connection_hook = ut_wait_for_connect_failure;
+        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
+        args->push((int64)server.port, &xsink);
+        ValueHolder rv(pgm->callFunction("redirect_to_dead_port", *args, &xsink), &xsink);
+        qore_http_manager_new_connection_hook = nullptr;
+        UT_ASSERT(c, !xsink, "the redirect function runs");
+        UT_ASSERT_EQ(c, 2, ut_new_connection_hook_calls.load(),
+            "the request and its redirect create a connection each");
+        QoreStringValueHelper desc(*rv);
+        UT_ASSERT(c, strstr(desc->c_str(), "refused") != nullptr,
+            (std::string("the redirect gets the refused connect's error: ") + desc->c_str()).c_str());
+    }
+    // the server's thread is joined when the test returns: a request that never reached it would leave it in accept()
+    {
+        int fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (fd >= 0) {
+            sockaddr_in addr{};
+            addr.sin_family = AF_INET;
+            addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            addr.sin_port = htons(server.port);
+            ::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+            ::close(fd);
+        }
+    }
+    xsink.clear();
+    pgm->waitForTerminationAndDeref(&xsink);
+    xsink.clear();
+}
+
 static void ut_manager_acquire_first_request(UnitTestCounters& c) {
     ExceptionSink xsink;
 
@@ -12288,6 +12373,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_streaming_does_not_repeat_unsafe_requests(c);
     ut_manager_streaming_abandon_releases_connection(c);
     ut_manager_new_connection_closed_before_reservation(c);
+    ut_async_redirect_task_error_counted_on_driving_thread(c);
     ut_manager_abandon_h1_evicts_connection(c);
     ut_manager_abandon_multiplexed_keeps_connection(c);
     ut_manager_abandon_completed_request_is_a_no_op(c);

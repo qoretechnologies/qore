@@ -1766,7 +1766,9 @@ int q_check_stack(ExceptionSink* xsink) {
 void inc_active_exceptions(int diff) {
     ThreadData* td = thread_data.get();
     assert(diff == 1 || diff < 0);
-    assert(diff == 1 || ((td->active_exceptions + diff) >= 0));
+    // the count is unsigned: a thread cannot handle more exceptions than are counted on it, which a sink that hands
+    // its exceptions to another thread without ExceptionSink::markExternallyManaged() would do
+    assert(diff == 1 || td->active_exceptions >= static_cast<unsigned>(-diff));
     td->active_exceptions += diff;
 }
 
