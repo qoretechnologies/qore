@@ -63,6 +63,7 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
         addTestCase("chat shaping handles reasoning effort", \shaping());
         addTestCase("both providers resolve options before normalization", \providers());
         addTestCase("response enums keep their types and use the native string-only contract", \responseEnums());
+        addTestCase("alternative response records do not narrow unconstrained enum fields", \alternativeEnums());
         addTestCase("Vertex shares repeated response definitions without changing their expanded schema",
             \responseReferences());
         set_return_value(main());
@@ -123,6 +124,56 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
             assertEq(("literal-property-name",), shaped.properties."enum"."enum");
             assertEq((" ",), shaped.properties.blank."enum", "nonempty whitespace stays an exact string choice");
             assertEq(original, schema, "the strict caller schema is unchanged");
+        }
+    }
+
+    alternativeEnums() {
+        hash<auto> free = {"type": "string"};
+        hash<auto> typed = {"type": "string", "enum": ("string", "integer")};
+        hash<auto> other = {"type": "string", "enum": ("zdroj", "目标")};
+        hash<auto> generic = {"type": "object", "additionalProperties": False, "properties": {
+            "role": free, "values": {"type": "array", "items": free}}, "required": ("role",)};
+        hash<auto> specific = {"type": "object", "additionalProperties": False, "properties": {
+            "role": typed, "values": {"type": "array", "items": typed}}, "required": ("role",)};
+        CaptureGenerationRest rest();
+        hash<QoreLlmUtils::LlmBackendConfig> config = <QoreLlmUtils::LlmBackendConfig>{
+            "model": "gemini-3.5-flash", "api_key": "test-only-key", "max_retries": 0,
+            "provider_options": {"gcp_project_id": "test-project"},
+        };
+        foreach string composition in (("anyOf", "oneOf")) {
+            hash<auto> schema = {"type": "object", "$defs": {"generic": generic, "specific": specific},
+                "properties": {
+                    "forward": {composition: ({"$ref": "#/$defs/generic"}, {"$ref": "#/$defs/specific"})},
+                    "reverse": {composition: (specific, generic)},
+                    "scalar": {composition: (free, typed)},
+                    "bounded": {composition: (typed, other)},
+                    "parent": {"type": "string", "enum": ("common",), composition: (free, typed)},
+                    "closed": {composition: (specific, {"type": "object", "additionalProperties": False})},
+                    "open": {composition: (specific, {"type": "object"})},
+                    "extra": {composition: (specific, {"type": "object", "additionalProperties": other})},
+                    "intersection": {"allOf": (generic, specific)},
+                }};
+            hash<auto> original = schema;
+            foreach GeminiBodyShape::AbstractGeminiModelProvider provider in ((
+                    new CaptureGeminiProvider(config, rest), new CaptureVertexProvider(config, rest))) {
+                provider.chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "fixture"},), NOTHING,
+                    <QoreLlmUtils::LlmRequestOptions>{"output_schema": schema});
+                hash<auto> props = rest.body.generationConfig.responseSchema.properties;
+                foreach string name in (("forward", "reverse", "open")) {
+                    assertFalse(props{name}.properties.role.hasKey("enum"), name);
+                    assertFalse(props{name}.properties.role.hasKey("description"), name);
+                    assertFalse(props{name}.properties.values.items.hasKey("enum"), name);
+                    assertFalse(props{name}.properties.values.items.hasKey("description"), name);
+                }
+                assertFalse(props.scalar.hasKey("enum"));
+                assertEq(("string", "integer", "zdroj", "目标"), props.bounded."enum");
+                assertEq(("common",), props.parent."enum", "an unconditional parent restriction still applies");
+                assertEq(typed."enum", props.closed.properties.role."enum");
+                assertEq(("string", "integer", "zdroj", "目标"), props.extra.properties.role."enum");
+                assertEq(typed."enum", props.intersection.properties.role."enum", "allOf is not a union");
+                assertEq(("role",), props.forward.required);
+                assertEq(original, schema, "caller validation retains the exact original alternatives");
+            }
         }
     }
 

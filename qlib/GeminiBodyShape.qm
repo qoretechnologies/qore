@@ -1068,9 +1068,14 @@ class GeminiSchemaShaper {
                 continue;
             }
             hash<auto> base = rv;
+            hash<auto> merged = key == "allOf" ? base : {};
             foreach hash<auto> variant in (variants) {
-                rv = GeminiBodyShape::mergeSchemaObjects(rv, variant);
+                merged = GeminiBodyShape::mergeSchemaObjects(merged, variant);
             }
+            if (key != "allOf") {
+                merged = GeminiSchemaShaper::relaxAlternativeEnums(merged, variants);
+            }
+            rv = key == "allOf" ? merged : GeminiBodyShape::mergeSchemaObjects(base, merged);
             if (tool) {
                 remove rv.required;
             } else {
@@ -1088,6 +1093,56 @@ class GeminiSchemaShaper {
             type_conflict = True;
         }
         return rv;
+    }
+
+    #! Keeps a merged enum only when every alternative that allows the value constrains it
+    /** A field shared by a generic record and a typed record must not inherit only the latter's enum.
+        Missing properties in closed alternatives cannot supply that field; open alternatives can, including
+        through an additionalProperties schema. Parent constraints are merged separately and remain in force.
+        @param node merged alternative schema
+        @param variants original alternatives at this value
+        @return schema with enums removed wherever an alternative allows unconstrained values
+    */
+    private static hash<auto> relaxAlternativeEnums(hash<auto> node, list<hash<auto>> variants) {
+        if (node.hasKey("enum")) {
+            list<auto> values = ();
+            bool constrained = True;
+            foreach hash<auto> variant in (variants) {
+                if (variant."enum".typeCode() != NT_LIST) {
+                    constrained = False;
+                    break;
+                }
+                values = GeminiBodyShape::mergeEnumLists(values, variant."enum");
+            }
+            if (constrained) {
+                node."enum" = values;
+            } else {
+                remove node."enum";
+            }
+        }
+        if (node.properties.typeCode() == NT_HASH) {
+            foreach string key in (keys node.properties) {
+                if (node.properties{key}.typeCode() != NT_HASH) { continue; }
+                list<hash<auto>> fields = ();
+                foreach hash<auto> variant in (variants) {
+                    if (variant.properties.typeCode() == NT_HASH
+                            && variant.properties{key}.typeCode() == NT_HASH) {
+                        fields += variant.properties{key};
+                    } else if (variant.additionalProperties !== False) {
+                        fields += variant.additionalProperties.typeCode() == NT_HASH
+                            ? variant.additionalProperties : {};
+                    }
+                }
+                if (fields) {
+                    node.properties{key} = GeminiSchemaShaper::relaxAlternativeEnums(node.properties{key}, fields);
+                }
+            }
+        }
+        if (node.items.typeCode() == NT_HASH) {
+            list<hash<auto>> items = map $1.items.typeCode() == NT_HASH ? $1.items : {}, variants;
+            node.items = GeminiSchemaShaper::relaxAlternativeEnums(node.items, items);
+        }
+        return node;
     }
 
     #! Returns a string schema whose description summarizes the original schema, and records the value's path

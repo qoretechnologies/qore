@@ -95,15 +95,25 @@ class ProtobufTest inherits QUnit::Test {
         assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \p.callFunction(), ("run", plain, dir),
             "a .proto file outside the sandbox of the calling program is denied");
 
-        # a policy barrier stops the caller's policy from being inherited, as for core file access
+        # a policy barrier stops the caller's policy from being inherited, as for core file access, for code created
+        # before the sandboxed caller: a closure created while serving it keeps its policy (sandbox provenance)
+        code read = auto sub (string path) {
+            Protobuf::ProtobufSchema schema(path, "probe.proto");
+            return schema.messageTypes();
+        };
         code barriered = auto sub (string path) {
+            return SandboxManager::callWithSystemPolicy(read, path);
+        };
+        assertEq(("Probe",), p.callFunction("run", barriered, dir),
+            "a .proto file is readable inside a policy barrier");
+        code created_for_caller = auto sub (string path) {
             return SandboxManager::callWithSystemPolicy(auto sub (string path) {
                 Protobuf::ProtobufSchema schema(path, "probe.proto");
                 return schema.messageTypes();
             }, path);
         };
-        assertEq(("Probe",), p.callFunction("run", barriered, dir),
-            "a .proto file is readable inside a policy barrier");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \p.callFunction(), ("run", created_for_caller, dir),
+            "a closure created while serving the sandboxed caller keeps its policy inside a policy barrier");
     }
 
     stringSchemaTest() {
