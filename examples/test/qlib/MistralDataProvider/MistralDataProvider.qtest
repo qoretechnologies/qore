@@ -118,6 +118,43 @@ public class MistralDataProviderTest inherits QUnit::Test {
         };
 
         const OptionColumn = 22;
+
+        #! A minimal tool of each kind, by alternative, in the order of the alternatives
+        const Tools = {
+            "FunctionTool": {"type": "function", "function": {"name": "lookup", "parameters": {}}},
+            "WebSearchTool": {"type": "web_search"},
+            "WebSearchPremiumTool": {"type": "web_search_premium"},
+            "CodeInterpreterTool": {"type": "code_interpreter"},
+            "ImageGenerationTool": {"type": "image_generation"},
+            "DocumentLibraryTool": {"type": "document_library", "library_ids": ("lib-1",)},
+            "CustomConnector": {"type": "connector", "connector_id": "conn-1"},
+        };
+
+        #! The type of each alternative of a connector's authorization
+        const ConnectorAuths = {
+            "*OAuth2TokenAuth": "oauth2-token",
+            "*APIKeyAuth": "api-key",
+        };
+
+        #! The label of the type of each alternative of a tool and of a connector's authorization
+        const TypeLabels = {
+            "FunctionTool": "Function",
+            "WebSearchTool": "Web Search",
+            "WebSearchPremiumTool": "Web Search Premium",
+            "CodeInterpreterTool": "Code Interpreter",
+            "ImageGenerationTool": "Image Generation",
+            "DocumentLibraryTool": "Document Library",
+            "CustomConnector": "Connector",
+            "*OAuth2TokenAuth": "OAuth2 Token",
+            "*APIKeyAuth": "API Key",
+        };
+
+        #! The actions that take tools, with the other options of a minimal request
+        const ToolActions = {
+            "create-conversation": {"inputs": "Hi"},
+            "create-agent": {"model": "mistral-large-latest", "name": "agent"},
+            "update-agent": {"agent_id": "agent-1"},
+        };
     }
 
     private {
@@ -144,6 +181,17 @@ public class MistralDataProviderTest inherits QUnit::Test {
         addTestCase("pinned provenance and schema drift", \schemaTest());
         addTestCase("an enumeration shows the same labels wherever an action reaches it", \enumLabelTest());
         addTestCase("resource dropdowns", \referenceTest());
+        foreach string tool in (keys Tools) {
+            string alternative = tool;
+            addTestCase(sprintf("the %s tool keeps its own type", Tools{tool}.type),
+                sub () { toolKindTest(alternative); });
+        }
+        foreach string auth in (keys ConnectorAuths) {
+            string alternative = auth;
+            addTestCase(sprintf("a connector's %s authorization keeps its own type", ConnectorAuths{auth}),
+                sub () { connectorAuthTest(alternative); });
+        }
+        addTestCase("a tool's type names exactly one kind of tool", \toolTypeNegativeTest());
         addTestCase("HTTP authentication, paths and named multipart files", \wireTest());
         addTestCase("invalid requests and transport failures", \negativeTest());
         hash<auto> fixtures = parse_json(File::readTextFile(get_script_dir() + "/requests.json"));
@@ -388,6 +436,95 @@ public class MistralDataProviderTest inherits QUnit::Test {
             assertEq(before + (decl.options_reference ? 2 : 1), fake.requests);
         }
 
+    }
+
+    #! Returns the alternatives of the tools an action takes
+    private list<AbstractDataProviderType> getToolAlternatives(string action,
+            reference<AbstractDataProviderType> type) {
+        type = DataProviderActionCatalog::getAppActionEx("MistralAi", action).options.tools.type;
+        list<AbstractDataProviderType> rv = cast<QoreUnionDataType>(type.getElementType()).getUnionTypes();
+        assertEq(keys Tools, map $1.getName(), rv, action);
+        return rv;
+    }
+
+    #! A kind of tool accepts its own type wherever an action takes tools
+    /** The alternatives are told apart by their \c type alone, so a choice of type that an overlay of the tools
+        gave to all of them would leave every other kind of tool unusable; each type is labelled where its schema
+        declares it (see @ref MistralDataProvider::MistralManifest::EnumDisplayNames "EnumDisplayNames").
+
+        @param name the name of the tool's alternative
+    */
+    private toolKindTest(string name) {
+        hash<auto> tool = Tools{name};
+        foreach hash<auto> request in (ToolActions.pairIterator()) {
+            string action = request.key;
+            string ctx = sprintf("%s: %s", action, name);
+            AbstractDataProviderType type;
+            AbstractDataProviderType alternative = (select getToolAlternatives(action, \type),
+                $1.getName() == name)[0];
+            hash<string, AbstractDataField> fields = alternative.getFields();
+            # the alternative offers only its own type, with its own label
+            assertEq(({"value": tool.type, "display_name": TypeLabels{name}},),
+                map ("value": $1.value, "display_name": $1.display_name), fields.type.getAllowedValues(), ctx);
+            assertEq((tool.type,), fields.type.getType().getConstraints().enum_values, ctx);
+            if (name == "CustomConnector") {
+                assertEq("connectors", fields.connector_id.getAttributes().ref_data, ctx);
+                assertTrue(fields.authorization.getAttributes().sensitive, ctx);
+            } else if (name == "DocumentLibraryTool") {
+                assertEq("libraries", fields.library_ids.getAttributes().element_ref_data, ctx);
+            }
+            assertEq(tool, type.acceptsValue((tool,))[0], ctx);
+
+            # the request carries the tool as given
+            FakeMistralRestClientIo fake();
+            MistralDataProvider::MistralDataProvider root(fake);
+            root.getChildProvider(action).doRequest(request.value + {"tools": (tool,)});
+            assertEq((tool,), fake.last_request.tools, ctx);
+        }
+    }
+
+    #! A kind of connector authorization accepts its own type wherever an action takes tools
+    /** @param name the name of the authorization's alternative
+    */
+    private connectorAuthTest(string name) {
+        hash<auto> tool = Tools.CustomConnector + {
+            "authorization": {"type": ConnectorAuths{name}, "value": "secret"},
+        };
+        foreach hash<auto> request in (ToolActions.pairIterator()) {
+            string action = request.key;
+            string ctx = sprintf("%s: %s", action, name);
+            AbstractDataProviderType type;
+            AbstractDataProviderType connector = (select getToolAlternatives(action, \type),
+                $1.getName() == "CustomConnector")[0];
+            AbstractDataProviderType alternative = (select cast<QoreUnionDataType>(connector.getFields()
+                .authorization.getType()).getUnionTypes(), $1.getName() == name)[0];
+            AbstractDataField type_field = alternative.getFields().type;
+            assertEq(({"value": ConnectorAuths{name}, "display_name": TypeLabels{name}},),
+                map ("value": $1.value, "display_name": $1.display_name), type_field.getAllowedValues(), ctx);
+            assertEq((ConnectorAuths{name},), type_field.getType().getConstraints().enum_values, ctx);
+            assertEq(tool, type.acceptsValue((tool,))[0], ctx);
+
+            FakeMistralRestClientIo fake();
+            MistralDataProvider::MistralDataProvider root(fake);
+            root.getChildProvider(action).doRequest(request.value + {"tools": (tool,)});
+            assertEq((tool,), fake.last_request.tools, ctx);
+        }
+    }
+
+    #! A tool's type names exactly one alternative, and the fields of another kind do not make up for it
+    private toolTypeNegativeTest() {
+        foreach string action in (keys ToolActions) {
+            AbstractDataProviderType type;
+            getToolAlternatives(action, \type);
+            assertThrows("RUNTIME-TYPE-ERROR", "does not match any oneOf schema", \type.acceptsValue(),
+                (({"type": "function"},),));
+            assertThrows("RUNTIME-TYPE-ERROR", "does not match any oneOf schema", \type.acceptsValue(),
+                (({"type": "connector", "library_ids": ("lib-1",)},),));
+            assertThrows("RUNTIME-TYPE-ERROR", "does not match any oneOf schema", \type.acceptsValue(),
+                (({"type": "file_search"},),));
+            assertThrows("RUNTIME-TYPE-ERROR", "does not match any oneOf schema", \type.acceptsValue(),
+                ((Tools.CustomConnector + {"authorization": {"type": "basic", "value": "secret"}},),));
+        }
     }
 
     private enumLabelTest() {
