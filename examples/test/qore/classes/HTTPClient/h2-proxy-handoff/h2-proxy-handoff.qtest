@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../../qlib"
 %requires QUnit
+%requires FsUtil
 
 %exec-class H2ProxyHandoffTest
 
@@ -33,10 +34,16 @@ class H2ProxyHandoffTest inherits QUnit::Test {
         string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         string dir = get_script_dir();
+        # the worker's results are its standard output; its standard error is reported with them, but warnings
+        # there, such as the warning that an AOT module is out of date and is loaded from its source, are not
+        # results
+        TmpFile err("h2-proxy-handoff-", ".err");
         int rc;
-        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s %s 2>&1", libqore_dir,
-            libqore_dir, qore_bin, dir + DirSep + "h2-proxy-handoff-worker.q", dir + DirSep + "localhost.pem"), \rc);
-        assertEq(0, rc, out);
-        assertEq("0: http2:True\n1: http2:True\n2: http2:True\n", out);
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s %s 2>%s", libqore_dir,
+            libqore_dir, qore_bin, dir + DirSep + "h2-proxy-handoff-worker.q", dir + DirSep + "localhost.pem",
+            err.path), \rc);
+        string errout = ReadOnlyFile::readTextFile(err.path) ?? "";
+        assertEq(0, rc, "stdout: " + out + "stderr: " + errout);
+        assertEq("0: http2:True\n1: http2:True\n2: http2:True\n", out, "stderr: " + errout);
     }
 }
