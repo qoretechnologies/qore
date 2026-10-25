@@ -38,6 +38,8 @@ class SharedCallbackInlineTest inherits QUnit::Test {
                 "QORE_DISABLE_AOT_DIRECT_RUNTIME_CONFIG=1 ",
                 "QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION=1 ",
                 "QORE_DISABLE_AOT_CALLBACK_ENTRY_STATE=1 ",
+                "QORE_DISABLE_AOT_COMPANION_INLINE_STACK=1 ",
+                "QORE_CONTROL_AOT_NULL_COMPANION_STACK_LIMIT=1 ",
                 "QORE_CONTROL_AOT_NULL_CALLBACK_RUNTIME_CONFIG=1 ", "QORE_AOT_EH=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {

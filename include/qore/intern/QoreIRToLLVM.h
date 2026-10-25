@@ -235,7 +235,7 @@ public:
 
     //! Forward a non-null, borrowed same-thread context to a private native callback target.
     //! @param runtime_config live invocation-owned view; the caller retains the ordinary entry on null
-    //! @param entry_state optional borrowed native slots and cancellation addresses, never their live values
+    //! @param entry_state optional borrowed native slots, cancellation addresses and live stack-limit address
     void setNativeRuntimeConfig(llvm::Value* runtime_config, llvm::Value* entry_state = nullptr) {
         native_runtime_config = runtime_config;
         native_entry_state = entry_state;
@@ -367,8 +367,11 @@ private:
     llvm::Value* native_runtime_config = nullptr;
     // Nullable caller-owned view acquired once for guarded companion calls.
     llvm::Value* native_call_runtime_config = nullptr;
-    // Private six-pointer descriptor: thread data, location/statement slots,
-    // then QoreCancelPollStateV1 addresses. Borrowed only within this invocation.
+    // Private same-image descriptor: thread data, location/statement slots,
+    // QoreCancelPollStateV1 addresses and the live stack-limit address.
+    // Caller and callee are generated together; this is not a runtime ABI.
+    // Only addresses, never their live values, are borrowed within this invocation.
+    static constexpr unsigned NativeEntryStateSize = 7;
     llvm::Value* native_entry_state = nullptr;
     llvm::Value* native_call_entry_state = nullptr;
     llvm::Instruction* native_entry_slots_anchor = nullptr;

@@ -11614,7 +11614,7 @@ llvm::Value* QoreIRToLLVM::getNativeCallEntryState(llvm::Module& module, llvm::F
         // this same-thread invocation. The callee still reads live values at
         // every checkpoint and restores locations through the existing frame.
         assert(native_entry_slots_anchor);
-        auto* state_type = llvm::ArrayType::get(ptr_type, 6);
+        auto* state_type = llvm::ArrayType::get(ptr_type, NativeEntryStateSize);
         llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
         native_call_entry_state = ab.CreateAlloca(state_type, nullptr, "callback_entry_state");
         llvm::IRBuilder<> eb(native_entry_slots_anchor->getParent(),
@@ -11629,6 +11629,15 @@ llvm::Value* QoreIRToLLVM::getNativeCallEntryState(llvm::Module& module, llvm::F
             llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
         eb.CreateCall(acquire, {rc,
             eb.CreateConstInBoundsGEP2_32(state_type, native_call_entry_state, 0, 3)});
+        llvm::Value* stack_limit = llvm::Constant::getNullValue(ptr_type);
+        if (!q_env_is_set("QORE_DISABLE_AOT_COMPANION_INLINE_STACK")
+                && !q_env_is_set("QORE_CONTROL_AOT_NULL_COMPANION_STACK_LIMIT")) {
+            auto acquire_limit = module.getOrInsertFunction("qore_rt_get_stack_limit_v1",
+                llvm::FunctionType::get(ptr_type, {ptr_type}, false));
+            stack_limit = eb.CreateCall(acquire_limit, {rc}, "companion_stack_limit");
+        }
+        eb.CreateStore(stack_limit,
+            eb.CreateConstInBoundsGEP2_32(state_type, native_call_entry_state, 0, 6));
     }
     return native_call_entry_state;
 }
@@ -12058,7 +12067,7 @@ void QoreIRToLLVM::emitCancellationCheck(llvm::Module& module, llvm::Function* l
             }
             if (!q_env_is_set("QORE_DISABLE_LLVM_INLINE_CANCEL_POLL")) {
                 if (native_entry_state) {
-                    auto* state_type = llvm::ArrayType::get(ptr_type, 6);
+                    auto* state_type = llvm::ArrayType::get(ptr_type, NativeEntryStateSize);
                     auto load_state = [&](unsigned i, const char* name) -> llvm::Value* {
                         return eb.CreateLoad(ptr_type,
                             eb.CreateConstInBoundsGEP2_32(state_type, native_entry_state, 0, i), name);
@@ -13574,6 +13583,34 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 "stack_overflow", llvm_func, first_ir_bb);
 
         builder->SetInsertPoint(stack_check_bb);
+        if (native_entry_state && !q_env_is_set("QORE_DISABLE_AOT_COMPANION_INLINE_STACK")) {
+            assert(native_runtime_config);
+            auto* inline_check = llvm::BasicBlock::Create(ctx, "native_stack_inline", llvm_func, first_ir_bb);
+            auto* full_check = llvm::BasicBlock::Create(ctx, "native_stack_full", llvm_func, first_ir_bb);
+            auto* state_type = llvm::ArrayType::get(ptr_type, NativeEntryStateSize);
+            llvm::Value* limit_ptr = builder->CreateLoad(ptr_type,
+                builder->CreateConstInBoundsGEP2_32(state_type, native_entry_state, 0, 6),
+                "native_stack_limit_ptr");
+            builder->CreateCondBr(builder->CreateIsNotNull(limit_ptr), inline_check, full_check,
+                llvm::MDBuilder(ctx).createBranchWeights(999, 1));
+            builder->SetInsertPoint(inline_check);
+            // The versioned accessor supplies a view only for supported 64-bit
+            // downward stacks. Reload the limit and this entry's SP on every call.
+            llvm::Value* limit = builder->CreateLoad(i64_type, limit_ptr, "native_stack_limit");
+#if LLVM_VERSION_MAJOR >= 20
+            auto* stacksave = llvm::Intrinsic::getOrInsertDeclaration(&module,
+                llvm::Intrinsic::stacksave, {ptr_type});
+#else
+            auto* stacksave = llvm::Intrinsic::getDeclaration(&module, llvm::Intrinsic::stacksave,
+                llvm::Intrinsic::isOverloaded(llvm::Intrinsic::stacksave)
+                    ? llvm::ArrayRef<llvm::Type*>(ptr_type) : llvm::ArrayRef<llvm::Type*>());
+#endif
+            llvm::Value* sp = builder->CreatePtrToInt(builder->CreateCall(stacksave), i64_type);
+            builder->CreateCondBr(builder->CreateICmpULE(limit, sp), first_ir_bb, full_check,
+                llvm::MDBuilder(ctx).createBranchWeights(999, 1));
+            // Preserve the full native/RSE guard and overflow materialization.
+            builder->SetInsertPoint(full_check);
+        }
         llvm::Value* err;
         if (native_runtime_config || receiver_runtime_config || dynamic_closure_runtime_config) {
             auto check_fn = module.getOrInsertFunction("qore_rt_check_stack_v2",
@@ -13711,7 +13748,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // (QoreNativeEntrySlots)
     {
         if (native_entry_state) {
-            auto* state_type = llvm::ArrayType::get(ptr_type, 6);
+            auto* state_type = llvm::ArrayType::get(ptr_type, NativeEntryStateSize);
             auto load_state = [&](unsigned i, const char* name) -> llvm::Value* {
                 return builder->CreateLoad(ptr_type,
                     builder->CreateConstInBoundsGEP2_32(state_type, native_entry_state, 0, i), name);

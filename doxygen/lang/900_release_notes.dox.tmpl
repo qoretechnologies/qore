@@ -262,6 +262,8 @@
     reducing repeated frame setup while retaining name ownership, synchronization and exception behavior.
     Generated-code stack checks avoid overflow-handling register saves on supported native stacks,
     retaining live limits, deferred context and the complete fallback guard.
+    Private entries for eligible standalone AOT native loop calls inline the live stack-limit check,
+    reducing per-call helper overhead while retaining null/unsupported-stack fallback and overflow handling.
 
     AOT-compiled modules record the AOT runtime identity of the %Qore library that compiled them, and a module
     compiled by a library with a different generated-code contract is refused when it is loaded, with an error that

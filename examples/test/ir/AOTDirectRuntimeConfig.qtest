@@ -33,6 +33,8 @@ class DirectRuntimeConfigTest inherits QUnit::Test {
         foreach string prefix in (("", "QORE_DISABLE_AOT_DIRECT_RUNTIME_CONFIG=1 ",
                 "QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION=1 ",
                 "QORE_DISABLE_AOT_CALLBACK_ENTRY_STATE=1 ",
+                "QORE_DISABLE_AOT_COMPANION_INLINE_STACK=1 ",
+                "QORE_CONTROL_AOT_NULL_COMPANION_STACK_LIMIT=1 ",
                 "QORE_CONTROL_AOT_NULL_CALLBACK_RUNTIME_CONFIG=1 ", "QORE_AOT_EH=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
@@ -42,6 +44,7 @@ class DirectRuntimeConfigTest inherits QUnit::Test {
                 if (level == "-O0" && !prefix.contains("QCC_SPLIT_THRESHOLD")) {
                     bool selected = !prefix.contains("QORE_DISABLE_AOT_DIRECT_RUNTIME_CONFIG");
                     bool shared_state = !prefix.contains("QORE_DISABLE_AOT_CALLBACK_ENTRY_STATE");
+                    bool inline_stack = shared_state && !prefix.contains("QORE_DISABLE_AOT_COMPANION_INLINE_STACK");
                     int companions = 0;
                     int callers = 0;
                     int ordinary = 0;
@@ -51,6 +54,10 @@ class DirectRuntimeConfigTest inherits QUnit::Test {
                         if (header.contains("_runtime_config(")) {
                             ++companions;
                             assertTrue(body.contains("@qore_rt_check_stack_v2(ptr %xsink, ptr %native_runtime_config)"));
+                            assertEq(inline_stack, body.contains("%native_stack_limit_ptr = load ptr"));
+                            assertEq(inline_stack, body.contains("@llvm.stacksave"));
+                            assertEq(inline_stack, body.contains("native_stack_full:"));
+                            assertEq(inline_stack, body.contains("icmp ule i64 %native_stack_limit"));
                             assertEq(!shared_state, body.contains("@qore_rt_get_native_entry_slots_v2"));
                             assertEq(!shared_state,
                                 body.contains("@qore_rt_get_cancel_poll_state_v1(ptr %native_runtime_config"));
@@ -67,6 +74,9 @@ class DirectRuntimeConfigTest inherits QUnit::Test {
                         if (header.contains("@bodyKnownUnary_") && header.contains("_fast_")) {
                             ++callers;
                             assertEq(selected, body.contains("known_callref_rc_result"));
+                            assertEq(selected && inline_stack
+                                && !prefix.contains("QORE_CONTROL_AOT_NULL_COMPANION_STACK_LIMIT"),
+                                body.contains("@qore_rt_get_stack_limit_v1"));
                             assertEq(selected, body.contains("callref_without_context"));
                             assertTrue(body.contains("call double @bodyStep_"));
                             assertTrue(body.contains("@qore_rt_push_native_inline_call_frame_aot"));

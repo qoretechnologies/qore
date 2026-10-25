@@ -23037,3 +23037,87 @@ The merge is conflict-free. Local audit fixes give three new test callback handl
 The focused driver initially misread QUnit's filtered summary: its child tests passed, but the driver expected only executed cases in the registered-case total. The recorded recovery verifies the worker's one executed case/nine assertions and two exclusions, then runs Qdx. The original Debug unit process crashed in ut_local_discard, and the saved pre-merge Debug binary reproduced the same crash. LLDB identified a fabricated assigned enum with a null member. The corrected fixture retains a real enum through its local, checks release of the declaration/member on deletion, and checks repeated deletion. Production behavior is unchanged; ql_debug.cpp is compiled only with DEBUG. Two initial debugger launch attempts failed on LLDB options before target execution; the recorded process-launch command produced the backtrace. The first fixture correction selected fixed scalar storage and asserted on enum assignment; using an ordinary local selects enum storage through the normal assignment path. The next run passed all native checks but the command-line wrapper incorrectly used set_return_value outside exec-class mode; the final requalification uses a normal top-level return. The crash, fixture assertion, wrapper error, and failed launch receipts are retained separately from the passing requalification. Debug module-link cleanup restores all 391 recorded Release aliases and verifies their hashes. No new performance timing is attributed to this merge; the preceding stack-wrapper measurements remain a 9a2128dc30 snapshot.
 
 [All 62 audit checks](audit-merge-88f1.md); [evidence](results-merge-88f1.json).
+
+## Private AOT companion stack guard (2026-10-25)
+
+Eligible standalone AOT direct/callback native loop entries borrow a live stack-limit address in the private caller-owned entry descriptor. The descriptor has seven pointer fields; its callers and InternalLinkage callees are generated together, so this is not a public runtime ABI change. Each companion loads the current limit and its own native SP before its body. A successful comparison avoids qore_rt_check_stack_v2; null/unsupported views and overflow retain the complete existing guard. Cancellation, deferred context, call frames and ordinary callable entries remain. The observed target frame remains 96 bytes. General qmod compilation does not yet invoke these companion-discovery passes, so these measurements do not establish a new qmod speedup.
+
+Optimized performance branch 398649d556 (develop through 88f1a38482) versus the six-file candidate; Release -O3 -DNDEBUG, allocation tracking off, LLVM 22.1.8, Apple M4/macOS arm64. Eighteen fresh executables use identical sources and default/reverse/shuffle-487 link layouts. The 52-kernel screen has three forks; selected confirmation has five. Each fork uses one warmup and three 150 ms samples, 4096 items, seed 7, randomized paired order. Results are median fork means, then median across layouts. Short-invocation controls use counts 1 and 16. Whole-kernel ns/item, not isolated call latency. No exclusive-host, thermal or frequency control; no fresh Java/develop or IR/JIT speed comparison.
+
+|!screen workload|!Before ns/item|!Candidate ns/item|!Change
+|float:direct_local_float_return|0.806626|0.802904|-0.46%
+|float:callback_local_float_return|0.900932|0.906007|+0.56%
+|float:direct_local_float_result|0.731989|0.762682|+4.19%
+|float:callback_local_float_result|0.855630|0.862155|+0.76%
+|float:direct_loop_float_return|6.243548|6.006944|-3.79%
+|float:callback_loop_float_return|5.557486|5.246562|-5.59%
+|float:direct_float_add|0.819263|0.808119|-1.36%
+|float:static_float_add|0.812856|0.823160|+1.27%
+|float:typed_local_int_unary|7.096344|7.376279|+3.94%
+|float:typed_local_float_unary|0.930133|0.933628|+0.38%
+|float:result_float_add|0.874794|0.880315|+0.63%
+|micro:arithmetic|1.561113|1.562852|+0.11%
+|micro:direct_call|1.554853|1.558065|+0.21%
+|micro:method_call|1.641848|1.630362|-0.70%
+|micro:indirect_call|7.645487|7.684240|+0.51%
+|micro:polymorphic_call|24.171866|24.569196|+1.64%
+|micro:polymorphic_expression_call|11.505242|11.593507|+0.77%
+|micro:monomorphic_call|4.216559|4.232271|+0.37%
+|micro:optional_method_call|11.310090|11.330985|+0.18%
+|micro:polymorphic_float_call|24.334406|24.449081|+0.47%
+|micro:polymorphic_float_expression_call|11.363010|11.608784|+2.16%
+|micro:monomorphic_float_call|4.176775|4.220774|+1.05%
+|micro:optional_float_method_call|11.396386|11.453110|+0.50%
+|micro:boxed_float_method_call|20.786671|20.922114|+0.65%
+|micro:dynamic_int_result_call|11.294283|11.309269|+0.13%
+|micro:dynamic_int_result_fallback|21.554742|21.804266|+1.16%
+|micro:boxed_int_method_call|17.298746|17.854306|+3.21%
+|micro:boxed_int_method_fallback|33.494120|35.160133|+4.97%
+|micro:boxed_float_method_fallback|35.237919|35.106093|-0.37%
+|micro:boxed_int_method_effect|91.361359|92.791900|+1.57%
+|micro:dynamic_float_result_call|12.217784|12.135228|-0.68%
+|micro:indirect_wide|7.509040|7.654833|+1.94%
+|micro:indirect_float|8.555059|8.562095|+0.08%
+|micro:indirect_int_result|7.695026|7.730107|+0.46%
+|micro:indirect_float_result|8.157253|8.098552|-0.72%
+|micro:indirect_tagged_float|8.077755|8.020763|-0.71%
+|micro:indirect_branch_float|8.674290|8.755234|+0.93%
+|micro:indirect_affine|7.629548|7.608800|-0.27%
+|micro:indirect_affine_wide|7.493403|7.438420|-0.73%
+|micro:indirect_branch_int|7.578370|7.653217|+0.99%
+|micro:dispatch_control|1.909128|1.923992|+0.78%
+|micro:list_read|2.933611|2.902548|-1.06%
+|micro:list_build|29.786917|29.292596|-1.66%
+|micro:list_mutate|198.930992|200.903443|+0.99%
+|micro:temporary_list|1.662439|1.665479|+0.18%
+|micro:temporary_hash|338.563289|340.974619|+0.71%
+|micro:closure_call|19.096142|19.493537|+2.08%
+|micro:closure_capture|25.337164|25.270148|-0.26%
+|mixed:csv_report|977.491948|972.270765|-0.53%
+|mixed:object_orders|1844.525437|1850.781250|+0.34%
+|mixed:callback_pipeline|89.698345|88.869993|-0.92%
+|mixed:text_index|1380.051601|1381.187910|+0.08%
+
+|!confirmation workload|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_loop_float_return|5.557361|5.261014|-5.33%
+|float:direct_local_float_result|0.730637|0.726373|-0.58%
+|float:direct_loop_float_return|6.260895|6.001758|-4.14%
+|float:typed_local_int_unary|7.105628|7.493612|+5.46%
+|micro:boxed_float_method_fallback|35.066920|34.734490|-0.95%
+|micro:boxed_int_method_call|17.316334|17.795168|+2.77%
+|micro:boxed_int_method_fallback|33.656343|34.779053|+3.34%
+|micro:monomorphic_call|4.256081|4.230393|-0.60%
+
+|!short1 workload|!Before ns/item|!Candidate ns/item|!Change
+|float:direct_loop_float_return|389.608741|389.541789|-0.02%
+|float:callback_loop_float_return|735.402994|735.953033|+0.07%
+
+|!short16 workload|!Before ns/item|!Candidate ns/item|!Change
+|float:direct_loop_float_return|30.660610|30.840319|+0.59%
+|float:callback_loop_float_return|51.775381|51.865454|+0.17%
+
+Both target loop kernels improve at least 2% in every layout in screen and confirmation; confirmation direct 6.260895 to 6.001758 ns/item (-4.14%), callback 5.557361 to 5.261014 (-5.33%). Whole-invocation counts 1 and 16 move less than 1% in aggregate. Original matched-build regressions are retained: typed integer unary +5.46%, boxed integer method call +2.77%, boxed integer fallback +3.34% in confirmation. Crossed runtime tests attribute boxed costs to runtime placement and typed cost to executable choice; seven typed-integer LLVM definitions are unchanged. Relinking identical candidate runtime objects with unused 64/128 bytes of text shifts boxed fallback from 35.176931 to 33.312813/33.831975 ns/item without changing the executable or runtime work. No padding or alignment tuning is retained. This demonstrates layout sensitivity, not a universal cacheline explanation and does not erase costs of the actual matched build. Four mixed workloads move -0.92% to +0.34% in the screen; these are unconfirmed. Retain the generated guard improvement under user authorization to assess the broader workload tradeoff, while reporting the measured costs.
+
+Release validation passes 20 cases/1899 assertions; Debug passes 13 cases/1730 assertions plus 3776 native checks, with no skips. All 391 Release qmod aliases and hashes are restored after Debug. The generated-entry probe uses the actual optimized companion, forces a changed live limit after descriptor acquisition on the main thread and three foreign registrations, and verifies overflow/recovery and null fallback. Across 48 calls, baseline invokes the full helper 24 times and candidate 16 times. Its first driver failed because LLVM 22 clang++ was absent before a compiler child could start; the preserved v2 driver uses installed llc22 and system clang++, and succeeds. All 1680 jobs/5040 measured windows are independently replayed. No product code change was required during these validations.
+
+Next: Extend existing discovery to owned, filtered, same-image monolithic module maps; freeze and measure actual qmod execution before enabling; shared/per-file maps remain a separate design. Java parity and a global performance ceiling remain unestablished. [Evidence](results-companion-stack-macos-arm64.json); [all 62 checks](audit-companion-stack.md).
