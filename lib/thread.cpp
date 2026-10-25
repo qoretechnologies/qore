@@ -1491,7 +1491,7 @@ public:
     DLLLOCAL void del() {
         // decrement program's thread count
         if (started) {
-            qore_program_private::decThreadCount(*pgm, tid);
+            qore_program_private::decThreadCount(*pgm, tid, nullptr);
             //printd(5, "BGThreadParams::del() this: %p pgm: %p\n", this, pgm);
             pgm->depDeref();
         } else if (registered) {
@@ -3234,7 +3234,7 @@ ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
     sync_runtime_config_program(td);
 
     if (thread_count_incremented) {
-        qore_program_private::decThreadCount(*pgm, td->tid);
+        qore_program_private::decThreadCount(*pgm, td->tid, xsink);
     }
 }
 
@@ -3262,6 +3262,7 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         old_pgm ? old_pgm->getProgramId() : -1, pgm, pgm?pgm->getProgramId():-1, old_tlpd, old_ctx,
         old_frameCount);
     qore_program_private* pp = qore_program_private::get(*pgm);
+    this->xsink = xsink;
     // ProgramRuntimeParseContextHelper locks a program for parsing without
     // creating tlpd. Nested cross-program calls can temporarily switch away
     // from that program while module init is still running; re-entering the
@@ -3929,7 +3930,8 @@ ProgramRuntimeExternalParseContextHelper::operator bool() const {
     return static_cast<bool>(pgm);
 }
 
-ProgramRuntimeParseAccessHelper::ProgramRuntimeParseAccessHelper(ExceptionSink* xsink, QoreProgram* pgm) : restore(false) {
+ProgramRuntimeParseAccessHelper::ProgramRuntimeParseAccessHelper(ExceptionSink* xsink, QoreProgram* pgm)
+        : xsink(xsink), restore(false) {
     ThreadData* td = thread_data.get();
     if (pgm != td->current_pgm) {
         if (qore_program_private::incThreadCount(*pgm, xsink))
@@ -3947,9 +3949,10 @@ ProgramRuntimeParseAccessHelper::~ProgramRuntimeParseAccessHelper() {
         return;
 
     ThreadData* td = thread_data.get();
-    qore_program_private::decThreadCount(*td->current_pgm, td->tid);
+    QoreProgram* pgm = td->current_pgm;
     td->current_pgm = old_pgm;
     sync_runtime_config_program(td);
+    qore_program_private::decThreadCount(*pgm, td->tid, xsink);
 }
 
 QoreProgram* getProgram() {

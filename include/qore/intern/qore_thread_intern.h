@@ -1229,6 +1229,8 @@ protected:
     // frame count of tlpd when context is started
     int save_frameCount = 0;
     int old_frameCount = 0;
+    //! receives the exceptions of clearing a Program deleted while this context ran its code
+    ExceptionSink* xsink = nullptr;
     bool restore = false;
     bool init_tlpd = false;
     bool thread_count_incremented = false;
@@ -1263,6 +1265,8 @@ public:
 
 protected:
     QoreProgram* old_pgm;
+    //! receives the exceptions of clearing a Program deleted while this context ran its code
+    ExceptionSink* xsink;
     bool restore;
 };
 

@@ -1381,6 +1381,14 @@ Program::copy() {
 //! Deletes the Program
 /** Waits for all threads to finish executing, then deletes all global variables, dereferences the internal Program
     object and deletes the %Qore object
+
+    If the current thread runs code of the Program, as when the Program is deleted in code that its code calls, the
+    Program cannot wait for the current thread: the %Qore object is deleted at once, and the Program is kept until the
+    current thread has left its code; then, when other threads have finished executing its code as well, its global
+    variables are deleted and it is dereferenced
+
+    @since %Qore 3.0 a Program deleted while the current thread runs its code is kept until the thread has left it;
+    the code crashed the process when it returned
  */
 Program::destructor() {
     printd(5, "Program::destructor() pgm: %p pgmid: %d self: %p\n", p, p->getProgramId(), self);

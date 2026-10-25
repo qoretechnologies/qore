@@ -1,0 +1,260 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ProgramDeleteRunningTest
+
+#! A Program deleted while the current thread runs its code (issue #5538)
+/** A Program deleted while another thread runs its code is kept until that thread has left the code: the deleting
+    thread waits for it.  The current thread cannot wait for itself, and its deletion cleared the Program at once, so
+    the code that it ran then used the cleared Program and crashed when it returned.  The Program is now kept until
+    the current thread has left its code too, and is cleared then: the child's global object is destroyed after the
+    last call into the child returns and before the caller continues.
+
+    Each script runs in a separate process, in each execution mode and compiled ahead of time, as a crash is the
+    failure.
+*/
+class ProgramDeleteRunningTest inherits QUnit::Test {
+    public {
+        #! The child's global object, whose destructor shows when the child is cleared
+        const ChildData = "class D {
+    destructor() {
+        printf(\"child data destroyed\\n\");
+    }
+}
+our D d();
+";
+
+        #! The start of each parent script: the child is parsed from child.q next to the script
+        const ParentStart = "%modern
+our *Program child = new Program(PO_NEW_STYLE);
+child.parse(ReadOnlyFile::readTextFile(get_script_dir() + \"/child.q\"), \"child\");
+# creates the child's global object
+child.run();
+";
+
+        #! The deleting class of the parent
+        const Killer = "class K {
+    kill() {
+        printf(\"deleting child\\n\");
+        delete child;
+        printf(\"deleted: %y\\n\", exists child);
+    }
+}
+";
+
+        #! The scripts: the child's code, the parent's, and the output that each must print
+        const Scripts = {
+            # the script of the issue: a method of the child deletes it through the parent
+            "method": {
+                "child": ChildData + "class C {
+    int run(object k) {
+        k.kill();
+        printf(\"run returns\\n\");
+        return 1;
+    }
+}
+object sub make() {
+    return new C();
+}
+",
+                "parent": ParentStart + Killer + "object o = child.callFunction(\"make\");
+try {
+    printf(\"run: %y\\n\", o.run(new K()));
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s: %s\\n\", ex.err, ex.desc);
+}
+printf(\"done\\n\");
+",
+                "output": ("deleting child", "deleted: False", "run returns", "child data destroyed", "run: 1", "done"),
+            },
+            # once the call has returned, the child is gone as when it is deleted while it runs no code
+            "after": {
+                "child": ChildData + "class C {
+    int run(object k) {
+        k.kill();
+        printf(\"run returns\\n\");
+        return 6;
+    }
+    int ping() {
+        return 7;
+    }
+}
+object sub make() {
+    return new C();
+}
+",
+                "parent": ParentStart + Killer + "object o = child.callFunction(\"make\");
+printf(\"run: %y\\n\", o.run(new K()));
+try {
+    printf(\"ping: %y\\n\", o.ping());
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+printf(\"done\\n\");
+",
+                "output": ("deleting child", "deleted: False", "run returns", "child data destroyed", "run: 6",
+                    "PROGRAM-ERROR", "done"),
+            },
+            # a function of the child rather than a method
+            "function": {
+                "child": ChildData + "int sub run(object k) {
+    k.kill();
+    printf(\"run returns\\n\");
+    return 2;
+}
+",
+                "parent": ParentStart + Killer + "printf(\"run: %y\\n\", child.callFunction(\"run\", new K()));
+printf(\"done\\n\");
+",
+                "output": ("deleting child", "deleted: False", "run returns", "child data destroyed", "run: 2", "done"),
+            },
+            # the deletion is several calls deep in the child, whose frames use their local variables after it
+            "nested": {
+                "child": ChildData + "class C {
+    int run(object k) {
+        string s = \"run\";
+        int rv = a(k);
+        printf(\"%s returns\\n\", s);
+        return rv + 1;
+    }
+    int a(object k) {
+        string s = \"a\";
+        int rv = b(k);
+        printf(\"%s returns\\n\", s);
+        return rv + 1;
+    }
+    int b(object k) {
+        string s = \"b\";
+        k.kill();
+        printf(\"%s returns\\n\", s);
+        return 1;
+    }
+}
+object sub make() {
+    return new C();
+}
+",
+                "parent": ParentStart + Killer + "object o = child.callFunction(\"make\");
+printf(\"run: %y\\n\", o.run(new K()));
+printf(\"done\\n\");
+",
+                "output": ("deleting child", "deleted: False", "b returns", "a returns", "run returns",
+                    "child data destroyed", "run: 3", "done"),
+            },
+            # the child calls a closure of the parent, which deletes the child
+            "closure": {
+                "child": ChildData + "int sub run(code c) {
+    c();
+    printf(\"run returns\\n\");
+    return 4;
+}
+",
+                "parent": ParentStart + "code del = sub () {
+    printf(\"deleting child\\n\");
+    delete child;
+    printf(\"deleted: %y\\n\", exists child);
+};
+printf(\"run: %y\\n\", child.callFunction(\"run\", del));
+printf(\"done\\n\");
+",
+                "output": ("deleting child", "deleted: False", "run returns", "child data destroyed", "run: 4", "done"),
+            },
+            # a background thread runs the child's code when the current thread's call returns: the child is
+            # cleared when that thread has left it as well
+            "thread": {
+                "child": ChildData + "int sub run(object k, Queue started, Queue go) {
+    background sub () {
+        started.push(True);
+        go.get();
+        printf(\"background returns\\n\");
+    }();
+    started.get();
+    k.kill();
+    printf(\"run returns\\n\");
+    go.push(True);
+    return 5;
+}
+",
+                "parent": ParentStart + Killer + "printf(\"run: %y\\n\", child.callFunction(\"run\", new K(), new Queue(), new Queue()));
+printf(\"done\\n\");
+",
+                "output": ("deleting child", "deleted: False", "run returns", "background returns",
+                    "child data destroyed", "run: 5", "done"),
+            },
+        };
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        #! bounds each run: a deadlock ends with the timeout's status instead of stopping the test
+        string timeout_cmd;
+    }
+
+    constructor() : QUnit::Test("ProgramDeleteRunningTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        timeout_cmd = trim(backquote("command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true"));
+        if (!timeout_cmd) {
+            string perl = trim(backquote("command -v perl 2>/dev/null || true"));
+            if (perl) {
+                timeout_cmd = perl + " -e 'alarm shift; exec @ARGV'";
+            }
+        }
+
+        foreach hash<auto> i in (Scripts.pairIterator()) {
+            addTestCase("a Program deleted while the current thread runs its code: " + i.key, \testScript(),
+                (i.key, i.value.child, i.value.parent, i.value.output));
+        }
+        set_return_value(main());
+    }
+
+    private writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+    }
+
+    #! Runs a command and asserts that it exits normally and prints the given lines
+    private checkRun(string cmd, list<string> output, string what) {
+        # the thread variant deadlocked before the fix: the deleting thread waited for the background thread, which
+        # waited for it
+        if (timeout_cmd) {
+            cmd = timeout_cmd + " 120 " + cmd;
+        }
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd);
+        assertEq(0, r.rc, sprintf("%s exits normally: %s", what, r.out));
+        assertEq(output, r.stdout.split("\n"), sprintf("%s prints its steps in order: %s", what, r.out));
+        assertEq("", r.stderr, what + " writes nothing to stderr");
+    }
+
+    testScript(string name, string child, string parent, list<string> output) {
+        TmpDir tmp("qore-program-delete-running-");
+        writeFile(tmp.path + "/child.q", child);
+        string path = tmp.path + "/" + name + ".q";
+        writeFile(path, parent);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkRun(sprintf("%s --exec-mode=%s %s", qore_bin, mode, path), output, name + " with " + mode);
+        }
+
+        # compiled ahead of time
+        if (qcc_bin =~ /\// ? !is_executable(qcc_bin)
+                : system(sprintf("command -v %s > /dev/null 2>&1", qcc_bin))) {
+            testSkip(sprintf("qcc is not available at %y", qcc_bin));
+        }
+        string exe = tmp.path + "/" + name;
+        int rc;
+        string out = backquote(sprintf("%s -o %s %s 2>&1", qcc_bin, exe, path), \rc);
+        assertEq(0, rc, sprintf("qcc compiles %s: %s", name, out));
+        checkRun(exe, output, name + " compiled ahead of time");
+    }
+}
