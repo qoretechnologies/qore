@@ -19,7 +19,8 @@
     against the declared return type: a return statement that returns no value or a value of another type raises
     "<return statement> expects type ..." in the blocks of the statement, so that a catch block around it catches the
     error, the on_error handlers of the blocks run and the exceptions of destructors that run when the blocks exit
-    follow it, and code that ends without a return statement raises
+    follow it; a return that such an error, or one of an on_exit handler after it, interrupts gives no value when a
+    catch block handles the error; and code that ends without a return statement raises
     "<block return> ... block missing return statement".  The checks are in return-no-value-checks.qi and run
     in this program, in a worker in each execution mode, from a compiled module and in a compiled program.
 */
@@ -75,6 +76,14 @@ class ReturnNoValueTest inherits QUnit::Test {
             "rejected-value-released": "RUNTIME-TYPE-ERROR, released: True",
             "rejected-value-in-try-released": "no error: 1, released: True",
             "rejected-call-released": "released: True",
+            # a return that an exception interrupts gives no value: when a catch block handles the error of a return
+            # statement, or of an on_exit handler after it, the code continues as if the return had not completed
+            "interrupted-rejected-return": "RUNTIME-TYPE-ERROR: <block return> expects type 'int', but got no value "
+                "instead: block missing return statement",
+            "interrupted-on-exit-return": "RUNTIME-TYPE-ERROR: <block return> expects type 'int', but got no value "
+                "instead: block missing return statement",
+            "interrupted-return-continues": "no error: 2",
+            "interrupted-rejected-released": "RUNTIME-TYPE-ERROR, released: True",
             # an element of a typed list or hash has no value when it does not exist, which a return type that
             # requires a value rejects
             "list-element-missing": "RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got no value "

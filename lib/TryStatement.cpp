@@ -47,6 +47,18 @@ TryStatement::~TryStatement() {
     delete parseTypeInfo;
 }
 
+//! Releases the value of a return in the try block that an exception interrupted
+/** A return that an exception interrupts gives no value: the value of a return statement whose value the declared
+    return type rejects, or of a return statement after which an on_exit handler raised an exception, is released
+    while the exception is still pending, so that an exception that releasing it raises follows it, and the code
+    continues after the catch block as if the return had not completed
+*/
+static void qore_try_release_interrupted_return(ValueHolder& trv, ExceptionSink* xsink) {
+    if (*xsink && !trv->isNothing()) {
+        ValueHolder interrupted(trv.release(), xsink);
+    }
+}
+
 bool qore_catch_thread_exit(ExceptionSink* xsink) {
     if (!xsink || !xsink->isThreadExit()) {
         return false;
@@ -66,6 +78,11 @@ int TryStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     int rc = 0;
     if (try_block)
         rc = try_block->execImpl(*trv, xsink);
+
+    // a return that an exception interrupted gives no value: the value of a return statement that raised the
+    // exception (a value that the declared return type rejects) or that an exception raised after it (in an on_exit
+    // handler) interrupted is released, and the code continues as if the return had not completed
+    qore_try_release_interrupted_return(trv, xsink);
 
     QoreException* except = xsink->catchException();
     if (except) {
@@ -105,6 +122,9 @@ int TryStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Exception
     int rc_state = 0;
     if (try_block)
         rc_state = try_block->execImpl(rc, *trv, xsink);
+
+    // a return that an exception interrupted gives no value (see above)
+    qore_try_release_interrupted_return(trv, xsink);
 
     QoreException* except = xsink->catchException();
     if (except) {

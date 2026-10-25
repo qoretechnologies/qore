@@ -127,6 +127,37 @@ public namespace ReturnNoValueChecks {
         return sprintf("%s, released: %y", rv, inlist(name, TrackedValue::destroyed));
     }
 
+    #! a return that an exception interrupts gives no value: a value that the return type rejects in a try block whose
+    #! catch block handles the error is not returned, and the code ends without a return statement
+    int sub interrupted_rejected_return(auto v) {
+        try {
+            return v;
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    #! a return after which an on_exit handler raises an exception that a catch block handles gives no value
+    int sub interrupted_on_exit_return() {
+        try {
+            {
+                on_exit {
+                    throw "ON-EXIT-ERROR", "on_exit";
+                }
+                return 1;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    #! the code continues after the catch block of an interrupted return
+    int sub interrupted_return_continues(auto v) {
+        try {
+            return v;
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        return 2;
+    }
+
     #! calls code whose return type rejects the value in a try block whose catch block ignores the error, and returns
     #! whether the value was destroyed after the call
     string sub check_rejected_call_released() {
@@ -374,6 +405,11 @@ public namespace ReturnNoValueChecks {
             "rejected-value-in-try-released": check_rejected_released("rejected-in-try",
                 auto sub (TrackedValue v) { return return_rejected_in_try(v); }),
             "rejected-call-released": check_rejected_call_released(),
+            "interrupted-rejected-return": check(int sub () { return interrupted_rejected_return("str"); }),
+            "interrupted-on-exit-return": check(int sub () { return interrupted_on_exit_return(); }),
+            "interrupted-return-continues": check(int sub () { return interrupted_return_continues("str"); }),
+            "interrupted-rejected-released": check_rejected_released("interrupted",
+                auto sub (TrackedValue v) { return interrupted_rejected_return(v); }),
             "return-destructor-value": check_errors(int sub () { return return_with_destructor_error(1); }),
             "list-element-missing": check(int sub () { return return_list_element((1, 2), 5); }),
             # the caller does not check the value again
