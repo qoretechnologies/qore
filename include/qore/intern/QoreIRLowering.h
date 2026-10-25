@@ -628,8 +628,8 @@ private:
 
     //! Returns true if an operation that reads and changes the variable must change it through its lvalue
     /** A variable that other threads can change (see isSharedVar() in QoreIRLowering.cpp) is changed in one
-        operation, and the variable of a foreach loop (foreach_element_locals) is changed through the variable
-        itself, as it can hold a weak reference.
+        operation, and the variable of a foreach loop (foreach_element_locals) and a variable assigned with := or @=
+        (LocalVar::isWeakAssigned()) are changed through the variable itself, as they can hold a weak reference.
     */
     DLLLOCAL bool changesThroughLValue(const VarRefNode* var) const;
 

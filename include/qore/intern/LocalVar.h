@@ -640,6 +640,7 @@ public:
     DLLLOCAL LocalVar(const LocalVar& old) : name(old.name), decl_seq(old.decl_seq), closure_use(old.closure_use),
             parse_assigned(old.parse_assigned), is_self(old.is_self), is_top_level(old.is_top_level),
             is_auto_type(old.is_auto_type), no_narrowing(old.no_narrowing), read_only(old.read_only),
+            weak_assigned(old.weak_assigned),
             typeInfo(old.typeInfo), refTypeInfo(old.refTypeInfo),
             narrowedTypeInfo(old.narrowedTypeInfo), type_info_needs_substitution(old.type_info_needs_substitution),
             ref_type_info_needs_substitution(old.ref_type_info_needs_substitution) {
@@ -662,6 +663,22 @@ public:
 
     DLLLOCAL bool isAssigned() const {
         return parse_assigned;
+    }
+
+    //! Records that the variable is assigned with the weak (:=) or the opaque (@=) assignment operator
+    /** Such a variable can hold a weak or an opaque reference, which a read gives as its target, but which an operator
+        that changes the variable (+=, ++, ...) sees as it is held, as the AST interpreter's lvalue does.  IR lowering
+        therefore changes such a variable through its lvalue; the parse of an assignment anywhere in the code records
+        it, so lowering knows it before it lowers the code that changes the variable.
+    */
+    DLLLOCAL void parseWeakAssigned() {
+        weak_assigned = true;
+    }
+
+    //! Returns whether the variable is assigned with the weak or the opaque assignment operator; see
+    //! parseWeakAssigned()
+    DLLLOCAL bool isWeakAssigned() const {
+        return weak_assigned;
     }
 
     //! Preserves the definite-assignment state the variable had when it left the parse stack.
@@ -1119,7 +1136,9 @@ private:
         is_top_level = false,
         is_auto_type = false,       // true if declared type is an auto type (hash<auto>, list<auto>, etc.)
         no_narrowing = false,       // true if declared with auto! to disable type narrowing
-        read_only = false;
+        read_only = false,
+        //! assigned with := or @=; see parseWeakAssigned()
+        weak_assigned = false;
     const QoreTypeInfo* typeInfo = nullptr;
     const QoreTypeInfo* refTypeInfo = nullptr;
     const QoreTypeInfo* narrowedTypeInfo = nullptr;  // narrowed type from assignment (parse-time only)

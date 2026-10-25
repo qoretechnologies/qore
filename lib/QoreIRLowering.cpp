@@ -731,8 +731,15 @@ static bool isSharedVar(const VarRefNode* var) {
 
 // documented in QoreIRLowering.h
 bool QoreIRLowering::changesThroughLValue(const VarRefNode* var) const {
-    return isSharedVar(var)
-        || (var && var->getType() == VT_LOCAL && var->ref.id && foreach_element_locals.count(var->ref.id));
+    if (isSharedVar(var)) {
+        return true;
+    }
+    if (!var || !var->ref.id || (var->getType() != VT_LOCAL && var->getType() != VT_CLOSURE)) {
+        return false;
+    }
+    // the variable of a foreach loop, and a variable assigned with := or @=, can hold a weak reference, which an
+    // operator that changes the variable sees as it is held (see LocalVar::parseWeakAssigned())
+    return foreach_element_locals.count(var->ref.id) || var->ref.id->isWeakAssigned();
 }
 
 static bool qoreIrCallHasNoArgs(const FunctionCallBase* call) {

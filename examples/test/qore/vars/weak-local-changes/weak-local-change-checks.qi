@@ -1,0 +1,215 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks of the operators that change a local variable assigned with the weak assignment operator (:=), which every
+# execution mode must change as the AST interpreter does; included by weak-local-changes-worker.q, so that the checks
+# run in the execution mode of the worker, and by WeakLocalChangeChecks.qm for the compiled run
+#
+# a read of such a variable gives the target of its weak reference, but an operator that changes the variable (+=,
+# -=, ++, push, ...) sees the weak reference as the variable holds it, as the AST interpreter's lvalue does, and
+# the target is not changed; each check returns the variable and the target after the change, or the error raised
+
+public namespace WeakLocalChangeChecks {
+    #! an object to hold weakly
+    public class Target {
+        public {
+            int n = 1;
+        }
+    }
+
+    #! returns the variable and the target as text
+    string sub fmt(auto w, auto t) {
+        return sprintf("%y/%y", w, t);
+    }
+
+    string sub hash_plus() {
+        hash<auto> t = {"a": 1};
+        auto w := t;
+        w += {"c": 3};
+        return fmt(w, t);
+    }
+
+    string sub hash_minus() {
+        hash<auto> t = {"a": 1, "b": 2};
+        auto w := t;
+        w -= "a";
+        return fmt(w, t);
+    }
+
+    string sub list_plus() {
+        list<auto> t = (1, 2);
+        auto w := t;
+        w += 3;
+        return fmt(w, t);
+    }
+
+    string sub list_minus() {
+        list<auto> t = (1, 2);
+        auto w := t;
+        w -= 1;
+        return fmt(w, t);
+    }
+
+    string sub list_multiply() {
+        list<auto> t = (1, 2);
+        auto w := t;
+        w *= 2;
+        return fmt(w, t);
+    }
+
+    string sub list_divide() {
+        list<auto> t = (1, 2);
+        auto w := t;
+        w /= 2;
+        return fmt(w, t);
+    }
+
+    string sub list_modulo() {
+        list<auto> t = (1, 2);
+        auto w := t;
+        w %= 2;
+        return fmt(w, t);
+    }
+
+    string sub list_and() {
+        list<auto> t = (1, 2);
+        auto w := t;
+        w &= 3;
+        return fmt(w, t);
+    }
+
+    string sub list_or() {
+        list<auto> t = (1, 2);
+        auto w := t;
+        w |= 3;
+        return fmt(w, t);
+    }
+
+    string sub list_xor() {
+        list<auto> t = (1, 2);
+        auto w := t;
+        w ^= 3;
+        return fmt(w, t);
+    }
+
+    string sub list_shift_left() {
+        list<auto> t = (1, 2);
+        auto w := t;
+        w <<= 1;
+        return fmt(w, t);
+    }
+
+    string sub list_shift_right() {
+        list<auto> t = (1, 2);
+        auto w := t;
+        w >>= 1;
+        return fmt(w, t);
+    }
+
+    string sub list_pre_increment() {
+        list<auto> t = (1, 2);
+        auto w := t;
+        ++w;
+        return fmt(w, t);
+    }
+
+    string sub list_post_increment() {
+        list<auto> t = (1, 2);
+        auto w := t;
+        w++;
+        return fmt(w, t);
+    }
+
+    string sub list_pre_decrement() {
+        list<auto> t = (1, 2);
+        auto w := t;
+        --w;
+        return fmt(w, t);
+    }
+
+    string sub list_post_decrement() {
+        list<auto> t = (1, 2);
+        auto w := t;
+        w--;
+        return fmt(w, t);
+    }
+
+    string sub list_push() {
+        list<auto> t = (1, 2);
+        auto w := t;
+        push w, 3;
+        return fmt(w, t);
+    }
+
+    string sub object_plus() {
+        Target t();
+        auto w := t;
+        w += {"n": 2};
+        return sprintf("%y/%y", w.n, t.n);
+    }
+
+    #! the weak assignment follows the change in the code, and runs before it
+    string sub assigned_later() {
+        list<auto> t = (1, 2);
+        auto w;
+        for (int i = 0; i < 2; ++i) {
+            if (i) {
+                w += 3;
+            } else {
+                w := t;
+            }
+        }
+        return fmt(w, t);
+    }
+
+    #! a variable assigned with the opaque assignment operator (@=)
+    string sub opaque_plus() {
+        list<auto> t = (1, 2);
+        auto w @= t;
+        w += 3;
+        return fmt(w, t);
+    }
+
+    #! the result of the change: the value of the variable after the change
+    string sub result_used() {
+        list<auto> t = (1, 2);
+        auto w := t;
+        auto rv = (w += 3);
+        return sprintf("%y %s", rv, fmt(w, t));
+    }
+
+    #! returns the result of the call, or the error it raised
+    string sub check(code<string()> call) {
+        try {
+            return call();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returns the results of every check: name -> result
+    public hash<string, string> sub get_results() {
+        return {
+            "hash-plus": check(\hash_plus()),
+            "hash-minus": check(\hash_minus()),
+            "list-plus": check(\list_plus()),
+            "list-minus": check(\list_minus()),
+            "list-multiply": check(\list_multiply()),
+            "list-divide": check(\list_divide()),
+            "list-modulo": check(\list_modulo()),
+            "list-and": check(\list_and()),
+            "list-or": check(\list_or()),
+            "list-xor": check(\list_xor()),
+            "list-shift-left": check(\list_shift_left()),
+            "list-shift-right": check(\list_shift_right()),
+            "list-pre-increment": check(\list_pre_increment()),
+            "list-post-increment": check(\list_post_increment()),
+            "list-pre-decrement": check(\list_pre_decrement()),
+            "list-post-decrement": check(\list_post_decrement()),
+            "list-push": check(\list_push()),
+            "object-plus": check(\object_plus()),
+            "assigned-later": check(\assigned_later()),
+            "opaque-plus": check(\opaque_plus()),
+            "result-used": check(\result_used()),
+        };
+    }
+}
