@@ -17197,8 +17197,15 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             continue;
         }
 
-        // Create the TypedHashDecl
-        TypedHashDecl* hd = new TypedHashDecl(name, nspath);
+        // Create the TypedHashDecl.  The writer records the unrooted namespace path; the hashdecl's type is built
+        // rooted, as the parser and qpp build it (as for enums below), so that the type name of a hashdecl, which a
+        // signature that uses it shows, and which therefore goes into the signature hash that identifies a class, is
+        // the same whether the hashdecl was loaded from an AOT module or from its source
+        std::string type_path = nspath ? nspath : "";
+        if (type_path.compare(0, 2, "::")) {
+            type_path.insert(0, "::");
+        }
+        TypedHashDecl* hd = new TypedHashDecl(name, type_path.c_str());
         typed_hash_decl_private* hdp = typed_hash_decl_private::get(*hd);
 
         // Set visibility
