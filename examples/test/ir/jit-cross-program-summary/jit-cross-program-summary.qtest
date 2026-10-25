@@ -1,0 +1,35 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../ExecModeHarness.qm
+
+%exec-class JitCrossProgramSummaryTest
+
+#! a JIT batch whose callees belong to another Program than its root function
+/** The fast entry of a callee of another Program is not used (isApproachBEligible() in Function.cpp); the batch
+    function summaries made such a callee with a constant body eligible for it again, and the JIT then called a fast
+    entry that it had never named, which crashed the compilation.  modules.qtest crashed in this way when the JIT
+    compiled its warning test.
+*/
+class JitCrossProgramSummaryTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JIT cross-Program summary", "1.0") {
+        addTestCase("a module function called from a child Program", \testCall());
+        set_return_value(main());
+    }
+
+    testCall() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string worker = get_script_dir() + "/jit-cross-program-summary-worker.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the child Program chooses no execution mode of its own, so its code is compiled as the worker's
+            string out = ExecModeHarness::run(sprintf("%s %s --enable-debug --exec-mode=%s %s",
+                ExecModeHarness::TraceEnv, qore_bin, mode, worker), ExecModeHarness::NativeCheck::Jit);
+            assertEq("1\n", out, mode);
+        }
+    }
+}

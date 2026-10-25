@@ -1450,6 +1450,25 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             error = "cancelled during JIT batch function summary analysis";
             return false;
         }
+        // The summaries mark a callee whose value they compute as having a fast entry, which AOT compilation
+        // emits for it.  A JIT batch defines one only for a callee that collectBatchCallees() found eligible (the
+        // fast entry of a callee of another Program is never used, for example), and a callee without one has no
+        // fast entry name: a call to it through a fast entry would call a function that the module does not define.
+        size_t eligibility_count = 0;
+        for (const auto& callee : callees) {
+            if (++eligibility_count % 100 == 0
+                    && qore_check_cancel(nullptr, "JIT batch fast entry eligibility")) {
+                error = "cancelled during JIT batch fast entry eligibility";
+                return false;
+            }
+            if (callee.approach_b_eligible) {
+                continue;
+            }
+            auto info_it = batch_callee_map.find(callee.variant);
+            if (info_it != batch_callee_map.end()) {
+                info_it->second.approach_b_eligible = false;
+            }
+        }
     }
     if (rewrite_root
             && !q_env_is_set("QORE_DISABLE_JIT_AGGREGATE_RETURN_PROJECTION")) {
