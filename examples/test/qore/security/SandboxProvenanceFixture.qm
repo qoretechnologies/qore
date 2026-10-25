@@ -35,7 +35,7 @@ public namespace SandboxProvenanceFixture {
         }
         string bind() {
             Socket socket();
-            socket.bindINET("0.0.0.0", 0);
+            socket.bindINET("127.0.0.1", 0);
             return "bound";
         }
         list<auto> startWaiter(Queue gate, Queue result) {

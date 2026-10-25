@@ -830,6 +830,22 @@ public:
     }
 };
 
+//! Makes @a ctx, captured without a sandbox, govern by @a sm as the sandbox of the calling Program
+/** A context with a manager names the Program the manager was found on (QoreSandboxContext::pgm_id): an object
+    constructed while the context applies captures it as its sandbox provenance, which requires the Program ID.
+*/
+static void ut_set_sandbox_context(QoreSandboxContext& ctx, QoreSandboxManager* sm) {
+    assert(!ctx.manager && !ctx.policy_manager && !ctx.pgm_id);
+    sm->ref();
+    ctx.manager = sm;
+    sm->ref();
+    ctx.policy_manager = sm;
+    QoreProgram* pgm = getProgram();
+    assert(pgm);
+    ctx.pgm_id = pgm->getProgramId();
+    ctx.program_ids.push_back(ctx.pgm_id);
+}
+
 // QoreFile::open() has no exception sink, so a sandbox denial fails the open with EACCES; the sandbox context
 // helper applies a captured sandbox to the current thread
 static void ut_qorefile_open_sandbox_policy(UnitTestCounters& c) {
@@ -858,10 +874,7 @@ static void ut_qorefile_open_sandbox_policy(UnitTestCounters& c) {
         QoreSandboxContext ctx;
         // the test thread has no sandbox of its own; the context governs it while the helper exists
         UT_ASSERT(c, !ctx.manager && !ctx.policy_manager, "no sandbox captured");
-        sm->ref();
-        ctx.manager = sm;
-        sm->ref();
-        ctx.policy_manager = sm;
+        ut_set_sandbox_context(ctx, sm);
         {
             QoreSandboxContextHelper sch(ctx);
             QoreFile denied;
@@ -8769,10 +8782,7 @@ static void ut_manager_pool_reuse(UnitTestCounters& c) {
 template <typename F>
 static void ut_with_sandbox(QoreSandboxManager* sm, F f) {
     QoreSandboxContext ctx;
-    sm->ref();
-    ctx.manager = sm;
-    sm->ref();
-    ctx.policy_manager = sm;
+    ut_set_sandbox_context(ctx, sm);
     QoreSandboxContextHelper sch(ctx);
     f();
 }
