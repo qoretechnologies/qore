@@ -80,8 +80,12 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
             "ratio": {"type": "number", "enum": (1.5, 2.5)},
             "status": {"type": "string", "enum": ("準備完了", "připraveno")},
             "optional": {"type": ("string", "null"), "enum": ("ready", NOTHING)},
+            "unstated": {"type": "string", "enum": ("",)},
+            "selection": {"type": "string", "enum": ("", "selected")},
+            "blank": {"type": "string", "enum": (" ",)},
             "enum": {"type": "string", "enum": ("literal-property-name",)},
-        }, "required": ("record", "fixed", "count", "ratio", "status", "optional", "enum")};
+        }, "required": ("record", "fixed", "count", "ratio", "status", "optional", "unstated", "selection",
+            "blank", "enum")};
         hash<auto> original = schema;
         CaptureGenerationRest rest();
         hash<QoreLlmUtils::LlmBackendConfig> config = <QoreLlmUtils::LlmBackendConfig>{
@@ -104,7 +108,9 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
                     {"name": "fixed", "type": "boolean", "values": "false"},
                     {"name": "count", "type": "integer", "values": "1, 3"},
                     {"name": "ratio", "type": "number", "values": "1.5, 2.5"},
-                    {"name": "optional", "type": "string", "values": "ready, null"})) {
+                    {"name": "optional", "type": "string", "values": "ready, null"},
+                    {"name": "unstated", "type": "string", "values": "\"\""},
+                    {"name": "selection", "type": "string", "values": "\"\", selected"})) {
                 hash<auto> field = shaped.properties{expectation.name};
                 assertEq(expectation.type, field.type);
                 assertFalse(field.hasKey("enum"));
@@ -113,6 +119,7 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
             assertTrue(shaped.properties.optional.nullable);
             assertEq(("準備完了", "připraveno"), shaped.properties.status."enum");
             assertEq(("literal-property-name",), shaped.properties."enum"."enum");
+            assertEq((" ",), shaped.properties.blank."enum", "nonempty whitespace stays an exact string choice");
             assertEq(original, schema, "the strict caller schema is unchanged");
         }
     }

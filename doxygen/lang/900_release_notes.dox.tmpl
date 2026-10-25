@@ -4087,7 +4087,7 @@ while (*binary chunk = input.read(65536)) {
         sanitizes authentication failures, bounds token requests, and isolates metadata caches by endpoint
 
     - @ref geminibodyshapeintro "GeminiBodyShape" module
-      - structured responses with boolean or numeric allowed values no longer fail before generation; values
+      - structured responses with boolean, numeric, or empty-string allowed values no longer fail before generation; values
         retain their declared types and remain subject to the caller's validation
       - new shared module for the Gemini \c generateContent wire format: request/response shapers plus the \
         common @ref GeminiBodyShape::AbstractGeminiModelProvider "AbstractGeminiModelProvider" base used by both @ref geminirestclientintro "GeminiRestClient" \
