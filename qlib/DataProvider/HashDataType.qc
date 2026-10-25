@@ -54,6 +54,9 @@ public class HashDataType inherits QoreDataType {
         #! Are any fields required?
         bool required_fields;
 
+        #! Set if the type is optional because its fields all have default values; see setOptionalByDefaults()
+        bool optional_by_defaults;
+
         #! Required field groups - at least one field in each group must have a value
         /** Each inner list represents a group of field names where at least one must be provided.
             For example, @code (("input_path", "data"),) @endcode means either "input_path" or "data"
@@ -245,7 +248,9 @@ auto v = t.getDefaultValue();
             } else {
                 value = {} + input_value;
             }
-        } else if (or_nothing_type) {
+        } else if (or_nothing_type && !optional_by_defaults) {
+            # a missing optional record is nothing; a record made optional by its fields' default values (see
+            # setOptionalByDefaults()) is the record of the default values
             return;
         }
         *hash<auto> value_copy = value;
@@ -538,6 +543,37 @@ node.setFields(fields);
         return rv;
     }
 
+    #! Returns an "or nothing" type equivalent to the current type
+    /** A record type made optional by the default values of its fields (see setOptionalByDefaults()) is already
+        optional; as for any other type, the type returned is named as an "or nothing" type
+
+        @return an "or nothing" type equivalent to the current type
+    */
+    AbstractDataProviderType getOrNothingType() {
+        if (!optional_by_defaults) {
+            return QoreDataType::getOrNothingType();
+        }
+        HashDataType rv = copy();
+        if (rv.name && rv.name !~ /^\*/) {
+            rv.name = "*" + rv.name;
+        }
+        if (rv.display_name && rv.display_name !~ /^\*/) {
+            rv.display_name = "*" + rv.display_name;
+        }
+        return rv;
+    }
+
+    #! Returns a mandatory (i.e. not "or nothing") type equivalent to the current type
+    /** A record type made optional by the default values of its fields (see setOptionalByDefaults()) accepts a
+        missing value as the record of the default values, so it has no mandatory equivalent and is returned itself
+
+        @return a mandatory type equivalent to the current type, or the type itself if its fields' defaults make it
+        optional
+    */
+    AbstractDataProviderType getMandatoryType() {
+        return optional_by_defaults ? self : QoreDataType::getMandatoryType();
+    }
+
     #! Returns an "or nothing" type equivalent to the current type as well as all fields
     /** @return an "or nothing" type equivalent to the current type as well as all fields
     */
@@ -564,10 +600,11 @@ node.setFields(fields);
         *bool dyn = field.getAttributes().dynamic;
         # do not run getDefaultValue() for dynamic fields; do not generate a default value for "or nothing" types
         if (!dyn) {
-            if (!or_nothing_type) {
+            if (!or_nothing_type || optional_by_defaults) {
                 if (exists (auto val = field.getDefaultValue())) {
                     if ((type == AutoHashType) && !required_fields) {
-                        type = AutoHashOrNothingType;
+                        # a record whose fields all have default values is optional
+                        setOptionalByDefaults(True);
                     }
                     default_value{field.getName()} = val;
                     if (!default_value_needs_check) {
@@ -577,8 +614,8 @@ node.setFields(fields);
                     # Record mandatory fields even before a default is added. Otherwise a later default
                     # incorrectly makes the container optional when the mandatory field came first.
                     if (type == AutoHashOrNothingType) {
-                        # or_nothing_type == False and type == *hash<auto> can only happen dynamically
-                        type = AutoHashType;
+                        # the record was made optional by the defaults of the fields added before
+                        setOptionalByDefaults(False);
                     }
                     required_fields = True;
                 }
@@ -586,6 +623,37 @@ node.setFields(fields);
         } else if (!tags.dynamic) {
             tags.dynamic = True;
         }
+    }
+
+    #! Makes a mandatory record type optional, or an optional one mandatory again, as its fields' defaults require
+    /** The type then describes the values it accepts as an "or nothing" type created optional does: it accepts
+        @ref nothing and, unless the \c qore.no_null option is set, @ref null, and it supports no options.  Its name
+        is not changed, since it identifies the type's presentation.
+
+        @param optional @ref True to make the type optional, @ref False to make it mandatory again
+    */
+    private setOptionalByDefaults(bool optional) {
+        optional_by_defaults = optional;
+        if (optional) {
+            type = AutoHashOrNothingType;
+            or_nothing_type = True;
+            base_type_hash{NT_NOTHING} = True;
+            accept_type_hash_simple."nothing" = accept_type_hash."nothing" = True;
+            return_type_hash_simple."nothing" = return_type_hash."nothing" = True;
+            if (!options."qore.no_null") {
+                accept_type_hash_simple."null" = accept_type_hash."null" = True;
+            }
+            return;
+        }
+        type = AutoHashType;
+        or_nothing_type = False;
+        remove base_type_hash{NT_NOTHING};
+        remove accept_type_hash_simple."nothing";
+        remove accept_type_hash."nothing";
+        remove accept_type_hash_simple."null";
+        remove accept_type_hash."null";
+        remove return_type_hash_simple."nothing";
+        remove return_type_hash."nothing";
     }
 
     #! adds a field to the type

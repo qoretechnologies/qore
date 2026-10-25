@@ -1693,7 +1693,9 @@ public class RestSchemaActionOperation {
             AbstractDataProviderType field_type = rv.getType();
             if (*hash<DataTypeConstraintInfo> constraints = field_type.getConstraints()) {
                 if (constraints.enum_values) {
-                    rv.updateFieldType(field_type.copyWithConstraints(constraints - "enum_values"));
+                    # a type left without constraints has none, not an empty set of them
+                    *hash<DataTypeConstraintInfo> rest = constraints - "enum_values";
+                    rv.updateFieldType(field_type.copyWithConstraints(rest ? rest : NOTHING));
                 }
             }
             rv.setAllowedValues(ov.allowed_values, ov.allowed_values_creatable);
@@ -1735,6 +1737,11 @@ public class RestSchemaActionOperation {
             AbstractDataProviderType new_etype = applyTypeOverlay(etype, ovl, ctx + " element", \enode,
                 location + "/items");
             node = enode;
+            # the copy keeps the kind of the list, such as a soft list, which accepts a single element, and its
+            # description and constraints; only its element type is replaced
+            if (type instanceof ListDataType) {
+                return cast<ListDataType>(type).copyWithElementType(new_etype);
+            }
             return new ListDataType(type.getName(), new_etype, !type.isMandatory());
         }
 

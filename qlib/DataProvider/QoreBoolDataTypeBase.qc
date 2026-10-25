@@ -66,7 +66,7 @@ public class QoreBoolDataTypeBase inherits QoreDataType {
                     throw "RUNTIME-TYPE-ERROR", sprintf("value %y cannot by parsed by type %y; the input data "
                         "contains non-integer text", value, getName());
                 }
-                return boolean(value);
+                value = boolean(value);
             }
         }
 
@@ -74,14 +74,14 @@ public class QoreBoolDataTypeBase inherits QoreDataType {
     }
 
     #! returns a "soft" type equivalent to the current type
-    /** @return a "soft" type equivalent to the current type
+    /** @return a "soft" type equivalent to the current type, with the same validation constraints
     */
     AbstractDataProviderType getSoftType() {
         if (soft_type) {
             return self;
         }
         return new QoreBoolDataTypeBase(base_type_hash{NT_NOTHING} ? SoftBoolOrNothingType : SoftBoolType,
-            getOptions());
+            getOptions()).copyWithConstraints(constraints);
     }
 }
 }

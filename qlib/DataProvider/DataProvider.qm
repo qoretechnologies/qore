@@ -1596,6 +1596,15 @@ fetch
     - @ref DataProvider::HashDataType::isAssignableFrom() "HashDataType::isAssignableFrom()" terminates for
       recursive types, which it compared until the stack was exhausted
     - added @ref DataProvider::HashDataType::setFields() "HashDataType::setFields()"
+    - the soft equivalents of all scalar types keep the validation constraints of the type, and a soft float, number,
+      boolean, binary or date type checks the value it converts from a string against them
+    - a record type (@ref DataProvider::HashDataType "HashDataType") whose added fields all have default values is
+      described as optional, as it behaves: it accepts @ref nothing and @ref null and supports no type options, so
+      that the type restored from its description is optional as well
+    - a string type can be created with a default value
+    - @ref DataProvider::AbstractDataProviderType::getMandatoryType() "getMandatoryType()" returns a type that accepts
+      @ref nothing in any case, such as \c auto, itself: its copy was described as optional but supported the options
+      of mandatory types
     - provider catalog extraction, validation, and projection use a shared 64 MiB file bound so large static API
       schemas, including NetSuite, can be localized without exceeding the general-purpose i18n loader's 16 MiB default
     - added @ref DataProvider::ConnectionPresentation "ConnectionPresentation" and

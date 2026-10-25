@@ -2035,11 +2035,11 @@
           "source": "user",
           "message": "používateľ"
         },
-        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOkNoYXRDb21wbGV0aW9uQXNzaXN0YW50TWVzc2FnZVBhcmFtIzAwYjk0MjRlYzEwMzQ2MDNjOWU4ZDE1YjU4YmExNTY4MmNkZDk3MDE4ZGY4YjQyMzY4MmQ0NWEwZmJhYjc0YmU.field.Y29udGVudA.display_name": {
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOkNoYXRDb21wbGV0aW9uQXNzaXN0YW50TWVzc2FnZVBhcmFtI2M3YzA1YWRkMDQ4NGUyNmM2ZjMxYmE5NTIwMGM2M2JmOWNiYzUwOTA5MGM1ZDYwM2FmOGQ2NzU5YmM5MWUxNDM.field.Y29udGVudA.display_name": {
           "source": "Content",
           "message": "Obsah"
         },
-        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOkNoYXRDb21wbGV0aW9uQXNzaXN0YW50TWVzc2FnZVBhcmFtIzAwYjk0MjRlYzEwMzQ2MDNjOWU4ZDE1YjU4YmExNTY4MmNkZDk3MDE4ZGY4YjQyMzY4MmQ0NWEwZmJhYjc0YmU.field.ZnVuY3Rpb25fY2FsbA.display_name": {
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOkNoYXRDb21wbGV0aW9uQXNzaXN0YW50TWVzc2FnZVBhcmFtI2M3YzA1YWRkMDQ4NGUyNmM2ZjMxYmE5NTIwMGM2M2JmOWNiYzUwOTA5MGM1ZDYwM2FmOGQ2NzU5YmM5MWUxNDM.field.ZnVuY3Rpb25fY2FsbA.display_name": {
           "source": "Function Call",
           "message": "Volanie funkcie"
         },
@@ -2051,27 +2051,27 @@
           "source": "Name",
           "message": "Názov"
         },
-        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOkNoYXRDb21wbGV0aW9uQXNzaXN0YW50TWVzc2FnZVBhcmFtIzAwYjk0MjRlYzEwMzQ2MDNjOWU4ZDE1YjU4YmExNTY4MmNkZDk3MDE4ZGY4YjQyMzY4MmQ0NWEwZmJhYjc0YmU.field.bmFtZQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOkNoYXRDb21wbGV0aW9uQXNzaXN0YW50TWVzc2FnZVBhcmFtI2M3YzA1YWRkMDQ4NGUyNmM2ZjMxYmE5NTIwMGM2M2JmOWNiYzUwOTA5MGM1ZDYwM2FmOGQ2NzU5YmM5MWUxNDM.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "Názov"
         },
-        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOkNoYXRDb21wbGV0aW9uQXNzaXN0YW50TWVzc2FnZVBhcmFtIzAwYjk0MjRlYzEwMzQ2MDNjOWU4ZDE1YjU4YmExNTY4MmNkZDk3MDE4ZGY4YjQyMzY4MmQ0NWEwZmJhYjc0YmU.field.cmVhc29uaW5n.display_name": {
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOkNoYXRDb21wbGV0aW9uQXNzaXN0YW50TWVzc2FnZVBhcmFtI2M3YzA1YWRkMDQ4NGUyNmM2ZjMxYmE5NTIwMGM2M2JmOWNiYzUwOTA5MGM1ZDYwM2FmOGQ2NzU5YmM5MWUxNDM.field.cmVhc29uaW5n.display_name": {
           "source": "Reasoning",
           "message": "Uvádzanie dôvodov"
         },
-        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOkNoYXRDb21wbGV0aW9uQXNzaXN0YW50TWVzc2FnZVBhcmFtIzAwYjk0MjRlYzEwMzQ2MDNjOWU4ZDE1YjU4YmExNTY4MmNkZDk3MDE4ZGY4YjQyMzY4MmQ0NWEwZmJhYjc0YmU.field.cmVhc29uaW5nX2NvbnRlbnQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOkNoYXRDb21wbGV0aW9uQXNzaXN0YW50TWVzc2FnZVBhcmFtI2M3YzA1YWRkMDQ4NGUyNmM2ZjMxYmE5NTIwMGM2M2JmOWNiYzUwOTA5MGM1ZDYwM2FmOGQ2NzU5YmM5MWUxNDM.field.cmVhc29uaW5nX2NvbnRlbnQ.display_name": {
           "source": "Reasoning Content",
           "message": "Obsah uvažovania"
         },
-        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOkNoYXRDb21wbGV0aW9uQXNzaXN0YW50TWVzc2FnZVBhcmFtIzAwYjk0MjRlYzEwMzQ2MDNjOWU4ZDE1YjU4YmExNTY4MmNkZDk3MDE4ZGY4YjQyMzY4MmQ0NWEwZmJhYjc0YmU.field.cm9sZQ.display_name": {
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOkNoYXRDb21wbGV0aW9uQXNzaXN0YW50TWVzc2FnZVBhcmFtI2M3YzA1YWRkMDQ4NGUyNmM2ZjMxYmE5NTIwMGM2M2JmOWNiYzUwOTA5MGM1ZDYwM2FmOGQ2NzU5YmM5MWUxNDM.field.cm9sZQ.display_name": {
           "source": "Role",
           "message": "Rola"
         },
-        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOkNoYXRDb21wbGV0aW9uQXNzaXN0YW50TWVzc2FnZVBhcmFtIzAwYjk0MjRlYzEwMzQ2MDNjOWU4ZDE1YjU4YmExNTY4MmNkZDk3MDE4ZGY4YjQyMzY4MmQ0NWEwZmJhYjc0YmU.field.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.display_name": {
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOkNoYXRDb21wbGV0aW9uQXNzaXN0YW50TWVzc2FnZVBhcmFtI2M3YzA1YWRkMDQ4NGUyNmM2ZjMxYmE5NTIwMGM2M2JmOWNiYzUwOTA5MGM1ZDYwM2FmOGQ2NzU5YmM5MWUxNDM.field.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.display_name": {
           "source": "assistant",
           "message": "asistent"
         },
-        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOkNoYXRDb21wbGV0aW9uQXNzaXN0YW50TWVzc2FnZVBhcmFtIzAwYjk0MjRlYzEwMzQ2MDNjOWU4ZDE1YjU4YmExNTY4MmNkZDk3MDE4ZGY4YjQyMzY4MmQ0NWEwZmJhYjc0YmU.field.dG9vbF9jYWxscw.display_name": {
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOkNoYXRDb21wbGV0aW9uQXNzaXN0YW50TWVzc2FnZVBhcmFtI2M3YzA1YWRkMDQ4NGUyNmM2ZjMxYmE5NTIwMGM2M2JmOWNiYzUwOTA5MGM1ZDYwM2FmOGQ2NzU5YmM5MWUxNDM.field.dG9vbF9jYWxscw.display_name": {
           "source": "Tool Calls",
           "message": "Volania nástrojov"
         },

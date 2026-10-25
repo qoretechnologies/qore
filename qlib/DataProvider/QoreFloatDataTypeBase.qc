@@ -61,12 +61,13 @@ public class QoreFloatDataTypeBase inherits QoreDataType {
                 remove value;
             } else if (soft_type) {
                 if (options."number.format") {
-                    return parse_float(value, options."number.format");
-                }
-                if (value !~ /^([-+])?[0-9]+(\.[0-9]+)?+$/)
+                    value = parse_float(value, options."number.format");
+                } else if (value !~ /^([-+])?[0-9]+(\.[0-9]+)?+$/) {
                     throw "RUNTIME-TYPE-ERROR", sprintf("value %y cannot be parsed by type %y; the input data "
                         "contains non-numeric text", value, getName());
-                return float(value);
+                } else {
+                    value = float(value);
+                }
             }
         }
         return QoreDataType::acceptsValue(value);
@@ -79,13 +80,14 @@ public class QoreFloatDataTypeBase inherits QoreDataType {
 
 
     #! returns a "soft" type equivalent to the current type
-    /** @return a "soft" type equivalent to the current type
+    /** @return a "soft" type equivalent to the current type, with the same validation constraints
     */
     AbstractDataProviderType getSoftType() {
         if (soft_type) {
             return self;
         }
-        return new QoreFloatDataTypeBase(base_type_hash{NT_NOTHING} ? SoftFloatOrNothingType : SoftFloatType, getOptions());
+        return new QoreFloatDataTypeBase(base_type_hash{NT_NOTHING} ? SoftFloatOrNothingType : SoftFloatType,
+            getOptions()).copyWithConstraints(constraints);
     }
 }
 }

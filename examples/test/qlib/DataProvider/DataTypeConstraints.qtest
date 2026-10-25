@@ -20,6 +20,10 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
         addTestCase("restored types have the original conversions", \conversionTest());
         addTestCase("examples are accepted by their fields", \exampleTest());
         addTestCase("a type known only in its program is restored from its value types", \programTypeTest());
+        addTestCase("soft conversions keep the constraints", \softConversionTest());
+        addTestCase("soft conversions from strings are checked", \softAcceptanceTest());
+        addTestCase("scalar types with a default value", \defaultValueTest());
+        addTestCase("a type that always accepts nothing has no mandatory equivalent", \mandatoryAutoTest());
         set_return_value(main());
     }
 
@@ -254,5 +258,111 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
             auto example = t.getExampleValue();
             assertEq(example, t.acceptsValue(example), t.getName());
         }
+    }
+
+    #! The soft equivalent of each scalar type class describes and enforces the constraints of the type
+    softConversionTest() {
+        hash<DataTypeConstraintInfo> length = <DataTypeConstraintInfo>{"max_length": 4};
+        hash<DataTypeConstraintInfo> bound = <DataTypeConstraintInfo>{"maximum": 10};
+        hash<DataTypeConstraintInfo> choice = <DataTypeConstraintInfo>{"enum_values": ("a", "b")};
+        # each type, its constraints, and, if the constraints apply to the values it accepts, a value that the soft
+        # type accepts but the constraints do not
+        list<hash<auto>> cases = (
+            {"type": new QoreStringDataType(), "constraints": length, "value": 12345},
+            {"type": new QoreStringOrNothingDataType(), "constraints": length, "value": "12345"},
+            {"type": AbstractDataProviderType::get("*string"), "constraints": choice, "value": "c",
+                "err": "TYPE-VALUE-ERROR"},
+            {"type": new QoreIntDataType(), "constraints": bound, "value": "11"},
+            {"type": new QoreIntOrNothingDataType(), "constraints": bound, "value": 11.0},
+            {"type": new QoreFloatDataType(), "constraints": bound, "value": "10.5"},
+            {"type": new QoreFloatOrNothingDataType(), "constraints": bound, "value": 11},
+            {"type": new QoreNumberDataType(), "constraints": bound, "value": "11"},
+            {"type": new QoreNumberOrNothingDataType(), "constraints": bound, "value": "10.5"},
+            {"type": new QoreSignedByteDataType(), "constraints": bound, "value": "11"},
+            {"type": new QoreUnsignedByteDataType(), "constraints": bound, "value": "11"},
+            {"type": new QoreSignedByteOrNothingDataType(), "constraints": bound, "value": "11"},
+            {"type": new QoreUnsignedByteOrNothingDataType(), "constraints": bound, "value": "11"},
+            {"type": new QoreBoolDataType(), "constraints": choice},
+            {"type": new QoreBoolOrNothingDataType(), "constraints": choice},
+            {"type": new QoreDateDataType(), "constraints": choice},
+            {"type": new QoreDateOrNothingDataType(), "constraints": choice},
+            {"type": new QoreBinaryDataType(), "constraints": choice},
+            {"type": new QoreBinaryOrNothingDataType(), "constraints": choice},
+        );
+        foreach hash<auto> c in (cases) {
+            AbstractDataProviderType t = c.type.copyWithConstraints(c.constraints);
+            AbstractDataProviderType soft = t.getSoftType();
+            string label = sprintf("%s %s -> %s %s", t.className(), t.getName(), soft.className(), soft.getName());
+            assertEq(c.constraints, soft.getConstraints(), label);
+            assertEq(c.constraints, soft.getInfo().constraints, label);
+            if (c.hasKey("value")) {
+                assertThrows(c.err ?? "RUNTIME-TYPE-ERROR", \soft.acceptsValue(), (c.value,), label);
+            }
+            # the conversion does not change the original type
+            assertEq(NOTHING, c.type.getConstraints(), label);
+        }
+
+        # a type without constraints has a soft equivalent without constraints
+        assertEq(NOTHING, new QoreStringDataType().getSoftType().getConstraints());
+    }
+
+    #! A soft type that converts a value from a string checks the converted value against its constraints
+    softAcceptanceTest() {
+        hash<DataTypeConstraintInfo> bound = <DataTypeConstraintInfo>{"maximum": 10};
+        foreach AbstractDataProviderType t in ((new QoreSoftFloatDataType(), new QoreSoftNumberDataType(),
+                new QoreSoftIntDataType())) {
+            AbstractDataProviderType constrained = t.copyWithConstraints(bound);
+            assertEq(10n, number(constrained.acceptsValue("10")), t.getName());
+            assertThrows("RUNTIME-TYPE-ERROR", \constrained.acceptsValue(), "10.5", t.getName());
+        }
+        # a number format is used to convert the string, then the value is checked
+        AbstractDataProviderType formatted = new QoreSoftFloatDataType({"number.format": ".,"})
+            .copyWithConstraints(bound);
+        assertEq(9.5, formatted.acceptsValue("9,5"));
+        assertThrows("RUNTIME-TYPE-ERROR", \formatted.acceptsValue(), "10,5");
+
+        hash<DataTypeConstraintInfo> choice = <DataTypeConstraintInfo>{"enum_values": ("1",)};
+        AbstractDataProviderType flag = new QoreSoftBoolDataType().copyWithConstraints(choice);
+        assertEq(True, flag.acceptsValue("1"));
+        assertThrows("TYPE-VALUE-ERROR", \flag.acceptsValue(), "0");
+        AbstractDataProviderType bytes = new QoreSoftBinaryDataType().copyWithConstraints(
+            <DataTypeConstraintInfo>{"enum_values": (binary("ab").toString(),)});
+        assertEq(binary("ab"), bytes.acceptsValue("ab"));
+        assertThrows("TYPE-VALUE-ERROR", \bytes.acceptsValue(), "cd");
+        AbstractDataProviderType day = new QoreSoftDateDataType().copyWithConstraints(
+            <DataTypeConstraintInfo>{"enum_values": (2026-10-25.toString(),)});
+        assertEq(2026-10-25, day.acceptsValue("2026-10-25"));
+        assertThrows("TYPE-VALUE-ERROR", \day.acceptsValue(), "2026-10-26");
+    }
+
+    #! A scalar type has the default value it is created with, also when restored from its description
+    defaultValueTest() {
+        foreach hash<auto> c in ((
+                {"type": StringType, "value": "draft"},
+                {"type": SoftStringType, "value": "draft"},
+                {"type": BoolType, "value": True},
+                {"type": IntType, "value": 7},
+            )) {
+            AbstractDataProviderType t = AbstractDataProviderType::get(c.type, NOTHING, NOTHING, c.value);
+            assertEq(c.value, t.getDefaultValue(), c.type.getName());
+            assertEq(c.value, t.acceptsValue(NOTHING), c.type.getName());
+            AbstractDataProviderType restored = AbstractDataProviderType::get(t.getInfo());
+            assertEq(c.value, restored.getDefaultValue(), c.type.getName());
+        }
+    }
+
+    #! An auto type accepts nothing, so its "mandatory" equivalent is itself, described as it is restored
+    mandatoryAutoTest() {
+        QoreDataType any(AutoType);
+        AbstractDataProviderType mandatory = any.getMandatoryType();
+        assertTrue(any == mandatory);
+        hash<DataTypeInfo> info = mandatory.getInfo();
+        assertFalse(info.mandatory);
+        assertEq(NOTHING, info.supported_options);
+        hash<DataTypeInfo> restored = AbstractDataProviderType::get(info).getInfo();
+        assertEq(info.supported_options, restored.supported_options);
+        # a type with a mandatory form still has one
+        AbstractDataProviderType optional_int = AbstractDataProviderType::get(IntOrNothingType);
+        assertTrue(optional_int.getMandatoryType().isMandatory());
     }
 }

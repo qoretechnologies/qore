@@ -1815,6 +1815,26 @@ val = "string";      # OK
     reported as a warning and does not fail the build.
     @endparblock
 
+    @par REST Action Options Enforce the Constraints of Their Schema
+    @parblock
+    The options and fields of REST schema actions (OpenAPI and Swagger) now enforce the constraints of their schema,
+    such as \c maxLength, \c maximum, \c pattern and \c enum, before the request is sent, also when they convert a
+    value from a string, and their type descriptions give the constraints.  Such options were only
+    checked by the remote API, so a value that the API rejects (for example a Stripe merchant category code longer
+    than 4 characters) is now refused with a \c RUNTIME-TYPE-ERROR or \c TYPE-VALUE-ERROR exception before the
+    request is made.  The soft (converting) equivalents of all data provider scalar types keep the constraints of the
+    type.
+    @endparblock
+
+    @par Records Whose Fields All Have Default Values Are Consistently Optional
+    @parblock
+    A data provider record type (@ref DataProvider::HashDataType "HashDataType") whose added fields all have default
+    values, which is optional and gives the record of the default values when no value is provided, now also
+    describes itself as optional: it accepts \c NOTHING and \c NULL in its accepted types, supports no type options,
+    like any other optional type, and its description restores an optional type.  It was described as accepting only
+    a hash.
+    @endparblock
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par LLVM-backed Execution Modes and AOT Compilation
     @parblock

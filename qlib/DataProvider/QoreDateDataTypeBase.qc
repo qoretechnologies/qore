@@ -92,6 +92,7 @@ public class QoreDateDataTypeBase inherits QoreDataType {
             if (options."date.output_timezone") {
                 value = options."date.output_timezone".date(value);
             }
+            checkConstraints(value);
             return value;
         }
         return QoreDataType::acceptsValue(value);
@@ -103,13 +104,14 @@ public class QoreDateDataTypeBase inherits QoreDataType {
     }
 
     #! returns a "soft" type equivalent to the current type
-    /** @return a "soft" type equivalent to the current type
+    /** @return a "soft" type equivalent to the current type, with the same validation constraints
     */
     AbstractDataProviderType getSoftType() {
         if (soft_type) {
             return self;
         }
-        return new QoreDateDataTypeBase(base_type_hash{NT_NOTHING} ? SoftDateOrNothingType : SoftDateType, getOptions());
+        return new QoreDateDataTypeBase(base_type_hash{NT_NOTHING} ? SoftDateOrNothingType : SoftDateType,
+            getOptions()).copyWithConstraints(constraints);
     }
 }
 }

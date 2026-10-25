@@ -370,7 +370,8 @@ class BedrockActionsTest inherits QUnit::Test {
         assertThrows("MISSING-VALUE-ERROR", sub () { type.acceptsValue({}); });
         assertThrows("MISSING-VALUE-ERROR", sub () { type.acceptsValue({"modelId": NOTHING}); });
         BedrockActionFixtureClient fake();
-        assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+        # the field type enforces the schema's minLength before the request is validated against the schema
+        assertThrows("RUNTIME-TYPE-ERROR", "\"modelId\".*requires at least 1 character; got 0", sub () {
             actionProvider("converse", fake).doRequest({"modelId": ""});
         });
         assertEq(0, fake.requests, "invalid values fail before transport");

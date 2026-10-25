@@ -65,7 +65,7 @@ public class QoreStringDataTypeBase inherits QoreDataType {
     #! creates the object with the given options
     /** @throw TYPE-ERROR invalid type; must be a string type
     */
-    constructor(Type type, *hash<auto> options, *hash<auto> tags, *hash<auto> default_value,
+    constructor(Type type, *hash<auto> options, *hash<auto> tags, auto default_value,
             *hash<NameDescInfo> attr) : QoreDataType(type, options, tags, default_value, attr) {
         if (type.getBaseTypeCode() != NT_STRING) {
             throw "TYPE-ERROR", sprintf("cannot create a %s object from type %y", self.className(),
@@ -143,14 +143,14 @@ public class QoreStringDataTypeBase inherits QoreDataType {
     }
 
     #! returns a "soft" type equivalent to the current type
-    /** @return a "soft" type equivalent to the current type
+    /** @return a "soft" type equivalent to the current type, with the same validation constraints
     */
     AbstractDataProviderType getSoftType() {
         if (soft_type) {
             return self;
         }
         return new QoreStringDataTypeBase(base_type_hash{NT_NOTHING} ? SoftStringOrNothingType : SoftStringType,
-            getOptions());
+            getOptions()).copyWithConstraints(constraints);
     }
 
     #! sets the given option without any validation of the option

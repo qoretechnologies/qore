@@ -47,10 +47,10 @@ public class QoreSignedByteDataType inherits QoreIntDataTypeBase {
     /** The base class method returns the same type; this method must be overridden in child classes to return a
         usable "soft" type
 
-        @return a "soft" type equivalent to the current type
+        @return a "soft" type equivalent to the current type, with the same validation constraints
     */
     AbstractDataProviderType getSoftType() {
-        return new QoreSoftSignedByteDataType();
+        return new QoreSoftSignedByteDataType().copyWithConstraints(constraints);
     }
 }
 }
