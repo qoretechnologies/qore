@@ -141,6 +141,9 @@ RestHandler handler(NOTHING, swagger);
     @section swagger_relnotes Swagger Module Release Notes
 
     @subsection swagger_2_6 Swagger v2.6
+    - a schema object whose document has been destroyed throws \c SCHEMA-DOCUMENT-DESTROYED when it is asked to build
+      a type, instead of failing with an unrelated error; the types it has already built keep working (see
+      @ref Swagger::SchemaObject "SchemaObject")
     - the \c default of a query or header parameter is the remote default value of its field, which is shown and
       never applied or sent (see @ref dataprovider_remote_default_values)
     - the type of a schema object is the type of a request value: it has no field for a \c readOnly property, and a
@@ -4031,6 +4034,13 @@ public class SwaggerHashDataType inherits HashDataType {
 
 /** Inherits common schema members from
     @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject".
+
+    A schema object refers to its document weakly, so that the document and its schema objects are released together,
+    and it needs its document: keep the document while using its schema objects.  Once the document has been
+    destroyed, building a type from a schema object or resolving one of its references throws a
+    \c SCHEMA-DOCUMENT-DESTROYED exception.  A type that a schema object has built does not need the document: it
+    validates and describes values after the document has been destroyed; only a serialized snapshot of the type
+    needs the document to exist when it is made.
 */
 public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::AbstractRestSchemaObject {
     public {
@@ -4294,8 +4304,17 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     }
 
     #! Returns the data provider type for a given type/format/items path
+    /** @throw SCHEMA-DOCUMENT-DESTROYED the document of this schema object has been destroyed; a schema object
+        refers to its document weakly, so keep the document while using its schema objects (the types it has built
+        do not need it)
+    */
     AbstractDataProviderType getSchemaType(string path, string typestr, *string format,
             *AbstractSchemaObject arrayItems, bool required) {
+        if (!exists swagger) {
+            throw "SCHEMA-DOCUMENT-DESTROYED", sprintf("schema %y can no longer build types or resolve references, "
+                "because its document has been destroyed; keep the document while using its schema objects (the "
+                "types that it has already built do not need it)", name);
+        }
         return swagger.getType(path, typestr, format, arrayItems, required);
     }
 

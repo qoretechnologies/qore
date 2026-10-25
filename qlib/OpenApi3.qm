@@ -321,6 +321,9 @@ or a date, and a \c date-time string property of an object alternative a date
       wraps one, has the choices of the enumeration
     - the \c default of a property or parameter schema is the remote default value of its field, which is shown and
       never applied or sent (see @ref dataprovider_remote_default_values)
+    - a schema object whose document has been destroyed throws \c SCHEMA-DOCUMENT-DESTROYED when it is asked to build
+      a type or resolve a reference, instead of failing with an unrelated error; the types it has already built keep
+      working (see @ref OpenApi3::SchemaObject "SchemaObject")
 */
 
 #! main namespace for all public %OpenApi3 declarations
@@ -4736,7 +4739,7 @@ public class OpenApi3HashDataType inherits HashDataType {
         @return this class's original members and the document required after restoration
     */
     private:internal hash<auto> serializeMembers(*hash<auto> members) {
-        return {"schema": schema, "for_request": for_request, "document": schema.getDocument(),
+        return {"schema": schema, "for_request": for_request, "document": schema.tryGetDocument(),
             "response_fields": response_fields};
     }
 
@@ -5176,7 +5179,7 @@ public class OpenApi3TupleDataType inherits ListDataType {
     constructor(SchemaObject schema, AbstractDataProviderType element_type, bool or_nothing)
             : ListDataType(element_type, or_nothing) { self.schema = schema; }
     private:internal hash<auto> serializeMembers(*hash<auto> members) {
-        return {"schema": schema, "document": schema.getDocument(), "for_request": for_request};
+        return {"schema": schema, "document": schema.tryGetDocument(), "for_request": for_request};
     }
     #! Marks an independent snapshot for response validation
     /** Called by OpenApi3HashDataType::forResponse(); never call on a cached request type. */
@@ -5240,7 +5243,7 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
     */
     private:internal hash<auto> serializeMembers(*hash<auto> members) {
         return {"composition_keyword": composition_keyword, "schemas": schemas, "for_request": for_request,
-            "multipart_wire_types": multipart_wire_types, "documents": map $1.getDocument(), schemas};
+            "multipart_wire_types": multipart_wire_types, "documents": map $1.tryGetDocument(), schemas};
     }
 
     #! Returns a union of the same kind over the given alternatives
@@ -5472,6 +5475,13 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
 #! defines an object in a schema
 /** Inherits common schema members from
     @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject".
+
+    A schema object refers to its document weakly, so that the document and its schema objects are released together,
+    and it needs its document: keep the document while using its schema objects.  Once the document has been
+    destroyed, building a type from a schema object or resolving one of its references throws a
+    \c SCHEMA-DOCUMENT-DESTROYED exception.  A type that a schema object has built does not need the document: it
+    validates and describes values after the document has been destroyed; only a serialized snapshot of the type
+    needs the document to exist when it is made.
 */
 public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::AbstractRestSchemaObject {
     public {
@@ -5636,8 +5646,35 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     }
 
     #! Returns the document required for schema reference and type resolution
-    /** @return the owning document; callers retaining a schema-backed type must retain this owner */
+    /** A schema object refers to its document weakly, so it needs the document to exist: keep the document while
+        using its schema objects.  The types a schema object has built do not need it.
+
+        @return the owning document
+
+        @throw SCHEMA-DOCUMENT-DESTROYED the document of this schema object has been destroyed
+    */
     OpenApi3Schema getDocument() {
+        return getLiveDocument();
+    }
+
+    #! Returns the document of this schema object, or @ref nothing if it has been destroyed
+    /** @return the owning document, or @ref nothing if it has been destroyed
+
+        @since OpenApi3 1.0
+    */
+    *OpenApi3Schema tryGetDocument() {
+        return exists openapi3 ? openapi3 : NOTHING;
+    }
+
+    #! Returns the document, which building a type of this schema object or resolving one of its references needs
+    /** @throw SCHEMA-DOCUMENT-DESTROYED the document of this schema object has been destroyed
+    */
+    private OpenApi3Schema getLiveDocument() {
+        if (!exists openapi3) {
+            throw "SCHEMA-DOCUMENT-DESTROYED", sprintf("schema %y can no longer build types or resolve references, "
+                "because its document has been destroyed; keep the document while using its schema objects (the "
+                "types that it has already built do not need it)", name);
+        }
         return openapi3;
     }
 
@@ -6240,7 +6277,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             return getDataType(True, rest);
         }
         if (!alternativeDataType) {
-            AbstractDataProviderType t = openapi3.getType("/", type, format, items, !nullable, True)
+            AbstractDataProviderType t = getLiveDocument().getType("/", type, format, items, !nullable, True)
                 .copyWithConstraints(getConstraintInfo());
             bool opaque;
             if (schema) {
@@ -6271,7 +6308,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
 
     AbstractDataProviderType getSchemaType(string path, string typestr, *string format,
             *AbstractSchemaObject arrayItems, bool required) {
-        return openapi3.getType(path, typestr, format, arrayItems, required);
+        return getLiveDocument().getType(path, typestr, format, arrayItems, required);
     }
 
     #! Factory method to create a HashDataType, allowing OpenApi3 to return OpenApi3HashDataType
@@ -6443,7 +6480,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             return mappedSchemas{key};
         }
         string reference = SchemaObject::getDiscriminatorReference(discriminatorMapping{key});
-        SchemaObject branch = openapi3.resolveSchemaObject(key, reference, {});
+        SchemaObject branch = getLiveDocument().resolveSchemaObject(key, reference, {});
         if (branch === self) {
             throw "INVALID-REFERENCE", sprintf("schema %y maps discriminator %y to itself", name, discriminator);
         }
@@ -6470,6 +6507,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         if (!discriminatorMapping || oneOf || anyOf) {
             return False;
         }
+        OpenApi3Schema doc = getLiveDocument();
         foreach auto mapped in (discriminatorMapping.iterator()) {
             if (mapped.typeCode() != NT_STRING) {
                 continue;
@@ -6481,7 +6519,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             seen{reference} = True;
             *SchemaObject branch;
             try {
-                branch = openapi3.resolveSchemaObject(name, reference, {});
+                branch = doc.resolveSchemaObject(name, reference, {});
             } catch (hash<ExceptionInfo> ex) {
                 continue;
             }

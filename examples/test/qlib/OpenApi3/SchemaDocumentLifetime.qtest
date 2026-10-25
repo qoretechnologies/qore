@@ -1,0 +1,124 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires OpenApi3
+%requires Swagger
+%requires json
+%exec-class SchemaDocumentLifetimeTest
+
+#! A type built from a REST schema works after its document is gone; a schema object needs its document
+class SchemaDocumentLifetimeTest inherits QUnit::Test {
+    public {
+        const Schemas = {
+            "Cat": {"type": "object", "required": ("kind",), "properties": {
+                "kind": {"type": "string"}, "meow": {"type": "boolean"}}},
+            "Dog": {"type": "object", "required": ("kind",), "properties": {
+                "kind": {"type": "string"}, "bark": {"type": "integer"}}},
+            "Pet": {"oneOf": ({"$ref": "#/components/schemas/Cat"}, {"$ref": "#/components/schemas/Dog"}),
+                "discriminator": {"propertyName": "kind", "mapping": {"cat": "#/components/schemas/Cat",
+                "dog": "Dog"}}},
+            "Owner": {"type": "object", "properties": {
+                "name": {"type": "string", "maxLength": 8},
+                "pet": {"$ref": "#/components/schemas/Pet"},
+                "code": {"anyOf": ({"type": "string", "maxLength": 3}, {"type": "integer"})},
+                "friend": {"$ref": "#/components/schemas/Owner"},
+            }},
+        };
+
+        const Definitions = {
+            "Owner": {"type": "object", "properties": {
+                "name": {"type": "string", "maxLength": 8},
+                "friend": {"$ref": "#/definitions/Owner"},
+            }},
+        };
+    }
+
+    constructor() : Test("REST schema document lifetime", "1.0", \ARGV) {
+        addTestCase("an OpenAPI type works after its document is destroyed", \openApiTypeTest());
+        addTestCase("an OpenAPI schema object needs its document", \openApiSchemaTest());
+        addTestCase("a Swagger type works after its document is destroyed", \swaggerTypeTest());
+        addTestCase("a Swagger schema object needs its document", \swaggerSchemaTest());
+        set_return_value(main());
+    }
+
+    openApiTypeTest() {
+        # the document exists only in the function that builds the type
+        AbstractDataProviderType owner = getOpenApiType();
+        assertEq({"name": "Ann", "pet": {"kind": "cat", "meow": True}, "code": "abc"},
+            owner.acceptsValue({"name": "Ann", "pet": {"kind": "cat", "meow": True}, "code": "abc"}));
+        assertEq({"pet": {"kind": "dog", "bark": 3}, "code": 5, "friend": {"name": "Bob"}},
+            owner.acceptsValue({"pet": {"kind": "dog", "bark": 3}, "code": 5, "friend": {"name": "Bob"}}));
+        assertThrows("RUNTIME-TYPE-ERROR", \owner.acceptsValue(), {"pet": {"kind": "dog", "bark": "x"}});
+        assertThrows("RUNTIME-TYPE-ERROR", \owner.acceptsValue(), {"friend": {"pet": {"kind": "bird"}}});
+        assertEq(("name", "pet", "code", "friend"), keys owner.getFields().friend.getType().getFields());
+        AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(owner.getInfoGraph());
+        assertEq(owner.getInfoGraph(), restored.getInfoGraph());
+    }
+
+    openApiSchemaTest() {
+        SchemaObject owner = getOpenApiSchema();
+        # the error names the schema object that needed the document, which can be one of its properties
+        assertThrows("SCHEMA-DOCUMENT-DESTROYED", "can no longer build types or resolve references, because its "
+            "document has been destroyed", \owner.getDataType());
+        assertThrows("SCHEMA-DOCUMENT-DESTROYED", "schema \"Owner\" can no longer", \owner.getDocument());
+        assertNothing(owner.tryGetDocument());
+    }
+
+    swaggerTypeTest() {
+        AbstractDataProviderType owner = getSwaggerType();
+        assertEq({"name": "Ann", "friend": {"name": "Bob"}},
+            owner.acceptsValue({"name": "Ann", "friend": {"name": "Bob"}}));
+        assertThrows("RUNTIME-TYPE-ERROR", \owner.acceptsValue(), {"friend": {"name": (1,)}});
+        assertThrows("RUNTIME-TYPE-ERROR", \owner.acceptsValue(), {"friend": {"friend": {"name": (1,)}}});
+        assertEq(("name", "friend"), keys owner.getFields().friend.getType().getFields());
+    }
+
+    swaggerSchemaTest() {
+        Swagger::SchemaObject owner = getSwaggerSchema();
+        assertThrows("SCHEMA-DOCUMENT-DESTROYED", "can no longer build types or resolve references, because its "
+            "document has been destroyed", \owner.getDataType());
+    }
+
+    #! Returns the type of an owner, built from a document that is destroyed when the function returns
+    private static AbstractDataProviderType getOpenApiType() {
+        OpenApi3Schema doc = openApi();
+        return doc.components.schemas.Owner.getDataType();
+    }
+
+    #! Returns the schema object of an owner, whose document is destroyed when the function returns
+    private static SchemaObject getOpenApiSchema() {
+        OpenApi3Schema doc = openApi();
+        return doc.components.schemas.Owner;
+    }
+
+    #! Returns the type of an owner, built from a document that is destroyed when the function returns
+    private static AbstractDataProviderType getSwaggerType() {
+        SwaggerSchema doc = swagger();
+        return doc.definitions.Owner.getDataType();
+    }
+
+    #! Returns the schema object of an owner, whose document is destroyed when the function returns
+    private static Swagger::SchemaObject getSwaggerSchema() {
+        SwaggerSchema doc = swagger();
+        return doc.definitions.Owner;
+    }
+
+    private static OpenApi3Schema openApi() {
+        return OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3", "info": {"title": "Owners", "version": "1"}, "paths": {},
+            "components": {"schemas": Schemas},
+        }), True);
+    }
+
+    private static SwaggerSchema swagger() {
+        return SwaggerLoader::fromString(make_json({
+            "swagger": "2.0", "info": {"title": "Owners", "version": "1"}, "paths": {},
+            "definitions": Definitions,
+        }), True);
+    }
+}
