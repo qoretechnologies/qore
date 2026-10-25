@@ -22352,3 +22352,46 @@ Runtime builds use -O3 -DNDEBUG with allocation tracking OFF; AOT uses -O3 --str
 Validation: full optimized Release build and 391 qmods; 21 fixtures (17 QUnit, four standalone), 49 cases/7754 assertions and 1110 IR/AOT references; eight Linux-only RSS skips. Additional standalone AST/IR/JIT/tiered and O0/O3 enabled/specialization-disabled/context-disabled/state-disabled/forced-null/helper-poll/legacy-poll/EH/split variants pass: 22 executions and 44 target-frame-observed interruptions followed by recovery. The finite worker is cancelled only after the target appears in its stack; all workers complete. Initial fixture validation caught an unsupported fprintf call; it was replaced with printf before the successful rerun and qualification. Special floats, empty/small loops, zero/unary targets, dynamic/reassigned callbacks, division errors and target frames remain covered. Fresh target/broad artifacts pass 3510/7047 references. No full-suite, Debug, sanitizer or cross-platform claim.
 
 [results-aot-callback-entry-state-macos-arm64.json](results-aot-callback-entry-state-macos-arm64.json) contains raw timings/references, plans, source snapshots, reproduction drivers, dependency fingerprints and all 62 audit checks. The updated profile samples named frame push/pop/destruction and native stack checking after repeated descriptor acquisition is removed. Next investigate repeated descriptor loads and named-frame setup while preserving asynchronous reader visibility, and extend proven context forwarding to direct calls. Sampling identifies leads, not isolated costs. No global performance ceiling is established.
+
+
+## Rejected native entry-state follow-ups (2026-10-25)
+
+After merging develop `f3f91cda6c`, the optimized performance baseline is
+`b7e3956cf6`. Three follow-ups to the private callback entry state were rejected.
+An output-pointer no-capture annotation generated identical candidate/control
+machine-code sections, so it was rejected before timing. Separating the runtime
+descriptor output from the private call state removed five repeated pointer loads
+but did not improve performance. Reusing the caller's descriptor also removed a
+duplicate acquisition, without meeting the performance gate.
+
+|!Screen: original loop callback|!Before, ns/item|!Candidate, ns/item|!Disabled, ns/item|!Candidate vs before
+|Separate descriptor|6.7978|7.3925|6.8272|+8.75%
+|Reuse caller descriptor|6.7876|6.8819|6.7917|+1.39%
+
+These are whole-loop timings from Release `-O3 -DNDEBUG` builds with allocation
+tracking disabled and `qcc -O3 --strip-source`. Each screen used three processes
+per variant/layout, default/reverse/shuffled symbol layouts, one warmup and three
+150 ms measured windows, 4,096 items and seed 7. Results above are medians across
+the per-layout process medians. The first screen covered 22 workloads (594 jobs);
+the revised candidate's prospectively narrowed screen covered four workloads
+(108 jobs), with broader validation required had it passed. All 2,106 measured
+windows were retained and independently replayed.
+
+Neither candidate met the prospective requirement of at least 3% improvement
+against both controls in every layout. The percentages are screen observations,
+not independently confirmed regression estimates. Neither candidate proceeded
+to confirmation or broad timing, and both source edits were reverted. The
+validated implementation remains in place. This does not establish a performance
+ceiling; direct same-program native-entry setup remains a larger next target.
+
+The separate-descriptor candidate passed 8,446 assertions and 1,110 IR/AOT
+references (eight Linux RSS skips); descriptor reuse passed 1,511 focused
+assertions and 1,110 references, with no skips. Both had all 391 qmods rebuilt.
+All 27 matched timing artifacts per campaign passed 3,510 reference checks.
+External host load, frequency and thermals were uncontrolled. No Java or
+pure-develop comparison was run in this checkpoint.
+
+[Recorded evidence](results-aot-entry-state-rejected-macos-arm64.json) and
+[all 62 audit checks](audit-aot-entry-state-rejected.md) preserve the unsuccessful
+candidates and their limits. The verified system installation remains optimized
+merge `b7e3956cf6`, including fixes #5517, #5518 and #5519.
