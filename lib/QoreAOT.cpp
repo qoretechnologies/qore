@@ -35865,8 +35865,10 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
             out.has_closure_locals = true;
         }
         blid.read_only = lv->isReadOnly();
-        auto slot_it = func.local_var_slots.find(lv);
-        blid.slot_id = slot_it != func.local_var_slots.end() ? slot_it->second : UINT32_MAX;
+        // Deferred handlers add their locals to the shared AOT context after the parent IR's slot pass.
+        // Use that complete table so same-named locals in the body and a handler retain distinct identities.
+        auto slot_it = slots.local_slots.find(static_cast<const void*>(lv));
+        blid.slot_id = slot_it != slots.local_slots.end() ? slot_it->second : UINT32_MAX;
         out.body_locals.push_back(std::move(blid));
     }
 

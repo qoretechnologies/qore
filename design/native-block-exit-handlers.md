@@ -24,6 +24,10 @@ function, and a nested handler is named after the handler containing it, such as
   that function. Native code reports an exception by unwinding to the runtime with the exception already in the sink
   (`QoreJITException`).
 
+  Body-local metadata uses this complete shared AOT slot table, including slots added by deferred handlers.
+  The parent IR's own slot table does not include every handler-local declaration. Using it can leave a handler
+  local without a slot identity and bind it by name to an earlier declaration in another lexical scope.
+
   The runtime binds the local slots of a native closure body to the variables of the closure's serialized IR by
   slot index (`AOTClosureRuntimeBinding::local_slots`), so the compiler prepares the closure's IR slots before it
   builds the slot map (`qoreAOTPrepareClosureIRLocalSlots()`, as the serializer does: parameters, `argv`, then the
@@ -51,4 +55,6 @@ with statement slots from an older version is refused.
   locals of their own, closures, a change to a local of their function, a background expression, `rethrow` and a new
   exception, and the handlers of a closure using captured variables that its body does not use, in each execution
   mode and from a source-stripped compiled module, whose image must contain the native handler functions.
+  A deferred handler also reuses a completed loop's variable name and type; it must finish without a chained
+  exception and use its own variable.
 - The many `examples/test/ir` tests with handlers in compiled code.
