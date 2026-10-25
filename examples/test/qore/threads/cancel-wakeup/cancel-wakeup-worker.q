@@ -27,17 +27,41 @@ string sub make_fifo() {
     return path;
 }
 
-# waits until the child process started by a case has written to its FIFO
-sub wait_fifo(string path) {
-    ReadOnlyFile f(path);
-    f.readBinary(1);
+# waits until the child process started by a case has written to its FIFO, or until the case's call has ended
+/** Opening the FIFO for reading blocks until the child opens it for writing.  A call that ends before its child
+    opens the FIFO, because it failed or the child was not started, leaves the child that would open it missing, so
+    the FIFO is opened in a thread of its own that pushes to \a events, where the end of the call is pushed too.
+
+    @return the end of the call if it ended first; the FIFO's reader is then released by a writer of its own
+*/
+*hash<auto> sub wait_fifo(string path, Queue events) {
+    background sub () {
+        ReadOnlyFile f(path);
+        f.readBinary(1);
+        events.push({"opened": True});
+    }();
+    hash<auto> ev = events.get();
+    if (ev.opened) {
+        return;
+    }
+    File w();
+    w.open2(path, O_WRONLY);
+    w.write("x");
+    w.close();
+    # the reader's event, after the end of the call
+    events.get();
+    return ev;
 }
 
 # runs a blocking call in a new thread, waits until the call is about to block (or has blocked), requests
 # cancellation, and returns the exception that ended the call and the time from the request to the end of the call
+/** A call that ended before the request could be made is reported with an error code that starts with "EARLY:",
+    followed by the exception (or "NONE") that ended it, and the exception's description as its detail.
+*/
 hash<auto> sub cancel_one(code blocking, code wait_blocked, code cancel) {
     Queue started();
-    Queue done();
+    # the end of the call ({"done": ...}); a case that waits for a child process of the call also gets its start here
+    Queue events();
     int tid = background sub () {
         hash<auto> rv;
         try {
@@ -47,15 +71,23 @@ hash<auto> sub cancel_one(code blocking, code wait_blocked, code cancel) {
         } catch (hash<ExceptionInfo> ex) {
             rv.err = ex.err;
             rv.detail = ex.arg;
+            rv.desc = ex.desc;
         }
         rv.end = clock_get_monotonic_us();
-        done.push(rv);
+        events.push({"done": rv});
     }();
     started.get();
-    wait_blocked();
+    *hash<auto> early = wait_blocked(events);
+    if (early) {
+        return early.done + {
+            "err": "EARLY:" + early.done.err,
+            "detail": early.done.desc ?? early.done.detail,
+            "us": 0,
+        };
+    }
     int start = clock_get_monotonic_us();
     cancel(tid);
-    hash<auto> rv = done.get();
+    hash<auto> rv = events.get().done;
     rv.us = rv.end - start;
     return rv;
 }
@@ -64,7 +96,7 @@ sub cancel_tid(int tid) {
     cancel_thread(tid, "cancel-wakeup test");
 }
 
-sub nothing_to_wait_for() {
+sub nothing_to_wait_for(Queue events) {
 }
 
 # runs a case Trials times and prints its line
@@ -134,7 +166,7 @@ run_case("pipe read", auto sub () {
     string fifo = make_fifo();
     run_case("backquote read", auto sub () {
         return backquote(sprintf("printf x > '%s'; exec sleep 60", fifo));
-    }, sub () { wait_fifo(fifo); });
+    }, *hash<auto> sub (Queue events) { return wait_fifo(fifo, events); });
 }
 
 # a process wait: the child never exits by itself
@@ -142,7 +174,7 @@ run_case("pipe read", auto sub () {
     string fifo = make_fifo();
     run_case("system wait", auto sub () {
         return system(sprintf("printf x > '%s'; exec sleep 60", fifo));
-    }, sub () { wait_fifo(fifo); });
+    }, *hash<auto> sub (Queue events) { return wait_fifo(fifo, events); });
 }
 
 # a StreamPipe read: nothing is ever written to the pipe
@@ -269,7 +301,7 @@ run_case("usleep", auto sub () {
         # the previous trial's interrupt has ended its call; this trial starts without it
         sm.clearInterrupt();
         return p.callFunction("run", sprintf("printf x > '%s'; exec sleep 60", fifo));
-    }, sub () { wait_fifo(fifo); }, sub (int tid) {
+    }, *hash<auto> sub (Queue events) { return wait_fifo(fifo, events); }, sub (int tid) {
         sm.requestInterrupt();
     });
 }
@@ -288,7 +320,7 @@ run_case("usleep", auto sub () {
             throw ex.err, ex.desc, out;
         }
         return out;
-    }, sub () { wait_fifo(fifo); });
+    }, *hash<auto> sub (Queue events) { return wait_fifo(fifo, events); });
 }
 
 # after a cancelled wait and clear_thread_cancel(), the next wait is not woken by the earlier request
@@ -311,5 +343,5 @@ run_case("usleep", auto sub () {
             int us = clock_get_monotonic_us() - start;
             throw "AFTER-CLEAR", ex.err, us >= 200000;
         }
-    }, sub () { ready.get(); });
+    }, sub (Queue events) { ready.get(); });
 }
