@@ -1565,6 +1565,9 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
         and a type with options whose name is that of a shared named type such as \c "file" is a copy of the shared
         type with the options; an object type of a class that cannot be resolved here is an
         @ref ObjectClassNameDataType
+
+        @note The fields of a restored type are @ref DescribedDataField objects, which give the example that their
+        descriptions give, and none if the description gives none
     */
     static AbstractDataProviderType get(hash<DataTypeInfo> info) {
         bool toplevel = !rctx;
@@ -1902,26 +1905,28 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
     }
 
     #! Restores a data field from its serialized description
-    /** An example value is presentation metadata; one that the restored field does not accept, such as a
-        generated example in a description written by an earlier version, is dropped rather than failing the
-        restoration of the whole type
+    /** The field gives the example that its description gives, and none if the description gives none
+        (@ref DataProvider::DescribedDataField "DescribedDataField").  An example value is presentation metadata; one
+        that the restored field does not accept, such as a generated example in a description written by an earlier
+        version, is dropped rather than failing the restoration of the whole type
 
         @param field the serialized field description
 
         @return the restored data field
 
         @since DataProvider 3.8
+        @since DataProvider 3.11 the field gives the example that its description gives
     */
     private static AbstractDataField getDataField(hash<auto> field) {
         try {
-            return new QoreDataField(field);
+            return new DescribedDataField(field);
         } catch (hash<ExceptionInfo> ex) {
             if (!exists field.example_value) {
                 rethrow;
             }
         }
         remove field.example_value;
-        return new QoreDataField(field);
+        return new DescribedDataField(field);
     }
 
     #! Applies common serialized data type metadata to a restored type

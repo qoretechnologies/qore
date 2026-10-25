@@ -1585,6 +1585,9 @@ fetch
       whether it is a soft list (@ref DataProvider::DataTypeInfo::soft_list "DataTypeInfo::soft_list"), and a Qore
       soft list type is restored as @ref DataProvider::AbstractDataProviderType::get() "get()" returns it for the Qore
       type
+    - a field restored from its description gives the example that the description gives, and none if it gives none
+      (@ref DataProvider::DescribedDataField "DescribedDataField"); a restored field generated one from its allowed
+      values or its type, which the original field does not give when the constraints of an API schema reject it
     - the base type of a type based on a Qore type whose name is not a Qore type name is the base type of the Qore
       type
     - an empty constraints hash given to

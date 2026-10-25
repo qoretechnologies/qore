@@ -34,6 +34,28 @@ class RoundTripWrapperType inherits Type {
     }
 }
 
+#! A field whose every example a rule that its description does not carry rejects, as a schema field's constraints can
+class RoundTripNoExampleField inherits QoreDataField {
+    constructor(hash<auto> h) : QoreDataField(h) {
+    }
+
+    auto getExampleValue(*hash<string, bool> emap, *string fname) {
+    }
+}
+
+#! A union that checks a value against rules that its description does not carry, as an OpenAPI union does
+class RoundTripSchemaUnion inherits QoreUnionDataType {
+    constructor(list<AbstractDataProviderType> types) : QoreUnionDataType(types) {
+    }
+
+    auto acceptsValue(auto value) {
+        if (value.typeCode() == NT_INT) {
+            throw "RUNTIME-TYPE-ERROR", "the schema of the integer alternative does not accept an integer";
+        }
+        return QoreUnionDataType::acceptsValue(value);
+    }
+}
+
 #! Tests that a type restored from its description with AbstractDataProviderType::get() has the same description
 /** The index of data providers stores option types as their descriptions, and a reader that needs a type object
     restores it from the description; a type that is not restored as it was described changes what the reader
@@ -53,6 +75,9 @@ public class DataTypeRoundTripTest inherits QUnit::Test {
         addTestCase("an object type of a class that cannot be resolved keeps its class", \objectClassTest());
         addTestCase("an empty constraints hash is no constraints", \emptyConstraintsTest());
         addTestCase("a type graph description is restored with the same description", \graphRoundTripTest());
+        addTestCase("a restored field gives the example that its description gives", \describedExampleTest());
+        addTestCase("a restored union of discriminated alternatives accepts what the original accepts",
+            \discriminatedUnionTest());
 
         set_return_value(main());
     }
@@ -213,5 +238,79 @@ public class DataTypeRoundTripTest inherits QUnit::Test {
         # the restored union refers to the restored type
         AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph);
         assertEq(restored, cast<QoreUnionDataType>(restored.getFields().alt.getType()).getUnionTypes()[0]);
+    }
+
+    describedExampleTest() {
+        HashDataType item("RoundTripExampleItem");
+        item.addField(new QoreDataField("name", NOTHING, AbstractDataProviderTypeMap."string"));
+        HashDataType t("RoundTripExampleOwner");
+        t.addField(new RoundTripNoExampleField({"name": "code", "type": AbstractDataProviderTypeMap."*softstring"}));
+        t.addField(new RoundTripNoExampleField({"name": "kind", "type": AbstractDataProviderTypeMap."*softstring",
+            "allowed_values": ("connector",)}));
+        t.addField(new RoundTripNoExampleField({"name": "item", "type": item}));
+        AbstractDataProviderType empty_string = AbstractDataProviderType::get("*string")
+            .copyWithConstraints(<DataTypeConstraintInfo>{"enum_values": ("",)});
+        t.addField(new QoreDataField({"name": "expires_at", "type": new RoundTripSchemaUnion(
+            (AbstractDataProviderTypeMap."*int", empty_string))}));
+        t.addField(new QoreDataField("label", NOTHING, AbstractDataProviderTypeMap."string"));
+        t.addField(new QoreDataField({"name": "mode", "type": AbstractDataProviderTypeMap."string",
+            "default_value": "fast"}));
+        checkRoundTrip("fields with and without examples", t);
+
+        foreach AbstractDataProviderType restored in ((AbstractDataProviderType::get(t.getInfo()),
+                AbstractDataProviderType::getFromGraph(t.getInfoGraph()))) {
+            hash<string, AbstractDataField> fields = restored.getFields();
+            foreach string name in (("code", "kind", "item", "expires_at")) {
+                assertNothing(fields{name}.getExampleValue(), name);
+                assertNothing(fields{name}.getExampleValue({}, name), name + " (in a traversal)");
+            }
+            assertEq(t.getFields().label.getExampleValue(), fields.label.getExampleValue());
+            assertEq("Example label", fields.label.getExampleValue());
+            assertEq("fast", fields.mode.getExampleValue());
+            # the example of the restored type is built from the examples of its fields
+            assertEq(t.getExampleValue(), restored.getExampleValue());
+            # a value that the original accepts is accepted
+            assertEq("", fields.expires_at.getType().acceptsValue(""));
+        }
+    }
+
+    discriminatedUnionTest() {
+        HashDataType function_tool("RoundTripFunctionTool");
+        function_tool.addField(new QoreDataField({"name": "type", "type": AbstractDataProviderTypeMap."string",
+            "allowed_values": ("function",)}));
+        function_tool.addField(new QoreDataField("function", NOTHING, AbstractDataProviderTypeMap."*string"));
+        HashDataType connector("RoundTripConnector");
+        connector.addField(new QoreDataField({"name": "type", "type": AbstractDataProviderTypeMap."string",
+            "allowed_values": ("connector",)}));
+        connector.addField(new QoreDataField("connector_id", NOTHING, AbstractDataProviderTypeMap."*string"));
+        AbstractDataProviderType tool = new QoreUnionDataType((function_tool, connector))
+            .copyWithConstraints(<DataTypeConstraintInfo>{"exclusive_union": True});
+        HashDataType conversation("RoundTripConversation");
+        conversation.addField(new QoreDataField({"name": "tools", "type": new ListDataType(tool, True)}));
+        checkRoundTrip("discriminated alternatives", conversation);
+
+        list<hash<auto>> values = (
+            {"type": "function", "function": "lookup"},
+            {"type": "connector", "connector_id": "crm"},
+        );
+        foreach AbstractDataProviderType restored in ((AbstractDataProviderType::get(conversation.getInfo()),
+                AbstractDataProviderType::getFromGraph(conversation.getInfoGraph()))) {
+            AbstractDataField tools = restored.getFields().tools;
+            AbstractDataProviderType restored_tool = tools.getType().getElementType();
+            list<AbstractDataProviderType> alternatives = cast<QoreUnionDataType>(restored_tool).getUnionTypes();
+            foreach hash<auto> value in (values) {
+                assertEq(tool.acceptsValue(value), restored_tool.acceptsValue(value), value.type);
+                # each value is accepted by its own alternative only
+                int own = $# == 0 ? 0 : 1;
+                assertEq(value, alternatives[own].acceptsValue(value), value.type);
+                assertThrows("RUNTIME-TYPE-ERROR", "does not accept value", \alternatives[1 - own].acceptsValue(),
+                    value, value.type);
+            }
+            assertThrows("RUNTIME-TYPE-ERROR", \restored_tool.acceptsValue(), {"type": "web_search"});
+            # each alternative's discriminator gives its own example
+            assertEq("function", alternatives[0].getFields().type.getExampleValue());
+            assertEq("connector", alternatives[1].getFields().type.getExampleValue());
+            assertEq(conversation.getFields().tools.getExampleValue(), tools.getExampleValue());
+        }
     }
 }

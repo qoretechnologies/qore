@@ -694,7 +694,9 @@
 
     Restored types also keep more of their descriptions: a type path that is not registered in the process, the name
     and softness of a type named otherwise than its Qore type, the options of class-backed named types such as
-    \c file, and the class of an object type that the restoring program cannot resolve.
+    \c file, and the class of an object type that the restoring program cannot resolve.  A restored field gives the
+    example that its description gives, and none if the description gives none, instead of generating one from its
+    allowed values or its type.
 
     Type descriptions say whether a list type is a soft list, and can describe a type graph with each type once
     (\c DataProvider::AbstractDataProviderType::getInfoGraph()); the input schemas of MCP tools describe the types
@@ -3092,7 +3094,8 @@ while (*binary chunk = input.read(65536)) {
       - @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()" restores each type of a
         description once, so that recursive types are restored as cycles, shared types stay shared, and restoring
         large type graphs takes little time and memory; restored types keep their paths, names, softness, options,
-        and object classes
+        and object classes, and restored fields give the examples of their descriptions
+        (@ref DataProvider::DescribedDataField "DescribedDataField")
       - added type graph descriptions, which describe each type with fields once and refer to it by key
         (@ref DataProvider::AbstractDataProviderType::getInfoGraph() "AbstractDataProviderType::getInfoGraph()",
         @ref DataProvider::DataTypeGraphBuilder "DataTypeGraphBuilder")
