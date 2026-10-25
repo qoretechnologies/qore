@@ -503,6 +503,16 @@ static inline bool isWeakReferenceType(qore_type_t type) {
     return type == NT_WEAKREF || type == NT_WEAKREF_HASH || type == NT_WEAKREF_LIST;
 }
 
+// Returns the type of the node that a value holds, or NT_NOTHING for a value that holds no node: a weak reference and a
+// reference are nodes, so a test for them of any other value, such as an int, is the test of its tag alone
+static inline qore_type_t qore_ir_value_node_type(const QoreValue& value) {
+    if (!value.isPointer()) {
+        return NT_NOTHING;
+    }
+    const AbstractQoreNode* n = value.getPtr();
+    return n ? n->getType() : NT_NOTHING;
+}
+
 // The mode in which a store assigns the given value: a store in AssignmentMode::Element (the variable of a foreach
 // loop) assigns a weak reference as it is, as the AST interpreter assigns each element, and any other value as a
 // Normal store does
@@ -1029,7 +1039,7 @@ public:
     DLLLOCAL QoreValue read(size_t i) const {
         const QoreValue& val = slots[i];
         // the target of a weak reference is kept allocated by the weak reference
-        return isWeakReferenceType(val.getType()) ? getWeakReferenceTarget(val) : val;
+        return isWeakReferenceType(qore_ir_value_node_type(val)) ? getWeakReferenceTarget(val) : val;
     }
 
     //! Returns the value stored in the given slot, to store, copy or release it
@@ -8394,7 +8404,8 @@ next_instruction:
                         bool cache_has_value = !cached_val.isNothing()
                             || (is_ir_only_local && sid < locals_instantiated.size()
                                 && locals_instantiated[sid]);
-                        if (cache_has_value && isWeakReferenceType(cached_val.getType())) {
+                        qore_type_t cached_node_type = qore_ir_value_node_type(cached_val);
+                        if (cache_has_value && isWeakReferenceType(cached_node_type)) {
                             // the variable of a foreach loop that was assigned a weak reference
                             // (AssignmentMode::Element) reads as its target, which is borrowed, as
                             // for a weak local on the runtime stack: a reference taken here would let
@@ -8404,7 +8415,7 @@ next_instruction:
                             result_slot_owned = false;
                             goto load_local_done;
                         }
-                        if (cache_has_value && cached_val.getType() != NT_REFERENCE) {
+                        if (cache_has_value && cached_node_type != NT_REFERENCE) {
                             if (local_inst->borrowed_local_load) {
                                 // Load pairs with a local mutation and has no
                                 // other consumers: borrow the slot-cache reference
