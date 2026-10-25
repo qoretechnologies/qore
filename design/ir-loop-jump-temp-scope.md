@@ -120,9 +120,10 @@ A frame also records the locals it instantiates on the runtime local stack, in i
 (`IRCallFrame::instantiated_locals_ordered`, filled by `ensureLocalInstantiated()`), so that frame exit cleans them up
 in reverse.  Only locals that the IR interpreter does not keep in its own slots are recorded: objects (so that a
 destructor runs when the block is left), lists and hashes assigned through the runtime stack (such as the target of
-`placed += {...}`), and every local of a function that `computeIROnlyLocals()` cannot analyse completely; a method
-call on `stderr` is one such construct, so `qore-data-provider-i18n`'s `rekeySourceTree()` has all of its locals
-recorded.
+`placed += {...}`), and every local of a function that `computeIROnlyLocals()` cannot analyse completely.  A method
+call on `stderr` was such a construct (the analysis did not know the object that a constant resolves to), so
+`qore-data-provider-i18n`'s `rekeySourceTree()` had all of its locals recorded; `examples/test/ir/object-constant-locals/`
+checks that such a call no longer puts a function's plain locals on the runtime stack.
 
 `UninstantiateLocal` cleared a local's entry without removing it, and it scanned the list even for a local that was
 not instantiated.  A `continue` uninstantiates every local of the loop body, including the locals the body declares

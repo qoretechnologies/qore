@@ -786,11 +786,14 @@ static void collectLocalsFromExpr(const QoreValue& expr,
         return;
     }
 
-    // Constants and literals — leaf nodes
+    // Constants and literals — leaf nodes.  An object in an expression tree is the value of a resolved constant,
+    // such as the system constants stdout and stderr in "stderr.printf(...)": a value, which references no local
+    // variable.  Treating it as unknown kept every local of any function that calls a method on such a constant
+    // on the runtime local stack.
     if (ntype == NT_STRING || ntype == NT_INT || ntype == NT_FLOAT || ntype == NT_BOOLEAN || ntype == NT_CHAR
             || ntype == NT_NOTHING || ntype == NT_NULL || ntype == NT_NUMBER
             || ntype == NT_DATE || ntype == NT_BINARY || ntype == NT_HASH
-            || ntype == NT_LIST || ntype == NT_BACKQUOTE) {
+            || ntype == NT_LIST || ntype == NT_BACKQUOTE || ntype == NT_OBJECT) {
         return;
     }
 

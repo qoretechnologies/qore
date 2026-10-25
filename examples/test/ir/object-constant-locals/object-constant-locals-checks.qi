@@ -1,0 +1,100 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Shared checks for the IR's local analysis of a function that calls a method on a constant object, such as
+# stderr.printf(): run in the test program itself and in a worker in each execution mode.
+#
+# The analysis (QoreIRFunction::computeIROnlyLocals()) decides which locals the IR interpreter can keep in its own
+# slots and which have to stay on the runtime local stack.  It walks the expressions that the IR evaluates through
+# the AST and gives up on the whole function at a node it does not know; the object that a constant such as stderr
+# resolves to was such a node, so every local of a function that called a method on stdout or stderr stayed on the
+# runtime stack.
+#
+# dbg_get_ir_instantiated_local_entries() reports how many locals the innermost IR frame has instantiated on the
+# runtime stack (0 outside the IR interpreter).  Each check reads it in its own function, after its locals are
+# assigned, and is compared with a function without the call: a function whose body locals are all plain values
+# reads the same count as that one.
+
+#! the debug introspection function that reports the locals the innermost IR frame keeps on the runtime stack
+/** It is registered only in a debug build of the library (Option::HAVE_LIBRARY_DEBUGGING), so it is called by name:
+    a build without it parses, and the checks read 0 there.
+*/
+const OclEntriesFunc = "dbg_get_ir_instantiated_local_entries";
+
+#! an object, which a local keeps on the runtime stack so that its destructor runs when its block is left
+class OclThing {
+    int get() { return 1; }
+}
+
+#! returns the number of locals on the runtime stack, and the function's result
+hash<string, int> sub ocl_stderr(int n) {
+    string text = "value " + n;
+    int sum = n * 2;
+    hash<string, int> counts = {"a": sum, "b": text.size()};
+    sum += counts.b;
+    if (!sum) {
+        # never reached: the analysis sees the call
+        stderr.printf("%s: no sum\n", text);
+    }
+    int entries = 0;
+    if (Option::HAVE_LIBRARY_DEBUGGING) {
+        entries = call_function(OclEntriesFunc);
+    }
+    return {"entries": entries, "result": sum};
+}
+
+#! ocl_stderr() without the call on stderr: the frame's count of the locals that every function has on the runtime
+#! stack (its parameters), which the other checks are compared with
+hash<string, int> sub ocl_control(int n) {
+    string text = "value " + n;
+    int sum = n * 2;
+    hash<string, int> counts = {"a": sum, "b": text.size()};
+    sum += counts.b;
+    int entries = 0;
+    if (Option::HAVE_LIBRARY_DEBUGGING) {
+        entries = call_function(OclEntriesFunc);
+    }
+    return {"entries": entries, "result": sum};
+}
+
+#! the same with a method of stdout, which is called (sync() writes nothing)
+hash<string, int> sub ocl_stdout(int n) {
+    string text = "value " + n;
+    int sum = n * 3 + text.size();
+    stdout.sync();
+    int entries = 0;
+    if (Option::HAVE_LIBRARY_DEBUGGING) {
+        entries = call_function(OclEntriesFunc);
+    }
+    return {"entries": entries, "result": sum};
+}
+
+#! a function that does keep a local on the runtime stack: shows that the counter reads this function's frame
+hash<string, int> sub ocl_object(int n) {
+    OclThing thing();
+    int sum = n + thing.get();
+    stderr.printf("");
+    int entries = 0;
+    if (Option::HAVE_LIBRARY_DEBUGGING) {
+        entries = call_function(OclEntriesFunc);
+    }
+    return {"entries": entries, "result": sum};
+}
+
+#! returns the results of the checks as a hash
+hash<string, int> sub ocl_results() {
+    hash<string, int> c = ocl_control(5);
+    hash<string, int> e = ocl_stderr(5);
+    hash<string, int> o = ocl_stdout(4);
+    hash<string, int> t = ocl_object(2);
+    return {
+        "control-entries": c.entries,
+        "control-result": c.result,
+        "stderr-entries": e.entries,
+        "stderr-result": e.result,
+        "stdout-entries": o.entries,
+        "stdout-result": o.result,
+        "object-entries": t.entries,
+        "object-result": t.result,
+    };
+}
