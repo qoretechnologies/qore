@@ -3808,6 +3808,7 @@ public:
         runIpv6OnlyHolder(c);
         runListenOrder(c);
         runReusePort(c);
+        runDualStackReusePort(c);
         runMappedAddress(c);
 #ifdef DARWIN
         runCancelledScan(c);
@@ -4099,6 +4100,38 @@ private:
             UT_ASSERT_EQ(c, both ? 0 : EADDRINUSE, bindTo(s.fd, AF_INET, "127.0.0.1", portOf(h.fd)),
                 both ? "specific bind: 127.0.0.1 with SO_REUSEPORT shares the port of a listener that reuses the port"
                     : "specific bind: 127.0.0.1 without SO_REUSEPORT is refused the port of a listener on 0.0.0.0");
+        }
+#endif
+    }
+
+    //! two dual-stack sockets on :: that reuse the port share it, as on Linux
+    /** The bind of a dual-stack socket on :: probes the IPv4 addresses of the port with IPv4 sockets.  Since macOS
+        26, an IPv4 bind of 0.0.0.0 that does not reuse the port is refused while a dual-stack socket on :: holds
+        the port, so the probe found the port used by the other dual-stack socket, and the bind was refused
+        (EADDRINUSE), although the system allows it: the probe reuses the port like the socket that it is made for.
+    */
+    static void runDualStackReusePort(UnitTestCounters& c) {
+#ifdef SO_REUSEPORT
+        if (!hasIpv6()) {
+            return;
+        }
+        for (bool listening : {false, true}) {
+            Fd h{open(AF_INET6, false, true, true)};
+            UT_ASSERT(c, h.fd >= 0, "specific bind: the dual-stack SO_REUSEPORT holder is opened");
+            if (h.fd < 0) {
+                return;
+            }
+            UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET6, "::", 0),
+                "specific bind: the dual-stack SO_REUSEPORT holder is bound");
+            if (listening) {
+                UT_ASSERT_EQ(c, 0, listenOn(h.fd), "specific bind: the dual-stack SO_REUSEPORT holder listens");
+            }
+            Fd s{open(AF_INET6, false, true, true)};
+            UT_ASSERT_EQ(c, 0, bindTo(s.fd, AF_INET6, "::", portOf(h.fd)),
+                listening ? "specific bind: a dual-stack socket on :: with SO_REUSEPORT shares the port of a "
+                        "dual-stack listener on :: that reuses the port"
+                    : "specific bind: a dual-stack socket on :: with SO_REUSEPORT shares the port of a bound "
+                        "dual-stack socket on :: that reuses the port");
         }
 #endif
     }
