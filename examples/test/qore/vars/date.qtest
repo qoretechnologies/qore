@@ -211,9 +211,15 @@ class DateTest inherits QUnit::Test {
 
         # absolute date difference tests
         testAssertionValue("date difference 1", 2006-01-02T11:34:28.344 - 2006-01-01,              35h + 34m + 28s +344ms);
+        testAssertionValue("date difference 2", 2099-04-21T19:20:02.106Z - 1804-03-04T20:45:19.956Z, 2587078h + 34m + 42s + 150ms);
 %ifndef Windows
-        # this test fails on Windows due to different DST application for dates outside the UNIX epoch
-        testAssertionValue("date difference 2", 2099-04-21T19:20:02.106 - 1804-03-04T20:45:19.956, 2587078h + 34m + 42s + 150ms);
+        # the difference of local times includes the UTC offsets of the region: Prague local mean time (+00:57:44)
+        # in 1804 and summer time (+02:00) in 2099; Windows time zones have no historical offsets
+        {
+            TimeZone prague("Europe/Prague");
+            testAssertionValue("date difference 3", prague.date("2099-04-21T19:20:02.106")
+                - prague.date("1804-03-04T20:45:19.956"), 2587077h + 32m + 26s + 150ms);
+        }
 %endif
 
         SingleValueIterator svi(2012-01-01);

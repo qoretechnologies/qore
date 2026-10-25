@@ -1,0 +1,31 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# zic(8) source for the TZif fixtures of tzif-zone-files.qtest; the zones are
+# synthetic test zones, not extracts of the time zone database.
+#
+# The test compiles this file with the platform's zic at test time when zic
+# supports "-b".  The fixtures in the "slim" and "fat" directories are the same
+# zones compiled with zic 2022g (macOS) as follows:
+#
+#   zic -b slim -d slim tzif-zones.zi
+#   zic -b fat -d fat tzif-zones.zi
+#
+# Qore/Dst: local mean time until 1990, then +02 with daylight saving time
+# (+03) from the last Sunday in March to the last Sunday in October.  A slim
+# file has the transitions up to the first daylight saving time change only;
+# the TZ string in its footer ("TST-2TDT,M3.5.0,M10.5.0/3") gives local time
+# after that.  A fat file also has explicit transitions up to 2037.
+#
+# Qore/Wide: offset changes in 1850 and 2050, outside of the 32-bit range of
+# TZif version 1 data (1901-12-13 to 2038-01-19); the footer is "<WT2>-2".
+
+# Rule	NAME	FROM	TO	-	IN	ON	AT	SAVE	LETTER/S
+Rule	Tst	1995	max	-	Mar	lastSun	2:00	1:00	D
+Rule	Tst	1995	max	-	Oct	lastSun	3:00	0	S
+
+# Zone	NAME		STDOFF	RULES	FORMAT	[UNTIL]
+Zone	Qore/Dst	1:30	-	LMT	1990 Jan 1
+			2:00	Tst	T%sT
+Zone	Qore/Wide	0:20	-	LMT	1850 Jan 1
+			1:00	-	WT1	2050 Jan 1
+			2:00	-	WT2

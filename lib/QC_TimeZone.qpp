@@ -115,7 +115,8 @@ qclass TimeZone [arg=TimeZoneData* z; vparent=Serializable; serializer=reinterpr
 TimeZone tz(region: "Europe/Prague");
     @endcode
 
-    @throw TZINFO-ERROR Unable to read zoneinfo file; invalid file magic; error parsing zoneinfo file, etc
+    @throw TZINFO-ERROR the zoneinfo file is not a valid TZif file, for example it is truncated or the time zone
+    rule at its end is not valid; see @ref zoneinfo_files
     @throw ILLEGAL-FILESYSTEM-ACCESS thrown if a path was passed for \a region and the @ref Qore::PO_NO_FILESYSTEM sandboxing restriction is set
     @throw TZINFO-ERROR the region or path contains a NUL character; see @ref path_nul_characters
     @throw TZINFO-ERROR the region (not a path) contains a \c ".." or empty path component or a backslash;
@@ -358,6 +359,7 @@ TimeZone::setRegion(region: "Europe/Prague");
     @throw TZINFO-ERROR the region contains a NUL character; see @ref path_nul_characters
     @throw TZINFO-ERROR the region contains a \c ".." or empty path component or a backslash; see
     @ref sandbox_fs_tz_regions
+    @throw TZINFO-ERROR the zoneinfo file of the region is not a valid TZif file; see @ref zoneinfo_files
  */
 static nothing TimeZone::setRegion(string region) [dom=LOCALE_CONTROL;flags=NAMED_ARGS] {
     if (QoreTimeZoneManager::checkRegion(*region, false, xsink)) {

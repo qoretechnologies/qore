@@ -14,6 +14,37 @@
 
     Note that posix-style time zone rules are not understood if assigned to the \c TZ environment variable, only file names to a zoneinfo file can be processed at the moment. Furthermore if the zoneinfo file contains leap second information, it is currently ignored.
 
+    @subsection zoneinfo_files Zoneinfo Files
+
+    Zoneinfo files are read in the Time Zone Information Format (TZif) of
+    <a href="https://www.rfc-editor.org/rfc/rfc9636">RFC 9636</a> (which obsoletes RFC 8536), versions 1 to 4:
+    - files of version 2 and higher are read from their 64-bit data, so time zone changes before 1901 and after 2038
+      are applied
+    - local time after the last time zone change in a file is given by the time zone rule at the end of the file (a
+      POSIX TZ string such as <tt>CET-1CEST,M3.5.0,M10.5.0/3</tt>), including the version 3 extension for rule times;
+      this is how "slim" files, which \c zic writes by default, give current and future local times
+    - local time before the first time zone change in a file is the first local time type of the file, normally the
+      local mean time of the region
+    - a file that is not a valid TZif file, for example a truncated file, raises a \c TZINFO-ERROR exception that
+      describes the problem, and the time zone is not loaded
+
+    For example, a zoneinfo file compiled with <tt>zic -b slim</tt> gives the same local times as one compiled with
+    <tt>zic -b fat</tt>:
+
+    @code{.py}
+TimeZone prague("Europe/Prague");
+# daylight saving time in 2100 comes from the time zone rule at the end of the file
+date summer = prague.date("2100-07-01T12:00:00");
+printf("%s %s\n", summer.format("YYYY-MM-DD HH:mm:SS Z"), summer.currentZoneName());
+# local mean time in 1800 comes from the 64-bit data
+date lmt = prague.date("1800-01-01T12:00:00");
+printf("%s %s\n", lmt.format("YYYY-MM-DD HH:mm:SS Z"), lmt.currentZoneName());
+    @endcode
+    which displays:
+    @verbatim
+2100-07-01 12:00:00 +02:00 CEST
+1800-01-01 12:00:00 +00:57:44 LMT@endverbatim
+
     @section windows_time_zones Windows Time Zone Handling
 
     Time zone information is read in from binary time zone data in the Windows registry under:\n
