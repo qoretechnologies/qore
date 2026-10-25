@@ -683,6 +683,23 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Data Provider Types Restored From Their Descriptions Can Be Cyclic and Shared
+    @parblock
+    \c DataProvider::AbstractDataProviderType::get() restores each type of a type description once: a recursive
+    type is restored as a cycle, whose recursive field is the restored type itself, and a type that the description
+    refers to at several places is one type.  Before, every occurrence was restored as a type of its own, and a
+    recursive reference as a hash type without fields, so restoring the option types of large REST schemas, such as
+    NetSuite's from the data provider index, took gigabytes of memory.  Code that walks the fields of restored types,
+    as of the types of recursive schemas, must recognize the types it has already visited.
+
+    Restored types also keep more of their descriptions: a type path that is not registered in the process, the name
+    and softness of a type named otherwise than its Qore type, the options of class-backed named types such as
+    \c file, and the class of an object type that the restoring program cannot resolve.
+
+    Type descriptions say whether a list type is a soft list, and can describe a type graph with each type once
+    (\c DataProvider::AbstractDataProviderType::getInfoGraph()).
+    @endparblock
+
     @par date() Raises an Exception for Text After a Date or Time
     @ref Qore::date(string) "date(string)" and @ref Qore::TimeZone::date(string) "TimeZone::date(string)" now raise
     \c INVALID-DATE for text after a complete ISO 8601 date or time that is not a zone designator or white space
@@ -3071,6 +3088,13 @@ while (*binary chunk = input.read(65536)) {
         reporting themselves as mandatory, so that a hash type rejected a value omitting such a field
       - fixed @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()" restoring a soft
         list type from its type description as a plain list type that rejected single values
+      - @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()" restores each type of a
+        description once, so that recursive types are restored as cycles, shared types stay shared, and restoring
+        large type graphs takes little time and memory; restored types keep their paths, names, softness, options,
+        and object classes
+      - added type graph descriptions, which describe each type with fields once and refer to it by key
+        (@ref DataProvider::AbstractDataProviderType::getInfoGraph() "AbstractDataProviderType::getInfoGraph()",
+        @ref DataProvider::DataTypeGraphBuilder "DataTypeGraphBuilder")
       - action option generation returns an empty hash for operations without input fields
       - fixed short-description derivation corrupting words and literal braces when help text contains quoted parameter names or numbers
       - added DPQL (Data Provider Query Language) — a human/AI-readable query syntax with a tokenizer,

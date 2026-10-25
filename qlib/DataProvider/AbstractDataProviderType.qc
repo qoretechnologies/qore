@@ -303,6 +303,49 @@ public hashdecl DataTypeInfo {
     /** @since DataProvider 3.8
     */
     *hash<DataTypeConstraintInfo> constraints;
+
+    #! @ref True if the type is a soft list type, which converts a single value to a list; @ref False for any other list type
+    /** Set only for list types.  A description written by an earlier version does not set it; in such a description, a
+        list type is a soft list type if its name is a soft list type name, such as \c "softlist<string>"
+
+        @since DataProvider 3.11
+    */
+    *bool soft_list;
+
+    #! The key of the type in the type table of a type graph description, if this description is a reference to it
+    /** A reference gives the type's name, base type, requiredness, and accepted and returned types; the type is
+        described under this key in the \c types member of the @ref DataProvider::DataTypeGraphInfo "DataTypeGraphInfo"
+        description that holds the reference.  Set only in a type graph description; see
+        @ref DataProvider::AbstractDataProviderType::getInfoGraph() "AbstractDataProviderType::getInfoGraph()"
+
+        @since DataProvider 3.11
+    */
+    *string type_ref;
+}
+
+#! A type graph description, in which each type with fields and each union type is described once
+/** Each type with fields and each union type that the described type refers to, directly or through other types, is
+    described once in \c types under a key, and every reference to it, including a recursive one, is a description with
+    that key in @ref DataProvider::DataTypeInfo::type_ref "type_ref"; other types are described in place.  The size of
+    the description is therefore proportional to the number of distinct types and fields, while the complete
+    description of @ref DataProvider::AbstractDataProviderType::getInfo() "AbstractDataProviderType::getInfo()"
+    describes a type again at every path to it, which is exponential in the size of a graph whose types refer to each
+    other.
+
+    @see @ref DataProvider::AbstractDataProviderType::getInfoGraph() "AbstractDataProviderType::getInfoGraph()",
+    @ref DataProvider::DataTypeGraphBuilder "DataTypeGraphBuilder", and
+    @ref DataProvider::AbstractDataProviderType::getFromGraph() "AbstractDataProviderType::getFromGraph()"
+
+    @since DataProvider 3.11
+*/
+public hashdecl DataTypeGraphInfo {
+    #! The description of the type; a reference if it is a type with fields or a union type
+    hash<DataTypeInfo> type;
+
+    #! The descriptions of the types with fields and the union types of the graph, by key
+    /** Keys are \c "1", \c "2", ... in the order in which the types are first referred to
+    */
+    hash<string, hash<DataTypeInfo>> types;
 }
 
 #! Validation constraints of a data type
@@ -491,7 +534,8 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             return self;
         }
         AbstractDataProviderType rv = self.copy();
-        rv.constraints = constraints;
+        # an empty constraints hash means no constraints
+        rv.constraints = constraints ?: NOTHING;
         return rv;
     }
 
@@ -699,6 +743,16 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         # to catch recursive fields
         string uh = self.uniqueHash();
 
+        # while a type graph is described (see DataTypeGraphBuilder), a type with fields or a union type below the
+        # type being described is a reference to its description in the graph
+        if (tgraph) {
+            if (tgraph.build == uh) {
+                remove tgraph.build;
+            } else if (getFields() || (self instanceof QoreUnionDataType)) {
+                return type_graph_reference(self, uh, simple);
+            }
+        }
+
         # "rimap" only tracks types on the current path, so a type object reachable by more than one path (i.e. any
         # shared subtype in a type DAG) would be re-expanded at every occurrence, which is exponential in the depth
         # of the graph.  Memoize each type's info for the duration of the traversal instead; results are shared by
@@ -745,7 +799,8 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             "types_returned": keys getReturnTypeHash(simple),
             "fields": !recursive ? getFieldInfo() : NOTHING,
             "recursive": recursive,
-            "unique_key": uh,
+            # in a type graph description, a type is identified by its key; a type described in place has none
+            "unique_key": tgraph ? tgraph.key_map{uh} ?? "" : uh,
             "tags": tags,
             "constraints": constraints,
         };
@@ -767,6 +822,53 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             imap{ck} = rv;
         }
         return rv;
+    }
+
+    #! Returns a description of the type in which each type with fields and each union type is described once
+    /** Each type with fields and each union type that the type refers to, directly or through other types, is
+        described once in the \c types member under a key, and every other place refers to it with a description that
+        gives the key in @ref DataProvider::DataTypeInfo::type_ref "type_ref", as an OpenAPI document describes its
+        components once and refers to them with \c $ref; other types are described in place.  The descriptions of the
+        types are those of getInfo(), except that the types they refer to are references.
+
+        The description therefore grows with the number of distinct types and fields: getInfo() describes a type
+        again at every path to it, which is exponential in the size of a graph whose types refer to each other, such
+        as the types of a large REST schema whose records refer to each other.
+
+        The keys are \c "1", \c "2", ... in the order in which the types are first referred to, starting with this
+        type, and types and fields described in place have an empty \c unique_key, so the same type graph is always
+        described identically.  To describe several types with one type table, use a
+        @ref DataProvider::DataTypeGraphBuilder "DataTypeGraphBuilder".
+
+        @param simple if @ref True, return simplified type names in \c types_accepted and \c types_returned of this
+        type and of the types described with it
+
+        @return a description of the type: \c type is its description, a reference if it is a type with fields or a
+        union type, and \c types the descriptions of the types with fields and the union types by key
+
+        @throw DATA-TYPE-GRAPH-ERROR a type graph is already being described in this thread
+
+        @par Example:
+        @code{.py}
+HashDataType node("node");
+node.addField(new QoreDataField("name", "the name of the node", StringType));
+node.addField(new QoreDataField("children", "the child nodes", new ListDataType("list<node>", node)));
+hash<DataTypeGraphInfo> graph = node.getInfoGraph();
+# graph.type.type_ref == "1"; graph.types."1".fields.children.type.element_type.type_ref == "1"
+AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph);
+        @endcode
+
+        @see getFromGraph()
+
+        @since DataProvider 3.11
+    */
+    hash<DataTypeGraphInfo> getInfoGraph(*bool simple) {
+        DataTypeGraphBuilder builder(simple);
+        hash<DataTypeInfo> type = builder.add(self);
+        return <DataTypeGraphInfo>{
+            "type": type,
+            "types": builder.getTypes(),
+        };
     }
 
     #! Returns the description of the type that a field's configuration carries
@@ -921,6 +1023,13 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             name =~ s/\*?(soft)?//;
             # remove any complex type information
             name =~ s/<.*>$//;
+            # a Type subclass can give its own name, which is not a base type name; the base type is then that of the
+            # Qore type it is based on
+            if (!DataTypeMap{name}) {
+                if (*string base_name = BaseTypeCodeNames{thistype.getBaseTypeCode()}) {
+                    return base_name;
+                }
+            }
             return name;
         }
         return "all";
@@ -1425,43 +1534,136 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     }
 
     #! Returns an appropriate object for the given type description
-    /** @param info the description of the type
+    /** @param info the description of the type, as returned by getInfo(); a reference in it
+        (@ref DataProvider::DataTypeInfo::type_ref "type_ref") is only resolved by getFromGraph()
 
         @return the type registered with the description's \c path in this process, if any, otherwise a type
         restored from the structure in the description
 
         @throw TYPE-ARG-ERROR the description has a \c path that is not registered in this process, and no name or
-        base type to restore the type from
+        base type to restore the type from, or it refers to a type graph that it is not part of
 
-        @note A list type is restored as a @ref SoftListDataType when its name is a soft list type name such as
-        \c "softlist<string>" or \c "*softlist<string>", so that it converts a single value to a list like the
-        described type does; a list type with any other name is restored as a @ref ListDataType
+        @note Each type of a description is restored once: a type described again at another place in the
+        description, which has the same \c unique_key and name, is the type already restored, and a recursion marker
+        (a description with @ref True in \c recursive) is the enclosing type it refers to.  A recursive type is
+        therefore restored as a cycle, types that the description shares are shared, and the time and memory
+        restoring takes are proportional to the number of distinct types, not to the size of the description, in
+        which a type is described again at every path to it.  In earlier versions, every occurrence was restored as a
+        type of its own, and a recursion marker as a type without fields.
+
+        @note A list type is restored as a @ref SoftListDataType if the description says it is a soft list
+        (@ref DataProvider::DataTypeInfo::soft_list "soft_list"); in a description written by an earlier version,
+        which does not say so, if its name is a soft list type name such as \c "softlist<string>" or
+        \c "*softlist<string>"
 
         @note A type path, such as one registered when a provider app is loaded, identifies the registered type
         only in a process where that registration has been made.  Elsewhere the type is restored from its
-        description, like a type without a path: it has the described structure and constraints but not any
-        custom behavior of the original type's class, and it has no path
+        description, like a type without a path: it has the described structure, constraints, and path, but not
+        any custom behavior of the original type's class
+
+        @note A type named otherwise than its Qore type, such as a scalar type named for what it holds, keeps its name,
+        and a type with options whose name is that of a shared named type such as \c "file" is a copy of the shared
+        type with the options; an object type of a class that cannot be resolved here is an
+        @ref ObjectClassNameDataType
     */
     static AbstractDataProviderType get(hash<DataTypeInfo> info) {
-        AbstractDataProviderType rv = AbstractDataProviderType::getFromInfo(info);
-        # restored types may be shared, so constraints are set on a copy
-        return info.constraints ? rv.copyWithConstraints(info.constraints) : rv;
+        bool toplevel = !rctx;
+        if (toplevel) {
+            rctx = <TypeRestoreState>{};
+        }
+        on_exit if (toplevel) {
+            remove rctx;
+        }
+        return AbstractDataProviderType::getRestored(info);
+    }
+
+    #! Restores a type from a type graph description
+    /** @param graph a type graph description, as returned by getInfoGraph()
+
+        @return the type of the description; each type of its type table is restored once, every reference to it,
+        including a recursive one, is that type, and the time and memory restoring takes are proportional to the
+        number of types in the graph
+
+        @throw TYPE-ARG-ERROR the description refers to a type that is not in its type table, or a description cannot
+        be restored (see get(hash<DataTypeInfo>))
+
+        @par Example:
+        @code{.py}
+hash<DataTypeGraphInfo> graph = type.getInfoGraph();
+AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph);
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static AbstractDataProviderType getFromGraph(hash<DataTypeGraphInfo> graph) {
+        *hash<TypeRestoreState> saved = remove rctx;
+        on_exit {
+            rctx = saved;
+        }
+        rctx = <TypeRestoreState>{"graph": graph.types};
+        return AbstractDataProviderType::getRestored(graph.type);
+    }
+
+    #! Restores a type from its description in the restoration in progress, once per unique key
+    private static AbstractDataProviderType getRestored(hash<DataTypeInfo> info) {
+        *string key = info.unique_key.val() ? info.unique_key : NOTHING;
+        # a key is only reused with the same name, so that a description reusing keys for other types is not misread
+        if (key && (*AbstractDataProviderType t = rctx.types{key}) && t.getName() == info.name) {
+            return t;
+        }
+        if (info.type_ref) {
+            *hash<DataTypeInfo> entry = rctx.graph{info.type_ref};
+            if (!entry) {
+                throw "TYPE-ARG-ERROR", sprintf("type %y refers to type %y, which is not in the type table of a type "
+                    "graph description; a reference is restored by AbstractDataProviderType::getFromGraph()",
+                    info.name, info.type_ref);
+            }
+            return AbstractDataProviderType::getRestored(entry);
+        }
+        bool shared;
+        bool done;
+        AbstractDataProviderType rv = AbstractDataProviderType::getFromInfo(info, key, \shared, \done);
+        if (!done) {
+            # restored types may be shared, so constraints are set on a copy
+            if (info.constraints) {
+                rv = rv.copyWithConstraints(info.constraints);
+                shared = False;
+            }
+            # the described path is kept when it is not registered here; see DataProviderPresentation
+            if (info.path && rv.getPath() != info.path) {
+                if (shared) {
+                    rv = rv.copy();
+                }
+                rv.setPath(info.path);
+            }
+        }
+        if (key) {
+            rctx.types{key} = rv;
+        }
+        return rv;
     }
 
     #! Returns an appropriate object for the given type description, without its validation constraints
     /** @param info the description of the type
+        @param key the unique key of the description, under which a type with fields is known before its fields are
+        restored
+        @param shared set to @ref True if the type returned is shared, so that it is copied before it is changed
+        @param done set to @ref True if the constraints and path of the description are set on the type returned
 
         @return a type for the description, which may be shared
 
         @since DataProvider 3.8
     */
-    private static AbstractDataProviderType getFromInfo(hash<DataTypeInfo> info) {
+    private static AbstractDataProviderType getFromInfo(hash<DataTypeInfo> info, *string key, reference<bool> shared,
+            reference<bool> done) {
         if (info.path) {
             # the path identifies the type registered in this process, which keeps the custom behavior of the
             # original type's class; a path registered only where its app is loaded is not known here, and the type
             # is then restored from the structure the description also holds
             *AbstractDataProviderType rv = DataProvider::getTypeCache().lookupTypeFromPath(info.path);
             if (rv) {
+                shared = True;
+                done = True;
                 return rv;
             }
             if (!info.name && !info.base_type) {
@@ -1471,36 +1673,87 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         }
         # class-backed named types (e.g. "file", "email") are identified by their name, even when their description
         # also lists fields
-        if (*AbstractDataProviderType adt = NamedClassBackedTypeMap{info.name}) {
+        if (*AbstractDataProviderType adt = AbstractDataProviderType::getNamedClassBackedType(info, \shared)) {
             return adt;
         }
         hash<auto> attr = info{"display_name", "short_desc", "desc"};
         if (info.union_types) {
-            # each alternative's description restores its own nullability, from which the union's is derived
-            return new QoreUnionDataType((map AbstractDataProviderType::get($1), info.union_types),
-                attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
+            # the union is complete except for its alternatives before they are restored, and it is known by its key,
+            # so that an alternative that refers back to it, through other types, refers to the union itself; each
+            # alternative's description restores its own nullability, from which the union's is derived
+            AbstractDataProviderType provisional = AbstractDataProviderTypeMap."auto";
+            QoreUnionDataType rv((provisional, provisional), attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
+            if (info.constraints) {
+                rv.constraints = info.constraints;
+            }
+            if (info.path) {
+                rv.setPath(info.path);
+            }
+            done = True;
+            if (key) {
+                rctx.types{key} = rv;
+            }
+            rv.setUnionTypes(map AbstractDataProviderType::get($1), info.union_types);
+            return rv;
         }
         # a hash type is restored by its name and description when the name is not a Qore type, even if it has no
         # fields
         if (info.fields || (info.base_type == "hash" && (!AbstractDataProviderType::isQoreTypeName(info.name)
                 || info.default_field_type_info))) {
-            HashDataType rv(info.mandatory ? AutoHashType : AutoHashOrNothingType, info.name,
-                AbstractDataProviderType::getDataFields(info.fields ?? {}), info.options, info.tags, info.default_value,
-                attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
+            hash<string, AbstractDataField> no_fields = {};
+            HashDataType rv(info.mandatory ? AutoHashType : AutoHashOrNothingType, info.name, no_fields,
+                info.options, info.tags, info.default_value, attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
+            # the type is complete except for its fields before they are restored, and it is known by its key, so
+            # that a field that refers back to it, directly or through other types, is the type itself
+            if (info.constraints) {
+                rv.constraints = info.constraints;
+            }
+            if (info.path) {
+                rv.setPath(info.path);
+            }
+            done = True;
+            if (key) {
+                rctx.types{key} = rv;
+            }
+            rv.setFields(AbstractDataProviderType::getDataFields(info.fields ?? {}));
             AbstractDataProviderType::setHashDataTypeInfo(rv, info);
             return rv;
         }
         if ((info.base_type == "list" || info.name =~ /^.?list</) && info.element_type) {
-            AbstractDataProviderType element_type = AbstractDataProviderType::get(info.element_type);
             *hash<NameDescInfo> name_desc = attr ? cast<hash<NameDescInfo>>(attr) : NOTHING;
-            # like a soft scalar type, a soft list is identified by its type name; it converts a single element to a
-            # list, so restoring it as a plain list would reject values the original type accepts
-            if (info.name =~ /^\*?softlist</) {
-                return new SoftListDataType(info.name, element_type, !info.mandatory, info.options, info.tags,
-                    info.default_value, name_desc);
+            # like a soft scalar type, a soft list converts a single element to a list, so restoring it as a plain
+            # list would reject values the original type accepts; a description written by an earlier version only
+            # says so with the type's name
+            bool soft = exists info.soft_list ? info.soft_list : (info.name =~ /^\*?softlist</);
+            # a mandatory soft list type that accepts no value is a Qore soft list type, which converts no value to an
+            # empty list; it is restored as get(Type) returns it
+            if (soft && info.mandatory && inlist("nothing", info.types_accepted)
+                    && AbstractDataProviderType::isQoreTypeName(info.name)) {
+                AbstractDataProviderType rv = AbstractDataProviderType::get(new Type(info.name), info.options,
+                    info.tags, info.default_value, name_desc);
+                return AbstractDataProviderType::setDataTypeInfo(rv, info);
             }
-            return new ListDataType(info.name, element_type, !info.mandatory, info.options, info.tags,
-                info.default_value, name_desc);
+            # the list is complete except for its element type before the element type is restored, and it is known
+            # by its key, so that an element type that refers back to it, through other types, refers to the list
+            # itself
+            AbstractDataProviderType provisional = AbstractDataProviderTypeMap."auto";
+            ListDataType rv = soft
+                ? new SoftListDataType(info.name, provisional, !info.mandatory, info.options, info.tags,
+                    info.default_value, name_desc)
+                : new ListDataType(info.name, provisional, !info.mandatory, info.options, info.tags,
+                    info.default_value, name_desc);
+            if (info.constraints) {
+                rv.constraints = info.constraints;
+            }
+            if (info.path) {
+                rv.setPath(info.path);
+            }
+            done = True;
+            if (key) {
+                rctx.types{key} = rv;
+            }
+            rv.updateElementType(AbstractDataProviderType::get(info.element_type), True);
+            return rv;
         }
         *Type t = DataTypeMap{info.name};
         # the map has aliases (e.g. "any" for "auto"); the type named by the description is restored under that name
@@ -1514,50 +1767,70 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             }
         }
         if (!t && info.name) {
-            # class-backed named types (e.g. "file", "email") are not Qore reflection types; the name
-            # ("email" vs "*email") already encodes nullability
-            if (*AbstractDataProviderType adt = NamedClassBackedTypeMap{info.name}) {
-                return adt;
-            }
             try {
                 t = new Type(info.name);
             } catch (hash<ExceptionInfo> ex) {
-                # Fall back to the base type below; named schema types are not necessarily Qore type names.
+                # named schema types are not necessarily Qore type names
             }
         }
+        # a type named otherwise than any Qore type keeps its name
+        *hash<auto> name_attr;
         if (!t) {
-            t = DataTypeMap{info.base_type};
+            # an object type of a class that cannot be resolved here
+            if (*list<*string> m = (info.name =~ x/^(\*)?object<(.+)>$/)) {
+                return new ObjectClassNameDataType(m[1], exists m[0], info.options, info.tags,
+                    attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
+            }
+            # a type whose name and base type are known only in the program defining it, such as a type based on a
+            # custom Qore type, or a scalar type named for what it holds, is restored from the value type it returns
+            # and the values it accepts, so that a soft type stays soft
+            t = AbstractDataProviderType::getValueTypeFromInfo(info) ?? DataTypeMap{info.base_type};
+            if (t && info.name) {
+                name_attr = {
+                    "name": info.name,
+                    "display_name": info.display_name ?? info.name,
+                    "short_desc": info.short_desc,
+                    "desc": info.desc ?? info.short_desc ?? info.name,
+                };
+            }
         }
         if (t) {
+            *hash<NameDescInfo> name_desc = name_attr
+                ? cast<hash<NameDescInfo>>(name_attr)
+                : (attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
             # options apply to the mandatory type (an "or nothing" type supports none), so a type with options and
             # its "or nothing" equivalent are created from the mandatory type, like the original
             if (info.options && !info.mandatory && info.name =~ /^\*/
                     && (*Type mandatory_type = DataTypeMap{info.name.substr(1)})) {
                 AbstractDataProviderType rv = AbstractDataProviderType::get(mandatory_type, info.options, info.tags,
-                    info.default_value, attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
+                    info.default_value, name_desc);
                 return AbstractDataProviderType::setDataTypeInfo(rv.getOrNothingType(), info);
             }
             AbstractDataProviderType rv = AbstractDataProviderType::get(t, info.options, info.tags, info.default_value,
-                attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
-            return AbstractDataProviderType::setDataTypeInfo(rv, info);
-        }
-
-        # a type whose name and base type are known only in the program defining it, such as a type based on a custom
-        # Qore type, is restored from the value type it returns and the values it accepts
-        if (*Type value_type = AbstractDataProviderType::getValueTypeFromInfo(info)) {
-            # the type keeps the name it is described by, which is not the name of the Qore value type
-            hash<NameDescInfo> named = <NameDescInfo>{
-                "name": info.name ?? value_type.getName(),
-                "display_name": info.display_name ?? info.name ?? value_type.getName(),
-                "short_desc": info.short_desc,
-                "desc": info.desc ?? info.short_desc ?? info.name ?? value_type.getName(),
-            };
-            AbstractDataProviderType rv = AbstractDataProviderType::get(value_type, info.options, info.tags,
-                info.default_value, named);
+                name_desc);
             return AbstractDataProviderType::setDataTypeInfo(rv, info);
         }
 
         throw "TYPE-ERROR", sprintf("No match for type: %y", info);
+    }
+
+    #! Returns the shared class-backed type of a description's name, or a copy of it with the described options
+    /** Class-backed named types (e.g. \c "file", \c "email") are not Qore reflection types; the name (\c "email" vs
+        \c "*email") already encodes nullability
+    */
+    private static *AbstractDataProviderType getNamedClassBackedType(hash<DataTypeInfo> info,
+            reference<bool> shared) {
+        *AbstractDataProviderType adt = NamedClassBackedTypeMap{info.name};
+        if (!adt) {
+            return;
+        }
+        if (!info.options) {
+            shared = True;
+            return adt;
+        }
+        AbstractDataProviderType rv = adt.copy();
+        rv.setOptions(info.options);
+        return rv;
     }
 
     #! Returns the Qore type for a description from the value type it returns and the values it accepts
@@ -1574,12 +1847,23 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         list<string> returned = info.types_returned
             ? (select info.types_returned, $1 != "nothing" && $1 != "null")
             : ();
-        if (returned.size() != 1 || !DataTypeMap{returned[0]}) {
+        # the names of a type and its aliases (e.g. "int" and "integer") are one value type
+        hash<string, bool> value_types = {};
+        foreach string name in (returned) {
+            *Type t = DataTypeMap{name};
+            if (!t) {
+                return;
+            }
+            value_types{t.getName()} = True;
+        }
+        if (value_types.size() != 1) {
             return;
         }
-        string value_type = returned[0];
+        string value_type = value_types.firstKey();
+        # the type converts values if it accepts more than the value type and its aliases (e.g. "char" for "string")
+        hash<string, bool> accepted = DataTypeMap{value_type}.getAcceptTypeHash();
         bool converts = (select info.types_accepted,
-            $1 != value_type && $1 != "nothing" && $1 != "null").size() > 0;
+            !accepted{$1} && $1 != "nothing" && $1 != "null").size() > 0;
         if (converts && (*string soft_name = OptimalQoreSoftDataTypeMap{value_type})) {
             return DataTypeMap{soft_name} ?? new Type(soft_name);
         }
@@ -1750,6 +2034,78 @@ thread_local hash<string, hash<DataTypeInfo>> imap;
 
 #! Counts cycle truncations during a getInfo() traversal, so that path-dependent results are not memoized
 thread_local int itrunc;
+
+#! The base type names of the base type codes, for a type whose name is not a Qore type name
+const BaseTypeCodeNames = {
+    NT_NOTHING: "nothing",
+    NT_INT: "int",
+    NT_FLOAT: "float",
+    NT_STRING: "string",
+    NT_DATE: "date",
+    NT_BOOLEAN: "bool",
+    NT_NULL: "NULL",
+    NT_BINARY: "binary",
+    NT_LIST: "list",
+    NT_HASH: "hash",
+    NT_OBJECT: "object",
+    NT_NUMBER: "number",
+};
+
+#! A type of a type graph whose description is pending
+hashdecl TypeGraphItem {
+    #! The key of the type in the graph
+    string key;
+    #! The unique hash of the type
+    string uh;
+    #! The type
+    AbstractDataProviderType type;
+}
+
+#! The state of the description of a type graph; see DataTypeGraphBuilder
+hashdecl TypeGraphState {
+    #! The key of each type in the graph, by unique hash
+    hash<string, string> key_map = {};
+    #! The types referred to whose descriptions are pending
+    list<hash<TypeGraphItem>> queue = ();
+    #! The unique hash of the type being described, whose own description is not a reference
+    *string build;
+}
+
+#! The state of a restoration; see AbstractDataProviderType::get(hash<DataTypeInfo>)
+hashdecl TypeRestoreState {
+    #! The types restored, by unique key
+    hash<string, AbstractDataProviderType> types = {};
+    #! The type table of the type graph description being restored, if any
+    *hash<string, hash<DataTypeInfo>> graph;
+}
+
+#! The type graph being described in this thread, if any
+thread_local *hash<TypeGraphState> tgraph;
+
+#! The restoration in progress in this thread, if any
+thread_local *hash<TypeRestoreState> rctx;
+
+#! Returns a reference to a type in the type graph being described, adding the type to the graph if it is new
+hash<DataTypeInfo> sub type_graph_reference(AbstractDataProviderType type, string uh, *bool simple) {
+    *string key = tgraph.key_map{uh};
+    if (!key) {
+        key = tgraph.key_map{uh} = (tgraph.key_map.size() + 1).toString();
+        push tgraph.queue, <TypeGraphItem>{"key": key, "uh": uh, "type": type};
+    }
+    return <DataTypeInfo>{
+        "name": type.getName(),
+        "display_name": type.getDisplayName(),
+        "short_desc": type.getShortDescription(),
+        "desc": type.getDesc(),
+        "base_type": type.getBaseTypeName(),
+        "mandatory": type.isMandatory(),
+        "types_accepted": keys type.getAcceptTypeHash(simple),
+        "types_returned": keys type.getReturnTypeHash(simple),
+        "unique_key": key,
+        "recursive": False,
+        "type_ref": key,
+    };
+}
 
 #! Memoizes example values for the duration of a single getExampleValue() traversal
 /** Keyed by type object identity and field name; without this, a type object shared by multiple parents in a type

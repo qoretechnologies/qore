@@ -105,6 +105,9 @@ public class DataProviderTypeGraphTest inherits QUnit::Test {
 
         #! Upper bound on the traversal; the unbounded implementation needs many minutes and many GB at this depth
         const MaxTraversalTime = 30s;
+
+        #! Depth of the cyclic graph whose description is measured
+        const CyclicDepth = 6;
     }
 
     constructor() : Test("DataProviderTypeGraphTest", "1.0") {
@@ -115,6 +118,12 @@ public class DataProviderTypeGraphTest inherits QUnit::Test {
         addTestCase("a field's configuration describes its type as getInfo() does", \configInfoTest());
         addTestCase("a field's configuration does not describe the type graph", \configInfoUntraversedTest());
         addTestCase("a field's configuration on a large cyclic graph is bounded", \configInfoCyclicGraphTest());
+        addTestCase("a cyclic type graph is described with each type once", \graphInfoSizeTest());
+        addTestCase("a type graph description refers to each type by its key", \graphInfoReferenceTest());
+        addTestCase("a type graph builder describes several types with one type table", \graphBuilderTest());
+        addTestCase("a type graph is restored with its cycles", \graphRestoreTest());
+        addTestCase("a description is restored with one type per unique key", \infoRestoreSharedTest());
+        addTestCase("recursive types are compared without recursing forever", \recursiveAssignableTest());
 
         set_return_value(main());
     }
@@ -135,6 +144,201 @@ public class DataProviderTypeGraphTest inherits QUnit::Test {
             rv = t;
         }
         return rv;
+    }
+
+    #! Builds a graph of @a depth levels that share their child type object three times, closed to a cycle
+    /** The leaf has a field that refers back to the top of the graph, so every type is on the cycle
+
+        @param depth the number of levels above the leaf
+        @param types the type objects of the graph, by their unique hash
+
+        @return the top of the graph
+    */
+    private AbstractDataProviderType getCyclicSharedGraph(int depth,
+            reference<hash<string, AbstractDataProviderType>> types) {
+        HashDataType root("level0");
+        types{root.uniqueHash()} = root;
+        AbstractDataProviderType rv = root;
+        for (int i = 0; i < depth; ++i) {
+            HashDataType t("level" + (i + 1));
+            foreach string fname in ("a", "b", "c") {
+                t.addField(new QoreDataField(fname, "shared subtype", rv));
+            }
+            types{t.uniqueHash()} = t;
+            rv = t;
+        }
+        # close the cycle: the leaf refers back to the top of the graph
+        root.addField(new QoreDataField("top", "cycle to the top", rv));
+        return rv;
+    }
+
+    #! Returns the number of type descriptions in a description: the description and those nested in it
+    private static int countTypeDescriptions(hash<auto> info) {
+        int rv = 1;
+        foreach hash<auto> field in (info.fields.iterator()) {
+            rv += countTypeDescriptions(field.type);
+        }
+        if (info.element_type) {
+            rv += countTypeDescriptions(info.element_type);
+        }
+        foreach hash<auto> union_type in (info.union_types) {
+            rv += countTypeDescriptions(union_type);
+        }
+        return rv;
+    }
+
+    #! Adds the type objects reachable from a type, by identity
+    private static getTypeObjects(AbstractDataProviderType t, reference<hash<string, AbstractDataProviderType>> rv) {
+        if (rv{t.uniqueHash()}) {
+            return;
+        }
+        rv{t.uniqueHash()} = t;
+        foreach AbstractDataField field in (t.getFields().iterator()) {
+            getTypeObjects(field.getType(), \rv);
+        }
+        if (*AbstractDataProviderType et = t.getElementType()) {
+            getTypeObjects(et, \rv);
+        }
+    }
+
+    #! A cyclic type graph is described with each type once, so the description grows with the graph
+    /** getInfo() describes a type on a cycle again at every path to it and cannot share the descriptions, because
+        each one is truncated at a different place: it has more than 3 ** depth descriptions of the leaf, and the
+        types of a large REST schema, whose records refer to each other, have millions
+    */
+    graphInfoSizeTest() {
+        hash<string, AbstractDataProviderType> small_types;
+        AbstractDataProviderType small = getCyclicSharedGraph(3, \small_types);
+        assertGt(pow(3, 3).toInt(), countTypeDescriptions(small.getInfo()), "getInfo() describes each path");
+
+        hash<string, AbstractDataProviderType> types;
+        AbstractDataProviderType top = getCyclicSharedGraph(CyclicDepth, \types);
+        hash<DataTypeGraphInfo> graph = top.getInfoGraph();
+        assertEq(types.size(), graph.types.size(), "every type of the graph is described once");
+        # each type once, with one nested description (a reference, or the element type of a hash type) for each
+        # field and element type
+        int nested = foldl $1 + $2, (map countTypeDescriptions($1) - 1, graph.types.iterator());
+        int edges = 3 * CyclicDepth + 1;
+        assertEq(edges + types.size(), nested, "one nested description per field and element type");
+    }
+
+    #! References are by key, keys follow the order of first reference, and every reference resolves
+    graphInfoReferenceTest() {
+        hash<string, AbstractDataProviderType> types;
+        AbstractDataProviderType top = getCyclicSharedGraph(4, \types);
+        hash<DataTypeGraphInfo> graph = top.getInfoGraph();
+
+        # the type itself is the first key; its description is a reference to it
+        assertEq("1", graph.type.type_ref, "the description of a type with fields is a reference");
+        assertEq("level4", graph.type.name, "a reference names the type");
+        assertEq(("1", "2", "3", "4", "5"), keys graph.types, "keys follow the order of first reference");
+        assertEq("level4", graph.types."1".name);
+        assertEq("level3", graph.types."2".name);
+        assertNothing(graph.types."1".type_ref, "a type of the table is not a reference");
+        # all three fields of a level refer to the same type, by the same key
+        assertEq("2", graph.types."1".fields.a.type.type_ref);
+        assertEq("2", graph.types."1".fields.b.type.type_ref);
+        assertEq("2", graph.types."1".fields.c.type.type_ref);
+        # the leaf refers back to the top
+        assertEq("1", graph.types."5".fields.top.type.type_ref);
+        foreach hash<auto> entry in (graph.types.iterator()) {
+            foreach hash<auto> field in (entry.fields.iterator()) {
+                assertTrue(exists graph.types{field.type.type_ref}, "every reference resolves");
+                assertFalse(field.type.recursive, "a reference is not a recursion marker");
+                assertEq("", field.unique_key, "a field of a type graph description has no unique key");
+            }
+        }
+        # the same graph is always described the same way
+        assertEq(graph, top.getInfoGraph(), "the description does not depend on the process state");
+        # getInfo() is unchanged: it describes the fields in place
+        assertTrue(exists top.getInfo().fields.a.type.fields, "getInfo() describes the fields in place");
+        assertNothing(top.getInfo().fields.a.type.type_ref);
+    }
+
+    #! A builder describes several types with one type table; a type already described is not described again
+    graphBuilderTest() {
+        hash<string, AbstractDataProviderType> types;
+        AbstractDataProviderType top = getCyclicSharedGraph(3, \types);
+        AbstractDataProviderType middle = top.getFields().a.getType();
+        DataTypeGraphBuilder builder();
+        hash<DataTypeInfo> top_info = builder.add(top);
+        int size = builder.getTypes().size();
+        hash<DataTypeInfo> middle_info = builder.add(middle);
+        assertEq(size, builder.getTypes().size(), "the second type is already in the table");
+        assertEq("2", middle_info.type_ref);
+        # a scalar type is described in place
+        hash<DataTypeInfo> scalar = builder.add(AbstractDataProviderTypeMap."string");
+        assertNothing(scalar.type_ref);
+        assertEq("string", scalar.name);
+        # each type restored from the builder's type table
+        AbstractDataProviderType restored_top = AbstractDataProviderType::getFromGraph(builder.getGraph(top_info));
+        AbstractDataProviderType leaf = restored_top;
+        while (leaf.getFields().a) {
+            leaf = leaf.getFields().a.getType();
+        }
+        assertEq(restored_top, leaf.getFields().top.getType(), "the cycle is restored");
+        AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(builder.getGraph(middle_info));
+        assertEq("level2", restored.getName());
+    }
+
+    #! A type graph is restored with its cycles: a reference to a type is the restored type itself
+    graphRestoreTest() {
+        HashDataType node("node");
+        node.addField(new QoreDataField("name", "the name", StringType));
+        node.addField(new QoreDataField("children", "the children", new ListDataType("list<node>", node)));
+        node.addField(new QoreDataField("self", "the node", node));
+
+        AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(node.getInfoGraph());
+        assertEq(restored, restored.getFields().self.getType(), "a recursive field is the restored type");
+        assertEq(restored, restored.getFields().children.getType().getElementType(), "and so is an element type");
+        assertEq(node.getInfoGraph(), restored.getInfoGraph(), "the restored graph has the same description");
+
+        # a reference outside a type graph description cannot be restored
+        hash<DataTypeInfo> ref = node.getInfoGraph().type;
+        assertThrows("TYPE-ARG-ERROR", \AbstractDataProviderType::get(), ref);
+    }
+
+    #! get() restores each type of a description once, by its unique key, and a recursion marker as the cycle
+    /** getInfo() describes a type on a cycle once per path to it; restoring each occurrence separately creates one
+        type object per path (about 3 ** depth here, millions for the largest REST schemas), and a recursion marker
+        becomes a type without fields
+    */
+    infoRestoreSharedTest() {
+        hash<string, AbstractDataProviderType> types;
+        AbstractDataProviderType top = getCyclicSharedGraph(4, \types);
+        AbstractDataProviderType restored = AbstractDataProviderType::get(top.getInfo());
+        hash<string, AbstractDataProviderType> restored_types;
+        getTypeObjects(restored, \restored_types);
+        int hash_types = elements (map 1, restored_types.iterator(), $1.getFields());
+        assertEq(types.size(), hash_types, "one restored hash type per type of the graph");
+        # the leaf's field refers back to the top: the restored top itself
+        AbstractDataProviderType leaf = restored;
+        while (leaf.getFields().a) {
+            leaf = leaf.getFields().a.getType();
+        }
+        assertEq(restored, leaf.getFields().top.getType(), "the recursion marker is the restored type");
+        assertEq(restored.getFields().a.getType(), restored.getFields().b.getType(), "shared types stay shared");
+    }
+
+    #! Two recursive types, such as a type and the type restored from its description, can be compared
+    /** A comparison of the fields of two recursive types compares the same pair of types again below them; without
+        recognizing the pair, it recursed until the stack was exhausted
+    */
+    recursiveAssignableTest() {
+        hash<string, AbstractDataProviderType> types;
+        AbstractDataProviderType top = getCyclicSharedGraph(3, \types);
+        AbstractDataProviderType restored = AbstractDataProviderType::get(top.getInfo());
+        assertTrue(top.isAssignableFrom(restored), "a type is assignable from the type restored from it");
+        assertTrue(restored.isAssignableFrom(top));
+        hash<string, AbstractDataProviderType> other_types;
+        assertTrue(top.isAssignableFrom(getCyclicSharedGraph(3, \other_types)), "two equal recursive types");
+        # a field that the other type lacks still makes it unassignable
+        HashDataType node("node");
+        node.addField(new QoreDataField("self", "the node", node));
+        node.addField(new QoreDataField("required", "a required field", StringType));
+        HashDataType other("node");
+        other.addField(new QoreDataField("self", "the node", other));
+        assertFalse(node.isAssignableFrom(other), "a mandatory field is missing");
     }
 
     #! A shared subtype must be expanded once per distinct type object, not once per path to it

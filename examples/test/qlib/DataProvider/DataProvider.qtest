@@ -4608,7 +4608,8 @@ public class DataProviderTest inherits QUnit::Test {
         assertNothing(restored.acceptsValue(NOTHING));
         assertThrows("RUNTIME-TYPE-ERROR", \restored.acceptsValue(), "string",
             "the restored type keeps the described base type");
-        assertNothing(restored.getPath(), "a structurally restored type has no path of its own");
+        # the described path is kept, so that the restored type has the presentation identity of the described one
+        assertEq(unregistered, restored.getPath(), "a structurally restored type keeps the described path");
         assertNothing(AbstractDataProviderType::get(<DataTypeInfo>{"name": "*hash<auto>"}).getPath(),
             "restoring a described path never changes a shared type");
 

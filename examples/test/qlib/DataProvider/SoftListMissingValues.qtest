@@ -229,7 +229,14 @@ class SoftListMissingValuesTest inherits QUnit::Test {
             assertEq(("a",), restored.acceptsValue("a"), label);
             assertEq(("a", "b"), restored.acceptsValue(("a", "b")), label);
             assertThrows("RUNTIME-TYPE-ERROR", \restored.acceptsValue(), (1,), label);
-            assertTrue(restored instanceof SoftListDataType, label);
+            # a soft list type is restored as a soft list type; a mandatory Qore soft list type, which converts no
+            # value to an empty list, is restored as get(Type) returns it
+            if ((type instanceof SoftListDataType) || !type.isMandatory()) {
+                assertTrue(restored instanceof SoftListDataType, label);
+            } else {
+                assertEq(type.className(), restored.className(), label);
+                assertEq((), restored.acceptsValue(NOTHING), label);
+            }
             if (!type.isMandatory()) {
                 assertEq(NOTHING, restored.acceptsValue(NOTHING), label);
             } else if (type instanceof SoftListDataType) {

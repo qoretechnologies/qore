@@ -320,6 +320,14 @@ auto v = t.getDefaultValue();
         without declared fields, then they are compatible
     */
     bool isAssignableFrom(AbstractDataProviderType t) {
+        # a recursive type compares a pair of types again while the pair is being compared; the pair is assignable as
+        # far as the comparison in progress goes, so that the comparison of two recursive types terminates
+        string pair = self.uniqueHash() + ":" + t.uniqueHash();
+        if (assignable_pairs{pair}) {
+            return True;
+        }
+        assignable_pairs{pair} = True;
+        on_exit remove assignable_pairs{pair};
         *hash<string, AbstractDataField> other_fields = t.getFields();
         if (fields && other_fields) {
             foreach AbstractDataField field in (fields.iterator()) {
@@ -412,6 +420,35 @@ invoice.addField(new QoreDataField("approved", "Approval status", BoolOrNothingT
         return self;
     }
 
+    #! Sets the fields of the type, replacing any fields it has, as the constructor with fields does
+    /** A type restored from its description is created before its fields, so that a field that refers back to it,
+        directly or through other types, can be the type itself; see
+        @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()"
+
+        @param fields the fields of the type
+
+        @return the type itself
+
+        @par Example:
+        @code{.py}
+HashDataType node("node", {});
+# a field whose type is the type itself
+hash<string, AbstractDataField> fields = {
+    "parent": new QoreDataField("parent", "the parent node", node.getOrNothingType()),
+};
+node.setFields(fields);
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    HashDataType setFields(hash<string, AbstractDataField> fields) {
+        self.fields = fields;
+        if (type == AutoHashType) {
+            scanFieldsForRequired();
+        }
+        return self;
+    }
+
     #! Adds a field to the type from a typed hash member
     HashDataType addField(Qore::Reflection::TypedHashMember mem) {
         addFieldIntern(mem);
@@ -474,6 +511,10 @@ invoice.addField(new QoreDataField("approved", "Approval status", BoolOrNothingT
     #! returns a description of the type as a hash
     hash<DataTypeInfo> getInfo(*bool simple) {
         hash<DataTypeInfo> rv = QoreDataType::getInfo(simple);
+        # a reference in a type graph description describes nothing else
+        if (rv.type_ref) {
+            return rv;
+        }
         if (!fields && default_other_field_type) {
             rv.default_field_type_info = default_other_field_type.getInfo(simple);
         }
@@ -567,4 +608,9 @@ invoice.addField(new QoreDataField("approved", "Approval status", BoolOrNothingT
         }
     }
 }
+}
+
+namespace Priv {
+#! The pairs of hash types being compared by HashDataType::isAssignableFrom() in this thread
+thread_local hash<string, bool> assignable_pairs;
 }
