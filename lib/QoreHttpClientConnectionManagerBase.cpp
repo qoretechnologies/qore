@@ -1491,6 +1491,18 @@ int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
         const QoreHashNode* headers, const void* body, size_t body_len,
         QoreChannel*& channel_out, ExceptionSink* xsink,
         HttpClientEventSink* event_sink, bool* reused) {
+    return requestStreaming(method, scheme, host, port, path, headers, body, body_len, channel_out, xsink,
+        event_sink, reused, nullptr);
+}
+
+int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
+        const char* scheme, const char* host, int port, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink,
+        HttpClientEventSink* event_sink, bool* reused, HttpClientConnectionBase** conn_out) {
+    if (conn_out) {
+        *conn_out = nullptr;
+    }
     // As in request(): an idempotent request whose connection is found closed when the request is submitted, after
     // the connection served a request and waited in the pool, is repeated once on a new connection (RFC 9110
     // section 9.2.2).  The close of a pooled connection becomes visible to the pool only when it has been marked
@@ -1500,7 +1512,7 @@ int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
     for (int attempt = 0; ; ++attempt) {
         bool retry = false;
         int64_t rv = requestStreamingOnce(method, scheme, host, port, path, headers, body, body_len, channel_out,
-            xsink, event_sink, reused, can_retry && !attempt ? &retry : nullptr);
+            xsink, event_sink, reused, can_retry && !attempt ? &retry : nullptr, conn_out);
         if (!retry) {
             // a request that has been repeated is not repeated again by the caller
             if (attempt && reused) {
@@ -1516,7 +1528,7 @@ int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
 int64_t HttpClientConnectionManagerBase::requestStreamingOnce(const char* method, const char* scheme,
         const char* host, int port, const char* path, const QoreHashNode* headers, const void* body,
         size_t body_len, QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink,
-        bool* reused, bool* retry) {
+        bool* reused, bool* retry, HttpClientConnectionBase** conn_out) {
     HttpClientConnectionBase* conn = acquireConnection(scheme, host, port, xsink);
     if (!conn || *xsink) {
         return -1;
@@ -1563,5 +1575,10 @@ int64_t HttpClientConnectionManagerBase::requestStreamingOnce(const char* method
     // request() path).  The connection itself stays in the pool; the
     // active stream count tracks in-flight work independently.
     releaseConnection(conn);
+    // the caller abandons the request on the connection if it stops reading the response before it ends
+    if (conn_out) {
+        conn->ref();
+        *conn_out = conn;
+    }
     return stream_id;
 }

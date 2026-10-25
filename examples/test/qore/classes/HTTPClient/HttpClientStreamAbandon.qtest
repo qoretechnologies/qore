@@ -1,0 +1,296 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class HttpClientStreamAbandonTest
+
+#! An HTTP/1.1 server whose responses do not end: each one sends its headers and a part of its body, and then waits
+#! for the client to close the connection
+/** The server reports, for each connection, whether the client closed it (\c "closed") or left it open until the
+    server gave up waiting (\c "open").  A response that is read to its end (\c /ok) keeps the connection, so that a
+    client can reuse it.
+*/
+class StallingServer {
+    public {
+        #! how long a connection whose response does not end is waited for to be closed by the client
+        const CloseWait = 15s;
+    }
+
+    private {
+        Socket listener();
+        int port;
+        bool quit;
+        Counter running(1);
+        #! one event per connection whose response does not end: {"path": ..., "closed": bool}
+        Queue events();
+        #! the number of connections accepted
+        int connections = 0;
+        #! the number of requests received
+        int requests = 0;
+        Mutex m();
+    }
+
+    constructor() {
+        listener.bindINET("127.0.0.1", "0", True);
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background serve();
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    int getConnections() {
+        AutoLock al(m);
+        return connections;
+    }
+
+    int getRequests() {
+        AutoLock al(m);
+        return requests;
+    }
+
+    #! returns the next event, or NOTHING if no connection is reported within the time
+    *hash<auto> getEvent(timeout t = CloseWait + 10s) {
+        try {
+            return events.get(t);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "QUEUE-TIMEOUT") {
+                rethrow;
+            }
+        }
+    }
+
+    shutdown() {
+        quit = True;
+        # wakes the listener up
+        try {
+            Socket s();
+            s.connectINET("127.0.0.1", port, 1s);
+            s.close();
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        running.waitForZero();
+        listener.close();
+    }
+
+    private serve() {
+        on_exit running.dec();
+        while (True) {
+            Socket s = listener.accept();
+            if (quit) {
+                break;
+            }
+            {
+                AutoLock al(m);
+                ++connections;
+            }
+            running.inc();
+            background handle(s);
+        }
+    }
+
+    private handle(Socket s) {
+        on_exit {
+            s.close();
+            running.dec();
+        }
+        while (True) {
+            string head;
+            try {
+                while (head !~ /\r\n\r\n/) {
+                    head += s.recv(-1, CloseWait);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # the client closed the connection or sent nothing more
+                return;
+            }
+            *string length = (head =~ x/\r\ncontent-length:\s*([0-9]+)/i)[0];
+            if (length) {
+                int remaining = length.toInt() - (head.size() - (head.find("\r\n\r\n") + 4));
+                while (remaining > 0) {
+                    remaining -= s.recvBinary(-1, CloseWait).size();
+                }
+            }
+            string path = (head =~ x/^[A-Z]+ ([^ ]+) /)[0];
+            {
+                AutoLock al(m);
+                ++requests;
+            }
+            switch (path) {
+                case "/ok":
+                    s.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n"
+                        "2\r\nok\r\n0\r\n\r\n");
+                    continue;
+                # a chunked body that does not end
+                case "/chunked":
+                    s.send("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n"
+                        "Transfer-Encoding: chunked\r\n\r\n");
+                    s.send(sprintf("%x\r\n%s\r\n", 1000, strmul("x", 1000)));
+                    break;
+                # a body that declares more than it sends
+                case "/length":
+                    s.send("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: 1000000\r\n\r\n");
+                    s.send(strmul("x", 8192));
+                    break;
+                # a redirect whose body does not end
+                case "/redirect":
+                    s.send("HTTP/1.1 302 Found\r\nLocation: /ok\r\nContent-Type: text/plain\r\n"
+                        "Content-Length: 1000000\r\n\r\n");
+                    s.send(strmul("r", 100));
+                    break;
+                # no response at all
+                case "/silent":
+                    break;
+            }
+            # the response does not end: the client must close the connection
+            bool closed;
+            try {
+                closed = !s.recv(1, CloseWait).val();
+            } catch (hash<ExceptionInfo> ex) {
+                closed = ex.err != "SOCKET-TIMEOUT";
+            }
+            events.push({"path": path, "closed": closed});
+            return;
+        }
+    }
+}
+
+#! An output stream that fails at its first write
+class FailingOutputStream inherits OutputStream {
+    write(binary data) {
+        throw "OUTPUT-STREAM-ERROR", "the output stream cannot be written";
+    }
+
+    close() {
+    }
+}
+
+#! A streaming request whose response is not read to its end releases its connection
+/** The client stops reading the response of a streaming request before the response ends: the body is larger than
+    the maximum response body size, the receive callback raises an exception, the output stream fails, the wait for
+    the response times out, or the response is a redirect.  Before, the client only closed the response's channel, and
+    the connection went on receiving the response with no reader: an endless stream, such as a server-sent event
+    stream, held its connection until the client was destroyed.  The request is now abandoned, and its HTTP/1
+    connection, which cannot serve another request in the middle of a response, is closed: the server sees the close.
+*/
+public class HttpClientStreamAbandonTest inherits QUnit::Test {
+    constructor() : Test("HttpClientStreamAbandonTest", "1.0") {
+        addTestCase("a response body too large to buffer", \tooLargeTest());
+        addTestCase("a receive callback that raises an exception", \callbackErrorTest());
+        addTestCase("an output stream that fails", \outputStreamErrorTest());
+        addTestCase("a timeout while the response is received", \timeoutTest());
+        addTestCase("a redirect whose body does not end", \redirectTest());
+        addTestCase("a timeout while waiting for the response headers of a stream", \streamHeaderTimeoutTest());
+        addTestCase("a response read to its end keeps its connection", \completedTest());
+        set_return_value(main());
+    }
+
+    private HTTPClient getClient(StallingServer server, *hash<auto> opts) {
+        return new HTTPClient({"url": sprintf("http://127.0.0.1:%d", server.getPort()), "timeout": 30s} + opts);
+    }
+
+    #! asserts that the connection of the request to the path was closed by the client, and that the client serves
+    #! another request on a new connection
+    private assertReleased(StallingServer server, HTTPClient hc, string path) {
+        *hash<auto> ev = server.getEvent();
+        assertEq({"path": path, "closed": True}, ev, path + ": the client closed the connection");
+        int connections = server.getConnections();
+        BinaryOutputStream os();
+        hc.send(os, NOTHING, "GET", "/ok");
+        assertEq(binary("ok"), os.getData(), path + ": the next request is served");
+        assertEq(connections + 1, server.getConnections(), path + ": the next request has a new connection");
+    }
+
+    tooLargeTest() {
+        StallingServer server();
+        on_exit server.shutdown();
+        HTTPClient hc = getClient(server, {"max_response_body_size": 4096});
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", \hc.sendWithRecvCallback(),
+            (sub (hash<auto> h) {}, NOTHING, "GET", "/length"));
+        assertReleased(server, hc, "/length");
+    }
+
+    callbackErrorTest() {
+        StallingServer server();
+        on_exit server.shutdown();
+        HTTPClient hc = getClient(server);
+        code recv = sub (hash<auto> h) {
+            if (h.data) {
+                throw "CALLBACK-ERROR", "the receive callback stops the response";
+            }
+        };
+        assertThrows("CALLBACK-ERROR", \hc.sendWithRecvCallback(), (recv, NOTHING, "GET", "/chunked"));
+        assertReleased(server, hc, "/chunked");
+    }
+
+    outputStreamErrorTest() {
+        StallingServer server();
+        on_exit server.shutdown();
+        HTTPClient hc = getClient(server);
+        assertThrows("OUTPUT-STREAM-ERROR", \hc.send(), (new FailingOutputStream(), NOTHING, "GET", "/chunked"));
+        assertReleased(server, hc, "/chunked");
+    }
+
+    timeoutTest() {
+        StallingServer server();
+        on_exit server.shutdown();
+        HTTPClient hc = getClient(server, {"timeout": 500ms});
+        int chunks = 0;
+        code recv = sub (hash<auto> h) {
+            if (h.data) {
+                ++chunks;
+            }
+        };
+        assertThrows("HTTP-CLIENT-TIMEOUT", \hc.sendWithRecvCallback(), (recv, NOTHING, "GET", "/chunked"));
+        assertEq(1, chunks, "the part of the body that was sent was received");
+        hc.setTimeout(30s);
+        assertReleased(server, hc, "/chunked");
+    }
+
+    redirectTest() {
+        StallingServer server();
+        on_exit server.shutdown();
+        HTTPClient hc = getClient(server);
+        BinaryOutputStream os();
+        hc.send(os, NOTHING, "GET", "/redirect");
+        assertEq(binary("ok"), os.getData(), "the redirect is followed");
+        *hash<auto> ev = server.getEvent();
+        assertEq({"path": "/redirect", "closed": True}, ev, "the client closed the connection of the redirect");
+    }
+
+    streamHeaderTimeoutTest() {
+        StallingServer server();
+        on_exit server.shutdown();
+        HTTPClient hc = getClient(server, {"timeout": 500ms});
+        assertThrows("HTTP-CLIENT-TIMEOUT", \hc.sendAndStream(), ("GET", "/silent"));
+        hc.setTimeout(30s);
+        assertReleased(server, hc, "/silent");
+    }
+
+    completedTest() {
+        StallingServer server();
+        on_exit server.shutdown();
+        HTTPClient hc = getClient(server);
+        for (int i = 0; i < 3; ++i) {
+            string body;
+            hc.sendWithRecvCallback(sub (hash<auto> h) {
+                if (h.data) {
+                    body += h.data;
+                }
+            }, NOTHING, "GET", "/ok");
+            assertEq("ok", body, sprintf("request %d", i));
+            BinaryOutputStream os();
+            hc.send(os, NOTHING, "GET", "/ok");
+            assertEq(binary("ok"), os.getData(), sprintf("request %d to an output stream", i));
+        }
+        assertEq(6, server.getRequests());
+        assertEq(1, server.getConnections(), "the connection is reused");
+    }
+}

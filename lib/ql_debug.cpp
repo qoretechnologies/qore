@@ -8885,6 +8885,76 @@ static void ut_manager_streaming_does_not_repeat_unsafe_requests(UnitTestCounter
     }
 }
 
+// requestStreaming() returns the connection that a streaming request was submitted on, so that a caller that stops
+// reading the response before it ends can abandon the request: the HTTP/1 connection of a response that does not end
+// is closed and leaves the pool, and the server sees the close.  HTTPClient closed only the response's channel, and
+// the connection went on receiving the response with no reader.
+static void ut_manager_streaming_abandon_releases_connection(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    // set by the server thread when the client closed the connection: the response never ends
+    std::atomic<bool> closed_by_client{false};
+    server.serveOnce([&closed_by_client](int cfd) {
+        char buf[4096];
+        if (ut_read_request_headers(cfd, buf, sizeof(buf)) <= 0) {
+            return;
+        }
+        static const char* resp =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: application/octet-stream\r\n"
+            "Transfer-Encoding: chunked\r\n"
+            "\r\n"
+            "5\r\nhello\r\n";
+        send(cfd, resp, strlen(resp), 0);
+        // the response does not end: waits until the client closes the connection, or for 15 seconds
+        struct timeval tv = {15, 0};
+        setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        char b;
+        closed_by_client = recv(cfd, &b, 1, 0) == 0;
+    });
+
+    HttpClientConnectionManagerBase::Options opts;
+    opts.connect_timeout_ms = 5000;
+    opts.request_timeout_ms = 5000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "abandon fixture manager constructs");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+    QoreChannel* channel_raw = nullptr;
+    HttpClientConnectionBase* conn_raw = nullptr;
+    int64_t stream_id = mgr->requestStreaming("GET", "http", "127.0.0.1", server.port, "/", nullptr, nullptr, 0,
+        channel_raw, &xsink, nullptr, nullptr, &conn_raw);
+    ReferenceHolder<QoreChannel> channel(channel_raw, &xsink);
+    ReferenceHolder<HttpClientConnectionBase> conn(conn_raw, &xsink);
+    UT_ASSERT(c, !xsink && stream_id >= 0 && channel_raw, "the streaming request is submitted");
+    UT_ASSERT(c, conn_raw != nullptr, "the connection that serves the request is returned");
+    if (!channel_raw || !conn_raw) {
+        xsink.clear();
+        return;
+    }
+    UT_ASSERT_EQ(c, (int64)200, ut_read_streaming_status(channel_raw, &xsink), "the response headers arrive");
+    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(), "the connection is pooled while the response is received");
+    // the caller stops reading the response
+    channel_raw->close();
+    mgr->abandonRequest(conn_raw, stream_id);
+    UT_ASSERT(c, conn_raw->isClosed(), "the HTTP/1 connection of the abandoned response is closed");
+    UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "the connection of the abandoned response leaves the pool");
+    xsink.clear();
+    mgr->closeAll(&xsink);
+    xsink.clear();
+    // the server thread ends when the client has closed the connection
+    if (server.thr.joinable()) {
+        server.thr.join();
+    }
+    UT_ASSERT(c, closed_by_client.load(), "the server sees the client close the connection");
+}
+
 static void ut_manager_acquire_first_request(UnitTestCounters& c) {
     ExceptionSink xsink;
 
@@ -12161,6 +12231,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_request_keeps_open_connection_that_refuses(c);
     ut_manager_streaming_repeats_on_closed_reused_connection(c);
     ut_manager_streaming_does_not_repeat_unsafe_requests(c);
+    ut_manager_streaming_abandon_releases_connection(c);
     ut_manager_abandon_h1_evicts_connection(c);
     ut_manager_abandon_multiplexed_keeps_connection(c);
     ut_manager_abandon_completed_request_is_a_no_op(c);

@@ -555,6 +555,34 @@ public:
         QoreChannel*& channel_out, ExceptionSink* xsink,
         HttpClientEventSink* event_sink, bool* reused);
 
+    //! Streaming request that also returns the connection that serves it
+    /** @overload
+        @param method HTTP method
+        @param scheme URL scheme
+        @param host target hostname
+        @param port target port
+        @param path request path
+        @param headers optional request headers
+        @param body optional complete request body
+        @param body_len body length in bytes
+        @param channel_out receives a referenced channel for reading response data; the caller must dereference it
+        @param xsink exception sink
+        @param event_sink optional event sink for the protocol events of this request
+        @param reused if not nullptr, set as by the overload above
+        @param conn_out if not nullptr, receives the connection that the request was submitted on, with a reference
+            that the caller must release, or nullptr if the request was not submitted; a caller that stops reading
+            the response before it ends abandons the request with @ref abandonRequest, so that the rest of the
+            response is not received with no reader
+        @return stream ID on success, -1 on error
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int64_t requestStreaming(const char* method,
+        const char* scheme, const char* host, int port, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink,
+        HttpClientEventSink* event_sink, bool* reused, HttpClientConnectionBase** conn_out);
+
     //! Returns true if the HTTP method is idempotent (RFC 9110 section 9.2.2), so a request with it can be repeated
     //! automatically when the connection fails before a response is received
     /** @since %Qore 3.0
@@ -731,10 +759,12 @@ private:
         @param retry if not nullptr, set to true if the request could not be submitted because the connection that
         it was given, which had served a request, is closed, in which case the request can be repeated on a new
         connection; nullptr if the request must not be repeated
+        @param conn_out if not nullptr, receives the connection that the request was submitted on, with a reference
     */
     DLLLOCAL int64_t requestStreamingOnce(const char* method, const char* scheme, const char* host, int port,
         const char* path, const QoreHashNode* headers, const void* body, size_t body_len, QoreChannel*& channel_out,
-        ExceptionSink* xsink, HttpClientEventSink* event_sink, bool* reused, bool* retry);
+        ExceptionSink* xsink, HttpClientEventSink* event_sink, bool* reused, bool* retry,
+        HttpClientConnectionBase** conn_out);
     HttpClientConnectionManagerBase& operator=(const HttpClientConnectionManagerBase&) = delete;
 
     //! Internal: the network sandbox of the calling code and its decisions on the connections of a pool scan
