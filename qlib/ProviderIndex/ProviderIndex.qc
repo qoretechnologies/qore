@@ -113,34 +113,77 @@ public hashdecl ProviderIndexCreateOptions {
     or field consistently, which a recursive type description relies on to refer to an enclosing type.  Each key is
     replaced by its position in the order in which the keys first occur.  The map of keys is a member, so the walk
     passes no reference and builds no closure for each node of the description.
+
+    A type that a description reaches by several paths is described by the same subtree on each of them (the
+    description of a type is made once per description, see
+    @ref DataProvider::AbstractDataProviderType::getInfo() "AbstractDataProviderType::getInfo()"), and a
+    description can reach some types by millions of paths.  A subtree is replaced once: when the subtree with the
+    same unique key is found again and it is identical to the one that was replaced, the replacement is used
+    again.  This is exact: every key in the subtree was mapped when it was first replaced, and a key's replacement
+    never changes, so replacing it again would give the same result.  A subtree with the same key that differs,
+    such as a recursive type cut at another depth, is replaced as usual.  The replacement shares the subtree, as
+    the description did, so it takes the memory of the distinct subtrees rather than of every path.
 */
 class ProviderIndexUniqueKeys {
+    public {
+        #! The hash nodes walked
+        int walked = 0;
+        #! The subtrees replaced by a replacement made before
+        int reused = 0;
+    }
+
     private {
         #! original key -> replacement
         hash<string, string> key_map = {};
+        #! original key -> the first subtree with the key as given (\c original) and as replaced (\c result)
+        hash<string, hash<auto>> subtrees = {};
+        #! original key -> the times its subtree was walked
+        hash<string, int> walks = {};
     }
 
     #! Returns the description or part of it with its unique keys replaced
     auto replace(auto value) {
         switch (value.typeCode()) {
-            case NT_HASH:
+            case NT_HASH: {
+                *string subtree_key;
+                if (value.hasKey("unique_key") && value.unique_key.typeCode() == NT_STRING) {
+                    subtree_key = value.unique_key;
+                    *hash<auto> replaced = subtrees{subtree_key};
+                    if (replaced && replaced.original.fullType() == value.fullType()
+                            && replaced.original === value) {
+                        ++reused;
+                        return replaced.result;
+                    }
+                    ++walks{subtree_key};
+                }
+                ++walked;
+                auto original = value;
                 foreach string key in (keys value) {
                     if (key == "unique_key" && value{key}.typeCode() == NT_STRING) {
-                        string original = value{key};
-                        *string replacement = key_map{original};
+                        string original_key = value{key};
+                        *string replacement = key_map{original_key};
                         if (!exists replacement) {
-                            replacement = key_map{original} = (key_map.size() + 1).toString();
+                            replacement = key_map{original_key} = (key_map.size() + 1).toString();
                         }
                         value{key} = replacement;
                     } else {
                         value{key} = replace(value{key});
                     }
                 }
+                if (subtree_key && !subtrees{subtree_key}) {
+                    subtrees{subtree_key} = {"original": original, "result": value};
+                }
                 return value;
+            }
             case NT_LIST:
                 return map replace($1), value;
         }
         return value;
+    }
+
+    #! Returns the most times that one subtree with a unique key was walked
+    int getMostWalks() {
+        return walks ? max(walks.values()) : 0;
     }
 }
 
@@ -156,10 +199,51 @@ public class ProviderIndex inherits ProviderIndexUtil {
         static Mutex worker_lock();
         #! Incremented by cancelWorkers(); a build started in an earlier generation has been cancelled
         static int cancel_generation = 0;
+
+        #! Protects @ref unique_key_counts
+        static Mutex unique_key_lock();
+        #! What the replacement of the unique keys of type descriptions did in this process; see
+        #! getUniqueKeyReplacementCounts()
+        static hash<string, int> unique_key_counts = {
+            "descriptions": 0,
+            "walked": 0,
+            "reused": 0,
+            "most_walks": 0,
+        };
 %ifndef NoProcess
         #! The worker processes of the builds in progress, by batch file
         static hash<string, Process> worker_processes = {};
 %endif
+    }
+
+    #! Returns what the replacement of the unique keys of type descriptions did in this process
+    /** For diagnostics and tests: the work of an index build on large type descriptions shows here.
+
+        @return \c descriptions: the descriptions whose unique keys were replaced; \c walked: the hash nodes walked;
+        \c reused: the subtrees that were found again and replaced by the replacement made before; \c most_walks:
+        the most times that one subtree of a description was walked, which is 1 when every subtree that a
+        description repeats is replaced once
+
+        @since %ProviderIndex 1.4
+    */
+    static hash<string, int> getUniqueKeyReplacementCounts() {
+        AutoLock al(unique_key_lock);
+        return unique_key_counts;
+    }
+
+    #! Returns a description with its unique keys replaced, and counts the work done
+    private static auto replaceUniqueKeys(auto description) {
+        ProviderIndexUniqueKeys replacer();
+        auto rv = replacer.replace(description);
+        AutoLock al(unique_key_lock);
+        ++unique_key_counts.descriptions;
+        unique_key_counts.walked += replacer.walked;
+        unique_key_counts.reused += replacer.reused;
+        int most = replacer.getMostWalks();
+        if (most > unique_key_counts.most_walks) {
+            unique_key_counts.most_walks = most;
+        }
+        return rv;
     }
 
     #! Stops the index worker processes of every build in progress in this process
@@ -729,7 +813,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                     continue;
                 }
                 # unique keys identify objects by address, so they are replaced to make builds reproducible
-                hash<auto> info = (new ProviderIndexUniqueKeys()).replace(factory.getInfoAsData(True));
+                hash<auto> info = replaceUniqueKeys(factory.getInfoAsData(True));
                 checkPlainData(info, "");
                 rv{name} = info;
             } catch (hash<ExceptionInfo> ex) {
@@ -805,7 +889,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
             return description;
         }
         # unique keys identify objects by address, so they are replaced to make builds reproducible
-        hash<DataTypeInfo> type_info = (new ProviderIndexUniqueKeys()).replace(type.getInfo());
+        hash<DataTypeInfo> type_info = replaceUniqueKeys(type.getInfo());
         hash<auto> description = {
             "type": type,
             "type_info": type_info,

@@ -92,6 +92,9 @@ module ProviderIndex {
     - an index build describes each option type once, however many options have it, and replaces the unique keys
       of a description in one walk without a reference argument or a closure for each of its nodes; the index
       written is unchanged
+    - an index build replaces the unique keys of a subtree that a type description repeats once, and the
+      replacement shares the subtree as the description did; the index written is unchanged
+      (see ProviderIndex::getUniqueKeyReplacementCounts())
     - action metadata that is not plain data blocks publication with structured action evidence
     - indexes are published without the canonical index file (\c qore-data-index.yaml) unless
       @ref ProviderIndex::ProviderIndexCreateOptions::write_canonical_yaml "ProviderIndexCreateOptions::write_canonical_yaml"

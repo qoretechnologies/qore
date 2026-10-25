@@ -30,6 +30,8 @@ public class ProviderIndexOptionTypesTest inherits QUnit::Test {
         addTestCase("each option type is described once per build", \describedOnceTest());
         addTestCase("the options of a type have its description, with unique keys replaced", \descriptionTest());
         addTestCase("a repeated build writes the same index", \repeatTest());
+        addTestCase("a subtree that a description repeats is replaced once, with the same result",
+            \repeatedSubtreeTest());
         set_return_value(main());
     }
 
@@ -104,6 +106,47 @@ public class ProviderIndexOptionTypesTest inherits QUnit::Test {
         on_exit remove_tree(second);
         assertEq(readIndexFiles(first), readIndexFiles(second));
 %endif
+    }
+
+    repeatedSubtreeTest() {
+        checkModules();
+%ifndef NoMsgPack
+        hash<string, int> before = ProviderIndex::getUniqueKeyReplacementCounts();
+        string dir = build();
+        on_exit remove_tree(dir);
+        hash<string, int> after = ProviderIndex::getUniqueKeyReplacementCounts();
+        # the order, the key and the description of the fixture app's info and of its factory, if any
+        assertGt(0, after.descriptions - before.descriptions);
+        # the order describes the address twice, by its billing and its shipping field, and each field's string
+        # type; each repeated subtree is replaced by the replacement made before
+        assertGt(0, after.reused - before.reused, "repeated subtrees are reused");
+        assertEq(1, after.most_walks, "no subtree of a description is walked twice");
+
+        # the result is that of replacing every key of the complete description in the order of its occurrence
+        hash<auto> order = readIndex(dir).actioninfomap{ProviderIndexOptionTypeFixture::App}.create.options.record
+            .type_info;
+        hash<string, string> key_map = {};
+        assertEq(replaceEveryKey(ProviderIndexOptionTypeFixture::OrderType.getInfo(), \key_map), order);
+%endif
+    }
+
+    #! Replaces the unique keys of a description by walking every node, as the index build did before it reused
+    #! repeated subtrees
+    private static auto replaceEveryKey(auto value, reference<hash<string, string>> key_map) {
+        switch (value.typeCode()) {
+            case NT_HASH:
+                foreach string key in (keys value) {
+                    if (key == "unique_key" && value{key}.typeCode() == NT_STRING) {
+                        value{key} = key_map{value{key}} ?? (key_map{value{key}} = (key_map.size() + 1).toString());
+                    } else {
+                        value{key} = replaceEveryKey(value{key}, \key_map);
+                    }
+                }
+                return value;
+            case NT_LIST:
+                return map replaceEveryKey($1, \key_map), value;
+        }
+        return value;
     }
 
     #! Reads the published index of the fixture app with its complete option type descriptions
