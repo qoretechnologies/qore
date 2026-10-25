@@ -7111,7 +7111,7 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
     ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
 
     CodeContextHelper cch(xsink, CT_USER, name, self, qc ? qc : (ceh ? ceh->getClass() : nullptr), ref_obj);
-    return evalIntern(name, uveh.getArgv(), self, xsink);
+    return qore_release_value_with_exception(evalIntern(name, uveh.getArgv(), self, xsink), xsink);
 }
 
 QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreClosureBase& closure_base,
@@ -7142,7 +7142,7 @@ QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreC
     CVecInstantiator cvi(closure_base.getCvec(), xsink);
     ThreadSafeLocalVarRuntimeEnvironmentHelper ch(&closure_base);
 
-    return evalIntern("<anonymous closure>", uveh.getArgv(), self, xsink);
+    return qore_release_value_with_exception(evalIntern("<anonymous closure>", uveh.getArgv(), self, xsink), xsink);
 }
 
 void UserVariantBase::parseCommit() {

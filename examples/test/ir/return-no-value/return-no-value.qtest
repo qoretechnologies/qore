@@ -70,6 +70,11 @@ class ReturnNoValueTest inherits QUnit::Test {
             # variable, so the exception of the destructor follows it
             "return-destructor-error": "RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR",
             "return-destructor-value": "DESTRUCTOR-ERROR",
+            # a value that the return type rejects is released with the error, also when a catch block returns
+            # another value
+            "rejected-value-released": "RUNTIME-TYPE-ERROR, released: True",
+            "rejected-value-in-try-released": "no error: 1, released: True",
+            "rejected-call-released": "released: True",
             # an element of a typed list or hash has no value when it does not exist, which a return type that
             # requires a value rejects
             "list-element-missing": "RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got no value "

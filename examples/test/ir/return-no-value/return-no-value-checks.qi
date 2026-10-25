@@ -82,6 +82,61 @@ public namespace ReturnNoValueChecks {
         }
     }
 
+    #! an object that records its destruction
+    public class TrackedValue {
+        public {
+            #! the names of the objects destroyed
+            static list<string> destroyed = ();
+        }
+
+        private {
+            string name;
+        }
+
+        constructor(string name) {
+            self.name = name;
+        }
+
+        destructor() {
+            push destroyed, name;
+        }
+    }
+
+    #! a return type that rejects the value returned
+    int sub return_rejected(auto v) {
+        return v;
+    }
+
+    #! a return type that rejects the value returned in a try block, whose catch block returns another value
+    int sub return_rejected_in_try(auto v) {
+        try {
+            return v;
+        } catch (hash<ExceptionInfo> ex) {
+            return 1;
+        }
+    }
+
+    #! returns the error or the value of the call, and whether the value that it rejected was destroyed after it
+    string sub check_rejected_released(string name, code<auto(TrackedValue)> call) {
+        string rv;
+        try {
+            rv = sprintf("no error: %y", call(new TrackedValue(name)));
+        } catch (hash<ExceptionInfo> ex) {
+            rv = ex.err;
+        }
+        return sprintf("%s, released: %y", rv, inlist(name, TrackedValue::destroyed));
+    }
+
+    #! calls code whose return type rejects the value in a try block whose catch block ignores the error, and returns
+    #! whether the value was destroyed after the call
+    string sub check_rejected_call_released() {
+        try {
+            return_rejected(new TrackedValue("rejected-call"));
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        return sprintf("released: %y", inlist("rejected-call", TrackedValue::destroyed));
+    }
+
     #! returns the errors raised by the call, in their order, or "no error" and the value returned
     string sub check_errors(code<auto()> call) {
         try {
@@ -314,6 +369,11 @@ public namespace ReturnNoValueChecks {
             "return-handlers-value": return_handlers(1),
             "no-value-accepted": check(string sub () { return typed_caller("x"); }),
             "return-destructor-error": check_errors(int sub () { return return_with_destructor_error(); }),
+            "rejected-value-released": check_rejected_released("rejected",
+                auto sub (TrackedValue v) { return return_rejected(v); }),
+            "rejected-value-in-try-released": check_rejected_released("rejected-in-try",
+                auto sub (TrackedValue v) { return return_rejected_in_try(v); }),
+            "rejected-call-released": check_rejected_call_released(),
             "return-destructor-value": check_errors(int sub () { return return_with_destructor_error(1); }),
             "list-element-missing": check(int sub () { return return_list_element((1, 2), 5); }),
             # the caller does not check the value again

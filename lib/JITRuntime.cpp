@@ -10681,7 +10681,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
         }
     }
 
-    return toBits(val);
+    return toBits(qore_release_value_with_exception(val, xsink));
 }
 
 // --- Fast closure dispatch (bypasses QoreListNode + dynamic_cast for closures with cached IR/JIT) ---
@@ -10886,7 +10886,7 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
         }
     }
 
-    return toBits(val);
+    return toBits(qore_release_value_with_exception(val, xsink));
 }
 
 static uint64_t qore_rt_call_immediate_closure_impl(const QoreClosureParseNode* cn,
@@ -11070,7 +11070,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
         }
     }
 
-    return toBits(val);
+    return toBits(qore_release_value_with_exception(val, xsink));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunctionVariant* variant,
@@ -11196,7 +11196,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
         }
     }
 
-    return toBits(val);
+    return toBits(qore_release_value_with_exception(val, xsink));
 }
 
 // --- Direct method call for devirtualized calls (final classes) ---
@@ -11543,7 +11543,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
         }
     }
 
-    return toBits(val);
+    return toBits(qore_release_value_with_exception(val, xsink));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
@@ -15178,7 +15178,7 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
             }
         }
 
-        return toBits(val);
+        return toBits(qore_release_value_with_exception(val, xsink));
     }
 
     // Medium path: pre-resolved function but no user variant (builtin)
@@ -16889,7 +16889,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         }
     }
 
-    result = toBits(val);
+    result = toBits(qore_release_value_with_exception(val, xsink));
     return true;
 }
 
@@ -18291,7 +18291,7 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
         }
     }
 
-    return toBits(val);
+    return toBits(qore_release_value_with_exception(val, xsink));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct(

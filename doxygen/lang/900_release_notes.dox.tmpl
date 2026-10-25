@@ -6026,6 +6026,9 @@ while (*binary chunk = input.read(65536)) {
       data, such as the \c python module, while another thread used the module: the module's data was copied for the
       new Program with the parent Program's lock held, and a thread of the module that held the module's lock waited
       for the Program's lock
+    - Fixed a value that the declared return type of a function or method rejects never being released when the
+      return statement is in a \c try block whose \c catch block returns another value: an object held by the value
+      was never destroyed
 
     @section qore_2_2_1 Qore 2.2.1
 
