@@ -129,6 +129,24 @@ string sub closure_handlers(int v) {
     return sprintf(\"%d %s\", n, got);
 }
 
+# A deferred handler's loop local has the same name and type as a completed body loop's local.
+# Their AOT context slots must remain distinct even when only the handler uses the second declaration.
+sub handler_shadowed_locals() {
+    hash<string, hash<string, int>> rows = {\"row\": {\"value\": 7}};
+    foreach hash<string, int> row in (rows.iterator()) {
+        if (row.value != 7) {
+            throw \"UNEXPECTED\", \"body loop value\";
+        }
+    }
+    on_error {
+        foreach hash<string, int> row in (rows.iterator()) {
+            log(sprintf(\"rollback=%d\", row.value));
+        }
+        log(\"rollback done\");
+    }
+    throw \"ERR6\", \"thrown\";
+}
+
 public list<string> sub run() {
     Log::l = ();
     log(sprintf(\"thrower=%d\", thrower(1)));
@@ -155,6 +173,11 @@ public list<string> sub run() {
     } catch (hash<ExceptionInfo> ex) {
         log(sprintf(\"caught %s %s\", ex.err, ex.desc));
     }
+    try {
+        handler_shadowed_locals();
+    } catch (hash<ExceptionInfo> ex) {
+        log(sprintf(\"caught %s next=%y\", ex.err, ex.next));
+    }
     return Log::l;
 }
 }
@@ -171,7 +194,7 @@ for (int i = 0; i < 3; ++i) {
         #! the handlers of a block run in the reverse order of registration, after the return value is taken
         const Expected = "success|exit own=5 parent=11|thrower=10|error closure=21|nested exit|"
             "exit own=5 parent=20|caught ERR|rethrow ERR2|caught ERR2|background=1|caught ERR3|block=6|caught ERR4|"
-            "closure=101 captured|body|caught ERR5 handler";
+            "closure=101 captured|body|caught ERR5 handler|rollback=7|rollback done|caught ERR6 next=null";
     }
 
     private {
