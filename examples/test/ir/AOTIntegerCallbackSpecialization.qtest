@@ -35,21 +35,29 @@ class IntegerCallbackSpecializationTest inherits QUnit::Test {
         assertEq(0, result.rc, result.out);
         return result.out;
     }
-    private checkEntries(string generated, bool enabled) {
+    private checkEntries(string generated, bool enabled, bool native_int_local) {
         int entries = 0;
         bool waiting = False;
         bool zero = False;
+        bool loop = False;
         foreach string definition in (generated.split("\ndefine ")) {
             string header = definition.split("\n")[0];
             if (!header.contains("_cb")) { continue; }
             ++entries;
             waiting = waiting || header.contains("bodyIntWait");
             zero = zero || header.contains("bodyIntResult");
+            if (header.contains("bodyIntLoop_")) {
+                loop = True;
+                string body = definition.split("\n}")[0];
+                assertEq(!native_int_local, body.contains("qore_rt_try_funcref_int_int"),
+                    "assigned native integer loop arguments use the known target");
+            }
             assertFalse(header.contains("bodyIntWide"), "two-argument targets retain ordinary calls");
         }
         assertEq(enabled, entries > 0);
         assertEq(enabled, waiting, "cancellation must exercise the specialized target");
         assertEq(enabled, zero, "zero-argument target is selected");
+        assertEq(enabled, loop, "loop target is selected");
     }
     private check() {
         TmpDir dir("qore-integer-callback-");
@@ -72,6 +80,7 @@ class IntegerCallbackSpecializationTest inherits QUnit::Test {
         write(host, "%modern\n%requires IntegerCallbackModule\nIntegerCallbackModule::run();\n");
         assertEq(expected, run((qore, "--exec-mode=ir", host), dir.path + "/source" + tail));
         foreach string prefix in (("", "QORE_DISABLE_AOT_INTEGER_CALLBACK_SPECIALIZATION=1 ",
+                "QORE_DISABLE_AOT_KNOWN_CALLREF_NATIVE_INT=1 ",
                 "QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION=1 ",
                 "QORE_DISABLE_AOT_MODULE_CALL_SPECIALIZATION=1 ",
                 "QORE_DISABLE_AOT_FLOAT_BODY_FAST_PATHS=1 ", "QORE_AOT_EH=1 ",
@@ -81,16 +90,18 @@ class IntegerCallbackSpecializationTest inherits QUnit::Test {
                     && !prefix.contains("QCC_SPLIT_THRESHOLD");
                 bool enabled = !prefix.contains("QORE_DISABLE_AOT_INTEGER_CALLBACK_SPECIALIZATION")
                     && !prefix.contains("QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION");
+                bool native_int_local = !prefix.contains("QORE_DISABLE_AOT_KNOWN_CALLREF_NATIVE_INT");
                 string executable = dir.path + "/behavior";
                 string generated = run((qcc, level, "--strip-source", "-o", executable, behavior),
                     modules, prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
-                if (inspect) { checkEntries(generated, enabled); }
+                if (inspect) { checkEntries(generated, enabled, native_int_local); }
                 assertEq(expected, run((executable,), modules), prefix + level);
                 string artifact = dir.path + "/modules/IntegerCallbackModule.qmod";
                 generated = run((qcc, level, "--strip-source", "-m", "-o", artifact, source),
                     dir.path + "/source" + tail, prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
                 if (inspect) {
-                    checkEntries(generated, enabled && !prefix.contains("QORE_DISABLE_AOT_MODULE_CALL_SPECIALIZATION"));
+                    checkEntries(generated, enabled && !prefix.contains("QORE_DISABLE_AOT_MODULE_CALL_SPECIALIZATION"),
+                        native_int_local);
                 }
                 assertEq(expected, run((qore, "--exec-mode=ir", host), modules), prefix + level);
             }

@@ -23192,3 +23192,28 @@ All 391 standard-library qmods total 344786872 bytes before and 344786872 after.
 Release passes 20 cases/5073 assertions and Debug 5 cases/4123 assertions, with no skips or source fallback. All 391 Release aliases/hashes are restored after Debug; 1110 standard IR/AOT references, 780 additional module references and 6360 prepared before/candidate references pass. All 1524 jobs/4572 measured windows are independently replayed. The first two new test drafts failed parsing (bool bitwise assignment, then missing auto return types); both failures are retained and corrected before timing. No owned build/test/profile overlaps timing. Shared host, no affinity/thermal/frequency control; no fresh Java/develop comparison or global performance ceiling.
 
 [Audit](audit-aot-integer-callback-specialization.md); [evidence](results-aot-integer-callback-specialization-macos-arm64.json).
+
+## Native integer local arguments in known callbacks (2026-10-25)
+
+AOT known-callback lowering now reuses the flow-sensitive assigned-state and exact type proof for an integer LoadLocal. Earlier flow-insensitive facts can describe a value produced by a callback as boxed or maybe-NOTHING even after native local promotion. This extension excludes boxed values, retained boxed-source provenance, references, closures and mismatching declared types; it retains ordinary guarded fallback. QORE_DISABLE_AOT_KNOWN_CALLREF_NATIVE_INT disables it. No runtime ABI, Program ownership or floating-point eligibility change.
+
+Before is optimized feature/performance bffec5dd4a, including integer callback admission. Actual stripped modules, Release -O3 -DNDEBUG, allocation tracking off, qcc -O3/LLVM 22.1.8, Apple M4 Pro/macOS 27.0.1. The same 53 kernels use default/reverse/shuffled layouts and randomized paired runs; 4096 items, one warmup and three 150ms samples per fork, three screening and five confirmation forks. Whole-kernel ns/item, not isolated call latency.
+
+|!Confirmed target|!Before ns/item|!Candidate ns/item|!Change
+|float:typed_local_int_unary|214.526487|1.202459|-99.44%
+
+Retain under the user-authorized broader-workload tradeoff: unary integer callbacks improve in every layout in screen, confirmation and both short-call rounds. Confirmation is 214.526487 to 1.202459 ns/item (178.41x), saving 213.324 ns/item. The zero-argument control remains 0.807217 to 0.805504 ns/item. Repeated costs are preserved: boxed-float fallback +3.22% in screening and +3.14% in confirmation (35.178897 to 36.283012 ns/item, +1.104 ns/item). Default-layout monomorphic float calls remain slower: +7.10% screen, +5.86% confirmation (4.617953 to 4.888427 ns/item), even though their confirmation aggregate is -0.48%. Default dynamic-float-result calls repeat +3.23%/+3.16% (12.205634 to 12.591918 ns/item), with confirmation aggregate +0.95%. Overlapping fork ranges remove disjoint-range flags in confirmation but do not erase these costs. Other confirmation controls move between -0.51% and +0.45% in aggregate; forwarded integer calls remain around 247-250 ns/item. Screen-only mixed CSV +1.05%, object orders +1.09%, callback pipeline +0.09%, text index -0.40% do not establish application speedup. The micro timed LLVM bodies and all 33 mixed definitions are identical; only micro module-init metadata length differs. This narrows investigation but is not a proven cause or dismissal of runtime placement costs. No padding or alignment tuning is retained. At count 1, unary time is 904.614495 to 694.669002 ns/item (-23.21%). At count 16, unary time is 262.692908 to 44.549172 ns/item (-83.04%). Short runs include fixed dispatch/reference-construction costs. No fresh Java/develop comparison or global performance ceiling is claimed.
+
+|!Short-call target/control|!Count|!Before ns/item|!Candidate ns/item|!Change
+|float:typed_local_int_unary|1|904.614495|694.669002|-23.21%
+|float:typed_local_int_result|1|726.061504|723.542743|-0.35%
+|float:typed_local_int_unary|16|262.692908|44.549172|-83.04%
+|float:typed_local_int_result|16|46.075473|46.166728|+0.20%
+
+Short invocations include fixed harness, dispatch, reference construction and cleanup costs. Three generated module layouts confirm removal of both typed and generic dynamic callback helpers from the unary specialized consumer, retaining cancellation checks. The micro dispatcher still forwards unknown callbacks and has no new specialized entries.
+
+All 391 standard-library qmods total 344786872 bytes before and 344786872 after. Default benchmark module sizes (before/candidate): float 185640/185560, micro 477464/477464, mixed 180424/180424 bytes.
+
+Release passes 26 cases/5376 assertions and Debug 7 cases/4415 assertions, plus the known-reference non-QUnit fixture in both builds, with no skips or source fallback. The expanded native/stripped-module regression has 233 assertions, including enabled/disabled structural checks, wide/negative integers, unassigned/optional/sparse values, exceptions and cancellation/recovery. All 391 Release aliases/hashes are restored after Debug; 1110 standard IR/AOT references, 780 additional module references and 6360 prepared before/candidate references pass. All 1446 jobs/4338 measured windows are independently replayed. No owned build/test/profile overlaps timing. Shared host, no affinity/thermal/frequency control; no fresh Java/develop comparison or global performance ceiling.
+
+[Audit](audit-aot-integer-native-local-specialization.md); [evidence](results-aot-integer-native-local-specialization-macos-arm64.json).

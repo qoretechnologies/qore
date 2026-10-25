@@ -31,6 +31,29 @@ int sub bodyIntKnownDivide(int value) { return bodyIntDivision(value, \bodyIntDi
 int sub bodyIntKnownWait() { return bodyIntWaiting(1, \bodyIntWait()); }
 int sub bodyIntKnownAuto(auto value) { return bodyIntAuto(value, \bodyIntPlus()); }
 int sub bodyIntKnownWide(int left, int right) { return bodyIntTwo(left, right, \bodyIntWide()); }
+int sub bodyIntLoop(int count, int value, code<int(int)> callback) {
+    for (int i = 0; i < count; ++i) { value = callback(value); }
+    return value;
+}
+int sub bodyIntKnownLoop(int count, int value) { return bodyIntLoop(count, value, \bodyIntPlus()); }
+int sub bodyIntKnownIdentityLoop(int count, int value) { return bodyIntLoop(count, value, \bodyIntIdentity()); }
+int sub bodyIntMaybeLocal(bool assigned, code<int(int)> callback) {
+    int value;
+    if (assigned) { value = 40; }
+    return callback(value);
+}
+int sub bodyIntKnownMaybeLocal(bool assigned) { return bodyIntMaybeLocal(assigned, \bodyIntPlus()); }
+int sub bodyIntOptionalLocal(bool assigned, code<int(int)> callback) {
+    *int value = assigned ? 40 : NOTHING;
+    return callback(value);
+}
+int sub bodyIntKnownOptionalLocal(bool assigned) { return bodyIntOptionalLocal(assigned, \bodyIntPlus()); }
+int sub bodyIntSparseLocal(int index, code<int(int)> callback) {
+    list<int> values = ();
+    values[3] = 40;
+    return callback(values[index]);
+}
+int sub bodyIntKnownSparseLocal(int index) { return bodyIntSparseLocal(index, \bodyIntPlus()); }
 # Deliberately dynamic callback and result types exercise native integer boxing.
 auto sub bodyIntGeneric(auto value, auto callback) { return callback(value); }
 auto sub bodyIntGenericZero(auto callback) { return callback(); }
@@ -55,6 +78,22 @@ expect(1152921504606846979, bodyIntKnownWide(1152921504606846976, 3));
 expect(9223372036854775807, bodyIntKnownGeneric(9223372036854775807));
 expect(-9223372036854775807 - 1, bodyIntKnownGeneric(-9223372036854775807 - 1));
 expect(1152921504606846979, bodyIntKnownGenericResult());
+expect(1152921504606846988, bodyIntKnownLoop(4, 1152921504606846976));
+expect(-1152921504606846964, bodyIntKnownLoop(4, -1152921504606846976));
+expect(2, bodyIntKnownLoop(4, -10));
+expect(9223372036854775807, bodyIntKnownLoop(0, 9223372036854775807));
+expect(9223372036854775807, bodyIntKnownIdentityLoop(4, 9223372036854775807));
+expect(-9223372036854775807 - 1, bodyIntKnownIdentityLoop(4, -9223372036854775807 - 1));
+foreach bool assigned in ((False, True)) {
+    try { printf("maybe-local: %y\n", bodyIntKnownMaybeLocal(assigned)); }
+    catch (hash<ExceptionInfo> ex) { printf("maybe-local-error: %s\n", ex.err); }
+    try { printf("optional-local: %y\n", bodyIntKnownOptionalLocal(assigned)); }
+    catch (hash<ExceptionInfo> ex) { printf("optional-local-error: %s\n", ex.err); }
+}
+foreach int index in ((0, 3)) {
+    try { printf("sparse-local: %y\n", bodyIntKnownSparseLocal(index)); }
+    catch (hash<ExceptionInfo> ex) { printf("sparse-local-error: %s\n", ex.err); }
+}
 expect(5, bodyIntReassigned(False));
 expect(13, bodyIntReassigned(True));
 code<int(int)> escaped = bodyIntEscape(\bodyIntPlus());

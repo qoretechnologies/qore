@@ -238,6 +238,8 @@
     private locals after local promotion, enabling native direct and typed callback paths for eligible functions.
     AOT calls through known same-program function references can use native floating-point arguments established
     by local promotion, avoiding redundant boxing and dynamic dispatch while retaining guards for optional values.
+    Known integer callback calls can use exact native integer locals established by assignment analysis,
+    avoiding redundant boxing and dynamic dispatch while preserving guarded optional and sparse inputs.
     AOT can also specialize eligible internal calls for known zero-argument and unary integer callbacks,
     avoiding repeated dynamic dispatch while retaining ordinary calls for unsupported targets.
     Monolithic AOT modules can specialize eligible internal floating-point callback and direct calls using the

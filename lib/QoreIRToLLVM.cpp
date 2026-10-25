@@ -28449,6 +28449,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     "QORE_DISABLE_AOT_KNOWN_CALLREF_NATIVE_FLOAT")) {
                             continue;
                         }
+                        // A typed integer local can also become native after
+                        // the original value facts were computed. Require the
+                        // local's assigned-state and exact type proof: i64 by
+                        // itself can represent boxed values or internal pointers.
+                        if (param_kind == BatchCalleeParamKind::NativeInt
+                                && lowered != values.end()
+                                && lowered->second->getType() == i64_type
+                                && !nanboxed_values.count(value_id)
+                                && !native_boxed_sources.count(value_id)
+                                && !q_env_is_set(
+                                    "QORE_DISABLE_AOT_KNOWN_CALLREF_NATIVE_INT")) {
+                            auto definition = value_definitions.find(value_id);
+                            if (definition != value_definitions.end()
+                                    && definition->second->opcode == QoreIROpcode::LoadLocal) {
+                                const auto* load = static_cast<const QoreIRLocalInstruction*>(
+                                    definition->second);
+                                const LocalVar* local = load->local;
+                                if (local && !load->is_ref && !load->is_closure
+                                        && assigned_non_nothing_locals.count(local)
+                                        && native_int_locals.count(local)
+                                        && specializeType(local->getTypeInfoForLValue())
+                                            == sig->getParamTypeInfo(static_cast<unsigned>(i))) {
+                                    continue;
+                                }
+                            }
+                        }
                         bool dynamic_scalar =
                             nanboxed_values.count(value_id)
                             && param_kind
