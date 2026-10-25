@@ -78,6 +78,8 @@ class ReturnNoValueTest inherits QUnit::Test {
             "rejected-call-released": "released: True",
             # a return that an exception interrupts gives no value: when a catch block handles the error of a return
             # statement, or of an on_exit handler after it, the code continues as if the return had not completed
+            # enum values hold a reference to their declaration, which the checks take and release
+            "enum-returns": "True, RUNTIME-TYPE-ERROR, True",
             "interrupted-rejected-return": "RUNTIME-TYPE-ERROR: <block return> expects type 'int', but got no value "
                 "instead: block missing return statement",
             "interrupted-on-exit-return": "RUNTIME-TYPE-ERROR: <block return> expects type 'int', but got no value "

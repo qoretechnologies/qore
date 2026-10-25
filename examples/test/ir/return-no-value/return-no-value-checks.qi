@@ -75,6 +75,48 @@ public namespace ReturnNoValueChecks {
         }
     }
 
+    #! an enum whose values hold a reference to its declaration
+    public enum ReturnState : int {
+        Ready = 1,
+        Done = 2,
+    }
+
+    #! returns an enum value in a try block, which checks the value against the return type in the statement
+    ReturnState sub return_enum_in_try(auto v) {
+        try {
+            return v;
+        } catch (hash<ExceptionInfo> ex) {
+            return ReturnState::Done;
+        }
+    }
+
+    #! returns an enum value that the return type rejects, which raises the error with the value
+    string sub return_enum_rejected(auto v) {
+        return v;
+    }
+
+    #! returns the enum values and errors of many returns through the checks, which take and release a reference to
+    #! the declaration of each enum value
+    string sub check_enum_returns() {
+        list<string> rv = ();
+        for (int i = 0; i < 1000; ++i) {
+            ReturnState state = return_enum_in_try(ReturnState::Ready);
+            if (i == 999) {
+                push rv, sprintf("%y", state == ReturnState::Ready);
+            }
+            try {
+                return_enum_rejected(ReturnState::Done);
+            } catch (hash<ExceptionInfo> ex) {
+                if (i == 999) {
+                    push rv, ex.err;
+                }
+            }
+        }
+        ReturnState done = ReturnState::Done;
+        push rv, sprintf("%y", done == ReturnState::Done);
+        return rv.join(", ");
+    }
+
     #! a class whose destructor throws an exception
     public class DestructorThrower {
         destructor() {
@@ -405,6 +447,7 @@ public namespace ReturnNoValueChecks {
             "rejected-value-in-try-released": check_rejected_released("rejected-in-try",
                 auto sub (TrackedValue v) { return return_rejected_in_try(v); }),
             "rejected-call-released": check_rejected_call_released(),
+            "enum-returns": check_enum_returns(),
             "interrupted-rejected-return": check(int sub () { return interrupted_rejected_return("str"); }),
             "interrupted-on-exit-return": check(int sub () { return interrupted_on_exit_return(); }),
             "interrupted-return-continues": check(int sub () { return interrupted_return_continues("str"); }),
