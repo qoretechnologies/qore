@@ -2536,10 +2536,16 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         *hash<auto> input_desc;
         bool needs_map = False;
         if (input) {
+            # a type with fields that the input type refers to more than once, including recursively, is described
+            # once in the schema's "$defs" and referred to with "$ref", so that the schema grows with the type graph
+            _mcp_tddefs = <McpSchemaDefinitionState>{};
+            on_exit remove _mcp_tddefs;
+            McpServerHandler::countTypeReferences(input, \_mcp_tddefs.counts);
             input_desc = getTypeDescriptionIntern("input", input, prov);
             debug("Creating tool %y (%y) input: %y (%s: %y) -> %y", name, desc, input ? input.getName() : "n/a",
                 input ? input.className() : "n/a", keys (input ? input.getFields() : NOTHING), input_desc);
-            input_desc = getToolInputDescription(input_desc, input.isMandatory(), \needs_map);
+            input_desc = McpServerHandler::addDefinitions(getToolInputDescription(
+                McpServerHandler::getRootDescription(input_desc), input.isMandatory(), \needs_map));
         }
         return makeTool(name, desc, input_desc, needs_map, tool, input_initialized, extra);
     }
@@ -2554,9 +2560,15 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         *hash<auto> input_desc;
         bool needs_map = False;
         if (input) {
+            # a type with fields that the description refers to more than once, including recursively, is
+            # described once in the schema's "$defs" and referred to with "$ref"
+            _mcp_tddefs = <McpSchemaDefinitionState>{};
+            on_exit remove _mcp_tddefs;
+            McpServerHandler::countTypeInfoReferences(input, \_mcp_tddefs.counts);
             hash<string, hash<auto!>> memo;
             input_desc = getTypeInfoDescriptionIntern("input", input, prov, \memo);
-            input_desc = getToolInputDescription(input_desc, input.mandatory, \needs_map);
+            input_desc = McpServerHandler::addDefinitions(getToolInputDescription(
+                McpServerHandler::getRootDescription(input_desc), input.mandatory, \needs_map));
         }
         return makeTool(name, desc, input_desc, needs_map, tool, input_initialized, extra);
     }
@@ -2888,6 +2900,18 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             *AbstractDataProvider prov, *hash<string, bool> tmap) {
         if (*hash<string, AbstractDataField> fields = t.getFields()) {
             string uh = t.uniqueHash();
+            # a type that the input type refers to more than once, including recursively, is described once in the
+            # schema's "$defs" and referred to with "$ref"
+            if (_mcp_tddefs.counts{uh} > 1) {
+                hash<auto> ref = McpServerHandler::getDefinitionReference(uh, t.getName());
+                if (!_mcp_tddefs.started{uh}) {
+                    _mcp_tddefs.started{uh} = True;
+                    tmap{uh} = True;
+                    _mcp_tddefs.defs{_mcp_tddefs.names{uh}} = McpServerHandler::addConstraints(
+                        getObjectDescription(fields, prov, tmap), t.getConstraints());
+                }
+                return ref;
+            }
             if (tmap{uh}) {
                 # count the truncation so that every type on the cycle's path is excluded from the cache as well
                 _mcp_tdtrunc = (_mcp_tdtrunc ?? 0) + 1;
@@ -3023,6 +3047,97 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         return info;
     }
 
+    #! Returns a reference to the definition of a type in the schema's \c "$defs", which it then has
+    /** @param key the identity of the type
+        @param type_name the name of the type, from which the name of the definition is made
+
+        @return a JSON schema with a \c "$ref" to the definition
+    */
+    private static hash<auto> getDefinitionReference(string key, string type_name) {
+        *string def = _mcp_tddefs.names{key};
+        if (!def) {
+            # a readable name that is a JSON pointer token as it is, made unique within the schema
+            string base = type_name.val() ? type_name : "type";
+            base =~ s/[^A-Za-z0-9_.-]+/_/g;
+            def = base;
+            int i = 2;
+            while (_mcp_tddefs.taken{def}) {
+                def = sprintf("%s_%d", base, i++);
+            }
+            _mcp_tddefs.taken{def} = True;
+            _mcp_tddefs.names{key} = def;
+        }
+        return {
+            "\$ref": "#/\$defs/" + def,
+        };
+    }
+
+    #! Counts the references to each type with fields that a type refers to, by the type's identity
+    /** The types below a type are counted the first time it is reached, so a type referred to from more than one
+        place, or recursively, has a count of two or more
+    */
+    private static countTypeReferences(AbstractDataProviderType t, reference<hash<string, int>> counts) {
+        if (t.getFields()) {
+            string uh = t.uniqueHash();
+            if (counts{uh}++) {
+                return;
+            }
+        }
+        foreach AbstractDataField field in (t.getFields().iterator()) {
+            McpServerHandler::countTypeReferences(field.getType(), \counts);
+        }
+        if (*AbstractDataProviderType et = t.getElementType()) {
+            McpServerHandler::countTypeReferences(et, \counts);
+        }
+        if (t instanceof QoreUnionDataType) {
+            map McpServerHandler::countTypeReferences($1, \counts), cast<QoreUnionDataType>(t).getUnionTypes();
+        }
+    }
+
+    #! Counts the references to each type with fields in a type description, by unique key
+    /** The descriptions below a type are counted the first time the type is reached, and a recursion marker counts
+        as a reference to the enclosing type, so a type referred to from more than one place, or recursively, has a
+        count of two or more
+    */
+    private static countTypeInfoReferences(hash<auto> info, reference<hash<string, int>> counts) {
+        if ((info.fields || (info.recursive && info.base_type == "hash")) && info.unique_key.val()) {
+            if (counts{info.unique_key}++) {
+                return;
+            }
+        }
+        foreach hash<auto> field in (info.fields.iterator()) {
+            if (field.type.typeCode() == NT_HASH) {
+                McpServerHandler::countTypeInfoReferences(field.type, \counts);
+            }
+        }
+        if (info.element_type.typeCode() == NT_HASH) {
+            McpServerHandler::countTypeInfoReferences(info.element_type, \counts);
+        }
+        foreach auto union_type in (info.union_types) {
+            if (union_type.typeCode() == NT_HASH) {
+                McpServerHandler::countTypeInfoReferences(union_type, \counts);
+            }
+        }
+    }
+
+    #! Returns the description of the root of a schema, which is its definition if it is a recursive type
+    /** The root of a tool's input schema describes an object, so it is never a reference
+    */
+    private static *hash<auto> getRootDescription(*hash<auto> rv) {
+        if (rv."\$ref".typeCode() == NT_STRING && rv.size() == 1) {
+            return _mcp_tddefs.defs{rv."\$ref".substr(8)};
+        }
+        return rv;
+    }
+
+    #! Adds the definitions of the shared and recursive types of a schema at its root
+    private static *hash<auto> addDefinitions(*hash<auto> rv) {
+        if (exists rv && _mcp_tddefs.defs) {
+            rv."\$defs" = _mcp_tddefs.defs;
+        }
+        return rv;
+    }
+
     #! Returns the JSON schema for a type description; descriptions shared in the description are converted once
     /** @param name the name of the value
         @param info the type description
@@ -3049,6 +3164,19 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
     #! Returns the JSON schema for a type description, like getTypeDescriptionImpl() for a type object
     private *hash<auto> getTypeInfoDescriptionImpl(string name, hash<auto> info, *AbstractDataProvider prov,
             reference<hash<string, hash<auto!>>> memo) {
+        # a type that the description refers to more than once, including with a recursion marker, is described
+        # once in the schema's "$defs" and referred to with "$ref"
+        if ((info.fields || (info.recursive && info.base_type == "hash")) && info.unique_key.val()
+                && _mcp_tddefs.counts{info.unique_key} > 1) {
+            string key = info.unique_key;
+            hash<auto> ref = McpServerHandler::getDefinitionReference(key, info.name);
+            if (info.fields && !_mcp_tddefs.started{key}) {
+                _mcp_tddefs.started{key} = True;
+                _mcp_tddefs.defs{_mcp_tddefs.names{key}} = McpServerHandler::addConstraints(
+                    getObjectInfoDescription(info.fields, prov, \memo), info.constraints);
+            }
+            return ref;
+        }
         if (info.fields) {
             return McpServerHandler::addConstraints(getObjectInfoDescription(info.fields, prov, \memo),
                 info.constraints);
@@ -5326,6 +5454,23 @@ thread_local hash<string, hash<auto!>> _mcp_tdmap;
 
 #! Counts cycle truncations during a type-description traversal, so that path-dependent results are not memoized
 thread_local int _mcp_tdtrunc;
+
+#! The definitions of the shared and recursive types of a tool input schema being built
+hashdecl McpSchemaDefinitionState {
+    #! The number of references to each type with fields, by its identity
+    hash<string, int> counts = {};
+    #! The name of the definition of each type described in "$defs", by its identity
+    hash<string, string> names = {};
+    #! The names of the definitions in use
+    hash<string, bool> taken = {};
+    #! The identities of the types whose definitions are built
+    hash<string, bool> started = {};
+    #! The definitions, by name
+    hash<string, hash<auto>> defs = {};
+}
+
+#! The definitions of the shared and recursive types of the tool input schema being built in this thread
+thread_local *hash<McpSchemaDefinitionState> _mcp_tddefs;
 class McpCallContextHelper {
     private {
         *hash<McpToolCallContext> old;
