@@ -256,6 +256,8 @@
     and minimum target alignment to recover callback performance while retaining runtime observability.
     Native call-frame removal avoids virtual destructor dispatch for the internal concrete frame class,
     preserving call-stack publication, concurrent stack inspection and caller-location restoration.
+    Already-bound AOT call-frame construction separates cached-name access from first-use initialization,
+    avoiding repeated register saves while preserving lazy names and call-stack visibility.
 
     AOT-compiled modules record the AOT runtime identity of the %Qore library that compiled them, and a module
     compiled by a library with a different generated-code contract is refused when it is loaded, with an error that

@@ -1071,6 +1071,15 @@ public:
         return call_name;
     }
 
+    //! Returns the immutable frame name if it has already been built, or nullptr
+    /** The acquire pairs with buildCallName()'s publication. Native frame construction can keep first-use
+        initialization in a separate slow path without preparing names for calls that never execute.
+        @return the name, valid as long as the variant exists, or nullptr before publication
+    */
+    DLLLOCAL const std::string* getCachedCallName() const {
+        return call_name_ready.load(std::memory_order_acquire) ? &call_name : nullptr;
+    }
+
     DLLLOCAL void setTypeParameters(std::vector<QoreGenericTypeParam>&& type_params) {
         signature.setTypeParameters(std::move(type_params));
     }

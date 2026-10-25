@@ -11589,7 +11589,8 @@ extern "C" DLLEXPORT void qore_rt_push_native_call_frame(void* storage, void* th
 //! Pushes the frame of a call that AOT code makes to the call target of an expression slot
 /** @param inline_body true if the callee runs inline at the location of its body
 */
-static void qore_rt_push_native_call_frame_aot_impl(void* storage, void* thread_data, QoreAOTContext* ctx,
+static __attribute__((noinline)) void qore_rt_push_native_call_frame_aot_slow(void* storage, void* thread_data,
+        QoreAOTContext* ctx,
         int32_t target_slot, const QoreProgramLocation* call_loc, bool inline_body) {
     assert(storage && thread_data && ctx);
     // the callee is the call target of the call's expression slot, resolved when the caller's context was built
@@ -11601,6 +11602,22 @@ static void qore_rt_push_native_call_frame_aot_impl(void* storage, void* thread_
     new (storage) QoreNativeCallStackLocation(thread_data, callee ? callee->getCallName() : unknown_call_name,
         callee ? callee->getStatementBlock() : nullptr, call_loc,
         inline_body && callee ? callee->getAOTBodyLocation() : nullptr);
+}
+
+static void qore_rt_push_native_call_frame_aot_impl(void* storage, void* thread_data, QoreAOTContext* ctx,
+        int32_t target_slot, const QoreProgramLocation* call_loc, bool inline_body) {
+    assert(storage && thread_data && ctx);
+    assert(target_slot >= 0 && target_slot < ctx->num_exprs);
+    const UserVariantBase* callee = ctx->call_targets[target_slot].uvb;
+    if (callee) {
+        if (const std::string* name = callee->getCachedCallName()) {
+            new (storage) QoreNativeCallStackLocation(thread_data, *name, callee->getStatementBlock(), call_loc,
+                inline_body ? callee->getAOTBodyLocation() : nullptr);
+            return;
+        }
+    }
+    // Keep allocation, locking and variant dispatch outside the repeated, already-bound call path.
+    qore_rt_push_native_call_frame_aot_slow(storage, thread_data, ctx, target_slot, call_loc, inline_body);
 }
 
 extern "C" DLLEXPORT void qore_rt_push_native_call_frame_aot(void* storage, void* thread_data,

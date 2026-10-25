@@ -22684,3 +22684,83 @@ Fresh Java checkpoint: Temurin 25.0.2+10, JMH 1.37, C2 and hot helper inlining v
 Validation: 391 rebuilt qmods; seven targeted QUnit runs (17 cases, 451 assertions, zero skips), 1110 IR/AOT references, 2340 references per frozen runtime and 90 Java references. All 1134 waited timing jobs/3402 windows are retained and independently replayed. This is a measured incremental improvement; Java parity and a global performance ceiling have not been established. Next investigate native frame entry metadata preparation and repeated call-name readiness checks while preserving lifetime and asynchronous visibility.
 
 [Evidence](results-native-frame-final-macos-arm64.json); [all 62 audit checks](audit-native-frame-final.md).
+
+## Cached native AOT frame construction (2026-10-25)
+
+Already-bound AOT frame pushes use a nullable cached-name accessor. The existing acquire load exposes the immutable name only after publication; first-use name construction and variant fallback are outlined. Both hot frame-push helpers become leaf machine code without stack prologues or nested calls. Lazy allocation, frame publication, reader synchronization, exceptions and cancellation remain unchanged. No exported helper signature, class data layout or AOT format change; frame size/alignment remain 80/8 on this host.
+
+Baseline: optimized performance commit 196f148ced, using the preceding qualified runtime whose tracked source hashes match that commit (its embedded build revision remains b83c2cdac1). Identical optimized AOT executables are reused across frozen runtimes. Release -O3 -DNDEBUG, allocation tracking off, Apple M4/macOS arm64, default/reverse/shuffle-487 layouts, 4096 items and seed 7. Screen: 52 workloads, three forks, one warmup and three 150 ms measurements. Confirmation: four selected workloads, five forks with the same windows. Additional tradeoff round: four workloads, seven forks, three warmup and three 250 ms measurements. Each value is the median fork mean, then median across layouts. Whole-kernel ns/item, not isolated call latency; no exclusive-host, frequency or thermal control.
+
+|!confirmation workload|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_loop_float_return|6.556907|6.542339|-0.22%
+|float:direct_local_float_result|0.738929|0.774624|+4.83%
+|float:direct_loop_float_return|6.847943|6.442214|-5.92%
+|micro:monomorphic_call|4.230769|4.253730|+0.54%
+
+|!tradeoff workload|!Before ns/item|!Candidate ns/item|!Change
+|float:direct_loop_float_return|6.801502|6.398919|-5.92%
+|float:direct_local_float_result|0.732725|0.733692|+0.13%
+|micro:monomorphic_call|4.241041|4.239049|-0.05%
+|micro:arithmetic|1.572618|1.563706|-0.57%
+
+The direct-loop target improves by at least 2% in every layout in every round: aggregate -4.59%, -5.92%, -5.92%. Callback speedup is unestablished (-0.75% screen, -0.22% confirmation). The simple-float-result control costs +0.68%, +4.83%, +0.13% overall; its reverse layout costs +5.01%, +2.21%, +3.56%, about 0.026 ns/item in the final round. This layout-dependent cost is retained under the authorized broader-workload tradeoff against about 0.403 ns/item saved in the direct target. The monomorphic-call control is +0.06%, +0.54%, -0.05% overall. Absence of a disjoint-range flag does not establish absence of cost. All earlier samples remain in the report.
+
+|!Screen workload|!Before ns/item|!Candidate ns/item|!Change
+|float:direct_local_float_return|0.812586|0.807121|-0.67%
+|float:callback_local_float_return|0.912199|0.911282|-0.10%
+|float:direct_local_float_result|0.730824|0.735829|+0.68%
+|float:callback_local_float_result|0.875198|0.857329|-2.04%
+|float:direct_loop_float_return|6.838111|6.524323|-4.59%
+|float:callback_loop_float_return|6.599871|6.550077|-0.75%
+|float:direct_float_add|0.835494|0.822959|-1.50%
+|float:static_float_add|0.822543|0.822702|+0.02%
+|float:typed_local_int_unary|7.348621|7.313450|-0.48%
+|float:typed_local_float_unary|1.203975|1.215236|+0.94%
+|float:result_float_add|0.881445|0.880511|-0.11%
+|micro:arithmetic|1.567506|1.569393|+0.12%
+|micro:direct_call|1.582662|1.578490|-0.26%
+|micro:method_call|1.667342|1.648434|-1.13%
+|micro:indirect_call|7.768290|7.926483|+2.04%
+|micro:polymorphic_call|24.136779|24.203366|+0.28%
+|micro:polymorphic_expression_call|11.553766|11.896916|+2.97%
+|micro:monomorphic_call|4.226528|4.229133|+0.06%
+|micro:optional_method_call|11.341037|11.325673|-0.14%
+|micro:polymorphic_float_call|24.171024|24.315656|+0.60%
+|micro:polymorphic_float_expression_call|11.563042|11.769937|+1.79%
+|micro:monomorphic_float_call|4.241076|4.213202|-0.66%
+|micro:optional_float_method_call|11.824465|11.692622|-1.12%
+|micro:boxed_float_method_call|20.870436|20.666186|-0.98%
+|micro:dynamic_int_result_call|13.654363|13.143442|-3.74%
+|micro:dynamic_int_result_fallback|23.029762|23.459113|+1.86%
+|micro:boxed_int_method_call|17.618620|17.309845|-1.75%
+|micro:boxed_int_method_fallback|33.822825|33.565809|-0.76%
+|micro:boxed_float_method_fallback|35.375853|35.185837|-0.54%
+|micro:boxed_int_method_effect|92.736058|91.645035|-1.18%
+|micro:dynamic_float_result_call|12.442484|12.700034|+2.07%
+|micro:indirect_wide|7.557986|7.545826|-0.16%
+|micro:indirect_float|8.282695|8.325587|+0.52%
+|micro:indirect_int_result|7.597256|7.583331|-0.18%
+|micro:indirect_float_result|8.325477|8.488437|+1.96%
+|micro:indirect_tagged_float|8.097487|8.139082|+0.51%
+|micro:indirect_branch_float|8.346159|8.330954|-0.18%
+|micro:indirect_affine|9.556284|9.302692|-2.65%
+|micro:indirect_affine_wide|7.647933|7.638982|-0.12%
+|micro:indirect_branch_int|7.654980|7.614085|-0.53%
+|micro:dispatch_control|2.018998|1.939748|-3.93%
+|micro:list_read|2.936144|2.928470|-0.26%
+|micro:list_build|34.155281|34.139499|-0.05%
+|micro:list_mutate|200.995172|201.055553|+0.03%
+|micro:temporary_list|1.680616|1.710610|+1.78%
+|micro:temporary_hash|351.872621|351.691214|-0.05%
+|micro:closure_call|19.728079|19.782445|+0.28%
+|micro:closure_capture|25.694239|25.679628|-0.06%
+|mixed:csv_report|992.415550|1003.027506|+1.07%
+|mixed:object_orders|1891.337077|1935.622901|+2.34%
+|mixed:callback_pipeline|112.951371|108.610712|-3.84%
+|mixed:text_index|1370.992240|1382.408613|+0.83%
+
+Validation: 391 rebuilt qmods; seven targeted QUnit runs, 17 executed cases, 451 assertions, no skips; 1110 IR/AOT references and 2340 candidate frozen-executable checks. The baseline reuses the prior qualified runtime/reference evidence, verified against the 196f tracked-source hashes. All 1224 timing jobs/3672 windows are independently replayed. These timings cover AOT; there is no new Java, pure-develop or IR/JIT speedup claim. The previous Java checkpoint applies to 196f, not this candidate.
+
+Next investigate the separate named-frame cache used by callbacks, then redundant frame metadata with artifact compatibility review. Ordinary language loops retain per-iteration cancellation; a known small loop bound does not justify dropping those checks. Java parity and a global performance ceiling remain unestablished.
+
+[Evidence](results-native-frame-cache-macos-arm64.json); [all 62 audit checks](audit-native-frame-cache.md).
