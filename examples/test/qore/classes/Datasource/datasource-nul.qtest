@@ -34,8 +34,8 @@ class DatasourceNulTest inherits QUnit::Test {
     datasourceStrings() {
         string str = "dbitest:user/secretpw@db\x00.other%host";
         try {
-            parse_datasource(str);
-            fail("parse_datasource() did not raise an exception");
+            hash<auto> parsed = parse_datasource(str);
+            fail(sprintf("parse_datasource() did not raise an exception; it returned the keys %y", keys parsed));
         } catch (hash<ExceptionInfo> ex) {
             assertEq("DATASOURCE-PARSE-ERROR", ex.err);
             assertEq("datasource string contains a NUL character; datasource strings cannot contain NUL characters",

@@ -85,10 +85,11 @@ class PgsqlSearchPathTest inherits QUnit::Test {
     }
 
     private setup() {
-%ifdef NoPgsql
-        return;
-%endif
+        # without the pgsql module there is no connection string, so the tests skip; an early return here would be
+        # reported as unreachable code
+%ifndef NoPgsql
         connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+%endif
         if (!connstr) {
             return;
         }
@@ -592,7 +593,7 @@ class PgsqlSearchPathTest inherits QUnit::Test {
         AbstractTable table = t.getTable();
         assertTrue(table.checkExistence());
         assertEq(("id", "dot_col"), table.describe().keys());
-        assertEq(dot_schema, table.getSchemaName());
+        assertEq(dot_schema, cast<PgsqlTable>(table).getSchemaName());
         assertEq(quote(dot_schema) + ".\"T.1\"", table.getSqlName());
         t.insert({"id": 1, "dot_col": "x"});
         assertEq({"id": 1, "dot_col": "x"}, t.selectRow({"where": {"id": 1}}));
