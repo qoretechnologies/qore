@@ -42,6 +42,27 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    #! packs test data with MessagePack, as the index files are written
+    /** The test cases that use it skip without the msgpack module (checkModules()), which this test only tries to
+        load, so that the test parses and reports the skip without it
+    */
+    private static binary packTestData(auto data) {
+%ifdef NoMsgPack
+        throw "MISSING-FEATURE-ERROR", "the msgpack module is not available";
+%else
+        return msgpack_pack(data, MSGPACK_QORE_MODE);
+%endif
+    }
+
+    #! unpacks MessagePack test data, as the index files are read; see packTestData()
+    private static auto unpackTestData(binary data) {
+%ifdef NoMsgPack
+        throw "MISSING-FEATURE-ERROR", "the msgpack module is not available";
+%else
+        return msgpack_unpack(data, MSGPACK_QORE_MODE);
+%endif
+    }
+
     private checkModules() {
 %ifdef NoMsgPack
         testSkip("no msgpack module");
@@ -312,7 +333,7 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
     private static list<string> getActionSummaryFiles(string dir) {
         list<string> rv = ();
         foreach string path in (glob(dir + DirSep + "qore-data-index-manifest-*.msgpack")) {
-            auto manifest = msgpack_unpack(ReadOnlyFile::readBinaryFile(path), MSGPACK_QORE_MODE);
+            auto manifest = unpackTestData(ReadOnlyFile::readBinaryFile(path));
             if (*string sha256 = manifest.actions.sha256) {
                 push rv, sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, sha256);
             }

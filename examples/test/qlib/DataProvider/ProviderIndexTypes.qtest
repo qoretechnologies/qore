@@ -177,6 +177,13 @@ class ProviderIndexTypesTest inherits QUnit::Test {
         hash<DataProviderIndexInfo> index = ProviderIndexUtil::readDataProviderIndex();
         assertFalse(index.actioninfomap.IndexIdentityFixture.hasKey("invalid"));
         assertTrue(index.actioninfomap.IndexIdentityFixture.hasKey("record"));
+        # the failures are recorded in the failure file of the index, which is written with MessagePack: without the
+        # msgpack module, the index is read from its canonical file and records no failures
+        # (ProviderIndexUtil::hasIndexedFailureInfo())
+        if (!ProviderIndexUtil::hasMessagePack()) {
+            assertFalse(ProviderIndexUtil::hasIndexedFailureInfo(), "no failures are recorded without MessagePack");
+            testSkip("no MessagePack support: the index records no failures");
+        }
         *hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFailure("IndexIdentityFixture",
             "invalid");
         assertEq("serialize-action-metadata", failure.phase);

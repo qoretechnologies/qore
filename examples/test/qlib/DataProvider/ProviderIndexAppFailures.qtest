@@ -74,6 +74,27 @@ public class ProviderIndexAppFailuresTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    #! packs test data with MessagePack, as the index files are written
+    /** The test cases that use it skip without the msgpack module (checkModules()), which this test only tries to
+        load, so that the test parses and reports the skip without it
+    */
+    private static binary packTestData(auto data) {
+%ifdef NoMsgPack
+        throw "MISSING-FEATURE-ERROR", "the msgpack module is not available";
+%else
+        return msgpack_pack(data, MSGPACK_QORE_MODE);
+%endif
+    }
+
+    #! unpacks MessagePack test data, as the index files are read; see packTestData()
+    private static auto unpackTestData(binary data) {
+%ifdef NoMsgPack
+        throw "MISSING-FEATURE-ERROR", "the msgpack module is not available";
+%else
+        return msgpack_unpack(data, MSGPACK_QORE_MODE);
+%endif
+    }
+
     private checkModules(*bool workers) {
 %ifdef NoMsgPack
         testSkip("no MessagePack support");
@@ -426,8 +447,7 @@ public class ProviderIndexAppFailuresTest inherits QUnit::Test {
         assertNothing(ProviderIndexUtil::readSerializedDataProviderIndex(dir));
 
         # a failure file of the right size and digest that does not hold valid failures
-        binary data = compress(msgpack_pack({FailingApp: ({"app": FailingApp, "unknown": True},)},
-            MSGPACK_QORE_MODE));
+        binary data = compress(packTestData({FailingApp: ({"app": FailingApp, "unknown": True},)}));
         string sha256 = digest("sha256", data).toHex();
         string bad_path = sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep, sha256);
         f.open2(bad_path, O_CREAT | O_TRUNC | O_WRONLY);
@@ -448,7 +468,7 @@ public class ProviderIndexAppFailuresTest inherits QUnit::Test {
         string path = sprintf("%s%sqore-data-index-manifest-%s.msgpack", dir, DirSep, routing.metadata_cache_sha256);
         return {
             "routing": routing,
-            "manifest": msgpack_unpack(ReadOnlyFile::readBinaryFile(path), MSGPACK_QORE_MODE),
+            "manifest": unpackTestData(ReadOnlyFile::readBinaryFile(path)),
             "path": path,
         };
     }
@@ -460,7 +480,7 @@ public class ProviderIndexAppFailuresTest inherits QUnit::Test {
 
     #! Publishes the given manifest with a routing index that references it
     private static writeManifest(string dir, hash<auto> routing, hash<auto> manifest) {
-        binary manifest_data = msgpack_pack(manifest, MSGPACK_QORE_MODE);
+        binary manifest_data = packTestData(manifest);
         string manifest_sha256 = digest("sha256", manifest_data).toHex();
         File f();
         f.open2(sprintf("%s%sqore-data-index-manifest-%s.msgpack", dir, DirSep, manifest_sha256),
