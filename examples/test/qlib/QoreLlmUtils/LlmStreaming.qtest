@@ -60,6 +60,9 @@ hashdecl FakeReply {
     bool first_chunk_with_head = False;
     #! When set, the end of the chunks is reported in stream_results (see FakeStreamResult)
     bool report_stream = False;
+    #! When set, the chunks are sent again and again until the client closes the connection, so that only the
+    #! client can end the response
+    bool repeat_until_close = False;
 }
 
 #! How the chunks of a reply with report_stream ended
@@ -189,9 +192,10 @@ class FakeLlmServer {
             try {
                 conn.send(head + "\r\n" + (first ? reply.chunks[0] : ""));
                 result.sent = first;
-                for (int i = first; i < reply.chunks.size(); ++i) {
+                for (int i = first; i < reply.chunks.size()
+                        || (reply.repeat_until_close && reply.chunks); ++i) {
                     if (reply.chunk_delay_ms) { usleep(reply.chunk_delay_ms * 1000); }
-                    conn.send(reply.chunks[i]);
+                    conn.send(reply.chunks[i % reply.chunks.size()]);
                     ++result.sent;
                 }
                 result.completed = True;
@@ -641,12 +645,12 @@ public class LlmStreamingTest inherits QUnit::Test {
     }
 
     openAiRequestDeadlineTest() {
-        LlmBackend llm = openAiBackend(1000);
+        # the client's own deadline is longer than any test run, so only a call's deadline can end the call
+        LlmBackend llm = openAiBackend(3600000);
         hash<auto> response = {"choices": ({"message": {"content": "ok"}, "finish_reason": "stop"},)};
         foreach bool complete in ((False, True)) {
-            server.script(<FakeReply>{"content_type": MimeTypeJson,
-                "body": make_json(response), "header_delay_ms": 200});
-            date started = now_us();
+            # the server sends nothing until the client closes the connection
+            server.script(<FakeReply>{"hold_headers": True});
             *hash<ExceptionInfo> error;
             try {
                 if (complete) {
@@ -655,12 +659,12 @@ public class LlmStreamingTest inherits QUnit::Test {
                     llm.chat(userMessage("test"), NOTHING, <LlmRequestOptions>{"timeout_ms": 50});
                 }
             } catch (hash<ExceptionInfo> ex) { error = ex; }
-            assertTrue(hasTransportTimeout(error));
-            assertLt(500, (now_us() - started).durationMilliseconds());
+            assertTrue(hasTransportTimeout(error), "the call ends on its deadline");
+            assertTrue(server.client_closed.get(60s), "the call's deadline closes the connection");
             assertEq(1, server.requests.size());
-            usleep(200000);
         }
-        # The call-local deadline must not shorten later calls on the same client.
+        # The call-local deadline must not shorten later calls on the same client: the reply comes after the
+        # earlier calls' deadline of 50 ms would have expired.
         server.script(<FakeReply>{"content_type": MimeTypeJson,
             "body": make_json(response), "header_delay_ms": 200});
         assertEq("ok", llm.chat(userMessage("default timeout")).content);
@@ -668,34 +672,30 @@ public class LlmStreamingTest inherits QUnit::Test {
 
     providerStreamDeadlineTest() {
         foreach string mode in (("http", "gemini")) {
+            # the client's own deadline is longer than any test run, so only a call's deadline can end the call
             LlmBackend llm(<LlmBackendConfig>{"mode": mode,
                 "url": "http://localhost:" + port, "protocol": "h1",
                 "model": mode == "http" ? "gpt-test" : "gemini-2.5-flash",
-                "api_key": "fixture-key", "timeout_ms": 1000, "max_retries": 0});
+                "api_key": "fixture-key", "timeout_ms": 3600000, "max_retries": 0});
             foreach string stage in (("headers", "comments", "events")) {
-                bool delayed_headers = stage == "headers";
+                bool held_headers = stage == "headers";
                 bool event_stage = stage == "events";
                 # Comments are valid SSE traffic but must not reset a call's deadline.
                 string frame = stage == "comments" ? ": keepalive\n\n"
                     : (mode == "http" ? sseData({"choices": ({"delta": {"content": "x"}},)})
                         : sseData({"candidates": ({"content": {"parts": ({"text": "x"},)}},)}));
-                # The first event is sent with the response headers as soon as the request has been read, so the
-                # client has it before its deadline unless the request itself takes the whole deadline; the
-                # deadline of the other stages expires before their headers or first event.
-                int call_timeout_ms = event_stage ? 1000 : 50;
-                # The frames take at least frame_count * chunk_delay_ms: a deadline reset by each frame would keep the
-                # call reading until the server had sent its last frame, while a deadline that covers the whole call
-                # ends it while the server is still sending, which the server reports.
-                int chunk_delay_ms = delayed_headers ? 0 : (event_stage ? 20 : 25);
-                int frame_count = delayed_headers ? 20 : (event_stage ? 300 : 80);
-                list<string> frames;
-                for (int i = 0; i < frame_count; ++i) { frames += frame; }
-                server.script(<FakeReply>{"header_delay_ms": delayed_headers ? 200 : 0,
-                    "chunk_delay_ms": chunk_delay_ms,
-                    "chunks": frames,
-                    "first_chunk_with_head": event_stage,
-                    "report_stream": True,
-                    "stall": True});
+                # The server sends nothing at all, or sends comments or events until the client closes the
+                # connection, so the call can only end on its deadline: a deadline reset by each frame would keep
+                # the call reading for ever.  The first event is sent with the response headers as soon as the
+                # request has been read; the deadline of the events stage leaves time to read it.
+                int call_timeout_ms = event_stage ? 2000 : 50;
+                server.script(held_headers
+                    ? <FakeReply>{"hold_headers": True}
+                    : <FakeReply>{"chunk_delay_ms": event_stage ? 20 : 25,
+                        "chunks": (frame,),
+                        "repeat_until_close": True,
+                        "first_chunk_with_head": event_stage,
+                        "report_stream": True});
                 *hash<ExceptionInfo> error;
                 int observed = 0;
                 try {
@@ -705,14 +705,14 @@ public class LlmStreamingTest inherits QUnit::Test {
                 } catch (hash<ExceptionInfo> ex) { error = ex; }
                 string label = mode + " " + stage;
                 assertTrue(hasTransportTimeout(error), label + ": the call ends on its deadline");
-                # the server has ended its frames: the client closed the connection, or every frame was sent
-                hash<FakeStreamResult> stream = server.stream_results.get(60s);
-                server.release();
-                if (delayed_headers) {
+                if (held_headers) {
                     # the deadline expired before the headers arrived: no event of the stream is read
+                    assertTrue(server.client_closed.get(60s), label + ": the deadline closes the connection");
                     assertEq(0, observed, label + ": no event is read after the deadline");
                 } else {
-                    assertFalse(stream.completed, label + ": the call ended before the server sent its last frame");
+                    # the server sends until the client closes the connection
+                    hash<FakeStreamResult> stream = server.stream_results.get(60s);
+                    assertFalse(stream.completed, label + ": the client closed the connection");
                     if (event_stage) {
                         assertGt(0, observed, label + ": events were read before the deadline");
                         assertLe(stream.sent, observed, label + ": only events that the server sent were read");
@@ -1355,15 +1355,14 @@ public class LlmStreamingTest inherits QUnit::Test {
                 canceller.waitForZero();
             }
             list<string> deltas = ();
-            date started = now_us();
+            # the request timeout is longer than any test run: the stream ends only on the cancellation, which
+            # closes the connection, as the server reports
             assertThrows("LLM-CANCELLED", "cancelled: stopped by the user", \llm.chatStream(),
                 (userMessage("hi"), sub (hash<ChatStreamEvent> e) {
                     deltas += e.delta ?? "";
                     delivered.push(True);
-                }, NOTHING, <LlmRequestOptions>{"cancellation": cancellation, "timeout_ms": 60000}), mode);
+                }, NOTHING, <LlmRequestOptions>{"cancellation": cancellation, "timeout_ms": 3600000}), mode);
             assertEq(("first",), deltas, mode);
-            # the stream does not wait for its next event until the request timeout
-            assertLt(30000, (now_us() - started).durationMilliseconds(), mode);
             assertTrue(server.client_closed.get(30s), mode + ": the connection is closed, so the provider stops");
         }
     }
@@ -1439,8 +1438,8 @@ public class LlmStreamingTest inherits QUnit::Test {
             "model": "gpt-test",
             "api_key": "openai-key",
             "max_retries": 3,
-            # a backoff that would outlast the test
-            "retry_delay_ms": 600000,
+            # a backoff longer than any test run: only the cancellation can end the call
+            "retry_delay_ms": 3600000,
             "protocol": "h1",
         });
         foreach bool stream in ((False, True)) {
@@ -1458,14 +1457,12 @@ public class LlmStreamingTest inherits QUnit::Test {
                 canceller.waitForZero();
             }
             hash<LlmRequestOptions> opts = <LlmRequestOptions>{"cancellation": cancellation};
-            date started = now_us();
             if (stream) {
                 assertThrows("LLM-CANCELLED", NOTHING, \llm.chatStream(),
                     (userMessage("hi"), sub (hash<ChatStreamEvent> e) {}, NOTHING, opts), ctx);
             } else {
                 assertThrows("LLM-CANCELLED", NOTHING, \llm.chat(), (userMessage("hi"), NOTHING, opts), ctx);
             }
-            assertLt(30000, (now_us() - started).durationMilliseconds(), ctx);
             assertEq(1, server.requests.size(), ctx + ": the request is not retried");
         }
     }
