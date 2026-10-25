@@ -82,6 +82,8 @@ class FakeVertexHandler inherits AbstractHttpRequestHandler {
         };
         #! Response chunks returned by :streamGenerateContent
         list<hash<auto>> stream_chunks = ();
+        string stream_end_marker = "";
+        int stream_requests = 0;
         #! When set, :streamGenerateContent fails with this status and stream_error_body
         *int stream_error_code;
         string stream_error_body = "";
@@ -119,13 +121,17 @@ class FakeVertexHandler inherits AbstractHttpRequestHandler {
             } + (last_body.displayName ? {"displayName": last_body.displayName} : {})));
         }
         if (last_path =~ /:streamGenerateContent\?alt=sse$/) {
+            ++stream_requests;
             if (stream_error_code) {
                 return makeResponse({"Content-Type": MimeTypeJson}, stream_error_code,
                     stream_error_body);
             }
             # Vertex AI frames SSE events with CRLF and sends no end marker
             string out = (map "data: " + make_json($1) + "\r\n\r\n", stream_chunks).join("");
-            return makeResponse({"Content-Type": "text/event-stream"}, 200, out);
+            # A comment-only body models EOF without a model event. An empty SSE body asks HttpServer
+            # to establish a live socket handler instead of serving this finite fixture response.
+            if (!out.val() && !stream_end_marker.val()) { out = ": closed\r\n\r\n"; }
+            return makeResponse({"Content-Type": "text/event-stream"}, 200, out + stream_end_marker);
         }
         if (last_path =~ /:generateContent$/) {
             return makeResponse({"Content-Type": MimeTypeJson}, 200,
@@ -163,6 +169,7 @@ public class VertexAiTest inherits QUnit::Test {
         addTestCase("Gemini 3 streaming generation config", \generationConfigStreamTest());
         addTestCase("streamed tool call is collected once", \streamToolCallTest());
         addTestCase("streaming error response raises", \streamErrorTest());
+        addTestCase("a stream without a terminal model event is incomplete", \incompleteStreamTest());
         addTestCase("live Vertex AI streaming (VERTEX_SA_JSON)", \liveStreamTest());
         addTestCase("URL path includes project/region/model", \pathTest());
         addTestCase("API URL follows location kind",        \apiUrlTest());
@@ -398,6 +405,51 @@ public class VertexAiTest inherits QUnit::Test {
         assertEq("Hello from Vertex", resp.choices[0].message.content);
         assertEq("stop", resp.choices[0].finish_reason);
         assertEq(12, resp.usage.total_tokens);
+    }
+
+    private incompleteStreamTest() {
+        VertexAiTest::checkJson(self);
+        if (!fake_http) { testSkip("no fake server"); }
+        on_exit { handler.stream_chunks = (); handler.stream_end_marker = ""; }
+        foreach string text in (("partial", "část", "未完了", "غير مكتمل")) {
+            foreach string ending in (("empty", "eof", "usage_only", "done_marker")) {
+                handler.stream_chunks = ending == "empty" ? ()
+                    : ({"candidates": ({"content": {"parts": ({"text": text},)}},)},);
+                if (ending == "usage_only") {
+                    handler.stream_chunks += {"usageMetadata": {"trafficType": "ON_DEMAND"}};
+                }
+                handler.stream_end_marker = ending == "done_marker" ? "data: [DONE]\r\n\r\n" : "";
+                list<hash<QoreLlmUtils::ChatStreamEvent>> events = ();
+                VertexAiRestClient::VertexAiLlmProvider provider = newProvider();
+                int requests = handler.stream_requests;
+                assertThrows("LLM-ERROR", "without a terminal model event", sub () {
+                    provider.chatStream((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "fixture"},),
+                        sub (hash<QoreLlmUtils::ChatStreamEvent> event) { events += event; });
+                });
+                assertEq(requests + 1, handler.stream_requests, "an interrupted stream is not silently retried");
+                assertFalse((select events, $1.done).val(), "EOF cannot manufacture a successful terminal event");
+                if (ending != "empty") { assertEq(text, events[0].delta); }
+                QoreLlmUtils::LlmBackend backend = newBackend();
+                list<hash<auto>> chunks = ();
+                assertThrows("LLM-ERROR", "without a terminal model event", sub () {
+                    backend.chatCompletionsStream({"messages": ({"role": "user", "content": "fixture"},)},
+                        sub (hash<auto> chunk) { chunks += chunk; });
+                });
+                assertEq(requests + 2, handler.stream_requests);
+                assertFalse((select chunks, $1.choices[0].finish_reason == "stop").val(),
+                    "the facade cannot normalize missing completion to stop");
+            }
+        }
+        handler.stream_end_marker = "";
+        foreach hash<auto> terminal in (({"candidates": ({"finishReason": "MAX_TOKENS"},)},
+                {"promptFeedback": {"blockReason": "SAFETY"}})) {
+            handler.stream_chunks = (terminal,);
+            list<hash<QoreLlmUtils::ChatStreamEvent>> events = ();
+            newProvider().chatStream((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "fixture"},),
+                sub (hash<QoreLlmUtils::ChatStreamEvent> event) { events += event; });
+            assertEq(1, events.size());
+            assertTrue(events[0].done, "an actual provider terminal reason remains valid");
+        }
     }
 
     private generationConfigStreamTest() {
