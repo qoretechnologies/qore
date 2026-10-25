@@ -11645,17 +11645,26 @@ static const std::string* qore_rt_intern_native_call_name(const char* name) {
     return rv.get();
 }
 
+//! Interns a named frame's first-use name outside the repeated callback call path
+static __attribute__((noinline)) void qore_rt_push_native_call_frame_aot_named_slow(void* storage,
+        void* thread_data,
+        const char* call_name, std::atomic<const std::string*>* call_name_cache,
+        const QoreProgramLocation* call_loc, const QoreProgramLocation* callee_loc) {
+    const std::string* name = qore_rt_intern_native_call_name(call_name);
+    call_name_cache->store(name, std::memory_order_release);
+    new (storage) QoreNativeCallStackLocation(thread_data, *name, nullptr, call_loc, callee_loc);
+}
+
 extern "C" DLLEXPORT void qore_rt_push_native_call_frame_aot_named(void* storage, void* thread_data,
         const char* call_name, std::atomic<const std::string*>* call_name_cache,
         const QoreProgramLocation* call_loc, const QoreProgramLocation* callee_loc) {
     assert(storage && thread_data && call_name && call_name_cache);
-    // the name is interned on the first call of the site, which caches it
-    const std::string* name = call_name_cache->load(std::memory_order_acquire);
-    if (!name) {
-        name = qore_rt_intern_native_call_name(call_name);
-        call_name_cache->store(name, std::memory_order_release);
+    if (const std::string* name = call_name_cache->load(std::memory_order_acquire)) {
+        new (storage) QoreNativeCallStackLocation(thread_data, *name, nullptr, call_loc, callee_loc);
+        return;
     }
-    new (storage) QoreNativeCallStackLocation(thread_data, *name, nullptr, call_loc, callee_loc);
+    qore_rt_push_native_call_frame_aot_named_slow(storage, thread_data, call_name, call_name_cache, call_loc,
+        callee_loc);
 }
 
 extern "C" DLLEXPORT void qore_rt_push_native_closure_call_frame(void* storage) {

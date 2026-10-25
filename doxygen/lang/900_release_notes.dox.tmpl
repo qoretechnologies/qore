@@ -258,6 +258,8 @@
     preserving call-stack publication, concurrent stack inspection and caller-location restoration.
     Already-bound AOT call-frame construction separates cached-name access from first-use initialization,
     avoiding repeated register saves while preserving lazy names and call-stack visibility.
+    Named frames used by specialized callbacks also separate first-use name interning from cached calls,
+    reducing repeated frame setup while retaining name ownership, synchronization and exception behavior.
 
     AOT-compiled modules record the AOT runtime identity of the %Qore library that compiled them, and a module
     compiled by a library with a different generated-code contract is refused when it is loaded, with an error that

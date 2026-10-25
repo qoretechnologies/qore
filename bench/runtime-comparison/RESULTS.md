@@ -22774,3 +22774,85 @@ Release qualification rebuilds all 391 qmods. Across 41 QUnit fixture runs, 722 
 Presentation retains source fallbacks for the separately installed GrpcUtil and SalesforcePubSubDataProvider qmods in the older metadata format; those external qmods still need rebuilding. Two loader warnings in the harness are deliberate synthetic test inputs. Initial digest-test failure, warning-reviewer errors and the known socket failure are preserved in the evidence. These are correctness/integration checks, not fresh performance measurements. The isolated develop build is available for subsequent optimized comparisons.
 
 [Audit](audit-merge-a9df.md); [evidence](results-merge-a9df.json).
+
+## Cached named native AOT frame construction (2026-10-25)
+
+The named-frame helper used by specialized AOT callbacks separates first-use name interning from repeated cached calls. The hot path becomes leaf machine code, removing its 160-byte stack reservation and twelve register saves/restores. The cache retains acquire/release publication and the interning mutex, immutable process-lifetime names and fork registration. Frame publication, reader synchronization, stack checks, cancellation, exception cleanup and locations are unchanged. Exported helper signature and frame layout are unchanged; measured size/alignment remain 80/8.
+
+Baseline is optimized merged performance commit 08979af265 (develop through a9df2443b6). Identical optimized AOT executables from the preceding frame experiment are reused across frozen baseline and candidate runtimes, with 2340 reference checks per runtime and actual dyld library resolution verified. This measures a runtime change, not new code generation. Release -O3 -DNDEBUG, allocation tracking off, Apple M4/macOS arm64, default/reverse/shuffle-487 layouts, 4096 items and seed 7. Screen: 52 workloads and three forks; selected confirmation: five forks. Screen and confirmation each use one warmup and three 150 ms samples. The additional tradeoff round selects three workloads and uses seven forks, three warmups and three 250 ms samples. All rounds use randomized paired order. Values are median fork means, then median across layouts. Whole-kernel ns/item, not isolated call latency; no exclusive-host, frequency or thermal control.
+
+|!screen workload|!Before ns/item|!Candidate ns/item|!Change
+|float:direct_local_float_return|0.804401|0.798478|-0.74%
+|float:callback_local_float_return|1.081833|1.023023|-5.44%
+|float:direct_local_float_result|0.736031|0.731073|-0.67%
+|float:callback_local_float_result|0.851474|0.853194|+0.20%
+|float:direct_loop_float_return|6.446277|6.433681|-0.20%
+|float:callback_loop_float_return|7.376736|6.630450|-10.12%
+|float:direct_float_add|0.812039|0.818869|+0.84%
+|float:static_float_add|0.811491|0.832419|+2.58%
+|float:typed_local_int_unary|7.216627|7.316641|+1.39%
+|float:typed_local_float_unary|0.938865|0.935878|-0.32%
+|float:result_float_add|0.873291|0.875676|+0.27%
+|micro:arithmetic|1.572329|1.589363|+1.08%
+|micro:direct_call|1.576056|1.569718|-0.40%
+|micro:method_call|1.656987|1.648576|-0.51%
+|micro:indirect_call|7.883511|7.887916|+0.06%
+|micro:polymorphic_call|24.085363|24.059593|-0.11%
+|micro:polymorphic_expression_call|11.569885|11.687902|+1.02%
+|micro:monomorphic_call|4.238193|4.245017|+0.16%
+|micro:optional_method_call|11.324819|11.228319|-0.85%
+|micro:polymorphic_float_call|24.785812|24.663525|-0.49%
+|micro:polymorphic_float_expression_call|11.675840|11.620828|-0.47%
+|micro:monomorphic_float_call|4.195143|4.083036|-2.67%
+|micro:optional_float_method_call|11.684831|11.512684|-1.47%
+|micro:boxed_float_method_call|20.652621|20.701220|+0.24%
+|micro:dynamic_int_result_call|11.200751|11.190965|-0.09%
+|micro:dynamic_int_result_fallback|21.801712|23.893408|+9.59%
+|micro:boxed_int_method_call|17.457965|17.574754|+0.67%
+|micro:boxed_int_method_fallback|33.441837|33.550173|+0.32%
+|micro:boxed_float_method_fallback|37.497494|38.769615|+3.39%
+|micro:boxed_int_method_effect|91.464909|92.233425|+0.84%
+|micro:dynamic_float_result_call|12.238493|12.165966|-0.59%
+|micro:indirect_wide|7.436798|7.521191|+1.13%
+|micro:indirect_float|8.294443|8.180321|-1.38%
+|micro:indirect_int_result|10.021994|9.098812|-9.21%
+|micro:indirect_float_result|8.254665|8.274483|+0.24%
+|micro:indirect_tagged_float|8.054621|8.030419|-0.30%
+|micro:indirect_branch_float|8.373857|8.207771|-1.98%
+|micro:indirect_affine|7.852594|8.029001|+2.25%
+|micro:indirect_affine_wide|7.473929|7.564341|+1.21%
+|micro:indirect_branch_int|7.626119|7.701828|+0.99%
+|micro:dispatch_control|1.948976|1.925479|-1.21%
+|micro:list_read|2.929782|2.932431|+0.09%
+|micro:list_build|37.254703|36.258938|-2.67%
+|micro:list_mutate|203.005426|206.459073|+1.70%
+|micro:temporary_list|1.672788|1.672725|-0.00%
+|micro:temporary_hash|336.822155|339.087447|+0.67%
+|micro:closure_call|19.538850|19.700297|+0.83%
+|micro:closure_capture|25.657212|26.033155|+1.47%
+|mixed:csv_report|996.894355|992.256262|-0.47%
+|mixed:object_orders|1852.155219|1854.106794|+0.11%
+|mixed:callback_pipeline|91.255188|91.620291|+0.40%
+|mixed:text_index|1381.248192|1379.159433|-0.15%
+
+|!confirmation workload|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_loop_float_return|6.476363|5.740818|-11.36%
+|float:direct_local_float_result|0.732667|0.737448|+0.65%
+|float:direct_loop_float_return|6.335300|6.355419|+0.32%
+|micro:boxed_float_method_fallback|34.333313|35.395119|+3.09%
+|micro:dynamic_int_result_fallback|21.451162|21.393170|-0.27%
+|micro:indirect_wide|7.481583|7.516232|+0.46%
+|micro:monomorphic_call|4.199685|4.178812|-0.50%
+
+|!tradeoff workload|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_loop_float_return|6.422666|5.680121|-11.56%
+|float:direct_loop_float_return|6.268230|6.281821|+0.22%
+|micro:boxed_float_method_fallback|33.958669|35.040242|+3.18%
+
+Retain under the authorized broader-workload tradeoff. Callback-loop aggregate time improves 10.12%, 11.36% and 11.56% in screen, confirmation and the longer repeat, with >=2% gains in every layout in every round; the final repeat saves about 0.743 ns/item. Boxed-float method fallback is repeatedly slower: +3.39%, +3.09%, +3.19% aggregate, adding about 1.082 ns/item in the final repeat. The final default/reverse/shuffle layout costs are +3.46%, +3.19%, +1.43%. This persistent cost is not dismissed because fork ranges overlap. The tradeoff depends on the application call mix; no universal overall throughput gain is established. Direct-loop movement is -0.20%, +0.32%, +0.22%. The dynamic-integer fallback screen cost (+9.59%) falls to -0.27% in confirmation, and the wide-callback cost falls from +1.13% to +0.46%. Preserve all observations and carry the boxed-float fallback cost into the next broader checkpoint.
+
+Validation: 391 qmods; seven targeted QUnit runs, 17 executed cases, 451 assertions, no skips; 1110 IR/AOT references and 2340 checks against each frozen runtime. All 1272 timing jobs/3816 windows are replayed. No fresh Java, pure-develop or IR/JIT speedup claim. The previous Java checkpoint applies to 196f, not this runtime. Java parity and a global performance ceiling remain unestablished.
+
+Next collect a current optimized Java/develop checkpoint, then evaluate a wrapper-scoped stack-check fast path. The broad stack-check outlining experiment rejected on 2026-10-09 enlarged method dispatch; any new approach must avoid repeating that change and preserve every live stack predicate and overflow action.
+
+[Evidence](results-native-frame-named-macos-arm64.json); [all 62 audit checks](audit-native-frame-named.md).
