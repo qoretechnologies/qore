@@ -1683,6 +1683,14 @@
           "source": "The replacement logic for detected PII, can be `entity_name` or `hash`. See [PII redaction](https://www.assemblyai.com/docs/pii-redaction) for more details.",
           "message": "偵測到的 PII 的替換邏輯可以是 `entity_name` 或 `hash`。有關更多詳細信息，請參閱[PII 修訂](https://www.assemblyai.com/docs/pii-redaction)。"
         },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9zdWI.allowed-value.c3RyaW5nOmVudGl0eV9uYW1l.display_name": {
+          "source": "entity_name",
+          "message": "實體名稱"
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9zdWI.allowed-value.c3RyaW5nOmhhc2g.display_name": {
+          "source": "hash",
+          "message": "雜湊"
+        },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.display_name": {
           "source": "Redact PII Return Unredacted",
           "message": "同時傳回原始文字"
@@ -2146,6 +2154,14 @@
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.desc": {
           "source": "Universal-3.5 Pro generates rich transcripts that can include inline annotations such as audio event markers and speaker cues. Set to `\"all\"` to remove all inline annotations, or `\"speaker\"` to remove only speaker cues while keeping other annotations. By default, all inline annotations are removed.\n\nNote: This parameter is only supported for the Universal-3.5 Pro model.\n",
           "message": "Universal-3.5 Pro 產生豐富的文字記錄，其中可以包括內聯註釋，例如音訊事件標記和揚聲器提示。設定為 `\"all\"` 以刪除所有內聯註釋，或設定為 `\"speaker\"` 以僅刪除揚聲器提示，同時保留其他註釋。預設情況下，所有內嵌註解都會被刪除。\n\n注意：僅Universal-3.5 Pro型號支援此參數。"
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "all",
+          "message": "全部"
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.allowed-value.c3RyaW5nOnNwZWFrZXI.display_name": {
+          "source": "speaker",
+          "message": "講者"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.dGVtcGVyYXR1cmU.display_name": {
           "source": "Temperature",
@@ -6963,6 +6979,14 @@
           "source": "The replacement logic for detected PII, can be `entity_name` or `hash`. See [PII redaction](https://www.assemblyai.com/docs/pii-redaction) for more details.",
           "message": "偵測到的 PII 的替換邏輯可以是 `entity_name` 或 `hash`。有關更多詳細信息，請參閱[PII 修訂](https://www.assemblyai.com/docs/pii-redaction)。"
         },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9zdWI.allowed-value.c3RyaW5nOmVudGl0eV9uYW1l.display_name": {
+          "source": "entity_name",
+          "message": "實體名稱"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9zdWI.allowed-value.c3RyaW5nOmhhc2g.display_name": {
+          "source": "hash",
+          "message": "雜湊"
+        },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.display_name": {
           "source": "Redact PII Return Unredacted",
           "message": "同時傳回原始文字"
@@ -7427,6 +7451,14 @@
           "source": "Universal-3.5 Pro generates rich transcripts that can include inline annotations such as audio event markers and speaker cues. Set to `\"all\"` to remove all inline annotations, or `\"speaker\"` to remove only speaker cues while keeping other annotations. By default, all inline annotations are removed.\n\nNote: This parameter is only supported for the Universal-3.5 Pro model.\n",
           "message": "Universal-3.5 Pro 產生豐富的文字記錄，其中可以包括內聯註釋，例如音訊事件標記和揚聲器提示。設定為 `\"all\"` 以刪除所有內聯註釋，或設定為 `\"speaker\"` 以僅刪除揚聲器提示，同時保留其他註釋。預設情況下，所有內嵌註解都會被刪除。\n\n注意：僅Universal-3.5 Pro型號支援此參數。"
         },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "all",
+          "message": "全部"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.allowed-value.c3RyaW5nOnNwZWFrZXI.display_name": {
+          "source": "speaker",
+          "message": "講者"
+        },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.dGVtcGVyYXR1cmU.display_name": {
           "source": "Temperature",
           "message": "溫度"
@@ -7534,6 +7566,22 @@
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.dHJhbnNjcmlwdGlvbl90aW1lb3V0.desc": {
           "source": "Positive polling time budget. Defaults to 30 minutes. A timeout leaves the server job running; use its ID to retrieve or delete it.",
           "message": "積極的輪詢時間預算。預設為 30 分鐘。逾時使伺服器作業繼續運作；使用其 ID 來檢索或刪除它。"
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbC0zLTUtcHJv.display_name": {
+          "source": "universal-3-5-pro",
+          "message": "universal-3-5-pro"
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbC0y.display_name": {
+          "source": "universal-2",
+          "message": "universal-2"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbC0zLTUtcHJv.display_name": {
+          "source": "universal-3-5-pro",
+          "message": "universal-3-5-pro"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbC0y.display_name": {
+          "source": "universal-2",
+          "message": "universal-2"
         }
       }
     }

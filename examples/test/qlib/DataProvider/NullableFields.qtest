@@ -10,6 +10,8 @@ class NullableFieldsTest inherits QUnit::Test {
     constructor() : Test("Required nullable fields", "1.0", \ARGV) {
         addTestCase("optional copies clear presence requirements without modifying the source", \copyTest());
         addTestCase("required nullable fields distinguish absence and explicit null", \presenceTest());
+        addTestCase("an optional field with choices accepts no value and null", \choicesTest());
+        addTestCase("an optional type with choices accepts no value and null", \typeChoicesTest());
         set_return_value(main());
     }
     private copyTest() {
@@ -30,5 +32,32 @@ class NullableFieldsTest inherits QUnit::Test {
         assertThrows("MISSING-VALUE-ERROR", sub () { type.acceptsValue({}); });
         type.getFields().value.setDefaultValue("default");
         assertEq({"value": "default"}, type.acceptsValue({}));
+    }
+    private choicesTest() {
+        QoreDataField field("status", "A status", AbstractDataProviderTypeMap."*string");
+        field.setAllowedValues(("open", "closed"));
+        assertNothing(field.acceptsValue(NOTHING));
+        # the type of an optional field takes null as no value
+        assertNothing(field.acceptsValue(NULL));
+        assertEq("open", field.acceptsValue("open"));
+        assertThrows("FIELD-VALUE-ERROR", "does not accept value \"bogus\"", \field.acceptsValue(), "bogus");
+        HashDataType type();
+        type.addField(field);
+        assertEq({"status": NOTHING}, type.acceptsValue({"status": NULL}));
+        assertEq({}, type.acceptsValue({}));
+        # a mandatory field with choices still refuses no value
+        QoreDataField mandatory("status", "A status", AbstractDataProviderTypeMap."string");
+        mandatory.setAllowedValues(("open", "closed"));
+        assertThrows("RUNTIME-TYPE-ERROR", \mandatory.acceptsValue(), NOTHING);
+    }
+    private typeChoicesTest() {
+        list<hash<AllowedValueInfo>> choices = (<AllowedValueInfo>{"value": "open"}, <AllowedValueInfo>{"value": "closed"});
+        QoreDataType optional(<QoreTypeInfo>{"type": new Type("*string"), "allowed_values": choices});
+        assertNothing(optional.acceptsValue(NOTHING));
+        assertNothing(optional.acceptsValue(NULL));
+        assertEq("closed", optional.acceptsValue("closed"));
+        assertThrows("TYPE-VALUE-ERROR", "does not accept value \"bogus\"", \optional.acceptsValue(), "bogus");
+        QoreDataType mandatory(<QoreTypeInfo>{"type": new Type("string"), "allowed_values": choices});
+        assertThrows("RUNTIME-TYPE-ERROR", \mandatory.acceptsValue(), NOTHING);
     }
 }

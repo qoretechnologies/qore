@@ -317,6 +317,8 @@ or a date, and a \c date-time string property of an object alternative a date
 
     @subsection openapi3_1_0 OpenApi3 v1.0
     - initial release
+    - a nullable enumeration, a composition whose only member that is not the \c null type is an enumeration or
+      wraps one, has the choices of the enumeration
 */
 
 #! main namespace for all public %OpenApi3 declarations
@@ -6528,6 +6530,40 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         }
     }
 
+    #! Returns the enumeration that the schema only wraps, if any
+    /** A composition with exactly one member that is not the \c "null" type - a single \c allOf member, or a
+        \c oneOf or \c anyOf of a schema and \c "null", which is how OpenAPI 3.1 writes a nullable enumeration -
+        is the enumeration its member is, or wraps in turn.
+
+        @param depth guards against a self-referential chain
+
+        @return the schema with the enumeration, or @ref nothing if the schema wraps none or has one itself
+    */
+    private *SchemaObject getWrappedEnumeration(int depth = 0) {
+        if (properties || depth > 8) {
+            return;
+        }
+        *list<SchemaObject> members;
+        if (allOf) {
+            members = allOf;
+        } else if (oneOf) {
+            members = oneOf;
+        } else if (anyOf) {
+            members = anyOf;
+        }
+        list<SchemaObject> real = ();
+        foreach SchemaObject member in (members) {
+            if (!member.nullType) {
+                real += member;
+            }
+        }
+        if (real.size() != 1) {
+            return;
+        }
+        SchemaObject member = real[0];
+        return member.enumValues ? member : member.getWrappedEnumeration(depth + 1);
+    }
+
     #! Resolves a schema to the constrained scalar it wraps, if it is only a wrapper around one
     /** Reusable types are commonly reached through a chain of single-member compositions — an \c allOf
         adding a description around a \c "$ref" to a \c oneOf that names a single enum, which is how Paddle
@@ -7253,7 +7289,11 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         length are ignored. Values remain strings until updateFieldType() restores their type.
     */
     private *list<auto> getFieldEnumValues() {
-        if (!enumValues) { return; }
+        if (!enumValues) {
+            # a nullable enumeration, {anyOf: [{enum: [...]}, {type: "null"}]}, has the choices of the enumeration
+            *SchemaObject wrapped = getWrappedEnumeration();
+            return wrapped ? wrapped.getFieldEnumValues() : NOTHING;
+        }
         list<string> values = keys enumValues ?? ();
         # x-enum-varnames names generated code symbols, not user-facing labels.
         auto names = vendorExtensions."x-enumNames";

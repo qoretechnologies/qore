@@ -1867,6 +1867,16 @@ val = "string";      # OK
     requests are no longer offered.
     @endparblock
 
+    @par Nullable Enumerations Offer Their Choices
+    @parblock
+    A REST schema property that is a nullable enumeration, which OpenAPI 3.1 writes as an \c anyOf or \c oneOf of
+    the enumeration and the \c null type, now offers the values of the enumeration as its choices, with the display
+    names that the schema gives them, as a plain enumeration does; for example, the \c schedule option of the
+    Unstructured \c create-workflow action and the reasoning effort options of the Mistral, Fireworks and Azure
+    OpenAI actions.  An optional data provider field, option or type with choices accepts no value and \c NULL; it
+    refused them with a \c FIELD-VALUE-ERROR or \c TYPE-VALUE-ERROR exception.
+    @endparblock
+
     @par Records Whose Fields All Have Default Values Are Consistently Optional
     @parblock
     A data provider record type (@ref DataProvider::HashDataType "HashDataType") whose added fields all have default

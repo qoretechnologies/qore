@@ -871,6 +871,14 @@
           "source": "Prompt Cache Retention",
           "message": "Prompt Cache Retention"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.cHJvbXB0X2NhY2hlX3JldGVudGlvbg.allowed-value.c3RyaW5nOmluX21lbW9yeQ.display_name": {
+          "source": "in_memory",
+          "message": "in_memory"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.cHJvbXB0X2NhY2hlX3JldGVudGlvbg.allowed-value.c3RyaW5nOjI0aA.display_name": {
+          "source": "24h",
+          "message": "24h"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.display_name": {
           "source": "Messages",
           "message": "Messages"
@@ -1503,6 +1511,18 @@
           "source": "Constrains the verbosity of the model's response. Lower values will result in\nmore concise responses, while higher values will result in more verbose responses.\nCurrently supported values are `low`, `medium`, and `high`.",
           "message": "Constrains the verbosity of the model's response. Lower values will result in\nmore concise responses, while higher values will result in more verbose responses.\nCurrently supported values are `low`, `medium`, and `high`."
         },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dmVyYm9zaXR5.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "medium"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
           "source": "Reasoning Effort",
           "message": "Reasoning Effort"
@@ -1514,6 +1534,30 @@
         "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
           "source": "Constrains effort on reasoning for\n[reasoning models](https://platform.openai.com/docs/guides/reasoning).\nCurrently supported values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Reducing\nreasoning effort can result in faster responses and fewer tokens used\non reasoning in a response.\n- `gpt-5.1` defaults to `none`, which does not perform reasoning. The supported reasoning values for `gpt-5.1` are `none`, `low`, `medium`, and `high`. Tool calls are supported for all reasoning values in gpt-5.1.\n- All models before `gpt-5.1` default to `medium` reasoning effort, and do not support `none`.\n- The `gpt-5-pro` model defaults to (and only supports) `high` reasoning effort.\n- `xhigh` is supported for all models after `gpt-5.1-codex-max`.",
           "message": "Constrains effort on reasoning for\n[reasoning models](https://platform.openai.com/docs/guides/reasoning).\nCurrently supported values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Reducing\nreasoning effort can result in faster responses and fewer tokens used\non reasoning in a response.\n- `gpt-5.1` defaults to `none`, which does not perform reasoning. The supported reasoning values for `gpt-5.1` are `none`, `low`, `medium`, and `high`. Tool calls are supported for all reasoning values in gpt-5.1.\n- All models before `gpt-5.1` default to `medium` reasoning effort, and do not support `none`.\n- The `gpt-5-pro` model defaults to (and only supports) `high` reasoning effort.\n- `xhigh` is supported for all models after `gpt-5.1-codex-max`."
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "none",
+          "message": "none"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "minimal",
+          "message": "minimal"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "medium"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOnhoaWdo.display_name": {
+          "source": "xhigh",
+          "message": "xhigh"
         },
         "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.display_name": {
           "source": "Max Completion Tokens",
@@ -3627,6 +3671,14 @@
           "source": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`).\nFor models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend\nphase on all assistant messages — dropping it can degrade performance. Not used for user messages.",
           "message": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`).\nFor models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend\nphase on all assistant messages — dropping it can degrade performance. Not used for user messages."
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkVhc3lJbnB1dE1lc3NhZ2UjYmNlMDc3MzE3NGJhMzk4OTk4MTk4ZDQ0OTQ5ODk0Yzg2ZDNmNjFiOWU1OTUwMTEzOGYzOTg5YmQ4ODU4ZmI3Mw.field.cGhhc2U.allowed-value.c3RyaW5nOmNvbW1lbnRhcnk.display_name": {
+          "source": "commentary",
+          "message": "commentary"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkVhc3lJbnB1dE1lc3NhZ2UjYmNlMDc3MzE3NGJhMzk4OTk4MTk4ZDQ0OTQ5ODk0Yzg2ZDNmNjFiOWU1OTUwMTEzOGYzOTg5YmQ4ODU4ZmI3Mw.field.cGhhc2U.allowed-value.c3RyaW5nOmZpbmFsX2Fuc3dlcg.display_name": {
+          "source": "final_answer",
+          "message": "final_answer"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkVhc3lJbnB1dE1lc3NhZ2UjYmNlMDc3MzE3NGJhMzk4OTk4MTk4ZDQ0OTQ5ODk0Yzg2ZDNmNjFiOWU1OTUwMTEzOGYzOTg5YmQ4ODU4ZmI3Mw.field.cm9sZQ.display_name": {
           "source": "Role",
           "message": "Role"
@@ -4090,6 +4142,14 @@
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2UjNGUzNDc5ZGMxYTMwNjVhOWJkM2IwOTU4YjliMTI5MGQ4N2NhNjY5Y2YxMWNiODZlNjczMDg5OGQyOGZiY2VjZQ.field.cGhhc2U.desc": {
           "source": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`).\nFor models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend\nphase on all assistant messages — dropping it can degrade performance. Not used for user messages.",
           "message": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`).\nFor models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend\nphase on all assistant messages — dropping it can degrade performance. Not used for user messages."
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2UjNGUzNDc5ZGMxYTMwNjVhOWJkM2IwOTU4YjliMTI5MGQ4N2NhNjY5Y2YxMWNiODZlNjczMDg5OGQyOGZiY2VjZQ.field.cGhhc2U.allowed-value.c3RyaW5nOmNvbW1lbnRhcnk.display_name": {
+          "source": "commentary",
+          "message": "commentary"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2UjNGUzNDc5ZGMxYTMwNjVhOWJkM2IwOTU4YjliMTI5MGQ4N2NhNjY5Y2YxMWNiODZlNjczMDg5OGQyOGZiY2VjZQ.field.cGhhc2U.allowed-value.c3RyaW5nOmZpbmFsX2Fuc3dlcg.display_name": {
+          "source": "final_answer",
+          "message": "final_answer"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2UjNGUzNDc5ZGMxYTMwNjVhOWJkM2IwOTU4YjliMTI5MGQ4N2NhNjY5Y2YxMWNiODZlNjczMDg5OGQyOGZiY2VjZQ.field.cm9sZQ.display_name": {
           "source": "Role",
@@ -5167,6 +5227,18 @@
           "source": "Status",
           "message": "Status"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUNvbXB1dGVyQ2FsbE91dHB1dEl0ZW1QYXJhbSMwNzIyMTkwOGRiMmMwYmRlNTk0Y2U2Njk5M2IyZDgxNTI3MDVlNzY5OTc0MjFjMTc2YjI5YWJhMzFiM2ExYzQ4.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUNvbXB1dGVyQ2FsbE91dHB1dEl0ZW1QYXJhbSMwNzIyMTkwOGRiMmMwYmRlNTk0Y2U2Njk5M2IyZDgxNTI3MDVlNzY5OTc0MjFjMTc2YjI5YWJhMzFiM2ExYzQ4.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUNvbXB1dGVyQ2FsbE91dHB1dEl0ZW1QYXJhbSMwNzIyMTkwOGRiMmMwYmRlNTk0Y2U2Njk5M2IyZDgxNTI3MDVlNzY5OTc0MjFjMTc2YjI5YWJhMzFiM2ExYzQ4.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUNvbXB1dGVyQ2FsbE91dHB1dEl0ZW1QYXJhbSMwNzIyMTkwOGRiMmMwYmRlNTk0Y2U2Njk5M2IyZDgxNTI3MDVlNzY5OTc0MjFjMTc2YjI5YWJhMzFiM2ExYzQ4.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
@@ -5531,6 +5603,22 @@
           "source": "Detail",
           "message": "Detail"
         },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpPcGVuQUkuSW5wdXRJbWFnZUNvbnRlbnRQYXJhbUF1dG9QYXJhbSM0MjdiZTg3MWNmOWNjNTQ2ZTFlNmZjYjk2MmRiNzg3YmQ3YWRlZjY2ZWM3MWQ4YzdkNjVkNDRhYjg1Y2NhZDhk.field.ZGV0YWls.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpPcGVuQUkuSW5wdXRJbWFnZUNvbnRlbnRQYXJhbUF1dG9QYXJhbSM0MjdiZTg3MWNmOWNjNTQ2ZTFlNmZjYjk2MmRiNzg3YmQ3YWRlZjY2ZWM3MWQ4YzdkNjVkNDRhYjg1Y2NhZDhk.field.ZGV0YWls.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpPcGVuQUkuSW5wdXRJbWFnZUNvbnRlbnRQYXJhbUF1dG9QYXJhbSM0MjdiZTg3MWNmOWNjNTQ2ZTFlNmZjYjk2MmRiNzg3YmQ3YWRlZjY2ZWM3MWQ4YzdkNjVkNDRhYjg1Y2NhZDhk.field.ZGV0YWls.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "auto"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpPcGVuQUkuSW5wdXRJbWFnZUNvbnRlbnRQYXJhbUF1dG9QYXJhbSM0MjdiZTg3MWNmOWNjNTQ2ZTFlNmZjYjk2MmRiNzg3YmQ3YWRlZjY2ZWM3MWQ4YzdkNjVkNDRhYjg1Y2NhZDhk.field.ZGV0YWls.allowed-value.c3RyaW5nOm9yaWdpbmFs.display_name": {
+          "source": "original",
+          "message": "original"
+        },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpPcGVuQUkuSW5wdXRJbWFnZUNvbnRlbnRQYXJhbUF1dG9QYXJhbSM0MjdiZTg3MWNmOWNjNTQ2ZTFlNmZjYjk2MmRiNzg3YmQ3YWRlZjY2ZWM3MWQ4YzdkNjVkNDRhYjg1Y2NhZDhk.field.ZmlsZV9pZA.display_name": {
           "source": "File ID",
           "message": "File ID"
@@ -5611,6 +5699,18 @@
           "source": "Status",
           "message": "Status"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uQ2FsbE91dHB1dEl0ZW1QYXJhbSMzYWVjOWI2MzYyMmYxNDc1NjBjMzJhYmNiZDdlY2U0YWY4YmNjZmQzMjkxOTcxODU0ZDBlNTU2OTRhNWFlNmJi.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uQ2FsbE91dHB1dEl0ZW1QYXJhbSMzYWVjOWI2MzYyMmYxNDc1NjBjMzJhYmNiZDdlY2U0YWY4YmNjZmQzMjkxOTcxODU0ZDBlNTU2OTRhNWFlNmJi.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uQ2FsbE91dHB1dEl0ZW1QYXJhbSMzYWVjOWI2MzYyMmYxNDc1NjBjMzJhYmNiZDdlY2U0YWY4YmNjZmQzMjkxOTcxODU0ZDBlNTU2OTRhNWFlNmJi.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uQ2FsbE91dHB1dEl0ZW1QYXJhbSMzYWVjOWI2MzYyMmYxNDc1NjBjMzJhYmNiZDdlY2U0YWY4YmNjZmQzMjkxOTcxODU0ZDBlNTU2OTRhNWFlNmJi.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
@@ -5671,6 +5771,18 @@
           "source": "Status",
           "message": "Status"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hDYWxsSXRlbVBhcmFtI2ViY2U1OWEyYzRlYmU5ZmU2NDk4YzMyMWM2ODkxNDAyNzk0NWJjNzYwNzQ2YWFmYmE5ZmY4M2M2MzdjY2M5ZDk.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hDYWxsSXRlbVBhcmFtI2ViY2U1OWEyYzRlYmU5ZmU2NDk4YzMyMWM2ODkxNDAyNzk0NWJjNzYwNzQ2YWFmYmE5ZmY4M2M2MzdjY2M5ZDk.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hDYWxsSXRlbVBhcmFtI2ViY2U1OWEyYzRlYmU5ZmU2NDk4YzMyMWM2ODkxNDAyNzk0NWJjNzYwNzQ2YWFmYmE5ZmY4M2M2MzdjY2M5ZDk.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hDYWxsSXRlbVBhcmFtI2ViY2U1OWEyYzRlYmU5ZmU2NDk4YzMyMWM2ODkxNDAyNzk0NWJjNzYwNzQ2YWFmYmE5ZmY4M2M2MzdjY2M5ZDk.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
@@ -5719,6 +5831,18 @@
           "source": "Status",
           "message": "Status"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hPdXRwdXRJdGVtUGFyYW0jNjJlYjc2MDMyNDQ1NzlkMjhjMmNjYTQ0YWZlMjhlNzA1Njc4ZTViY2Q5Y2U3Y2JjZjI0ZWJjYjdmYmVlNmE3OQ.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hPdXRwdXRJdGVtUGFyYW0jNjJlYjc2MDMyNDQ1NzlkMjhjMmNjYTQ0YWZlMjhlNzA1Njc4ZTViY2Q5Y2U3Y2JjZjI0ZWJjYjdmYmVlNmE3OQ.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hPdXRwdXRJdGVtUGFyYW0jNjJlYjc2MDMyNDQ1NzlkMjhjMmNjYTQ0YWZlMjhlNzA1Njc4ZTViY2Q5Y2U3Y2JjZjI0ZWJjYjdmYmVlNmE3OQ.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hPdXRwdXRJdGVtUGFyYW0jNjJlYjc2MDMyNDQ1NzlkMjhjMmNjYTQ0YWZlMjhlNzA1Njc4ZTViY2Q5Y2U3Y2JjZjI0ZWJjYjdmYmVlNmE3OQ.field.dG9vbHM.display_name": {
           "source": "Tools",
           "message": "Tools"
@@ -5758,6 +5882,22 @@
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpPcGVuQUkuQXV0b0NvZGVJbnRlcnByZXRlclRvb2xQYXJhbSNlNmM2ZWJjYjFiMDI5NmUxNThlOTM0MTg4OTY5NjI0NjMzODQ5NWU0N2Q5Zjc3OGRmYjFlNTQwN2UxNTUwY2Nm.field.bWVtb3J5X2xpbWl0.display_name": {
           "source": "Memory Limit",
           "message": "Memory Limit"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpPcGVuQUkuQXV0b0NvZGVJbnRlcnByZXRlclRvb2xQYXJhbSNlNmM2ZWJjYjFiMDI5NmUxNThlOTM0MTg4OTY5NjI0NjMzODQ5NWU0N2Q5Zjc3OGRmYjFlNTQwN2UxNTUwY2Nm.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjFn.display_name": {
+          "source": "1g",
+          "message": "1g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpPcGVuQUkuQXV0b0NvZGVJbnRlcnByZXRlclRvb2xQYXJhbSNlNmM2ZWJjYjFiMDI5NmUxNThlOTM0MTg4OTY5NjI0NjMzODQ5NWU0N2Q5Zjc3OGRmYjFlNTQwN2UxNTUwY2Nm.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjRn.display_name": {
+          "source": "4g",
+          "message": "4g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpPcGVuQUkuQXV0b0NvZGVJbnRlcnByZXRlclRvb2xQYXJhbSNlNmM2ZWJjYjFiMDI5NmUxNThlOTM0MTg4OTY5NjI0NjMzODQ5NWU0N2Q5Zjc3OGRmYjFlNTQwN2UxNTUwY2Nm.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjE2Zw.display_name": {
+          "source": "16g",
+          "message": "16g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpPcGVuQUkuQXV0b0NvZGVJbnRlcnByZXRlclRvb2xQYXJhbSNlNmM2ZWJjYjFiMDI5NmUxNThlOTM0MTg4OTY5NjI0NjMzODQ5NWU0N2Q5Zjc3OGRmYjFlNTQwN2UxNTUwY2Nm.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjY0Zw.display_name": {
+          "source": "64g",
+          "message": "64g"
         },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpPcGVuQUkuQXV0b0NvZGVJbnRlcnByZXRlclRvb2xQYXJhbSNlNmM2ZWJjYjFiMDI5NmUxNThlOTM0MTg4OTY5NjI0NjMzODQ5NWU0N2Q5Zjc3OGRmYjFlNTQwN2UxNTUwY2Nm.field.bmV0d29ya19wb2xpY3k.display_name": {
           "source": "Network Policy",
@@ -6595,6 +6735,14 @@
           "source": "Control how much effort the model will exert to match the style and features, especially facial features, of input images. This parameter is only supported for `gpt-image-1` and `gpt-image-1.5` and later models, unsupported for `gpt-image-1-mini`. Supports `high` and `low`. Defaults to `low`.",
           "message": "Control how much effort the model will exert to match the style and features, especially facial features, of input images. This parameter is only supported for `gpt-image-1` and `gpt-image-1.5` and later models, unsupported for `gpt-image-1-mini`. Supports `high` and `low`. Defaults to `low`."
         },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOk9wZW5BcGkzSGFzaERhdGFUeXBlOk9wZW5BSS5JbWFnZUdlblRvb2wjMDBlZjQ1YWU1NWQ1YjA0MWE5ODAwNzRlMzRhOWRkZmE4NDM5YzkxNjg2MWZmZjkxYTkxYmEzM2UzOWRlYjE1NQ.field.aW5wdXRfZmlkZWxpdHk.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOk9wZW5BcGkzSGFzaERhdGFUeXBlOk9wZW5BSS5JbWFnZUdlblRvb2wjMDBlZjQ1YWU1NWQ1YjA0MWE5ODAwNzRlMzRhOWRkZmE4NDM5YzkxNjg2MWZmZjkxYTkxYmEzM2UzOWRlYjE1NQ.field.aW5wdXRfZmlkZWxpdHk.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOk9wZW5BcGkzSGFzaERhdGFUeXBlOk9wZW5BSS5JbWFnZUdlblRvb2wjMDBlZjQ1YWU1NWQ1YjA0MWE5ODAwNzRlMzRhOWRkZmE4NDM5YzkxNjg2MWZmZjkxYTkxYmEzM2UzOWRlYjE1NQ.field.aW5wdXRfaW1hZ2VfbWFzaw.display_name": {
           "source": "Input Image Mask",
           "message": "Input Image Mask"
@@ -6870,6 +7018,22 @@
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOk9wZW5BcGkzSGFzaERhdGFUeXBlOipPcGVuQUkuQ29udGFpbmVyQXV0b1BhcmFtI2ViMWJiMTU2NDgzZDk2Mjc1NzIzYzUyMTFhYjI4ODIyYTQzMzA3MTE0NDgzODMwZTAyMjg0OGI1YzQ0NGRmOWM.field.bWVtb3J5X2xpbWl0.display_name": {
           "source": "Memory Limit",
           "message": "Memory Limit"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOk9wZW5BcGkzSGFzaERhdGFUeXBlOipPcGVuQUkuQ29udGFpbmVyQXV0b1BhcmFtI2ViMWJiMTU2NDgzZDk2Mjc1NzIzYzUyMTFhYjI4ODIyYTQzMzA3MTE0NDgzODMwZTAyMjg0OGI1YzQ0NGRmOWM.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjFn.display_name": {
+          "source": "1g",
+          "message": "1g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOk9wZW5BcGkzSGFzaERhdGFUeXBlOipPcGVuQUkuQ29udGFpbmVyQXV0b1BhcmFtI2ViMWJiMTU2NDgzZDk2Mjc1NzIzYzUyMTFhYjI4ODIyYTQzMzA3MTE0NDgzODMwZTAyMjg0OGI1YzQ0NGRmOWM.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjRn.display_name": {
+          "source": "4g",
+          "message": "4g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOk9wZW5BcGkzSGFzaERhdGFUeXBlOipPcGVuQUkuQ29udGFpbmVyQXV0b1BhcmFtI2ViMWJiMTU2NDgzZDk2Mjc1NzIzYzUyMTFhYjI4ODIyYTQzMzA3MTE0NDgzODMwZTAyMjg0OGI1YzQ0NGRmOWM.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjE2Zw.display_name": {
+          "source": "16g",
+          "message": "16g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOk9wZW5BcGkzSGFzaERhdGFUeXBlOipPcGVuQUkuQ29udGFpbmVyQXV0b1BhcmFtI2ViMWJiMTU2NDgzZDk2Mjc1NzIzYzUyMTFhYjI4ODIyYTQzMzA3MTE0NDgzODMwZTAyMjg0OGI1YzQ0NGRmOWM.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjY0Zw.display_name": {
+          "source": "64g",
+          "message": "64g"
         },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOk9wZW5BcGkzSGFzaERhdGFUeXBlOipPcGVuQUkuQ29udGFpbmVyQXV0b1BhcmFtI2ViMWJiMTU2NDgzZDk2Mjc1NzIzYzUyMTFhYjI4ODIyYTQzMzA3MTE0NDgzODMwZTAyMjg0OGI1YzQ0NGRmOWM.field.bmV0d29ya19wb2xpY3k.display_name": {
           "source": "Network Policy",
@@ -7971,6 +8135,18 @@
           "source": "Status",
           "message": "Status"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dCMyZmFkNDEzZTUzOThlZTFkNTk0ZTE0NzNiN2NmZDk2NDM5OTAyZGFjMzk1ZTk4NzJhOThkOWNjYWNjMDQzYzM1.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dCMyZmFkNDEzZTUzOThlZTFkNTk0ZTE0NzNiN2NmZDk2NDM5OTAyZGFjMzk1ZTk4NzJhOThkOWNjYWNjMDQzYzM1.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dCMyZmFkNDEzZTUzOThlZTFkNTk0ZTE0NzNiN2NmZDk2NDM5OTAyZGFjMzk1ZTk4NzJhOThkOWNjYWNjMDQzYzM1.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dCMyZmFkNDEzZTUzOThlZTFkNTk0ZTE0NzNiN2NmZDk2NDM5OTAyZGFjMzk1ZTk4NzJhOThkOWNjYWNjMDQzYzM1.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
@@ -8115,6 +8291,18 @@
           "source": "Status values reported for shell tool calls.",
           "message": "Status values reported for shell tool calls."
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsSXRlbVBhcmFtIzhiYmUzNTRjYjI5YzI0MjIwZDJhNGRlN2FkMzUzODU1MWJiZGQxNGQ3NmIwMzc1N2QxYTU4ZjY3NDAzNmFiMTU.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsSXRlbVBhcmFtIzhiYmUzNTRjYjI5YzI0MjIwZDJhNGRlN2FkMzUzODU1MWJiZGQxNGQ3NmIwMzc1N2QxYTU4ZjY3NDAzNmFiMTU.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsSXRlbVBhcmFtIzhiYmUzNTRjYjI5YzI0MjIwZDJhNGRlN2FkMzUzODU1MWJiZGQxNGQ3NmIwMzc1N2QxYTU4ZjY3NDAzNmFiMTU.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsSXRlbVBhcmFtIzhiYmUzNTRjYjI5YzI0MjIwZDJhNGRlN2FkMzUzODU1MWJiZGQxNGQ3NmIwMzc1N2QxYTU4ZjY3NDAzNmFiMTU.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
@@ -8254,6 +8442,18 @@
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtIzUzMDIwZjg3ZmJjYjk1ZGI4ZDcxZTQxM2QyMTAyZDI3Zjg3OTAyY2VkMmRkODE5NWIzMzdmMDg1ZjBjOGUzZDY.field.c3RhdHVz.desc": {
           "source": "Status values reported for shell tool calls.",
           "message": "Status values reported for shell tool calls."
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtIzUzMDIwZjg3ZmJjYjk1ZGI4ZDcxZTQxM2QyMTAyZDI3Zjg3OTAyY2VkMmRkODE5NWIzMzdmMDg1ZjBjOGUzZDY.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtIzUzMDIwZjg3ZmJjYjk1ZGI4ZDcxZTQxM2QyMTAyZDI3Zjg3OTAyY2VkMmRkODE5NWIzMzdmMDg1ZjBjOGUzZDY.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtIzUzMDIwZjg3ZmJjYjk1ZGI4ZDcxZTQxM2QyMTAyZDI3Zjg3OTAyY2VkMmRkODE5NWIzMzdmMDg1ZjBjOGUzZDY.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtIzUzMDIwZjg3ZmJjYjk1ZGI4ZDcxZTQxM2QyMTAyZDI3Zjg3OTAyY2VkMmRkODE5NWIzMzdmMDg1ZjBjOGUzZDY.field.dHlwZQ.display_name": {
           "source": "Type",
@@ -9547,6 +9747,14 @@
           "source": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`).\nFor models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend\nphase on all assistant messages — dropping it can degrade performance. Not used for user messages.",
           "message": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`).\nFor models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend\nphase on all assistant messages — dropping it can degrade performance. Not used for user messages."
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkVhc3lJbnB1dE1lc3NhZ2UjYmNlMDc3MzE3NGJhMzk4OTk4MTk4ZDQ0OTQ5ODk0Yzg2ZDNmNjFiOWU1OTUwMTEzOGYzOTg5YmQ4ODU4ZmI3Mw.field.cGhhc2U.allowed-value.c3RyaW5nOmNvbW1lbnRhcnk.display_name": {
+          "source": "commentary",
+          "message": "commentary"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkVhc3lJbnB1dE1lc3NhZ2UjYmNlMDc3MzE3NGJhMzk4OTk4MTk4ZDQ0OTQ5ODk0Yzg2ZDNmNjFiOWU1OTUwMTEzOGYzOTg5YmQ4ODU4ZmI3Mw.field.cGhhc2U.allowed-value.c3RyaW5nOmZpbmFsX2Fuc3dlcg.display_name": {
+          "source": "final_answer",
+          "message": "final_answer"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkVhc3lJbnB1dE1lc3NhZ2UjYmNlMDc3MzE3NGJhMzk4OTk4MTk4ZDQ0OTQ5ODk0Yzg2ZDNmNjFiOWU1OTUwMTEzOGYzOTg5YmQ4ODU4ZmI3Mw.field.cm9sZQ.display_name": {
           "source": "Role",
           "message": "Role"
@@ -10010,6 +10218,14 @@
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2UjNGUzNDc5ZGMxYTMwNjVhOWJkM2IwOTU4YjliMTI5MGQ4N2NhNjY5Y2YxMWNiODZlNjczMDg5OGQyOGZiY2VjZQ.field.cGhhc2U.desc": {
           "source": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`).\nFor models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend\nphase on all assistant messages — dropping it can degrade performance. Not used for user messages.",
           "message": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`).\nFor models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend\nphase on all assistant messages — dropping it can degrade performance. Not used for user messages."
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2UjNGUzNDc5ZGMxYTMwNjVhOWJkM2IwOTU4YjliMTI5MGQ4N2NhNjY5Y2YxMWNiODZlNjczMDg5OGQyOGZiY2VjZQ.field.cGhhc2U.allowed-value.c3RyaW5nOmNvbW1lbnRhcnk.display_name": {
+          "source": "commentary",
+          "message": "commentary"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2UjNGUzNDc5ZGMxYTMwNjVhOWJkM2IwOTU4YjliMTI5MGQ4N2NhNjY5Y2YxMWNiODZlNjczMDg5OGQyOGZiY2VjZQ.field.cGhhc2U.allowed-value.c3RyaW5nOmZpbmFsX2Fuc3dlcg.display_name": {
+          "source": "final_answer",
+          "message": "final_answer"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2UjNGUzNDc5ZGMxYTMwNjVhOWJkM2IwOTU4YjliMTI5MGQ4N2NhNjY5Y2YxMWNiODZlNjczMDg5OGQyOGZiY2VjZQ.field.cm9sZQ.display_name": {
           "source": "Role",
@@ -11087,6 +11303,18 @@
           "source": "Status",
           "message": "Status"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUNvbXB1dGVyQ2FsbE91dHB1dEl0ZW1QYXJhbSMwNzIyMTkwOGRiMmMwYmRlNTk0Y2U2Njk5M2IyZDgxNTI3MDVlNzY5OTc0MjFjMTc2YjI5YWJhMzFiM2ExYzQ4.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUNvbXB1dGVyQ2FsbE91dHB1dEl0ZW1QYXJhbSMwNzIyMTkwOGRiMmMwYmRlNTk0Y2U2Njk5M2IyZDgxNTI3MDVlNzY5OTc0MjFjMTc2YjI5YWJhMzFiM2ExYzQ4.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUNvbXB1dGVyQ2FsbE91dHB1dEl0ZW1QYXJhbSMwNzIyMTkwOGRiMmMwYmRlNTk0Y2U2Njk5M2IyZDgxNTI3MDVlNzY5OTc0MjFjMTc2YjI5YWJhMzFiM2ExYzQ4.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUNvbXB1dGVyQ2FsbE91dHB1dEl0ZW1QYXJhbSMwNzIyMTkwOGRiMmMwYmRlNTk0Y2U2Njk5M2IyZDgxNTI3MDVlNzY5OTc0MjFjMTc2YjI5YWJhMzFiM2ExYzQ4.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
@@ -11451,6 +11679,22 @@
           "source": "Detail",
           "message": "Detail"
         },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6SGFzaERhdGFUeXBlOk9wZW5BSS5JbnB1dEltYWdlQ29udGVudFBhcmFtQXV0b1BhcmFtIzQyN2JlODcxY2Y5Y2M1NDZlMWU2ZmNiOTYyZGI3ODdiZDdhZGVmNjZlYzcxZDhjN2Q2NWQ0NGFiODVjY2FkOGQ.field.ZGV0YWls.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6SGFzaERhdGFUeXBlOk9wZW5BSS5JbnB1dEltYWdlQ29udGVudFBhcmFtQXV0b1BhcmFtIzQyN2JlODcxY2Y5Y2M1NDZlMWU2ZmNiOTYyZGI3ODdiZDdhZGVmNjZlYzcxZDhjN2Q2NWQ0NGFiODVjY2FkOGQ.field.ZGV0YWls.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6SGFzaERhdGFUeXBlOk9wZW5BSS5JbnB1dEltYWdlQ29udGVudFBhcmFtQXV0b1BhcmFtIzQyN2JlODcxY2Y5Y2M1NDZlMWU2ZmNiOTYyZGI3ODdiZDdhZGVmNjZlYzcxZDhjN2Q2NWQ0NGFiODVjY2FkOGQ.field.ZGV0YWls.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "auto"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6SGFzaERhdGFUeXBlOk9wZW5BSS5JbnB1dEltYWdlQ29udGVudFBhcmFtQXV0b1BhcmFtIzQyN2JlODcxY2Y5Y2M1NDZlMWU2ZmNiOTYyZGI3ODdiZDdhZGVmNjZlYzcxZDhjN2Q2NWQ0NGFiODVjY2FkOGQ.field.ZGV0YWls.allowed-value.c3RyaW5nOm9yaWdpbmFs.display_name": {
+          "source": "original",
+          "message": "original"
+        },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6SGFzaERhdGFUeXBlOk9wZW5BSS5JbnB1dEltYWdlQ29udGVudFBhcmFtQXV0b1BhcmFtIzQyN2JlODcxY2Y5Y2M1NDZlMWU2ZmNiOTYyZGI3ODdiZDdhZGVmNjZlYzcxZDhjN2Q2NWQ0NGFiODVjY2FkOGQ.field.ZmlsZV9pZA.display_name": {
           "source": "File ID",
           "message": "File ID"
@@ -11531,6 +11775,18 @@
           "source": "Status",
           "message": "Status"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uQ2FsbE91dHB1dEl0ZW1QYXJhbSMzYWVjOWI2MzYyMmYxNDc1NjBjMzJhYmNiZDdlY2U0YWY4YmNjZmQzMjkxOTcxODU0ZDBlNTU2OTRhNWFlNmJi.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uQ2FsbE91dHB1dEl0ZW1QYXJhbSMzYWVjOWI2MzYyMmYxNDc1NjBjMzJhYmNiZDdlY2U0YWY4YmNjZmQzMjkxOTcxODU0ZDBlNTU2OTRhNWFlNmJi.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uQ2FsbE91dHB1dEl0ZW1QYXJhbSMzYWVjOWI2MzYyMmYxNDc1NjBjMzJhYmNiZDdlY2U0YWY4YmNjZmQzMjkxOTcxODU0ZDBlNTU2OTRhNWFlNmJi.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uQ2FsbE91dHB1dEl0ZW1QYXJhbSMzYWVjOWI2MzYyMmYxNDc1NjBjMzJhYmNiZDdlY2U0YWY4YmNjZmQzMjkxOTcxODU0ZDBlNTU2OTRhNWFlNmJi.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
@@ -11591,6 +11847,18 @@
           "source": "Status",
           "message": "Status"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hDYWxsSXRlbVBhcmFtI2ViY2U1OWEyYzRlYmU5ZmU2NDk4YzMyMWM2ODkxNDAyNzk0NWJjNzYwNzQ2YWFmYmE5ZmY4M2M2MzdjY2M5ZDk.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hDYWxsSXRlbVBhcmFtI2ViY2U1OWEyYzRlYmU5ZmU2NDk4YzMyMWM2ODkxNDAyNzk0NWJjNzYwNzQ2YWFmYmE5ZmY4M2M2MzdjY2M5ZDk.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hDYWxsSXRlbVBhcmFtI2ViY2U1OWEyYzRlYmU5ZmU2NDk4YzMyMWM2ODkxNDAyNzk0NWJjNzYwNzQ2YWFmYmE5ZmY4M2M2MzdjY2M5ZDk.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hDYWxsSXRlbVBhcmFtI2ViY2U1OWEyYzRlYmU5ZmU2NDk4YzMyMWM2ODkxNDAyNzk0NWJjNzYwNzQ2YWFmYmE5ZmY4M2M2MzdjY2M5ZDk.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
@@ -11639,6 +11907,18 @@
           "source": "Status",
           "message": "Status"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hPdXRwdXRJdGVtUGFyYW0jNjJlYjc2MDMyNDQ1NzlkMjhjMmNjYTQ0YWZlMjhlNzA1Njc4ZTViY2Q5Y2U3Y2JjZjI0ZWJjYjdmYmVlNmE3OQ.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hPdXRwdXRJdGVtUGFyYW0jNjJlYjc2MDMyNDQ1NzlkMjhjMmNjYTQ0YWZlMjhlNzA1Njc4ZTViY2Q5Y2U3Y2JjZjI0ZWJjYjdmYmVlNmE3OQ.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hPdXRwdXRJdGVtUGFyYW0jNjJlYjc2MDMyNDQ1NzlkMjhjMmNjYTQ0YWZlMjhlNzA1Njc4ZTViY2Q5Y2U3Y2JjZjI0ZWJjYjdmYmVlNmE3OQ.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hPdXRwdXRJdGVtUGFyYW0jNjJlYjc2MDMyNDQ1NzlkMjhjMmNjYTQ0YWZlMjhlNzA1Njc4ZTViY2Q5Y2U3Y2JjZjI0ZWJjYjdmYmVlNmE3OQ.field.dG9vbHM.display_name": {
           "source": "Tools",
           "message": "Tools"
@@ -11678,6 +11958,22 @@
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6SGFzaERhdGFUeXBlOk9wZW5BSS5BdXRvQ29kZUludGVycHJldGVyVG9vbFBhcmFtI2U2YzZlYmNiMWIwMjk2ZTE1OGU5MzQxODg5Njk2MjQ2MzM4NDk1ZTQ3ZDlmNzc4ZGZiMWU1NDA3ZTE1NTBjY2Y.field.bWVtb3J5X2xpbWl0.display_name": {
           "source": "Memory Limit",
           "message": "Memory Limit"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6SGFzaERhdGFUeXBlOk9wZW5BSS5BdXRvQ29kZUludGVycHJldGVyVG9vbFBhcmFtI2U2YzZlYmNiMWIwMjk2ZTE1OGU5MzQxODg5Njk2MjQ2MzM4NDk1ZTQ3ZDlmNzc4ZGZiMWU1NDA3ZTE1NTBjY2Y.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjFn.display_name": {
+          "source": "1g",
+          "message": "1g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6SGFzaERhdGFUeXBlOk9wZW5BSS5BdXRvQ29kZUludGVycHJldGVyVG9vbFBhcmFtI2U2YzZlYmNiMWIwMjk2ZTE1OGU5MzQxODg5Njk2MjQ2MzM4NDk1ZTQ3ZDlmNzc4ZGZiMWU1NDA3ZTE1NTBjY2Y.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjRn.display_name": {
+          "source": "4g",
+          "message": "4g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6SGFzaERhdGFUeXBlOk9wZW5BSS5BdXRvQ29kZUludGVycHJldGVyVG9vbFBhcmFtI2U2YzZlYmNiMWIwMjk2ZTE1OGU5MzQxODg5Njk2MjQ2MzM4NDk1ZTQ3ZDlmNzc4ZGZiMWU1NDA3ZTE1NTBjY2Y.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjE2Zw.display_name": {
+          "source": "16g",
+          "message": "16g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6SGFzaERhdGFUeXBlOk9wZW5BSS5BdXRvQ29kZUludGVycHJldGVyVG9vbFBhcmFtI2U2YzZlYmNiMWIwMjk2ZTE1OGU5MzQxODg5Njk2MjQ2MzM4NDk1ZTQ3ZDlmNzc4ZGZiMWU1NDA3ZTE1NTBjY2Y.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjY0Zw.display_name": {
+          "source": "64g",
+          "message": "64g"
         },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6SGFzaERhdGFUeXBlOk9wZW5BSS5BdXRvQ29kZUludGVycHJldGVyVG9vbFBhcmFtI2U2YzZlYmNiMWIwMjk2ZTE1OGU5MzQxODg5Njk2MjQ2MzM4NDk1ZTQ3ZDlmNzc4ZGZiMWU1NDA3ZTE1NTBjY2Y.field.bmV0d29ya19wb2xpY3k.display_name": {
           "source": "Network Policy",
@@ -12515,6 +12811,14 @@
           "source": "Control how much effort the model will exert to match the style and features, especially facial features, of input images. This parameter is only supported for `gpt-image-1` and `gpt-image-1.5` and later models, unsupported for `gpt-image-1-mini`. Supports `high` and `low`. Defaults to `low`.",
           "message": "Control how much effort the model will exert to match the style and features, especially facial features, of input images. This parameter is only supported for `gpt-image-1` and `gpt-image-1.5` and later models, unsupported for `gpt-image-1-mini`. Supports `high` and `low`. Defaults to `low`."
         },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkltYWdlR2VuVG9vbCMwMGVmNDVhZTU1ZDViMDQxYTk4MDA3NGUzNGE5ZGRmYTg0MzljOTE2ODYxZmZmOTFhOTFiYTMzZTM5ZGViMTU1.field.aW5wdXRfZmlkZWxpdHk.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkltYWdlR2VuVG9vbCMwMGVmNDVhZTU1ZDViMDQxYTk4MDA3NGUzNGE5ZGRmYTg0MzljOTE2ODYxZmZmOTFhOTFiYTMzZTM5ZGViMTU1.field.aW5wdXRfZmlkZWxpdHk.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkltYWdlR2VuVG9vbCMwMGVmNDVhZTU1ZDViMDQxYTk4MDA3NGUzNGE5ZGRmYTg0MzljOTE2ODYxZmZmOTFhOTFiYTMzZTM5ZGViMTU1.field.aW5wdXRfaW1hZ2VfbWFzaw.display_name": {
           "source": "Input Image Mask",
           "message": "Input Image Mask"
@@ -12790,6 +13094,22 @@
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk9wZW5BSS5Db250YWluZXJBdXRvUGFyYW0jZWIxYmIxNTY0ODNkOTYyNzU3MjNjNTIxMWFiMjg4MjJhNDMzMDcxMTQ0ODM4MzBlMDIyODQ4YjVjNDQ0ZGY5Yw.field.bWVtb3J5X2xpbWl0.display_name": {
           "source": "Memory Limit",
           "message": "Memory Limit"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk9wZW5BSS5Db250YWluZXJBdXRvUGFyYW0jZWIxYmIxNTY0ODNkOTYyNzU3MjNjNTIxMWFiMjg4MjJhNDMzMDcxMTQ0ODM4MzBlMDIyODQ4YjVjNDQ0ZGY5Yw.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjFn.display_name": {
+          "source": "1g",
+          "message": "1g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk9wZW5BSS5Db250YWluZXJBdXRvUGFyYW0jZWIxYmIxNTY0ODNkOTYyNzU3MjNjNTIxMWFiMjg4MjJhNDMzMDcxMTQ0ODM4MzBlMDIyODQ4YjVjNDQ0ZGY5Yw.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjRn.display_name": {
+          "source": "4g",
+          "message": "4g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk9wZW5BSS5Db250YWluZXJBdXRvUGFyYW0jZWIxYmIxNTY0ODNkOTYyNzU3MjNjNTIxMWFiMjg4MjJhNDMzMDcxMTQ0ODM4MzBlMDIyODQ4YjVjNDQ0ZGY5Yw.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjE2Zw.display_name": {
+          "source": "16g",
+          "message": "16g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk9wZW5BSS5Db250YWluZXJBdXRvUGFyYW0jZWIxYmIxNTY0ODNkOTYyNzU3MjNjNTIxMWFiMjg4MjJhNDMzMDcxMTQ0ODM4MzBlMDIyODQ4YjVjNDQ0ZGY5Yw.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjY0Zw.display_name": {
+          "source": "64g",
+          "message": "64g"
         },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJpMXBkR1Z0Y3c6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk9wZW5BSS5Db250YWluZXJBdXRvUGFyYW0jZWIxYmIxNTY0ODNkOTYyNzU3MjNjNTIxMWFiMjg4MjJhNDMzMDcxMTQ0ODM4MzBlMDIyODQ4YjVjNDQ0ZGY5Yw.field.bmV0d29ya19wb2xpY3k.display_name": {
           "source": "Network Policy",
@@ -13891,6 +14211,18 @@
           "source": "Status",
           "message": "Status"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dCMyZmFkNDEzZTUzOThlZTFkNTk0ZTE0NzNiN2NmZDk2NDM5OTAyZGFjMzk1ZTk4NzJhOThkOWNjYWNjMDQzYzM1.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dCMyZmFkNDEzZTUzOThlZTFkNTk0ZTE0NzNiN2NmZDk2NDM5OTAyZGFjMzk1ZTk4NzJhOThkOWNjYWNjMDQzYzM1.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dCMyZmFkNDEzZTUzOThlZTFkNTk0ZTE0NzNiN2NmZDk2NDM5OTAyZGFjMzk1ZTk4NzJhOThkOWNjYWNjMDQzYzM1.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dCMyZmFkNDEzZTUzOThlZTFkNTk0ZTE0NzNiN2NmZDk2NDM5OTAyZGFjMzk1ZTk4NzJhOThkOWNjYWNjMDQzYzM1.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
@@ -14035,6 +14367,18 @@
           "source": "Status values reported for shell tool calls.",
           "message": "Status values reported for shell tool calls."
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsSXRlbVBhcmFtIzhiYmUzNTRjYjI5YzI0MjIwZDJhNGRlN2FkMzUzODU1MWJiZGQxNGQ3NmIwMzc1N2QxYTU4ZjY3NDAzNmFiMTU.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsSXRlbVBhcmFtIzhiYmUzNTRjYjI5YzI0MjIwZDJhNGRlN2FkMzUzODU1MWJiZGQxNGQ3NmIwMzc1N2QxYTU4ZjY3NDAzNmFiMTU.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsSXRlbVBhcmFtIzhiYmUzNTRjYjI5YzI0MjIwZDJhNGRlN2FkMzUzODU1MWJiZGQxNGQ3NmIwMzc1N2QxYTU4ZjY3NDAzNmFiMTU.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsSXRlbVBhcmFtIzhiYmUzNTRjYjI5YzI0MjIwZDJhNGRlN2FkMzUzODU1MWJiZGQxNGQ3NmIwMzc1N2QxYTU4ZjY3NDAzNmFiMTU.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
@@ -14174,6 +14518,18 @@
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtIzUzMDIwZjg3ZmJjYjk1ZGI4ZDcxZTQxM2QyMTAyZDI3Zjg3OTAyY2VkMmRkODE5NWIzMzdmMDg1ZjBjOGUzZDY.field.c3RhdHVz.desc": {
           "source": "Status values reported for shell tool calls.",
           "message": "Status values reported for shell tool calls."
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtIzUzMDIwZjg3ZmJjYjk1ZGI4ZDcxZTQxM2QyMTAyZDI3Zjg3OTAyY2VkMmRkODE5NWIzMzdmMDg1ZjBjOGUzZDY.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtIzUzMDIwZjg3ZmJjYjk1ZGI4ZDcxZTQxM2QyMTAyZDI3Zjg3OTAyY2VkMmRkODE5NWIzMzdmMDg1ZjBjOGUzZDY.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtIzUzMDIwZjg3ZmJjYjk1ZGI4ZDcxZTQxM2QyMTAyZDI3Zjg3OTAyY2VkMmRkODE5NWIzMzdmMDg1ZjBjOGUzZDY.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtIzUzMDIwZjg3ZmJjYjk1ZGI4ZDcxZTQxM2QyMTAyZDI3Zjg3OTAyY2VkMmRkODE5NWIzMzdmMDg1ZjBjOGUzZDY.field.dHlwZQ.display_name": {
           "source": "Type",
@@ -16167,6 +16523,30 @@
           "source": "Constrains effort on reasoning for\n[reasoning models](https://platform.openai.com/docs/guides/reasoning).\nCurrently supported values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Reducing\nreasoning effort can result in faster responses and fewer tokens used\non reasoning in a response.\n- `gpt-5.1` defaults to `none`, which does not perform reasoning. The supported reasoning values for `gpt-5.1` are `none`, `low`, `medium`, and `high`. Tool calls are supported for all reasoning values in gpt-5.1.\n- All models before `gpt-5.1` default to `medium` reasoning effort, and do not support `none`.\n- The `gpt-5-pro` model defaults to (and only supports) `high` reasoning effort.\n- `xhigh` is supported for all models after `gpt-5.1-codex-max`.",
           "message": "Constrains effort on reasoning for\n[reasoning models](https://platform.openai.com/docs/guides/reasoning).\nCurrently supported values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Reducing\nreasoning effort can result in faster responses and fewer tokens used\non reasoning in a response.\n- `gpt-5.1` defaults to `none`, which does not perform reasoning. The supported reasoning values for `gpt-5.1` are `none`, `low`, `medium`, and `high`. Tool calls are supported for all reasoning values in gpt-5.1.\n- All models before `gpt-5.1` default to `medium` reasoning effort, and do not support `none`.\n- The `gpt-5-pro` model defaults to (and only supports) `high` reasoning effort.\n- `xhigh` is supported for all models after `gpt-5.1-codex-max`."
         },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0Okhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "none",
+          "message": "none"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0Okhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "minimal",
+          "message": "minimal"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0Okhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0Okhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "medium"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0Okhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0Okhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOnhoaWdo.display_name": {
+          "source": "xhigh",
+          "message": "xhigh"
+        },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0Okhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.c2VlZA.display_name": {
           "source": "Seed",
           "message": "Seed"
@@ -16827,6 +17207,14 @@
           "source": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`).\nFor models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend\nphase on all assistant messages — dropping it can degrade performance. Not used for user messages.",
           "message": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`).\nFor models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend\nphase on all assistant messages — dropping it can degrade performance. Not used for user messages."
         },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkVhc3lJbnB1dE1lc3NhZ2UjYmNlMDc3MzE3NGJhMzk4OTk4MTk4ZDQ0OTQ5ODk0Yzg2ZDNmNjFiOWU1OTUwMTEzOGYzOTg5YmQ4ODU4ZmI3Mw.field.cGhhc2U.allowed-value.c3RyaW5nOmNvbW1lbnRhcnk.display_name": {
+          "source": "commentary",
+          "message": "commentary"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkVhc3lJbnB1dE1lc3NhZ2UjYmNlMDc3MzE3NGJhMzk4OTk4MTk4ZDQ0OTQ5ODk0Yzg2ZDNmNjFiOWU1OTUwMTEzOGYzOTg5YmQ4ODU4ZmI3Mw.field.cGhhc2U.allowed-value.c3RyaW5nOmZpbmFsX2Fuc3dlcg.display_name": {
+          "source": "final_answer",
+          "message": "final_answer"
+        },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkVhc3lJbnB1dE1lc3NhZ2UjYmNlMDc3MzE3NGJhMzk4OTk4MTk4ZDQ0OTQ5ODk0Yzg2ZDNmNjFiOWU1OTUwMTEzOGYzOTg5YmQ4ODU4ZmI3Mw.field.cm9sZQ.display_name": {
           "source": "Role",
           "message": "Role"
@@ -17154,6 +17542,30 @@
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkF6dXJlQ29tcGxldGlvbnNTYW1wbGluZ1BhcmFtcyM1NzJjMWE4NmY1NmNmY2E5ZTNiZWU0ODIxNTc3MzQ5YzExN2Q1YjJkMmExYTQzNDRkMjU3ZDJkZDMwMjk5ZTNh.field.cmVhc29uaW5nX2VmZm9ydA.desc": {
           "source": "Controls the level of reasoning effort applied during generation.",
           "message": "Controls the level of reasoning effort applied during generation."
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkF6dXJlQ29tcGxldGlvbnNTYW1wbGluZ1BhcmFtcyM1NzJjMWE4NmY1NmNmY2E5ZTNiZWU0ODIxNTc3MzQ5YzExN2Q1YjJkMmExYTQzNDRkMjU3ZDJkZDMwMjk5ZTNh.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "none",
+          "message": "none"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkF6dXJlQ29tcGxldGlvbnNTYW1wbGluZ1BhcmFtcyM1NzJjMWE4NmY1NmNmY2E5ZTNiZWU0ODIxNTc3MzQ5YzExN2Q1YjJkMmExYTQzNDRkMjU3ZDJkZDMwMjk5ZTNh.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "minimal",
+          "message": "minimal"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkF6dXJlQ29tcGxldGlvbnNTYW1wbGluZ1BhcmFtcyM1NzJjMWE4NmY1NmNmY2E5ZTNiZWU0ODIxNTc3MzQ5YzExN2Q1YjJkMmExYTQzNDRkMjU3ZDJkZDMwMjk5ZTNh.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkF6dXJlQ29tcGxldGlvbnNTYW1wbGluZ1BhcmFtcyM1NzJjMWE4NmY1NmNmY2E5ZTNiZWU0ODIxNTc3MzQ5YzExN2Q1YjJkMmExYTQzNDRkMjU3ZDJkZDMwMjk5ZTNh.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "medium"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkF6dXJlQ29tcGxldGlvbnNTYW1wbGluZ1BhcmFtcyM1NzJjMWE4NmY1NmNmY2E5ZTNiZWU0ODIxNTc3MzQ5YzExN2Q1YjJkMmExYTQzNDRkMjU3ZDJkZDMwMjk5ZTNh.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkF6dXJlQ29tcGxldGlvbnNTYW1wbGluZ1BhcmFtcyM1NzJjMWE4NmY1NmNmY2E5ZTNiZWU0ODIxNTc3MzQ5YzExN2Q1YjJkMmExYTQzNDRkMjU3ZDJkZDMwMjk5ZTNh.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOnhoaWdo.display_name": {
+          "source": "xhigh",
+          "message": "xhigh"
         },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkF6dXJlQ29tcGxldGlvbnNTYW1wbGluZ1BhcmFtcyM1NzJjMWE4NmY1NmNmY2E5ZTNiZWU0ODIxNTc3MzQ5YzExN2Q1YjJkMmExYTQzNDRkMjU3ZDJkZDMwMjk5ZTNh.field.cmVzcG9uc2VfZm9ybWF0.display_name": {
           "source": "Response Format",
@@ -17507,6 +17919,30 @@
           "source": "Controls the level of reasoning effort applied during generation.",
           "message": "Controls the level of reasoning effort applied during generation."
         },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkF6dXJlUmVzcG9uc2VzU2FtcGxpbmdQYXJhbXMjM2EyMjFmNzdhYjJiY2ViMDBhYTMwMTMwM2RhOTZmZmI5ZGQxMjlkODhmMjNjNmM3ZTVmMTFkOGZlYzdkMmJiNg.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "none",
+          "message": "none"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkF6dXJlUmVzcG9uc2VzU2FtcGxpbmdQYXJhbXMjM2EyMjFmNzdhYjJiY2ViMDBhYTMwMTMwM2RhOTZmZmI5ZGQxMjlkODhmMjNjNmM3ZTVmMTFkOGZlYzdkMmJiNg.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "minimal",
+          "message": "minimal"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkF6dXJlUmVzcG9uc2VzU2FtcGxpbmdQYXJhbXMjM2EyMjFmNzdhYjJiY2ViMDBhYTMwMTMwM2RhOTZmZmI5ZGQxMjlkODhmMjNjNmM3ZTVmMTFkOGZlYzdkMmJiNg.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkF6dXJlUmVzcG9uc2VzU2FtcGxpbmdQYXJhbXMjM2EyMjFmNzdhYjJiY2ViMDBhYTMwMTMwM2RhOTZmZmI5ZGQxMjlkODhmMjNjNmM3ZTVmMTFkOGZlYzdkMmJiNg.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "medium"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkF6dXJlUmVzcG9uc2VzU2FtcGxpbmdQYXJhbXMjM2EyMjFmNzdhYjJiY2ViMDBhYTMwMTMwM2RhOTZmZmI5ZGQxMjlkODhmMjNjNmM3ZTVmMTFkOGZlYzdkMmJiNg.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkF6dXJlUmVzcG9uc2VzU2FtcGxpbmdQYXJhbXMjM2EyMjFmNzdhYjJiY2ViMDBhYTMwMTMwM2RhOTZmZmI5ZGQxMjlkODhmMjNjNmM3ZTVmMTFkOGZlYzdkMmJiNg.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOnhoaWdo.display_name": {
+          "source": "xhigh",
+          "message": "xhigh"
+        },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkF6dXJlUmVzcG9uc2VzU2FtcGxpbmdQYXJhbXMjM2EyMjFmNzdhYjJiY2ViMDBhYTMwMTMwM2RhOTZmZmI5ZGQxMjlkODhmMjNjNmM3ZTVmMTFkOGZlYzdkMmJiNg.field.c2VlZA.display_name": {
           "source": "Seed",
           "message": "Seed"
@@ -17666,6 +18102,22 @@
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6SGFzaERhdGFUeXBlOk9wZW5BSS5BdXRvQ29kZUludGVycHJldGVyVG9vbFBhcmFtI2U2YzZlYmNiMWIwMjk2ZTE1OGU5MzQxODg5Njk2MjQ2MzM4NDk1ZTQ3ZDlmNzc4ZGZiMWU1NDA3ZTE1NTBjY2Y.field.bWVtb3J5X2xpbWl0.display_name": {
           "source": "Memory Limit",
           "message": "Memory Limit"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6SGFzaERhdGFUeXBlOk9wZW5BSS5BdXRvQ29kZUludGVycHJldGVyVG9vbFBhcmFtI2U2YzZlYmNiMWIwMjk2ZTE1OGU5MzQxODg5Njk2MjQ2MzM4NDk1ZTQ3ZDlmNzc4ZGZiMWU1NDA3ZTE1NTBjY2Y.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjFn.display_name": {
+          "source": "1g",
+          "message": "1g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6SGFzaERhdGFUeXBlOk9wZW5BSS5BdXRvQ29kZUludGVycHJldGVyVG9vbFBhcmFtI2U2YzZlYmNiMWIwMjk2ZTE1OGU5MzQxODg5Njk2MjQ2MzM4NDk1ZTQ3ZDlmNzc4ZGZiMWU1NDA3ZTE1NTBjY2Y.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjRn.display_name": {
+          "source": "4g",
+          "message": "4g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6SGFzaERhdGFUeXBlOk9wZW5BSS5BdXRvQ29kZUludGVycHJldGVyVG9vbFBhcmFtI2U2YzZlYmNiMWIwMjk2ZTE1OGU5MzQxODg5Njk2MjQ2MzM4NDk1ZTQ3ZDlmNzc4ZGZiMWU1NDA3ZTE1NTBjY2Y.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjE2Zw.display_name": {
+          "source": "16g",
+          "message": "16g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6SGFzaERhdGFUeXBlOk9wZW5BSS5BdXRvQ29kZUludGVycHJldGVyVG9vbFBhcmFtI2U2YzZlYmNiMWIwMjk2ZTE1OGU5MzQxODg5Njk2MjQ2MzM4NDk1ZTQ3ZDlmNzc4ZGZiMWU1NDA3ZTE1NTBjY2Y.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjY0Zw.display_name": {
+          "source": "64g",
+          "message": "64g"
         },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6SGFzaERhdGFUeXBlOk9wZW5BSS5BdXRvQ29kZUludGVycHJldGVyVG9vbFBhcmFtI2U2YzZlYmNiMWIwMjk2ZTE1OGU5MzQxODg5Njk2MjQ2MzM4NDk1ZTQ3ZDlmNzc4ZGZiMWU1NDA3ZTE1NTBjY2Y.field.bmV0d29ya19wb2xpY3k.display_name": {
           "source": "Network Policy",
@@ -18503,6 +18955,14 @@
           "source": "Control how much effort the model will exert to match the style and features, especially facial features, of input images. This parameter is only supported for `gpt-image-1` and `gpt-image-1.5` and later models, unsupported for `gpt-image-1-mini`. Supports `high` and `low`. Defaults to `low`.",
           "message": "Control how much effort the model will exert to match the style and features, especially facial features, of input images. This parameter is only supported for `gpt-image-1` and `gpt-image-1.5` and later models, unsupported for `gpt-image-1-mini`. Supports `high` and `low`. Defaults to `low`."
         },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkltYWdlR2VuVG9vbCMwMGVmNDVhZTU1ZDViMDQxYTk4MDA3NGUzNGE5ZGRmYTg0MzljOTE2ODYxZmZmOTFhOTFiYTMzZTM5ZGViMTU1.field.aW5wdXRfZmlkZWxpdHk.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkltYWdlR2VuVG9vbCMwMGVmNDVhZTU1ZDViMDQxYTk4MDA3NGUzNGE5ZGRmYTg0MzljOTE2ODYxZmZmOTFhOTFiYTMzZTM5ZGViMTU1.field.aW5wdXRfZmlkZWxpdHk.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkltYWdlR2VuVG9vbCMwMGVmNDVhZTU1ZDViMDQxYTk4MDA3NGUzNGE5ZGRmYTg0MzljOTE2ODYxZmZmOTFhOTFiYTMzZTM5ZGViMTU1.field.aW5wdXRfaW1hZ2VfbWFzaw.display_name": {
           "source": "Input Image Mask",
           "message": "Input Image Mask"
@@ -18778,6 +19238,22 @@
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk9wZW5BSS5Db250YWluZXJBdXRvUGFyYW0jZWIxYmIxNTY0ODNkOTYyNzU3MjNjNTIxMWFiMjg4MjJhNDMzMDcxMTQ0ODM4MzBlMDIyODQ4YjVjNDQ0ZGY5Yw.field.bWVtb3J5X2xpbWl0.display_name": {
           "source": "Memory Limit",
           "message": "Memory Limit"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk9wZW5BSS5Db250YWluZXJBdXRvUGFyYW0jZWIxYmIxNTY0ODNkOTYyNzU3MjNjNTIxMWFiMjg4MjJhNDMzMDcxMTQ0ODM4MzBlMDIyODQ4YjVjNDQ0ZGY5Yw.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjFn.display_name": {
+          "source": "1g",
+          "message": "1g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk9wZW5BSS5Db250YWluZXJBdXRvUGFyYW0jZWIxYmIxNTY0ODNkOTYyNzU3MjNjNTIxMWFiMjg4MjJhNDMzMDcxMTQ0ODM4MzBlMDIyODQ4YjVjNDQ0ZGY5Yw.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjRn.display_name": {
+          "source": "4g",
+          "message": "4g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk9wZW5BSS5Db250YWluZXJBdXRvUGFyYW0jZWIxYmIxNTY0ODNkOTYyNzU3MjNjNTIxMWFiMjg4MjJhNDMzMDcxMTQ0ODM4MzBlMDIyODQ4YjVjNDQ0ZGY5Yw.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjE2Zw.display_name": {
+          "source": "16g",
+          "message": "16g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk9wZW5BSS5Db250YWluZXJBdXRvUGFyYW0jZWIxYmIxNTY0ODNkOTYyNzU3MjNjNTIxMWFiMjg4MjJhNDMzMDcxMTQ0ODM4MzBlMDIyODQ4YjVjNDQ0ZGY5Yw.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjY0Zw.display_name": {
+          "source": "64g",
+          "message": "64g"
         },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk9wZW5BSS5Db250YWluZXJBdXRvUGFyYW0jZWIxYmIxNTY0ODNkOTYyNzU3MjNjNTIxMWFiMjg4MjJhNDMzMDcxMTQ0ODM4MzBlMDIyODQ4YjVjNDQ0ZGY5Yw.field.bmV0d29ya19wb2xpY3k.display_name": {
           "source": "Network Policy",
@@ -19398,6 +19874,30 @@
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6SGFzaERhdGFUeXBlOk9wZW5BSS5FdmFsUmVzcG9uc2VzU291cmNlI2U0MmFhYzY2ZjdkZGMyZDQ2ZjY2MzNkNmMzNDMwYzkwMzE4N2Y3Yzk3MTQ2ODM1Zjk1ZDNhMmYzN2I4MjdiNmQ.field.cmVhc29uaW5nX2VmZm9ydA.desc": {
           "source": "Constrains effort on reasoning for\n[reasoning models](https://platform.openai.com/docs/guides/reasoning).\nCurrently supported values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Reducing\nreasoning effort can result in faster responses and fewer tokens used\non reasoning in a response.\n- `gpt-5.1` defaults to `none`, which does not perform reasoning. The supported reasoning values for `gpt-5.1` are `none`, `low`, `medium`, and `high`. Tool calls are supported for all reasoning values in gpt-5.1.\n- All models before `gpt-5.1` default to `medium` reasoning effort, and do not support `none`.\n- The `gpt-5-pro` model defaults to (and only supports) `high` reasoning effort.\n- `xhigh` is supported for all models after `gpt-5.1-codex-max`.",
           "message": "Constrains effort on reasoning for\n[reasoning models](https://platform.openai.com/docs/guides/reasoning).\nCurrently supported values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Reducing\nreasoning effort can result in faster responses and fewer tokens used\non reasoning in a response.\n- `gpt-5.1` defaults to `none`, which does not perform reasoning. The supported reasoning values for `gpt-5.1` are `none`, `low`, `medium`, and `high`. Tool calls are supported for all reasoning values in gpt-5.1.\n- All models before `gpt-5.1` default to `medium` reasoning effort, and do not support `none`.\n- The `gpt-5-pro` model defaults to (and only supports) `high` reasoning effort.\n- `xhigh` is supported for all models after `gpt-5.1-codex-max`."
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6SGFzaERhdGFUeXBlOk9wZW5BSS5FdmFsUmVzcG9uc2VzU291cmNlI2U0MmFhYzY2ZjdkZGMyZDQ2ZjY2MzNkNmMzNDMwYzkwMzE4N2Y3Yzk3MTQ2ODM1Zjk1ZDNhMmYzN2I4MjdiNmQ.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "none",
+          "message": "none"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6SGFzaERhdGFUeXBlOk9wZW5BSS5FdmFsUmVzcG9uc2VzU291cmNlI2U0MmFhYzY2ZjdkZGMyZDQ2ZjY2MzNkNmMzNDMwYzkwMzE4N2Y3Yzk3MTQ2ODM1Zjk1ZDNhMmYzN2I4MjdiNmQ.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "minimal",
+          "message": "minimal"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6SGFzaERhdGFUeXBlOk9wZW5BSS5FdmFsUmVzcG9uc2VzU291cmNlI2U0MmFhYzY2ZjdkZGMyZDQ2ZjY2MzNkNmMzNDMwYzkwMzE4N2Y3Yzk3MTQ2ODM1Zjk1ZDNhMmYzN2I4MjdiNmQ.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6SGFzaERhdGFUeXBlOk9wZW5BSS5FdmFsUmVzcG9uc2VzU291cmNlI2U0MmFhYzY2ZjdkZGMyZDQ2ZjY2MzNkNmMzNDMwYzkwMzE4N2Y3Yzk3MTQ2ODM1Zjk1ZDNhMmYzN2I4MjdiNmQ.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "medium"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6SGFzaERhdGFUeXBlOk9wZW5BSS5FdmFsUmVzcG9uc2VzU291cmNlI2U0MmFhYzY2ZjdkZGMyZDQ2ZjY2MzNkNmMzNDMwYzkwMzE4N2Y3Yzk3MTQ2ODM1Zjk1ZDNhMmYzN2I4MjdiNmQ.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6SGFzaERhdGFUeXBlOk9wZW5BSS5FdmFsUmVzcG9uc2VzU291cmNlI2U0MmFhYzY2ZjdkZGMyZDQ2ZjY2MzNkNmMzNDMwYzkwMzE4N2Y3Yzk3MTQ2ODM1Zjk1ZDNhMmYzN2I4MjdiNmQ.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOnhoaWdo.display_name": {
+          "source": "xhigh",
+          "message": "xhigh"
         },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdWMllXeDFZWFJwYjI0dGNuVnU6SGFzaERhdGFUeXBlOk9wZW5BSS5FdmFsUmVzcG9uc2VzU291cmNlI2U0MmFhYzY2ZjdkZGMyZDQ2ZjY2MzNkNmMzNDMwYzkwMzE4N2Y3Yzk3MTQ2ODM1Zjk1ZDNhMmYzN2I4MjdiNmQ.field.dGVtcGVyYXR1cmU.display_name": {
           "source": "Temperature",
@@ -20627,6 +21127,30 @@
           "source": "Constrains effort on reasoning for\n[reasoning models](https://platform.openai.com/docs/guides/reasoning).\nCurrently supported values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Reducing\nreasoning effort can result in faster responses and fewer tokens used\non reasoning in a response.\n- `gpt-5.1` defaults to `none`, which does not perform reasoning. The supported reasoning values for `gpt-5.1` are `none`, `low`, `medium`, and `high`. Tool calls are supported for all reasoning values in gpt-5.1.\n- All models before `gpt-5.1` default to `medium` reasoning effort, and do not support `none`.\n- The `gpt-5-pro` model defaults to (and only supports) `high` reasoning effort.\n- `xhigh` is supported for all models after `gpt-5.1-codex-max`.",
           "message": "Constrains effort on reasoning for\n[reasoning models](https://platform.openai.com/docs/guides/reasoning).\nCurrently supported values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Reducing\nreasoning effort can result in faster responses and fewer tokens used\non reasoning in a response.\n- `gpt-5.1` defaults to `none`, which does not perform reasoning. The supported reasoning values for `gpt-5.1` are `none`, `low`, `medium`, and `high`. Tool calls are supported for all reasoning values in gpt-5.1.\n- All models before `gpt-5.1` default to `medium` reasoning effort, and do not support `none`.\n- The `gpt-5-pro` model defaults to (and only supports) `high` reasoning effort.\n- `xhigh` is supported for all models after `gpt-5.1-codex-max`."
         },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOmNuVnVMV2R5WVdSbGNnOkhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "none",
+          "message": "none"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOmNuVnVMV2R5WVdSbGNnOkhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "minimal",
+          "message": "minimal"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOmNuVnVMV2R5WVdSbGNnOkhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOmNuVnVMV2R5WVdSbGNnOkhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "medium"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOmNuVnVMV2R5WVdSbGNnOkhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOmNuVnVMV2R5WVdSbGNnOkhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOnhoaWdo.display_name": {
+          "source": "xhigh",
+          "message": "xhigh"
+        },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOmNuVnVMV2R5WVdSbGNnOkhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.c2VlZA.display_name": {
           "source": "Seed",
           "message": "Seed"
@@ -21662,6 +22186,30 @@
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOmRtRnNhV1JoZEdVdFozSmhaR1Z5Okhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.desc": {
           "source": "Constrains effort on reasoning for\n[reasoning models](https://platform.openai.com/docs/guides/reasoning).\nCurrently supported values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Reducing\nreasoning effort can result in faster responses and fewer tokens used\non reasoning in a response.\n- `gpt-5.1` defaults to `none`, which does not perform reasoning. The supported reasoning values for `gpt-5.1` are `none`, `low`, `medium`, and `high`. Tool calls are supported for all reasoning values in gpt-5.1.\n- All models before `gpt-5.1` default to `medium` reasoning effort, and do not support `none`.\n- The `gpt-5-pro` model defaults to (and only supports) `high` reasoning effort.\n- `xhigh` is supported for all models after `gpt-5.1-codex-max`.",
           "message": "Constrains effort on reasoning for\n[reasoning models](https://platform.openai.com/docs/guides/reasoning).\nCurrently supported values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Reducing\nreasoning effort can result in faster responses and fewer tokens used\non reasoning in a response.\n- `gpt-5.1` defaults to `none`, which does not perform reasoning. The supported reasoning values for `gpt-5.1` are `none`, `low`, `medium`, and `high`. Tool calls are supported for all reasoning values in gpt-5.1.\n- All models before `gpt-5.1` default to `medium` reasoning effort, and do not support `none`.\n- The `gpt-5-pro` model defaults to (and only supports) `high` reasoning effort.\n- `xhigh` is supported for all models after `gpt-5.1-codex-max`."
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOmRtRnNhV1JoZEdVdFozSmhaR1Z5Okhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "none",
+          "message": "none"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOmRtRnNhV1JoZEdVdFozSmhaR1Z5Okhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "minimal",
+          "message": "minimal"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOmRtRnNhV1JoZEdVdFozSmhaR1Z5Okhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOmRtRnNhV1JoZEdVdFozSmhaR1Z5Okhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "medium"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOmRtRnNhV1JoZEdVdFozSmhaR1Z5Okhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOmRtRnNhV1JoZEdVdFozSmhaR1Z5Okhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOnhoaWdo.display_name": {
+          "source": "xhigh",
+          "message": "xhigh"
         },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOmRtRnNhV1JoZEdVdFozSmhaR1Z5Okhhc2hEYXRhVHlwZToqT3BlbkFJLkV2YWxHcmFkZXJTY29yZU1vZGVsU2FtcGxpbmdQYXJhbXMjN2FmMzE1YzllN2JhYjU1YzdjZWY0ODU2Mzg2NTY3ZjA4MjhhYzg2YWI1NTExNWM3MGQxZDM1NDBkZjU2ODI5ZA.field.c2VlZA.display_name": {
           "source": "Seed",
@@ -23046,6 +23594,30 @@
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdacGJtVXRkSFZ1YVc1bkxXcHZZZzpIYXNoRGF0YVR5cGU6Kk9wZW5BSS5FdmFsR3JhZGVyU2NvcmVNb2RlbFNhbXBsaW5nUGFyYW1zIzdhZjMxNWM5ZTdiYWI1NWM3Y2VmNDg1NjM4NjU2N2YwODI4YWM4NmFiNTUxMTVjNzBkMWQzNTQwZGY1NjgyOWQ.field.cmVhc29uaW5nX2VmZm9ydA.desc": {
           "source": "Constrains effort on reasoning for\n[reasoning models](https://platform.openai.com/docs/guides/reasoning).\nCurrently supported values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Reducing\nreasoning effort can result in faster responses and fewer tokens used\non reasoning in a response.\n- `gpt-5.1` defaults to `none`, which does not perform reasoning. The supported reasoning values for `gpt-5.1` are `none`, `low`, `medium`, and `high`. Tool calls are supported for all reasoning values in gpt-5.1.\n- All models before `gpt-5.1` default to `medium` reasoning effort, and do not support `none`.\n- The `gpt-5-pro` model defaults to (and only supports) `high` reasoning effort.\n- `xhigh` is supported for all models after `gpt-5.1-codex-max`.",
           "message": "Constrains effort on reasoning for\n[reasoning models](https://platform.openai.com/docs/guides/reasoning).\nCurrently supported values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Reducing\nreasoning effort can result in faster responses and fewer tokens used\non reasoning in a response.\n- `gpt-5.1` defaults to `none`, which does not perform reasoning. The supported reasoning values for `gpt-5.1` are `none`, `low`, `medium`, and `high`. Tool calls are supported for all reasoning values in gpt-5.1.\n- All models before `gpt-5.1` default to `medium` reasoning effort, and do not support `none`.\n- The `gpt-5-pro` model defaults to (and only supports) `high` reasoning effort.\n- `xhigh` is supported for all models after `gpt-5.1-codex-max`."
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdacGJtVXRkSFZ1YVc1bkxXcHZZZzpIYXNoRGF0YVR5cGU6Kk9wZW5BSS5FdmFsR3JhZGVyU2NvcmVNb2RlbFNhbXBsaW5nUGFyYW1zIzdhZjMxNWM5ZTdiYWI1NWM3Y2VmNDg1NjM4NjU2N2YwODI4YWM4NmFiNTUxMTVjNzBkMWQzNTQwZGY1NjgyOWQ.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "none",
+          "message": "none"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdacGJtVXRkSFZ1YVc1bkxXcHZZZzpIYXNoRGF0YVR5cGU6Kk9wZW5BSS5FdmFsR3JhZGVyU2NvcmVNb2RlbFNhbXBsaW5nUGFyYW1zIzdhZjMxNWM5ZTdiYWI1NWM3Y2VmNDg1NjM4NjU2N2YwODI4YWM4NmFiNTUxMTVjNzBkMWQzNTQwZGY1NjgyOWQ.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "minimal",
+          "message": "minimal"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdacGJtVXRkSFZ1YVc1bkxXcHZZZzpIYXNoRGF0YVR5cGU6Kk9wZW5BSS5FdmFsR3JhZGVyU2NvcmVNb2RlbFNhbXBsaW5nUGFyYW1zIzdhZjMxNWM5ZTdiYWI1NWM3Y2VmNDg1NjM4NjU2N2YwODI4YWM4NmFiNTUxMTVjNzBkMWQzNTQwZGY1NjgyOWQ.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdacGJtVXRkSFZ1YVc1bkxXcHZZZzpIYXNoRGF0YVR5cGU6Kk9wZW5BSS5FdmFsR3JhZGVyU2NvcmVNb2RlbFNhbXBsaW5nUGFyYW1zIzdhZjMxNWM5ZTdiYWI1NWM3Y2VmNDg1NjM4NjU2N2YwODI4YWM4NmFiNTUxMTVjNzBkMWQzNTQwZGY1NjgyOWQ.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "medium"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdacGJtVXRkSFZ1YVc1bkxXcHZZZzpIYXNoRGF0YVR5cGU6Kk9wZW5BSS5FdmFsR3JhZGVyU2NvcmVNb2RlbFNhbXBsaW5nUGFyYW1zIzdhZjMxNWM5ZTdiYWI1NWM3Y2VmNDg1NjM4NjU2N2YwODI4YWM4NmFiNTUxMTVjNzBkMWQzNTQwZGY1NjgyOWQ.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdacGJtVXRkSFZ1YVc1bkxXcHZZZzpIYXNoRGF0YVR5cGU6Kk9wZW5BSS5FdmFsR3JhZGVyU2NvcmVNb2RlbFNhbXBsaW5nUGFyYW1zIzdhZjMxNWM5ZTdiYWI1NWM3Y2VmNDg1NjM4NjU2N2YwODI4YWM4NmFiNTUxMTVjNzBkMWQzNTQwZGY1NjgyOWQ.field.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOnhoaWdo.display_name": {
+          "source": "xhigh",
+          "message": "xhigh"
         },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFdacGJtVXRkSFZ1YVc1bkxXcHZZZzpIYXNoRGF0YVR5cGU6Kk9wZW5BSS5FdmFsR3JhZGVyU2NvcmVNb2RlbFNhbXBsaW5nUGFyYW1zIzdhZjMxNWM5ZTdiYWI1NWM3Y2VmNDg1NjM4NjU2N2YwODI4YWM4NmFiNTUxMTVjNzBkMWQzNTQwZGY1NjgyOWQ.field.c2VlZA.display_name": {
           "source": "Seed",
@@ -24635,6 +25207,30 @@
           "source": "The quality of the image that will be generated.\n  - `auto` (default value) will automatically select the best quality for the given model.\n  - `high`, `medium` and `low` are supported for the GPT image models.\n  - `hd` and `standard` are supported for `dall-e-3`.\n  - `standard` is the only option for `dall-e-2`.",
           "message": "The quality of the image that will be generated.\n  - `auto` (default value) will automatically select the best quality for the given model.\n  - `high`, `medium` and `low` are supported for the GPT image models.\n  - `hd` and `standard` are supported for `dall-e-3`.\n  - `standard` is the only option for `dall-e-2`."
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "standard"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOmhk.display_name": {
+          "source": "hd",
+          "message": "hd"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "medium"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "auto"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
           "source": "Response Format",
           "message": "Response Format"
@@ -24647,6 +25243,14 @@
           "source": "The format in which generated images with `dall-e-2` and `dall-e-3` are returned. Must be one of `url` or `b64_json`. URLs are only valid for 60 minutes after the image has been generated. This parameter isn't supported for the GPT image models, which always return base64-encoded images.",
           "message": "The format in which generated images with `dall-e-2` and `dall-e-3` are returned. Must be one of `url` or `b64_json`. URLs are only valid for 60 minutes after the image has been generated. This parameter isn't supported for the GPT image models, which always return base64-encoded images."
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnVybA.display_name": {
+          "source": "url",
+          "message": "url"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOmI2NF9qc29u.display_name": {
+          "source": "b64_json",
+          "message": "b64_json"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2Zvcm1hdA.display_name": {
           "source": "Output Format",
           "message": "Output Format"
@@ -24658,6 +25262,18 @@
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2Zvcm1hdA.desc": {
           "source": "The format in which the generated images are returned. This parameter is only supported for the GPT image models. Must be one of `png`, `jpeg`, or `webp`.",
           "message": "The format in which the generated images are returned. This parameter is only supported for the GPT image models. Must be one of `png`, `jpeg`, or `webp`."
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBuZw.display_name": {
+          "source": "png",
+          "message": "png"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmpwZWc.display_name": {
+          "source": "jpeg",
+          "message": "jpeg"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOndlYnA.display_name": {
+          "source": "webp",
+          "message": "webp"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2NvbXByZXNzaW9u.display_name": {
           "source": "Output Compression",
@@ -24711,6 +25327,14 @@
           "source": "Control the content-moderation level for images generated by the GPT image models. Must be either `low` for less restrictive filtering or `auto` (default value).",
           "message": "Control the content-moderation level for images generated by the GPT image models. Must be either `low` for less restrictive filtering or `auto` (default value)."
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.bW9kZXJhdGlvbg.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.bW9kZXJhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "auto"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.display_name": {
           "source": "Background",
           "message": "Background"
@@ -24723,6 +25347,18 @@
           "source": "Allows to set transparency for the background of the generated image(s).\n  This parameter is only supported for the GPT image models. Must be one of\n  `transparent`, `opaque` or `auto` (default value). When `auto` is used, the\n  model will automatically determine the best background for the image.\n  If `transparent`, the output format needs to support transparency, so it\n  should be set to either `png` (default value) or `webp`.",
           "message": "Allows to set transparency for the background of the generated image(s).\n  This parameter is only supported for the GPT image models. Must be one of\n  `transparent`, `opaque` or `auto` (default value). When `auto` is used, the\n  model will automatically determine the best background for the image.\n  If `transparent`, the output format needs to support transparency, so it\n  should be set to either `png` (default value) or `webp`."
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.allowed-value.c3RyaW5nOnRyYW5zcGFyZW50.display_name": {
+          "source": "transparent",
+          "message": "transparent"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.allowed-value.c3RyaW5nOm9wYXF1ZQ.display_name": {
+          "source": "opaque",
+          "message": "opaque"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "auto"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.c3R5bGU.display_name": {
           "source": "Style",
           "message": "Style"
@@ -24734,6 +25370,14 @@
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.c3R5bGU.desc": {
           "source": "The style of the generated images. This parameter is only supported for `dall-e-3`. Must be one of `vivid` or `natural`. Vivid causes the model to lean towards generating hyper-real and dramatic images. Natural causes the model to produce more natural, less hyper-real looking images.",
           "message": "The style of the generated images. This parameter is only supported for `dall-e-3`. Must be one of `vivid` or `natural`. Vivid causes the model to lean towards generating hyper-real and dramatic images. Natural causes the model to produce more natural, less hyper-real looking images."
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.c3R5bGU.allowed-value.c3RyaW5nOnZpdmlk.display_name": {
+          "source": "vivid",
+          "message": "vivid"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.c3R5bGU.allowed-value.c3RyaW5nOm5hdHVyYWw.display_name": {
+          "source": "natural",
+          "message": "natural"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLWltYWdl.option.dXNlcg.display_name": {
           "source": "User",
@@ -28315,6 +28959,14 @@
           "source": "Prompt Cache Retention",
           "message": "Prompt Cache Retention"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX3JldGVudGlvbg.allowed-value.c3RyaW5nOmluX21lbW9yeQ.display_name": {
+          "source": "in_memory",
+          "message": "in_memory"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX3JldGVudGlvbg.allowed-value.c3RyaW5nOjI0aA.display_name": {
+          "source": "24h",
+          "message": "24h"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.display_name": {
           "source": "Previous Response ID",
           "message": "Previous Response ID"
@@ -28355,13 +29007,61 @@
           "source": "Constrains effort on reasoning for\n[reasoning models](https://platform.openai.com/docs/guides/reasoning).\nCurrently supported values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Reducing\nreasoning effort can result in faster responses and fewer tokens used\non reasoning in a response.\n- `gpt-5.1` defaults to `none`, which does not perform reasoning. The supported reasoning values for `gpt-5.1` are `none`, `low`, `medium`, and `high`. Tool calls are supported for all reasoning values in gpt-5.1.\n- All models before `gpt-5.1` default to `medium` reasoning effort, and do not support `none`.\n- The `gpt-5-pro` model defaults to (and only supports) `high` reasoning effort.\n- `xhigh` is supported for all models after `gpt-5.1-codex-max`.",
           "message": "Constrains effort on reasoning for\n[reasoning models](https://platform.openai.com/docs/guides/reasoning).\nCurrently supported values are `none`, `minimal`, `low`, `medium`, `high`, and `xhigh`. Reducing\nreasoning effort can result in faster responses and fewer tokens used\non reasoning in a response.\n- `gpt-5.1` defaults to `none`, which does not perform reasoning. The supported reasoning values for `gpt-5.1` are `none`, `low`, `medium`, and `high`. Tool calls are supported for all reasoning values in gpt-5.1.\n- All models before `gpt-5.1` default to `medium` reasoning effort, and do not support `none`.\n- The `gpt-5-pro` model defaults to (and only supports) `high` reasoning effort.\n- `xhigh` is supported for all models after `gpt-5.1-codex-max`."
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.field.ZWZmb3J0.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "none",
+          "message": "none"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "minimal",
+          "message": "minimal"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "medium"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.field.ZWZmb3J0.allowed-value.c3RyaW5nOnhoaWdo.display_name": {
+          "source": "xhigh",
+          "message": "xhigh"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.field.Z2VuZXJhdGVfc3VtbWFyeQ.display_name": {
           "source": "Generate Summary",
           "message": "Generate Summary"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.field.Z2VuZXJhdGVfc3VtbWFyeQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "auto"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.field.Z2VuZXJhdGVfc3VtbWFyeQ.allowed-value.c3RyaW5nOmNvbmNpc2U.display_name": {
+          "source": "concise",
+          "message": "concise"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.field.Z2VuZXJhdGVfc3VtbWFyeQ.allowed-value.c3RyaW5nOmRldGFpbGVk.display_name": {
+          "source": "detailed",
+          "message": "detailed"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.field.c3VtbWFyeQ.display_name": {
           "source": "Summary",
           "message": "Summary"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.field.c3VtbWFyeQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "auto"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.field.c3VtbWFyeQ.allowed-value.c3RyaW5nOmNvbmNpc2U.display_name": {
+          "source": "concise",
+          "message": "concise"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.field.c3VtbWFyeQ.allowed-value.c3RyaW5nOmRldGFpbGVk.display_name": {
+          "source": "detailed",
+          "message": "detailed"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.YmFja2dyb3VuZA.display_name": {
           "source": "Background",
@@ -28495,6 +29195,18 @@
           "source": "Constrains the verbosity of the model's response. Lower values will result in\nmore concise responses, while higher values will result in more verbose responses.\nCurrently supported values are `low`, `medium`, and `high`.",
           "message": "Constrains the verbosity of the model's response. Lower values will result in\nmore concise responses, while higher values will result in more verbose responses.\nCurrently supported values are `low`, `medium`, and `high`."
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "medium"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.display_name": {
           "source": "Tools",
           "message": "Tools"
@@ -28534,6 +29246,22 @@
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpPcGVuQUkuQXV0b0NvZGVJbnRlcnByZXRlclRvb2xQYXJhbSNlNmM2ZWJjYjFiMDI5NmUxNThlOTM0MTg4OTY5NjI0NjMzODQ5NWU0N2Q5Zjc3OGRmYjFlNTQwN2UxNTUwY2Nm.field.bWVtb3J5X2xpbWl0.display_name": {
           "source": "Memory Limit",
           "message": "Memory Limit"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpPcGVuQUkuQXV0b0NvZGVJbnRlcnByZXRlclRvb2xQYXJhbSNlNmM2ZWJjYjFiMDI5NmUxNThlOTM0MTg4OTY5NjI0NjMzODQ5NWU0N2Q5Zjc3OGRmYjFlNTQwN2UxNTUwY2Nm.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjFn.display_name": {
+          "source": "1g",
+          "message": "1g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpPcGVuQUkuQXV0b0NvZGVJbnRlcnByZXRlclRvb2xQYXJhbSNlNmM2ZWJjYjFiMDI5NmUxNThlOTM0MTg4OTY5NjI0NjMzODQ5NWU0N2Q5Zjc3OGRmYjFlNTQwN2UxNTUwY2Nm.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjRn.display_name": {
+          "source": "4g",
+          "message": "4g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpPcGVuQUkuQXV0b0NvZGVJbnRlcnByZXRlclRvb2xQYXJhbSNlNmM2ZWJjYjFiMDI5NmUxNThlOTM0MTg4OTY5NjI0NjMzODQ5NWU0N2Q5Zjc3OGRmYjFlNTQwN2UxNTUwY2Nm.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjE2Zw.display_name": {
+          "source": "16g",
+          "message": "16g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpPcGVuQUkuQXV0b0NvZGVJbnRlcnByZXRlclRvb2xQYXJhbSNlNmM2ZWJjYjFiMDI5NmUxNThlOTM0MTg4OTY5NjI0NjMzODQ5NWU0N2Q5Zjc3OGRmYjFlNTQwN2UxNTUwY2Nm.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjY0Zw.display_name": {
+          "source": "64g",
+          "message": "64g"
         },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpPcGVuQUkuQXV0b0NvZGVJbnRlcnByZXRlclRvb2xQYXJhbSNlNmM2ZWJjYjFiMDI5NmUxNThlOTM0MTg4OTY5NjI0NjMzODQ5NWU0N2Q5Zjc3OGRmYjFlNTQwN2UxNTUwY2Nm.field.bmV0d29ya19wb2xpY3k.display_name": {
           "source": "Network Policy",
@@ -29371,6 +30099,14 @@
           "source": "Control how much effort the model will exert to match the style and features, especially facial features, of input images. This parameter is only supported for `gpt-image-1` and `gpt-image-1.5` and later models, unsupported for `gpt-image-1-mini`. Supports `high` and `low`. Defaults to `low`.",
           "message": "Control how much effort the model will exert to match the style and features, especially facial features, of input images. This parameter is only supported for `gpt-image-1` and `gpt-image-1.5` and later models, unsupported for `gpt-image-1-mini`. Supports `high` and `low`. Defaults to `low`."
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkltYWdlR2VuVG9vbCMwMGVmNDVhZTU1ZDViMDQxYTk4MDA3NGUzNGE5ZGRmYTg0MzljOTE2ODYxZmZmOTFhOTFiYTMzZTM5ZGViMTU1.field.aW5wdXRfZmlkZWxpdHk.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkltYWdlR2VuVG9vbCMwMGVmNDVhZTU1ZDViMDQxYTk4MDA3NGUzNGE5ZGRmYTg0MzljOTE2ODYxZmZmOTFhOTFiYTMzZTM5ZGViMTU1.field.aW5wdXRfZmlkZWxpdHk.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkltYWdlR2VuVG9vbCMwMGVmNDVhZTU1ZDViMDQxYTk4MDA3NGUzNGE5ZGRmYTg0MzljOTE2ODYxZmZmOTFhOTFiYTMzZTM5ZGViMTU1.field.aW5wdXRfaW1hZ2VfbWFzaw.display_name": {
           "source": "Input Image Mask",
           "message": "Input Image Mask"
@@ -29646,6 +30382,22 @@
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipPcGVuQUkuQ29udGFpbmVyQXV0b1BhcmFtI2ViMWJiMTU2NDgzZDk2Mjc1NzIzYzUyMTFhYjI4ODIyYTQzMzA3MTE0NDgzODMwZTAyMjg0OGI1YzQ0NGRmOWM.field.bWVtb3J5X2xpbWl0.display_name": {
           "source": "Memory Limit",
           "message": "Memory Limit"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipPcGVuQUkuQ29udGFpbmVyQXV0b1BhcmFtI2ViMWJiMTU2NDgzZDk2Mjc1NzIzYzUyMTFhYjI4ODIyYTQzMzA3MTE0NDgzODMwZTAyMjg0OGI1YzQ0NGRmOWM.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjFn.display_name": {
+          "source": "1g",
+          "message": "1g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipPcGVuQUkuQ29udGFpbmVyQXV0b1BhcmFtI2ViMWJiMTU2NDgzZDk2Mjc1NzIzYzUyMTFhYjI4ODIyYTQzMzA3MTE0NDgzODMwZTAyMjg0OGI1YzQ0NGRmOWM.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjRn.display_name": {
+          "source": "4g",
+          "message": "4g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipPcGVuQUkuQ29udGFpbmVyQXV0b1BhcmFtI2ViMWJiMTU2NDgzZDk2Mjc1NzIzYzUyMTFhYjI4ODIyYTQzMzA3MTE0NDgzODMwZTAyMjg0OGI1YzQ0NGRmOWM.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjE2Zw.display_name": {
+          "source": "16g",
+          "message": "16g"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipPcGVuQUkuQ29udGFpbmVyQXV0b1BhcmFtI2ViMWJiMTU2NDgzZDk2Mjc1NzIzYzUyMTFhYjI4ODIyYTQzMzA3MTE0NDgzODMwZTAyMjg0OGI1YzQ0NGRmOWM.field.bWVtb3J5X2xpbWl0.allowed-value.c3RyaW5nOjY0Zw.display_name": {
+          "source": "64g",
+          "message": "64g"
         },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipPcGVuQUkuQ29udGFpbmVyQXV0b1BhcmFtI2ViMWJiMTU2NDgzZDk2Mjc1NzIzYzUyMTFhYjI4ODIyYTQzMzA3MTE0NDgzODMwZTAyMjg0OGI1YzQ0NGRmOWM.field.bmV0d29ya19wb2xpY3k.display_name": {
           "source": "Network Policy",
@@ -30555,6 +31307,14 @@
           "source": "Truncation",
           "message": "Truncation"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "auto"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "disabled",
+          "message": "disabled"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.display_name": {
           "source": "Input",
           "message": "Input"
@@ -30746,6 +31506,14 @@
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkVhc3lJbnB1dE1lc3NhZ2UjYmNlMDc3MzE3NGJhMzk4OTk4MTk4ZDQ0OTQ5ODk0Yzg2ZDNmNjFiOWU1OTUwMTEzOGYzOTg5YmQ4ODU4ZmI3Mw.field.cGhhc2U.desc": {
           "source": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`).\nFor models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend\nphase on all assistant messages — dropping it can degrade performance. Not used for user messages.",
           "message": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`).\nFor models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend\nphase on all assistant messages — dropping it can degrade performance. Not used for user messages."
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkVhc3lJbnB1dE1lc3NhZ2UjYmNlMDc3MzE3NGJhMzk4OTk4MTk4ZDQ0OTQ5ODk0Yzg2ZDNmNjFiOWU1OTUwMTEzOGYzOTg5YmQ4ODU4ZmI3Mw.field.cGhhc2U.allowed-value.c3RyaW5nOmNvbW1lbnRhcnk.display_name": {
+          "source": "commentary",
+          "message": "commentary"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkVhc3lJbnB1dE1lc3NhZ2UjYmNlMDc3MzE3NGJhMzk4OTk4MTk4ZDQ0OTQ5ODk0Yzg2ZDNmNjFiOWU1OTUwMTEzOGYzOTg5YmQ4ODU4ZmI3Mw.field.cGhhc2U.allowed-value.c3RyaW5nOmZpbmFsX2Fuc3dlcg.display_name": {
+          "source": "final_answer",
+          "message": "final_answer"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLkVhc3lJbnB1dE1lc3NhZ2UjYmNlMDc3MzE3NGJhMzk4OTk4MTk4ZDQ0OTQ5ODk0Yzg2ZDNmNjFiOWU1OTUwMTEzOGYzOTg5YmQ4ODU4ZmI3Mw.field.cm9sZQ.display_name": {
           "source": "Role",
@@ -31210,6 +31978,14 @@
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2UjNGUzNDc5ZGMxYTMwNjVhOWJkM2IwOTU4YjliMTI5MGQ4N2NhNjY5Y2YxMWNiODZlNjczMDg5OGQyOGZiY2VjZQ.field.cGhhc2U.desc": {
           "source": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`).\nFor models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend\nphase on all assistant messages — dropping it can degrade performance. Not used for user messages.",
           "message": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`).\nFor models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend\nphase on all assistant messages — dropping it can degrade performance. Not used for user messages."
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2UjNGUzNDc5ZGMxYTMwNjVhOWJkM2IwOTU4YjliMTI5MGQ4N2NhNjY5Y2YxMWNiODZlNjczMDg5OGQyOGZiY2VjZQ.field.cGhhc2U.allowed-value.c3RyaW5nOmNvbW1lbnRhcnk.display_name": {
+          "source": "commentary",
+          "message": "commentary"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2UjNGUzNDc5ZGMxYTMwNjVhOWJkM2IwOTU4YjliMTI5MGQ4N2NhNjY5Y2YxMWNiODZlNjczMDg5OGQyOGZiY2VjZQ.field.cGhhc2U.allowed-value.c3RyaW5nOmZpbmFsX2Fuc3dlcg.display_name": {
+          "source": "final_answer",
+          "message": "final_answer"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2UjNGUzNDc5ZGMxYTMwNjVhOWJkM2IwOTU4YjliMTI5MGQ4N2NhNjY5Y2YxMWNiODZlNjczMDg5OGQyOGZiY2VjZQ.field.cm9sZQ.display_name": {
           "source": "Role",
@@ -32287,6 +33063,18 @@
           "source": "Status",
           "message": "Status"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUNvbXB1dGVyQ2FsbE91dHB1dEl0ZW1QYXJhbSMwNzIyMTkwOGRiMmMwYmRlNTk0Y2U2Njk5M2IyZDgxNTI3MDVlNzY5OTc0MjFjMTc2YjI5YWJhMzFiM2ExYzQ4.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUNvbXB1dGVyQ2FsbE91dHB1dEl0ZW1QYXJhbSMwNzIyMTkwOGRiMmMwYmRlNTk0Y2U2Njk5M2IyZDgxNTI3MDVlNzY5OTc0MjFjMTc2YjI5YWJhMzFiM2ExYzQ4.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUNvbXB1dGVyQ2FsbE91dHB1dEl0ZW1QYXJhbSMwNzIyMTkwOGRiMmMwYmRlNTk0Y2U2Njk5M2IyZDgxNTI3MDVlNzY5OTc0MjFjMTc2YjI5YWJhMzFiM2ExYzQ4.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUNvbXB1dGVyQ2FsbE91dHB1dEl0ZW1QYXJhbSMwNzIyMTkwOGRiMmMwYmRlNTk0Y2U2Njk5M2IyZDgxNTI3MDVlNzY5OTc0MjFjMTc2YjI5YWJhMzFiM2ExYzQ4.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
@@ -32651,6 +33439,22 @@
           "source": "Detail",
           "message": "Detail"
         },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpPcGVuQUkuSW5wdXRJbWFnZUNvbnRlbnRQYXJhbUF1dG9QYXJhbSM0MjdiZTg3MWNmOWNjNTQ2ZTFlNmZjYjk2MmRiNzg3YmQ3YWRlZjY2ZWM3MWQ4YzdkNjVkNDRhYjg1Y2NhZDhk.field.ZGV0YWls.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpPcGVuQUkuSW5wdXRJbWFnZUNvbnRlbnRQYXJhbUF1dG9QYXJhbSM0MjdiZTg3MWNmOWNjNTQ2ZTFlNmZjYjk2MmRiNzg3YmQ3YWRlZjY2ZWM3MWQ4YzdkNjVkNDRhYjg1Y2NhZDhk.field.ZGV0YWls.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpPcGVuQUkuSW5wdXRJbWFnZUNvbnRlbnRQYXJhbUF1dG9QYXJhbSM0MjdiZTg3MWNmOWNjNTQ2ZTFlNmZjYjk2MmRiNzg3YmQ3YWRlZjY2ZWM3MWQ4YzdkNjVkNDRhYjg1Y2NhZDhk.field.ZGV0YWls.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "auto"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpPcGVuQUkuSW5wdXRJbWFnZUNvbnRlbnRQYXJhbUF1dG9QYXJhbSM0MjdiZTg3MWNmOWNjNTQ2ZTFlNmZjYjk2MmRiNzg3YmQ3YWRlZjY2ZWM3MWQ4YzdkNjVkNDRhYjg1Y2NhZDhk.field.ZGV0YWls.allowed-value.c3RyaW5nOm9yaWdpbmFs.display_name": {
+          "source": "original",
+          "message": "original"
+        },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpPcGVuQUkuSW5wdXRJbWFnZUNvbnRlbnRQYXJhbUF1dG9QYXJhbSM0MjdiZTg3MWNmOWNjNTQ2ZTFlNmZjYjk2MmRiNzg3YmQ3YWRlZjY2ZWM3MWQ4YzdkNjVkNDRhYjg1Y2NhZDhk.field.ZmlsZV9pZA.display_name": {
           "source": "File ID",
           "message": "File ID"
@@ -32731,6 +33535,18 @@
           "source": "Status",
           "message": "Status"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uQ2FsbE91dHB1dEl0ZW1QYXJhbSMzYWVjOWI2MzYyMmYxNDc1NjBjMzJhYmNiZDdlY2U0YWY4YmNjZmQzMjkxOTcxODU0ZDBlNTU2OTRhNWFlNmJi.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uQ2FsbE91dHB1dEl0ZW1QYXJhbSMzYWVjOWI2MzYyMmYxNDc1NjBjMzJhYmNiZDdlY2U0YWY4YmNjZmQzMjkxOTcxODU0ZDBlNTU2OTRhNWFlNmJi.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uQ2FsbE91dHB1dEl0ZW1QYXJhbSMzYWVjOWI2MzYyMmYxNDc1NjBjMzJhYmNiZDdlY2U0YWY4YmNjZmQzMjkxOTcxODU0ZDBlNTU2OTRhNWFlNmJi.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uQ2FsbE91dHB1dEl0ZW1QYXJhbSMzYWVjOWI2MzYyMmYxNDc1NjBjMzJhYmNiZDdlY2U0YWY4YmNjZmQzMjkxOTcxODU0ZDBlNTU2OTRhNWFlNmJi.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
@@ -32791,6 +33607,18 @@
           "source": "Status",
           "message": "Status"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hDYWxsSXRlbVBhcmFtI2ViY2U1OWEyYzRlYmU5ZmU2NDk4YzMyMWM2ODkxNDAyNzk0NWJjNzYwNzQ2YWFmYmE5ZmY4M2M2MzdjY2M5ZDk.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hDYWxsSXRlbVBhcmFtI2ViY2U1OWEyYzRlYmU5ZmU2NDk4YzMyMWM2ODkxNDAyNzk0NWJjNzYwNzQ2YWFmYmE5ZmY4M2M2MzdjY2M5ZDk.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hDYWxsSXRlbVBhcmFtI2ViY2U1OWEyYzRlYmU5ZmU2NDk4YzMyMWM2ODkxNDAyNzk0NWJjNzYwNzQ2YWFmYmE5ZmY4M2M2MzdjY2M5ZDk.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hDYWxsSXRlbVBhcmFtI2ViY2U1OWEyYzRlYmU5ZmU2NDk4YzMyMWM2ODkxNDAyNzk0NWJjNzYwNzQ2YWFmYmE5ZmY4M2M2MzdjY2M5ZDk.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
@@ -32838,6 +33666,18 @@
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hPdXRwdXRJdGVtUGFyYW0jNjJlYjc2MDMyNDQ1NzlkMjhjMmNjYTQ0YWZlMjhlNzA1Njc4ZTViY2Q5Y2U3Y2JjZjI0ZWJjYjdmYmVlNmE3OQ.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "Status"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hPdXRwdXRJdGVtUGFyYW0jNjJlYjc2MDMyNDQ1NzlkMjhjMmNjYTQ0YWZlMjhlNzA1Njc4ZTViY2Q5Y2U3Y2JjZjI0ZWJjYjdmYmVlNmE3OQ.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hPdXRwdXRJdGVtUGFyYW0jNjJlYjc2MDMyNDQ1NzlkMjhjMmNjYTQ0YWZlMjhlNzA1Njc4ZTViY2Q5Y2U3Y2JjZjI0ZWJjYjdmYmVlNmE3OQ.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hPdXRwdXRJdGVtUGFyYW0jNjJlYjc2MDMyNDQ1NzlkMjhjMmNjYTQ0YWZlMjhlNzA1Njc4ZTViY2Q5Y2U3Y2JjZjI0ZWJjYjdmYmVlNmE3OQ.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbVRvb2xTZWFyY2hPdXRwdXRJdGVtUGFyYW0jNjJlYjc2MDMyNDQ1NzlkMjhjMmNjYTQ0YWZlMjhlNzA1Njc4ZTViY2Q5Y2U3Y2JjZjI0ZWJjYjdmYmVlNmE3OQ.field.dG9vbHM.display_name": {
           "source": "Tools",
@@ -33306,6 +34146,14 @@
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOk9wZW5BSS5JbWFnZUdlblRvb2wjMDBlZjQ1YWU1NWQ1YjA0MWE5ODAwNzRlMzRhOWRkZmE4NDM5YzkxNjg2MWZmZjkxYTkxYmEzM2UzOWRlYjE1NQ.field.aW5wdXRfZmlkZWxpdHk.desc": {
           "source": "Control how much effort the model will exert to match the style and features, especially facial features, of input images. This parameter is only supported for `gpt-image-1` and `gpt-image-1.5` and later models, unsupported for `gpt-image-1-mini`. Supports `high` and `low`. Defaults to `low`.",
           "message": "Control how much effort the model will exert to match the style and features, especially facial features, of input images. This parameter is only supported for `gpt-image-1` and `gpt-image-1.5` and later models, unsupported for `gpt-image-1-mini`. Supports `high` and `low`. Defaults to `low`."
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOk9wZW5BSS5JbWFnZUdlblRvb2wjMDBlZjQ1YWU1NWQ1YjA0MWE5ODAwNzRlMzRhOWRkZmE4NDM5YzkxNjg2MWZmZjkxYTkxYmEzM2UzOWRlYjE1NQ.field.aW5wdXRfZmlkZWxpdHk.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOk9wZW5BSS5JbWFnZUdlblRvb2wjMDBlZjQ1YWU1NWQ1YjA0MWE5ODAwNzRlMzRhOWRkZmE4NDM5YzkxNjg2MWZmZjkxYTkxYmEzM2UzOWRlYjE1NQ.field.aW5wdXRfZmlkZWxpdHk.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
         },
         "app.QXp1cmVPcGVuQUk.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOk9wZW5BSS5JbWFnZUdlblRvb2wjMDBlZjQ1YWU1NWQ1YjA0MWE5ODAwNzRlMzRhOWRkZmE4NDM5YzkxNjg2MWZmZjkxYTkxYmEzM2UzOWRlYjE1NQ.field.aW5wdXRfaW1hZ2VfbWFzaw.display_name": {
           "source": "Input Image Mask",
@@ -34195,6 +35043,18 @@
           "source": "Status",
           "message": "Status"
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dCMyZmFkNDEzZTUzOThlZTFkNTk0ZTE0NzNiN2NmZDk2NDM5OTAyZGFjMzk1ZTk4NzJhOThkOWNjYWNjMDQzYzM1.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dCMyZmFkNDEzZTUzOThlZTFkNTk0ZTE0NzNiN2NmZDk2NDM5OTAyZGFjMzk1ZTk4NzJhOThkOWNjYWNjMDQzYzM1.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dCMyZmFkNDEzZTUzOThlZTFkNTk0ZTE0NzNiN2NmZDk2NDM5OTAyZGFjMzk1ZTk4NzJhOThkOWNjYWNjMDQzYzM1.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dCMyZmFkNDEzZTUzOThlZTFkNTk0ZTE0NzNiN2NmZDk2NDM5OTAyZGFjMzk1ZTk4NzJhOThkOWNjYWNjMDQzYzM1.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
@@ -34339,6 +35199,18 @@
           "source": "Status values reported for shell tool calls.",
           "message": "Status values reported for shell tool calls."
         },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsSXRlbVBhcmFtIzhiYmUzNTRjYjI5YzI0MjIwZDJhNGRlN2FkMzUzODU1MWJiZGQxNGQ3NmIwMzc1N2QxYTU4ZjY3NDAzNmFiMTU.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsSXRlbVBhcmFtIzhiYmUzNTRjYjI5YzI0MjIwZDJhNGRlN2FkMzUzODU1MWJiZGQxNGQ3NmIwMzc1N2QxYTU4ZjY3NDAzNmFiMTU.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsSXRlbVBhcmFtIzhiYmUzNTRjYjI5YzI0MjIwZDJhNGRlN2FkMzUzODU1MWJiZGQxNGQ3NmIwMzc1N2QxYTU4ZjY3NDAzNmFiMTU.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
+        },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsSXRlbVBhcmFtIzhiYmUzNTRjYjI5YzI0MjIwZDJhNGRlN2FkMzUzODU1MWJiZGQxNGQ3NmIwMzc1N2QxYTU4ZjY3NDAzNmFiMTU.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
@@ -34478,6 +35350,18 @@
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtIzUzMDIwZjg3ZmJjYjk1ZGI4ZDcxZTQxM2QyMTAyZDI3Zjg3OTAyY2VkMmRkODE5NWIzMzdmMDg1ZjBjOGUzZDY.field.c3RhdHVz.desc": {
           "source": "Status values reported for shell tool calls.",
           "message": "Status values reported for shell tool calls."
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtIzUzMDIwZjg3ZmJjYjk1ZGI4ZDcxZTQxM2QyMTAyZDI3Zjg3OTAyY2VkMmRkODE5NWIzMzdmMDg1ZjBjOGUzZDY.field.c3RhdHVz.allowed-value.c3RyaW5nOmluX3Byb2dyZXNz.display_name": {
+          "source": "in_progress",
+          "message": "in_progress"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtIzUzMDIwZjg3ZmJjYjk1ZGI4ZDcxZTQxM2QyMTAyZDI3Zjg3OTAyY2VkMmRkODE5NWIzMzdmMDg1ZjBjOGUzZDY.field.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtIzUzMDIwZjg3ZmJjYjk1ZGI4ZDcxZTQxM2QyMTAyZDI3Zjg3OTAyY2VkMmRkODE5NWIzMzdmMDg1ZjBjOGUzZDY.field.c3RhdHVz.allowed-value.c3RyaW5nOmluY29tcGxldGU.display_name": {
+          "source": "incomplete",
+          "message": "incomplete"
         },
         "app.QXp1cmVPcGVuQUk.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.union.TGlzdERhdGFUeXBlOipsaXN0PE9wZW5BSS5FYXN5SW5wdXRNZXNzYWdlfE9wZW5BSS5JdGVtUmVmZXJlbmNlUGFyYW18T3BlbkFJLklucHV0SXRlbU91dHB1dE1lc3NhZ2V8T3BlbkFJLklucHV0SXRlbUZpbGVTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtQ29tcHV0ZXJDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1XZWJTZWFyY2hUb29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25Ub29sQ2FsbHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25DYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1Ub29sU2VhcmNoQ2FsbEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtVG9vbFNlYXJjaE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtUmVhc29uaW5nSXRlbXxPcGVuQUkuSW5wdXRJdGVtQ29tcGFjdGlvblN1bW1hcnlJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUltYWdlR2VuVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUNvZGVJbnRlcnByZXRlclRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1Mb2NhbFNoZWxsVG9vbENhbGx8T3BlbkFJLklucHV0SXRlbUxvY2FsU2hlbGxUb29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtRnVuY3Rpb25TaGVsbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtfE9wZW5BSS5JbnB1dEl0ZW1BcHBseVBhdGNoVG9vbENhbGxJdGVtUGFyYW18T3BlbkFJLklucHV0SXRlbUFwcGx5UGF0Y2hUb29sQ2FsbE91dHB1dEl0ZW1QYXJhbXxPcGVuQUkuSW5wdXRJdGVtTWNwTGlzdFRvb2xzfE9wZW5BSS5JbnB1dEl0ZW1NY3BBcHByb3ZhbFJlcXVlc3R8T3BlbkFJLklucHV0SXRlbU1jcEFwcHJvdmFsUmVzcG9uc2V8T3BlbkFJLklucHV0SXRlbU1jcFRvb2xDYWxsfE9wZW5BSS5JbnB1dEl0ZW1DdXN0b21Ub29sQ2FsbE91dHB1dHxPcGVuQUkuSW5wdXRJdGVtQ3VzdG9tVG9vbENhbGx8QXp1cmVUb29sQXBwcm92YWxSZXNwb25zZT4jYzk0YzE1NzE1OGFjMTQ4Zjg1NzI2ZjBkNDFlNzYzNjZjNGY5NGM4YWEzMTY1NWI2ODczMGZjMmQyMDlhM2ZmMg.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6T3BlbkFJLklucHV0SXRlbUZ1bmN0aW9uU2hlbGxDYWxsT3V0cHV0SXRlbVBhcmFtIzUzMDIwZjg3ZmJjYjk1ZGI4ZDcxZTQxM2QyMTAyZDI3Zjg3OTAyY2VkMmRkODE5NWIzMzdmMDg1ZjBjOGUzZDY.field.dHlwZQ.display_name": {
           "source": "Type",

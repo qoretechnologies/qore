@@ -639,6 +639,18 @@
           "source": "Preset highlight length: `low`, `medium`, and `high` allocate progressively larger token budgets for the returned highlights. With highlights.dynamic, the preset sets a single shared budget across the whole result set instead of a per-URL budget. Exact budgets are tuned by Exa and may change. Not compatible with maxCharacters or numSentences. Beta: requires the `Exa-Beta: dynamic-highlights-2026-08-28` request header; requests setting `verbosity` without it are rejected.",
           "message": "Prednastavená dĺžka výrazu: `low`, `medium` a `high` pridelia postupne väčšie rozpočty pre vrátené výrazy. Pri highlights.dynamic nastaví prednastavenie jednotný zdieľaný rozpočet pre celú sadu výsledkov namiesto rozpočtu na každú URL. Presné rozpočty sú optimalizované Exa a môžu sa zmeniť. Nie je kompatibilné s maxCharacters alebo numSentences. Beta: vyžaduje hlavičku `Exa-Beta: dynamic-highlights-2026-08-28`; požiadavky nastavujúce `verbosity` bez nej sú zamietnuté."
         },
+        "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOkhhc2hEYXRhVHlwZToqaGlnaGxpZ2h0c0FueU9mT25lT2YjOTNkNDgxNzllMjA5N2M3MGMyZGQ2MDA1MmI1MWRiZDE3OGNmZGQ5ODJlNDk5ZDM5OGZkOTQ1ZDY5MWIyNTJhZQ.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "nízka"
+        },
+        "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOkhhc2hEYXRhVHlwZToqaGlnaGxpZ2h0c0FueU9mT25lT2YjOTNkNDgxNzllMjA5N2M3MGMyZGQ2MDA1MmI1MWRiZDE3OGNmZGQ5ODJlNDk5ZDM5OGZkOTQ1ZDY5MWIyNTJhZQ.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "stredná"
+        },
+        "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOkhhc2hEYXRhVHlwZToqaGlnaGxpZ2h0c0FueU9mT25lT2YjOTNkNDgxNzllMjA5N2M3MGMyZGQ2MDA1MmI1MWRiZDE3OGNmZGQ5ODJlNDk5ZDM5OGZkOTQ1ZDY5MWIyNTJhZQ.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "vysoká"
+        },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXds.display_name": {
           "source": "Livecrawl",
           "message": "Livecrawl"
@@ -650,6 +662,22 @@
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXds.desc": {
           "source": "Deprecated: Use maxAgeHours instead for content freshness control. livecrawl does not guarantee freshly fetched parser output and may be served according to server freshness policy. Do not send livecrawl and maxAgeHours together.",
           "message": "Zastarané: použite maxAgeHours namiesto toho pre kontrolu aktuálnosti obsahu. livecrawl nezaručuje aktuálne načítaný výstup analyzátora a môže byť poskytovaný podľa politiky čerstvosti servera. Neposielajte livecrawl a maxAgeHours spolu."
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXds.allowed-value.c3RyaW5nOm5ldmVy.display_name": {
+          "source": "never",
+          "message": "nikdy"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXds.allowed-value.c3RyaW5nOmFsd2F5cw.display_name": {
+          "source": "always",
+          "message": "vždy"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXds.allowed-value.c3RyaW5nOmZhbGxiYWNr.display_name": {
+          "source": "fallback",
+          "message": "záložné"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXds.allowed-value.c3RyaW5nOnByZWZlcnJlZA.display_name": {
+          "source": "preferred",
+          "message": "preferované"
         },
         "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
           "source": "Livecrawl Timeout",
@@ -806,6 +834,18 @@
         "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOkhhc2hEYXRhVHlwZToqdGV4dEFueU9mT25lT2YjOGZiNTk5ZTNjYTkyMWI5NmU4MzU3NTE5ODMzMzVkMzg3NDk1M2FhOGY0ZjhiOGFkNTdlZWZiZmJlNzZjZTdkMA.field.dmVyYm9zaXR5.desc": {
           "source": "Controls text rendering verbosity. compact focuses on main content, standard includes more surrounding page context, and full requests the most complete rendered text. Some pages may produce identical standard and full output. Use maxAgeHours: 0 when you need this applied to freshly fetched content.",
           "message": "Ovláda úroveň podrobnosti textového vykreslenia. compact sa sústredí na hlavný obsah, standard zahŕňa viac kontextu okolo stránky, a full požaduje najkompletnejší vykreslený text. Niektoré stránky môžu výstup štandard a full výsledky rovnaké. Použite maxAgeHours: 0, keď potrebujete toto použiť na práve stiahnutý obsah."
+        },
+        "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOkhhc2hEYXRhVHlwZToqdGV4dEFueU9mT25lT2YjOGZiNTk5ZTNjYTkyMWI5NmU4MzU3NTE5ODMzMzVkMzg3NDk1M2FhOGY0ZjhiOGFkNTdlZWZiZmJlNzZjZTdkMA.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmNvbXBhY3Q.display_name": {
+          "source": "compact",
+          "message": "kompaktné"
+        },
+        "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOkhhc2hEYXRhVHlwZToqdGV4dEFueU9mT25lT2YjOGZiNTk5ZTNjYTkyMWI5NmU4MzU3NTE5ODMzMzVkMzg3NDk1M2FhOGY0ZjhiOGFkNTdlZWZiZmJlNzZjZTdkMA.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "štandardné"
+        },
+        "app.RXhh.type.YWN0aW9uOmMyVmhjbU5vOkhhc2hEYXRhVHlwZToqdGV4dEFueU9mT25lT2YjOGZiNTk5ZTNjYTkyMWI5NmU4MzU3NTE5ODMzMzVkMzg3NDk1M2FhOGY0ZjhiOGFkNTdlZWZiZmJlNzZjZTdkMA.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "full",
+          "message": "úplné"
         },
         "app.RXhh.action.c2VhcmNo.option.aW5jbHVkZURvbWFpbnM.display_name": {
           "source": "Only These Domains",
@@ -1307,6 +1347,18 @@
           "source": "Controls text rendering verbosity. compact focuses on main content, standard includes more surrounding page context, and full requests the most complete rendered text. Some pages may produce identical standard and full output. Use maxAgeHours: 0 when you need this applied to freshly fetched content.",
           "message": "Ovláda úroveň podrobnosti textového vykreslenia. compact sa sústredí na hlavný obsah, standard zahŕňa viac kontextu okolo stránky, a full požaduje najkompletnejší vykreslený text. Niektoré stránky môžu výstup štandard a full výsledky rovnaké. Použite maxAgeHours: 0, keď potrebujete toto použiť na práve stiahnutý obsah."
         },
+        "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.SGFzaERhdGFUeXBlOip0ZXh0QW55T2ZPbmVPZiM4ZmI1OTllM2NhOTIxYjk2ZTgzNTc1MTk4MzMzNWQzODc0OTUzYWE4ZjRmOGI4YWQ1N2VlZmJmYmU3NmNlN2Qw.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmNvbXBhY3Q.display_name": {
+          "source": "compact",
+          "message": "kompaktné"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.SGFzaERhdGFUeXBlOip0ZXh0QW55T2ZPbmVPZiM4ZmI1OTllM2NhOTIxYjk2ZTgzNTc1MTk4MzMzNWQzODc0OTUzYWE4ZjRmOGI4YWQ1N2VlZmJmYmU3NmNlN2Qw.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "štandardné"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.dGV4dA.union.SGFzaERhdGFUeXBlOip0ZXh0QW55T2ZPbmVPZiM4ZmI1OTllM2NhOTIxYjk2ZTgzNTc1MTk4MzMzNWQzODc0OTUzYWE4ZjRmOGI4YWQ1N2VlZmJmYmU3NmNlN2Qw.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "full",
+          "message": "úplné"
+        },
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.display_name": {
           "source": "Highlights",
           "message": "Zvýraznenia"
@@ -1390,6 +1442,18 @@
         "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.SGFzaERhdGFUeXBlOipoaWdobGlnaHRzQW55T2ZPbmVPZiM5M2Q0ODE3OWUyMDk3YzcwYzJkZDYwMDUyYjUxZGJkMTc4Y2ZkZDk4MmU0OTlkMzk4ZmQ5NDVkNjkxYjI1MmFl.field.dmVyYm9zaXR5.desc": {
           "source": "Preset highlight length: `low`, `medium`, and `high` allocate progressively larger token budgets for the returned highlights. With highlights.dynamic, the preset sets a single shared budget across the whole result set instead of a per-URL budget. Exact budgets are tuned by Exa and may change. Not compatible with maxCharacters or numSentences. Beta: requires the `Exa-Beta: dynamic-highlights-2026-08-28` request header; requests setting `verbosity` without it are rejected.",
           "message": "Prednastavená dĺžka výrazu: `low`, `medium` a `high` pridelia postupne väčšie rozpočty pre vrátené výrazy. Pri highlights.dynamic nastaví prednastavenie jednotný zdieľaný rozpočet pre celú sadu výsledkov namiesto rozpočtu na každú URL. Presné rozpočty sú optimalizované Exa a môžu sa zmeniť. Nie je kompatibilné s maxCharacters alebo numSentences. Beta: vyžaduje hlavičku `Exa-Beta: dynamic-highlights-2026-08-28`; požiadavky nastavujúce `verbosity` bez nej sú zamietnuté."
+        },
+        "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.SGFzaERhdGFUeXBlOipoaWdobGlnaHRzQW55T2ZPbmVPZiM5M2Q0ODE3OWUyMDk3YzcwYzJkZDYwMDUyYjUxZGJkMTc4Y2ZkZDk4MmU0OTlkMzk4ZmQ5NDVkNjkxYjI1MmFl.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "nízka"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.SGFzaERhdGFUeXBlOipoaWdobGlnaHRzQW55T2ZPbmVPZiM5M2Q0ODE3OWUyMDk3YzcwYzJkZDYwMDUyYjUxZGJkMTc4Y2ZkZDk4MmU0OTlkMzk4ZmQ5NDVkNjkxYjI1MmFl.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "stredná"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.union.SGFzaERhdGFUeXBlOipoaWdobGlnaHRzQW55T2ZPbmVPZiM5M2Q0ODE3OWUyMDk3YzcwYzJkZDYwMDUyYjUxZGJkMTc4Y2ZkZDk4MmU0OTlkMzk4ZmQ5NDVkNjkxYjI1MmFl.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "vysoká"
         },
         "app.RXhh.action.Y29udGVudHM.option.c3VtbWFyeQ.display_name": {
           "source": "Summary",
@@ -1891,6 +1955,18 @@
           "source": "Preset highlight length: `low`, `medium`, and `high` allocate progressively larger token budgets for the returned highlights. With highlights.dynamic, the preset sets a single shared budget across the whole result set instead of a per-URL budget. Exact budgets are tuned by Exa and may change. Not compatible with maxCharacters or numSentences. Beta: requires the `Exa-Beta: dynamic-highlights-2026-08-28` request header; requests setting `verbosity` without it are rejected.",
           "message": "Prednastavená dĺžka výrazu: `low`, `medium` a `high` pridelia postupne väčšie rozpočty pre vrátené výrazy. Pri highlights.dynamic nastaví prednastavenie jednotný zdieľaný rozpočet pre celú sadu výsledkov namiesto rozpočtu na každú URL. Presné rozpočty sú optimalizované Exa a môžu sa zmeniť. Nie je kompatibilné s maxCharacters alebo numSentences. Beta: vyžaduje hlavičku `Exa-Beta: dynamic-highlights-2026-08-28`; požiadavky nastavujúce `verbosity` bez nej sú zamietnuté."
         },
+        "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6SGFzaERhdGFUeXBlOipoaWdobGlnaHRzQW55T2ZPbmVPZiM5M2Q0ODE3OWUyMDk3YzcwYzJkZDYwMDUyYjUxZGJkMTc4Y2ZkZDk4MmU0OTlkMzk4ZmQ5NDVkNjkxYjI1MmFl.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "nízka"
+        },
+        "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6SGFzaERhdGFUeXBlOipoaWdobGlnaHRzQW55T2ZPbmVPZiM5M2Q0ODE3OWUyMDk3YzcwYzJkZDYwMDUyYjUxZGJkMTc4Y2ZkZDk4MmU0OTlkMzk4ZmQ5NDVkNjkxYjI1MmFl.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "stredná"
+        },
+        "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6SGFzaERhdGFUeXBlOipoaWdobGlnaHRzQW55T2ZPbmVPZiM5M2Q0ODE3OWUyMDk3YzcwYzJkZDYwMDUyYjUxZGJkMTc4Y2ZkZDk4MmU0OTlkMzk4ZmQ5NDVkNjkxYjI1MmFl.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "vysoká"
+        },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXds.display_name": {
           "source": "Livecrawl",
           "message": "Livecrawl"
@@ -1902,6 +1978,22 @@
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXds.desc": {
           "source": "Deprecated: Use maxAgeHours instead for content freshness control. livecrawl does not guarantee freshly fetched parser output and may be served according to server freshness policy. Do not send livecrawl and maxAgeHours together.",
           "message": "Zastarané: použite maxAgeHours namiesto toho pre kontrolu aktuálnosti obsahu. livecrawl nezaručuje aktuálne načítaný výstup analyzátora a môže byť poskytovaný podľa politiky čerstvosti servera. Neposielajte livecrawl a maxAgeHours spolu."
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXds.allowed-value.c3RyaW5nOm5ldmVy.display_name": {
+          "source": "never",
+          "message": "nikdy"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXds.allowed-value.c3RyaW5nOmFsd2F5cw.display_name": {
+          "source": "always",
+          "message": "vždy"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXds.allowed-value.c3RyaW5nOmZhbGxiYWNr.display_name": {
+          "source": "fallback",
+          "message": "záložné"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXds.allowed-value.c3RyaW5nOnByZWZlcnJlZA.display_name": {
+          "source": "preferred",
+          "message": "preferované"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.field.bGl2ZWNyYXdsVGltZW91dA.display_name": {
           "source": "Livecrawl Timeout",
@@ -2058,6 +2150,18 @@
         "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6SGFzaERhdGFUeXBlOip0ZXh0QW55T2ZPbmVPZiM4ZmI1OTllM2NhOTIxYjk2ZTgzNTc1MTk4MzMzNWQzODc0OTUzYWE4ZjRmOGI4YWQ1N2VlZmJmYmU3NmNlN2Qw.field.dmVyYm9zaXR5.desc": {
           "source": "Controls text rendering verbosity. compact focuses on main content, standard includes more surrounding page context, and full requests the most complete rendered text. Some pages may produce identical standard and full output. Use maxAgeHours: 0 when you need this applied to freshly fetched content.",
           "message": "Ovláda úroveň podrobnosti textového vykreslenia. compact sa sústredí na hlavný obsah, standard zahŕňa viac kontextu okolo stránky, a full požaduje najkompletnejší vykreslený text. Niektoré stránky môžu výstup štandard a full výsledky rovnaké. Použite maxAgeHours: 0, keď potrebujete toto použiť na práve stiahnutý obsah."
+        },
+        "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6SGFzaERhdGFUeXBlOip0ZXh0QW55T2ZPbmVPZiM4ZmI1OTllM2NhOTIxYjk2ZTgzNTc1MTk4MzMzNWQzODc0OTUzYWE4ZjRmOGI4YWQ1N2VlZmJmYmU3NmNlN2Qw.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmNvbXBhY3Q.display_name": {
+          "source": "compact",
+          "message": "kompaktné"
+        },
+        "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6SGFzaERhdGFUeXBlOip0ZXh0QW55T2ZPbmVPZiM4ZmI1OTllM2NhOTIxYjk2ZTgzNTc1MTk4MzMzNWQzODc0OTUzYWE4ZjRmOGI4YWQ1N2VlZmJmYmU3NmNlN2Qw.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "štandardné"
+        },
+        "app.RXhh.type.YWN0aW9uOlptbHVaQzF6YVcxcGJHRnk6SGFzaERhdGFUeXBlOip0ZXh0QW55T2ZPbmVPZiM4ZmI1OTllM2NhOTIxYjk2ZTgzNTc1MTk4MzMzNWQzODc0OTUzYWE4ZjRmOGI4YWQ1N2VlZmJmYmU3NmNlN2Qw.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "full",
+          "message": "úplné"
         },
         "app.RXhh.action.ZmluZC1zaW1pbGFy.option.aW5jbHVkZURvbWFpbnM.display_name": {
           "source": "Only These Domains",
@@ -3155,6 +3259,18 @@
           "source": "Preset highlight length: `low`, `medium`, and `high` allocate progressively larger token budgets for the returned highlights. With highlights.dynamic, the preset sets a single shared budget across the whole result set instead of a per-URL budget. Exact budgets are tuned by Exa and may change. Not compatible with maxCharacters or numSentences. Beta: requires the `Exa-Beta: dynamic-highlights-2026-08-28` request header; requests setting `verbosity` without it are rejected.",
           "message": "Prednastavená dĺžka výrazu: `low`, `medium` a `high` pridelia postupne väčšie rozpočty pre vrátené výrazy. Pri highlights.dynamic nastaví prednastavenie jednotný zdieľaný rozpočet pre celú sadu výsledkov namiesto rozpočtu na každú URL. Presné rozpočty sú optimalizované Exa a môžu sa zmeniť. Nie je kompatibilné s maxCharacters alebo numSentences. Beta: vyžaduje hlavičku `Exa-Beta: dynamic-highlights-2026-08-28`; požiadavky nastavujúce `verbosity` bez nej sú zamietnuté."
         },
+        "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6SGFzaERhdGFUeXBlOipoaWdobGlnaHRzT25lT2YjY2RkMzk5MWM1NzU3YmI1ODliOTA2MTAzZWZjODQ1MzczMzRmNjgyODJmYjQxYmZlNmY4ZDVlOWNmOWZiZjQyNw.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "nízka"
+        },
+        "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6SGFzaERhdGFUeXBlOipoaWdobGlnaHRzT25lT2YjY2RkMzk5MWM1NzU3YmI1ODliOTA2MTAzZWZjODQ1MzczMzRmNjgyODJmYjQxYmZlNmY4ZDVlOWNmOWZiZjQyNw.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "stredná"
+        },
+        "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6SGFzaERhdGFUeXBlOipoaWdobGlnaHRzT25lT2YjY2RkMzk5MWM1NzU3YmI1ODliOTA2MTAzZWZjODQ1MzczMzRmNjgyODJmYjQxYmZlNmY4ZDVlOWNmOWZiZjQyNw.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "vysoká"
+        },
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6SGFzaERhdGFUeXBlOipTZWFyY2hNb25pdG9yQ29udGVudHMjMjBkNGIzYzBhYzI5MjlhZGJhNmFmYzJjNWVlMDk3YjA0MjljZWY4ZGI0YTQ2NmNiMWI5OWE0Y2Y1NDhkZGJjOA.field.bGl2ZWNyYXds.display_name": {
           "source": "Livecrawl",
           "message": "Livecrawl"
@@ -3322,6 +3438,18 @@
         "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6SGFzaERhdGFUeXBlOip0ZXh0T25lT2YjNDA3M2YwMTVmOTQ1OWY3YTk1OTlmY2FkNWEyMjkzNzcwYjk3MjRjMTg4MDI1NTE1YzBkZTM0MTlhMzE5MmZhMQ.field.dmVyYm9zaXR5.desc": {
           "source": "Controls text rendering verbosity. compact focuses on main content, standard includes more surrounding page context, and full requests the most complete rendered text. Some pages may produce identical standard and full output. Use maxAgeHours: 0 when you need this applied to freshly fetched content.",
           "message": "Ovláda úroveň podrobnosti textového vykreslenia. compact sa sústredí na hlavný obsah, standard zahŕňa viac kontextu okolo stránky, a full požaduje najkompletnejší vykreslený text. Niektoré stránky môžu výstup štandard a full výsledky rovnaké. Použite maxAgeHours: 0, keď potrebujete toto použiť na práve stiahnutý obsah."
+        },
+        "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6SGFzaERhdGFUeXBlOip0ZXh0T25lT2YjNDA3M2YwMTVmOTQ1OWY3YTk1OTlmY2FkNWEyMjkzNzcwYjk3MjRjMTg4MDI1NTE1YzBkZTM0MTlhMzE5MmZhMQ.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmNvbXBhY3Q.display_name": {
+          "source": "compact",
+          "message": "kompaktné"
+        },
+        "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6SGFzaERhdGFUeXBlOip0ZXh0T25lT2YjNDA3M2YwMTVmOTQ1OWY3YTk1OTlmY2FkNWEyMjkzNzcwYjk3MjRjMTg4MDI1NTE1YzBkZTM0MTlhMzE5MmZhMQ.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "štandardné"
+        },
+        "app.RXhh.type.YWN0aW9uOlkzSmxZWFJsTFcxdmJtbDBiM0k6SGFzaERhdGFUeXBlOip0ZXh0T25lT2YjNDA3M2YwMTVmOTQ1OWY3YTk1OTlmY2FkNWEyMjkzNzcwYjk3MjRjMTg4MDI1NTE1YzBkZTM0MTlhMzE5MmZhMQ.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "full",
+          "message": "úplné"
         },
         "app.RXhh.action.Y3JlYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.display_name": {
           "source": "Exclude Domains",
@@ -3887,6 +4015,18 @@
           "source": "Preset highlight length: `low`, `medium`, and `high` allocate progressively larger token budgets for the returned highlights. With highlights.dynamic, the preset sets a single shared budget across the whole result set instead of a per-URL budget. Exact budgets are tuned by Exa and may change. Not compatible with maxCharacters or numSentences. Beta: requires the `Exa-Beta: dynamic-highlights-2026-08-28` request header; requests setting `verbosity` without it are rejected.",
           "message": "Prednastavená dĺžka výrazu: `low`, `medium` a `high` pridelia postupne väčšie rozpočty pre vrátené výrazy. Pri highlights.dynamic nastaví prednastavenie jednotný zdieľaný rozpočet pre celú sadu výsledkov namiesto rozpočtu na každú URL. Presné rozpočty sú optimalizované Exa a môžu sa zmeniť. Nie je kompatibilné s maxCharacters alebo numSentences. Beta: vyžaduje hlavičku `Exa-Beta: dynamic-highlights-2026-08-28`; požiadavky nastavujúce `verbosity` bez nej sú zamietnuté."
         },
+        "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6SGFzaERhdGFUeXBlOipoaWdobGlnaHRzT25lT2YjY2RkMzk5MWM1NzU3YmI1ODliOTA2MTAzZWZjODQ1MzczMzRmNjgyODJmYjQxYmZlNmY4ZDVlOWNmOWZiZjQyNw.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "nízka"
+        },
+        "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6SGFzaERhdGFUeXBlOipoaWdobGlnaHRzT25lT2YjY2RkMzk5MWM1NzU3YmI1ODliOTA2MTAzZWZjODQ1MzczMzRmNjgyODJmYjQxYmZlNmY4ZDVlOWNmOWZiZjQyNw.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "stredná"
+        },
+        "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6SGFzaERhdGFUeXBlOipoaWdobGlnaHRzT25lT2YjY2RkMzk5MWM1NzU3YmI1ODliOTA2MTAzZWZjODQ1MzczMzRmNjgyODJmYjQxYmZlNmY4ZDVlOWNmOWZiZjQyNw.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "vysoká"
+        },
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6SGFzaERhdGFUeXBlOipTZWFyY2hNb25pdG9yQ29udGVudHMjMjBkNGIzYzBhYzI5MjlhZGJhNmFmYzJjNWVlMDk3YjA0MjljZWY4ZGI0YTQ2NmNiMWI5OWE0Y2Y1NDhkZGJjOA.field.bGl2ZWNyYXds.display_name": {
           "source": "Livecrawl",
           "message": "Livecrawl"
@@ -4054,6 +4194,18 @@
         "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6SGFzaERhdGFUeXBlOip0ZXh0T25lT2YjNDA3M2YwMTVmOTQ1OWY3YTk1OTlmY2FkNWEyMjkzNzcwYjk3MjRjMTg4MDI1NTE1YzBkZTM0MTlhMzE5MmZhMQ.field.dmVyYm9zaXR5.desc": {
           "source": "Controls text rendering verbosity. compact focuses on main content, standard includes more surrounding page context, and full requests the most complete rendered text. Some pages may produce identical standard and full output. Use maxAgeHours: 0 when you need this applied to freshly fetched content.",
           "message": "Ovláda úroveň podrobnosti textového vykreslenia. compact sa sústredí na hlavný obsah, standard zahŕňa viac kontextu okolo stránky, a full požaduje najkompletnejší vykreslený text. Niektoré stránky môžu výstup štandard a full výsledky rovnaké. Použite maxAgeHours: 0, keď potrebujete toto použiť na práve stiahnutý obsah."
+        },
+        "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6SGFzaERhdGFUeXBlOip0ZXh0T25lT2YjNDA3M2YwMTVmOTQ1OWY3YTk1OTlmY2FkNWEyMjkzNzcwYjk3MjRjMTg4MDI1NTE1YzBkZTM0MTlhMzE5MmZhMQ.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmNvbXBhY3Q.display_name": {
+          "source": "compact",
+          "message": "kompaktné"
+        },
+        "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6SGFzaERhdGFUeXBlOip0ZXh0T25lT2YjNDA3M2YwMTVmOTQ1OWY3YTk1OTlmY2FkNWEyMjkzNzcwYjk3MjRjMTg4MDI1NTE1YzBkZTM0MTlhMzE5MmZhMQ.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "štandardné"
+        },
+        "app.RXhh.type.YWN0aW9uOmRYQmtZWFJsTFcxdmJtbDBiM0k6SGFzaERhdGFUeXBlOip0ZXh0T25lT2YjNDA3M2YwMTVmOTQ1OWY3YTk1OTlmY2FkNWEyMjkzNzcwYjk3MjRjMTg4MDI1NTE1YzBkZTM0MTlhMzE5MmZhMQ.field.dmVyYm9zaXR5.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "full",
+          "message": "úplné"
         },
         "app.RXhh.action.dXBkYXRlLW1vbml0b3I.option.c2VhcmNo.field.ZXhjbHVkZURvbWFpbnM.display_name": {
           "source": "Exclude Domains",

@@ -545,7 +545,8 @@ public class AbstractDataField inherits Qore::Serializable {
         try {
             # first do any value / type filtering / conversions
             value = getType().acceptsValue(value);
-            if (allowed_values && !allowed_values_creatable) {
+            # no value, or null, which the type of an optional field accepts, is not one of its choices
+            if (allowed_values && !allowed_values_creatable && exists value && value.typeCode() != NT_NULL) {
                 if (!DataProviderAllowedValueKeys::contains(allowed_values_map, value)) {
                     throw "FIELD-VALUE-ERROR", sprintf("field %y does not accept value %y; allowed values: %y",
                         getName(), value, (map $1.value, allowed_values));

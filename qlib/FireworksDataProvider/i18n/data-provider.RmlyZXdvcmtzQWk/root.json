@@ -14935,6 +14935,18 @@
           "source": "Opt-in sampling mask metadata for generated tokens. When set to `\"count\"`, each generated token in the new logprobs format includes the number of token logits still eligible for sampling after filters such as top_p and top_k are applied. `\"non_zero_list\"` additionally returns active token IDs in `sampling_mask`; `\"non_zero_buffer\"` additionally returns a base64-encoded little-endian uint32 buffer of active token IDs. Non-zero payloads are omitted for positions with more active tokens than 1000.",
           "message": "Opt-in sampling mask metadata for generated tokens. When set to `\"count\"`, each generated token in the new logprobs format includes the number of token logits still eligible for sampling after filters such as top_p and top_k are applied. `\"non_zero_list\"` additionally returns active token IDs in `sampling_mask`; `\"non_zero_buffer\"` additionally returns a base64-encoded little-endian uint32 buffer of active token IDs. Non-zero payloads are omitted for positions with more active tokens than 1000."
         },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "count"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOm5vbl96ZXJvX2xpc3Q.display_name": {
+          "source": "non_zero_list",
+          "message": "non_zero_list"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOm5vbl96ZXJvX2J1ZmZlcg.display_name": {
+          "source": "non_zero_buffer",
+          "message": "non_zero_buffer"
+        },
         "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.ZWNobw.display_name": {
           "source": "Echo",
           "message": "Echo"
@@ -15239,6 +15251,18 @@
           "source": "Controls how historical assistant reasoning content is included in the prompt for multi-turn conversations.\n\n**Accepted values:**\n\n- `null`: Use model/template default behavior (for **GLM-4.7**, the model/template default is `'interleaved'`, i.e. historical reasoning is cleared by default)\n- `'disabled'`: Strip `reasoning_content` from all messages before prompt construction\n- `'interleaved'`: Strip `reasoning_content` from messages up to (and including) the last user message\n- `'preserved'`: Preserve historical `reasoning_content` across the conversation\n\n**Model support:**\n\n| Model | Default | Supported values |\n| --- | --- | --- |\n| Kimi K2.7 | `'preserved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| Kimi K2.6 | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| Kimi K2 Instruct | `'preserved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| MiniMax M2 | `'interleaved'` | `'disabled'`, `'interleaved'` |\n| GLM-5.2 | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| GLM-4.7 | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| GLM-4.6 | `'interleaved'` | `'disabled'`, `'interleaved'` |\n| Qwen 3.6 | `'preserved'` | `'disabled'`, `'preserved'` |\n| DeepSeek V4 | `'interleaved'` | `'interleaved'` |\n\nFor other models, refer to the model provider's documentation.\n\n**Note:** This parameter controls prompt formatting only. To disable reasoning computation entirely, use `reasoning_effort='none'`.",
           "message": "Controls how historical assistant reasoning content is included in the prompt for multi-turn conversations.\n\n**Accepted values:**\n\n- `null`: Use model/template default behavior (for **GLM-4.7**, the model/template default is `'interleaved'`, i.e. historical reasoning is cleared by default)\n- `'disabled'`: Strip `reasoning_content` from all messages before prompt construction\n- `'interleaved'`: Strip `reasoning_content` from messages up to (and including) the last user message\n- `'preserved'`: Preserve historical `reasoning_content` across the conversation\n\n**Model support:**\n\n| Model | Default | Supported values |\n| --- | --- | --- |\n| Kimi K2.7 | `'preserved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| Kimi K2.6 | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| Kimi K2 Instruct | `'preserved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| MiniMax M2 | `'interleaved'` | `'disabled'`, `'interleaved'` |\n| GLM-5.2 | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| GLM-4.7 | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| GLM-4.6 | `'interleaved'` | `'disabled'`, `'interleaved'` |\n| Qwen 3.6 | `'preserved'` | `'disabled'`, `'preserved'` |\n| DeepSeek V4 | `'interleaved'` | `'interleaved'` |\n\nFor other models, refer to the model provider's documentation.\n\n**Note:** This parameter controls prompt formatting only. To disable reasoning computation entirely, use `reasoning_effort='none'`."
         },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "disabled",
+          "message": "disabled"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOmludGVybGVhdmVk.display_name": {
+          "source": "interleaved",
+          "message": "interleaved"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOnByZXNlcnZlZA.display_name": {
+          "source": "preserved",
+          "message": "preserved"
+        },
         "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.dGhpbmtpbmc.display_name": {
           "source": "Thinking",
           "message": "Thinking"
@@ -15298,6 +15322,10 @@
         "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.a2VlcA.desc": {
           "source": "Controls whether historical reasoning content is preserved in the prompt. When set to `\"all\"`, all previous assistant turns' reasoning_content is included in the rendered prompt (equivalent to `reasoning_history: \"preserved\"`). When omitted (null), the model uses its default history behavior. Only valid when `type` is `\"enabled\"`.",
           "message": "Controls whether historical reasoning content is preserved in the prompt. When set to `\"all\"`, all previous assistant turns' reasoning_content is included in the rendered prompt (equivalent to `reasoning_history: \"preserved\"`). When omitted (null), the model uses its default history behavior. Only valid when `type` is `\"enabled\"`."
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.a2VlcA.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "all",
+          "message": "all"
         },
         "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.dHlwZQ.display_name": {
           "source": "Type",
@@ -16135,6 +16163,18 @@
           "source": "Opt-in sampling mask metadata for generated tokens. When set to `\"count\"`, each generated token in the new logprobs format includes the number of token logits still eligible for sampling after filters such as top_p and top_k are applied. `\"non_zero_list\"` additionally returns active token IDs in `sampling_mask`; `\"non_zero_buffer\"` additionally returns a base64-encoded little-endian uint32 buffer of active token IDs. Non-zero payloads are omitted for positions with more active tokens than 1000.",
           "message": "Opt-in sampling mask metadata for generated tokens. When set to `\"count\"`, each generated token in the new logprobs format includes the number of token logits still eligible for sampling after filters such as top_p and top_k are applied. `\"non_zero_list\"` additionally returns active token IDs in `sampling_mask`; `\"non_zero_buffer\"` additionally returns a base64-encoded little-endian uint32 buffer of active token IDs. Non-zero payloads are omitted for positions with more active tokens than 1000."
         },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "count"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOm5vbl96ZXJvX2xpc3Q.display_name": {
+          "source": "non_zero_list",
+          "message": "non_zero_list"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOm5vbl96ZXJvX2J1ZmZlcg.display_name": {
+          "source": "non_zero_buffer",
+          "message": "non_zero_buffer"
+        },
         "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.ZWNobw.display_name": {
           "source": "Echo",
           "message": "Echo"
@@ -16275,6 +16315,18 @@
           "source": "Controls how historical assistant reasoning content is included in the prompt for multi-turn conversations.\n\n**Accepted values:**\n\n- `null`: Use model/template default behavior (for **GLM-4.7**, the model/template default is `'interleaved'`, i.e. historical reasoning is cleared by default)\n- `'disabled'`: Strip `reasoning_content` from all messages before prompt construction\n- `'interleaved'`: Strip `reasoning_content` from messages up to (and including) the last user message\n- `'preserved'`: Preserve historical `reasoning_content` across the conversation\n\n**Model support:**\n\n| Model | Default | Supported values |\n| --- | --- | --- |\n| Kimi K2.7 | `'preserved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| Kimi K2.6 | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| Kimi K2 Instruct | `'preserved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| MiniMax M2 | `'interleaved'` | `'disabled'`, `'interleaved'` |\n| GLM-5.2 | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| GLM-4.7 | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| GLM-4.6 | `'interleaved'` | `'disabled'`, `'interleaved'` |\n| Qwen 3.6 | `'preserved'` | `'disabled'`, `'preserved'` |\n| DeepSeek V4 | `'interleaved'` | `'interleaved'` |\n\nFor other models, refer to the model provider's documentation.\n\n**Note:** This parameter controls prompt formatting only. To disable reasoning computation entirely, use `reasoning_effort='none'`.",
           "message": "Controls how historical assistant reasoning content is included in the prompt for multi-turn conversations.\n\n**Accepted values:**\n\n- `null`: Use model/template default behavior (for **GLM-4.7**, the model/template default is `'interleaved'`, i.e. historical reasoning is cleared by default)\n- `'disabled'`: Strip `reasoning_content` from all messages before prompt construction\n- `'interleaved'`: Strip `reasoning_content` from messages up to (and including) the last user message\n- `'preserved'`: Preserve historical `reasoning_content` across the conversation\n\n**Model support:**\n\n| Model | Default | Supported values |\n| --- | --- | --- |\n| Kimi K2.7 | `'preserved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| Kimi K2.6 | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| Kimi K2 Instruct | `'preserved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| MiniMax M2 | `'interleaved'` | `'disabled'`, `'interleaved'` |\n| GLM-5.2 | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| GLM-4.7 | `'interleaved'` | `'disabled'`, `'interleaved'`, `'preserved'` |\n| GLM-4.6 | `'interleaved'` | `'disabled'`, `'interleaved'` |\n| Qwen 3.6 | `'preserved'` | `'disabled'`, `'preserved'` |\n| DeepSeek V4 | `'interleaved'` | `'interleaved'` |\n\nFor other models, refer to the model provider's documentation.\n\n**Note:** This parameter controls prompt formatting only. To disable reasoning computation entirely, use `reasoning_effort='none'`."
         },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "disabled",
+          "message": "disabled"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOmludGVybGVhdmVk.display_name": {
+          "source": "interleaved",
+          "message": "interleaved"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOnByZXNlcnZlZA.display_name": {
+          "source": "preserved",
+          "message": "preserved"
+        },
         "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dGhpbmtpbmc.display_name": {
           "source": "Thinking",
           "message": "Thinking"
@@ -16334,6 +16386,10 @@
         "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.a2VlcA.desc": {
           "source": "Controls whether historical reasoning content is preserved in the prompt. When set to `\"all\"`, all previous assistant turns' reasoning_content is included in the rendered prompt (equivalent to `reasoning_history: \"preserved\"`). When omitted (null), the model uses its default history behavior. Only valid when `type` is `\"enabled\"`.",
           "message": "Controls whether historical reasoning content is preserved in the prompt. When set to `\"all\"`, all previous assistant turns' reasoning_content is included in the rendered prompt (equivalent to `reasoning_history: \"preserved\"`). When omitted (null), the model uses its default history behavior. Only valid when `type` is `\"enabled\"`."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.a2VlcA.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "all",
+          "message": "all"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.dHlwZQ.display_name": {
           "source": "Type",
@@ -17323,6 +17379,22 @@
           "source": "How much effort the model should put into its response. Higher effort levels may result in more thorough analysis but take longer.\n\nValid values are `low`, `medium`, `high`, or `max`.\n\n**Fireworks behavior:** The `effort` level is converted to Fireworks [`reasoning_effort`](/api-reference/post-chatcompletions). Values `low`, `medium`, and `high` map directly. `max` is mapped to `high` since Fireworks does not have a `max` effort level.",
           "message": "How much effort the model should put into its response. Higher effort levels may result in more thorough analysis but take longer.\n\nValid values are `low`, `medium`, `high`, or `max`.\n\n**Fireworks behavior:** The `effort` level is converted to Fireworks [`reasoning_effort`](/api-reference/post-chatcompletions). Values `low`, `medium`, and `high` map directly. `max` is mapped to `high` since Fireworks does not have a `max` effort level."
         },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "low"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "medium"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "max",
+          "message": "max"
+        },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.Zm9ybWF0.display_name": {
           "source": "Format",
           "message": "Format"
@@ -17630,6 +17702,10 @@
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9vbHM.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9vbHM.field.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "custom"
         },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX2s.display_name": {
           "source": "Top K",

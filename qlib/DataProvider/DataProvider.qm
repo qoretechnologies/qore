@@ -1563,6 +1563,8 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_11 DataProvider v3.11
+    - an optional field, option or type with choices that are not creatable accepts no value and \c NULL, which are
+      not choices; it refused them with a \c FIELD-VALUE-ERROR or \c TYPE-VALUE-ERROR exception
     - added @ref DataProvider::HashDataType::setFieldList() "HashDataType::setFieldList()", which sets the fields of
       a record type as if they had been added to it in order, with the default value and optionality they give
     - added @ref DataProvider::AbstractDataProviderType::getInfoGraph() "AbstractDataProviderType::getInfoGraph()",

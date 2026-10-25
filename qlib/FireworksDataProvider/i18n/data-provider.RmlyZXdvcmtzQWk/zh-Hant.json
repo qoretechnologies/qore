@@ -14935,6 +14935,18 @@
           "source": "Opt-in sampling mask metadata for generated tokens. When set to `\"count\"`, each generated token in the new logprobs format includes the number of token logits still eligible for sampling after filters such as top_p and top_k are applied. `\"non_zero_list\"` additionally returns active token IDs in `sampling_mask`; `\"non_zero_buffer\"` additionally returns a base64-encoded little-endian uint32 buffer of active token IDs. Non-zero payloads are omitted for positions with more active tokens than 1000.",
           "message": "生成 token 的可選抽樣遮罩中繼資料。設定為 `\"count\"` 時，新 logprobs 格式中的每個生成 token 皆會包含在套用 top_p 與 top_k 等過濾後仍可抽樣的 token logits 數量。`\"non_zero_list\"` 會額外返回 `sampling_mask` 中的活躍 token ID；`\"non_zero_buffer\"` 會額外返回活躍 token ID 的 base64 編碼小端序 uint32 緩衝。若活躍 token 超過 1000，則不會包含非零負載。"
         },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "計數"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOm5vbl96ZXJvX2xpc3Q.display_name": {
+          "source": "non_zero_list",
+          "message": "非零清單"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOm5vbl96ZXJvX2J1ZmZlcg.display_name": {
+          "source": "non_zero_buffer",
+          "message": "非零緩衝區"
+        },
         "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.ZWNobw.display_name": {
           "source": "Echo",
           "message": "回音"
@@ -15298,6 +15310,10 @@
         "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.a2VlcA.desc": {
           "source": "Controls whether historical reasoning content is preserved in the prompt. When set to `\"all\"`, all previous assistant turns' reasoning_content is included in the rendered prompt (equivalent to `reasoning_history: \"preserved\"`). When omitted (null), the model uses its default history behavior. Only valid when `type` is `\"enabled\"`.",
           "message": "控制歷史推理內容是否保留在提示中。當設為 `\"all\"` 時，所有先前助理回合的 reasoning_content 會包含在渲染提示中（等同於 `reasoning_history: \"preserved\"`）。若省略（null），模型會使用其預設歷史行為。僅在 `type` 為 `\"enabled\"` 時有效。"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.a2VlcA.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "all",
+          "message": "全部"
         },
         "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.dHlwZQ.display_name": {
           "source": "Type",
@@ -16135,6 +16151,18 @@
           "source": "Opt-in sampling mask metadata for generated tokens. When set to `\"count\"`, each generated token in the new logprobs format includes the number of token logits still eligible for sampling after filters such as top_p and top_k are applied. `\"non_zero_list\"` additionally returns active token IDs in `sampling_mask`; `\"non_zero_buffer\"` additionally returns a base64-encoded little-endian uint32 buffer of active token IDs. Non-zero payloads are omitted for positions with more active tokens than 1000.",
           "message": "生成 token 的可選抽樣遮罩中繼資料。設定為 `\"count\"` 時，新 logprobs 格式中的每個生成 token 皆會包含在套用 top_p 與 top_k 等過濾後仍可抽樣的 token logits 數量。`\"non_zero_list\"` 會額外返回 `sampling_mask` 中的活躍 token ID；`\"non_zero_buffer\"` 會額外返回活躍 token ID 的 base64 編碼小端序 uint32 緩衝。若活躍 token 超過 1000，則不會包含非零負載。"
         },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "計數"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOm5vbl96ZXJvX2xpc3Q.display_name": {
+          "source": "non_zero_list",
+          "message": "非零清單"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOm5vbl96ZXJvX2J1ZmZlcg.display_name": {
+          "source": "non_zero_buffer",
+          "message": "非零緩衝區"
+        },
         "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.ZWNobw.display_name": {
           "source": "Echo",
           "message": "回音"
@@ -16334,6 +16362,10 @@
         "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.a2VlcA.desc": {
           "source": "Controls whether historical reasoning content is preserved in the prompt. When set to `\"all\"`, all previous assistant turns' reasoning_content is included in the rendered prompt (equivalent to `reasoning_history: \"preserved\"`). When omitted (null), the model uses its default history behavior. Only valid when `type` is `\"enabled\"`.",
           "message": "控制歷史推理內容是否保留在提示中。當設為 `\"all\"` 時，所有先前助理回合的 reasoning_content 會包含在渲染提示中（等同於 `reasoning_history: \"preserved\"`）。若省略（null），模型會使用其預設歷史行為。僅在 `type` 為 `\"enabled\"` 時有效。"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.a2VlcA.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "all",
+          "message": "全部"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.dHlwZQ.display_name": {
           "source": "Type",
@@ -17323,6 +17355,22 @@
           "source": "How much effort the model should put into its response. Higher effort levels may result in more thorough analysis but take longer.\n\nValid values are `low`, `medium`, `high`, or `max`.\n\n**Fireworks behavior:** The `effort` level is converted to Fireworks [`reasoning_effort`](/api-reference/post-chatcompletions). Values `low`, `medium`, and `high` map directly. `max` is mapped to `high` since Fireworks does not have a `max` effort level.",
           "message": "模型應投入回應的 effort 多少。較高 effort 等級可能導致更徹底的分析，但耗時較長。\n\n有效值為 `low`、`medium`、`high` 或 `max`。\n\n**Fireworks 行為：** `effort` 等級會轉換為 Fireworks [`reasoning_effort`](/api-reference/post-chatcompletions)。值 `low`、`medium` 和 `high` 直接對應。`max` 對應至 `high`，因為 Fireworks 沒有 `max` 的 effort 等級。"
         },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "低"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "中"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "高"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "max",
+          "message": "最大"
+        },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.Zm9ybWF0.display_name": {
           "source": "Format",
           "message": "格式"
@@ -17631,6 +17679,10 @@
           "source": "Type",
           "message": "類型"
         },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9vbHM.field.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "自訂"
+        },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX2s.display_name": {
           "source": "Top K",
           "message": "Top K"
@@ -17854,6 +17906,30 @@
         "app.RmlyZXdvcmtzQWk.action.cmVyYW5r.option.dGFzaw.desc": {
           "source": "Optional instruction describing the relevance task.",
           "message": "描述相關性任務的可選指示。"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "disabled",
+          "message": "已停用"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOmludGVybGVhdmVk.display_name": {
+          "source": "interleaved",
+          "message": "交錯"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOnByZXNlcnZlZA.display_name": {
+          "source": "preserved",
+          "message": "保留"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "disabled",
+          "message": "已停用"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOmludGVybGVhdmVk.display_name": {
+          "source": "interleaved",
+          "message": "交錯"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOnByZXNlcnZlZA.display_name": {
+          "source": "preserved",
+          "message": "保留"
         }
       }
     }

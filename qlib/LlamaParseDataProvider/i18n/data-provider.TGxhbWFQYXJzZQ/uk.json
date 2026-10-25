@@ -1243,6 +1243,10 @@
           "source": "Confidence scoring effort. Omit for standard scoring. 'high': more accurate assessment of the parsing quality of every page, plus a document-level score in the result metadata; costs an additional 5 credits per page",
           "message": "Зусилля оцінки достовірності. Пропустіть для стандартної оцінки. 'high': більш точна оцінка якості розбору кожної сторінки, а також оцінка на рівні документа в метаданих результату; коштує додатково 5 кредитів за сторінку"
         },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.Y29uZmlkZW5jZV9zY29yZV9lZmZvcnQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "високий"
+        },
         "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.Y29zdF9vcHRpbWl6ZXI.display_name": {
           "source": "Cost Optimizer",
           "message": "Оптимізатор витрат"
@@ -1290,6 +1294,14 @@
         "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.Zm9ybXM.desc": {
           "source": "Beta: set to 'enrich' to run an additional AI form-analysis pass on pages detected as forms, producing a structured tree of the form's sections, fields, and fillable grids. Retrieve the result with expand=forms. 'default' (the default) applies standard parsing with no extra pass. Not available on the fast tier",
           "message": "Бета: встановіть значення 'enrich', щоб запустити додаткову перевірку форми за допомогою штучного інтелекту на сторінках, виявлених як форми, що виробляє структуроване дерево розділів форми, полів та заповнюваних таблиць. Отримайте результат за допомогою expand=forms. 'default' (за замовчуванням) застосовує стандартне розпізнавання без додаткової перевірки. Не доступно на швидкому тарифі"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.Zm9ybXM.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "default",
+          "message": "за замовчуванням"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.Zm9ybXM.allowed-value.c3RyaW5nOmVucmljaA.display_name": {
+          "source": "enrich",
+          "message": "збагачення"
         },
         "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.aWdub3Jl.display_name": {
           "source": "Ignore",
@@ -1458,6 +1470,14 @@
         "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.d2ViaG9va19jb25maWd1cmF0aW9ucw.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.desc": {
           "source": "Format of the webhook payload body. 'string' (default) sends the payload as a JSON-encoded string; 'json' sends it as a JSON object.",
           "message": "Формат тіла вебхука. 'string' (за замовчуванням) надсилає тіло як JSON-рядок; 'json' надсилає його як об’єкт JSON."
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.d2ViaG9va19jb25maWd1cmF0aW9ucw.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.allowed-value.c3RyaW5nOnN0cmluZw.display_name": {
+          "source": "string",
+          "message": "рядок"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.d2ViaG9va19jb25maWd1cmF0aW9ucw.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "json",
+          "message": "JSON"
         },
         "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.d2ViaG9va19jb25maWd1cmF0aW9ucw.field.d2ViaG9va19zaWduaW5nX3NlY3JldA.display_name": {
           "source": "Webhook Signing Secret",
@@ -7183,6 +7203,10 @@
           "source": "Confidence scoring effort. Omit for standard scoring. 'high': more accurate assessment of the parsing quality of every page, plus a document-level score in the result metadata; costs an additional 5 credits per page",
           "message": "Зусилля оцінки достовірності. Пропустіть для стандартної оцінки. 'high': більш точна оцінка якості розбору кожної сторінки, а також оцінка на рівні документа в метаданих результату; коштує додатково 5 кредитів за сторінку"
         },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Y29uZmlkZW5jZV9zY29yZV9lZmZvcnQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "високий"
+        },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Y29zdF9vcHRpbWl6ZXI.display_name": {
           "source": "Cost Optimizer",
           "message": "Оптимізатор витрат"
@@ -7230,6 +7254,14 @@
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Zm9ybXM.desc": {
           "source": "Beta: set to 'enrich' to run an additional AI form-analysis pass on pages detected as forms, producing a structured tree of the form's sections, fields, and fillable grids. Retrieve the result with expand=forms. 'default' (the default) applies standard parsing with no extra pass. Not available on the fast tier",
           "message": "Бета: встановіть значення 'enrich', щоб запустити додаткову перевірку форми за допомогою штучного інтелекту на сторінках, виявлених як форми, що виробляє структуроване дерево розділів форми, полів та заповнюваних таблиць. Отримайте результат за допомогою expand=forms. 'default' (за замовчуванням) застосовує стандартне розпізнавання без додаткової перевірки. Не доступно на швидкому тарифі"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Zm9ybXM.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "default",
+          "message": "за замовчуванням"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Zm9ybXM.allowed-value.c3RyaW5nOmVucmljaA.display_name": {
+          "source": "enrich",
+          "message": "збагачення"
         },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.aWdub3Jl.display_name": {
           "source": "Ignore",
@@ -7430,6 +7462,14 @@
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6TGxhbWFQYXJzZVdlYmhvb2tDb25maWd1cmF0aW9uIzM0NDVmMDRkNGFlMDE2ZGJmZWQ4ZmI0MThiNzc1ZDUyNmZlMzVjMjBhYTQyYzk3YjAyYjk2NjhhYjljZDE4YWQ.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.desc": {
           "source": "Format of the webhook payload body. 'string' (default) sends the payload as a JSON-encoded string; 'json' sends it as a JSON object.",
           "message": "Формат тіла вебхука. 'string' (за замовчуванням) надсилає тіло як JSON-рядок; 'json' надсилає його як об’єкт JSON."
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6TGxhbWFQYXJzZVdlYmhvb2tDb25maWd1cmF0aW9uIzM0NDVmMDRkNGFlMDE2ZGJmZWQ4ZmI0MThiNzc1ZDUyNmZlMzVjMjBhYTQyYzk3YjAyYjk2NjhhYjljZDE4YWQ.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.allowed-value.c3RyaW5nOnN0cmluZw.display_name": {
+          "source": "string",
+          "message": "рядок"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6TGxhbWFQYXJzZVdlYmhvb2tDb25maWd1cmF0aW9uIzM0NDVmMDRkNGFlMDE2ZGJmZWQ4ZmI0MThiNzc1ZDUyNmZlMzVjMjBhYTQyYzk3YjAyYjk2NjhhYjljZDE4YWQ.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "json",
+          "message": "JSON"
         },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6TGxhbWFQYXJzZVdlYmhvb2tDb25maWd1cmF0aW9uIzM0NDVmMDRkNGFlMDE2ZGJmZWQ4ZmI0MThiNzc1ZDUyNmZlMzVjMjBhYTQyYzk3YjAyYjk2NjhhYjljZDE4YWQ.field.d2ViaG9va19zaWduaW5nX3NlY3JldA.display_name": {
           "source": "Webhook Signing Secret",
@@ -9787,6 +9827,10 @@
           "source": "Confidence scoring effort. Omit for standard scoring. 'high': more accurate assessment of the parsing quality of every page, plus a document-level score in the result metadata; costs an additional 5 credits per page",
           "message": "Зусилля оцінки достовірності. Пропустіть для стандартної оцінки. 'high': більш точна оцінка якості розбору кожної сторінки, а також оцінка на рівні документа в метаданих результату; коштує додатково 5 кредитів за сторінку"
         },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Y29uZmlkZW5jZV9zY29yZV9lZmZvcnQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "високий"
+        },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Y29zdF9vcHRpbWl6ZXI.display_name": {
           "source": "Cost Optimizer",
           "message": "Оптимізатор витрат"
@@ -9834,6 +9878,14 @@
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Zm9ybXM.desc": {
           "source": "Beta: set to 'enrich' to run an additional AI form-analysis pass on pages detected as forms, producing a structured tree of the form's sections, fields, and fillable grids. Retrieve the result with expand=forms. 'default' (the default) applies standard parsing with no extra pass. Not available on the fast tier",
           "message": "Бета: встановіть значення 'enrich', щоб запустити додаткову перевірку форми за допомогою штучного інтелекту на сторінках, виявлених як форми, що виробляє структуроване дерево розділів форми, полів та заповнюваних таблиць. Отримайте результат за допомогою expand=forms. 'default' (за замовчуванням) застосовує стандартне розпізнавання без додаткової перевірки. Не доступно на швидкому тарифі"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Zm9ybXM.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "default",
+          "message": "за замовчуванням"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Zm9ybXM.allowed-value.c3RyaW5nOmVucmljaA.display_name": {
+          "source": "enrich",
+          "message": "збагачення"
         },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.aWdub3Jl.display_name": {
           "source": "Ignore",
@@ -10034,6 +10086,14 @@
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6TGxhbWFQYXJzZVdlYmhvb2tDb25maWd1cmF0aW9uIzM0NDVmMDRkNGFlMDE2ZGJmZWQ4ZmI0MThiNzc1ZDUyNmZlMzVjMjBhYTQyYzk3YjAyYjk2NjhhYjljZDE4YWQ.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.desc": {
           "source": "Format of the webhook payload body. 'string' (default) sends the payload as a JSON-encoded string; 'json' sends it as a JSON object.",
           "message": "Формат тіла вебхука. 'string' (за замовчуванням) надсилає тіло як JSON-рядок; 'json' надсилає його як об’єкт JSON."
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6TGxhbWFQYXJzZVdlYmhvb2tDb25maWd1cmF0aW9uIzM0NDVmMDRkNGFlMDE2ZGJmZWQ4ZmI0MThiNzc1ZDUyNmZlMzVjMjBhYTQyYzk3YjAyYjk2NjhhYjljZDE4YWQ.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.allowed-value.c3RyaW5nOnN0cmluZw.display_name": {
+          "source": "string",
+          "message": "рядок"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6TGxhbWFQYXJzZVdlYmhvb2tDb25maWd1cmF0aW9uIzM0NDVmMDRkNGFlMDE2ZGJmZWQ4ZmI0MThiNzc1ZDUyNmZlMzVjMjBhYTQyYzk3YjAyYjk2NjhhYjljZDE4YWQ.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "json",
+          "message": "JSON"
         },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6TGxhbWFQYXJzZVdlYmhvb2tDb25maWd1cmF0aW9uIzM0NDVmMDRkNGFlMDE2ZGJmZWQ4ZmI0MThiNzc1ZDUyNmZlMzVjMjBhYTQyYzk3YjAyYjk2NjhhYjljZDE4YWQ.field.d2ViaG9va19zaWduaW5nX3NlY3JldA.display_name": {
           "source": "Webhook Signing Secret",
@@ -11482,6 +11542,186 @@
         "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.am9iX3RpbWVvdXQ.desc": {
           "source": "Overall job timeout — if extraction takes longer than this, the call errors out.",
           "message": "Загальний таймаут завдання — якщо вилучення триває довше, виклик завершується помилкою."
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "агентивний"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmVmZmljaWVudA.display_name": {
+          "source": "efficient",
+          "message": "ефективний"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.dGllcg.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+          "source": "fast",
+          "message": "швидкий"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.dGllcg.allowed-value.c3RyaW5nOmNvc3RfZWZmZWN0aXZl.display_name": {
+          "source": "cost_effective",
+          "message": "ефективний"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.dGllcg.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "агентивний"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.dGllcg.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "агентивний"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmVmZmljaWVudA.display_name": {
+          "source": "efficient",
+          "message": "ефективний"
+        },
+        "app.TGxhbWFQYXJzZQ.action.ZXh0cmFjdC1mcm9tLWRvY3VtZW50.option.Y29uZmlndXJhdGlvbg.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+          "source": "fast",
+          "message": "швидкий"
+        },
+        "app.TGxhbWFQYXJzZQ.action.ZXh0cmFjdC1mcm9tLWRvY3VtZW50.option.Y29uZmlndXJhdGlvbg.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmNvc3RfZWZmZWN0aXZl.display_name": {
+          "source": "cost_effective",
+          "message": "ефективний"
+        },
+        "app.TGxhbWFQYXJzZQ.action.ZXh0cmFjdC1mcm9tLWRvY3VtZW50.option.Y29uZmlndXJhdGlvbg.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "агентивний"
+        },
+        "app.TGxhbWFQYXJzZQ.action.ZXh0cmFjdC1mcm9tLWRvY3VtZW50.option.Y29uZmlndXJhdGlvbg.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.action.Y3JlYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOkV4dHJhY3RWMlBhcmFtZXRlcnMjMzA2Y2IxZjFmZjZiZmM4YTQ5MzkzN2NkNDJhMDkwMzU3OWIwMWZhNzk1MjUyZTFiNDhkMGRmZDNhMTAzN2NlNw.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+          "source": "fast",
+          "message": "швидкий"
+        },
+        "app.TGxhbWFQYXJzZQ.action.Y3JlYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOkV4dHJhY3RWMlBhcmFtZXRlcnMjMzA2Y2IxZjFmZjZiZmM4YTQ5MzkzN2NkNDJhMDkwMzU3OWIwMWZhNzk1MjUyZTFiNDhkMGRmZDNhMTAzN2NlNw.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmNvc3RfZWZmZWN0aXZl.display_name": {
+          "source": "cost_effective",
+          "message": "ефективний"
+        },
+        "app.TGxhbWFQYXJzZQ.action.Y3JlYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOkV4dHJhY3RWMlBhcmFtZXRlcnMjMzA2Y2IxZjFmZjZiZmM4YTQ5MzkzN2NkNDJhMDkwMzU3OWIwMWZhNzk1MjUyZTFiNDhkMGRmZDNhMTAzN2NlNw.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "агентивний"
+        },
+        "app.TGxhbWFQYXJzZQ.action.Y3JlYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOkV4dHJhY3RWMlBhcmFtZXRlcnMjMzA2Y2IxZjFmZjZiZmM4YTQ5MzkzN2NkNDJhMDkwMzU3OWIwMWZhNzk1MjUyZTFiNDhkMGRmZDNhMTAzN2NlNw.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "агентивний"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmVmZmljaWVudA.display_name": {
+          "source": "efficient",
+          "message": "ефективний"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+          "source": "fast",
+          "message": "швидкий"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.allowed-value.c3RyaW5nOmNvc3RfZWZmZWN0aXZl.display_name": {
+          "source": "cost_effective",
+          "message": "ефективний"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "агентивний"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "агентивний"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmVmZmljaWVudA.display_name": {
+          "source": "efficient",
+          "message": "ефективний"
+        },
+        "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOipFeHRyYWN0VjJQYXJhbWV0ZXJzI2M0YjI0NDU2MGFlMWZkMjJiYjc3YWZmZmZhNTAwZGUyMDExZmZhNjFkNTRiMzU4ZDIxNmU5MDRiOTNmMjc0M2Y.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+          "source": "fast",
+          "message": "швидкий"
+        },
+        "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOipFeHRyYWN0VjJQYXJhbWV0ZXJzI2M0YjI0NDU2MGFlMWZkMjJiYjc3YWZmZmZhNTAwZGUyMDExZmZhNjFkNTRiMzU4ZDIxNmU5MDRiOTNmMjc0M2Y.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmNvc3RfZWZmZWN0aXZl.display_name": {
+          "source": "cost_effective",
+          "message": "ефективний"
+        },
+        "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOipFeHRyYWN0VjJQYXJhbWV0ZXJzI2M0YjI0NDU2MGFlMWZkMjJiYjc3YWZmZmZhNTAwZGUyMDExZmZhNjFkNTRiMzU4ZDIxNmU5MDRiOTNmMjc0M2Y.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "агентивний"
+        },
+        "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOipFeHRyYWN0VjJQYXJhbWV0ZXJzI2M0YjI0NDU2MGFlMWZkMjJiYjc3YWZmZmZhNTAwZGUyMDExZmZhNjFkNTRiMzU4ZDIxNmU5MDRiOTNmMjc0M2Y.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "агентивний"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmVmZmljaWVudA.display_name": {
+          "source": "efficient",
+          "message": "ефективний"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+          "source": "fast",
+          "message": "швидкий"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.allowed-value.c3RyaW5nOmNvc3RfZWZmZWN0aXZl.display_name": {
+          "source": "cost_effective",
+          "message": "ефективний"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "агентивний"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "агентивний"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmVmZmljaWVudA.display_name": {
+          "source": "efficient",
+          "message": "ефективний"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bGlzdC1kaXJlY3Rvcmllcw.option.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "user",
+          "message": "користувацький"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bGlzdC1kaXJlY3Rvcmllcw.option.dHlwZQ.allowed-value.c3RyaW5nOmluZGV4.display_name": {
+          "source": "index",
+          "message": "індекс"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bGlzdC1kaXJlY3Rvcmllcw.option.dHlwZQ.allowed-value.c3RyaW5nOmVwaGVtZXJhbA.display_name": {
+          "source": "ephemeral",
+          "message": "тимчасовий"
         }
       }
     }
