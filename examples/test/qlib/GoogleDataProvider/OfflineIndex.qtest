@@ -118,7 +118,12 @@ public class OfflineGoogleIndexTest inherits QUnit::Test {
         setenv("QORE_DATA_PROVIDERS", normalize_dir(get_script_dir() + "/../DataProvider")
             + "/ProviderIndexEnvironmentMapFixture.qm");
         hash<ProviderIndexCreateOptions> opts = options(1, ("GoogleCalendar", "Gmail"));
-        opts.worker_command = (normalize_dir(ENV.QORE_BIN ?? QORE_ARGV[0]), "--enable-debug", script);
+        # an interpreter run by name is found in the PATH, so only a path is normalized
+        string qore = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        if (qore.find(DirSep) >= 0) {
+            qore = normalize_dir(qore);
+        }
+        opts.worker_command = (qore, "--enable-debug", script);
         opts.worker_timeout_ms = 1000;
         try {
             ProviderIndex::createDataProviderIndex(NOTHING, dir + "/index", opts);
