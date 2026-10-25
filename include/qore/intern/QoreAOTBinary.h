@@ -339,7 +339,7 @@ enum class QoreAOTSectionType : uint16_t {
     CALL_RELOCATIONS     = 27,  //!< Optional direct-call slot relocation candidates
     DEBUG_IR             = 28,  //!< Lazy debugger IR payloads referenced by SLOT_MAPS entries
     IMPORT_DEPENDENCIES  = 29,  //!< Direct module dependencies imported into an AOT module Program
-    SOURCE_STAT_FINGERPRINT = 30,  //!< Optional source size and nanosecond mtime for staleness checks
+    SOURCE_STAT_FINGERPRINT = 30,  //!< Source size and nanosecond mtime; written by earlier qcc versions only
     UNRUN_TOP_LEVEL_CODE = 31,  //!< Optional top-level statements of a script fragment's sources that never run
 };
 
@@ -1706,15 +1706,10 @@ struct QoreAOTSourceStatFingerprint {
 */
 bool getAOTSourceStatFingerprint(const char* path, QoreAOTSourceStatFingerprint& fingerprint);
 
-//! Serialize an optional source stat fingerprint into its fixed-width binary section.
-/** @param writer AOT binary writer receiving the section
-    @param fingerprint source stat fingerprint to serialize
-*/
-void serializeAOTSourceStatFingerprint(QoreAOTBinaryWriter& writer,
-        const QoreAOTSourceStatFingerprint& fingerprint);
+//! Read the source fingerprint recorded in an AOT binary written by an earlier qcc
+/** qcc no longer writes the section: an artifact's bytes must not depend on its source file's modification time.
 
-//! Read an optional source fingerprint from an AOT binary.
-/** @param reader opened AOT binary reader
+    @param reader opened AOT binary reader
     @param fingerprint receives the recorded source fingerprint on success
     @return true when both fingerprint fields are present and valid, false otherwise
 */

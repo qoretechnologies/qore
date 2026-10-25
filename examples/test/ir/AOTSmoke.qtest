@@ -323,7 +323,9 @@ class AOTSmokeTest inherits QUnit::Test {
         # AOT Binary Format v1 tests
         addTestCase("AOT v1 version field", \testVersionField());
         addTestCase("AOT v1 parse options high bits", \testPOHighBitsRoundTrip());
-        addTestCase("AOT v1 source fingerprint recorded", \testSourceFingerprintRecorded());
+        addTestCase("AOT binary records no source modification time", \testNoSourceStatFingerprint());
+        addTestCase("AOT module bytes do not depend on the source modification time",
+            \testModuleBytesIndependentOfSourceMtime());
         addTestCase("AOT v1 feature flags", \testFeatureFlagsNonZero());
         addTestCase("AOT subscript compound assign", \testSubscriptCompoundAssign());
         addTestCase("AOT hash compound native", \testHashCompoundNative());
@@ -9773,9 +9775,10 @@ printf(\"%d %d\\n\", h.x, h.y);
         assertTrue(aot_out =~ /options test/, "Program executes with parse options");
     }
 
-    testSourceFingerprintRecorded() {
-        # The source size and modification time are recorded in the binary for build tools; a compiled program runs
-        # without reading its source, which can change or be gone, so running it does not check the source.
+    testNoSourceStatFingerprint() {
+        # A binary records nothing about its source file's state on disk, so that compiling the same source content
+        # again produces the same binary; a compiled program runs without reading its source, which can change or
+        # be gone.
         string code = "%modern\nprintf(\"hello\\n\");\n";
         hash<auto> paths = writeTempScript(code);
         on_exit {
@@ -9789,8 +9792,9 @@ printf(\"%d %d\\n\", h.x, h.y);
         backquote(compile_cmd);
 
         string info = dumpQccInfo(paths.out, False);
-        assertTrue(info =~ /source-size: [0-9]+/, "AOT build info records source size: " + info);
-        assertTrue(info =~ /source-mtime-ns: [0-9]+/, "AOT build info records source mtime: " + info);
+        assertTrue(info =~ /build info:/, "the binary has build info: " + info);
+        assertFalse(info =~ /source-size:/, "AOT build info records no source size: " + info);
+        assertFalse(info =~ /source-mtime-ns:/, "AOT build info records no source mtime: " + info);
 
         string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b 2>&1", libqore_dir, paths.out);
         assertEq("hello\n", backquote(run_cmd), "The binary runs");
@@ -9804,6 +9808,73 @@ printf(\"%d %d\\n\", h.x, h.y);
         assertEq("hello\n", backquote(run_cmd), "The binary runs after its source changed");
         unlink(paths.src);
         assertEq("hello\n", backquote(run_cmd), "The binary runs without its source");
+    }
+
+    testModuleBytesIndependentOfSourceMtime() {
+        # A checkout or a rebase rewrites a source file with unchanged content and a new modification time, and a
+        # build compiles it again; the module it produces must be byte for byte the one it replaces, so that
+        # anything that identifies a module by its content (an installer, a cache, a provider index) sees no change.
+        string tmp_dir = sprintf("/tmp/aot_mtime_test_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            system(sprintf("rm -rf %s", tmp_dir));
+        }
+        string suffix = sprintf("%d", getpid());
+
+        # a single-file module and a split module (a directory with its .qm and a .qc)
+        string single_mod = "MtimeProbe" + suffix;
+        string single_src = tmp_dir + "/" + single_mod + ".qm";
+        writeFile(single_src, sprintf("%%modern
+module %s { version = \"1.0\"; desc = \"mtime probe\"; author = \"t\"; license = \"MIT\"; }
+public namespace %s {
+public int sub value() {
+    return 7;
+}
+}
+", single_mod, single_mod));
+        string split_mod = "MtimeSplitProbe" + suffix;
+        string split_dir = tmp_dir + "/" + split_mod;
+        mkdir(split_dir);
+        writeFile(split_dir + "/" + split_mod + ".qm", sprintf("%%modern
+module %s { version = \"1.0\"; desc = \"split mtime probe\"; author = \"t\"; license = \"MIT\"; }
+", split_mod));
+        writeFile(split_dir + "/Values.qc", sprintf("public namespace %s {
+public int sub value() {
+    return 8;
+}
+}
+", split_mod));
+
+        foreach hash<auto> mod in ((
+                {"name": single_mod, "src": single_src, "touch": (single_src,)},
+                {"name": split_mod, "src": split_dir,
+                    "touch": (split_dir + "/" + split_mod + ".qm", split_dir + "/Values.qc")},
+            )) {
+            list<string> digests = ();
+            # two builds of the same content: the sources dated 2000-01-01 and then 2001-01-01, each written to
+            # a module file of the same name, since a module records its file name
+            foreach string stamp in (("200001010000", "200101010000")) {
+                foreach string path in (mod.touch) {
+                    assertEq(0, system(sprintf("touch -t %s %s", stamp, path)), "set the time of " + path);
+                }
+                string out_dir = tmp_dir + "/out-" + stamp;
+                mkdir(out_dir);
+                string qmod = out_dir + "/" + mod.name + ".qmod";
+                string out = backquote(sprintf(
+                    "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -m %s -o %s 2>&1; echo EXIT=$?",
+                    libqore_dir, libqore_dir, qcc_bin, mod.src, qmod));
+                assertTrue(out.regex("EXIT=0"), mod.name + " compiled: " + out);
+                digests += ReadOnlyFile::readBinaryFile(qmod).toSHA256();
+            }
+            assertEq(digests[0], digests[1], mod.name + ": the same source content gives the same module");
+        }
+    }
+
+    private static writeFile(string path, string content) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(content);
+        f.close();
     }
 
     testFeatureFlagsNonZero() {

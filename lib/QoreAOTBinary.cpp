@@ -19993,14 +19993,6 @@ bool getAOTSourceStatFingerprint(const char* path, QoreAOTSourceStatFingerprint&
     return true;
 }
 
-void serializeAOTSourceStatFingerprint(QoreAOTBinaryWriter& writer,
-        const QoreAOTSourceStatFingerprint& fingerprint) {
-    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::SOURCE_STAT_FINGERPRINT);
-    writer.writeU64(fingerprint.size);
-    writer.writeU64(fingerprint.mtime_ns);
-    writer.endSection(sec_idx);
-}
-
 bool readAOTSourceStatFingerprint(const QoreAOTBinaryReader& reader,
         QoreAOTSourceStatFingerprint& fingerprint) {
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SOURCE_STAT_FINGERPRINT);
