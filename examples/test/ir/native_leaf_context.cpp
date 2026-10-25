@@ -175,14 +175,15 @@ struct ReusableCallbackFrame {
 // Test-only adapter: the actual compiler-proven entry still executes, using a
 // null view or a changed live limit after frame publication. Each test owns an unshared Program;
 // the saved target belongs only to this thread and is restored before teardown.
-static thread_local QoreAOTContext::NativeIntUnaryMethodEntryV3 null_view_target = nullptr;
-static thread_local unsigned null_view_calls = 0;
+static thread_local QoreAOTContext::NativeIntUnaryMethodEntryV3 method_stack_target_v3 = nullptr;
+static thread_local QoreAOTContext::NativeIntUnaryMethodEntryV2 method_stack_target_v2 = nullptr;
+static thread_local unsigned method_stack_calls = 0;
 static thread_local bool method_null_view = false;
 static thread_local bool method_force_overflow = false;
 static thread_local QoreObject* method_expected_object = nullptr;
 static int64_t nullViewMethod(int64_t arg, QoreAOTContext* ctx, ExceptionSink* xsink,
         RuntimeConfig* rc, const size_t* view) {
-    ++null_view_calls;
+    ++method_stack_calls;
     struct RestoreLimit {
         size_t* limit;
         size_t saved;
@@ -195,14 +196,16 @@ static int64_t nullViewMethod(int64_t arg, QoreAOTContext* ctx, ExceptionSink* x
     if (method_force_overflow) {
 #if defined(__aarch64__) || defined(__x86_64__)
         restore.limit = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
-        assert(restore.limit && restore.limit == view);
+        assert(restore.limit && (!method_stack_target_v3 || restore.limit == view));
         restore.saved = *restore.limit;
         *restore.limit = get_stack_pos() + 4096;
 #else
         assert(false && "forced live limit requires a supported native stack view");
 #endif
     }
-    int64_t result = null_view_target(arg, ctx, xsink, rc, method_null_view ? nullptr : view);
+    int64_t result = method_stack_target_v3
+        ? method_stack_target_v3(arg, ctx, xsink, rc, method_null_view ? nullptr : view)
+        : method_stack_target_v2(arg, ctx, xsink, rc);
     if (method_force_overflow) {
         assert(*xsink && method_expected_object);
         // Inspect only after the real callee's failing guard has materialized
@@ -222,27 +225,43 @@ static int64_t nullViewMethod(int64_t arg, QoreAOTContext* ctx, ExceptionSink* x
     return result;
 }
 
+static int64_t explicitStackMethod(int64_t arg, QoreAOTContext* ctx, ExceptionSink* xsink, RuntimeConfig* rc) {
+    return nullViewMethod(arg, ctx, xsink, rc, nullptr);
+}
+
 class MethodStackProbe {
 public:
     MethodStackProbe(QoreAOTContext* ctx, bool null_view, bool overflow = false,
             QoreObject* expected_object = nullptr)
             : ctx(null_view || overflow ? ctx : nullptr) {
         if (this->ctx) {
-            assert(!null_view_target);
-            null_view_target = ctx->native_int_unary_method_entry_v3.load(std::memory_order_acquire);
-            assert(null_view_target && null_view_target != nullViewMethod);
-            null_view_calls = 0;
+            assert(!method_stack_target_v3 && !method_stack_target_v2);
+            method_stack_target_v3 = ctx->native_int_unary_method_entry_v3.load(std::memory_order_acquire);
+            assert(method_stack_target_v3 != nullViewMethod);
+            method_stack_calls = 0;
             method_null_view = null_view;
             method_force_overflow = overflow;
             method_expected_object = expected_object;
-            ctx->native_int_unary_method_entry_v3.store(nullViewMethod, std::memory_order_release);
+            if (method_stack_target_v3) {
+                ctx->native_int_unary_method_entry_v3.store(nullViewMethod, std::memory_order_release);
+            } else {
+                assert(overflow && !null_view);
+                method_stack_target_v2 = ctx->native_int_unary_method_entry_v2.load(std::memory_order_acquire);
+                assert(method_stack_target_v2 && method_stack_target_v2 != explicitStackMethod);
+                ctx->native_int_unary_method_entry_v2.store(explicitStackMethod, std::memory_order_release);
+            }
         }
     }
     ~MethodStackProbe() {
         if (ctx) {
-            assert(null_view_calls);
-            ctx->native_int_unary_method_entry_v3.store(null_view_target, std::memory_order_release);
-            null_view_target = nullptr;
+            assert(method_stack_calls);
+            if (method_stack_target_v3) {
+                ctx->native_int_unary_method_entry_v3.store(method_stack_target_v3, std::memory_order_release);
+                method_stack_target_v3 = nullptr;
+            } else {
+                ctx->native_int_unary_method_entry_v2.store(method_stack_target_v2, std::memory_order_release);
+                method_stack_target_v2 = nullptr;
+            }
             method_expected_object = nullptr;
         }
     }
@@ -1949,7 +1968,6 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
 #if defined(__aarch64__) || defined(__x86_64__)
     if (limit) {
         const size_t saved_limit = *limit;
-        unsigned observed_method = 0;
         unsigned observed_early = 0;
         unsigned observed_success = 0;
         // Include the compiled caller and public Program entry in the sweep.
@@ -1977,7 +1995,7 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
                         assert(!qore_check_cancel(&xsink, "native method stack inspection"));
                     }
                 }
-                ++(method ? observed_method : observed_early);
+                observed_early += !method;
             } else {
                 assert(result->getAsBigInt() == 24);
                 ++observed_success;
@@ -1987,11 +2005,9 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
             }
         }
         assert(observed_early && observed_success);
-        // The smaller inline entry can stay above the earlier dispatch guard's
-        // SP, leaving no published-overflow interval in this external sweep.
-        // v2/null-view still exercise that interval; v3's own overflow is forced
-        // below by changing the live limit only after publication.
-        assert(observed_method || (inline_method && !null_view));
+        // Frame sizes and tail calls can leave either entry above the earlier
+        // dispatch guard's SP. Force each entry's own overflow below instead
+        // of depending on a published-overflow interval in this external sweep.
     }
 #else
     assert(!limit);
@@ -2001,51 +2017,54 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
     assert(rc->getObject() == saved_object && rc->getClass() == saved_class);
     if (inline_method && !null_view) {
         checkMethod(program, caller_name, inline_method, true);
-        if (limit) {
-            for (bool forced_null : {false, true}) {
-                {
-                    MethodStackProbe forced(ctx, forced_null, true, object->get<QoreObject>());
-                    ValueHolder failed(program->callFunction(caller_name, *args, &xsink), &xsink);
-                    assert(xsink && qore_get_call_program_context() == caller);
-                    assert(rc->getObject() == saved_object && rc->getClass() == saved_class);
-                    assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
-                    ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
-                    assert(!xsink);
-                    const auto* file = info->getKeyValue("file").get<const QoreStringNode>();
-                    assert(file && !file->empty());
-                    assert(info->getKeyValue("line").getAsBigInt()
-                        == uvb->getUserSignature()->getParseLocation()->start_line);
-                    const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
-                    assert(stack);
-                    bool published = false;
-                    bool forward_published = false;
-                    for (size_t i = 0; i < stack->size(); ++i) {
-                        const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
-                        assert(frame);
-                        const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
-                        published |= name && std::strstr(name->c_str(), "NativeLeafMethodDerived");
-                        forward_published |= name && std::strstr(name->c_str(), "::forward");
-                        if (caller_line >= 0 && name && std::strstr(name->c_str(), "::forward")) {
-                            assert(frame->getKeyValue("line").getAsBigInt() == caller_line);
-                        }
-                        if (forward_line >= 0 && name && std::strstr(name->c_str(), "::next")) {
-                            if (frame->getKeyValue("line").getAsBigInt() != forward_line) {
-                                std::fprintf(stderr, "%s call-site line %lld, expected %d\n", name->c_str(),
-                                    static_cast<long long>(frame->getKeyValue("line").getAsBigInt()), forward_line);
-                            }
-                            assert(frame->getKeyValue("line").getAsBigInt() == forward_line);
-                        }
-                        if (!(i % 100)) {
-                            assert(!qore_check_cancel(&xsink, "forced method stack inspection"));
-                        }
-                    }
-                    assert(published);
-                    assert(forward_line < 0 || forward_published);
-                }
-                ValueHolder recovered(program->callFunction(caller_name, *args, &xsink), &xsink);
-                assert(!xsink && recovered->getAsBigInt() == 24 && qore_get_call_program_context() == caller);
-                assert(rc->getObject() == saved_object && rc->getClass() == saved_class);
+    }
+    if (!null_view && limit) {
+        for (bool forced_null : {false, true}) {
+            if (forced_null && !inline_method) {
+                continue;
             }
+            {
+                MethodStackProbe forced(ctx, forced_null, true, object->get<QoreObject>());
+                ValueHolder failed(program->callFunction(caller_name, *args, &xsink), &xsink);
+                assert(xsink && qore_get_call_program_context() == caller);
+                assert(rc->getObject() == saved_object && rc->getClass() == saved_class);
+                assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+                ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+                assert(!xsink);
+                const auto* file = info->getKeyValue("file").get<const QoreStringNode>();
+                assert(file && !file->empty());
+                assert(info->getKeyValue("line").getAsBigInt()
+                    == uvb->getUserSignature()->getParseLocation()->start_line);
+                const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
+                assert(stack);
+                bool published = false;
+                bool forward_published = false;
+                for (size_t i = 0; i < stack->size(); ++i) {
+                    const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
+                    assert(frame);
+                    const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
+                    published |= name && std::strstr(name->c_str(), "NativeLeafMethodDerived");
+                    forward_published |= name && std::strstr(name->c_str(), "::forward");
+                    if (caller_line >= 0 && name && std::strstr(name->c_str(), "::forward")) {
+                        assert(frame->getKeyValue("line").getAsBigInt() == caller_line);
+                    }
+                    if (forward_line >= 0 && name && std::strstr(name->c_str(), "::next")) {
+                        if (frame->getKeyValue("line").getAsBigInt() != forward_line) {
+                            std::fprintf(stderr, "%s call-site line %lld, expected %d\n", name->c_str(),
+                                static_cast<long long>(frame->getKeyValue("line").getAsBigInt()), forward_line);
+                        }
+                        assert(frame->getKeyValue("line").getAsBigInt() == forward_line);
+                    }
+                    if (!(i % 100)) {
+                        assert(!qore_check_cancel(&xsink, "forced method stack inspection"));
+                    }
+                }
+                assert(published);
+                assert(forward_line < 0 || forward_published);
+            }
+            ValueHolder recovered(program->callFunction(caller_name, *args, &xsink), &xsink);
+            assert(!xsink && recovered->getAsBigInt() == 24 && qore_get_call_program_context() == caller);
+            assert(rc->getObject() == saved_object && rc->getClass() == saved_class);
         }
     }
 }

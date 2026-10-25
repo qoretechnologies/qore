@@ -2607,6 +2607,28 @@ extern "C" DLLEXPORT __attribute__((always_inline)) const size_t* qore_rt_get_st
     return nullptr;
 }
 
+#ifdef QORE_MANAGE_STACK
+//! Keeps overflow materialization and diagnostics outside the generated-code wrapper's successful path
+static __attribute__((noinline)) int qore_rt_check_stack_v2_slow(ExceptionSink* xsink, RuntimeConfig* rc) {
+    return RuntimeConfigNativeAccess::checkStack(*rc, xsink);
+}
+#endif
+
+extern "C" DLLEXPORT int qore_rt_check_stack_v2(ExceptionSink* xsink, RuntimeConfig* rc) {
+#ifdef QORE_MANAGE_STACK
+    // A nonnull view supports this exact downward-stack predicate. Read both the live limit and current SP;
+    // unsupported targets and failed comparisons retain the full guard, including any platform-specific state.
+    // Keeping this wrapper beside the accessor also avoids an extra call in split compilation-unit builds.
+    const size_t* limit = qore_rt_get_stack_limit_v1(rc);
+    if (limit && *limit <= get_stack_pos()) {
+        return 0;
+    }
+    return qore_rt_check_stack_v2_slow(xsink, rc);
+#else
+    return 0;
+#endif
+}
+
 // Keep native-leaf save/restore visible to the caller's register allocator when
 // this definition is available (the normal single-compilation-unit build).
 // Applying the hint only here retains ordinary out-of-line symbols for split

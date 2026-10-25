@@ -22952,3 +22952,78 @@ The optimized all-target build verifies 391 qmods and explicitly recompiles Gemi
 [Audit](audit-merge-c0bc.md); [evidence](results-merge-c0bc.json).
 
 The initial documentation-check driver wrongly passed whole Qore source to qpp --table, which flagged unchanged logical-OR code lines. The failed attempt is preserved. Qdx --strict-tables correctly parses module documentation and passes; no source was changed to satisfy the wrong checker.
+
+## Generated-code stack-check wrapper (2026-10-25)
+
+The exported qore_rt_check_stack_v2 helper reads the supported live downward-stack limit and current SP directly; failed comparisons and unsupported views use a private noinline wrapper around the unchanged full guard. Its definition moves beside the live-limit accessor in thread.cpp, making the accessor visible even in split compilation-unit builds. The successful arm64 path changes from 35 instructions and a 48-byte stack reservation to nine instructions without stack reservation or register saves. Internal dispatch guards, deferred materialization, exception diagnostics, cancellation and every native/RSE predicate remain. No exported signature, layout or code-generator change. Five inspected method-dispatch controls retain their instruction counts and stack reservations.
+
+The original NativeLeafContext fixture passed on the frozen baseline but failed on the candidate because its static limit sweep required an interval where a published method, rather than an earlier guard, overflowed. A smaller wrapper can legitimately eliminate that interval. The regression now forces the live limit to fail after publication for both v2 and v3 entries, including null-view fallback, and verifies actual compiled-entry overflow, object/class materialization, method/call-site diagnostics and successful reuse. The early-overflow and successful-call sweep checks remain. The strengthened fixture passes against the baseline and candidate Release runtimes and the candidate Debug runtime. The original failure is preserved. All Debug test processes passed; its driver then failed restoring module aliases removed by CMake. A separate recorded recovery recreated 388 missing links and restored 3 Debug links, verifying all 391 Release module hashes before timing.
+
+Baseline is optimized merged performance c73e09abb1, including develop through c0bca49308, not pure develop. Identical optimized AOT executables freshly compiled for the preceding 820afd57c1 checkpoint run against frozen baseline and candidate runtimes. Runtime resolution and 2340 references per runtime are verified. Release -O3 -DNDEBUG, allocation tracking off, Apple M4/macOS arm64; 4096 items, seed 7, default/reverse/shuffle-487 layouts. The 52-workload screen uses three forks; selected confirmation uses five. Each has one warmup and three 150 ms samples, in randomized paired order. Values are median fork means, then median across layouts. Whole-kernel ns/item, not isolated call latency; no exclusive-host, thermal or frequency control. No fresh Java, pure-develop or IR/JIT speedup claim.
+
+|!screen workload|!Before ns/item|!Candidate ns/item|!Change
+|float:direct_local_float_return|0.800310|0.794849|-0.68%
+|float:callback_local_float_return|0.891597|0.883994|-0.85%
+|float:direct_local_float_result|0.754197|0.730892|-3.09%
+|float:callback_local_float_result|0.852631|0.857620|+0.59%
+|float:direct_loop_float_return|6.409881|6.269665|-2.19%
+|float:callback_loop_float_return|5.823054|5.602200|-3.79%
+|float:direct_float_add|0.812847|0.818828|+0.74%
+|float:static_float_add|0.803371|0.806262|+0.36%
+|float:typed_local_int_unary|7.143822|7.148951|+0.07%
+|float:typed_local_float_unary|0.918497|0.915314|-0.35%
+|float:result_float_add|0.872300|0.865778|-0.75%
+|micro:arithmetic|1.561837|1.561061|-0.05%
+|micro:direct_call|1.564496|1.552901|-0.74%
+|micro:method_call|1.671505|1.635750|-2.14%
+|micro:indirect_call|7.627976|7.554328|-0.97%
+|micro:polymorphic_call|24.294537|24.100602|-0.80%
+|micro:polymorphic_expression_call|11.538166|11.528995|-0.08%
+|micro:monomorphic_call|4.246262|4.232643|-0.32%
+|micro:optional_method_call|11.328528|11.269615|-0.52%
+|micro:polymorphic_float_call|24.534259|24.384033|-0.61%
+|micro:polymorphic_float_expression_call|11.703803|11.621533|-0.70%
+|micro:monomorphic_float_call|4.227927|4.144088|-1.98%
+|micro:optional_float_method_call|11.304084|11.356299|+0.46%
+|micro:boxed_float_method_call|20.797244|20.849041|+0.25%
+|micro:dynamic_int_result_call|11.204891|11.280257|+0.67%
+|micro:dynamic_int_result_fallback|21.489583|21.439571|-0.23%
+|micro:boxed_int_method_call|17.170588|17.377816|+1.21%
+|micro:boxed_int_method_fallback|33.204215|33.625272|+1.27%
+|micro:boxed_float_method_fallback|35.702004|34.552814|-3.22%
+|micro:boxed_int_method_effect|91.764771|92.121215|+0.39%
+|micro:dynamic_float_result_call|11.928903|12.092379|+1.37%
+|micro:indirect_wide|7.445480|7.486769|+0.55%
+|micro:indirect_float|8.560567|8.485963|-0.87%
+|micro:indirect_int_result|7.841066|7.877853|+0.47%
+|micro:indirect_float_result|8.110560|8.057983|-0.65%
+|micro:indirect_tagged_float|7.919542|7.986334|+0.84%
+|micro:indirect_branch_float|8.665822|8.778289|+1.30%
+|micro:indirect_affine|7.580667|7.574689|-0.08%
+|micro:indirect_affine_wide|7.486853|7.652576|+2.21%
+|micro:indirect_branch_int|7.514384|7.422530|-1.22%
+|micro:dispatch_control|1.903124|1.898845|-0.22%
+|micro:list_read|2.919573|2.923408|+0.13%
+|micro:list_build|29.466270|29.754298|+0.98%
+|micro:list_mutate|203.128636|200.174525|-1.45%
+|micro:temporary_list|1.656910|1.660381|+0.21%
+|micro:temporary_hash|341.684002|340.853184|-0.24%
+|micro:closure_call|19.854734|19.730119|-0.63%
+|micro:closure_capture|26.243234|25.192696|-4.00%
+|mixed:csv_report|990.784241|991.097671|+0.03%
+|mixed:object_orders|1857.328288|1855.126953|-0.12%
+|mixed:callback_pipeline|91.358781|88.271053|-3.38%
+|mixed:text_index|1370.373384|1364.281925|-0.44%
+
+|!confirmation workload|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_loop_float_return|5.821274|5.533448|-4.94%
+|float:direct_local_float_result|0.747672|0.740343|-0.98%
+|float:direct_loop_float_return|6.420094|6.238372|-2.83%
+|micro:boxed_float_method_fallback|35.749963|35.251843|-1.39%
+|micro:monomorphic_call|4.256344|4.216238|-0.94%
+
+Retain for the repeated callback-loop improvement: 5.823054 to 5.602200 ns/item (-3.79%) in the screen and 5.821274 to 5.533448 (-4.94%) in confirmation, with at least 2% improvement in every layout in both rounds. Direct-loop aggregate time falls 2.19% then 2.83%, but its every-layout 2% criterion is not met (one layout per round is below 2%). The boxed-float fallback control falls 3.22% then 1.39%; this does not establish a repeatable >=2% gain across layouts or erase the preceding named-frame change's separately recorded cost. The other confirmed controls also have lower aggregate time. No layout meets the prospective >3% disjoint-fork-range regression flag. The largest aggregate screen cost is indirect_affine_wide at +2.21%; it is below the prospective confirmation threshold and is unconfirmed. All 52 screen results remain visible; no universal improvement or fresh Java/develop claim.
+
+Validation: Release 18 cases/1103 reported assertions and Debug 8 cases/956 assertions, no skips; the strengthened baseline fixture also passes 652 assertions. The Release all-target build verifies 391 qmods. 1110 IR/AOT reference checks and 2340 frozen-executable checks per runtime pass. All 1086 timing jobs/3258 windows are independently replayed. Debug alias-restoration recovery is verified separately from the successful build/test child processes.
+
+Next investigate passing the live stack-limit address in the internal native-entry descriptor so eligible compiled callees can inline the same guard; audit internal linkage and same-image descriptor consistency first. Duplicate previous-frame storage is another candidate, preserving opaque AOT frame capacity and concurrent-reader synchronization. Java parity and a global performance ceiling remain unestablished. [Evidence](results-stack-check-wrapper-macos-arm64.json); [all 62 audit checks](audit-stack-check-wrapper.md).

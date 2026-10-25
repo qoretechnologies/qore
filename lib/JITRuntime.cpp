@@ -777,10 +777,6 @@ extern "C" DLLEXPORT int qore_rt_check_stack(ExceptionSink* xsink) {
 #endif
 }
 
-extern "C" DLLEXPORT int qore_rt_check_stack_v2(ExceptionSink* xsink, RuntimeConfig* rc) {
-    return RuntimeConfigNativeAccess::checkStack(*rc, xsink);
-}
-
 // --- Forward declarations for Phase 5 fast-call builtins ---
 extern "C" DLLEXPORT uint64_t qore_fast_strlen(uint64_t arg_bits, ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_now_us(ExceptionSink* xsink);

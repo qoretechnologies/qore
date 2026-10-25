@@ -260,6 +260,8 @@
     avoiding repeated register saves while preserving lazy names and call-stack visibility.
     Named frames used by specialized callbacks also separate first-use name interning from cached calls,
     reducing repeated frame setup while retaining name ownership, synchronization and exception behavior.
+    Generated-code stack checks avoid overflow-handling register saves on supported native stacks,
+    retaining live limits, deferred context and the complete fallback guard.
 
     AOT-compiled modules record the AOT runtime identity of the %Qore library that compiled them, and a module
     compiled by a library with a different generated-code contract is refused when it is loaded, with an error that
