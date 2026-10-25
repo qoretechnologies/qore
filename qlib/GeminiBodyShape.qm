@@ -237,6 +237,10 @@ try {
 
     @section geminibodyshaperelnotes Release Notes
 
+    Gemini and Vertex AI streaming calls now report an incomplete response when the stream ends without
+    a model completion or safety-block verdict. Partial output is no longer reported as a successful completion.
+
+
     @subsection geminibodyshape_v1_0 GeminiBodyShape v1.0
     - initial release
 */
@@ -2632,8 +2636,8 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         \c raw and its text, if any, in \c delta.  The chunk with a
         \c finishReason, or with a \c promptFeedback.blockReason when the prompt
         was blocked, is delivered with \c done set and ends the stream; if the
-        server closes the stream without one, a final \c done event without
-        \c raw is delivered.
+        server closes the stream without one, the call raises an incomplete-stream error instead of
+        presenting partial output as a completed response.
 
         @param messages conversation history
         @param callback receives each event as it arrives
@@ -2643,7 +2647,7 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
 
         @throw LLM-ERROR the request failed or was rejected, the response was
         not an event stream, an event could not be parsed, the stream reported
-        an error, or no event arrived within the request timeout
+        an error, ended without a terminal model event, or no event arrived within the request timeout
         @throw GEMINI-TOOL-SCHEMA-TOO-COMPLEX Gemini rejected the request because its tool declarations exceed its
         constrained-decoding budget (see @ref geminibodyshapetoolschemacomplexity)
         @throw LLM-CANCELLED the request was cancelled with
@@ -2738,7 +2742,7 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         (@ref GeminiBodyShape::decodeResponseToolArguments())
 
         @throw LLM-ERROR an event could not be parsed, the stream reported an
-        error, or no event arrived within \a timeout_ms
+        error, ended without a terminal model event, or no event arrived within \a timeout_ms
         @throw LLM-CANCELLED the request was cancelled
     */
     private deliverStreamEvents(HttpClientStreamingIo::SseStreamReader reader,
@@ -2757,15 +2761,19 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
                         sprintf("%s streaming response timed out: no event arrived within %d ms",
                             getProviderLabel(), timeout_ms), {"err": "HTTPCLIENT-TIMEOUT"};
                 }
-                deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{"done": True}, opts);
-                return;
+                throw "LLM-ERROR",
+                    sprintf("%s streaming response ended without a terminal model event", getProviderLabel()),
+                    {"err": "LLM-STREAM-INCOMPLETE"};
             }
             if (!evt.data.val()) {
                 continue;
             }
             if (evt.data == "[DONE]") {
-                deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{"done": True}, opts);
-                return;
+                # An SSE terminator does not establish why generation stopped. Native Gemini must supply
+                # a model finish reason or a blocked-prompt verdict before this transport marker.
+                throw "LLM-ERROR",
+                    sprintf("%s streaming response ended without a terminal model event", getProviderLabel()),
+                    {"err": "LLM-STREAM-INCOMPLETE"};
             }
             auto parsed;
             try {

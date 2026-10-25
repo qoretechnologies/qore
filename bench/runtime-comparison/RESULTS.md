@@ -22942,3 +22942,13 @@ Preflight: 18 optimized AOT executables, 4680 AOT and 1560 IR checks; 90 Java re
 Next evaluate wrapper-scoped stack-check setup, preserving live limit/SP checks, overflow materialization and fallbacks, while avoiding the method-dispatch expansion of the previously rejected broad outlining experiment. The persistent boxed-float fallback cost remains a control.
 
 [Raw evidence](results-current-a9df-macos-arm64.json); [all 62 audit checks](audit-current-a9df-checkpoint.md).
+
+## Develop integration through c0bca49308 (2026-10-25)
+
+Merged the Gemini/Vertex incomplete-stream fix onto performance checkpoint eea8311c66 without conflict. GeminiBodyShape matches upstream exactly; the Vertex fixture retains the branch module-name imports so it exercises compiled modules. EOF, empty/usage-only responses and a transport-only [DONE] marker raise LLM-ERROR without manufacturing successful completion or silently retrying. Valid token-limit and safety-block endings remain accepted. Core performance sources are unchanged.
+
+The optimized all-target build verifies 391 qmods and explicitly recompiles GeminiBodyShape. Eight focused fixtures report 83 cases, 82 executed, 1167 assertions; the live Vertex test is skipped without credentials. All 1110 IR/AOT references pass, with no module-source fallback in these fixtures. Build warnings for optional TLS libraries, STL slist detection, CMake symlink policy and duplicate static libraries are preserved. This is integration qualification, not a new performance measurement or a full-suite pass. The previously documented macOS SocketSpecificBind failure is not rerun or reclassified here.
+
+[Audit](audit-merge-c0bc.md); [evidence](results-merge-c0bc.json).
+
+The initial documentation-check driver wrongly passed whole Qore source to qpp --table, which flagged unchanged logical-OR code lines. The failed attempt is preserved. Qdx --strict-tables correctly parses module documentation and passes; no source was changed to satisfy the wrong checker.
