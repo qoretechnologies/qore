@@ -527,6 +527,17 @@ private:
     bool emitBlockCleanups(size_t target_depth, std::string& error, bool is_error = false, unsigned flags = CF_NONE,
         size_t unwind_temp_depth = SIZE_MAX, const QoreProgramLocation* unwind_loc = nullptr);
 
+    //! Returns true if what a return statement leaves on its way out of the code depends on an error it raises
+    /** A try block catches the error, a catch block and a context clean up, the handlers of a block run by how it
+        exits, a reference foreach writes its list back, and the destructor of an object can run when a local variable
+        whose value can be or hold one leaves its block: the value of a return statement that leaves any of these
+        must be checked before it leaves them, as the AST interpreter checks it in the statement (CheckReturnValue).
+        The other local variables leave their blocks without running code, as does the variable whose value is
+        returned, which stays referenced, so a check when the code returns is the same.
+
+        @param returned_local the local variable whose value the statement returns, if it returns one as it is
+    */
+    DLLLOCAL bool returnCleanupObservesError(const LocalVar* returned_local) const;
 
     //! Determine if a handler should execute for a given exit type
     /** Handlers are filtered by type:

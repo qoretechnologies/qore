@@ -797,7 +797,21 @@ enum class QoreIROpcode : uint16_t {
     //! vector back to (and including) the mark.  See design/ir-loop-jump-temp-scope.md.
     UnwindTemps = 408,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (409, 410, ...)
+    //! Check the value of a return statement against the declared return type, before the statement leaves its
+    //! blocks.
+    //!
+    //! operands[0] = the value returned; no result.  `element_type` = the declared return type.  The AST interpreter
+    //! checks the value in the return statement (ReturnStatement::execImpl()), so its error - "<return statement>
+    //! expects type ..." for no value or a value of another type - is raised inside the blocks of the statement: a
+    //! catch block around the return statement catches it, and the on_error handlers of the blocks it leaves run.  The
+    //! check does not change the value, which the caller converts as before.  The lowering emits one for a return
+    //! statement with a value in typed code that leaves something whose behaviour depends on the error (see
+    //! QoreIRLowering::returnCleanupObservesError()); for any other, nothing runs between the statement and the Return,
+    //! which checks the value for no value itself, and the caller checks its type.  qore_ir_optimize() removes the
+    //! checks whose value facts prove the value is accepted as it is.
+    CheckReturnValue = 409,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (410, 411, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -806,8 +820,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::UnwindTemps);
-static_assert(QORE_IR_MAX_OPCODE == 408, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::CheckReturnValue);
+static_assert(QORE_IR_MAX_OPCODE == 409, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -1019,7 +1033,8 @@ public:
     QoreIRValue result{};
     std::vector<QoreIRValue> operands;
     QoreIRBasicBlock* exception_target = nullptr;
-    const QoreTypeInfo* element_type = nullptr;  // For list/hash creation instructions
+    // For list/hash creation instructions; for CheckReturnValue, the declared return type
+    const QoreTypeInfo* element_type = nullptr;
     bool list_push_in_place = false;  // Transient: assigned local list can be mutated without a store-back
     bool list_push_local_cow = false;  // Transient: paired local push can run CoW after compiler refs are cleared
     bool string_append_in_place = false;  // Transient: uniquely owned local string can be mutated without store-back
@@ -1455,6 +1470,11 @@ public:
         can change a returned value (such as call-site summaries) use the type the parser checked
     */
     const QoreTypeInfo* value_parse_type = nullptr;
+
+    //! Transient (never serialized): qore_ir_optimize() proved that the declared return type accepts the value as it is
+    /** so native code does not check the value for no value when it returns it; see CheckReturnValue
+    */
+    bool value_accepted = false;
 
     //! Transient (never serialized): set by the AOT function-body outliner on
     //! returns moved into a helper.  The lowering emits

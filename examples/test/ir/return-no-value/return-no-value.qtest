@@ -1,0 +1,181 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%include return-no-value-checks.qi
+
+%exec-class ReturnNoValueTest
+
+#! Tests the error raised when code whose return type requires a value returns no value
+/** Every execution mode raises the error of the AST interpreter, which checks the value of every return statement
+    against the declared return type: a return statement that returns no value or a value of another type raises
+    "<return statement> expects type ..." in the blocks of the statement, so that a catch block around it catches the
+    error, the on_error handlers of the blocks run and the exceptions of destructors that run when the blocks exit
+    follow it, and code that ends without a return statement raises
+    "<block return> ... block missing return statement".  The checks are in return-no-value-checks.qi and run
+    in this program, in a worker in each execution mode, from a compiled module and in a compiled program.
+*/
+class ReturnNoValueTest inherits QUnit::Test {
+    public {
+        #! the result of each check: the error raised and its description, as the AST interpreter raises them
+        const Expected = {
+            "closure": "RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got no value instead",
+            "fall-off-end": "RUNTIME-TYPE-ERROR: <block return> expects type 'int', but got no value instead: block "
+                "missing return statement",
+            "object-getter-bool": "RUNTIME-TYPE-ERROR: <return statement> expects type 'bool', but got no value "
+                "instead",
+            "object-getter-float": "RUNTIME-TYPE-ERROR: <return statement> expects type 'float', but got no value "
+                "instead",
+            "object-getter-hash": "RUNTIME-TYPE-ERROR: <return statement> expects type 'hash<auto>', but got no "
+                "value instead",
+            "object-getter-int": "RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got no value "
+                "instead",
+            "return-no-value-expression": "RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got no "
+                "value instead",
+            "return-unassigned-bool": "RUNTIME-TYPE-ERROR: <return statement> expects type 'bool', but got no value "
+                "instead",
+            "return-unassigned-float": "RUNTIME-TYPE-ERROR: <return statement> expects type 'float', but got no "
+                "value instead",
+            "return-unassigned-hash": "RUNTIME-TYPE-ERROR: <return statement> expects type 'hash<auto>', but got no "
+                "value instead",
+            "return-unassigned-hashdecl": "RUNTIME-TYPE-ERROR: <return statement> expects type 'hash<ReturnInfo>', "
+                "but got no value instead",
+            "return-unassigned-softint": "RUNTIME-TYPE-ERROR: <return statement> expects type 'softint', but got no "
+                "value instead",
+            "return-unassigned": "RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got no value "
+                "instead",
+            "object-getter-softlist": "no error: []",
+            "final-getter": "RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got no value instead",
+            "final-set-get": "RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got no value instead",
+            "return-unassigned-softlist": "no error: []",
+            "return-value": "no error: 2",
+            # the error of a return statement is raised in its blocks: a catch block around it catches it, and the
+            # on_error handlers of the blocks run
+            "return-in-try": "no error: 7",
+            "return-value-in-try": "no error: 8",
+            "return-converted-in-try": "no error: 12",
+            "return-handlers": "error:RUNTIME-TYPE-ERROR",
+            "return-handlers-value": "success",
+            # the return type of code is its own, also when it is compiled while code of another return type runs
+            "no-value-accepted": "no error: \"none\"",
+            # the error is raised before the block of the return statement destroys the object of its local
+            # variable, so the exception of the destructor follows it
+            "return-destructor-error": "RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR",
+            "return-destructor-value": "DESTRUCTOR-ERROR",
+            # an element of a typed list or hash has no value when it does not exist, which a return type that
+            # requires a value rejects
+            "list-element-missing": "RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got no value "
+                "instead",
+            "list-element-missing-untyped-caller": "RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but "
+                "got no value instead",
+            "hash-key-missing-untyped-caller": "RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got "
+                "no value instead",
+            "list-element": "no error: 2",
+            "hash-key-missing": "RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got no value "
+                "instead",
+            "optional-list-element-missing": "no error: null",
+            "list-size": "no error: 3",
+            "string-contains": "no error: True",
+            "self-getters": "RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got no value instead | "
+                "RUNTIME-TYPE-ERROR: <return statement> expects type 'float', but got no value instead | "
+                "RUNTIME-TYPE-ERROR: <return statement> expects type 'bool', but got no value instead | "
+                "RUNTIME-TYPE-ERROR: <return statement> expects type 'hash<auto>', but got no value instead | no error: []",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("ReturnNoValueTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("checks in this program", \testInProgram());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+        addTestCase("compiled program", \testCompiledProgram());
+
+        set_return_value(main());
+    }
+
+    testInProgram() {
+        checkResults("in-program", ReturnNoValueChecks::get_results());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkWorkerOutput(mode, runWorker("return-no-value-worker.q", get_script_dir(), "--exec-mode=" + mode));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-return-no-value-");
+        string qmod_path = tmp.path + DirSep + "ReturnNoValueChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "ReturnNoValueChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot", runWorker("return-no-value-module-worker.q", tmp.path));
+    }
+
+    #! the checks compiled into a program, whose calls of code in the program compiled code makes directly
+    testCompiledProgram() {
+        string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        TmpDir tmp("qore-return-no-value-");
+        string exe_path = tmp.path + DirSep + "return-no-value";
+        string src_path = get_script_dir() + DirSep + "return-no-value-worker.q";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1", libqore_dir, qcc_bin,
+            exe_path, src_path));
+        assertTrue(is_file(exe_path), "compiled checks program: " + compile_out);
+
+        checkWorkerOutput("aot-program", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir,
+            exe_path)));
+    }
+
+    #! runs the given worker with the given module directory and returns its output
+    private string runWorker(string worker_name, string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + worker_name;
+        return ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s %s",
+            libqore_dir, module_dir, qore_bin, opts, worker));
+    }
+
+    #! parses the "name=value" lines printed by the worker and checks them
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        checkResults(label, results);
+    }
+
+    private checkResults(string label, hash<string, string> results) {
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (results.pairIterator()) {
+            assertEq(Expected{i.key}, i.value, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

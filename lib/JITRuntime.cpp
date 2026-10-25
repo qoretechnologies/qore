@@ -182,7 +182,6 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_rethrow", reinterpret_cast<void*>(&qore_rt_rethrow) },
     { "qore_rt_deopt", reinterpret_cast<void*>(&qore_rt_deopt) },
     { "qore_rt_guard_not_nothing", reinterpret_cast<void*>(&qore_rt_guard_not_nothing) },
-    { "qore_rt_raise_return_nothing", reinterpret_cast<void*>(&qore_rt_raise_return_nothing) },
     { "qore_rt_coerce_return", reinterpret_cast<void*>(&qore_rt_coerce_return) },
     { "qore_rt_coerce_nothing_return", reinterpret_cast<void*>(&qore_rt_coerce_nothing_return) },
     { "qore_rt_guard_int", reinterpret_cast<void*>(&qore_rt_guard_int) },
@@ -196,14 +195,6 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_make_weak_value", reinterpret_cast<void*>(&qore_rt_make_weak_value) },
     { "qore_rt_make_opaque_value", reinterpret_cast<void*>(&qore_rt_make_opaque_value) },
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
-    { "qore_rt_load_self_getter_checked",
-        reinterpret_cast<void*>(&qore_rt_load_self_getter_checked) },
-    { "qore_rt_load_self_getter_int",
-        reinterpret_cast<void*>(&qore_rt_load_self_getter_int) },
-    { "qore_rt_load_self_getter_float",
-        reinterpret_cast<void*>(&qore_rt_load_self_getter_float) },
-    { "qore_rt_load_self_getter_bool",
-        reinterpret_cast<void*>(&qore_rt_load_self_getter_bool) },
     { "qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local) },
     { "qore_rt_binary_op", reinterpret_cast<void*>(&qore_rt_binary_op) },
     { "qore_rt_list_index_dynamic", reinterpret_cast<void*>(&qore_rt_list_index_dynamic) },
@@ -1464,9 +1455,47 @@ extern "C" DLLEXPORT int64_t qore_rt_guard_not_nothing(uint64_t val) {
     return v.isNothing() ? 0 : 1;
 }
 
-extern "C" DLLEXPORT void qore_rt_raise_return_nothing(ExceptionSink* xsink) {
-    xsink->raiseException("RUNTIME-TYPE-ERROR",
-        "cannot return NOTHING from code with a declared non-NOTHING return type");
+//! Applies the declared return type to no value, as the AST interpreter does for a return statement that returns no
+//! value
+/** The AST interpreter checks the value of every return statement against the declared return type
+    (ReturnStatement::execImpl()), so a return statement that returns no value from code whose return type requires a
+    value raises "<return statement> expects type ..."; code that ends without a return statement raises
+    "<block return> ... block missing return statement" instead.  A type that converts no value, such as softlist,
+    gives the value it converts it to.
+
+    @return the value that the type gives to no value, owned by the caller; no value if an exception was raised
+*/
+static QoreValue qore_rt_accept_return_statement_nothing(const QoreTypeInfo* ti, ExceptionSink* xsink) {
+    ti = qore_substitute_type_params_if_needed(ti);
+    QoreValue val;
+    QoreTypeInfo::acceptAssignment(ti, "<return statement>", val, xsink);
+    if (*xsink) {
+        val.discard(xsink);
+        return QoreValue();
+    }
+    return val;
+}
+
+//! Raises the error of the AST interpreter for a return statement that returns no value from code whose return type
+//! requires a value; see qore_rt_accept_return_statement_nothing()
+/** The value returned stays no value: the caller applies the declared return type to it, which converts it for a
+    type that converts no value.
+*/
+extern "C" DLLEXPORT void qore_rt_raise_return_statement_nothing(const QoreTypeInfo* ti, ExceptionSink* xsink) {
+    qore_rt_accept_return_statement_nothing(ti, xsink).discard(xsink);
+}
+
+//! Checks the value of a return statement against the declared return type, as the AST interpreter checks it in the
+//! return statement (ReturnStatement::execImpl()); see QoreIROpcode::CheckReturnValue
+/** Raises "<return statement> expects type ..." if the type does not accept the value; the value is not changed, as
+    the caller applies the declared return type to it, which converts it for a type that converts it.
+*/
+extern "C" DLLEXPORT void qore_rt_check_return_value(const QoreTypeInfo* ti, uint64_t value, ExceptionSink* xsink) {
+    ti = qore_substitute_type_params_if_needed(ti);
+    QoreValue val = fromBits(value);
+    QoreValue checked = val.needsRef() ? val.refSelf() : val;
+    QoreTypeInfo::acceptAssignment(ti, "<return statement>", checked, xsink);
+    checked.discard(xsink);
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_guard_int(uint64_t val) {
@@ -2475,18 +2504,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_self_member(const char* member_name, 
     return toBits(val->needsEval() ? val->eval(xsink) : val.release());
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_load_self_getter_checked(
-        const char* member_name, int32_t rejects_nothing, ExceptionSink* xsink) {
-    uint64_t result = qore_rt_load_self_member(member_name, xsink);
-    if (!*xsink && rejects_nothing && fromBits(result).isNothing()) {
-        qore_rt_raise_return_nothing(xsink);
-    }
-    return *xsink ? toBits(QoreValue()) : result;
-}
-
-template <typename T, typename F>
+//! Loads the member of self that a getter returns, as a native value; \a accept_nothing gives the value of the
+//! getter for no value, owned by the caller, or raises its error
+template <typename T, typename F, typename N>
 static T qore_rt_load_self_getter_native(const char* member_name,
-        ExceptionSink* xsink, F&& convert) {
+        ExceptionSink* xsink, F&& convert, N&& accept_nothing) {
     QoreObject* obj = runtime_get_stack_object();
     assert(obj);
     if (qore_rt_check_closure_self_valid(obj, xsink)) {
@@ -2503,28 +2525,10 @@ static T qore_rt_load_self_getter_native(const char* member_name,
         return T();
     }
     if (value->isNothing()) {
-        qore_rt_raise_return_nothing(xsink);
-        return T();
+        ValueHolder accepted(accept_nothing(), xsink);
+        return *xsink ? T() : convert(*accepted);
     }
     return convert(*value);
-}
-
-extern "C" DLLEXPORT int64_t qore_rt_load_self_getter_int(
-        const char* member_name, ExceptionSink* xsink) {
-    return qore_rt_load_self_getter_native<int64_t>(member_name, xsink,
-        [](QoreValue value) { return value.getAsBigInt(); });
-}
-
-extern "C" DLLEXPORT double qore_rt_load_self_getter_float(
-        const char* member_name, ExceptionSink* xsink) {
-    return qore_rt_load_self_getter_native<double>(member_name, xsink,
-        [](QoreValue value) { return value.getAsFloat(); });
-}
-
-extern "C" DLLEXPORT int64_t qore_rt_load_self_getter_bool(
-        const char* member_name, ExceptionSink* xsink) {
-    return qore_rt_load_self_getter_native<int64_t>(member_name, xsink,
-        [](QoreValue value) { return value.getAsBool(); });
 }
 
 // Variant that does NOT evaluate needsEval() values (e.g., WeakReferenceNode).
@@ -4053,6 +4057,81 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_nothing_return_by_type_path_aot(
         }
     }
     return qore_rt_coerce_nothing_return_value(type_info, cleanup_ptr, xsink);
+}
+
+//! As qore_rt_accept_return_statement_nothing(), with the return type identified by its type path
+static QoreValue qore_rt_accept_return_statement_nothing_by_type_path(QoreAOTContext* ctx, const char* type_path,
+        ExceptionSink* xsink) {
+    const QoreTypeInfo* type_info = nullptr;
+    if (type_path && *type_path) {
+        type_info = qore_rt_resolve_full_type_path_cached(ctx, type_path, "return type", xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    return qore_rt_accept_return_statement_nothing(type_info, xsink);
+}
+
+//! The AOT counterpart of qore_rt_raise_return_statement_nothing(), with the return type identified by its type path
+extern "C" DLLEXPORT void qore_rt_raise_return_statement_nothing_by_type_path_aot(QoreAOTContext* ctx,
+        const char* type_path, ExceptionSink* xsink) {
+    qore_rt_accept_return_statement_nothing_by_type_path(ctx, type_path, xsink).discard(xsink);
+}
+
+//! The AOT counterpart of qore_rt_check_return_value(), with the return type identified by its type path
+extern "C" DLLEXPORT void qore_rt_check_return_value_by_type_path_aot(QoreAOTContext* ctx, const char* type_path,
+        uint64_t value, ExceptionSink* xsink) {
+    if (!type_path || !*type_path) {
+        return;
+    }
+    const QoreTypeInfo* type_info = qore_rt_resolve_full_type_path_cached(ctx, type_path, "return type", xsink);
+    if (!*xsink) {
+        qore_rt_check_return_value(type_info, value, xsink);
+    }
+}
+
+//! Loads the member of self that a getter whose return type requires a value returns
+/** No value is given to the getter's return type as the getter's return statement gives it in the AST interpreter
+    (see qore_rt_accept_return_statement_nothing()), which raises its error for a type that does not accept it; the
+    getter's return type is identified by its type path.
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_load_self_getter_typed_aot(QoreAOTContext* ctx, const char* member_name,
+        const char* return_type_path, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_load_self_member(member_name, xsink);
+    if (!*xsink && fromBits(result).isNothing()) {
+        return toBits(qore_rt_accept_return_statement_nothing_by_type_path(ctx, return_type_path, xsink));
+    }
+    return *xsink ? toBits(QoreValue()) : result;
+}
+
+//! Loads the member of self that a getter returns as an int, as a native value; see
+//! qore_rt_load_self_getter_typed_aot()
+extern "C" DLLEXPORT int64_t qore_rt_load_self_getter_int_typed_aot(QoreAOTContext* ctx, const char* member_name,
+        const char* return_type_path, ExceptionSink* xsink) {
+    return qore_rt_load_self_getter_native<int64_t>(member_name, xsink,
+        [](QoreValue value) { return value.getAsBigInt(); }, [ctx, return_type_path, xsink]() {
+            return qore_rt_accept_return_statement_nothing_by_type_path(ctx, return_type_path, xsink);
+        });
+}
+
+//! Loads the member of self that a getter returns as a float, as a native value; see
+//! qore_rt_load_self_getter_typed_aot()
+extern "C" DLLEXPORT double qore_rt_load_self_getter_float_typed_aot(QoreAOTContext* ctx, const char* member_name,
+        const char* return_type_path, ExceptionSink* xsink) {
+    return qore_rt_load_self_getter_native<double>(member_name, xsink,
+        [](QoreValue value) { return value.getAsFloat(); }, [ctx, return_type_path, xsink]() {
+            return qore_rt_accept_return_statement_nothing_by_type_path(ctx, return_type_path, xsink);
+        });
+}
+
+//! Loads the member of self that a getter returns as a bool, as a native value; see
+//! qore_rt_load_self_getter_typed_aot()
+extern "C" DLLEXPORT int64_t qore_rt_load_self_getter_bool_typed_aot(QoreAOTContext* ctx, const char* member_name,
+        const char* return_type_path, ExceptionSink* xsink) {
+    return qore_rt_load_self_getter_native<int64_t>(member_name, xsink,
+        [](QoreValue value) { return value.getAsBool(); }, [ctx, return_type_path, xsink]() {
+            return qore_rt_accept_return_statement_nothing_by_type_path(ctx, return_type_path, xsink);
+        });
 }
 
 // applies an lvalue type identified by its type path; unlike qore_rt_coerce_value_aot(), this does not require the
@@ -17651,26 +17730,34 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_object_getter_aot(
     if (!*xsink && result->isNothing() && target.variant
             && !QoreTypeInfo::parseAcceptsReturns(
                 target.variant->getReturnTypeInfo(), NT_NOTHING)) {
-        qore_rt_raise_return_nothing(xsink);
+        // as the getter's return statement does in the AST interpreter
+        return toBits(qore_rt_accept_return_statement_nothing(target.variant->getReturnTypeInfo(), xsink));
     }
     return toBits(*xsink ? QoreValue() : result.release());
 }
 
+//! Loads the member that a getter returns from an object of the exact class of the call target
+/** For a getter whose return type rejects no value (\a rejects_nothing), no value is given to the return type that
+    \a return_type_path identifies as the getter's return statement gives it in the AST interpreter (see
+    qore_rt_accept_return_statement_nothing()); code generation gives the type, as the call target's variant can be
+    unknown at run time.
+*/
 extern "C" DLLEXPORT uint64_t qore_rt_load_object_getter_checked_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
-        const char* member_name, int32_t rejects_nothing,
+        const char* member_name, int32_t rejects_nothing, const char* return_type_path,
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_load_object_getter_aot(
         ctx, slot, base_bits, member_name, xsink);
     if (!*xsink && rejects_nothing && fromBits(result).isNothing()) {
-        qore_rt_raise_return_nothing(xsink);
+        return toBits(qore_rt_accept_return_statement_nothing_by_type_path(ctx, return_type_path, xsink));
     }
     return *xsink ? toBits(QoreValue()) : result;
 }
 
+//! Loads the member that a getter returns as a native value; see qore_rt_load_object_getter_checked_aot()
 template <typename T, typename F>
 static T qore_rt_load_object_getter_native_aot(QoreAOTContext* ctx,
-        int32_t slot, uint64_t base_bits, const char* member_name,
+        int32_t slot, uint64_t base_bits, const char* member_name, const char* return_type_path,
         ExceptionSink* xsink, F&& convert) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
     QoreAOTCallTarget& target = ctx->call_targets[slot];
@@ -17706,40 +17793,42 @@ static T qore_rt_load_object_getter_native_aot(QoreAOTContext* ctx,
         return T();
     }
     if (value->isNothing()) {
-        qore_rt_raise_return_nothing(xsink);
-        return T();
+        // as the method's return statement does in the AST interpreter
+        ValueHolder accepted(qore_rt_accept_return_statement_nothing_by_type_path(ctx, return_type_path, xsink),
+            xsink);
+        return *xsink ? T() : convert(*accepted);
     }
     return convert(*value);
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_load_object_getter_int_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
-        const char* member_name, ExceptionSink* xsink) {
+        const char* member_name, const char* return_type_path, ExceptionSink* xsink) {
     return qore_rt_load_object_getter_native_aot<int64_t>(
-        ctx, slot, base_bits, member_name, xsink,
+        ctx, slot, base_bits, member_name, return_type_path, xsink,
         [](QoreValue value) { return value.getAsBigInt(); });
 }
 
 extern "C" DLLEXPORT double qore_rt_load_object_getter_float_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
-        const char* member_name, ExceptionSink* xsink) {
+        const char* member_name, const char* return_type_path, ExceptionSink* xsink) {
     return qore_rt_load_object_getter_native_aot<double>(
-        ctx, slot, base_bits, member_name, xsink,
+        ctx, slot, base_bits, member_name, return_type_path, xsink,
         [](QoreValue value) { return value.getAsFloat(); });
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_load_object_getter_bool_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
-        const char* member_name, ExceptionSink* xsink) {
+        const char* member_name, const char* return_type_path, ExceptionSink* xsink) {
     return qore_rt_load_object_getter_native_aot<int64_t>(
-        ctx, slot, base_bits, member_name, xsink,
+        ctx, slot, base_bits, member_name, return_type_path, xsink,
         [](QoreValue value) { return value.getAsBool(); });
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
         uint64_t* args, int nargs, const char* member_name,
-        int32_t value_param, int32_t rejects_nothing,
+        int32_t value_param, int32_t rejects_nothing, const char* return_type_path,
         ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
     QoreAOTCallTarget& target = ctx->call_targets[slot];
@@ -17807,7 +17896,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
     ValueHolder result(
         value->needsEval() ? value->eval(xsink) : value.release(), xsink);
     if (!*xsink && rejects_nothing && result->isNothing()) {
-        qore_rt_raise_return_nothing(xsink);
+        // as the method's return statement does in the AST interpreter
+        return toBits(qore_rt_accept_return_statement_nothing_by_type_path(ctx, return_type_path, xsink));
     }
     return toBits(*xsink ? QoreValue() : result.release());
 }
@@ -17815,7 +17905,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
 template <typename T, typename LValueConvert, typename ValueConvert>
 static T qore_rt_object_member_set_get_native_aot(QoreAOTContext* ctx,
         int32_t slot, uint64_t base_bits, uint64_t* args, int nargs,
-        const char* member_name, int32_t value_param, ExceptionSink* xsink,
+        const char* member_name, int32_t value_param, const char* return_type_path, ExceptionSink* xsink,
         qore_type_t expected_type, LValueConvert&& lvalue_convert,
         ValueConvert&& value_convert) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
@@ -17892,8 +17982,10 @@ static T qore_rt_object_member_set_get_native_aot(QoreAOTContext* ctx,
         return T();
     }
     if (result->isNothing()) {
-        qore_rt_raise_return_nothing(xsink);
-        return T();
+        // as the method's return statement does in the AST interpreter
+        ValueHolder accepted(qore_rt_accept_return_statement_nothing_by_type_path(ctx, return_type_path, xsink),
+            xsink);
+        return *xsink ? T() : value_convert(*accepted);
     }
     return value_convert(*result);
 }
@@ -17901,9 +17993,9 @@ static T qore_rt_object_member_set_get_native_aot(QoreAOTContext* ctx,
 extern "C" DLLEXPORT int64_t qore_rt_object_member_set_get_int_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
         uint64_t* args, int nargs, const char* member_name,
-        int32_t value_param, ExceptionSink* xsink) {
+        int32_t value_param, const char* return_type_path, ExceptionSink* xsink) {
     return qore_rt_object_member_set_get_native_aot<int64_t>(
-        ctx, slot, base_bits, args, nargs, member_name, value_param, xsink,
+        ctx, slot, base_bits, args, nargs, member_name, value_param, return_type_path, xsink,
         NT_INT,
         [](const LValueHelper& helper) { return helper.getAsBigInt(); },
         [](QoreValue value) { return value.getAsBigInt(); });
@@ -17912,9 +18004,9 @@ extern "C" DLLEXPORT int64_t qore_rt_object_member_set_get_int_aot(
 extern "C" DLLEXPORT double qore_rt_object_member_set_get_float_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
         uint64_t* args, int nargs, const char* member_name,
-        int32_t value_param, ExceptionSink* xsink) {
+        int32_t value_param, const char* return_type_path, ExceptionSink* xsink) {
     return qore_rt_object_member_set_get_native_aot<double>(
-        ctx, slot, base_bits, args, nargs, member_name, value_param, xsink,
+        ctx, slot, base_bits, args, nargs, member_name, value_param, return_type_path, xsink,
         NT_FLOAT,
         [](const LValueHelper& helper) { return helper.getAsFloat(); },
         [](QoreValue value) { return value.getAsFloat(); });
@@ -17923,9 +18015,9 @@ extern "C" DLLEXPORT double qore_rt_object_member_set_get_float_aot(
 extern "C" DLLEXPORT int64_t qore_rt_object_member_set_get_bool_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
         uint64_t* args, int nargs, const char* member_name,
-        int32_t value_param, ExceptionSink* xsink) {
+        int32_t value_param, const char* return_type_path, ExceptionSink* xsink) {
     return qore_rt_object_member_set_get_native_aot<int64_t>(
-        ctx, slot, base_bits, args, nargs, member_name, value_param, xsink,
+        ctx, slot, base_bits, args, nargs, member_name, value_param, return_type_path, xsink,
         NT_BOOLEAN,
         [](const LValueHelper& helper) { return helper.getAsBool(); },
         [](QoreValue value) { return value.getAsBool(); });
@@ -17934,7 +18026,7 @@ extern "C" DLLEXPORT int64_t qore_rt_object_member_set_get_bool_aot(
 extern "C" DLLEXPORT uint64_t qore_rt_object_member_compound_get_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
         uint64_t* args, int nargs, const char* member_name,
-        int32_t value_param, int32_t compound_op, int32_t rejects_nothing,
+        int32_t value_param, int32_t compound_op, int32_t rejects_nothing, const char* return_type_path,
         ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
     QoreAOTCallTarget& target = ctx->call_targets[slot];
@@ -17993,7 +18085,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_compound_get_aot(
     ValueHolder result(
         value->needsEval() ? value->eval(xsink) : value.release(), xsink);
     if (!*xsink && rejects_nothing && result->isNothing()) {
-        qore_rt_raise_return_nothing(xsink);
+        // as the method's return statement does in the AST interpreter
+        return toBits(qore_rt_accept_return_statement_nothing_by_type_path(ctx, return_type_path, xsink));
     }
     return toBits(*xsink ? QoreValue() : result.release());
 }

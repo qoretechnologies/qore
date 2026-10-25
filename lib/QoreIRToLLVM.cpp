@@ -49,7 +49,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 408,
+static_assert(QORE_IR_MAX_OPCODE == 409,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -5600,6 +5600,22 @@ llvm::Value* QoreIRToLLVM::emitReturnTypeConversion(llvm::Module& module, llvm::
     return result;
 }
 
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitReturnStatementNothingError(llvm::Module& module, const QoreTypeInfo* return_type) {
+    if (aot_mode) {
+        auto helper = module.getOrInsertFunction("qore_rt_raise_return_statement_nothing_by_type_path_aot",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
+        llvm::Value* type_path = return_type
+            ? getTypePathArg(return_type)
+            : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+        builder->CreateCall(helper, {aot_ctx_arg, type_path, xsink_arg});
+    } else {
+        auto helper = module.getOrInsertFunction("qore_rt_raise_return_statement_nothing",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+        builder->CreateCall(helper, {getTypeInfoPointerArg(return_type), xsink_arg});
+    }
+}
+
 llvm::Value* QoreIRToLLVM::getFastEntryReturnValue(llvm::Module& module, llvm::Value* boxed) {
     switch (fast_entry_return_kind) {
         case BatchCalleeReturnKind::NativeInt: {
@@ -5647,35 +5663,43 @@ llvm::Value* QoreIRToLLVM::emitAOTSelfGetter(const BatchCalleeInfo& info,
         : qore_ir_get_fast_entry_return_kind(
             variant, rejects_nothing, current_ir_func);
 
+    // a native getter's member must have a value, as must the member of a getter whose return type requires one:
+    // no value raises the error of the getter's return statement, as with the AST interpreter
+    llvm::Value* getter_type_path = return_kind != BatchCalleeReturnKind::Boxed || rejects_nothing
+        ? getTypePathArg(return_type)
+        : nullptr;
     if (return_kind == BatchCalleeReturnKind::NativeInt) {
         auto helper = module.getOrInsertFunction(
-            "qore_rt_load_self_getter_int",
-            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-        return builder->CreateCall(helper, {member_name, xsink_arg});
+            "qore_rt_load_self_getter_int_typed_aot",
+            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type, ptr_type}, false));
+        return builder->CreateCall(helper, {aot_ctx_arg, member_name, getter_type_path, xsink_arg});
     }
     if (return_kind == BatchCalleeReturnKind::NativeFloat) {
         auto helper = module.getOrInsertFunction(
-            "qore_rt_load_self_getter_float",
-            llvm::FunctionType::get(double_type, {ptr_type, ptr_type}, false));
-        return builder->CreateCall(helper, {member_name, xsink_arg});
+            "qore_rt_load_self_getter_float_typed_aot",
+            llvm::FunctionType::get(double_type, {ptr_type, ptr_type, ptr_type, ptr_type}, false));
+        return builder->CreateCall(helper, {aot_ctx_arg, member_name, getter_type_path, xsink_arg});
     }
     if (return_kind == BatchCalleeReturnKind::NativeBool) {
         auto helper = module.getOrInsertFunction(
-            "qore_rt_load_self_getter_bool",
-            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+            "qore_rt_load_self_getter_bool_typed_aot",
+            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type, ptr_type}, false));
         llvm::Value* value = builder->CreateCall(
-            helper, {member_name, xsink_arg});
+            helper, {aot_ctx_arg, member_name, getter_type_path, xsink_arg});
         return builder->CreateICmpNE(
             value, llvm::ConstantInt::get(i64_type, 0));
     }
 
-    auto helper = module.getOrInsertFunction(
-        "qore_rt_load_self_getter_checked",
-        llvm::FunctionType::get(
-            i64_type, {ptr_type, i32_type, ptr_type}, false));
-    return builder->CreateCall(helper,
-        {member_name, llvm::ConstantInt::get(i32_type, rejects_nothing),
-         xsink_arg});
+    if (rejects_nothing) {
+        auto helper = module.getOrInsertFunction(
+            "qore_rt_load_self_getter_typed_aot",
+            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type, ptr_type}, false));
+        return builder->CreateCall(helper, {aot_ctx_arg, member_name, getter_type_path, xsink_arg});
+    }
+    // the return type accepts no value
+    auto helper = module.getOrInsertFunction("qore_rt_load_self_member",
+        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+    return builder->CreateCall(helper, {member_name, xsink_arg});
 }
 
 llvm::Value* QoreIRToLLVM::emitAOTObjectGetter(const BatchCalleeInfo& info,
@@ -5690,30 +5714,33 @@ llvm::Value* QoreIRToLLVM::emitAOTObjectGetter(const BatchCalleeInfo& info,
         : qore_ir_get_fast_entry_return_kind(
             variant, rejects_nothing, current_ir_func);
     llvm::Value* slot_value = llvm::ConstantInt::get(i32_type, slot);
+    // the getter's return type, which no value is given to as the getter's return statement gives it; the call
+    // target's variant can be unknown at run time
+    llvm::Value* return_type_path = getAOTGetterReturnTypePathArg(variant, rejects_nothing);
 
     if (return_kind == BatchCalleeReturnKind::NativeInt) {
         auto helper = module.getOrInsertFunction(
             "qore_rt_load_object_getter_int_aot",
             llvm::FunctionType::get(i64_type,
-                {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
+                {ptr_type, i32_type, i64_type, ptr_type, ptr_type, ptr_type}, false));
         return builder->CreateCall(helper,
-            {aot_ctx_arg, slot_value, base, member_name, xsink_arg});
+            {aot_ctx_arg, slot_value, base, member_name, return_type_path, xsink_arg});
     }
     if (return_kind == BatchCalleeReturnKind::NativeFloat) {
         auto helper = module.getOrInsertFunction(
             "qore_rt_load_object_getter_float_aot",
             llvm::FunctionType::get(double_type,
-                {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
+                {ptr_type, i32_type, i64_type, ptr_type, ptr_type, ptr_type}, false));
         return builder->CreateCall(helper,
-            {aot_ctx_arg, slot_value, base, member_name, xsink_arg});
+            {aot_ctx_arg, slot_value, base, member_name, return_type_path, xsink_arg});
     }
     if (return_kind == BatchCalleeReturnKind::NativeBool) {
         auto helper = module.getOrInsertFunction(
             "qore_rt_load_object_getter_bool_aot",
             llvm::FunctionType::get(i64_type,
-                {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
+                {ptr_type, i32_type, i64_type, ptr_type, ptr_type, ptr_type}, false));
         llvm::Value* value = builder->CreateCall(helper,
-            {aot_ctx_arg, slot_value, base, member_name, xsink_arg});
+            {aot_ctx_arg, slot_value, base, member_name, return_type_path, xsink_arg});
         return builder->CreateICmpNE(
             value, llvm::ConstantInt::get(i64_type, 0));
     }
@@ -5721,11 +5748,20 @@ llvm::Value* QoreIRToLLVM::emitAOTObjectGetter(const BatchCalleeInfo& info,
     auto helper = module.getOrInsertFunction(
         "qore_rt_load_object_getter_checked_aot",
         llvm::FunctionType::get(i64_type,
-            {ptr_type, i32_type, i64_type, ptr_type, i32_type, ptr_type},
+            {ptr_type, i32_type, i64_type, ptr_type, i32_type, ptr_type, ptr_type},
             false));
     return builder->CreateCall(helper,
         {aot_ctx_arg, slot_value, base, member_name,
-         llvm::ConstantInt::get(i32_type, rejects_nothing), xsink_arg});
+         llvm::ConstantInt::get(i32_type, rejects_nothing), return_type_path, xsink_arg});
+}
+
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::getAOTGetterReturnTypePathArg(const AbstractQoreFunctionVariant* variant,
+        bool rejects_nothing) {
+    if (!rejects_nothing || !variant) {
+        return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    }
+    return getTypePathArg(variant->getReturnTypeInfo());
 }
 
 llvm::Value* QoreIRToLLVM::emitAOTObjectSetGet(
@@ -5749,36 +5785,38 @@ llvm::Value* QoreIRToLLVM::emitAOTObjectSetGet(
     llvm::Value* nargs_value = llvm::ConstantInt::get(i32_type, nargs);
     llvm::Value* value_param = llvm::ConstantInt::get(
         i32_type, info.object_set_get_param);
+    // the method's return type, as for a getter (see emitAOTObjectGetter())
+    llvm::Value* return_type_path = getAOTGetterReturnTypePathArg(variant, rejects_nothing);
 
     if (return_kind == BatchCalleeReturnKind::NativeInt) {
         auto helper = module.getOrInsertFunction(
             "qore_rt_object_member_set_get_int_aot",
             llvm::FunctionType::get(i64_type,
                 {ptr_type, i32_type, i64_type, ptr_type, i32_type,
-                 ptr_type, i32_type, ptr_type}, false));
+                 ptr_type, i32_type, ptr_type, ptr_type}, false));
         return builder->CreateCall(helper,
             {aot_ctx_arg, slot_value, base, args, nargs_value, member_name,
-             value_param, xsink_arg});
+             value_param, return_type_path, xsink_arg});
     }
     if (return_kind == BatchCalleeReturnKind::NativeFloat) {
         auto helper = module.getOrInsertFunction(
             "qore_rt_object_member_set_get_float_aot",
             llvm::FunctionType::get(double_type,
                 {ptr_type, i32_type, i64_type, ptr_type, i32_type,
-                 ptr_type, i32_type, ptr_type}, false));
+                 ptr_type, i32_type, ptr_type, ptr_type}, false));
         return builder->CreateCall(helper,
             {aot_ctx_arg, slot_value, base, args, nargs_value, member_name,
-             value_param, xsink_arg});
+             value_param, return_type_path, xsink_arg});
     }
     if (return_kind == BatchCalleeReturnKind::NativeBool) {
         auto helper = module.getOrInsertFunction(
             "qore_rt_object_member_set_get_bool_aot",
             llvm::FunctionType::get(i64_type,
                 {ptr_type, i32_type, i64_type, ptr_type, i32_type,
-                 ptr_type, i32_type, ptr_type}, false));
+                 ptr_type, i32_type, ptr_type, ptr_type}, false));
         llvm::Value* value = builder->CreateCall(helper,
             {aot_ctx_arg, slot_value, base, args, nargs_value, member_name,
-             value_param, xsink_arg});
+             value_param, return_type_path, xsink_arg});
         return builder->CreateICmpNE(
             value, llvm::ConstantInt::get(i64_type, 0));
     }
@@ -5787,11 +5825,11 @@ llvm::Value* QoreIRToLLVM::emitAOTObjectSetGet(
         "qore_rt_object_member_set_get_aot",
         llvm::FunctionType::get(i64_type,
             {ptr_type, i32_type, i64_type, ptr_type, i32_type,
-             ptr_type, i32_type, i32_type, ptr_type}, false));
+             ptr_type, i32_type, i32_type, ptr_type, ptr_type}, false));
     return builder->CreateCall(helper,
         {aot_ctx_arg, slot_value, base, args, nargs_value, member_name,
          value_param, llvm::ConstantInt::get(i32_type, rejects_nothing),
-         xsink_arg});
+         return_type_path, xsink_arg});
 }
 
 bool QoreIRToLLVM::fastEntryParamRejectsNothing(
@@ -8047,6 +8085,11 @@ llvm::Value* QoreIRToLLVM::emitAOTCollectionOp(const BatchCalleeInfo& info,
         const QoreIRCallDirectInstruction* fused_call) {
     const AOTCollectionOpInfo& op = info.collection_op;
     if (!op || q_env_is_set("QORE_DISABLE_AOT_COLLECTION_OP_IMPORT")) {
+        return nullptr;
+    }
+    // an element or a key that does not exist has no value, which a return type that rejects NOTHING rejects with
+    // the error of the return statement: the operation raises no such error, so the call is made instead
+    if (info.return_rejects_nothing && op.kind != AOTCollectionOpKind::ListSize) {
         return nullptr;
     }
     QoreIRCallDirectInstruction::AOTCollectionConsumerKind consumer =
@@ -16037,6 +16080,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 coerce_return = !timeout_return && !optional_timeout_return
                     && (aot_mode || !fast_entry_name.empty())
                     && qore_ir_return_needs_coercion(return_type, return_value_facts);
+                // a return statement that returns no value from code whose return type requires one raises the
+                // error of its return statement, as the AST interpreter checks every return statement, instead of
+                // the "block missing return statement" error that the caller raises for code without one; a coerced
+                // return value is checked by the coercion, and a return statement that leaves something whose
+                // behaviour depends on the error is checked before it leaves it (CheckReturnValue)
+                if (!coerce_return && !ret->value_accepted && nanboxed_values.count(ret->value.id)
+                        && QoreTypeInfo::hasType(return_type)
+                        && !QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING)) {
+                    llvm::BasicBlock* nothing_bb = llvm::BasicBlock::Create(ctx, "return_no_value", llvm_func);
+                    llvm::BasicBlock* value_bb = llvm::BasicBlock::Create(ctx, "return_value", llvm_func);
+                    builder->CreateCondBr(builder->CreateICmpEQ(val,
+                        llvm::ConstantInt::get(i64_type, VAL_NOTHING)), nothing_bb, value_bb);
+                    builder->SetInsertPoint(nothing_bb);
+                    emitReturnStatementNothingError(module, return_type);
+                    emitExceptionCheck(module, llvm_func, inst);
+                    builder->CreateBr(value_bb);
+                    builder->SetInsertPoint(value_bb);
+                }
                 if (timeout_return) {
                     llvm::Value* timeout_value = ensureTimeoutTypeInline(
                         val, ret->value.id);
@@ -16096,9 +16157,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::ConstantInt::get(i64_type, VAL_NOTHING));
                     builder->CreateCondBr(is_nothing, reject, cont);
                     builder->SetInsertPoint(reject);
-                    auto raise = module.getOrInsertFunction("qore_rt_raise_return_nothing",
-                        llvm::FunctionType::get(void_type, {ptr_type}, false));
-                    builder->CreateCall(raise, {xsink_arg});
+                    emitReturnStatementNothingError(module, return_type);
                     builder->CreateBr(cont);
                     builder->SetInsertPoint(cont);
                 }
@@ -21404,6 +21463,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const BatchCalleeInfo* aot_object_getter = nullptr;
             const BatchCalleeInfo* aot_object_set_get = nullptr;
             const BatchCalleeInfo* aot_object_compound_get = nullptr;
+            const AbstractQoreFunctionVariant* aot_object_compound_get_variant = nullptr;
             bool aot_object_getter_rejects_nothing = false;
             bool aot_object_set_get_rejects_nothing = false;
             bool aot_object_compound_get_rejects_nothing = false;
@@ -21494,6 +21554,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             direct_inst->variant, direct_inst->expr,
                             current_ir_func, inst->operands, 1, nargs)) {
                     aot_object_compound_get = &it->second;
+                    aot_object_compound_get_variant = direct_inst->variant;
                     const QoreTypeInfo* return_type =
                         direct_inst->variant->getReturnTypeInfo();
                     aot_object_compound_get_rejects_nothing =
@@ -22057,8 +22118,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         "qore_rt_object_member_compound_get_aot",
                         llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, i64_type, ptr_type, i32_type,
-                             ptr_type, i32_type, i32_type, i32_type, ptr_type},
+                             ptr_type, i32_type, i32_type, i32_type, ptr_type, ptr_type},
                             false));
+                    // the method's return type, as for a getter (see emitAOTObjectGetter())
+                    llvm::Value* return_type_path = getAOTGetterReturnTypePathArg(
+                        aot_object_compound_get_variant, aot_object_compound_get_rejects_nothing);
                     // the frame of the call that the compound assignment of the callee's body takes the place of
                     AotInlineCallFrame frame = emitPushAotInlineCallFrame(slot, *aot_object_compound_get, inst,
                         module, llvm_func);
@@ -22072,7 +22136,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                              aot_object_compound_get->object_compound_get_op),
                          llvm::ConstantInt::get(i32_type,
                              aot_object_compound_get_rejects_nothing),
-                         xsink_arg});
+                         return_type_path, xsink_arg});
                     endAotInlineCallFrame(frame, true, module);
                     clear_fast_path_arg_cleanups();
                     call_may_modify_runtime_locals = false;
@@ -22342,6 +22406,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const BatchCalleeInfo* aot_object_getter = nullptr;
             const BatchCalleeInfo* aot_object_set_get = nullptr;
             const BatchCalleeInfo* aot_object_compound_get = nullptr;
+            const AbstractQoreFunctionVariant* aot_object_compound_get_variant = nullptr;
             bool aot_object_getter_rejects_nothing = false;
             bool aot_object_set_get_rejects_nothing = false;
             bool aot_object_compound_get_rejects_nothing = false;
@@ -22432,6 +22497,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             invoke_inst->variant, invoke_inst->expr,
                             current_ir_func, inst->operands, 1, nargs)) {
                     aot_object_compound_get = &it->second;
+                    aot_object_compound_get_variant = invoke_inst->variant;
                     const QoreTypeInfo* return_type =
                         invoke_inst->variant->getReturnTypeInfo();
                     aot_object_compound_get_rejects_nothing =
@@ -22817,8 +22883,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         "qore_rt_object_member_compound_get_aot",
                         llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, i64_type, ptr_type, i32_type,
-                             ptr_type, i32_type, i32_type, i32_type, ptr_type},
+                             ptr_type, i32_type, i32_type, i32_type, ptr_type, ptr_type},
                             false));
+                    // the method's return type, as for a getter (see emitAOTObjectGetter())
+                    llvm::Value* return_type_path = getAOTGetterReturnTypePathArg(
+                        aot_object_compound_get_variant, aot_object_compound_get_rejects_nothing);
                     // the frame of the call that the compound assignment of the callee's body takes the place of
                     AotInlineCallFrame frame = emitPushAotInlineCallFrame(slot, *aot_object_compound_get, inst,
                         module, llvm_func);
@@ -22832,7 +22901,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                              aot_object_compound_get->object_compound_get_op),
                          llvm::ConstantInt::get(i32_type,
                              aot_object_compound_get_rejects_nothing),
-                         xsink_arg});
+                         return_type_path, xsink_arg});
                     endAotInlineCallFrame(frame, true, module);
                     clear_fast_path_arg_cleanups();
                     call_may_modify_runtime_locals = false;
@@ -30648,6 +30717,45 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::DiscardTemps: {
             emitDiscardTemps(module, inst->temp_scope_id);
+            return true;
+        }
+        case QoreIROpcode::CheckReturnValue: {
+            // the value of a return statement is checked against the declared return type in the statement, as the
+            // AST interpreter checks it, so that the handler of an enclosing try block catches the error; the value
+            // is not changed (see QoreIROpcode::CheckReturnValue)
+            auto* val = getVal(inst->operands[0].id, error);
+            if (!val) {
+                return false;
+            }
+            llvm::Value* boxed = val;
+            bool boxed_temp = false;
+            if (!nanboxed_values.count(inst->operands[0].id)) {
+                if (val->getType() == double_type) {
+                    boxed = boxFloat(val);
+                    boxed_temp = true;
+                } else if (val->getType() == i1_type) {
+                    boxed = boxBool(val);
+                } else if (val->getType() == i64_type) {
+                    boxed = boxIntInline(val);
+                    boxed_temp = true;
+                }
+            }
+            if (aot_mode) {
+                auto helper = module.getOrInsertFunction("qore_rt_check_return_value_by_type_path_aot",
+                    llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i64_type, ptr_type}, false));
+                builder->CreateCall(helper, {aot_ctx_arg, getTypePathArg(inst->element_type), boxed, xsink_arg});
+            } else {
+                auto helper = module.getOrInsertFunction("qore_rt_check_return_value",
+                    llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
+                builder->CreateCall(helper, {getTypeInfoPointerArg(inst->element_type), boxed, xsink_arg});
+            }
+            if (boxed_temp) {
+                // a boxed big int or colliding double is a new node
+                auto decref_nothrow = module.getOrInsertFunction("qore_rt_decref_nothrow",
+                    llvm::FunctionType::get(void_type, {i64_type}, false));
+                builder->CreateCall(decref_nothrow, {boxed});
+            }
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::UnwindTemps: {

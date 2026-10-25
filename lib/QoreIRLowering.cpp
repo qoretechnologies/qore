@@ -1440,6 +1440,64 @@ bool QoreIRLowering::stackReserveReached(std::string& error) {
     return true;
 }
 
+//! Returns the local variable whose value the expression is, if the expression is a local variable
+static const LocalVar* qore_ir_get_returned_local(const QoreValue& expr) {
+    const auto* var = dynamic_cast<const VarRefNode*>(expr.getInternalNode());
+    if (!var || (var->getType() != VT_LOCAL && var->getType() != VT_CLOSURE)) {
+        return nullptr;
+    }
+    return var->ref.id;
+}
+
+//! Returns true if a value of the type can be or hold an object, whose destructor can run when it is released
+static bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth = 0) {
+    if (!QoreTypeInfo::needsScan(ti)) {
+        return false;
+    }
+    if (depth >= 8) {
+        return true;
+    }
+    // the elements of a list and the values of a hash of a type are of that type
+    if (const QoreTypeInfo* element = QoreTypeInfo::getComplexListValueType(ti)) {
+        return qore_ir_type_may_hold_object(element, depth + 1);
+    }
+    if (const QoreTypeInfo* value = QoreTypeInfo::getComplexHashValueType(ti)) {
+        return qore_ir_type_may_hold_object(value, depth + 1);
+    }
+    return true;
+}
+
+// documented in QoreIRLowering.h
+bool QoreIRLowering::returnCleanupObservesError(const LocalVar* returned_local) const {
+    if (getCurrentExceptionTarget() || catch_cleanup_depth > 0) {
+        return true;
+    }
+    size_t check_count = 0;
+    for (const auto& entry : cleanup_stack) {
+        if (entry.type != BlockCleanupEntry::Lvars) {
+            return true;
+        }
+        if (!entry.lvars) {
+            continue;
+        }
+        for (size_t i = 0, e = entry.lvars->size(); i < e; ++i) {
+            // a cancelled scan keeps the check in the statement
+            if (++check_count % 100 == 0 && qore_check_cancel(nullptr, "IR return cleanup analysis")) {
+                return true;
+            }
+            const LocalVar* lv = entry.lvars->lv[i];
+            // the value of a variable whose value is returned stays referenced, so it is not released
+            if (lv && lv == returned_local) {
+                continue;
+            }
+            if (!lv || qore_ir_type_may_hold_object(lv->getTypeInfo())) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& error) {
     if (!stmt) {
         error = "null statement for IR lowering";
@@ -1497,6 +1555,19 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreIRValue lowered = lowerExpression(expr, error);
         if (!lowered.isValid()) {
             return false;
+        }
+        // the value is checked against the declared return type in the return statement, as the AST interpreter
+        // checks it (ReturnStatement::execImpl()): when the statement leaves something whose behaviour depends on
+        // the error, the check is made before it leaves its blocks, so the handler of an enclosing try block catches
+        // the error and the on_error handlers of the blocks run; otherwise nothing runs between the statement and
+        // the Return, which checks the value for no value, and the caller checks its type.  qore_ir_optimize()
+        // removes the checks whose value facts prove the value is accepted as it is.  A return type with type
+        // parameters is checked by the caller, which knows the arguments that instantiate it.
+        const QoreTypeInfo* return_type = builder.getFunction()->return_type_info;
+        if (QoreTypeInfo::hasType(return_type) && return_type != anyTypeInfo
+                && !qore_type_contains_type_parameter(return_type)
+                && returnCleanupObservesError(qore_ir_get_returned_local(expr))) {
+            builder.createCheckReturnValue(lowered, return_type, getCurrentExceptionTarget(), stmt->loc);
         }
         bool cleanup_before_return = catch_cleanup_depth > 0;
         if (!cleanup_before_return) {

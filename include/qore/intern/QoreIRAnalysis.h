@@ -92,6 +92,8 @@ struct QoreIROptimizationStats {
     size_t pure_calls_folded = 0;
     size_t pure_calls_commoned = 0;
     size_t redundant_phis_eliminated = 0;
+    //! the checks of return values (CheckReturnValue) removed because the value facts prove them
+    size_t return_checks_elided = 0;
 };
 
 //! Where the values produced by compile-time folding are consumed.
@@ -181,6 +183,22 @@ DLLLOCAL bool qore_ir_collect_resolved_callees(
 //! cancelled. @p initially_assigned contains locals that are assigned on function
 //! entry, normally signature parameters.
 DLLLOCAL std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
+    const QoreIRFunction& ir_func, const std::unordered_set<const void*>& initially_assigned);
+
+//! The definite assignment of the local variables of a function (see qore_ir_analyze_local_assignment())
+struct QoreIRLocalAssignment {
+    //! the locals that cannot use native scalar storage, as qore_ir_get_native_unsafe_locals() returns them
+    std::unordered_set<const void*> unsafe_locals;
+    //! the loads of local variables (LoadLocal) that may observe a variable that is not assigned
+    std::unordered_set<const QoreIRInstruction*> unassigned_loads;
+    //! false if the analysis was cancelled: every local is unsafe, and no load is known to observe an assignment
+    bool complete = false;
+};
+
+//! Analyzes the definite assignment of the local variables of a function, as qore_ir_get_native_unsafe_locals()
+//! does, and also finds each load that may observe a variable that is not assigned: a variable that a load observes
+//! before its assignment is unsafe for all its loads, but its other loads can still observe an assignment
+DLLLOCAL QoreIRLocalAssignment qore_ir_analyze_local_assignment(
     const QoreIRFunction& ir_func, const std::unordered_set<const void*>& initially_assigned);
 
 //! Run conservative, semantics-preserving optimizations on a lowered function.
@@ -394,5 +412,22 @@ size_t qore_ir_fuse_object_int_string_measure_consumers(
 
 //! Fuse exact string case transformations with supported sole consumers.
 size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func);
+
+//! Returns true if a returned value with the given facts must be converted or checked by the declared return type
+/** Defined in lib/QoreIRToLLVM.cpp
+*/
+DLLLOCAL bool qore_ir_return_needs_coercion(const QoreTypeInfo* return_type, const QoreIRValueFacts* value_facts);
+
+//! Returns true if a returned value with the given facts may need a conversion or type check by the declared return
+//! type, apart from the rejection of a NOTHING value
+/** Defined in lib/QoreIRToLLVM.cpp
+*/
+DLLLOCAL bool qore_ir_return_value_needs_conversion(const QoreTypeInfo* return_type,
+    const QoreIRValueFacts* value_facts);
+
+//! Returns true if the declared return type converts or rejects a missing return value
+/** Defined in lib/QoreIRToLLVM.cpp
+*/
+DLLLOCAL bool qore_ir_nothing_return_needs_filter(const QoreTypeInfo* return_type);
 
 #endif

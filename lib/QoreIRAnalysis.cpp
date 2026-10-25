@@ -9685,6 +9685,177 @@ static QoreIRDenseListStats qore_ir_refine_dense_list_facts(
     return stats;
 }
 
+//! Finds what proves that the declared return type accepts the values of return statements as they are
+/** The facts of a value of a local variable come from the parse state of the variable at the end of its scope, which
+    does not prove that a load observes an assignment, so a load of a local variable is proven by the flow analysis of
+    the function's assignments (qore_ir_analyze_local_assignment()) and the variable's declared type instead; the
+    values of a phi are proven when all its incoming values are, and the reference that a return statement takes to
+    its value (RefSelf) when its operand is; any other value is proven by its facts, and, as SSA
+    facts do not describe every value, the type of a value without one is the type that the parser checked for the
+    returned expression, as for the return summaries (qore_ir_function_returns_pass_through()).
+*/
+class QoreIRReturnValueProof {
+public:
+    //! @param check_count the count of the cancellation checks of the analysis
+    DLLLOCAL QoreIRReturnValueProof(const QoreIRFunction& func, size_t& check_count) : func(func),
+            check_count(check_count) {
+    }
+
+    //! Returns true if the return type accepts the value as it is, without a conversion or a check
+    /** @param return_type the declared return type
+        @param value the value returned
+        @param value_parse_type the parse-time type of the returned expression, if known; each value that a phi gives
+        is a value of the expression
+        @param depth the depth of phis followed
+    */
+    DLLLOCAL bool accepts(const QoreTypeInfo* return_type, QoreIRValue value, const QoreTypeInfo* value_parse_type,
+            int depth = 0) {
+        if (depth > MaxDepth) {
+            return false;
+        }
+        const QoreIRInstruction* producer = getProducer(value);
+        if (producer && producer->opcode == QoreIROpcode::LoadLocal) {
+            const auto* load = static_cast<const QoreIRLocalInstruction*>(producer);
+            const LocalVar* local = load->local;
+            if (!local || load->is_closure || load->is_ref || local->isWeakAssigned()
+                    || QoreTypeInfo::getReferenceTarget(local->getTypeInfo())) {
+                return false;
+            }
+            const QoreIRLocalAssignment& assignment = getLocalAssignment();
+            if (!assignment.complete || assignment.unassigned_loads.count(producer)) {
+                return false;
+            }
+            // the load observes an assignment, which gives the variable a value of its declared type, with the type
+            // arguments of a specialization of generic code
+            QoreIRValueFacts facts;
+            facts.type_info = func.specializeType(local->getTypeInfo());
+            facts.assigned_state = QoreIRAssignedState::Assigned;
+            facts.never_nothing = QoreTypeInfo::hasType(facts.type_info)
+                && !QoreTypeInfo::parseAcceptsReturns(facts.type_info, NT_NOTHING);
+            return !qore_ir_return_needs_coercion(return_type, &facts);
+        }
+        // the reference that a return statement takes to its value before it leaves its blocks is the same value
+        if (producer && producer->opcode == QoreIROpcode::RefSelf && producer->operands.size() == 1) {
+            return accepts(return_type, producer->operands.front(), value_parse_type, depth + 1);
+        }
+        if (producer && producer->opcode == QoreIROpcode::Phi) {
+            const auto* phi = static_cast<const QoreIRPhiInstruction*>(producer);
+            if (phi->incoming.empty()) {
+                return false;
+            }
+            for (const auto& incoming : phi->incoming) {
+                // a cancelled proof proves nothing
+                if (qore_ir_analysis_cancelled(check_count, "IR return value phi proof")
+                        || !accepts(return_type, incoming.value, value_parse_type, depth + 1)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        const QoreIRValueFacts* facts = func.getValueFacts(value);
+        if (!QoreTypeInfo::hasType(value_parse_type) || (facts && QoreTypeInfo::hasType(facts->type_info))) {
+            return !qore_ir_return_needs_coercion(return_type, facts);
+        }
+        QoreIRValueFacts parse_facts;
+        if (facts) {
+            parse_facts = *facts;
+        }
+        parse_facts.type_info = func.specializeType(value_parse_type);
+        return !qore_ir_return_needs_coercion(return_type, &parse_facts);
+    }
+
+private:
+    static constexpr int MaxDepth = 8;
+
+    const QoreIRFunction& func;
+    size_t& check_count;
+    std::unordered_map<uint32_t, const QoreIRInstruction*> producers;
+    bool producers_ready = false;
+    bool producers_cancelled = false;
+    QoreIRLocalAssignment local_assignment;
+    bool local_assignment_ready = false;
+
+    DLLLOCAL const QoreIRInstruction* getProducer(QoreIRValue value) {
+        if (!producers_ready) {
+            producers_ready = true;
+            for (const auto& block : func.blocks) {
+                for (const auto& inst : block->instructions) {
+                    // a cancelled scan leaves the producers unknown, which proves nothing
+                    if (qore_ir_analysis_cancelled(check_count, "IR return value producer scan")) {
+                        producers.clear();
+                        producers_cancelled = true;
+                        return nullptr;
+                    }
+                    if (inst->result.isValid()) {
+                        producers.emplace(inst->result.id, inst.get());
+                    }
+                }
+            }
+        }
+        if (producers_cancelled) {
+            return nullptr;
+        }
+        auto it = producers.find(value.id);
+        return it == producers.end() ? nullptr : it->second;
+    }
+
+    DLLLOCAL const QoreIRLocalAssignment& getLocalAssignment() {
+        if (!local_assignment_ready) {
+            local_assignment_ready = true;
+            // the parameters are assigned when the function is entered
+            std::unordered_set<const void*> initially_assigned;
+            for (const auto& param : func.param_local_vars) {
+                if (param.second) {
+                    initially_assigned.insert(reinterpret_cast<const void*>(param.second));
+                }
+            }
+            local_assignment = qore_ir_analyze_local_assignment(func, initially_assigned);
+        }
+        return local_assignment;
+    }
+};
+
+//! Removes the checks of return values that the function proves unnecessary
+/** The declared return type accepts such a value as it is (see qore_ir_return_needs_coercion() and
+    QoreIRReturnValueProof): it has a value, or the type accepts no value, and its type is accepted without a
+    conversion or a check, so the check can raise no error.  A check made before the return statement leaves its
+    blocks (CheckReturnValue) is removed, and a Return is marked so that native code does not check its value for no
+    value (QoreIRReturnInstruction::value_accepted).
+
+    @return the number of checks removed
+*/
+static size_t qore_ir_elide_proven_return_checks(QoreIRFunction& func, size_t& check_count) {
+    size_t elided = 0;
+    QoreIRReturnValueProof proof(func, check_count);
+    const QoreTypeInfo* return_type = func.specializeType(func.return_type_info);
+    for (const auto& block : func.blocks) {
+        auto& instructions = block->instructions;
+        for (auto it = instructions.begin(); it != instructions.end();) {
+            if (qore_ir_analysis_cancelled(check_count, "IR return value check elision")) {
+                return elided;
+            }
+            QoreIRInstruction* inst = it->get();
+            if (inst->opcode == QoreIROpcode::CheckReturnValue) {
+                if (!inst->operands.empty()
+                        && proof.accepts(func.specializeType(inst->element_type), inst->operands.front(), nullptr)) {
+                    it = instructions.erase(it);
+                    ++elided;
+                    continue;
+                }
+            } else if (inst->opcode == QoreIROpcode::Return) {
+                auto* ret = static_cast<QoreIRReturnInstruction*>(inst);
+                if (ret->has_value && QoreTypeInfo::hasType(return_type)
+                        && proof.accepts(return_type, ret->value, ret->value_parse_type)) {
+                    ret->value_accepted = true;
+                    ++elided;
+                }
+            }
+            ++it;
+        }
+    }
+    return elided;
+}
+
 void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
         bool enable_licm, const QoreIRFoldContext& fold_context) {
     QoreIROptimizationStats local_stats;
@@ -10030,6 +10201,8 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
         local_stats.constant_branches_folded = qore_ir_fold_constant_branches(func);
     }
     local_stats.unreachable_blocks_pruned = qore_ir_prune_unreachable_blocks(func);
+    // after the passes above, which refine the facts of the values
+    local_stats.return_checks_elided = qore_ir_elide_proven_return_checks(func, check_count);
 
     if (stats) {
         *stats = local_stats;

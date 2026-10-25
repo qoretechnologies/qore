@@ -386,19 +386,32 @@ static std::unordered_set<const void*> qore_ir_intersect_assigned(
 
 std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
         const QoreIRFunction& ir_func, const std::unordered_set<const void*>& initially_assigned) {
+    return qore_ir_analyze_local_assignment(ir_func, initially_assigned).unsafe_locals;
+}
+
+QoreIRLocalAssignment qore_ir_analyze_local_assignment(
+        const QoreIRFunction& ir_func, const std::unordered_set<const void*>& initially_assigned) {
+    QoreIRLocalAssignment rv;
     bool cancelled = false;
     std::unordered_set<const void*> all_keys = qore_ir_collect_local_keys(ir_func, &cancelled);
+    // the result of a cancelled analysis: every local is unsafe
+    auto incomplete = [&]() -> QoreIRLocalAssignment {
+        rv.unsafe_locals = all_keys;
+        rv.unassigned_loads.clear();
+        rv.complete = false;
+        return std::move(rv);
+    };
     if (cancelled) {
-        return all_keys;
+        return incomplete();
     }
     if (ir_func.blocks.empty()) {
-        return all_keys;
+        return incomplete();
     }
 
     std::unordered_map<const QoreIRBasicBlock*, size_t> block_index;
     for (size_t i = 0; i < ir_func.blocks.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "IR native local block index setup")) {
-            return all_keys;
+            return incomplete();
         }
         block_index.emplace(ir_func.blocks[i].get(), i);
     }
@@ -406,7 +419,7 @@ std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
     std::vector<std::vector<size_t>> preds(ir_func.blocks.size());
     for (size_t i = 0; i < ir_func.blocks.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "IR native local successor analysis")) {
-            return all_keys;
+            return incomplete();
         }
         bool successor_cancelled = false;
         for (const QoreIRBasicBlock* succ : qore_ir_get_normal_successors(
@@ -417,7 +430,7 @@ std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
             }
         }
         if (successor_cancelled) {
-            return all_keys;
+            return incomplete();
         }
     }
 
@@ -426,7 +439,7 @@ std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
     for (const auto& entry : ir_func.local_var_slots) {
         if (++slot_count % 100 == 0
                 && qore_check_cancel(nullptr, "IR native local transfer slot setup")) {
-            return all_keys;
+            return incomplete();
         }
         slot_to_key.emplace(entry.second, reinterpret_cast<const void*>(entry.first));
     }
@@ -438,7 +451,7 @@ std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
     for (size_t i = 0; i < out_sets.size(); ++i) {
         if (i && !(i % 10)
                 && qore_check_cancel(nullptr, "IR native local lattice initialization")) {
-            return all_keys;
+            return incomplete();
         }
         out_sets[i] = assigned_universe;
     }
@@ -461,6 +474,10 @@ std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
                 if (unsafe) {
                     const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
                     const void* key = qore_ir_get_local_instruction_key(*linst, slot_to_key);
+                    // a load of a local that the analysis does not identify is not known to observe an assignment
+                    if (!key || !assigned.count(key)) {
+                        rv.unassigned_loads.insert(inst);
+                    }
                     if (key && !assigned.count(key)) {
                         unsafe->insert(key);
                     }
@@ -557,25 +574,25 @@ std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
     while (changed) {
         changed = false;
         if (++iterations % 10 == 0 && qore_check_cancel(nullptr, "IR native local assigned-state analysis")) {
-            return all_keys;
+            return incomplete();
         }
         for (size_t i = 0; i < ir_func.blocks.size(); ++i) {
             if (i && !(i % 100)
                     && qore_check_cancel(nullptr, "IR native local assigned-state block transfer")) {
-                return all_keys;
+                return incomplete();
             }
             bool intersect_cancelled = false;
             std::unordered_set<const void*> assigned = i == 0
                 ? initially_assigned : qore_ir_intersect_assigned(out_sets,
                     preds[i], &intersect_cancelled);
             if (intersect_cancelled) {
-                return all_keys;
+                return incomplete();
             }
             if (in_sets[i] != assigned) {
                 in_sets[i] = assigned;
             }
             if (!transfer_block(i, assigned, nullptr)) {
-                return all_keys;
+                return incomplete();
             }
 
             if (out_sets[i] != assigned) {
@@ -589,14 +606,16 @@ std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
     for (size_t i = 0; i < ir_func.blocks.size(); ++i) {
         if (i && !(i % 100)
                 && qore_check_cancel(nullptr, "IR native local unsafe-use classification")) {
-            return all_keys;
+            return incomplete();
         }
         std::unordered_set<const void*> assigned = in_sets[i];
         if (!transfer_block(i, assigned, &unsafe)) {
-            return all_keys;
+            return incomplete();
         }
     }
-    return unsafe;
+    rv.unsafe_locals = std::move(unsafe);
+    rv.complete = true;
+    return rv;
 }
 
 std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(

@@ -80,7 +80,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 408,
+static_assert(QORE_IR_MAX_OPCODE == 409,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -12189,6 +12189,33 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::CheckReturnValue: {
+                // the value of a return statement is checked against the declared return type in the statement, as
+                // the AST interpreter checks it (ReturnStatement::execImpl()), so that the handler of an enclosing
+                // try block catches the error; the check does not change the value, which the caller converts
+                QoreValue value = getIRValue(values, inst->operands.front());
+                const QoreTypeInfo* return_type = qore_substitute_type_params_if_needed(inst->element_type);
+                if (!exactPrimitiveTypeAcceptsValue(return_type, value)) {
+                    QoreValue checked = value.needsRef() ? value.refSelf() : value;
+                    QoreTypeInfo::acceptAssignment(return_type, "<return statement>", checked, xsink);
+                    checked.discard(xsink);
+                    if (xsink && *xsink) {
+                        if (inst->exception_target) {
+                            // the handler is in this frame: only the raising statement's temps are dead there
+                            cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                            prev_block = block;
+                            block = inst->exception_target;
+                            ip = 0;
+                            break;
+                        }
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::UnwindTemps: {
                 // A break or continue leaves this temp scope: release its temps and remove its runtime mark.
                 // Unlike DiscardTemps this runs on the jump's path only; the scope stays open in the IR for the
@@ -15997,6 +16024,30 @@ load_local_done:
                 auto* ret = static_cast<QoreIRReturnInstruction*>(inst);
                 if (ret->has_value) {
                     QoreValue val = getIRValue(values, ret->value);
+                    // a return statement that returns no value from code whose return type requires one raises the
+                    // error of the return statement, as the AST interpreter checks every return statement
+                    // (ReturnStatement::execImpl()), instead of the "block missing return statement" error that the
+                    // caller raises for code without one; a return statement that leaves something whose behaviour
+                    // depends on the error is checked before it leaves it (CheckReturnValue)
+                    if (val.isNothing() && QoreTypeInfo::hasType(func.return_type_info)
+                            && !QoreTypeInfo::parseAcceptsReturns(func.return_type_info, NT_NOTHING)) {
+                        QoreValue no_value;
+                        QoreTypeInfo::acceptAssignment(qore_substitute_type_params_if_needed(func.return_type_info),
+                            "<return statement>", no_value, xsink);
+                        no_value.discard(xsink);
+                        if (xsink && *xsink) {
+                            if (inst->exception_target) {
+                                cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                                prev_block = block;
+                                block = inst->exception_target;
+                                ip = 0;
+                                break;
+                            }
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                    }
                     bool owned_return_slot = removeCleanupEntry(cleanup, ret->value.id);
                     traceIRRef(inst, "return.input", ret->value.id, val,
                         owned_return_slot ? "owned" : "borrowed");

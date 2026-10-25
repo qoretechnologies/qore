@@ -415,6 +415,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::DiscardTemps: return "discard.temps";
         case QoreIROpcode::DiscardTempsKeep: return "discard.temps.keep";
         case QoreIROpcode::UnwindTemps: return "unwind.temps";
+        case QoreIROpcode::CheckReturnValue: return "check.return";
         case QoreIROpcode::PushTempMark: return "push.temp.mark";
         case QoreIROpcode::CallAOTHelper: return "call.aot.helper";
         case QoreIROpcode::RefForeachInit: return "ref.foreach.init";

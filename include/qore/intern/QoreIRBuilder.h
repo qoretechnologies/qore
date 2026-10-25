@@ -337,6 +337,14 @@ public:
     QoreIRInstruction* createDebugBlock(const QoreProgramLocation* loc = nullptr);
     //! Emit a pending-exception check after cleanup code that can run destructors.
     QoreIRInstruction* createCheckException(const QoreProgramLocation* loc = nullptr);
+    //! Emit the check of the value of a return statement against the declared return type (CheckReturnValue)
+    /** @param value the value returned
+        @param return_type the declared return type
+        @param exception_target the handler of the error in this frame, if any
+        @param loc the location of the return statement
+    */
+    QoreIRInstruction* createCheckReturnValue(QoreIRValue value, const QoreTypeInfo* return_type,
+        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc);
 
     //! Emit a call to an AOT-emitted helper function by LLVM symbol name.
     //! Only appears in AOT-compiled IR produced by the init-expression

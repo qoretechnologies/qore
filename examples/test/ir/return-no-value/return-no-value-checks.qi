@@ -1,0 +1,329 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks of the error raised when code whose return type requires a value returns no value, which every execution
+# mode must raise as the AST interpreter does; included by return-no-value-worker.q, so that the checks run in the
+# execution mode of the worker or in the program that qcc compiles from it, and by ReturnNoValueChecks.qm for the
+# compiled module
+#
+# the AST interpreter checks the value of every return statement against the declared return type, so a return
+# statement that returns no value raises "<return statement> expects type ...", and code that ends without a return
+# statement raises "<block return> ... block missing return statement"; each check returns the error and its
+# description
+
+public namespace ReturnNoValueChecks {
+    #! a hash type for a declared return type
+    public hashdecl ReturnInfo {
+        int a;
+    }
+
+    #! a class whose getters return members that have no value
+    public class Holder {
+        public {
+            *int n;
+            *float f;
+            *bool b;
+            *hash<auto> h;
+            auto l;
+        }
+
+        int getN() {
+            return n;
+        }
+
+        float getF() {
+            return f;
+        }
+
+        bool getB() {
+            return b;
+        }
+
+        hash<auto> getH() {
+            return h;
+        }
+
+        #! a type that converts no value: the getter returns an empty list
+        softlist<string> getL() {
+            return l;
+        }
+
+        #! calls the getters of this object, which compiled code can read directly
+        string selfGetters() {
+            list<string> rv = ();
+            push rv, check(int sub () { return getN(); });
+            push rv, check(float sub () { return getF(); });
+            push rv, check(bool sub () { return getB(); });
+            push rv, check(hash<auto> sub () { return getH(); });
+            push rv, check(softlist<string> sub () { return getL(); });
+            return rv.join(" | ");
+        }
+    }
+
+    #! a final class, whose getters compiled code can read directly instead of calling them
+    public final class FinalHolder {
+        public {
+            *int n;
+        }
+
+        int getN() {
+            return n;
+        }
+
+        int setN(*int v) {
+            n = v;
+            return n;
+        }
+    }
+
+    #! a class whose destructor throws an exception
+    public class DestructorThrower {
+        destructor() {
+            throw "DESTRUCTOR-ERROR", "destructor";
+        }
+    }
+
+    #! returns the errors raised by the call, in their order, or "no error" and the value returned
+    string sub check_errors(code<auto()> call) {
+        try {
+            auto rv = call();
+            return sprintf("no error: %y", rv);
+        } catch (hash<ExceptionInfo> ex) {
+            list<string> errs = ();
+            *hash<ExceptionInfo> e = ex;
+            while (e) {
+                push errs, e.err;
+                e = e.next;
+            }
+            return errs.join(",");
+        }
+    }
+
+    #! returns the error raised by the call and its description, or "no error" and the value returned
+    string sub check(code<auto()> call) {
+        try {
+            auto rv = call();
+            return sprintf("no error: %y", rv);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + ": " + ex.desc;
+        }
+    }
+
+    int sub return_unassigned(int n) {
+        int rv;
+        for (int i = 0; i < n; ++i) {
+            rv = i;
+        }
+        return rv;
+    }
+
+    int sub return_no_value_expression(*int v) {
+        return v;
+    }
+
+    int sub fall_off_end(int n) {
+        if (n > 0) {
+            return 1;
+        }
+    }
+
+    hash<auto> sub return_unassigned_hash(int n) {
+        hash<auto> rv;
+        if (n) {
+            rv = {};
+        }
+        return rv;
+    }
+
+    hash<ReturnInfo> sub return_unassigned_hashdecl(int n) {
+        hash<ReturnInfo> rv;
+        if (n) {
+            rv = <ReturnInfo>{"a": n};
+        }
+        return rv;
+    }
+
+    float sub return_unassigned_float(int n) {
+        float rv;
+        if (n) {
+            rv = n;
+        }
+        return rv;
+    }
+
+    bool sub return_unassigned_bool(int n) {
+        bool rv;
+        if (n) {
+            rv = True;
+        }
+        return rv;
+    }
+
+    softint sub return_unassigned_softint(int n) {
+        *int rv;
+        if (n) {
+            rv = n;
+        }
+        return rv;
+    }
+
+    #! the error of a return statement in a try block is caught by its catch block
+    int sub return_in_try(int n) {
+        int rv;
+        try {
+            if (n) {
+                rv = n;
+            }
+            return rv;
+        } catch (hash<ExceptionInfo> ex) {
+            return 7;
+        }
+    }
+
+    #! the error for a value of another type is caught as well
+    int sub return_value_in_try(auto v) {
+        try {
+            return v;
+        } catch (hash<ExceptionInfo> ex) {
+            return 8;
+        }
+    }
+
+    #! a value that the return type converts raises no error in the try block
+    softint sub return_converted_in_try(auto v) {
+        try {
+            return v;
+        } catch (hash<ExceptionInfo> ex) {
+            return 9;
+        }
+    }
+
+    #! the error of a return statement makes its block exit with an exception: the on_error handlers run
+    int sub return_with_handlers(*int v, reference<string> log) {
+        on_error {
+            log += "error";
+        }
+        on_success {
+            log += "success";
+        }
+        return v;
+    }
+
+    #! returns the handlers that ran and the error of the call
+    string sub return_handlers(*int v) {
+        string log = "";
+        try {
+            return_with_handlers(v, \log);
+        } catch (hash<ExceptionInfo> ex) {
+            log += ":" + ex.err;
+        }
+        return log;
+    }
+
+    #! a type that converts no value: the return statement returns an empty list
+    softlist<string> sub return_unassigned_softlist(int n) {
+        auto rv;
+        if (n) {
+            rv = "x";
+        }
+        return rv;
+    }
+
+    #! the error of the return statement is raised before its block destroys the object of its local variable, whose
+    #! destructor throws an exception, which follows the error
+    int sub return_with_destructor_error(*int v) {
+        DestructorThrower t();
+        return v;
+    }
+
+    #! an element of a list of a type that requires a value has no value when the index is out of range
+    int sub return_list_element(list<int> l, int i) {
+        return l[i];
+    }
+
+    #! a key of a hash of a type that requires a value has no value when the hash does not have the key
+    int sub return_hash_key(hash<string, int> h) {
+        return h.answer;
+    }
+
+    #! a return type that accepts no value: an index out of range returns no value
+    *int sub return_optional_list_element(list<int> l, int i) {
+        return l[i];
+    }
+
+    #! the size of a list always has a value
+    int sub return_list_size(list<int> l) {
+        return l.size();
+    }
+
+    #! a method of a string whose return type requires a value always returns one
+    bool sub return_contains(string s, string p) {
+        return s.contains(p);
+    }
+
+    #! returns the value matched, or no value, which the return type accepts
+    *string sub optional_value(string s) {
+        *list<*string> m = (s =~ x/^(v)/);
+        return m ? m[0] : NOTHING;
+    }
+
+    #! code whose return type requires a value calls code whose return type accepts no value, which returns none;
+    #! the code called is compiled while this code runs, and must keep its own return type
+    string sub typed_caller(string s) {
+        return optional_value(s) ?? "none";
+    }
+
+    #! returns the results of every check: name -> result
+    public hash<string, string> sub get_results() {
+        Holder holder();
+        return {
+            "return-unassigned": check(int sub () { return return_unassigned(0); }),
+            "return-no-value-expression": check(int sub () { return return_no_value_expression(); }),
+            "fall-off-end": check(int sub () { return fall_off_end(0); }),
+            "return-unassigned-hash": check(hash<auto> sub () { return return_unassigned_hash(0); }),
+            "return-unassigned-hashdecl": check(hash<ReturnInfo> sub () { return return_unassigned_hashdecl(0); }),
+            "return-unassigned-float": check(float sub () { return return_unassigned_float(0); }),
+            "return-unassigned-bool": check(bool sub () { return return_unassigned_bool(0); }),
+            "return-unassigned-softint": check(softint sub () { return return_unassigned_softint(0); }),
+            "closure": check(int sub () {
+                code c = int sub () {
+                    int rv;
+                    return rv;
+                };
+                return c();
+            }),
+            "object-getter-int": check(int sub () { return holder.getN(); }),
+            "object-getter-float": check(float sub () { return holder.getF(); }),
+            "object-getter-bool": check(bool sub () { return holder.getB(); }),
+            "object-getter-hash": check(hash<auto> sub () { return holder.getH(); }),
+            "object-getter-softlist": check(softlist<string> sub () { return holder.getL(); }),
+            "final-getter": check(int sub () {
+                FinalHolder f();
+                return f.getN();
+            }),
+            "final-set-get": check(int sub () {
+                FinalHolder f();
+                return f.setN();
+            }),
+            "return-unassigned-softlist": check(softlist<string> sub () { return return_unassigned_softlist(0); }),
+            "self-getters": holder.selfGetters(),
+            "return-value": check(int sub () { return return_unassigned(3); }),
+            "return-in-try": check(int sub () { return return_in_try(0); }),
+            "return-value-in-try": check(int sub () { return return_value_in_try("str"); }),
+            "return-converted-in-try": check(softint sub () { return return_converted_in_try("12"); }),
+            "return-handlers": return_handlers(),
+            "return-handlers-value": return_handlers(1),
+            "no-value-accepted": check(string sub () { return typed_caller("x"); }),
+            "return-destructor-error": check_errors(int sub () { return return_with_destructor_error(); }),
+            "return-destructor-value": check_errors(int sub () { return return_with_destructor_error(1); }),
+            "list-element-missing": check(int sub () { return return_list_element((1, 2), 5); }),
+            # the caller does not check the value again
+            "list-element-missing-untyped-caller": check(auto sub () { return return_list_element((1, 2), 5); }),
+            "hash-key-missing-untyped-caller": check(auto sub () { return return_hash_key({"other": 1}); }),
+            "list-element": check(int sub () { return return_list_element((1, 2), 1); }),
+            "hash-key-missing": check(int sub () { return return_hash_key({"other": 1}); }),
+            "optional-list-element-missing": check(*int sub () { return return_optional_list_element((1, 2), 5); }),
+            "list-size": check(int sub () { return return_list_size((1, 2, 3)); }),
+            "string-contains": check(bool sub () { return return_contains("abc", "b"); }),
+        };
+    }
+}

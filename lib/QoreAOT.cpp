@@ -1361,6 +1361,9 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             if (info.never_returns_nothing) {
                 entry.flags |= QORE_AOT_FAST_ENTRY_NEVER_NOTHING;
             }
+            if (info.return_rejects_nothing) {
+                entry.flags |= QORE_AOT_FAST_ENTRY_RETURN_REJECTS_NOTHING;
+            }
             if (info.implicit_self_method) {
                 entry.flags |= QORE_AOT_FAST_ENTRY_IMPLICIT_SELF;
             }
@@ -2735,7 +2738,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         return -1;
     }
     if (q_env_is_set("QORE_IR_OPT_STATS")) {
-        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu\n",
+        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu return-checks-elided=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
             optimization_stats.scalar_loads_forwarded,
@@ -2757,7 +2760,8 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
             optimization_stats.in_place_string_appends,
             optimization_stats.pure_calls_folded,
             optimization_stats.pure_calls_commoned,
-            optimization_stats.redundant_phis_eliminated);
+            optimization_stats.redundant_phis_eliminated,
+            optimization_stats.return_checks_elided);
     }
 
     return 0;
@@ -13822,6 +13826,10 @@ bool qore_ir_resolve_batch_function_summaries(
         AOTCollectionOpInfo collection_op;
         if (pass_through_return && qore_aot_get_collection_op(*func, *sig, collection_op)) {
             callee_it->second.collection_op = std::move(collection_op);
+            // an element or a key that does not exist has no value, which such a return type rejects
+            const QoreTypeInfo* return_type = func->specializeType(sig->getReturnTypeInfo());
+            callee_it->second.return_rejects_nothing = QoreTypeInfo::hasType(return_type)
+                && !QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING);
         }
         AOTAggregateReturnInfo aggregate_return;
         if (qore_aot_get_aggregate_return(*func, *sig, aggregate_return)
@@ -16057,6 +16065,8 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         : info.may_invalidate_external_caches;
     info.never_returns_nothing =
         rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_NEVER_NOTHING;
+    info.return_rejects_nothing =
+        rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_RETURN_REJECTS_NOTHING;
     if (rec.fast_return_kind > static_cast<uint8_t>(BatchCalleeReturnKind::NativeBool)) {
         return false;
     }

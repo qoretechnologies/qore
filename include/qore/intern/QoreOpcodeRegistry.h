@@ -57,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[409] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[410] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -467,12 +467,13 @@ constexpr OpcodeInfo OPCODE_REGISTRY[409] = {
     { "ListIntSprintfJoin"             , false, true , false,  4, "Format exact list<int> and join in one pass", false, true , "QoreDotEvalOperatorNode", true , false, true , false, false }, // 406
     { "DiscardTempsKeep"               , true , false, false,  1, "Drain cleanup back to the matching PushTempMark, keeping one value", true , true , "ParseNode", true , false, false, false, false }, // 407
     { "UnwindTemps"                    , false, false, false,  0, "Release the temps of a scope that a break or continue leaves", false, false, "ParseNode", false, false, false, false, false }, // 408
+    { "CheckReturnValue"               , false, false, false,  1, "Check the value of a return statement against the declared return type", false, true , "ReturnStatement", false, false, false, false, false }, // 409
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 409,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 409"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 410,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 410"
 );
 
 //! ============================================================================

@@ -5515,9 +5515,11 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         func->source_dpgm_addr = const_cast<void*>(static_cast<const void*>(
                 qore_program_private::get(*pgm)->getAttachedDebugProgramAddr()));
     }
-    // Store the return type info for type coercion in Return opcode lowering
-    func->return_type_info = qore_substitute_type_params_if_needed(getReturnTypeInfo(), specialization_receiver_type_info,
-        specialization_type_param_instantiation);
+    // Store the return type info for type coercion in Return opcode lowering; the declared return type of this
+    // variant, not the thread's (::getReturnTypeInfo() gives the return type of the code running when the function
+    // is lowered, which lowering at its first call makes the caller's)
+    func->return_type_info = qore_substitute_type_params_if_needed(signature.getReturnTypeInfo(),
+        specialization_receiver_type_info, specialization_type_param_instantiation);
     func->specialization_receiver_type_info = specialization_receiver_type_info;
     if (specialization_type_param_instantiation && !specialization_type_param_instantiation->empty()) {
         func->specialization_type_param_instantiation = *specialization_type_param_instantiation;
@@ -5737,7 +5739,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         return nullptr;
     }
     if (q_env_is_set("QORE_IR_OPT_STATS")) {
-        fprintf(stderr, "IR-OPT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu typed-foreach=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu\n",
+        fprintf(stderr, "IR-OPT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu typed-foreach=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu return-checks-elided=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
             optimization_stats.scalar_loads_forwarded,
@@ -5760,7 +5762,8 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
             optimization_stats.in_place_string_appends,
             optimization_stats.pure_calls_folded,
             optimization_stats.pure_calls_commoned,
-            optimization_stats.redundant_phis_eliminated);
+            optimization_stats.redundant_phis_eliminated,
+            optimization_stats.return_checks_elided);
     }
 
     if (q_env_is_set("QORE_IR_CONTEXT_STATS")) {

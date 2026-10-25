@@ -295,10 +295,24 @@ void qore_rt_deopt(void* deopt_counter_ptr);
 //! Check if a NaN-boxed QoreValue is not NOTHING; returns 1 if not NOTHING, 0 otherwise
 int64_t qore_rt_guard_not_nothing(uint64_t val);
 
-//! Raise the runtime type error required when a non-NOTHING return yields NOTHING.
-void qore_rt_raise_return_nothing(ExceptionSink* xsink);
-
 class QoreTypeInfo;
+
+//! Raises the error of the AST interpreter for a return statement that returns no value from code with the given
+//! return type: "<return statement> expects type ..."; nothing is raised for a type that accepts no value or converts
+//! it (such as softlist), whose conversion the caller makes
+void qore_rt_raise_return_statement_nothing(const QoreTypeInfo* ti, ExceptionSink* xsink);
+
+//! The AOT counterpart of qore_rt_raise_return_statement_nothing(), with the return type identified by its type path
+void qore_rt_raise_return_statement_nothing_by_type_path_aot(QoreAOTContext* ctx, const char* type_path,
+        ExceptionSink* xsink);
+
+//! Checks the value of a return statement against the declared return type as the AST interpreter checks it in the
+//! return statement, without changing the value (QoreIROpcode::CheckReturnValue)
+void qore_rt_check_return_value(const QoreTypeInfo* ti, uint64_t value, ExceptionSink* xsink);
+
+//! The AOT counterpart of qore_rt_check_return_value(), with the return type identified by its type path
+void qore_rt_check_return_value_by_type_path_aot(QoreAOTContext* ctx, const char* type_path, uint64_t value,
+        ExceptionSink* xsink);
 
 //! Applies the declared return type to a returned value in a fast entry
 /** @return the converted value, which is also stored in @p cleanup when given
@@ -804,18 +818,19 @@ uint64_t qore_rt_load_constant_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSi
 //! Load a member from the current runtime object; returns NaN-boxed QoreValue.
 uint64_t qore_rt_load_self_member(const char* member_name, ExceptionSink* xsink);
 
-//! Load an exact getter member from self and enforce its declared return contract.
-uint64_t qore_rt_load_self_getter_checked(const char* member_name, int32_t rejects_nothing,
-        ExceptionSink* xsink);
+//! Load the member of self that a getter whose return type requires a value returns; no value is given to the return
+//! type as the getter's return statement gives it, which raises its error for a type that does not accept it, with the
+//! return type identified by its type path
+uint64_t qore_rt_load_self_getter_typed_aot(QoreAOTContext* ctx, const char* member_name,
+        const char* return_type_path, ExceptionSink* xsink);
 
-//! Load an exact required int getter from self, convert it to native form, and release the owned value.
-int64_t qore_rt_load_self_getter_int(const char* member_name, ExceptionSink* xsink);
-
-//! Load an exact required float getter from self, convert it to native form, and release the owned value.
-double qore_rt_load_self_getter_float(const char* member_name, ExceptionSink* xsink);
-
-//! Load an exact required bool getter from self, convert it to native form, and release the owned value.
-int64_t qore_rt_load_self_getter_bool(const char* member_name, ExceptionSink* xsink);
+//! Native int, float and bool variants of qore_rt_load_self_getter_typed_aot()
+int64_t qore_rt_load_self_getter_int_typed_aot(QoreAOTContext* ctx, const char* member_name,
+        const char* return_type_path, ExceptionSink* xsink);
+double qore_rt_load_self_getter_float_typed_aot(QoreAOTContext* ctx, const char* member_name,
+        const char* return_type_path, ExceptionSink* xsink);
+int64_t qore_rt_load_self_getter_bool_typed_aot(QoreAOTContext* ctx, const char* member_name,
+        const char* return_type_path, ExceptionSink* xsink);
 
 //! Load a member for use as a method-call base; preserves raw weak-reference results.
 uint64_t qore_rt_load_self_member_for_call(const char* member_name, ExceptionSink* xsink);
@@ -1798,40 +1813,44 @@ uint64_t qore_rt_dot_eval_object_method_direct_aot(QoreAOTContext* ctx, int32_t 
 uint64_t qore_rt_load_object_getter_aot(QoreAOTContext* ctx, int32_t slot,
     uint64_t base_bits, const char* member_name, ExceptionSink* xsink);
 
-//! Getter variant carrying the compile-time declared-return NOTHING contract.
+//! Getter variant carrying the compile-time declared-return NOTHING contract: no value is given to the return type
+//! identified by \a return_type_path as the getter's return statement gives it (see the definition)
 uint64_t qore_rt_load_object_getter_checked_aot(QoreAOTContext* ctx, int32_t slot,
-    uint64_t base_bits, const char* member_name, int32_t rejects_nothing,
+    uint64_t base_bits, const char* member_name, int32_t rejects_nothing, const char* return_type_path,
     ExceptionSink* xsink);
 
-//! Native scalar variants of exact-class object getter lowering.
+//! Native scalar variants of exact-class object getter lowering; no value is given to the return type as by
+//! qore_rt_load_object_getter_checked_aot()
 int64_t qore_rt_load_object_getter_int_aot(QoreAOTContext* ctx, int32_t slot,
-    uint64_t base_bits, const char* member_name, ExceptionSink* xsink);
+    uint64_t base_bits, const char* member_name, const char* return_type_path, ExceptionSink* xsink);
 double qore_rt_load_object_getter_float_aot(QoreAOTContext* ctx, int32_t slot,
-    uint64_t base_bits, const char* member_name, ExceptionSink* xsink);
+    uint64_t base_bits, const char* member_name, const char* return_type_path, ExceptionSink* xsink);
 int64_t qore_rt_load_object_getter_bool_aot(QoreAOTContext* ctx, int32_t slot,
-    uint64_t base_bits, const char* member_name, ExceptionSink* xsink);
+    uint64_t base_bits, const char* member_name, const char* return_type_path, ExceptionSink* xsink);
 
-//! Assign an exact-class object member from one argument and return its resulting value.
+//! Assign an exact-class object member from one argument and return its resulting value; no value is given to the
+//! return type as by qore_rt_load_object_getter_checked_aot()
 uint64_t qore_rt_object_member_set_get_aot(QoreAOTContext* ctx, int32_t slot,
         uint64_t base_bits, uint64_t* args, int nargs, const char* member_name,
-        int32_t value_param, int32_t rejects_nothing, ExceptionSink* xsink);
+        int32_t value_param, int32_t rejects_nothing, const char* return_type_path, ExceptionSink* xsink);
 
 //! Native scalar variants of exact-class object member assignment-return lowering.
 int64_t qore_rt_object_member_set_get_int_aot(QoreAOTContext* ctx,
         int32_t slot, uint64_t base_bits, uint64_t* args, int nargs,
-        const char* member_name, int32_t value_param, ExceptionSink* xsink);
+        const char* member_name, int32_t value_param, const char* return_type_path, ExceptionSink* xsink);
 double qore_rt_object_member_set_get_float_aot(QoreAOTContext* ctx,
         int32_t slot, uint64_t base_bits, uint64_t* args, int nargs,
-        const char* member_name, int32_t value_param, ExceptionSink* xsink);
+        const char* member_name, int32_t value_param, const char* return_type_path, ExceptionSink* xsink);
 int64_t qore_rt_object_member_set_get_bool_aot(QoreAOTContext* ctx,
         int32_t slot, uint64_t base_bits, uint64_t* args, int nargs,
-        const char* member_name, int32_t value_param, ExceptionSink* xsink);
+        const char* member_name, int32_t value_param, const char* return_type_path, ExceptionSink* xsink);
 
-//! Apply a compound operation to an exact-class object member and return its resulting value.
+//! Apply a compound operation to an exact-class object member and return its resulting value; no value is given to
+//! the return type as by qore_rt_load_object_getter_checked_aot()
 uint64_t qore_rt_object_member_compound_get_aot(QoreAOTContext* ctx,
         int32_t slot, uint64_t base_bits, uint64_t* args, int nargs,
         const char* member_name, int32_t value_param, int32_t compound_op,
-        int32_t rejects_nothing, ExceptionSink* xsink);
+        int32_t rejects_nothing, const char* return_type_path, ExceptionSink* xsink);
 
 //! AOT variant that consumes caller-owned temporary argument cleanup slots.
 uint64_t qore_rt_dot_eval_method_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,

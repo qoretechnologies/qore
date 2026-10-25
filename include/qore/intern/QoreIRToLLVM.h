@@ -390,6 +390,12 @@ private:
     DLLLOCAL llvm::Value* loadLocalCacheValue(const void* key, const LocalCacheSlot& slot, llvm::Module& module,
             llvm::IRBuilder<>* load_builder = nullptr, const char* name = "");
 
+    //! Emits the call that raises the error of a return statement that returns no value
+    /** The error is the one the AST interpreter raises for such a return statement ("<return statement> expects
+        type ..."), for the given declared return type.
+    */
+    DLLLOCAL void emitReturnStatementNothingError(llvm::Module& module, const QoreTypeInfo* return_type);
+
     // Track LocalVars that underwent COW in HashKeyStore/ListIndexStore
     // These need fresh reload from runtime stack on next LoadLocal to get updated value
     std::unordered_set<LocalVar*> cow_modified_locals;
@@ -1070,6 +1076,10 @@ private:
     //! Converts a boxed value to a native int: an integer in the boxed value inline, any other value with
     //! qore_rt_to_int()
     llvm::Value* emitBoxedToIntInline(llvm::Value* val);
+    //! Returns the type path argument of the return type of a method that AOT-compiled code reads a member for
+    //! directly (a getter, an assignment or a compound assignment that returns the member), or a null pointer
+    //! when the return type accepts no value
+    llvm::Value* getAOTGetterReturnTypePathArg(const AbstractQoreFunctionVariant* variant, bool rejects_nothing);
 
     // Preserve timeout's relative-date-to-milliseconds assignment semantics.
     llvm::Value* ensureTimeoutTypeInline(llvm::Value* val, uint32_t value_id);
@@ -1783,16 +1793,8 @@ private:
             llvm::Module& module, std::string& error);
 };
 
-//! Returns true if a returned value with the given facts must be converted or checked by the declared return type
-DLLLOCAL bool qore_ir_return_needs_coercion(const QoreTypeInfo* return_type, const QoreIRValueFacts* value_facts);
-
-//! Returns true if a returned value with the given facts may need a conversion or type check by the declared return
-//! type, apart from the rejection of a NOTHING value
-DLLLOCAL bool qore_ir_return_value_needs_conversion(const QoreTypeInfo* return_type,
-    const QoreIRValueFacts* value_facts);
-
-//! Returns true if the declared return type converts or rejects a missing return value
-DLLLOCAL bool qore_ir_nothing_return_needs_filter(const QoreTypeInfo* return_type);
+// qore_ir_return_needs_coercion(), qore_ir_return_value_needs_conversion() and
+// qore_ir_nothing_return_needs_filter() are declared in QoreIRAnalysis.h
 
 //! Returns true if the declared return type leaves every value returned by the function unchanged
 /** A call-site summary that substitutes the callee's returned value is only valid in this case

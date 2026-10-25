@@ -494,6 +494,9 @@ struct BatchCalleeInfo {
     bool may_modify_runtime_locals = true; //!< Callee can change unknown caller-visible runtime local slots
     std::vector<const void*> modified_runtime_locals; //!< Exact modified locals when effects are known
     bool never_returns_nothing = false; //!< Every normal return has an assigned non-NOTHING value
+    //! The declared return type rejects NOTHING, so a return statement that returns none raises an error; set with
+    //! a summary whose value can be NOTHING (collection_op)
+    bool return_rejects_nothing = false;
     BatchCalleeReturnKind return_kind = BatchCalleeReturnKind::Boxed; //!< Fast-entry return ABI
     BatchCalleeBoxedReturnKind boxed_return_kind = BatchCalleeBoxedReturnKind::Unknown;
         //!< Exact body-proven boxed runtime kind

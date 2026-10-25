@@ -449,6 +449,8 @@ constexpr uint32_t QORE_AOT_FAST_ENTRY_PRECISE_LOCAL_EFFECTS = 0x0020;
 constexpr uint32_t QORE_AOT_FAST_ENTRY_MAY_MODIFY_RUNTIME_LOCALS = 0x0040;
 //! Entry is valid only for the serialized generic specialization dispatch key.
 constexpr uint32_t QORE_AOT_FAST_ENTRY_GENERIC_SPECIALIZATION = 0x0080;
+//! The declared return type rejects NOTHING: a summary whose value can be NOTHING cannot take the place of a call
+constexpr uint32_t QORE_AOT_FAST_ENTRY_RETURN_REJECTS_NOTHING = 0x0100;
 
 //! One record in the optional SYMBOL_INDEX section.
 struct QoreAOTSymbolIndexRecord {
