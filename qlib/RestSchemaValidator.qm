@@ -82,6 +82,11 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - the type of an object schema is the type of a request value, which has no field for a \c readOnly property;
+      added @ref RestSchemaValidator::AbstractRestSchemaValidator::getResponseDataType() "getResponseDataType()" and
+      @ref RestSchemaValidator::AbstractRestSchemaValidator::getResponseFieldFromSchema() "getResponseFieldFromSchema()",
+      which give the type of a response value: it has the read-only properties, and an OpenAPI one has no
+      \c writeOnly property
     - the type of a field for a scalar property enforces and describes the constraints of the property's schema, such
       as \c maxLength, \c maximum, \c pattern and \c enum, as the data type of the schema does
     - added @ref RestSchemaValidator::AbstractRestSchemaObject::getSchemaIdentity() "getSchemaIdentity()", the
@@ -2030,9 +2035,69 @@ public namespace RestSchemaValidator {
         }
 
         #! Sets fields of a schema object
+        /** The type of a schema is the type of the value of a request, so it has no field for a \c readOnly
+            property, which a request cannot give a value for: a response may have one, and a request that gives one
+            is refused.  The field of such a property is built as any other and given to omitRequestField() instead
+            of the type, so that a producer whose responses have them can give them to its response types; see
+            @ref RestSchemaValidator::AbstractRestSchemaValidator::getResponseDataType() "getResponseDataType()".
+        */
         private getSchemaObjectFields(HashDataType t, string path, auto def_body) {
-            map t.addField($1.value.getField(path + "/" + $1.key, $1.key, NOTHING,
-                required{$1.key} ?? False, NOTHING, def_body{$1.key})), properties.pairIterator();
+            *string previous;
+            foreach hash<auto> i in (properties.pairIterator()) {
+                AbstractDataField field = i.value.getField(path + "/" + i.key, i.key, NOTHING,
+                    required{i.key} ?? False, NOTHING, def_body{i.key});
+                if (i.value.readOnly) {
+                    omitRequestField(t, field, previous);
+                } else {
+                    t.addField(field);
+                }
+                previous = i.key;
+            }
+        }
+
+        #! Called with the field of each \c readOnly property, which the type of this schema has no field for
+        /** The default implementation does nothing; a producer whose response types have these fields records them
+            in the type.
+
+            @param t the type being built
+            @param field the field of the property
+            @param after the name of the property declared before it, if any
+        */
+        private omitRequestField(HashDataType t, AbstractDataField field, *string after) {
+        }
+
+        #! Returns the fields of the response type of an object type, in the order of the schema's properties
+        /** @param fields the fields of the request type, in order
+            @param response_fields the fields that only responses have, in the order of their declaration: each is a
+            hash with the \c field and the name of the property declared before it (\c after), if any
+            @param omit the names of the fields that responses do not have
+
+            @return the fields of the response type: the fields of the request type that responses have, and each
+            field that only responses have after the property declared before it
+
+            @since RestSchemaValidator 2.5
+        */
+        static list<AbstractDataField> getResponseFieldList(*hash<string, AbstractDataField> fields,
+                *list<hash<auto>> response_fields, *hash<string, bool> omit) {
+            list<string> order = fields ? keys fields : ();
+            hash<string, AbstractDataField> all = fields ?? {};
+            foreach hash<auto> i in (response_fields) {
+                AbstractDataField field = i.field;
+                # the position of the property declared before it, or -1 to put it first
+                int pos = -1;
+                if (exists i.after) {
+                    pos = order.size() - 1;
+                    for (int j = 0; j < order.size(); ++j) {
+                        if (order[j] == i.after) {
+                            pos = j;
+                            break;
+                        }
+                    }
+                }
+                splice order, pos + 1, 0, field.getName();
+                all{field.getName()} = field;
+            }
+            return map all{$1}, order, !omit{$1};
         }
 
         #! Returns a field definition from the schema parameter
@@ -3144,6 +3209,45 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
         */
         abstract AbstractDataField getFieldFromSchema(string name, *string desc, AbstractSchemaObject schema,
             bool required = True, *object rest);
+
+        #! Returns the type of a response value for a type that the schema built
+        /** The types a schema builds are the types of request values, which have no field for a \c readOnly
+            property; a response has them, and has no \c writeOnly property.  The default implementation returns
+            \a type, for a schema without such properties.
+
+            @param type a type that the schema built; it is never modified
+
+            @return the type of a response value
+
+            @since RestSchemaValidator 2.5
+        */
+        AbstractDataProviderType getResponseDataType(AbstractDataProviderType type) {
+            return type;
+        }
+
+        #! Returns a data field for a response value from a schema object
+        /** @param name the name of the field
+            @param desc optional description for the field
+            @param schema the schema object
+            @param required if the field is required
+            @param rest optional REST client for URL resolution
+
+            @return the data field definition, whose type is the type of a response value; see getResponseDataType()
+
+            @since RestSchemaValidator 2.5
+        */
+        AbstractDataField getResponseFieldFromSchema(string name, *string desc, AbstractSchemaObject schema,
+                bool required = True, *object rest) {
+            AbstractDataField field = getFieldFromSchema(name, desc, schema, required, rest);
+            AbstractDataProviderType type = field.getType();
+            AbstractDataProviderType response_type = getResponseDataType(type);
+            if (response_type === type) {
+                return field;
+            }
+            QoreDataField rv = cast<QoreDataField>(field.copy());
+            rv.updateFieldType(response_type);
+            return rv;
+        }
 
         #! Returns a field for header fields
         /** @param name the name of the field

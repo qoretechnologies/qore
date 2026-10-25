@@ -3363,75 +3363,39 @@
           "source": "List of items to charge for. You can charge for items that you've added to your catalog by passing the Paddle ID of an existing price entity, or you can charge for non-catalog items by passing a price object.\n\nNon-catalog items can be for existing products, or you can pass a product object as part of your price to charge for a non-catalog product.",
           "message": "Список позицій для списання коштів. Ви можете стягувати плату за позиції, додані до вашого каталогу, передавши Paddle ID наявної сутності ціни, або ви можете стягувати плату за позиції поза каталогом, передавши об’єкт ціни.\n\nПозиції поза каталогом можуть стосуватися наявних продуктів, або ви можете передати об’єкт продукту як частину вашої ціни для стягнення плати за продукт поза каталогом."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.display_name": {
           "source": "Price ID",
           "message": "ID ціни"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.short_desc": {
           "source": "Paddle ID of an existing catalog price to add to this transaction, prefixed…",
           "message": "Paddle ID існуючої ціни каталогу, яку потрібно додати до цієї транзакції, з префіксом…"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.desc": {
           "source": "Paddle ID of an existing catalog price to add to this transaction, prefixed with `pri_`.",
           "message": "Paddle ID існуючої ціни каталогу, яку потрібно додати до цієї транзакції, з префіксом `pri_`."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "Пропорційне розподілення"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "Як було розраховано пропорцію для цього товару"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "Як було розраховано пропорцію для цього товару. Заповнюється, коли транзакція створюється зі зміни підписки, де `proration_billing_mode` було `prorated_immediately` або `prorated_next_billing_period`. Встановлюється автоматично Paddle."
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.display_name": {
-          "source": "Billing Period",
-          "message": "Розрахунковий період"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.short_desc": {
-          "source": "Billing period that proration is based on",
-          "message": "Період виставлення рахунку, на якому ґрунтується пропорційна оплата"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.desc": {
-          "source": "Billing period that proration is based on.",
-          "message": "Період виставлення рахунку, на якому ґрунтується пропорційна оплата."
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.display_name": {
-          "source": "Rate",
-          "message": "Тариф"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.short_desc": {
-          "source": "Rate used to calculate proration",
-          "message": "Ставка, використовувана для обчислення пропорційного розподілення"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.desc": {
-          "source": "Rate used to calculate proration.",
-          "message": "Ставка, використовувана для обчислення пропорційного розподілення."
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "Кількість"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "Кількість цього товару в транзакції"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "Кількість цього товару в транзакції."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.display_name": {
           "source": "Price",
           "message": "Ціна"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.short_desc": {
           "source": "Price object for a non-catalog item to charge for",
           "message": "Об’єкт ціни для товару, що не входить до каталогу, який потрібно зарахувати"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.desc": {
           "source": "Price object for a non-catalog item to charge for. Include a `product_id` to relate this non-catalog price to an existing catalog price.",
           "message": "Об’єкт ціни для товару, що не входить до каталогу, який потрібно зарахувати. Включіть `product_id` для зв’язку цієї ціни без каталогу з існуючою ціною каталогу."
         },
@@ -3499,63 +3463,39 @@
           "source": "Override price. This price applies to customers located in the countries for this unit price override.",
           "message": "Перевизначення ціни. Ця ціна застосовується до клієнтів, розташованих у країнах, для яких встановлено цю перевизначення ціни."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "Пропорційне розподілення"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "Як було розраховано пропорцію для цього товару"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "Як було розраховано пропорцію для цього товару. Заповнюється, коли транзакція створюється зі зміни підписки, де `proration_billing_mode` було `prorated_immediately` або `prorated_next_billing_period`. Встановлюється автоматично Paddle."
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "Кількість"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "Кількість цього товару в транзакції"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "Кількість цього товару в транзакції."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.display_name": {
           "source": "Price",
           "message": "Ціна"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.short_desc": {
           "source": "Price object for a non-catalog item to charge for",
           "message": "Об’єкт ціни для товару, що не входить до каталогу, який потрібно зарахувати"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.desc": {
           "source": "Price object for a non-catalog item to charge for. Include a `product` object to create a non-catalog product for this non-catalog price.",
           "message": "Об’єкт ціни для товару, що не входить до каталогу, який потрібно зарахувати. Включіть об’єкт `product` для створення товару без каталогу для цієї ціни без каталогу."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "Пропорційне розподілення"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "Як було розраховано пропорцію для цього товару"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "Як було розраховано пропорцію для цього товару. Заповнюється, коли транзакція створюється зі зміни підписки, де `proration_billing_mode` було `prorated_immediately` або `prorated_next_billing_period`. Встановлюється автоматично Paddle."
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "Кількість"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "Кількість цього товару в транзакції"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "Кількість цього товару в транзакції."
         },
@@ -5626,30 +5566,6 @@
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6SGFzaERhdGFUeXBlOk1vbmV5I2RiNTExYTQzMzlhMzg1MjlhNDc4MTM3NGFjZmJiOWQyOGEwM2EzNWQ3MzE0OTA2NjVhODQwOGFmZTNkYmNiMmM.field.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlpBUg.display_name": {
           "source": "ZAR",
           "message": "ZAR"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.display_name": {
-          "source": "Ends At",
-          "message": "Завершується"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.short_desc": {
-          "source": "RFC 3339 datetime string of when this period ends",
-          "message": "Строка дати і часу RFC 3339, коли закінчується цей період"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.desc": {
-          "source": "RFC 3339 datetime string of when this period ends.",
-          "message": "Строка дати і часу RFC 3339, коли закінчується цей період."
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.display_name": {
-          "source": "Starts At",
-          "message": "Починається"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.short_desc": {
-          "source": "RFC 3339 datetime string of when this period starts",
-          "message": "Строка дати і часу RFC 3339, коли починається цей період"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.desc": {
-          "source": "RFC 3339 datetime string of when this period starts.",
-          "message": "Строка дати і часу RFC 3339, коли починається цей період."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25QcmljZUNyZWF0ZVdpdGhQcm9kdWN0SWQjMDIwY2RjNmQ3NGJhYzZmOTk2OTg2ZDExMDM5OTI1ZjI5OWRhNzRkNzE3MjZmNDE0N2VhM2MzMzUzOGEzZGM2YQ.field.YmlsbGluZ19jeWNsZQ.display_name": {
           "source": "Billing Cycle",

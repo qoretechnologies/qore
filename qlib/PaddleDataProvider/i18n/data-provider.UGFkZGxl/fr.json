@@ -3363,75 +3363,39 @@
           "source": "List of items to charge for. You can charge for items that you've added to your catalog by passing the Paddle ID of an existing price entity, or you can charge for non-catalog items by passing a price object.\n\nNon-catalog items can be for existing products, or you can pass a product object as part of your price to charge for a non-catalog product.",
           "message": "Liste des articles à facturer. Vous pouvez facturer des articles que vous avez ajoutés à votre catalogue en transmettant l'identifiant Paddle d'une entité de prix existante, ou vous pouvez facturer des articles hors catalogue en transmettant un objet de prix.\n\nLes articles hors catalogue peuvent concerner des produits existants, ou vous pouvez transmettre un objet de produit dans votre prix pour facturer un produit hors catalogue."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.display_name": {
           "source": "Price ID",
           "message": "Identifiant du prix"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.short_desc": {
           "source": "Paddle ID of an existing catalog price to add to this transaction, prefixed…",
           "message": "ID Paddle d'un prix de catalogue existant à ajouter à cette transaction, préfixé…"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.desc": {
           "source": "Paddle ID of an existing catalog price to add to this transaction, prefixed with `pri_`.",
           "message": "ID Paddle d'un prix de catalogue existant à ajouter à cette transaction, préfixé par `pri_`."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "Proratisation"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "Méthode de calcul de la proportionnalité pour cet article"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "Méthode de calcul de la proportionnalité pour cet article. Rempli lorsque une transaction est créée à partir d'un changement d'abonnement, où `proration_billing_mode` était `prorated_immediately` ou `prorated_next_billing_period`. Défini automatiquement par Paddle."
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.display_name": {
-          "source": "Billing Period",
-          "message": "Période de facturation"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.short_desc": {
-          "source": "Billing period that proration is based on",
-          "message": "Période de facturation sur laquelle la proratisation est basée"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.desc": {
-          "source": "Billing period that proration is based on.",
-          "message": "Période de facturation sur laquelle la proratisation est basée."
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.display_name": {
-          "source": "Rate",
-          "message": "Tarif"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.short_desc": {
-          "source": "Rate used to calculate proration",
-          "message": "Taux utilisé pour le calcul de la proratisation"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.desc": {
-          "source": "Rate used to calculate proration.",
-          "message": "Taux utilisé pour le calcul de la proratisation."
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "Quantité"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "Quantité de cet article dans la transaction"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "Quantité de cet article dans la transaction."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.display_name": {
           "source": "Price",
           "message": "Prix"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.short_desc": {
           "source": "Price object for a non-catalog item to charge for",
           "message": "Objet de prix pour un article non catalogué à facturer"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.desc": {
           "source": "Price object for a non-catalog item to charge for. Include a `product_id` to relate this non-catalog price to an existing catalog price.",
           "message": "Objet de prix pour un article non catalogué à facturer. Inclure un `product_id` pour associer ce prix non catalogué à un prix catalogué existant."
         },
@@ -3499,63 +3463,39 @@
           "source": "Override price. This price applies to customers located in the countries for this unit price override.",
           "message": "Prix de substitution. Ce prix s'applique aux clients situés dans les pays concernés par cette substitution de prix unitaire."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "Proratisation"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "Méthode de calcul de la proportionnalité pour cet article"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "Méthode de calcul de la proportionnalité pour cet article. Rempli lorsque une transaction est créée à partir d'un changement d'abonnement, où `proration_billing_mode` était `prorated_immediately` ou `prorated_next_billing_period`. Défini automatiquement par Paddle."
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "Quantité"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "Quantité de cet article dans la transaction"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "Quantité de cet article dans la transaction."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.display_name": {
           "source": "Price",
           "message": "Prix"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.short_desc": {
           "source": "Price object for a non-catalog item to charge for",
           "message": "Objet de prix pour un article non catalogué à facturer"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.desc": {
           "source": "Price object for a non-catalog item to charge for. Include a `product` object to create a non-catalog product for this non-catalog price.",
           "message": "Objet de prix pour un article non catalogué à facturer. Inclure un objet `product` pour créer un produit non catalogué pour ce prix non catalogué."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "Proratisation"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "Méthode de calcul de la proportionnalité pour cet article"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "Méthode de calcul de la proportionnalité pour cet article. Rempli lorsque une transaction est créée à partir d'un changement d'abonnement, où `proration_billing_mode` était `prorated_immediately` ou `prorated_next_billing_period`. Défini automatiquement par Paddle."
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "Quantité"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "Quantité de cet article dans la transaction"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "Quantité de cet article dans la transaction."
         },
@@ -5626,30 +5566,6 @@
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6SGFzaERhdGFUeXBlOk1vbmV5I2RiNTExYTQzMzlhMzg1MjlhNDc4MTM3NGFjZmJiOWQyOGEwM2EzNWQ3MzE0OTA2NjVhODQwOGFmZTNkYmNiMmM.field.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlpBUg.display_name": {
           "source": "ZAR",
           "message": "ZAR"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.display_name": {
-          "source": "Ends At",
-          "message": "Se termine le"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.short_desc": {
-          "source": "RFC 3339 datetime string of when this period ends",
-          "message": "Chaîne de date-temps RFC 3339 indiquant la fin de cette période"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.desc": {
-          "source": "RFC 3339 datetime string of when this period ends.",
-          "message": "Chaîne de date-temps RFC 3339 indiquant la fin de cette période."
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.display_name": {
-          "source": "Starts At",
-          "message": "Commence le"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.short_desc": {
-          "source": "RFC 3339 datetime string of when this period starts",
-          "message": "Chaîne de date-temps RFC 3339 indiquant le début de cette période"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.desc": {
-          "source": "RFC 3339 datetime string of when this period starts.",
-          "message": "Chaîne de date-temps RFC 3339 indiquant le début de cette période."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25QcmljZUNyZWF0ZVdpdGhQcm9kdWN0SWQjMDIwY2RjNmQ3NGJhYzZmOTk2OTg2ZDExMDM5OTI1ZjI5OWRhNzRkNzE3MjZmNDE0N2VhM2MzMzUzOGEzZGM2YQ.field.YmlsbGluZ19jeWNsZQ.display_name": {
           "source": "Billing Cycle",

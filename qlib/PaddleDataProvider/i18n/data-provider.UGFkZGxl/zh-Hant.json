@@ -3363,75 +3363,39 @@
           "source": "List of items to charge for. You can charge for items that you've added to your catalog by passing the Paddle ID of an existing price entity, or you can charge for non-catalog items by passing a price object.\n\nNon-catalog items can be for existing products, or you can pass a product object as part of your price to charge for a non-catalog product.",
           "message": "要收費的品項清單。您可以傳遞現有價格實體的 Paddle ID 來為目錄中的品項收費，也可以傳遞價格物件來為非目錄品項收費。\n\n非目錄品項可以屬於現有產品，或者您可以在價格中傳遞產品物件以針對非目錄產品收費。"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.display_name": {
           "source": "Price ID",
           "message": "價格 ID"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.short_desc": {
           "source": "Paddle ID of an existing catalog price to add to this transaction, prefixed…",
           "message": "要加入此交易的現有目錄價格之Paddle ID，前綴為…"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.desc": {
           "source": "Paddle ID of an existing catalog price to add to this transaction, prefixed with `pri_`.",
           "message": "要加入此交易的現有目錄價格之Paddle ID，前綴為 `pri_`。"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "比例調整"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "此項目的按比例計算方式"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "此項目的按比例計算方式。當交易由訂閱變更產生時填入，其中 `proration_billing_mode` 為 `prorated_immediately` 或 `prorated_next_billing_period`。由 Paddle 自動設定。"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.display_name": {
-          "source": "Billing Period",
-          "message": "計費週期"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.short_desc": {
-          "source": "Billing period that proration is based on",
-          "message": "按比例計算的帳單期間"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.desc": {
-          "source": "Billing period that proration is based on.",
-          "message": "按比例計算的帳單期間。"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.display_name": {
-          "source": "Rate",
-          "message": "費率"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.short_desc": {
-          "source": "Rate used to calculate proration",
-          "message": "用於計算比例的比率"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.desc": {
-          "source": "Rate used to calculate proration.",
-          "message": "用於計算比例的比率。"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "數量"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "交易中此項目的數量"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "交易中此項目的數量。"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.display_name": {
           "source": "Price",
           "message": "價格"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.short_desc": {
           "source": "Price object for a non-catalog item to charge for",
           "message": "用於非目錄項目收費的價格物件"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.desc": {
           "source": "Price object for a non-catalog item to charge for. Include a `product_id` to relate this non-catalog price to an existing catalog price.",
           "message": "用於非目錄項目收費的價格物件。請包含一個 `product_id` 以將此非目錄價格與現有目錄價格關聯。"
         },
@@ -3499,63 +3463,39 @@
           "source": "Override price. This price applies to customers located in the countries for this unit price override.",
           "message": "覆蓋價格。此價格適用於設定單位價格覆蓋的國家內的客戶"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "比例調整"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "此項目的按比例計算方式"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "此項目的按比例計算方式。當交易由訂閱變更產生時填入，其中 `proration_billing_mode` 為 `prorated_immediately` 或 `prorated_next_billing_period`。由 Paddle 自動設定。"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "數量"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "交易中此項目的數量"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "交易中此項目的數量。"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.display_name": {
           "source": "Price",
           "message": "價格"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.short_desc": {
           "source": "Price object for a non-catalog item to charge for",
           "message": "用於非目錄項目收費的價格物件"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.desc": {
           "source": "Price object for a non-catalog item to charge for. Include a `product` object to create a non-catalog product for this non-catalog price.",
           "message": "用於非目錄項目收費的價格物件。請包含一個 `product` 物件以針對此非目錄價格建立非目錄產品。"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "比例調整"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "此項目的按比例計算方式"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "此項目的按比例計算方式。當交易由訂閱變更產生時填入，其中 `proration_billing_mode` 為 `prorated_immediately` 或 `prorated_next_billing_period`。由 Paddle 自動設定。"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "數量"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "交易中此項目的數量"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "交易中此項目的數量。"
         },
@@ -5626,30 +5566,6 @@
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6SGFzaERhdGFUeXBlOk1vbmV5I2RiNTExYTQzMzlhMzg1MjlhNDc4MTM3NGFjZmJiOWQyOGEwM2EzNWQ3MzE0OTA2NjVhODQwOGFmZTNkYmNiMmM.field.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlpBUg.display_name": {
           "source": "ZAR",
           "message": "ZAR"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.display_name": {
-          "source": "Ends At",
-          "message": "結束於"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.short_desc": {
-          "source": "RFC 3339 datetime string of when this period ends",
-          "message": "此期間結束時間的 RFC 3339 時間字串"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.desc": {
-          "source": "RFC 3339 datetime string of when this period ends.",
-          "message": "此期間結束時間的 RFC 3339 時間字串。"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.display_name": {
-          "source": "Starts At",
-          "message": "開始於"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.short_desc": {
-          "source": "RFC 3339 datetime string of when this period starts",
-          "message": "此期間開始時間的 RFC 3339 時間字串"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.desc": {
-          "source": "RFC 3339 datetime string of when this period starts.",
-          "message": "此期間開始時間的 RFC 3339 時間字串。"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25QcmljZUNyZWF0ZVdpdGhQcm9kdWN0SWQjMDIwY2RjNmQ3NGJhYzZmOTk2OTg2ZDExMDM5OTI1ZjI5OWRhNzRkNzE3MjZmNDE0N2VhM2MzMzUzOGEzZGM2YQ.field.YmlsbGluZ19jeWNsZQ.display_name": {
           "source": "Billing Cycle",

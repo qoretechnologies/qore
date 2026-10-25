@@ -1857,6 +1857,16 @@ val = "string";      # OK
     type.
     @endparblock
 
+    @par REST Requests Have No Read-Only Properties
+    @parblock
+    The request types of REST schema data providers (Swagger and OpenAPI), such as the Mews tables' search requests,
+    have no field for a property that the schema declares \c readOnly, which a request cannot give a value for: a
+    request value with one is refused with a \c RUNTIME-TYPE-ERROR exception, where the request was refused when it
+    was sent.  Response and record types have the read-only properties, and an OpenAPI response type has no field for
+    a \c writeOnly property.  For example, the \c MaskedAccessToken and \c MaskedClientToken fields of the Mews
+    requests are no longer offered.
+    @endparblock
+
     @par Records Whose Fields All Have Default Values Are Consistently Optional
     @parblock
     A data provider record type (@ref DataProvider::HashDataType "HashDataType") whose added fields all have default

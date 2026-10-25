@@ -1853,6 +1853,20 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
     */
     bool hasDirectionalProperties() { return directional_properties; }
 
+    #! Returns the type of a response value for a type that the schema built
+    /** A document with a read-only or write-only property gives a response copy of the type, which has the fields
+        of the read-only properties and none for the write-only ones; see OpenApi3HashDataType::forResponse().
+
+        @param type a type that the schema built; it is never modified
+
+        @return the type of a response value
+
+        @since OpenApi3 1.0
+    */
+    AbstractDataProviderType getResponseDataType(AbstractDataProviderType type) {
+        return directional_properties ? OpenApi3HashDataType::forResponse(type) : type;
+    }
+
     #! Returns the data type for the given type specification
     AbstractDataProviderType getType(string path, string typestr, *string format, *SchemaObject arrayItems,
             bool required = True, *bool strict) {
@@ -3130,13 +3144,6 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
         *hash<string, AbstractDataField> fields = type.getFields();
         if (!fields) {
             return field;
-        }
-        foreach string name in (keys fields) {
-            if (param.schema.properties{name}.readOnly) {
-                # A read-only property's requiredness applies to responses. Keep its declaration
-                # for presentation overlays; schema validation still rejects sending a value for it.
-                fields{name} = fields{name}.getOrNothingType();
-            }
         }
         foreach string name in (keys getMultipartFileProperties(param)) {
             if (!fields{name}) {
@@ -4699,6 +4706,12 @@ public class OpenApi3HashDataType inherits HashDataType {
 
         #! Is this type for a request (True) or response (False)?
         bool for_request;
+
+        #! The fields of the schema's read-only properties, which a request type has no field for
+        /** Each is a hash of the \c field and the name of the property declared before it (\c after), if any;
+            forResponse() gives them to the response copies of the type.
+        */
+        list<hash<auto>> response_fields = ();
     }
 
     #! Creates the type with a reference to the schema object
@@ -4719,7 +4732,20 @@ public class OpenApi3HashDataType inherits HashDataType {
         @return this class's original members and the document required after restoration
     */
     private:internal hash<auto> serializeMembers(*hash<auto> members) {
-        return {"schema": schema, "for_request": for_request, "document": schema.getDocument()};
+        return {"schema": schema, "for_request": for_request, "document": schema.getDocument(),
+            "response_fields": response_fields};
+    }
+
+    #! Records the field of a read-only property, which the type has no field for and its response copies have
+    /** Called by SchemaObject while it builds the type; see forResponse().
+
+        @param field the field of the property
+        @param after the name of the property declared before it, if any
+
+        @since OpenApi3 1.0
+    */
+    addResponseField(AbstractDataField field, *string after) {
+        response_fields += {"field": field, "after": after};
     }
 
     #! Returns the schema object
@@ -4770,19 +4796,27 @@ public class OpenApi3HashDataType inherits HashDataType {
             result = type.copy();
             copy_ctx.copies{id} = result;
             HashDataType object_type = cast<HashDataType>(result);
-            if (result instanceof OpenApi3HashDataType) {
-                cast<OpenApi3HashDataType>(result).for_request = False;
+            # a response has the read-only properties that a request type has no field for, and has no write-only
+            # property
+            *list<hash<auto>> response_fields;
+            *hash<string, bool> write_only;
+            if (type instanceof OpenApi3HashDataType) {
+                OpenApi3HashDataType request_type = cast<OpenApi3HashDataType>(type);
+                OpenApi3HashDataType response_type = cast<OpenApi3HashDataType>(result);
+                response_type.for_request = False;
+                response_type.response_fields = ();
+                response_fields = request_type.response_fields;
+                write_only = map {$1.key: True}, request_type.schema.properties.pairIterator(),
+                    cast<SchemaObject>($1.value).writeOnly;
             }
-            foreach AbstractDataField original in (type.getFields().iterator()) {
+            list<AbstractDataField> fields = ();
+            foreach AbstractDataField original in (RestSchemaValidator::AbstractRestSchemaObject::getResponseFieldList(
+                    type.getFields(), response_fields, write_only)) {
                 QoreDataField field = cast<QoreDataField>(original.copy());
                 field.updateFieldType(copyResponse(original.getType(), copy_ctx));
-                if (type instanceof OpenApi3HashDataType) {
-                    *SchemaObject property = cast<SchemaObject>(
-                        cast<OpenApi3HashDataType>(type).schema.properties{field.getName()});
-                    if (property && property.writeOnly) { field = cast<QoreDataField>(field.getOrNothingType()); }
-                }
-                object_type.addField(field);
+                fields += field;
             }
+            object_type.setFieldList(fields);
             if (*AbstractDataProviderType additional = object_type.getDefaultOtherFieldType()) {
                 object_type.setDefaultOtherFieldType(copyResponse(additional, copy_ctx));
             }
@@ -4799,6 +4833,27 @@ public class OpenApi3HashDataType inherits HashDataType {
         @throw RUNTIME-TYPE-ERROR if the value does not match the schema
     */
     auto acceptsValue(auto input_value) {
+        # a request type has no field for a read-only property, which a request cannot give a value for, and a
+        # response type none for a write-only property, which a response cannot have
+        if (input_value.typeCode() == NT_HASH) {
+            if (for_request) {
+                foreach hash<auto> i in (response_fields) {
+                    string name = i.field.getName();
+                    if (input_value.hasKey(name)) {
+                        throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: property %y is read-only and cannot be "
+                            "included in a request", getName(), name);
+                    }
+                }
+            } else {
+                foreach string name in (keys input_value) {
+                    *SchemaObject property = cast<*SchemaObject>(schema.properties{name});
+                    if (property && property.writeOnly) {
+                        throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: property %y is write-only and cannot be "
+                            "included in a response", getName(), name);
+                    }
+                }
+            }
+        }
         # First perform basic HashDataType validation
         auto value = HashDataType::acceptsValue(input_value);
 
@@ -6221,6 +6276,16 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             return new OpenApi3HashDataType(base_type, typename, self, True);
         }
         return new HashDataType(base_type, typename);
+    }
+
+    #! Records the field of a read-only property in the type, whose response copies have it
+    /** A schema with a read-only property has an OpenApi3HashDataType (see hasSchemaCompositionFeatures()); see
+        OpenApi3HashDataType::forResponse().
+    */
+    private omitRequestField(HashDataType t, AbstractDataField field, *string after) {
+        if (t instanceof OpenApi3HashDataType) {
+            cast<OpenApi3HashDataType>(t).addResponseField(field, after);
+        }
     }
 
     #! Returns the data type for the schema

@@ -3363,75 +3363,39 @@
           "source": "List of items to charge for. You can charge for items that you've added to your catalog by passing the Paddle ID of an existing price entity, or you can charge for non-catalog items by passing a price object.\n\nNon-catalog items can be for existing products, or you can pass a product object as part of your price to charge for a non-catalog product.",
           "message": "청구할 항목 목록입니다. 기존 가격 엔터티의 Paddle ID를 전달하여 카탈로그에 추가한 항목에 대해 청구하거나, 가격 객체를 전달하여 카탈로그 외 항목에 대해 청구할 수 있습니다.\n\n카탈로그 외 항목은 기존 제품에 대한 것일 수도 있고, 비카탈로그 제품에 대해 청구하기 위해 가격의 일부로 제품 객체를 전달할 수도 있습니다."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.display_name": {
           "source": "Price ID",
           "message": "가격 ID"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.short_desc": {
           "source": "Paddle ID of an existing catalog price to add to this transaction, prefixed…",
           "message": "이 거래에 추가할 기존 카탈로그 가격의 Paddle ID, 접두사 포함…"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.desc": {
           "source": "Paddle ID of an existing catalog price to add to this transaction, prefixed with `pri_`.",
           "message": "이 거래에 추가할 기존 카탈로그 가격의 Paddle ID, `pri_` 접두사 포함."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "정산"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "이 항목에 대한 정산이 어떻게 계산되었는지"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "이 항목에 대한 정산이 어떻게 계산되었는지. 구독 변경으로 거래가 생성될 때, `proration_billing_mode`이 `prorated_immediately` 또는 `prorated_next_billing_period`로 설정된 경우에 채워짐. Paddle에 의해 자동 설정됨."
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.display_name": {
-          "source": "Billing Period",
-          "message": "청구 기간"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.short_desc": {
-          "source": "Billing period that proration is based on",
-          "message": "정산 기간 기반의 정산 기간"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.desc": {
-          "source": "Billing period that proration is based on.",
-          "message": "정산 기간 기반의 정산 기간."
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.display_name": {
-          "source": "Rate",
-          "message": "요금"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.short_desc": {
-          "source": "Rate used to calculate proration",
-          "message": "정산을 계산하는 데 사용되는 비율"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.desc": {
-          "source": "Rate used to calculate proration.",
-          "message": "정산을 계산하는 데 사용되는 비율."
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "수량"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "거래 내 이 품목의 수량"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "거래 내 이 품목의 수량."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.display_name": {
           "source": "Price",
           "message": "가격"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.short_desc": {
           "source": "Price object for a non-catalog item to charge for",
           "message": "카탈로그 외 항목에 대해 청구할 가격 객체"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.desc": {
           "source": "Price object for a non-catalog item to charge for. Include a `product_id` to relate this non-catalog price to an existing catalog price.",
           "message": "카탈로그 외 항목에 대해 청구할 가격 객체. 기존 카탈로그 가격과 연결하려면 `product_id`를 포함합니다."
         },
@@ -3499,63 +3463,39 @@
           "source": "Override price. This price applies to customers located in the countries for this unit price override.",
           "message": "가격 오버라이드. 이 가격은 이 단위 가격 오버라이드에 해당하는 국가에 위치한 고객에게 적용됩니다."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "정산"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "이 항목에 대한 정산이 어떻게 계산되었는지"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "이 항목에 대한 정산이 어떻게 계산되었는지. 구독 변경으로 거래가 생성될 때, `proration_billing_mode`이 `prorated_immediately` 또는 `prorated_next_billing_period`로 설정된 경우에 채워짐. Paddle에 의해 자동 설정됨."
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "수량"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "거래 내 이 품목의 수량"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "거래 내 이 품목의 수량."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.display_name": {
           "source": "Price",
           "message": "가격"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.short_desc": {
           "source": "Price object for a non-catalog item to charge for",
           "message": "카탈로그 외 항목에 대해 청구할 가격 객체"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.desc": {
           "source": "Price object for a non-catalog item to charge for. Include a `product` object to create a non-catalog product for this non-catalog price.",
           "message": "카탈로그 외 항목에 대해 청구할 가격 객체. 카탈로그 외 제품을 생성하려면 `product` 객체를 포함합니다."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "정산"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "이 항목에 대한 정산이 어떻게 계산되었는지"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "이 항목에 대한 정산이 어떻게 계산되었는지. 구독 변경으로 거래가 생성될 때, `proration_billing_mode`이 `prorated_immediately` 또는 `prorated_next_billing_period`로 설정된 경우에 채워짐. Paddle에 의해 자동 설정됨."
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "수량"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "거래 내 이 품목의 수량"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "거래 내 이 품목의 수량."
         },
@@ -5626,30 +5566,6 @@
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6SGFzaERhdGFUeXBlOk1vbmV5I2RiNTExYTQzMzlhMzg1MjlhNDc4MTM3NGFjZmJiOWQyOGEwM2EzNWQ3MzE0OTA2NjVhODQwOGFmZTNkYmNiMmM.field.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlpBUg.display_name": {
           "source": "ZAR",
           "message": "ZAR"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.display_name": {
-          "source": "Ends At",
-          "message": "종료 일시"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.short_desc": {
-          "source": "RFC 3339 datetime string of when this period ends",
-          "message": "이 기간이 끝나는 RFC 3339 날짜시간 문자열"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.desc": {
-          "source": "RFC 3339 datetime string of when this period ends.",
-          "message": "이 기간이 끝나는 RFC 3339 날짜시간 문자열."
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.display_name": {
-          "source": "Starts At",
-          "message": "시작 일시"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.short_desc": {
-          "source": "RFC 3339 datetime string of when this period starts",
-          "message": "이 기간이 시작되는 RFC 3339 날짜시간 문자열"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.desc": {
-          "source": "RFC 3339 datetime string of when this period starts.",
-          "message": "이 기간이 시작되는 RFC 3339 날짜시간 문자열."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25QcmljZUNyZWF0ZVdpdGhQcm9kdWN0SWQjMDIwY2RjNmQ3NGJhYzZmOTk2OTg2ZDExMDM5OTI1ZjI5OWRhNzRkNzE3MjZmNDE0N2VhM2MzMzUzOGEzZGM2YQ.field.YmlsbGluZ19jeWNsZQ.display_name": {
           "source": "Billing Cycle",

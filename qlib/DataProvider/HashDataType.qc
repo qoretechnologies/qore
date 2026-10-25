@@ -454,6 +454,37 @@ node.setFields(fields);
         return self;
     }
 
+    #! Sets the fields of the type, as if they had been added in order to the type without fields
+    /** Unlike setFields(), which keeps what the fields it replaces gave the type, the type's default value and
+        whether it is optional because all its fields have default values are what the given fields give: a field
+        the type had and is not given contributes nothing.  A type built from a schema for one direction of a
+        value, such as the response type of a request type, is given its fields this way.
+
+        @param fields the fields of the type, in order
+
+        @return the type itself
+
+        @par Example:
+        @code{.py}
+HashDataType response = request_type.copy();
+# the response has no field for the write-only password, and has the read-only id
+response.setFieldList((id_field, name_field));
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    HashDataType setFieldList(list<AbstractDataField> fields) {
+        self.fields = {};
+        remove default_value;
+        default_value_needs_check = False;
+        required_fields = False;
+        if (optional_by_defaults) {
+            setOptionalByDefaults(False);
+        }
+        map addFieldIntern($1), fields;
+        return self;
+    }
+
     #! Adds a field to the type from a typed hash member
     HashDataType addField(Qore::Reflection::TypedHashMember mem) {
         addFieldIntern(mem);

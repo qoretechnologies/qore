@@ -48,9 +48,11 @@ public class GitHubEventDataType {
         @return the type
     */
     static AbstractDataProviderType getComponentType(string name, bool required = True) {
-        *OpenApi3::SchemaObject so = GitHubSchema::getSchema().components.schemas{name};
+        OpenApi3::OpenApi3Schema doc = GitHubSchema::getSchema();
+        *OpenApi3::SchemaObject so = doc.components.schemas{name};
         if (so) {
-            return so.getDataType(required);
+            # an event payload is received, as a response is
+            return doc.getResponseDataType(so.getDataType(required));
         }
         return AbstractDataProviderTypeMap{required ? "hash" : "*hash"};
     }

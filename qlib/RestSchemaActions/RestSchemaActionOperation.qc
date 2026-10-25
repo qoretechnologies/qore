@@ -855,7 +855,7 @@ public class RestSchemaActionOperation {
                     # not repeat the same display name and dropdown on two dozen actions
                     ov = RestSchemaActionOperation::mergeOverlay(entry.base_overlay, ov);
                 }
-                if (ov.ignore || entry.read_only) {
+                if (ov.ignore) {
                     # a header the action does not ask for is one the connection supplies; the schema may
                     # still require it, and dropping it from the action must not produce a request the
                     # schema rejects
@@ -1049,19 +1049,8 @@ public class RestSchemaActionOperation {
         }
         hash<string, bool> fixed = getFixedProperties(landing_schema);
         foreach hash<auto> i in (body_fields.pairIterator()) {
-            auto property = RestSchemaActionOperation::getSchemaProperty(landing_schema, i.key);
-            if (property.readOnly) {
-                # Response-owned values must not become editable request options, even when an API
-                # reuses the same object schema for creating and retrieving a resource. Keep the
-                # declaration addressable so existing manifests may still explicitly ignore it.
-                derived{RSAL_BODY} += {
-                    "wire_name": i.key,
-                    "wire_path": request_wrap,
-                    "field": i.value,
-                    "read_only": True,
-                };
-                continue;
-            }
+            # a read-only property, which only responses have, has no field in a request type, so it is never an
+            # option, and no overlay can name it
             if (fixed{i.key}) {
                 # a discriminator the level the options were lifted to fixes is filled in rather than
                 # published, exactly as one beside the path is: there is nothing for a caller to choose,
@@ -1391,15 +1380,12 @@ public class RestSchemaActionOperation {
         response
     */
     private buildResponseType() {
-        AbstractDataField body_field = schema.getFieldFromSchema("body", "REST response body argument",
+        # the type of a response value has the read-only properties that request types have no field for, and has
+        # no write-only property; a schema without such properties gives its shared cached type, as for Stripe's
+        # large graph of expandable objects
+        AbstractDataField body_field = schema.getResponseFieldFromSchema("body", "REST response body argument",
             response_schema);
         AbstractDataProviderType type = body_field.getType();
-        # Large direction-neutral graphs (for example Stripe's expandable objects) can retain their
-        # shared cached types. Copy only when readOnly/writeOnly makes validation direction significant.
-        if (schema instanceof OpenApi3::OpenApi3Schema
-                && cast<OpenApi3::OpenApi3Schema>(schema).hasDirectionalProperties()) {
-            type = OpenApi3::OpenApi3HashDataType::forResponse(type);
-        }
 
         foreach string name in (info.response_unwrap) {
             *hash<string, AbstractDataField> tfields = type.getFields();

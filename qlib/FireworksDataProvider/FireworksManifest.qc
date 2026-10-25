@@ -692,18 +692,6 @@ public class FireworksManifest {
                         ),
                         "desc": "Select an account or enter its ID or full `accounts/<id>` resource name.",
                     },
-                    "name": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "createTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "expireTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "createdBy": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "state": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
@@ -714,9 +702,6 @@ public class FireworksManifest {
                         "ref_data": "public-models",
                         "supports_custom_values": True,
                         "preselected": True,
-                    },
-                    "updateTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
                     },
                     "precision": <RestSchemaFieldOverlayInfo>{
                         "allowed_values": (
@@ -970,9 +955,6 @@ public class FireworksManifest {
                         },
                     },
                     "lifecycle": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "waitingOnCapacity": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "displayName": <RestSchemaFieldOverlayInfo>{
@@ -1349,12 +1331,6 @@ public class FireworksManifest {
                     },
                     "dataset": <RestSchemaFieldOverlayInfo>{
                         "fields": {
-                            "name": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "createTime": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
                             "state": <RestSchemaFieldOverlayInfo>{
                                 "ignore": True,
                             },
@@ -1404,18 +1380,6 @@ public class FireworksManifest {
                                         "display_name": "Reinforcement Learning",
                                     },
                                 ),
-                            },
-                            "createdBy": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "updateTime": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "estimatedTokenCount": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "averageTurnCount": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
                             },
                             "encryptionState": <RestSchemaFieldOverlayInfo>{
                                 "ignore": True,
@@ -1505,9 +1469,6 @@ public class FireworksManifest {
                         ),
                         "desc": "Select a resource or enter its ID or full resource name.",
                     },
-                    "createTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "state": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
@@ -1557,18 +1518,6 @@ public class FireworksManifest {
                                 "display_name": "Reinforcement Learning",
                             },
                         ),
-                    },
-                    "createdBy": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "updateTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "estimatedTokenCount": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "averageTurnCount": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
                     },
                     "encryptionState": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
@@ -1862,12 +1811,6 @@ public class FireworksManifest {
                         ),
                         "desc": "Select an account or enter its ID or full `accounts/<id>` resource name.",
                     },
-                    "name": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "createTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "model": <RestSchemaFieldOverlayInfo>{
                         "ref_data": "public-models",
                         "supports_custom_values": True,
@@ -1884,9 +1827,6 @@ public class FireworksManifest {
                         "ignore": True,
                     },
                     "status": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "updateTime": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "displayName": <RestSchemaFieldOverlayInfo>{
@@ -1975,9 +1915,6 @@ public class FireworksManifest {
                         ),
                         "desc": "Select a resource or enter its ID or full resource name.",
                     },
-                    "createTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "model": <RestSchemaFieldOverlayInfo>{
                         "ref_data": "public-models",
                         "supports_custom_values": True,
@@ -1994,9 +1931,6 @@ public class FireworksManifest {
                         "ignore": True,
                     },
                     "status": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "updateTime": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "displayName": <RestSchemaFieldOverlayInfo>{
@@ -2355,31 +2289,13 @@ public class FireworksManifest {
                         ),
                         "desc": "Select an account or enter its ID or full `accounts/<id>` resource name.",
                     },
-                    "name": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "createTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "expireTime": <RestSchemaFieldOverlayInfo>{
                         "codec": "iso-8601-utc",
-                    },
-                    "purgeTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "deleteTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
                     },
                     "state": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "status": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "desiredReplicaCount": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "replicaCount": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "baseModel": <RestSchemaFieldOverlayInfo>{
@@ -2510,9 +2426,6 @@ public class FireworksManifest {
                             },
                         ),
                     },
-                    "cluster": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "draftModel": <RestSchemaFieldOverlayInfo>{
                         "ref_data": "public-models",
                         "supports_custom_values": True,
@@ -2539,9 +2452,6 @@ public class FireworksManifest {
                                 "display_name": "AWS PrivateLink",
                             },
                         ),
-                    },
-                    "directRouteHandle": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
                     },
                     "placement": <RestSchemaFieldOverlayInfo>{
                         "fields": {
@@ -2728,9 +2638,6 @@ public class FireworksManifest {
                         },
                     },
                     "region": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "updateTime": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "hotLoadBucketType": <RestSchemaFieldOverlayInfo>{
@@ -2872,28 +2779,13 @@ public class FireworksManifest {
                         ),
                         "desc": "Select a resource or enter its ID or full resource name.",
                     },
-                    "createTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "expireTime": <RestSchemaFieldOverlayInfo>{
                         "codec": "iso-8601-utc",
-                    },
-                    "purgeTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "deleteTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
                     },
                     "state": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "status": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "desiredReplicaCount": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "replicaCount": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "baseModel": <RestSchemaFieldOverlayInfo>{
@@ -3024,9 +2916,6 @@ public class FireworksManifest {
                             },
                         ),
                     },
-                    "cluster": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "draftModel": <RestSchemaFieldOverlayInfo>{
                         "ref_data": "public-models",
                         "supports_custom_values": True,
@@ -3053,9 +2942,6 @@ public class FireworksManifest {
                                 "display_name": "AWS PrivateLink",
                             },
                         ),
-                    },
-                    "directRouteHandle": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
                     },
                     "placement": <RestSchemaFieldOverlayInfo>{
                         "fields": {
@@ -3242,9 +3128,6 @@ public class FireworksManifest {
                         },
                     },
                     "region": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "updateTime": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "hotLoadBucketType": <RestSchemaFieldOverlayInfo>{
@@ -3736,15 +3619,6 @@ public class FireworksManifest {
                         ),
                         "desc": "Select an account or enter its ID or full `accounts/<id>` resource name.",
                     },
-                    "name": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "createTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "completedTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "dataset": <RestSchemaFieldOverlayInfo>{
                         "ref_data": "datasets",
                         "supports_custom_values": True,
@@ -3756,9 +3630,6 @@ public class FireworksManifest {
                         "ignore": True,
                     },
                     "status": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "createdBy": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "trainingConfig": <RestSchemaFieldOverlayInfo>{
@@ -3774,13 +3645,7 @@ public class FireworksManifest {
                             "apiKey": <RestSchemaFieldOverlayInfo>{
                                 "sensitive": True,
                             },
-                            "url": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
                         },
-                    },
-                    "trainerLogsSignedUrl": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
                     },
                     "lossConfig": <RestSchemaFieldOverlayInfo>{
                         "fields": {
@@ -4125,15 +3990,6 @@ public class FireworksManifest {
                     },
                     "evaluationJob": <RestSchemaFieldOverlayInfo>{
                         "fields": {
-                            "name": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "createTime": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "createdBy": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
                             "state": <RestSchemaFieldOverlayInfo>{
                                 "ignore": True,
                             },
@@ -4146,12 +4002,6 @@ public class FireworksManifest {
                                 "depends_on": (
                                     "account_id",
                                 ),
-                            },
-                            "metrics": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "updateTime": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
                             },
                             "awsS3Config": <RestSchemaFieldOverlayInfo>{
                                 "fields": {
@@ -4364,15 +4214,6 @@ public class FireworksManifest {
                     },
                     "evaluation": <RestSchemaFieldOverlayInfo>{
                         "fields": {
-                            "name": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "createTime": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "createdBy": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
                             "status": <RestSchemaFieldOverlayInfo>{
                                 "ignore": True,
                             },
@@ -4395,9 +4236,6 @@ public class FireworksManifest {
                                         ),
                                     },
                                 },
-                            },
-                            "updateTime": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
                             },
                         },
                     },
@@ -4706,15 +4544,6 @@ public class FireworksManifest {
                             "account_id",
                         ),
                         "desc": "Select a resource or enter its ID or full resource name.",
-                    },
-                    "createTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "createdBy": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "updateTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
                     },
                     "state": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
@@ -5268,18 +5097,6 @@ public class FireworksManifest {
                     },
                     "evaluator": <RestSchemaFieldOverlayInfo>{
                         "fields": {
-                            "name": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "createTime": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "createdBy": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "updateTime": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
                             "state": <RestSchemaFieldOverlayInfo>{
                                 "ignore": True,
                             },
@@ -5361,18 +5178,6 @@ public class FireworksManifest {
                     },
                     "evaluator": <RestSchemaFieldOverlayInfo>{
                         "fields": {
-                            "name": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "createTime": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "createdBy": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "updateTime": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
                             "state": <RestSchemaFieldOverlayInfo>{
                                 "ignore": True,
                             },
@@ -5503,12 +5308,6 @@ public class FireworksManifest {
                     },
                     "model": <RestSchemaFieldOverlayInfo>{
                         "fields": {
-                            "name": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "createTime": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
                             "state": <RestSchemaFieldOverlayInfo>{
                                 "ignore": True,
                             },
@@ -5596,37 +5395,7 @@ public class FireworksManifest {
                                         "ref_data": "public-models",
                                         "supports_custom_values": True,
                                     },
-                                    "baseModelType": <RestSchemaFieldOverlayInfo>{
-                                        "ignore": True,
-                                    },
                                 },
-                            },
-                            "importedFrom": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "fineTuningJob": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "deployedModelRefs": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "cluster": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "calibrated": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "tunable": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "updateTime": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "defaultSamplingParams": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "rlTunable": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
                             },
                             "snapshotType": <RestSchemaFieldOverlayInfo>{
                                 "allowed_values": (
@@ -5640,25 +5409,7 @@ public class FireworksManifest {
                                     },
                                 ),
                             },
-                            "supportsServerless": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "supervisedLoraTunable": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "supervisedFullParameterTunable": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "rlLoraTunable": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "rlFullParameterTunable": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
                             "encryptionState": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
-                            "serverlessModes": <RestSchemaFieldOverlayInfo>{
                                 "ignore": True,
                             },
                         },
@@ -5747,9 +5498,6 @@ public class FireworksManifest {
                         ),
                         "desc": "Select a resource or enter its ID or full resource name.",
                     },
-                    "createTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "state": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
@@ -5837,37 +5585,7 @@ public class FireworksManifest {
                                 "ref_data": "public-models",
                                 "supports_custom_values": True,
                             },
-                            "baseModelType": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
                         },
-                    },
-                    "importedFrom": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "fineTuningJob": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "deployedModelRefs": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "cluster": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "calibrated": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "tunable": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "updateTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "defaultSamplingParams": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "rlTunable": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
                     },
                     "snapshotType": <RestSchemaFieldOverlayInfo>{
                         "allowed_values": (
@@ -5881,25 +5599,7 @@ public class FireworksManifest {
                             },
                         ),
                     },
-                    "supportsServerless": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "supervisedLoraTunable": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "supervisedFullParameterTunable": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "rlLoraTunable": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "rlFullParameterTunable": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "encryptionState": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "serverlessModes": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "displayName": <RestSchemaFieldOverlayInfo>{
@@ -5987,12 +5687,6 @@ public class FireworksManifest {
                             "account_id",
                         ),
                         "desc": "Select a resource or enter its ID or full resource name.",
-                    },
-                    "name": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "createTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
                     },
                     "snapshot": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
@@ -6661,15 +6355,6 @@ public class FireworksManifest {
                         ),
                         "desc": "Select an account or enter its ID or full `accounts/<id>` resource name.",
                     },
-                    "name": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "createTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "completedTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "dataset": <RestSchemaFieldOverlayInfo>{
                         "ref_data": "datasets",
                         "supports_custom_values": True,
@@ -6688,9 +6373,6 @@ public class FireworksManifest {
                         "ignore": True,
                     },
                     "status": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "createdBy": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "trainingConfig": <RestSchemaFieldOverlayInfo>{
@@ -6713,9 +6395,6 @@ public class FireworksManifest {
                             "apiKey": <RestSchemaFieldOverlayInfo>{
                                 "sensitive": True,
                             },
-                            "url": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
                         },
                     },
                     "awsS3Config": <RestSchemaFieldOverlayInfo>{
@@ -6732,13 +6411,7 @@ public class FireworksManifest {
                             },
                         },
                     },
-                    "outputStats": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "jobProgress": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "outputMetrics": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "lossConfig": <RestSchemaFieldOverlayInfo>{
@@ -6772,12 +6445,6 @@ public class FireworksManifest {
                                 ),
                             },
                         },
-                    },
-                    "trainerLogsSignedUrl": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "acceleratorSeconds": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
                     },
                     "purpose": <RestSchemaFieldOverlayInfo>{
                         "allowed_values": (
@@ -6880,12 +6547,6 @@ public class FireworksManifest {
                         ),
                         "desc": "Select a resource or enter its ID or full resource name.",
                     },
-                    "createTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "completedTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "dataset": <RestSchemaFieldOverlayInfo>{
                         "ref_data": "datasets",
                         "supports_custom_values": True,
@@ -6904,9 +6565,6 @@ public class FireworksManifest {
                         "ignore": True,
                     },
                     "status": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "createdBy": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "trainingConfig": <RestSchemaFieldOverlayInfo>{
@@ -6929,9 +6587,6 @@ public class FireworksManifest {
                             "apiKey": <RestSchemaFieldOverlayInfo>{
                                 "sensitive": True,
                             },
-                            "url": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
-                            },
                         },
                     },
                     "awsS3Config": <RestSchemaFieldOverlayInfo>{
@@ -6948,13 +6603,7 @@ public class FireworksManifest {
                             },
                         },
                     },
-                    "outputStats": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "jobProgress": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "outputMetrics": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "lossConfig": <RestSchemaFieldOverlayInfo>{
@@ -6988,12 +6637,6 @@ public class FireworksManifest {
                                 ),
                             },
                         },
-                    },
-                    "trainerLogsSignedUrl": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "acceleratorSeconds": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
                     },
                     "purpose": <RestSchemaFieldOverlayInfo>{
                         "allowed_values": (
@@ -7253,15 +6896,6 @@ public class FireworksManifest {
                         ),
                         "desc": "Select an account or enter its ID or full `accounts/<id>` resource name.",
                     },
-                    "name": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "createTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "createdBy": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "state": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
@@ -7272,12 +6906,6 @@ public class FireworksManifest {
                         "ref_data": "public-models",
                         "supports_custom_values": True,
                         "preselected": True,
-                    },
-                    "aliases": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "autoGenerated": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
                     },
                     "displayName": <RestSchemaFieldOverlayInfo>{
                         "preselected": True,
@@ -7365,12 +6993,6 @@ public class FireworksManifest {
                         ),
                         "desc": "Select a resource or enter its ID or full resource name.",
                     },
-                    "createTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "createdBy": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "state": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
@@ -7381,12 +7003,6 @@ public class FireworksManifest {
                         "ref_data": "public-models",
                         "supports_custom_values": True,
                         "preselected": True,
-                    },
-                    "aliases": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "autoGenerated": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
                     },
                     "displayName": <RestSchemaFieldOverlayInfo>{
                         "preselected": True,
@@ -7647,15 +7263,6 @@ public class FireworksManifest {
                         ),
                         "desc": "Select an account or enter its ID or full `accounts/<id>` resource name.",
                     },
-                    "name": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "createTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "completedTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "dataset": <RestSchemaFieldOverlayInfo>{
                         "ref_data": "datasets",
                         "supports_custom_values": True,
@@ -7683,9 +7290,6 @@ public class FireworksManifest {
                     "status": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
-                    "createdBy": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "baseModel": <RestSchemaFieldOverlayInfo>{
                         "ref_data": "public-models",
                         "supports_custom_values": True,
@@ -7694,9 +7298,6 @@ public class FireworksManifest {
                         "fields": {
                             "apiKey": <RestSchemaFieldOverlayInfo>{
                                 "sensitive": True,
-                            },
-                            "url": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
                             },
                         },
                     },
@@ -7707,16 +7308,7 @@ public class FireworksManifest {
                             "account_id",
                         ),
                     },
-                    "updateTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "jobProgress": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "trainerLogsSignedUrl": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "renderSamplesSignedUrl": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "estimatedCost": <RestSchemaFieldOverlayInfo>{
@@ -7931,15 +7523,6 @@ public class FireworksManifest {
                         ),
                         "desc": "Select an account or enter its ID or full `accounts/<id>` resource name.",
                     },
-                    "name": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "createTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "completedTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "dataset": <RestSchemaFieldOverlayInfo>{
                         "ref_data": "datasets",
                         "supports_custom_values": True,
@@ -7967,9 +7550,6 @@ public class FireworksManifest {
                     "status": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
-                    "createdBy": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "baseModel": <RestSchemaFieldOverlayInfo>{
                         "ref_data": "public-models",
                         "supports_custom_values": True,
@@ -7978,9 +7558,6 @@ public class FireworksManifest {
                         "fields": {
                             "apiKey": <RestSchemaFieldOverlayInfo>{
                                 "sensitive": True,
-                            },
-                            "url": <RestSchemaFieldOverlayInfo>{
-                                "ignore": True,
                             },
                         },
                     },
@@ -7991,16 +7568,7 @@ public class FireworksManifest {
                             "account_id",
                         ),
                     },
-                    "updateTime": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
                     "jobProgress": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "trainerLogsSignedUrl": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "renderSamplesSignedUrl": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                     "estimatedCost": <RestSchemaFieldOverlayInfo>{
@@ -8310,9 +7878,6 @@ public class FireworksManifest {
                         ),
                     },
                     "used": <RestSchemaFieldOverlayInfo>{
-                        "ignore": True,
-                    },
-                    "updateTime": <RestSchemaFieldOverlayInfo>{
                         "ignore": True,
                     },
                 },

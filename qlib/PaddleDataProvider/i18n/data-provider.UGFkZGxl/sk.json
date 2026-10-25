@@ -3363,75 +3363,39 @@
           "source": "List of items to charge for. You can charge for items that you've added to your catalog by passing the Paddle ID of an existing price entity, or you can charge for non-catalog items by passing a price object.\n\nNon-catalog items can be for existing products, or you can pass a product object as part of your price to charge for a non-catalog product.",
           "message": "Zoznam položiek na zaúčtovanie. Položky pridané do katalógu môžete účtovať odovzdaním Paddle ID existujúcej entity ceny, alebo môžete účtovať mimokatalógové položky odovzdaním objektu ceny.\n\nMimokatalógové položky sa môžu týkať existujúcich produktov, alebo môžete ako súčasť ceny odovzdať objekt produktu a účtovať tak mimokatalógový produkt."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.display_name": {
           "source": "Price ID",
           "message": "ID ceny"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.short_desc": {
           "source": "Paddle ID of an existing catalog price to add to this transaction, prefixed…",
           "message": "Paddle ID existujúcej katalógovej ceny, ktorú chcete pridať do tejto transakcie, s predponou…"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.desc": {
           "source": "Paddle ID of an existing catalog price to add to this transaction, prefixed with `pri_`.",
           "message": "Paddle ID existujúcej katalógovej ceny, ktorú chcete pridať do tejto transakcie, s predponou `pri_`."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "Rozpočítanie"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "Ako bola prorácia vypočítaná pre tento položku"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "Ako bola prorácia vypočítaná pre tento položku. Vyplňuje sa, keď je transakcia vytvorená zmenou predplatného, kde `proration_billing_mode` bol `prorated_immediately` alebo `prorated_next_billing_period`. Automaticky nastavené Paddle."
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.display_name": {
-          "source": "Billing Period",
-          "message": "Fakturačné obdobie"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.short_desc": {
-          "source": "Billing period that proration is based on",
-          "message": "Obdobie fakturácie, na ktorom sa založí príslušná úprava"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.desc": {
-          "source": "Billing period that proration is based on.",
-          "message": "Obdobie fakturácie, na ktorom sa založí príslušná úprava."
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.display_name": {
-          "source": "Rate",
-          "message": "Sadzba"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.short_desc": {
-          "source": "Rate used to calculate proration",
-          "message": "Sadzba použitá na výpočet prorácie"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.desc": {
-          "source": "Rate used to calculate proration.",
-          "message": "Sadzba použitá na výpočet prorácie."
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "Množstvo"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "Množstvo tejto položky v transakcii"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "Množstvo tejto položky v transakcii."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.display_name": {
           "source": "Price",
           "message": "Cena"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.short_desc": {
           "source": "Price object for a non-catalog item to charge for",
           "message": "Objekt ceny pre položku mimo katalógu, ktorú je potrebné účtovať"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.desc": {
           "source": "Price object for a non-catalog item to charge for. Include a `product_id` to relate this non-catalog price to an existing catalog price.",
           "message": "Objekt ceny pre položku mimo katalógu, ktorú je potrebné účtovať. Zahrňte `product_id` pre prepojenie tejto ceny mimo katalógu s existujúcou cenou v katalógu."
         },
@@ -3499,63 +3463,39 @@
           "source": "Override price. This price applies to customers located in the countries for this unit price override.",
           "message": "Prepísať cenu. Táto cena sa používa pre zákazníkov umiestnených v krajinách pre túto prepísanú jednotkovú cenu."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "Rozpočítanie"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "Ako bola prorácia vypočítaná pre tento položku"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "Ako bola prorácia vypočítaná pre tento položku. Vyplňuje sa, keď je transakcia vytvorená zmenou predplatného, kde `proration_billing_mode` bol `prorated_immediately` alebo `prorated_next_billing_period`. Automaticky nastavené Paddle."
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "Množstvo"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "Množstvo tejto položky v transakcii"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "Množstvo tejto položky v transakcii."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.display_name": {
           "source": "Price",
           "message": "Cena"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.short_desc": {
           "source": "Price object for a non-catalog item to charge for",
           "message": "Objekt ceny pre položku mimo katalógu, ktorú je potrebné účtovať"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.desc": {
           "source": "Price object for a non-catalog item to charge for. Include a `product` object to create a non-catalog product for this non-catalog price.",
           "message": "Objekt ceny pre položku mimo katalógu, ktorú je potrebné účtovať. Zahrňte objekt `product` na vytvorenie položky mimo katalógu pre túto cenu mimo katalógu."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "Rozpočítanie"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "Ako bola prorácia vypočítaná pre tento položku"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "Ako bola prorácia vypočítaná pre tento položku. Vyplňuje sa, keď je transakcia vytvorená zmenou predplatného, kde `proration_billing_mode` bol `prorated_immediately` alebo `prorated_next_billing_period`. Automaticky nastavené Paddle."
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "Množstvo"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "Množstvo tejto položky v transakcii"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "Množstvo tejto položky v transakcii."
         },
@@ -5626,30 +5566,6 @@
         "app.UGFkZGxl.type.YWN0aW9uOmRYQmtZWFJsWDNCeWFXTmw6SGFzaERhdGFUeXBlOk1vbmV5I2RiNTExYTQzMzlhMzg1MjlhNDc4MTM3NGFjZmJiOWQyOGEwM2EzNWQ3MzE0OTA2NjVhODQwOGFmZTNkYmNiMmM.field.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlpBUg.display_name": {
           "source": "ZAR",
           "message": "ZAR"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.display_name": {
-          "source": "Ends At",
-          "message": "Končí"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.short_desc": {
-          "source": "RFC 3339 datetime string of when this period ends",
-          "message": "Rozsah dátumu v formáte RFC 3339, keď končí tento obdobie"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.desc": {
-          "source": "RFC 3339 datetime string of when this period ends.",
-          "message": "Rozsah dátumu v formáte RFC 3339, keď končí tento obdobie."
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.display_name": {
-          "source": "Starts At",
-          "message": "Začína"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.short_desc": {
-          "source": "RFC 3339 datetime string of when this period starts",
-          "message": "Rozsah dátumu v formáte RFC 3339, keď začína tento obdobie"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.desc": {
-          "source": "RFC 3339 datetime string of when this period starts.",
-          "message": "Rozsah dátumu v formáte RFC 3339, keď začína tento obdobie."
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25QcmljZUNyZWF0ZVdpdGhQcm9kdWN0SWQjMDIwY2RjNmQ3NGJhYzZmOTk2OTg2ZDExMDM5OTI1ZjI5OWRhNzRkNzE3MjZmNDE0N2VhM2MzMzUzOGEzZGM2YQ.field.YmlsbGluZ19jeWNsZQ.display_name": {
           "source": "Billing Cycle",

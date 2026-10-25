@@ -1,0 +1,47 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires MewsRestClient
+%requires SwaggerDataProvider
+%requires MewsRestDataProvider
+%exec-class MewsDirectionalTypesTest
+
+#! Offline checks of the read-only properties of the Mews schema: no connection, credentials, or requests
+/** A table's records are what the API returns, so they have the read-only properties; a request has none of them.
+*/
+class MewsDirectionalTypesTest inherits QUnit::Test {
+    public {
+        const Options = {"url": "https://api.mews-demo.com", "client_token": "client", "access_token": "access"};
+    }
+
+    constructor() : Test("Mews read-only properties", "1.0", \ARGV) {
+        addTestCase("a table record has the read-only properties of the records the API returns", \recordTest());
+        addTestCase("a search request has no read-only property", \requestTest());
+        set_return_value(main());
+    }
+
+    recordTest() {
+        MewsRestPaymentsTableDataProvider payments(new MewsRestClient(Options, True));
+        *hash<string, AbstractDataField> record = payments.getRecordType();
+        assertTrue(exists record.Data, "a payment has its data");
+        # PaymentData.Discriminator is read-only: the API says what kind of payment data it returns
+        assertEq(("CreditCard", "Discriminator", "External", "Invoice"), keys record.Data.getType().getFields());
+    }
+
+    requestTest() {
+        MewsRestClient rest(Options, True);
+        SwaggerDataProvider provider(cast<SwaggerSchema>(rest.getValidator()), rest);
+        hash<string, AbstractDataField> body = provider.getChildProviderPath("api/connector/v1/payments/getAll/POST")
+            .getRequestType().getFields().body.getType().getFields();
+        # the masked tokens are read-only: the API reports them, and a request gives the tokens themselves
+        assertFalse(exists body.MaskedAccessToken);
+        assertFalse(exists body.MaskedClientToken);
+        assertTrue(exists body.AccessToken);
+        assertTrue(exists body.ClientToken);
+    }
+}

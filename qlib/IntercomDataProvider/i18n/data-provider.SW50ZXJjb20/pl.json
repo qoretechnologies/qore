@@ -2083,231 +2083,207 @@
           "source": "The Content of an Article.",
           "message": "Zawartość artykułu."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
           "source": "AI Chatbot Availability",
           "message": "Dostępność dla AI Chatbota"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article is available for AI Chatbot",
           "message": "Czy artykuł jest dostępny dla chatbota AI"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
           "source": "Whether the article is available for AI Chatbot.",
           "message": "Czy artykuł jest dostępny dla chatbota AI."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
           "source": "AI Copilot Availability",
           "message": "Dostępność dla AI Copilot"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article is available for AI Copilot",
           "message": "Czy artykuł jest dostępny dla AI Copilot"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
           "source": "Whether the article is available for AI Copilot.",
           "message": "Czy artykuł jest dostępny dla AI Copilot."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
           "source": "AI Sales Agent Availability",
           "message": "Dostępność dla AI Sales Agenta"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
           "source": "Whether the article is available for AI Sales Agent",
           "message": "Czy artykuł jest dostępny dla AI Sales Agent"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
           "source": "Whether the article is available for AI Sales Agent.",
           "message": "Czy artykuł jest dostępny dla AI Sales Agent."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXVkaWVuY2VfaWRz.display_name": {
           "source": "Audience Ids",
           "message": "Identyfikatory odbiorców"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXVkaWVuY2VfaWRz.short_desc": {
           "source": "The list of audience IDs this article content is targeted to for Fin AI Agent",
           "message": "Lista identyfikatorów odbiorców, do których jest skierowany ten artykuł dla Fin AI Agent"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXVkaWVuY2VfaWRz.desc": {
           "source": "The list of audience IDs this article content is targeted to for Fin AI Agent. On multilingual help centers this field appears per-locale inside `translated_content`. On single-language help centers it appears at the article root level. Empty array means no audience targeting is set.",
           "message": "Lista identyfikatorów odbiorców, do których jest skierowany ten artykuł dla Fin AI Agent. W centrum pomocy wielojęzycznych to pole pojawia się per-lokalnie w `translated_content`. W centrum pomocy jednojęzycznych pojawia się na poziomie artykułu. Pusta tablica oznacza brak celowania do odbiorców."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXV0aG9yX2lk.display_name": {
           "source": "Author ID",
           "message": "ID autora"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXV0aG9yX2lk.short_desc": {
           "source": "The ID of the author of the article",
           "message": "ID autora artykułu"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXV0aG9yX2lk.desc": {
           "source": "The ID of the author of the article.",
           "message": "ID autora artykułu."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keQ.display_name": {
           "source": "Body",
           "message": "Treść"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keQ.short_desc": {
           "source": "The body of the article in HTML",
           "message": "Treść artykułu w formacie HTML"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keQ.desc": {
           "source": "The body of the article in HTML.",
           "message": "Treść artykułu w formacie HTML."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keV9tYXJrZG93bg.display_name": {
           "source": "Body Markdown",
           "message": "Treść w Markdown"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keV9tYXJrZG93bg.short_desc": {
           "source": "The body of the article in markdown",
           "message": "Treść artykułu w formacie markdown"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keV9tYXJrZG93bg.desc": {
           "source": "The body of the article in markdown.",
           "message": "Treść artykułu w formacie markdown."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Y3JlYXRlZF9hdA.display_name": {
           "source": "Created At",
           "message": "Data utworzenia"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Y3JlYXRlZF9hdA.short_desc": {
           "source": "The time when the article was created (seconds)",
           "message": "Czas utworzenia artykułu (w sekundach)"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Y3JlYXRlZF9hdA.desc": {
           "source": "The time when the article was created (seconds).",
           "message": "Czas utworzenia artykułu (w sekundach)."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.display_name": {
-          "source": "Created by ID",
-          "message": "ID utworzonego przez"
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.short_desc": {
-          "source": "The ID of the teammate who created this content version",
-          "message": "ID kolegi, który utworzył tę wersję treści"
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.desc": {
-          "source": "The ID of the teammate who created this content version.",
-          "message": "ID kolegi, który utworzył tę wersję treści."
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "Opis"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "The description of the article",
           "message": "Opis artykułu"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZGVzY3JpcHRpb24.desc": {
           "source": "The description of the article.",
           "message": "Opis artykułu."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
           "source": "Draft Updated At",
           "message": "Data aktualizacji szkicu"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
           "source": "The time, in seconds, when this locale's staged draft was last edited, or…",
           "message": "Czas, w sekundach, od ostatniej edycji szkicu wersji lokalnej tego języka, lub…"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZHJhZnRfdXBkYXRlZF9hdA.desc": {
           "source": "The time, in seconds, when this locale's staged draft was last edited, or `null` when there is no staged draft.",
           "message": "Czas, w sekundach, od ostatniej edycji szkicu wersji lokalnej tego języka, lub `null`, jeśli nie ma szkicu."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
           "source": "Has Unpublished Changes",
           "message": "Posiada nieopublikowane zmiany"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
           "source": "Whether this locale's published content has unpublished changes staged as a…",
           "message": "Czy treści opublikowane w tym języku mają nieopublikowane zmiany przechowywane jako…"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.desc": {
           "source": "Whether this locale's published content has unpublished changes staged as a draft on top of its live content.",
           "message": "Czy treści opublikowane w tym języku mają nieopublikowane zmiany przechowywane jako szkic na wersji live."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.display_name": {
           "source": "State",
           "message": "Stan"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.short_desc": {
           "source": "Whether the article is 'published' or is a 'draft'",
           "message": "Czy artykuł jest 'opublikowany' czy 'szkicem'"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.desc": {
           "source": "Whether the article is `published` or is a `draft` .",
           "message": "Czy artykuł jest `published` czy `draft`."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
           "source": "published",
           "message": "opublikowany"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
           "source": "draft",
           "message": "wersja robocza"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dGl0bGU.display_name": {
           "source": "Title",
           "message": "Tytuł"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dGl0bGU.short_desc": {
           "source": "The title of the article",
           "message": "Tytuł artykułu"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dGl0bGU.desc": {
           "source": "The title of the article.",
           "message": "Tytuł artykułu."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Typ"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dHlwZQ.short_desc": {
           "source": "The type of object - 'article_content'",
           "message": "Typ obiektu — 'article_content'"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dHlwZQ.desc": {
           "source": "The type of object - `article_content` .",
           "message": "Typ obiektu — `article_content` ."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.allowed-value.c3RyaW5nOmFydGljbGVfY29udGVudA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dHlwZQ.allowed-value.c3RyaW5nOmFydGljbGVfY29udGVudA.display_name": {
           "source": "article_content",
           "message": "article_content"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXBkYXRlZF9hdA.display_name": {
           "source": "Updated At",
           "message": "Data aktualizacji"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXBkYXRlZF9hdA.short_desc": {
           "source": "The time when the article was last updated (seconds)",
           "message": "Czas ostatniej aktualizacji artykułu (w sekundach)"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXBkYXRlZF9hdA.desc": {
           "source": "The time when the article was last updated (seconds).",
           "message": "Czas ostatniej aktualizacji artykułu (w sekundach)."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.display_name": {
-          "source": "Updated by ID",
-          "message": "Zaktualizowano przez ID"
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.short_desc": {
-          "source": "The ID of the teammate who last updated this content version",
-          "message": "ID kolegi, który ostatnio zaktualizował tę wersję treści"
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.desc": {
-          "source": "The ID of the teammate who last updated this content version.",
-          "message": "ID kolegi, który ostatnio zaktualizował tę wersję treści."
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXJs.display_name": {
           "source": "URL",
           "message": "URL"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXJs.short_desc": {
           "source": "The URL of the article",
           "message": "URL artykułu"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXJs.desc": {
           "source": "The URL of the article.",
           "message": "URL artykułu."
         },
@@ -3499,231 +3475,207 @@
           "source": "The Content of an Article.",
           "message": "Zawartość artykułu."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
           "source": "AI Chatbot Availability",
           "message": "Dostępność dla AI Chatbota"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article is available for AI Chatbot",
           "message": "Czy artykuł jest dostępny dla chatbota AI"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
           "source": "Whether the article is available for AI Chatbot.",
           "message": "Czy artykuł jest dostępny dla chatbota AI."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
           "source": "AI Copilot Availability",
           "message": "Dostępność dla AI Copilot"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article is available for AI Copilot",
           "message": "Czy artykuł jest dostępny dla AI Copilot"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
           "source": "Whether the article is available for AI Copilot.",
           "message": "Czy artykuł jest dostępny dla AI Copilot."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
           "source": "AI Sales Agent Availability",
           "message": "Dostępność dla AI Sales Agenta"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
           "source": "Whether the article is available for AI Sales Agent",
           "message": "Czy artykuł jest dostępny dla AI Sales Agent"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
           "source": "Whether the article is available for AI Sales Agent.",
           "message": "Czy artykuł jest dostępny dla AI Sales Agent."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXVkaWVuY2VfaWRz.display_name": {
           "source": "Audience Ids",
           "message": "Identyfikatory odbiorców"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXVkaWVuY2VfaWRz.short_desc": {
           "source": "The list of audience IDs this article content is targeted to for Fin AI Agent",
           "message": "Lista identyfikatorów odbiorców, do których jest skierowany ten artykuł dla Fin AI Agent"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXVkaWVuY2VfaWRz.desc": {
           "source": "The list of audience IDs this article content is targeted to for Fin AI Agent. On multilingual help centers this field appears per-locale inside `translated_content`. On single-language help centers it appears at the article root level. Empty array means no audience targeting is set.",
           "message": "Lista identyfikatorów odbiorców, do których jest skierowany ten artykuł dla Fin AI Agent. W centrum pomocy wielojęzycznych to pole pojawia się per-lokalnie w `translated_content`. W centrum pomocy jednojęzycznych pojawia się na poziomie artykułu. Pusta tablica oznacza brak celowania do odbiorców."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXV0aG9yX2lk.display_name": {
           "source": "Author ID",
           "message": "ID autora"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXV0aG9yX2lk.short_desc": {
           "source": "The ID of the author of the article",
           "message": "ID autora artykułu"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXV0aG9yX2lk.desc": {
           "source": "The ID of the author of the article.",
           "message": "ID autora artykułu."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keQ.display_name": {
           "source": "Body",
           "message": "Treść"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keQ.short_desc": {
           "source": "The body of the article in HTML",
           "message": "Treść artykułu w formacie HTML"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keQ.desc": {
           "source": "The body of the article in HTML.",
           "message": "Treść artykułu w formacie HTML."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keV9tYXJrZG93bg.display_name": {
           "source": "Body Markdown",
           "message": "Treść w Markdown"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keV9tYXJrZG93bg.short_desc": {
           "source": "The body of the article in markdown",
           "message": "Treść artykułu w formacie markdown"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keV9tYXJrZG93bg.desc": {
           "source": "The body of the article in markdown.",
           "message": "Treść artykułu w formacie markdown."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Y3JlYXRlZF9hdA.display_name": {
           "source": "Created At",
           "message": "Data utworzenia"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Y3JlYXRlZF9hdA.short_desc": {
           "source": "The time when the article was created (seconds)",
           "message": "Czas utworzenia artykułu (w sekundach)"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Y3JlYXRlZF9hdA.desc": {
           "source": "The time when the article was created (seconds).",
           "message": "Czas utworzenia artykułu (w sekundach)."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.display_name": {
-          "source": "Created by ID",
-          "message": "ID utworzonego przez"
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.short_desc": {
-          "source": "The ID of the teammate who created this content version",
-          "message": "ID kolegi, który utworzył tę wersję treści"
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.desc": {
-          "source": "The ID of the teammate who created this content version.",
-          "message": "ID kolegi, który utworzył tę wersję treści."
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "Opis"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "The description of the article",
           "message": "Opis artykułu"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZGVzY3JpcHRpb24.desc": {
           "source": "The description of the article.",
           "message": "Opis artykułu."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
           "source": "Draft Updated At",
           "message": "Data aktualizacji szkicu"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
           "source": "The time, in seconds, when this locale's staged draft was last edited, or…",
           "message": "Czas, w sekundach, od ostatniej edycji szkicu wersji lokalnej tego języka, lub…"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZHJhZnRfdXBkYXRlZF9hdA.desc": {
           "source": "The time, in seconds, when this locale's staged draft was last edited, or `null` when there is no staged draft.",
           "message": "Czas, w sekundach, od ostatniej edycji szkicu wersji lokalnej tego języka, lub `null`, jeśli nie ma szkicu."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
           "source": "Has Unpublished Changes",
           "message": "Posiada nieopublikowane zmiany"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
           "source": "Whether this locale's published content has unpublished changes staged as a…",
           "message": "Czy treści opublikowane w tym języku mają nieopublikowane zmiany przechowywane jako…"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.desc": {
           "source": "Whether this locale's published content has unpublished changes staged as a draft on top of its live content.",
           "message": "Czy treści opublikowane w tym języku mają nieopublikowane zmiany przechowywane jako szkic na wersji live."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.display_name": {
           "source": "State",
           "message": "Stan"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.short_desc": {
           "source": "Whether the article is 'published' or is a 'draft'",
           "message": "Czy artykuł jest 'opublikowany' czy 'szkicem'"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.desc": {
           "source": "Whether the article is `published` or is a `draft` .",
           "message": "Czy artykuł jest `published` czy `draft`."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
           "source": "published",
           "message": "opublikowany"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
           "source": "draft",
           "message": "wersja robocza"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dGl0bGU.display_name": {
           "source": "Title",
           "message": "Tytuł"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dGl0bGU.short_desc": {
           "source": "The title of the article",
           "message": "Tytuł artykułu"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dGl0bGU.desc": {
           "source": "The title of the article.",
           "message": "Tytuł artykułu."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Typ"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dHlwZQ.short_desc": {
           "source": "The type of object - 'article_content'",
           "message": "Typ obiektu — 'article_content'"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dHlwZQ.desc": {
           "source": "The type of object - `article_content` .",
           "message": "Typ obiektu — `article_content` ."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.allowed-value.c3RyaW5nOmFydGljbGVfY29udGVudA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dHlwZQ.allowed-value.c3RyaW5nOmFydGljbGVfY29udGVudA.display_name": {
           "source": "article_content",
           "message": "article_content"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXBkYXRlZF9hdA.display_name": {
           "source": "Updated At",
           "message": "Data aktualizacji"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXBkYXRlZF9hdA.short_desc": {
           "source": "The time when the article was last updated (seconds)",
           "message": "Czas ostatniej aktualizacji artykułu (w sekundach)"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXBkYXRlZF9hdA.desc": {
           "source": "The time when the article was last updated (seconds).",
           "message": "Czas ostatniej aktualizacji artykułu (w sekundach)."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.display_name": {
-          "source": "Updated by ID",
-          "message": "Zaktualizowano przez ID"
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.short_desc": {
-          "source": "The ID of the teammate who last updated this content version",
-          "message": "ID kolegi, który ostatnio zaktualizował tę wersję treści"
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.desc": {
-          "source": "The ID of the teammate who last updated this content version.",
-          "message": "ID kolegi, który ostatnio zaktualizował tę wersję treści."
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXJs.display_name": {
           "source": "URL",
           "message": "URL"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXJs.short_desc": {
           "source": "The URL of the article",
           "message": "URL artykułu"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXJs.desc": {
           "source": "The URL of the article.",
           "message": "URL artykułu."
         },

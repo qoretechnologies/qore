@@ -60,8 +60,14 @@ class OpenApi3DescribedReferenceTest inherits QUnit::Test {
         assertEq("Page where chunk starts", fields.pageSpan.getType().getFields().pageStart.getDescription(),
             "the fields of the type are the referenced schema's");
         assertEq({"pageStart": 7}, fields.example.getExampleValue(), "the field has the use's example");
-        assertTrue(fields.readonly.getType() === doc.components.schemas.ChunkSpan.getDataType(False),
-            "a read-only use has the referenced schema's type");
+        # a read-only use is a field of a response, where it has the referenced schema's type
+        assertFalse(exists fields.readonly, "a request type has no field for a read-only use");
+        AbstractDataProviderType readonly = doc.getResponseDataType(type(doc, "Chunk")).getFields().readonly
+            .getType();
+        assertEq(doc.components.schemas.ChunkSpan.getDataType(False).getName(), readonly.getName(),
+            "a read-only use has the referenced schema's type in a response");
+        assertEq(doc.components.schemas.ChunkSpan.getDataType(False).getSchemaIdentity(),
+            readonly.getSchemaIdentity());
         # read-only is a property of the use, which the object declaring the property validates
         AbstractDataProviderType chunk = type(doc, "Chunk");
         assertThrows("RUNTIME-TYPE-ERROR", "read-only", \chunk.acceptsValue(),

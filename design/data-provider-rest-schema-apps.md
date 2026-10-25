@@ -1151,6 +1151,17 @@ that exist on one cloud and not another. And where the same field appears inside
 overlay reaches it: an entry is applied to every alternative that declares the field, and one no
 alternative declares is refused, which is what proves the overlay was applied rather than ignored.
 
+**A request has no read-only property, and a response no write-only one.** A schema's type is the type of a
+request value: `getSchemaObjectFields()` builds the field of a `readOnly` property as any other, and gives it to the
+producer's type (`OpenApi3HashDataType`, `SwaggerHashDataType`) instead of adding it, so that no request option and
+no request example has it, and a request value with it is refused with "read-only" - the schema refused it when the
+request was sent.  Every response path asks the schema for its response view
+(`AbstractRestSchemaValidator::getResponseDataType()`, `getResponseFieldFromSchema()`): a copy of the type graph in
+which each such type has those fields back, in the order of the schema's properties, and an OpenAPI type has no
+field for a `writeOnly` property.  A document without either keeps sharing its cached types.  Manifests used to hide
+read-only request fields with `ignore` overlays (Fireworks had 145 of them); an overlay naming one now names
+nothing and is refused.
+
 **An overlay offers a narrower choice than the schema, never a wider one.** The overlay's values replace
 the schema's enumeration on the published field, so nothing downstream of the overlay would notice a value
 the API never accepts: the request type still enforces the schema, and the choice fails on every use.

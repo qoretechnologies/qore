@@ -724,8 +724,6 @@ public class XeroManifest {
                     "ValidationErrors": ResponseOnlyOverlay,
                     "HasAccount": ResponseOnlyOverlay,
                     "HasValidationErrors": ResponseOnlyOverlay,
-                    "UpdatedDateUTC": ResponseOnlyOverlay,
-                    "UpdatedDateUTCString": ResponseOnlyOverlay,
                     "StatusAttributeString": ResponseOnlyOverlay,
                     "Invoice": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Invoice",

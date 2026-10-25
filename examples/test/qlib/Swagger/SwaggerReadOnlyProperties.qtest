@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires Swagger
+%requires SwaggerDataProvider
+%requires RestSchemaDataProvider
+%requires json
+%exec-class SwaggerReadOnlyPropertiesTest
+
+#! A request has no read-only property, and a response has every read-only property, in every type a schema builds
+class SwaggerReadOnlyPropertiesTest inherits QUnit::Test {
+    public {
+        const Definitions = {
+            "Pet": {"type": "object", "required": ("id", "name"), "properties": {
+                "id": {"type": "integer", "readOnly": True},
+                "name": {"type": "string", "example": "Rex"},
+                "tags": {"type": "array", "items": {"$ref": "#/definitions/Tag"}},
+                "owner": {"$ref": "#/definitions/Tag"},
+                "created": {"type": "string", "format": "date-time", "readOnly": True},
+            }},
+            "Tag": {"type": "object", "properties": {
+                "id": {"type": "integer", "readOnly": True},
+                "label": {"type": "string"},
+            }},
+            "Node": {"type": "object", "properties": {
+                "id": {"type": "integer", "readOnly": True},
+                "children": {"type": "array", "items": {"$ref": "#/definitions/Node"}},
+            }},
+        };
+    }
+
+    constructor() : Test("Swagger read-only properties", "1.0", \ARGV) {
+        addTestCase("a request type has no field for a read-only property", \requestTest());
+        addTestCase("a response type has the read-only properties", \responseTest());
+        addTestCase("an example has only the properties of its direction", \exampleTest());
+        addTestCase("a recursive type has its read-only properties at every depth of a response", \recursionTest());
+        addTestCase("data provider request and response types", \providerTest());
+        addTestCase("a document without read-only properties gives a response its request types", \plainTest());
+        set_return_value(main());
+    }
+
+    requestTest() {
+        SwaggerSchema doc = document();
+        AbstractDataProviderType pet = doc.definitions.Pet.getDataType();
+        assertEq(("name", "tags", "owner"), keys pet.getFields());
+        assertEq(("label",), keys pet.getFields().tags.getType().getElementType().getFields());
+        assertEq(("label",), keys pet.getFields().owner.getType().getFields());
+        # a request that gives a value for a read-only property is refused, as the schema refuses it
+        assertThrows("RUNTIME-TYPE-ERROR", "property \"id\" is read-only and cannot be included in a request",
+            \pet.acceptsValue(), {"id": 1, "name": "Rex"});
+        assertEq({"name": "Rex"}, pet.acceptsValue({"name": "Rex"}));
+    }
+
+    responseTest() {
+        SwaggerSchema doc = document();
+        AbstractDataProviderType request = doc.definitions.Pet.getDataType();
+        AbstractDataProviderType response = doc.getResponseDataType(request);
+        # the fields are in the order of the schema's properties
+        assertEq(("id", "name", "tags", "owner", "created"), keys response.getFields());
+        assertTrue(response.getFields().id.isMandatory(), "a required read-only property is required in a response");
+        assertEq(("id", "label"), keys response.getFields().tags.getType().getElementType().getFields());
+        assertEq(("id", "label"), keys response.getFields().owner.getType().getFields());
+        # the request type is not changed by its response copy
+        assertEq(("name", "tags", "owner"), keys request.getFields());
+        hash<auto> value = {"id": 1, "name": "Rex", "owner": {"id": 2, "label": "Ann"}};
+        assertEq(value, response.acceptsValue(value));
+        # a type is copied once for the document
+        assertTrue(doc.getResponseDataType(request) === response, "a response type is shared");
+    }
+
+    exampleTest() {
+        SwaggerSchema doc = document();
+        hash<auto> request = doc.getFieldFromSchema("body", NOTHING, doc.definitions.Pet).getExampleValue();
+        assertFalse(request.hasKey("id") || request.hasKey("created"), "a request example has no read-only property");
+        assertEq("Rex", request.name);
+        if (request.owner) {
+            assertFalse(request.owner.hasKey("id"), "nor has a nested object in it");
+        }
+        hash<auto> response = doc.getResponseFieldFromSchema("body", NOTHING, doc.definitions.Pet).getExampleValue();
+        assertTrue(response.hasKey("id") && response.hasKey("created"),
+            "a response example has the read-only properties");
+    }
+
+    recursionTest() {
+        SwaggerSchema doc = document();
+        AbstractDataProviderType node = doc.getResponseDataType(doc.definitions.Node.getDataType());
+        AbstractDataProviderType child = node.getFields().children.getType().getElementType();
+        AbstractDataProviderType grandchild = child.getFields().children.getType().getElementType();
+        assertEq(("id", "children"), keys child.getFields());
+        assertEq(("id", "children"), keys grandchild.getFields());
+        assertEq(("children",), keys doc.definitions.Node.getDataType().getFields());
+    }
+
+    providerTest() {
+        foreach AbstractDataProvider provider in ((new SwaggerDataProvider(document()),
+                new RestSchemaDataProvider({"schema": make_json(Document)}))) {
+            string ctx = provider.className();
+            AbstractDataProvider create = provider.getChildProviderPath("pets/POST");
+            assertEq(("name", "tags", "owner"), keys create.getRequestType().getFields().body.getType().getFields(),
+                ctx);
+            assertEq(("id", "name", "tags", "owner", "created"),
+                keys create.getResponseType().getFields().body.getType().getFields(), ctx);
+        }
+    }
+
+    plainTest() {
+        SwaggerSchema doc = SwaggerLoader::fromString(make_json({
+            "swagger": "2.0", "info": {"title": "Plain", "version": "1"}, "paths": {},
+            "definitions": {"Plain": {"type": "object", "properties": {"name": {"type": "string"}}}},
+        }), True);
+        AbstractDataProviderType type = doc.definitions.Plain.getDataType();
+        assertTrue(doc.getResponseDataType(type) === type, "a response shares the request type");
+    }
+
+    #! The pet store document
+    const Document = {
+        "swagger": "2.0", "info": {"title": "Read-only", "version": "1"},
+        "paths": {"/pets": {"post": {
+            "operationId": "createPet",
+            "parameters": ({"name": "body", "in": "body", "required": True,
+                "schema": {"$ref": "#/definitions/Pet"}},),
+            "responses": {"200": {"description": "The pet", "schema": {"$ref": "#/definitions/Pet"}}},
+        }}},
+        "definitions": Definitions,
+    };
+
+    #! Returns the pet store document, whose pets have read-only properties
+    private static SwaggerSchema document() {
+        return SwaggerLoader::fromString(make_json(Document), True);
+    }
+}

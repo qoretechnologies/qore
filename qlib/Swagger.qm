@@ -141,6 +141,10 @@ RestHandler handler(NOTHING, swagger);
     @section swagger_relnotes Swagger Module Release Notes
 
     @subsection swagger_2_6 Swagger v2.6
+    - the type of a schema object is the type of a request value: it has no field for a \c readOnly property, and a
+      value with one is refused with \c RUNTIME-TYPE-ERROR;
+      @ref Swagger::SwaggerSchema::getResponseDataType() "SwaggerSchema::getResponseDataType()" gives the type of a
+      response value, which has them (see @ref Swagger::SwaggerHashDataType "SwaggerHashDataType")
     - schema objects record their location in the document
       (@ref RestSchemaValidator::AbstractRestSchemaObject::getSchemaIdentity() "getSchemaIdentity()"): a definition
       by its name, a schema that only adds to one schema it refers to by that schema, and a schema declared in place
@@ -673,6 +677,14 @@ public class ParameterGroup inherits ObjectBase {
 
 #! This is the root document object for the API specification. It combines what previously was the Resource Listing and API Declaration (version 1.2 and earlier) together into one document.
 public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator {
+    private {
+        #! Whether a schema of the document has a read-only property
+        bool readonly_properties = False;
+
+        #! The response copies of the types the document's schemas built, by the unique hash of the type
+        transient hash<string, AbstractDataProviderType> response_types = {};
+    }
+
     public {
         #! <a href="https://swagger.io/">Swagger</a> Specification version being used.
         /**
@@ -1222,6 +1234,33 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     AbstractDataProviderType getSchemaDataType(string path, SchemaObject schema, bool required = True,
             *object rest) {
         return schema.getDataType(required, rest);
+    }
+
+    #! Records that a schema of the document has a read-only property
+    /** Called by SchemaObject while the document is parsed; see getResponseDataType().
+
+        @since Swagger 2.6
+    */
+    setReadOnlyProperties() {
+        readonly_properties = True;
+    }
+
+    #! Returns the type of a response value for a type that the schema built
+    /** A document with a read-only property gives a response copy of the type, which has the fields of the
+        read-only properties; see SwaggerHashDataType::forResponse().  A type is copied once for the document, so
+        that the operations whose responses share a type share its copy.
+
+        @param type a type that the schema built; it is never modified
+
+        @return the type of a response value
+
+        @since Swagger 2.6
+    */
+    AbstractDataProviderType getResponseDataType(AbstractDataProviderType type) {
+        if (!readonly_properties) {
+            return type;
+        }
+        return SwaggerHashDataType::forResponse(type, \response_types);
     }
 
     #! Returns a field definition from the Swagger parameter
@@ -3857,6 +3896,116 @@ public class TagObject inherits ObjectBase {
 }
 
 #! defines an object in a schema
+#! The type of an object whose schema has read-only properties
+/** The type is the type of a request value, which has no field for a read-only property; it records the fields of
+    those properties, so that the type of a response value, which has them, can be made from it with forResponse().
+
+    @since Swagger 2.6
+*/
+public class SwaggerHashDataType inherits HashDataType {
+    private {
+        #! The fields of the schema's read-only properties, which a request type has no field for
+        /** Each is a hash of the \c field and the name of the property declared before it (\c after), if any.
+        */
+        list<hash<auto>> response_fields = ();
+    }
+
+    #! Creates the type
+    /** @param base_type the base Qore type
+        @param name the type name
+    */
+    constructor(Type base_type, string name) : HashDataType(base_type, name) {
+    }
+
+    #! Returns the value if the type accepts it
+    /** A request value with a read-only property is refused: the type of a request value has no field for it.
+
+        @param value the value
+
+        @return the value as the type accepts it
+
+        @throw RUNTIME-TYPE-ERROR the value has a read-only property, or is not accepted by the type
+    */
+    auto acceptsValue(auto value) {
+        if (value.typeCode() == NT_HASH) {
+            foreach hash<auto> i in (response_fields) {
+                string name = i.field.getName();
+                if (value.hasKey(name)) {
+                    throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: property %y is read-only and cannot be included "
+                        "in a request", getName(), name);
+                }
+            }
+        }
+        return HashDataType::acceptsValue(value);
+    }
+
+    #! Records the field of a read-only property, which the type has no field for and its response copies have
+    /** Called by SchemaObject while it builds the type.
+
+        @param field the field of the property
+        @param after the name of the property declared before it, if any
+    */
+    addResponseField(AbstractDataField field, *string after) {
+        response_fields += {"field": field, "after": after};
+    }
+
+    #! Returns the type of a response value for a type that a schema built
+    /** Every object type of the type's graph that has read-only properties is copied with their fields, in the
+        order of the schema's properties; the types that refer to such a type, directly or through others, are
+        copied so that they refer to its copy.  Shared and recursive types stay shared in the copy.
+
+        @param type a type that a schema built; it is never modified
+        @param copies the copies already made, by the unique hash of the type they copy; updated
+
+        @return the type of a response value
+    */
+    static AbstractDataProviderType forResponse(AbstractDataProviderType type,
+            reference<hash<string, AbstractDataProviderType>> copies) {
+        return SwaggerHashDataType::copyResponse(type, \copies);
+    }
+
+    private static AbstractDataProviderType copyResponse(AbstractDataProviderType type,
+            reference<hash<string, AbstractDataProviderType>> copies) {
+        string id = type.uniqueHash();
+        if (copies{id}) {
+            return copies{id};
+        }
+        AbstractDataProviderType result = type;
+        if (type instanceof QoreUnionDataType) {
+            result = cast<QoreUnionDataType>(type).copyWithUnionTypes(
+                map SwaggerHashDataType::copyResponse($1, \copies), cast<QoreUnionDataType>(type).getUnionTypes());
+        } else if (type instanceof ListDataType) {
+            if (*AbstractDataProviderType element = type.getElementType()) {
+                result = type.copy();
+                copies{id} = result;
+                cast<ListDataType>(result).updateElementType(SwaggerHashDataType::copyResponse(element, \copies));
+            }
+        } else if (type instanceof HashDataType) {
+            result = type.copy();
+            copies{id} = result;
+            *list<hash<auto>> response_fields;
+            if (type instanceof SwaggerHashDataType) {
+                response_fields = cast<SwaggerHashDataType>(type).response_fields;
+                cast<SwaggerHashDataType>(result).response_fields = ();
+            }
+            list<AbstractDataField> fields = ();
+            foreach AbstractDataField original in (RestSchemaValidator::AbstractRestSchemaObject::getResponseFieldList(
+                    type.getFields(), response_fields)) {
+                QoreDataField field = cast<QoreDataField>(original.copy());
+                field.updateFieldType(SwaggerHashDataType::copyResponse(original.getType(), \copies));
+                fields += field;
+            }
+            HashDataType object_type = cast<HashDataType>(result);
+            object_type.setFieldList(fields);
+            if (*AbstractDataProviderType additional = object_type.getDefaultOtherFieldType()) {
+                object_type.setDefaultOtherFieldType(SwaggerHashDataType::copyResponse(additional, \copies));
+            }
+        }
+        copies{id} = result;
+        return result;
+    }
+}
+
 /** Inherits common schema members from
     @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject".
 */
@@ -4085,7 +4234,9 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                     "'required' list", name);
         }
 
-        optional_field(objType, oh, "readOnly", NT_BOOLEAN, \readOnly);
+        if (optional_field(objType, oh, "readOnly", NT_BOOLEAN, \readOnly) && readOnly) {
+            swagger.setReadOnlyProperties();
+        }
 
         *hash xmlObj;
         if (optional_field(objType, oh, "xml", NT_HASH, \xmlObj))
@@ -4123,6 +4274,23 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     AbstractDataProviderType getSchemaType(string path, string typestr, *string format,
             *AbstractSchemaObject arrayItems, bool required) {
         return swagger.getType(path, typestr, format, arrayItems, required);
+    }
+
+    #! Creates the type of an object, which records its read-only properties if it has any; see SwaggerHashDataType
+    HashDataType createHashDataType(Type base_type, string typename) {
+        foreach AbstractSchemaObject property in (cast<*hash<string, AbstractSchemaObject>>(properties).iterator()) {
+            if (property.readOnly) {
+                return new SwaggerHashDataType(base_type, typename);
+            }
+        }
+        return new HashDataType(base_type, typename);
+    }
+
+    #! Records the field of a read-only property in the type, whose response copies have it
+    private omitRequestField(HashDataType t, AbstractDataField field, *string after) {
+        if (t instanceof SwaggerHashDataType) {
+            cast<SwaggerHashDataType>(t).addResponseField(field, after);
+        }
     }
 
     #! Returns the data type for the schema

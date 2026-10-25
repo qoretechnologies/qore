@@ -2083,231 +2083,207 @@
           "source": "The Content of an Article.",
           "message": "Obsah článku."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
           "source": "AI Chatbot Availability",
           "message": "Dostupnost pro AI Chatbota"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article is available for AI Chatbot",
           "message": "Zda je článek dostupný pro AI chatbot"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
           "source": "Whether the article is available for AI Chatbot.",
           "message": "Zda je článek dostupný pro AI chatbot."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
           "source": "AI Copilot Availability",
           "message": "Dostupnost pro AI Copilot"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article is available for AI Copilot",
           "message": "Zda je článek dostupný pro AI Copilot"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
           "source": "Whether the article is available for AI Copilot.",
           "message": "Zda je článek dostupný pro AI Copilot."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
           "source": "AI Sales Agent Availability",
           "message": "Dostupnost pro AI Sales Agenta"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
           "source": "Whether the article is available for AI Sales Agent",
           "message": "Zda je článek dostupný pro AI prodejního agenta"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
           "source": "Whether the article is available for AI Sales Agent.",
           "message": "Zda je článek dostupný pro AI prodejního agenta."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXVkaWVuY2VfaWRz.display_name": {
           "source": "Audience Ids",
           "message": "ID publik"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXVkaWVuY2VfaWRz.short_desc": {
           "source": "The list of audience IDs this article content is targeted to for Fin AI Agent",
           "message": "Seznam ID cílových skupin, na které je obsah článku zaměřen pro Fin AI Agent"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXVkaWVuY2VfaWRz.desc": {
           "source": "The list of audience IDs this article content is targeted to for Fin AI Agent. On multilingual help centers this field appears per-locale inside `translated_content`. On single-language help centers it appears at the article root level. Empty array means no audience targeting is set.",
           "message": "Seznam ID cílových skupin, na které je obsah článku zaměřen pro Fin AI Agent. U mnohojazyčných center pomoci se tento parametr zobrazuje na úrovni jazyka uvnitř `translated_content`. U jednojazyčných center pomoci se zobrazuje na kořenové úrovni článku. Prázdný seznam znamená, že není nastaveno cílení na skupiny."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXV0aG9yX2lk.display_name": {
           "source": "Author ID",
           "message": "ID autora"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXV0aG9yX2lk.short_desc": {
           "source": "The ID of the author of the article",
           "message": "ID autora článku"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXV0aG9yX2lk.desc": {
           "source": "The ID of the author of the article.",
           "message": "ID autora článku."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keQ.display_name": {
           "source": "Body",
           "message": "Tělo"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keQ.short_desc": {
           "source": "The body of the article in HTML",
           "message": "Tělo článku ve formátu HTML"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keQ.desc": {
           "source": "The body of the article in HTML.",
           "message": "Tělo článku ve formátu HTML."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keV9tYXJrZG93bg.display_name": {
           "source": "Body Markdown",
           "message": "Markdown těla"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keV9tYXJrZG93bg.short_desc": {
           "source": "The body of the article in markdown",
           "message": "Tělo článku ve formátu markdown"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keV9tYXJrZG93bg.desc": {
           "source": "The body of the article in markdown.",
           "message": "Tělo článku ve formátu markdown."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Y3JlYXRlZF9hdA.display_name": {
           "source": "Created At",
           "message": "Vytvořeno"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Y3JlYXRlZF9hdA.short_desc": {
           "source": "The time when the article was created (seconds)",
           "message": "Čas vytvoření článku (v sekundách)"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Y3JlYXRlZF9hdA.desc": {
           "source": "The time when the article was created (seconds).",
           "message": "Čas vytvoření článku (v sekundách)."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.display_name": {
-          "source": "Created by ID",
-          "message": "Vytvořil ID"
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.short_desc": {
-          "source": "The ID of the teammate who created this content version",
-          "message": "ID kolegy, který vytvořil tuto verzi obsahu"
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.desc": {
-          "source": "The ID of the teammate who created this content version.",
-          "message": "ID kolegy, který vytvořil tuto verzi obsahu."
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "Popis"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "The description of the article",
           "message": "Popis článku"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZGVzY3JpcHRpb24.desc": {
           "source": "The description of the article.",
           "message": "Popis článku."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
           "source": "Draft Updated At",
           "message": "Datum aktualizace návrhu"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
           "source": "The time, in seconds, when this locale's staged draft was last edited, or…",
           "message": "Čas, v sekundách, kdy byla posledně upravena připravená verze pro tento jazyk, nebo…"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZHJhZnRfdXBkYXRlZF9hdA.desc": {
           "source": "The time, in seconds, when this locale's staged draft was last edited, or `null` when there is no staged draft.",
           "message": "Čas, v sekundách, kdy byla posledně upravena připravená verze pro tento jazyk, nebo `null`, pokud neexistuje připravená verze."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
           "source": "Has Unpublished Changes",
           "message": "Má nepublikované změny"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
           "source": "Whether this locale's published content has unpublished changes staged as a…",
           "message": "Zda má obsah zveřejněného jazyka nepublikované změny, které jsou připraveny jako…"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.desc": {
           "source": "Whether this locale's published content has unpublished changes staged as a draft on top of its live content.",
           "message": "Zda má obsah zveřejněného jazyka nepublikované změny, které jsou připraveny jako návrh nad jeho živým obsahem."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.display_name": {
           "source": "State",
           "message": "Stát"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.short_desc": {
           "source": "Whether the article is 'published' or is a 'draft'",
           "message": "Zda je článek 'publikován' nebo je 'návrh'"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.desc": {
           "source": "Whether the article is `published` or is a `draft` .",
           "message": "Zda je článek `published` nebo je `draft`."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
           "source": "published",
           "message": "publikováno"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
           "source": "draft",
           "message": "koncept"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dGl0bGU.display_name": {
           "source": "Title",
           "message": "Název"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dGl0bGU.short_desc": {
           "source": "The title of the article",
           "message": "Název článku"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dGl0bGU.desc": {
           "source": "The title of the article.",
           "message": "Název článku."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Typ"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dHlwZQ.short_desc": {
           "source": "The type of object - 'article_content'",
           "message": "Typ objektu – 'article_content'"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dHlwZQ.desc": {
           "source": "The type of object - `article_content` .",
           "message": "Typ objektu – `article_content` ."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.allowed-value.c3RyaW5nOmFydGljbGVfY29udGVudA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dHlwZQ.allowed-value.c3RyaW5nOmFydGljbGVfY29udGVudA.display_name": {
           "source": "article_content",
           "message": "obsah článku"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXBkYXRlZF9hdA.display_name": {
           "source": "Updated At",
           "message": "Aktualizováno"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXBkYXRlZF9hdA.short_desc": {
           "source": "The time when the article was last updated (seconds)",
           "message": "Čas poslední aktualizace článku (v sekundách)"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXBkYXRlZF9hdA.desc": {
           "source": "The time when the article was last updated (seconds).",
           "message": "Čas poslední aktualizace článku (v sekundách)."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.display_name": {
-          "source": "Updated by ID",
-          "message": "Aktualizováno ID"
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.short_desc": {
-          "source": "The ID of the teammate who last updated this content version",
-          "message": "ID kolegy, který naposledy aktualizoval tuto verzi obsahu"
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.desc": {
-          "source": "The ID of the teammate who last updated this content version.",
-          "message": "ID kolegy, který naposledy aktualizoval tuto verzi obsahu."
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXJs.display_name": {
           "source": "URL",
           "message": "URL"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXJs.short_desc": {
           "source": "The URL of the article",
           "message": "URL článku"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOlkzSmxZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXJs.desc": {
           "source": "The URL of the article.",
           "message": "URL článku."
         },
@@ -3499,231 +3475,207 @@
           "source": "The Content of an Article.",
           "message": "Obsah článku."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
           "source": "AI Chatbot Availability",
           "message": "Dostupnost pro AI Chatbota"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article is available for AI Chatbot",
           "message": "Zda je článek dostupný pro AI chatbot"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
           "source": "Whether the article is available for AI Chatbot.",
           "message": "Zda je článek dostupný pro AI chatbot."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
           "source": "AI Copilot Availability",
           "message": "Dostupnost pro AI Copilot"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article is available for AI Copilot",
           "message": "Zda je článek dostupný pro AI Copilot"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
           "source": "Whether the article is available for AI Copilot.",
           "message": "Zda je článek dostupný pro AI Copilot."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
           "source": "AI Sales Agent Availability",
           "message": "Dostupnost pro AI Sales Agenta"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
           "source": "Whether the article is available for AI Sales Agent",
           "message": "Zda je článek dostupný pro AI prodejního agenta"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
           "source": "Whether the article is available for AI Sales Agent.",
           "message": "Zda je článek dostupný pro AI prodejního agenta."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXVkaWVuY2VfaWRz.display_name": {
           "source": "Audience Ids",
           "message": "ID publik"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXVkaWVuY2VfaWRz.short_desc": {
           "source": "The list of audience IDs this article content is targeted to for Fin AI Agent",
           "message": "Seznam ID cílových skupin, na které je obsah článku zaměřen pro Fin AI Agent"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXVkaWVuY2VfaWRz.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXVkaWVuY2VfaWRz.desc": {
           "source": "The list of audience IDs this article content is targeted to for Fin AI Agent. On multilingual help centers this field appears per-locale inside `translated_content`. On single-language help centers it appears at the article root level. Empty array means no audience targeting is set.",
           "message": "Seznam ID cílových skupin, na které je obsah článku zaměřen pro Fin AI Agent. U mnohojazyčných center pomoci se tento parametr zobrazuje na úrovni jazyka uvnitř `translated_content`. U jednojazyčných center pomoci se zobrazuje na kořenové úrovni článku. Prázdný seznam znamená, že není nastaveno cílení na skupiny."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXV0aG9yX2lk.display_name": {
           "source": "Author ID",
           "message": "ID autora"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXV0aG9yX2lk.short_desc": {
           "source": "The ID of the author of the article",
           "message": "ID autora článku"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.YXV0aG9yX2lk.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.YXV0aG9yX2lk.desc": {
           "source": "The ID of the author of the article.",
           "message": "ID autora článku."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keQ.display_name": {
           "source": "Body",
           "message": "Tělo"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keQ.short_desc": {
           "source": "The body of the article in HTML",
           "message": "Tělo článku ve formátu HTML"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keQ.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keQ.desc": {
           "source": "The body of the article in HTML.",
           "message": "Tělo článku ve formátu HTML."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keV9tYXJrZG93bg.display_name": {
           "source": "Body Markdown",
           "message": "Markdown těla"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keV9tYXJrZG93bg.short_desc": {
           "source": "The body of the article in markdown",
           "message": "Tělo článku ve formátu markdown"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Ym9keV9tYXJrZG93bg.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Ym9keV9tYXJrZG93bg.desc": {
           "source": "The body of the article in markdown.",
           "message": "Tělo článku ve formátu markdown."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Y3JlYXRlZF9hdA.display_name": {
           "source": "Created At",
           "message": "Vytvořeno"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Y3JlYXRlZF9hdA.short_desc": {
           "source": "The time when the article was created (seconds)",
           "message": "Čas vytvoření článku (v sekundách)"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.Y3JlYXRlZF9hdA.desc": {
           "source": "The time when the article was created (seconds).",
           "message": "Čas vytvoření článku (v sekundách)."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.display_name": {
-          "source": "Created by ID",
-          "message": "Vytvořil ID"
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.short_desc": {
-          "source": "The ID of the teammate who created this content version",
-          "message": "ID kolegy, který vytvořil tuto verzi obsahu"
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.Y3JlYXRlZF9ieV9pZA.desc": {
-          "source": "The ID of the teammate who created this content version.",
-          "message": "ID kolegy, který vytvořil tuto verzi obsahu."
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "Popis"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "The description of the article",
           "message": "Popis článku"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZGVzY3JpcHRpb24.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZGVzY3JpcHRpb24.desc": {
           "source": "The description of the article.",
           "message": "Popis článku."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZHJhZnRfdXBkYXRlZF9hdA.display_name": {
           "source": "Draft Updated At",
           "message": "Datum aktualizace návrhu"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZHJhZnRfdXBkYXRlZF9hdA.short_desc": {
           "source": "The time, in seconds, when this locale's staged draft was last edited, or…",
           "message": "Čas, v sekundách, kdy byla posledně upravena připravená verze pro tento jazyk, nebo…"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.ZHJhZnRfdXBkYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.ZHJhZnRfdXBkYXRlZF9hdA.desc": {
           "source": "The time, in seconds, when this locale's staged draft was last edited, or `null` when there is no staged draft.",
           "message": "Čas, v sekundách, kdy byla posledně upravena připravená verze pro tento jazyk, nebo `null`, pokud neexistuje připravená verze."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.display_name": {
           "source": "Has Unpublished Changes",
           "message": "Má nepublikované změny"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.short_desc": {
           "source": "Whether this locale's published content has unpublished changes staged as a…",
           "message": "Zda má obsah zveřejněného jazyka nepublikované změny, které jsou připraveny jako…"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.aGFzX3VucHVibGlzaGVkX2NoYW5nZXM.desc": {
           "source": "Whether this locale's published content has unpublished changes staged as a draft on top of its live content.",
           "message": "Zda má obsah zveřejněného jazyka nepublikované změny, které jsou připraveny jako návrh nad jeho živým obsahem."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.display_name": {
           "source": "State",
           "message": "Stát"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.short_desc": {
           "source": "Whether the article is 'published' or is a 'draft'",
           "message": "Zda je článek 'publikován' nebo je 'návrh'"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.desc": {
           "source": "Whether the article is `published` or is a `draft` .",
           "message": "Zda je článek `published` nebo je `draft`."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
           "source": "published",
           "message": "publikováno"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
           "source": "draft",
           "message": "koncept"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dGl0bGU.display_name": {
           "source": "Title",
           "message": "Název"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dGl0bGU.short_desc": {
           "source": "The title of the article",
           "message": "Název článku"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dGl0bGU.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dGl0bGU.desc": {
           "source": "The title of the article.",
           "message": "Název článku."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Typ"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dHlwZQ.short_desc": {
           "source": "The type of object - 'article_content'",
           "message": "Typ objektu – 'article_content'"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dHlwZQ.desc": {
           "source": "The type of object - `article_content` .",
           "message": "Typ objektu – `article_content` ."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dHlwZQ.allowed-value.c3RyaW5nOmFydGljbGVfY29udGVudA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dHlwZQ.allowed-value.c3RyaW5nOmFydGljbGVfY29udGVudA.display_name": {
           "source": "article_content",
           "message": "obsah článku"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXBkYXRlZF9hdA.display_name": {
           "source": "Updated At",
           "message": "Aktualizováno"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXBkYXRlZF9hdA.short_desc": {
           "source": "The time when the article was last updated (seconds)",
           "message": "Čas poslední aktualizace článku (v sekundách)"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9hdA.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXBkYXRlZF9hdA.desc": {
           "source": "The time when the article was last updated (seconds).",
           "message": "Čas poslední aktualizace článku (v sekundách)."
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.display_name": {
-          "source": "Updated by ID",
-          "message": "Aktualizováno ID"
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.short_desc": {
-          "source": "The ID of the teammate who last updated this content version",
-          "message": "ID kolegy, který naposledy aktualizoval tuto verzi obsahu"
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXBkYXRlZF9ieV9pZA.desc": {
-          "source": "The ID of the teammate who last updated this content version.",
-          "message": "ID kolegy, který naposledy aktualizoval tuto verzi obsahu."
-        },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.display_name": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXJs.display_name": {
           "source": "URL",
           "message": "URL"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.short_desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXJs.short_desc": {
           "source": "The URL of the article",
           "message": "URL článku"
         },
-        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50IzIwZjBjYjAzZmE0NjliYzJhNDlhZWNmYTFkODMxY2ZiYWYzOGY1MjMyYTQ2YTc2OGY3MGY4ODVjMGQ4MTAwMjE.field.dXJs.desc": {
+        "app.SW50ZXJjb20.type.YWN0aW9uOmRYQmtZWFJsUVhKMGFXTnNaUTpPcGVuQXBpM0hhc2hEYXRhVHlwZToqYXJ0aWNsZV9jb250ZW50Izg2OWI5OTM5YTA5OGFjNjY1OWY5NzViYjk3YjdmYThiOGM5ZmMzNTc2M2ZjZTdhZDZjNWJhMzUzMjA1OTk5NzU.field.dXJs.desc": {
           "source": "The URL of the article.",
           "message": "URL článku."
         },

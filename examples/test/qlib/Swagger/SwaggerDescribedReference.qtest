@@ -52,8 +52,13 @@ class SwaggerDescribedReferenceTest inherits QUnit::Test {
             fieldType(type(doc, "Chunk"), "header").getFields().pageSpan.getDescription());
         assertEq("Page where chunk starts", fields.pageSpan.getType().getFields().pageStart.getDescription(),
             "the fields of the type are the referenced definition's");
-        assertTrue(fields.readonly.getType() === doc.definitions.ChunkSpan.getDataType(False),
-            "a read-only use has the referenced definition's type");
+        # a read-only use is a field of a response, where it has the referenced definition's type
+        assertFalse(exists fields.readonly, "a request type has no field for a read-only use");
+        AbstractDataProviderType readonly = doc.getResponseDataType(type(doc, "Chunk")).getFields().readonly
+            .getType();
+        assertEq(doc.definitions.ChunkSpan.getDataType(False).getName(), readonly.getName(),
+            "a read-only use has the referenced definition's type in a response");
+        assertEq(doc.definitions.ChunkSpan.getDataType(False).getSchemaIdentity(), readonly.getSchemaIdentity());
         # read-only is a property of the use, which the schema declaring the property validates
         SchemaObject chunk = doc.definitions.Chunk;
         hash<auto> value = {"span": {"pageStart": 1}, "readonly": {"pageStart": 2}};
