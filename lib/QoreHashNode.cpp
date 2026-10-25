@@ -504,7 +504,19 @@ QoreValue qore_hash_private::getKeyValueExistencePrehashedIntern(const char* key
     return QoreValue();
 }
 
+#ifdef DEBUG
+//! the number of hashes that the current thread has created; see q_get_hash_create_count()
+static thread_local int64 hash_create_count = 0;
+
+int64 q_get_hash_create_count() {
+    return hash_create_count;
+}
+#endif
+
 QoreHashNode::QoreHashNode() : AbstractQoreNode(NT_HASH, true, false), priv(new qore_hash_private) {
+#ifdef DEBUG
+    ++hash_create_count;
+#endif
 }
 
 QoreHashNode::QoreHashNode(const TypedHashDecl* hd, ExceptionSink* xsink) : QoreHashNode() {

@@ -6572,7 +6572,19 @@ static __attribute__((noinline)) bool check_pending_program_interrupt(ExceptionS
     return false;
 }
 
+#ifdef DEBUG
+//! the number of cancellation checks that the current thread has made; see q_get_cancel_check_count()
+static thread_local int64 cancel_check_count = 0;
+
+int64 q_get_cancel_check_count() {
+    return cancel_check_count;
+}
+#endif
+
 static bool qore_check_cancel_intern(ThreadData* td, ExceptionSink* xsink, const char* operation) {
+#ifdef DEBUG
+    ++cancel_check_count;
+#endif
     // a cleanup critical section must be able to complete on a cancelled or interrupted thread;
     // the pending request is deliberately left untouched here, so the first cancellation point
     // after the deferral scope ends raises it with the original reason and scope

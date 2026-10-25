@@ -42,8 +42,10 @@ the operation once any exception has been raised, so every enclosing loop that u
 use `cst_for_each_child()` or `cst_find_named_child()`, which use a cursor. Doc comments, the run of `/**` and
 `#!` comments directly before a declaration, are recorded by `CSTDocComments` while the children of a node are
 visited in order, instead of walking backwards over the preceding siblings of each declaration.
-`examples/test/modules/astparser/large-sources.qtest` checks that the time to search sources with many members
-grows linearly.
+`examples/test/modules/astparser/large-sources.qtest` checks that the module's sources call none of the
+tree-sitter functions that walk the preceding children, and, in debug builds, that the work of searching sources
+with many members grows linearly: the searches check for cancellation every 100 nodes, so the number of checks
+they make (`dbg_get_cancel_check_count()`) measures the nodes they visit.
 
 `examples/test/modules/astparser/deep-trees.qtest` runs the parser, the error
 and comment collection, the printer, the searcher and the conditional directives

@@ -1,0 +1,1480 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks of weak references read from containers, which every execution mode must read as the AST interpreter does;
+# included by weak-container-reads-worker.q, so that the checks run in the execution mode of the worker, by
+# weak-container-reads.qtest, so that they run in the mode of the test, and by WeakContainerReadChecks.qm for the
+# compiled run
+#
+# each check applies one operation to a weak reference read in one way - from a hash value, an object member or a
+# list element, or by map - and returns the result as a string, or the err of the exception raised; the target of
+# the weak reference exists or has been destroyed
+
+public namespace WeakContainerReadChecks {
+    #! the target of the weak references
+    public class Target {
+        public {
+            int n = 7;
+        }
+
+        int ping() {
+            return n;
+        }
+    }
+
+    #! holds a weak reference in an object member
+    public class Holder {
+        public {
+            auto w;
+        }
+    }
+
+    #! returns True if the argument has a value
+    bool sub has_value(*object o) {
+        return exists o;
+    }
+
+    #! returns True; requires an object
+    bool sub is_object(object o) {
+        return True;
+    }
+
+    #! returns the type of the argument
+    string sub type_of(auto v) {
+        return v.type();
+    }
+
+    #! returns its argument
+    auto sub identity(auto v) {
+        return v;
+    }
+
+    #! returns whether a local variable assigned the value has a value
+    string sub assigned_exists(auto v) {
+        auto a = v;
+        return sprintf("%y", exists a);
+    }
+
+    #! returns whether a typed local variable assigned the value has a value
+    string sub typed_assigned_exists(*Target v) {
+        *Target a = v;
+        return sprintf("%y", exists a);
+    }
+
+    #! returns whether the first element of the list has a value, read by an iterator
+    string sub list_copy_exists(list<auto> l) {
+        ListIterator it(l);
+        it.next();
+        return sprintf("%y", exists it.getValue());
+    }
+
+    #! returns the results of every check for a live and for a destroyed target: name -> result
+    public hash<string, string> sub get_results() {
+        hash<string, string> rv = {};
+        foreach bool live in (True, False) {
+            hash<auto!> h = {};
+            Holder o();
+            list<auto!> l = (1,);
+            list<Target> tl = ();
+            *Target keep;
+            {
+                Target t();
+                h.w := t;
+                o.w := t;
+                l[0] := t;
+                tl[0] := t;
+                if (live) {
+                    keep = t;
+                }
+            }
+            string prefix = live ? "live-" : "destroyed-";
+            rv{prefix + "hash-value-exists"} = c_0_0(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-value-is-nothing"} = c_0_1(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-value-optional-object-argument"} = c_0_2(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-value-object-argument"} = c_0_3(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-value-auto-argument"} = c_0_4(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-value-returned"} = c_0_5(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-value-assigned"} = c_0_6(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-value-assigned-typed"} = c_0_7(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-value-method-call"} = c_0_8(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-value-pseudo-method-call"} = c_0_9(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-value-member-read"} = c_0_10(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-value-instanceof"} = c_0_11(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-value-cast"} = c_0_12(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-value-bool"} = c_0_13(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-value-copied-into-list"} = c_0_14(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-value-string"} = c_0_15(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-dynamic-key-exists"} = c_1_0(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-dynamic-key-is-nothing"} = c_1_1(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-dynamic-key-optional-object-argument"} = c_1_2(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-dynamic-key-object-argument"} = c_1_3(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-dynamic-key-auto-argument"} = c_1_4(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-dynamic-key-returned"} = c_1_5(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-dynamic-key-assigned"} = c_1_6(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-dynamic-key-assigned-typed"} = c_1_7(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-dynamic-key-method-call"} = c_1_8(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-dynamic-key-pseudo-method-call"} = c_1_9(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-dynamic-key-member-read"} = c_1_10(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-dynamic-key-instanceof"} = c_1_11(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-dynamic-key-cast"} = c_1_12(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-dynamic-key-bool"} = c_1_13(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-dynamic-key-copied-into-list"} = c_1_14(h, o, l, tl, "w", 0);
+            rv{prefix + "hash-dynamic-key-string"} = c_1_15(h, o, l, tl, "w", 0);
+            rv{prefix + "member-exists"} = c_2_0(h, o, l, tl, "w", 0);
+            rv{prefix + "member-is-nothing"} = c_2_1(h, o, l, tl, "w", 0);
+            rv{prefix + "member-optional-object-argument"} = c_2_2(h, o, l, tl, "w", 0);
+            rv{prefix + "member-object-argument"} = c_2_3(h, o, l, tl, "w", 0);
+            rv{prefix + "member-auto-argument"} = c_2_4(h, o, l, tl, "w", 0);
+            rv{prefix + "member-returned"} = c_2_5(h, o, l, tl, "w", 0);
+            rv{prefix + "member-assigned"} = c_2_6(h, o, l, tl, "w", 0);
+            rv{prefix + "member-assigned-typed"} = c_2_7(h, o, l, tl, "w", 0);
+            rv{prefix + "member-method-call"} = c_2_8(h, o, l, tl, "w", 0);
+            rv{prefix + "member-pseudo-method-call"} = c_2_9(h, o, l, tl, "w", 0);
+            rv{prefix + "member-member-read"} = c_2_10(h, o, l, tl, "w", 0);
+            rv{prefix + "member-instanceof"} = c_2_11(h, o, l, tl, "w", 0);
+            rv{prefix + "member-cast"} = c_2_12(h, o, l, tl, "w", 0);
+            rv{prefix + "member-bool"} = c_2_13(h, o, l, tl, "w", 0);
+            rv{prefix + "member-copied-into-list"} = c_2_14(h, o, l, tl, "w", 0);
+            rv{prefix + "member-string"} = c_2_15(h, o, l, tl, "w", 0);
+            rv{prefix + "member-dynamic-key-exists"} = c_3_0(h, o, l, tl, "w", 0);
+            rv{prefix + "member-dynamic-key-is-nothing"} = c_3_1(h, o, l, tl, "w", 0);
+            rv{prefix + "member-dynamic-key-optional-object-argument"} = c_3_2(h, o, l, tl, "w", 0);
+            rv{prefix + "member-dynamic-key-object-argument"} = c_3_3(h, o, l, tl, "w", 0);
+            rv{prefix + "member-dynamic-key-auto-argument"} = c_3_4(h, o, l, tl, "w", 0);
+            rv{prefix + "member-dynamic-key-returned"} = c_3_5(h, o, l, tl, "w", 0);
+            rv{prefix + "member-dynamic-key-assigned"} = c_3_6(h, o, l, tl, "w", 0);
+            rv{prefix + "member-dynamic-key-assigned-typed"} = c_3_7(h, o, l, tl, "w", 0);
+            rv{prefix + "member-dynamic-key-method-call"} = c_3_8(h, o, l, tl, "w", 0);
+            rv{prefix + "member-dynamic-key-pseudo-method-call"} = c_3_9(h, o, l, tl, "w", 0);
+            rv{prefix + "member-dynamic-key-member-read"} = c_3_10(h, o, l, tl, "w", 0);
+            rv{prefix + "member-dynamic-key-instanceof"} = c_3_11(h, o, l, tl, "w", 0);
+            rv{prefix + "member-dynamic-key-cast"} = c_3_12(h, o, l, tl, "w", 0);
+            rv{prefix + "member-dynamic-key-bool"} = c_3_13(h, o, l, tl, "w", 0);
+            rv{prefix + "member-dynamic-key-copied-into-list"} = c_3_14(h, o, l, tl, "w", 0);
+            rv{prefix + "member-dynamic-key-string"} = c_3_15(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-exists"} = c_4_0(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-is-nothing"} = c_4_1(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-optional-object-argument"} = c_4_2(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-object-argument"} = c_4_3(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-auto-argument"} = c_4_4(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-returned"} = c_4_5(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-assigned"} = c_4_6(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-assigned-typed"} = c_4_7(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-method-call"} = c_4_8(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-pseudo-method-call"} = c_4_9(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-member-read"} = c_4_10(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-instanceof"} = c_4_11(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-cast"} = c_4_12(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-bool"} = c_4_13(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-copied-into-list"} = c_4_14(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-string"} = c_4_15(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-variable-index-exists"} = c_5_0(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-variable-index-is-nothing"} = c_5_1(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-variable-index-optional-object-argument"} = c_5_2(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-variable-index-object-argument"} = c_5_3(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-variable-index-auto-argument"} = c_5_4(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-variable-index-returned"} = c_5_5(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-variable-index-assigned"} = c_5_6(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-variable-index-assigned-typed"} = c_5_7(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-variable-index-method-call"} = c_5_8(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-variable-index-pseudo-method-call"} = c_5_9(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-variable-index-member-read"} = c_5_10(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-variable-index-instanceof"} = c_5_11(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-variable-index-cast"} = c_5_12(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-variable-index-bool"} = c_5_13(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-variable-index-copied-into-list"} = c_5_14(h, o, l, tl, "w", 0);
+            rv{prefix + "list-element-variable-index-string"} = c_5_15(h, o, l, tl, "w", 0);
+            rv{prefix + "typed-list-element-exists"} = c_6_0(h, o, l, tl, "w", 0);
+            rv{prefix + "typed-list-element-is-nothing"} = c_6_1(h, o, l, tl, "w", 0);
+            rv{prefix + "typed-list-element-optional-object-argument"} = c_6_2(h, o, l, tl, "w", 0);
+            rv{prefix + "typed-list-element-object-argument"} = c_6_3(h, o, l, tl, "w", 0);
+            rv{prefix + "typed-list-element-auto-argument"} = c_6_4(h, o, l, tl, "w", 0);
+            rv{prefix + "typed-list-element-returned"} = c_6_5(h, o, l, tl, "w", 0);
+            rv{prefix + "typed-list-element-assigned"} = c_6_6(h, o, l, tl, "w", 0);
+            rv{prefix + "typed-list-element-assigned-typed"} = c_6_7(h, o, l, tl, "w", 0);
+            rv{prefix + "typed-list-element-method-call"} = c_6_8(h, o, l, tl, "w", 0);
+            rv{prefix + "typed-list-element-pseudo-method-call"} = c_6_9(h, o, l, tl, "w", 0);
+            rv{prefix + "typed-list-element-member-read"} = c_6_10(h, o, l, tl, "w", 0);
+            rv{prefix + "typed-list-element-instanceof"} = c_6_11(h, o, l, tl, "w", 0);
+            rv{prefix + "typed-list-element-cast"} = c_6_12(h, o, l, tl, "w", 0);
+            rv{prefix + "typed-list-element-bool"} = c_6_13(h, o, l, tl, "w", 0);
+            rv{prefix + "typed-list-element-copied-into-list"} = c_6_14(h, o, l, tl, "w", 0);
+            rv{prefix + "typed-list-element-string"} = c_6_15(h, o, l, tl, "w", 0);
+            rv{prefix + "map-exists"} = c_7_0(h, o, l, tl, "w", 0);
+            rv{prefix + "map-is-nothing"} = c_7_1(h, o, l, tl, "w", 0);
+            rv{prefix + "map-optional-object-argument"} = c_7_2(h, o, l, tl, "w", 0);
+            rv{prefix + "map-object-argument"} = c_7_3(h, o, l, tl, "w", 0);
+            rv{prefix + "map-auto-argument"} = c_7_4(h, o, l, tl, "w", 0);
+            rv{prefix + "map-returned"} = c_7_5(h, o, l, tl, "w", 0);
+            rv{prefix + "map-assigned"} = c_7_6(h, o, l, tl, "w", 0);
+            rv{prefix + "map-assigned-typed"} = c_7_7(h, o, l, tl, "w", 0);
+            rv{prefix + "map-method-call"} = c_7_8(h, o, l, tl, "w", 0);
+            rv{prefix + "map-pseudo-method-call"} = c_7_9(h, o, l, tl, "w", 0);
+            rv{prefix + "map-member-read"} = c_7_10(h, o, l, tl, "w", 0);
+            rv{prefix + "map-instanceof"} = c_7_11(h, o, l, tl, "w", 0);
+            rv{prefix + "map-cast"} = c_7_12(h, o, l, tl, "w", 0);
+            rv{prefix + "map-bool"} = c_7_13(h, o, l, tl, "w", 0);
+            rv{prefix + "map-copied-into-list"} = c_7_14(h, o, l, tl, "w", 0);
+            rv{prefix + "map-string"} = c_7_15(h, o, l, tl, "w", 0);
+        }
+        return rv;
+    }
+
+    #! exists of a weak reference read as hash-value
+    string sub c_0_0(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists h.w);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! is-nothing of a weak reference read as hash-value
+    string sub c_0_1(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", h.w === NOTHING);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! optional-object-argument of a weak reference read as hash-value
+    string sub c_0_2(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", has_value(h.w));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! object-argument of a weak reference read as hash-value
+    string sub c_0_3(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", is_object(h.w));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! auto-argument of a weak reference read as hash-value
+    string sub c_0_4(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return type_of(h.w);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returned of a weak reference read as hash-value
+    string sub c_0_5(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists identity(h.w));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigned of a weak reference read as hash-value
+    string sub c_0_6(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return assigned_exists(h.w);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigned-typed of a weak reference read as hash-value
+    string sub c_0_7(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return typed_assigned_exists(h.w);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! method-call of a weak reference read as hash-value
+    string sub c_0_8(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", h.w.ping());
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! pseudo-method-call of a weak reference read as hash-value
+    string sub c_0_9(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return h.w.type();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! member-read of a weak reference read as hash-value
+    string sub c_0_10(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", h.w.n);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! instanceof of a weak reference read as hash-value
+    string sub c_0_11(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", h.w instanceof Target);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! cast of a weak reference read as hash-value
+    string sub c_0_12(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists cast<*Target>(h.w));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! bool of a weak reference read as hash-value
+    string sub c_0_13(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", h.w ? True : False);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! copied-into-list of a weak reference read as hash-value
+    string sub c_0_14(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return list_copy_exists((h.w,));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! string of a weak reference read as hash-value
+    string sub c_0_15(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", h.w);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! exists of a weak reference read as hash-dynamic-key
+    string sub c_1_0(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists h{k});
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! is-nothing of a weak reference read as hash-dynamic-key
+    string sub c_1_1(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", h{k} === NOTHING);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! optional-object-argument of a weak reference read as hash-dynamic-key
+    string sub c_1_2(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", has_value(h{k}));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! object-argument of a weak reference read as hash-dynamic-key
+    string sub c_1_3(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", is_object(h{k}));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! auto-argument of a weak reference read as hash-dynamic-key
+    string sub c_1_4(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return type_of(h{k});
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returned of a weak reference read as hash-dynamic-key
+    string sub c_1_5(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists identity(h{k}));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigned of a weak reference read as hash-dynamic-key
+    string sub c_1_6(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return assigned_exists(h{k});
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigned-typed of a weak reference read as hash-dynamic-key
+    string sub c_1_7(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return typed_assigned_exists(h{k});
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! method-call of a weak reference read as hash-dynamic-key
+    string sub c_1_8(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", h{k}.ping());
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! pseudo-method-call of a weak reference read as hash-dynamic-key
+    string sub c_1_9(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return h{k}.type();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! member-read of a weak reference read as hash-dynamic-key
+    string sub c_1_10(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", h{k}.n);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! instanceof of a weak reference read as hash-dynamic-key
+    string sub c_1_11(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", h{k} instanceof Target);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! cast of a weak reference read as hash-dynamic-key
+    string sub c_1_12(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists cast<*Target>(h{k}));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! bool of a weak reference read as hash-dynamic-key
+    string sub c_1_13(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", h{k} ? True : False);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! copied-into-list of a weak reference read as hash-dynamic-key
+    string sub c_1_14(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return list_copy_exists((h{k},));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! string of a weak reference read as hash-dynamic-key
+    string sub c_1_15(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", h{k});
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! exists of a weak reference read as member
+    string sub c_2_0(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists o.w);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! is-nothing of a weak reference read as member
+    string sub c_2_1(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", o.w === NOTHING);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! optional-object-argument of a weak reference read as member
+    string sub c_2_2(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", has_value(o.w));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! object-argument of a weak reference read as member
+    string sub c_2_3(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", is_object(o.w));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! auto-argument of a weak reference read as member
+    string sub c_2_4(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return type_of(o.w);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returned of a weak reference read as member
+    string sub c_2_5(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists identity(o.w));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigned of a weak reference read as member
+    string sub c_2_6(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return assigned_exists(o.w);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigned-typed of a weak reference read as member
+    string sub c_2_7(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return typed_assigned_exists(o.w);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! method-call of a weak reference read as member
+    string sub c_2_8(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", o.w.ping());
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! pseudo-method-call of a weak reference read as member
+    string sub c_2_9(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return o.w.type();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! member-read of a weak reference read as member
+    string sub c_2_10(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", o.w.n);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! instanceof of a weak reference read as member
+    string sub c_2_11(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", o.w instanceof Target);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! cast of a weak reference read as member
+    string sub c_2_12(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists cast<*Target>(o.w));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! bool of a weak reference read as member
+    string sub c_2_13(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", o.w ? True : False);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! copied-into-list of a weak reference read as member
+    string sub c_2_14(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return list_copy_exists((o.w,));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! string of a weak reference read as member
+    string sub c_2_15(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", o.w);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! exists of a weak reference read as member-dynamic-key
+    string sub c_3_0(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists o{k});
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! is-nothing of a weak reference read as member-dynamic-key
+    string sub c_3_1(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", o{k} === NOTHING);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! optional-object-argument of a weak reference read as member-dynamic-key
+    string sub c_3_2(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", has_value(o{k}));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! object-argument of a weak reference read as member-dynamic-key
+    string sub c_3_3(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", is_object(o{k}));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! auto-argument of a weak reference read as member-dynamic-key
+    string sub c_3_4(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return type_of(o{k});
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returned of a weak reference read as member-dynamic-key
+    string sub c_3_5(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists identity(o{k}));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigned of a weak reference read as member-dynamic-key
+    string sub c_3_6(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return assigned_exists(o{k});
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigned-typed of a weak reference read as member-dynamic-key
+    string sub c_3_7(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return typed_assigned_exists(o{k});
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! method-call of a weak reference read as member-dynamic-key
+    string sub c_3_8(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", o{k}.ping());
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! pseudo-method-call of a weak reference read as member-dynamic-key
+    string sub c_3_9(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return o{k}.type();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! member-read of a weak reference read as member-dynamic-key
+    string sub c_3_10(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", o{k}.n);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! instanceof of a weak reference read as member-dynamic-key
+    string sub c_3_11(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", o{k} instanceof Target);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! cast of a weak reference read as member-dynamic-key
+    string sub c_3_12(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists cast<*Target>(o{k}));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! bool of a weak reference read as member-dynamic-key
+    string sub c_3_13(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", o{k} ? True : False);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! copied-into-list of a weak reference read as member-dynamic-key
+    string sub c_3_14(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return list_copy_exists((o{k},));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! string of a weak reference read as member-dynamic-key
+    string sub c_3_15(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", o{k});
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! exists of a weak reference read as list-element
+    string sub c_4_0(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists l[0]);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! is-nothing of a weak reference read as list-element
+    string sub c_4_1(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", l[0] === NOTHING);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! optional-object-argument of a weak reference read as list-element
+    string sub c_4_2(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", has_value(l[0]));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! object-argument of a weak reference read as list-element
+    string sub c_4_3(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", is_object(l[0]));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! auto-argument of a weak reference read as list-element
+    string sub c_4_4(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return type_of(l[0]);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returned of a weak reference read as list-element
+    string sub c_4_5(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists identity(l[0]));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigned of a weak reference read as list-element
+    string sub c_4_6(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return assigned_exists(l[0]);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigned-typed of a weak reference read as list-element
+    string sub c_4_7(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return typed_assigned_exists(l[0]);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! method-call of a weak reference read as list-element
+    string sub c_4_8(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", l[0].ping());
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! pseudo-method-call of a weak reference read as list-element
+    string sub c_4_9(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return l[0].type();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! member-read of a weak reference read as list-element
+    string sub c_4_10(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", l[0].n);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! instanceof of a weak reference read as list-element
+    string sub c_4_11(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", l[0] instanceof Target);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! cast of a weak reference read as list-element
+    string sub c_4_12(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists cast<*Target>(l[0]));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! bool of a weak reference read as list-element
+    string sub c_4_13(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", l[0] ? True : False);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! copied-into-list of a weak reference read as list-element
+    string sub c_4_14(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return list_copy_exists((l[0],));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! string of a weak reference read as list-element
+    string sub c_4_15(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", l[0]);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! exists of a weak reference read as list-element-variable-index
+    string sub c_5_0(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists l[i]);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! is-nothing of a weak reference read as list-element-variable-index
+    string sub c_5_1(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", l[i] === NOTHING);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! optional-object-argument of a weak reference read as list-element-variable-index
+    string sub c_5_2(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", has_value(l[i]));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! object-argument of a weak reference read as list-element-variable-index
+    string sub c_5_3(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", is_object(l[i]));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! auto-argument of a weak reference read as list-element-variable-index
+    string sub c_5_4(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return type_of(l[i]);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returned of a weak reference read as list-element-variable-index
+    string sub c_5_5(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists identity(l[i]));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigned of a weak reference read as list-element-variable-index
+    string sub c_5_6(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return assigned_exists(l[i]);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigned-typed of a weak reference read as list-element-variable-index
+    string sub c_5_7(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return typed_assigned_exists(l[i]);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! method-call of a weak reference read as list-element-variable-index
+    string sub c_5_8(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", l[i].ping());
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! pseudo-method-call of a weak reference read as list-element-variable-index
+    string sub c_5_9(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return l[i].type();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! member-read of a weak reference read as list-element-variable-index
+    string sub c_5_10(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", l[i].n);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! instanceof of a weak reference read as list-element-variable-index
+    string sub c_5_11(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", l[i] instanceof Target);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! cast of a weak reference read as list-element-variable-index
+    string sub c_5_12(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists cast<*Target>(l[i]));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! bool of a weak reference read as list-element-variable-index
+    string sub c_5_13(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", l[i] ? True : False);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! copied-into-list of a weak reference read as list-element-variable-index
+    string sub c_5_14(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return list_copy_exists((l[i],));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! string of a weak reference read as list-element-variable-index
+    string sub c_5_15(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", l[i]);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! exists of a weak reference read as typed-list-element
+    string sub c_6_0(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists tl[i]);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! is-nothing of a weak reference read as typed-list-element
+    string sub c_6_1(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", tl[i] === NOTHING);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! optional-object-argument of a weak reference read as typed-list-element
+    string sub c_6_2(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", has_value(tl[i]));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! object-argument of a weak reference read as typed-list-element
+    string sub c_6_3(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", is_object(tl[i]));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! auto-argument of a weak reference read as typed-list-element
+    string sub c_6_4(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return type_of(tl[i]);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returned of a weak reference read as typed-list-element
+    string sub c_6_5(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists identity(tl[i]));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigned of a weak reference read as typed-list-element
+    string sub c_6_6(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return assigned_exists(tl[i]);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigned-typed of a weak reference read as typed-list-element
+    string sub c_6_7(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return typed_assigned_exists(tl[i]);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! method-call of a weak reference read as typed-list-element
+    string sub c_6_8(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", tl[i].ping());
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! pseudo-method-call of a weak reference read as typed-list-element
+    string sub c_6_9(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return tl[i].type();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! member-read of a weak reference read as typed-list-element
+    string sub c_6_10(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", tl[i].n);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! instanceof of a weak reference read as typed-list-element
+    string sub c_6_11(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", tl[i] instanceof Target);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! cast of a weak reference read as typed-list-element
+    string sub c_6_12(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", exists cast<*Target>(tl[i]));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! bool of a weak reference read as typed-list-element
+    string sub c_6_13(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", tl[i] ? True : False);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! copied-into-list of a weak reference read as typed-list-element
+    string sub c_6_14(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return list_copy_exists((tl[i],));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! string of a weak reference read as typed-list-element
+    string sub c_6_15(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return sprintf("%y", tl[i]);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! exists of a weak reference read as map
+    string sub c_7_0(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return (map sprintf("%y", exists $1), l)[0];
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! is-nothing of a weak reference read as map
+    string sub c_7_1(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return (map sprintf("%y", $1 === NOTHING), l)[0];
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! optional-object-argument of a weak reference read as map
+    string sub c_7_2(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return (map sprintf("%y", has_value($1)), l)[0];
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! object-argument of a weak reference read as map
+    string sub c_7_3(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return (map sprintf("%y", is_object($1)), l)[0];
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! auto-argument of a weak reference read as map
+    string sub c_7_4(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return (map type_of($1), l)[0];
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returned of a weak reference read as map
+    string sub c_7_5(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return (map sprintf("%y", exists identity($1)), l)[0];
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigned of a weak reference read as map
+    string sub c_7_6(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return (map assigned_exists($1), l)[0];
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! assigned-typed of a weak reference read as map
+    string sub c_7_7(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return (map typed_assigned_exists($1), l)[0];
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! method-call of a weak reference read as map
+    string sub c_7_8(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return (map sprintf("%y", $1.ping()), l)[0];
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! pseudo-method-call of a weak reference read as map
+    string sub c_7_9(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return (map $1.type(), l)[0];
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! member-read of a weak reference read as map
+    string sub c_7_10(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return (map sprintf("%y", $1.n), l)[0];
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! instanceof of a weak reference read as map
+    string sub c_7_11(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return (map sprintf("%y", $1 instanceof Target), l)[0];
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! cast of a weak reference read as map
+    string sub c_7_12(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return (map sprintf("%y", exists cast<*Target>($1)), l)[0];
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! bool of a weak reference read as map
+    string sub c_7_13(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return (map sprintf("%y", $1 ? True : False), l)[0];
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! copied-into-list of a weak reference read as map
+    string sub c_7_14(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return (map list_copy_exists(($1,)), l)[0];
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! string of a weak reference read as map
+    string sub c_7_15(hash<auto> h, Holder o, list<auto> l, list<Target> tl, string k, int i) {
+        try {
+            return (map sprintf("%y", $1), l)[0];
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returns the results of the checks of a loop over the indexes of a list of objects: name -> result
+    /** Compiled code can read the elements of a list in a bounded loop directly; each check reads the elements in
+        such a loop, compares them with no value and copies them, for a live and for a destroyed target.
+    */
+    public hash<string, string> sub get_loop_results() {
+        hash<string, string> rv = {};
+        foreach bool live in (True, False) {
+            list<Target> tl = ();
+            *Target keep;
+            {
+                Target t();
+                tl[0] := t;
+                if (live) {
+                    keep = t;
+                }
+            }
+            string prefix = live ? "live-" : "destroyed-";
+            rv{prefix + "typed-list-loop-is-nothing"} = loop_is_nothing(tl);
+            rv{prefix + "typed-list-loop-copied"} = loop_copied(tl);
+        }
+        return rv;
+    }
+
+    string sub loop_is_nothing(list<Target> l) {
+        int nothing = 0;
+        for (int i = 0; i < l.size(); ++i) {
+            if (l[i] === NOTHING) {
+                ++nothing;
+            }
+        }
+        return sprintf("%d", nothing);
+    }
+
+    string sub loop_copied(list<Target> l) {
+        list<auto> copy = ();
+        for (int i = 0; i < l.size(); ++i) {
+            push copy, l[i];
+        }
+        return list_copy_exists(copy);
+    }
+
+    #! a target whose destruction is counted
+    public class Tracked {
+        public {
+            static int destroyed = 0;
+        }
+
+        destructor() {
+            ++destroyed;
+        }
+    }
+
+    #! returns the results of the checks of when a target is destroyed while a value read from a weak reference to it
+    #! is held: name -> result
+    /** Each check reads a weak reference to the target, then releases the only strong reference to the target and
+        reports whether the target was destroyed while the value read is still in scope.
+    */
+    public hash<string, string> sub get_lifetime_results() {
+        return {
+            "lifetime-hash-value-assigned": lifetime_hash_value_assigned(),
+            "lifetime-list-element-assigned": lifetime_list_element_assigned(),
+            "lifetime-map": lifetime_map(),
+        };
+    }
+
+    #! returns a hash holding the only strong reference to a new target under "t", and the weak references "h" and "l"
+    hash<auto> sub make_tracked() {
+        Tracked::destroyed = 0;
+        hash<auto!> rv = {"t": new Tracked()};
+        hash<auto!> h = {};
+        h.w := rv.t;
+        list<auto!> l = (1,);
+        l[0] := rv.t;
+        rv.h = h;
+        rv.l = l;
+        return rv;
+    }
+
+    string sub lifetime_hash_value_assigned() {
+        hash<auto!> c = make_tracked();
+        auto a = c.h.w;
+        remove c.t;
+        return sprintf("destroyed: %d, exists: %y", Tracked::destroyed, exists a);
+    }
+
+    string sub lifetime_list_element_assigned() {
+        hash<auto!> c = make_tracked();
+        list<auto> l = c.l;
+        auto a = l[0];
+        remove c.t;
+        return sprintf("destroyed: %d, exists: %y", Tracked::destroyed, exists a);
+    }
+
+
+
+    string sub lifetime_map() {
+        hash<auto!> c = make_tracked();
+        list<auto> l = c.l;
+        return (map lifetime_map_element($1, \c), l)[0];
+    }
+
+    string sub lifetime_map_element(auto v, reference<hash<auto!>> c) {
+        remove c.t;
+        return sprintf("destroyed: %d, exists: %y", Tracked::destroyed, exists v);
+    }
+
+}
