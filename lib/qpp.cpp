@@ -581,7 +581,8 @@ static void log(LogLevel ll, const char* fmt, ...) {
             break;
     }
 
-    fprintf(stderr, "%s: ", pn.c_str());
+    // the prefix goes to the stream of the message, or a reader of either stream gets a broken line
+    fprintf(stdout, "%s: ", pn.c_str());
     if (ll == LL_DEBUG)
         fputs("DEBUG: ", stdout);
     fputs(buf.c_str(), stdout);
