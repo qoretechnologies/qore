@@ -29,6 +29,21 @@ Namespace teardown clears enum back-pointers and visits the generic hashdecl
 cache as well as the declarations directly in the namespace's hashdecl list.
 These cleanup traversals must complete even after cancellation.
 
+Enum values retain their declaration, including its members and type information
+(issue #5519). Their inline member pointer still needs no value-node allocation,
+but an owned `QoreValue` now acquires/releases a declaration reference through
+`ref()`/`discard()`. `makeEnum()` creates an owned value; `makeEnumBorrowed()` is
+only for borrowed views whose declaration is already retained. `hasNode()` still
+describes node storage, while `needsRef()` includes enums for ownership and cleanup
+bookkeeping in the interpreter and JIT/AOT runtime. Lvalues transfer or acquire
+the same ownership, and release it when overwritten or converted to a scalar.
+
+An enum declaration retains its source location strings and namespace path after
+the namespace is gone; `getProgram()` and `getNamespace()` then return null.
+Keeping a value alive does not keep the Program alive. Binary modules that create
+or transfer enum values using earlier development headers must be rebuilt for the
+new ownership contract.
+
 ## Consumer protocol
 
 1. Register a Program cleanup callback before publishing cached types.
@@ -58,9 +73,11 @@ the namespace, source locations, default expressions, and other referenced types
 `examples/test/qore/misc/declaration_owner.cpp` exercises the public C++ API with
 AST, IR, JIT, and tiered Programs. It checks nested declarations, child copies, explicit imports,
 static and copied builtins, unattached copies, concrete generic instances, parse
-rollback, callback ordering, late namespace assignment, and hash values surviving
-namespace teardown. The `declaration-owner.qtest` driver runs this executable in
-the normal test suite.
+rollback, callback ordering, late namespace assignment, and hash and enum values
+surviving namespace teardown. The `declaration-owner.qtest` driver runs this
+executable in the normal test suite. `examples/test/qore/enums/enum-lifetime.qtest`
+checks escaped enum values, copies, scalar conversions, repeated calls and casts,
+nested Programs, and exception cleanup across the execution modes.
 
 The module-python follow-up must use the protocol for its hashdecl and enum type
 caches, class wrappers, and static-member descriptors, and add the issue's saved

@@ -707,7 +707,7 @@ QoreValue copy_value_and_resolve_lvar_refs_bound_implicit(const QoreValue& n, Ex
 
 QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink) {
     if (!n.hasNode()) {
-        return const_cast<QoreValue&>(n);
+        return n.refSelf();
     }
 
     switch (n.getType()) {
@@ -1056,7 +1056,7 @@ DLLLOCAL QoreValue copy_strip_complex_types(const QoreValue& n) {
         return QoreValue();
     }
     if (!n.hasNode()) {
-        return const_cast<QoreValue&>(n);
+        return n.refSelf();
     }
     return QoreValue(copy_strip_complex_types(n.getInternalNode()));
 }

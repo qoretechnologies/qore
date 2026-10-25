@@ -465,7 +465,7 @@ static constinit QoreEnvFlag ir_trace_exceptions_env("QORE_IR_TRACE_EXCEPTIONS")
 static QoreValue evalAndRef(AbstractQoreNode* node, ExceptionSink* xsink) {
     bool needs_deref = true;
     QoreValue result = node->eval(needs_deref, xsink);
-    if (!needs_deref && result.hasNode()) {
+    if (!needs_deref && result.needsRef()) {
         result = result.refSelf();
     }
     return result;
@@ -1219,7 +1219,7 @@ static QoreValue makePluginArgsList(const std::vector<QoreIRValue>& operands,
             return QoreValue();
         }
         QoreValue arg = getIRValue(values, operands[i]);
-        if (arg.hasNode()) {
+        if (arg.needsRef()) {
             arg.refSelf();
         }
         priv->pushIntern(arg);
@@ -1243,7 +1243,7 @@ static QoreListNode* buildArgListFromIROperands(
     priv->reserve(end - first);
     for (size_t i = first; i < end; ++i) {
         QoreValue val = getIRValue(values, operands[i]);
-        if (val.hasNode()) {
+        if (val.needsRef()) {
             val.refSelf();
         }
         priv->pushIntern(val);
@@ -1315,7 +1315,7 @@ static std::pair<bool, QoreValue> runDecomposedBackground(
             return {false, QoreValue()};
         }
         QoreValue recv = getIRValue(values, operands[0]);
-        if (recv.hasNode()) {
+        if (recv.needsRef()) {
             recv.refSelf();
         }
         QoreListNode* arg_list =
@@ -1330,7 +1330,7 @@ static std::pair<bool, QoreValue> runDecomposedBackground(
     // background callref(args) — call-ref pre-evaluated in operand 0
     if (auto* crcn = dynamic_cast<const CallReferenceCallNode*>(inner)) {
         QoreValue callee = getIRValue(values, operands[0]);
-        if (callee.hasNode()) {
+        if (callee.needsRef()) {
             callee.refSelf();
         }
         QoreListNode* arg_list =
@@ -1354,7 +1354,7 @@ static std::pair<bool, QoreValue> runBackgroundMetadata(
 
     if (bg_inst->kind == QoreIRBackgroundKind::DotEval) {
         QoreValue recv = getIRValue(values, bg_inst->operands[0]);
-        if (recv.hasNode()) {
+        if (recv.needsRef()) {
             recv.refSelf();
         }
         QoreListNode* arg_list =
@@ -1417,7 +1417,7 @@ static inline void setValueSlot(IRValueSlots& values,
 static inline void setOwnedValueSlot(IRValueSlots& values, IRCleanupSlots& cleanup,
         uint32_t id, QoreValue new_val, ExceptionSink* xsink) {
     setValueSlot(values, id, new_val, xsink);
-    if (new_val.hasNode()) {
+    if (new_val.needsRef()) {
         cleanup.push_back(id);
     }
 }
@@ -1466,7 +1466,7 @@ static void storeValue(std::unordered_map<const void*, QoreValue>& values, const
     if (it != values.end()) {
         it->second.discard(xsink);
     }
-    QoreValue stored = value.hasNode() ? value.refSelf() : value;
+    QoreValue stored = value.needsRef() ? value.refSelf() : value;
     values[key] = stored;
 }
 
@@ -1544,7 +1544,7 @@ static void assignLocalVarValue(LocalVar* var, const QoreValue& value, Exception
         return;
     }
     // refSelf before assign — assign takes ownership of the reference
-    QoreValue stored = value.hasNode() ? value.refSelf() : value;
+    QoreValue stored = value.needsRef() ? value.refSelf() : value;
     helper.assign(stored);
 }
 
@@ -1590,7 +1590,7 @@ static void mirrorLocalVarValueTransfer(LocalVar* var, QoreValue value, Exceptio
 }
 
 static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
-    QoreValue stored = value.hasNode() ? value.refSelf() : value;
+    QoreValue stored = value.needsRef() ? value.refSelf() : value;
     const QoreTypeInfo* ti = var ? var->getTypeInfoForLValue() : nullptr;
     ti = qore_substitute_type_params_if_needed(ti);
     QoreTypeInfo::acceptAssignment(ti, "<lvalue>", stored, xsink);
@@ -1648,7 +1648,7 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
         if (var->getLValue(helper, false, initial_assignment)) {
             return;
         }
-        QoreValue stored = value.hasNode() ? value.refSelf() : value;
+        QoreValue stored = value.needsRef() ? value.refSelf() : value;
         helper.assign(stored);
         return;
     }
@@ -1656,7 +1656,7 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
     if (cv->getLValue(helper, false, initial_assignment)) {
         return;
     }
-    QoreValue stored = value.hasNode() ? value.refSelf() : value;
+    QoreValue stored = value.needsRef() ? value.refSelf() : value;
     helper.assign(stored);
 }
 
@@ -1719,7 +1719,7 @@ static void assignGlobalVarValue(Var* var, const QoreValue& value, ExceptionSink
     if (var->getLValue(helper, false)) {
         return;
     }
-    QoreValue stored = value.hasNode() ? value.refSelf() : value;
+    QoreValue stored = value.needsRef() ? value.refSelf() : value;
     helper.assign(stored);
 }
 
@@ -1738,7 +1738,7 @@ static void assignObjectMemberValue(QoreObject* obj, const char* key, const Qore
         helper.vl.addMemberNotification(obj, key);
     }
 
-    QoreValue stored = value.hasNode() ? value.refSelf() : value;
+    QoreValue stored = value.needsRef() ? value.refSelf() : value;
     helper.assign(stored);
 }
 
@@ -1788,7 +1788,7 @@ static QoreListNode* buildArgList(const IRValueSlots& values,
     priv->reserve(operands.size() - start_index);
     for (size_t i = start_index; i < operands.size(); ++i) {
         QoreValue val = getIRValue(values, operands[i]);
-        QoreValue stored = val.hasNode() ? val.refSelf() : val;
+        QoreValue stored = val.needsRef() ? val.refSelf() : val;
         // Use pushIntern() to bypass checkVal/stripVal which strips complex types
         // (e.g., hash<string, bool> -> hash<auto>) from arguments
         priv->pushIntern(stored);
@@ -4476,7 +4476,7 @@ static void consumeLastUseCallArgSlots(IRValueSlots& values, IRCleanupSlots& cle
             continue;
         }
         QoreValue& slot = values[id];
-        if (!slot.hasNode()) {
+        if (!slot.needsRef()) {
             continue;
         }
         removeAllCleanupEntries(cleanup, id);
@@ -4497,7 +4497,7 @@ static bool hasLastUseCallArgSlots(const IRValueSlots& values, const std::vector
         if (value_use_counts[id] != occurrences_in_args) {
             continue;
         }
-        if (values[id].hasNode()) {
+        if (values[id].needsRef()) {
             return true;
         }
     }
@@ -4935,7 +4935,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     if (auto* call = dynamic_cast<const CallReferenceCallNode*>(
                             inv->expr.getInternalNode())) {
                         QoreValue exp = call->getExp();
-                        if (exp.hasNode()) {
+                        if (exp.needsRef()) {
                             exp = exp.refSelf();
                         }
                         // Direct evalImpl() — avoids evalExprNode() overhead
@@ -4969,7 +4969,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 if (auto* call = dynamic_cast<const CallReferenceCallNode*>(
                         inv->expr.getInternalNode())) {
                     QoreValue exp = call->getExp();
-                    if (exp.hasNode()) {
+                    if (exp.needsRef()) {
                         exp = exp.refSelf();
                     }
                     // Direct evalImpl() — avoids evalExprNode() overhead
@@ -5086,7 +5086,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 priv->reserve(nargs);
                 for (int i = 0; i < nargs; ++i) {
                     QoreValue val = fromBits(nb_args[i]);
-                    if (val.hasNode()) {
+                    if (val.needsRef()) {
                         val.refSelf();
                     }
                     priv->pushIntern(val);
@@ -5777,7 +5777,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             // Copy parent's value into handler's slot (with reference counting)
             const QoreValue& parent_val = (*parent_slot_cache)[i];
             locals_slot_cache[i] = parent_val;
-            if (parent_val.hasNode()) {
+            if (parent_val.needsRef()) {
                 locals_slot_cache[i].refSelf();
             }
             // Mark as instantiated (parent is responsible for its own instantiation)
@@ -5793,9 +5793,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 bool needs_deref = true;
                 QoreValue parent_val = lvar->eval(needs_deref, xsink);
                 if (!parent_val.isNothing()) {
-                    locals_slot_cache[i] = parent_val.hasNode() ? parent_val.refSelf() : parent_val;
-                    if (needs_deref && parent_val.hasNode()) {
-                        parent_val.getInternalNode()->deref(xsink);
+                    locals_slot_cache[i] = parent_val.needsRef() ? parent_val.refSelf() : parent_val;
+                    if (needs_deref && parent_val.needsRef()) {
+                        parent_val.discard(xsink);
                     }
                     locals_instantiated[i] = true;
                 }
@@ -5830,7 +5830,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 // TLS can be stale during exception cleanup.
                 QoreValue value = locals_slot_cache[i];
                 if (!value.isNothing() || i >= slot_to_lvar.size() || !slot_to_lvar[i]) {
-                    return value.hasNode() ? value.refSelf() : value;
+                    return value.needsRef() ? value.refSelf() : value;
                 }
                 // Some parent locals (notably reference/closure-use locals) are
                 // not seeded into the native parent slot cache.  If the cache
@@ -5841,20 +5841,20 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 bool needs_deref = true;
                 QoreValue value = slot_to_lvar[i]->eval(needs_deref, xsink);
                 if (xsink && *xsink) {
-                    if (needs_deref && value.hasNode()) {
+                    if (needs_deref && value.needsRef()) {
                         value.discard(xsink);
                     }
                     return QoreValue();
                 }
-                QoreValue rv = value.hasNode() ? value.refSelf() : value;
-                if (needs_deref && value.hasNode()) {
+                QoreValue rv = value.needsRef() ? value.refSelf() : value;
+                if (needs_deref && value.needsRef()) {
                     value.discard(xsink);
                 }
                 return rv;
             }
 
             QoreValue value = locals_slot_cache[i];
-            return value.hasNode() ? value.refSelf() : value;
+            return value.needsRef() ? value.refSelf() : value;
         }
 
         ~ParentSlotWriteback() {
@@ -5959,7 +5959,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 uint32_t sid = func.interpreter_param_slot_ids[static_cast<size_t>(i)];
                 if (sid < local_slot_count) {
                     QoreValue val = fromBits(direct_params->args[i]);
-                    if (val.hasNode()) {
+                    if (val.needsRef()) {
                         val.refSelf();
                     }
 
@@ -6505,7 +6505,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         if (sid < locals_slot_cache.size()) {
             locals_slot_cache[sid].discard(xsink);
             if (repopulate) {
-                locals_slot_cache[sid] = res.hasNode() ? res.refSelf() : res;
+                locals_slot_cache[sid] = res.needsRef() ? res.refSelf() : res;
             } else {
                 locals_slot_cache[sid] = QoreValue();
             }
@@ -7009,9 +7009,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     return false;
                 }
                 QoreValue val = getIRValue(values, incoming_value);
-                QoreValue stored = val.hasNode() ? val.refSelf() : val;
+                QoreValue stored = val.needsRef() ? val.refSelf() : val;
                 setValueSlot(values, phi->result.id, stored, xsink);
-                if (stored.hasNode()) {
+                if (stored.needsRef()) {
                     cleanup.push_back(phi->result.id);
                 }
                 ++ip;
@@ -7226,8 +7226,8 @@ next_instruction:
             }
             case QoreIROpcode::ConstEnum: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
-                // TAG_ENUM values are zero-allocation, zero-refcount inline values
-                setValueSlot(values, cinst->result.id,
+                // Inline enum values own a reference to their declaration.
+                setOwnedValueSlot(values, cleanup, cinst->result.id,
                     QoreValue::makeEnum(cinst->constant.enum_member), xsink);
                 ++ip;
                 break;
@@ -7255,7 +7255,7 @@ next_instruction:
                     }
                     const auto& operand = inst->operands[i];
                     QoreValue value = getIRValue(values, operand);
-                    QoreValue stored = value.hasNode() ? value.refSelf() : value;
+                    QoreValue stored = value.needsRef() ? value.refSelf() : value;
                     const QoreTypeInfo* vt = stored.getTypeInfo();
                     if (!vtype) {
                         vtype = vt;
@@ -7317,7 +7317,7 @@ next_instruction:
                     QoreHashKeyHelper key(key_val, xsink);
                     if (!*xsink) {
                         QoreValue value = getIRValue(values, inst->operands[i + 1]);
-                        QoreValue stored = value.hasNode() ? value.refSelf() : value;
+                        QoreValue stored = value.needsRef() ? value.refSelf() : value;
                         const QoreTypeInfo* vt = stored.getFullTypeInfo();
                         if (!i) {
                             vtype = vt;
@@ -7382,7 +7382,7 @@ next_instruction:
                         return false;
                     }
                     QoreValue value = getIRValue(values, inst->operands[i]);
-                    QoreValue stored = value.hasNode() ? value.refSelf() : value;
+                    QoreValue stored = value.needsRef() ? value.refSelf() : value;
                     const QoreTypeInfo* vt = stored.getFullTypeInfo();
                     if (!i) {
                         vtype = vt;
@@ -7439,7 +7439,7 @@ next_instruction:
                         push_val = values[value_operand.id];
                         values[value_operand.id] = QoreValue();
                     } else {
-                        push_val = value.hasNode() ? value.refSelf() : value;
+                        push_val = value.needsRef() ? value.refSelf() : value;
                     }
                     // Track element type for correct list<T> type info at runtime
                     qore_list_private::get(*list)->setListTypeFromNewElementType(
@@ -7554,7 +7554,7 @@ next_instruction:
                     }
                 }
                 setValueSlot(values, inst->result.id, result, xsink);
-                if (result.hasNode()) {
+                if (result.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -7633,7 +7633,7 @@ next_instruction:
                         stored = values[value_operand.id];
                         values[value_operand.id] = QoreValue();
                     } else {
-                        stored = val.hasNode() ? val.refSelf() : val;
+                        stored = val.needsRef() ? val.refSelf() : val;
                     }
                     qore_list_private* priv = qore_list_private::get(*l);
                     ValueHolder checked(stored, xsink);
@@ -7751,7 +7751,7 @@ next_instruction:
                 }
                 if (resultValueIsNeeded(inst->result)) {
                     setValueSlot(values, inst->result.id, result, xsink);
-                    if (result.hasNode()) {
+                    if (result.needsRef()) {
                         cleanup.push_back(inst->result.id);
                     }
                 } else {
@@ -7822,7 +7822,7 @@ next_instruction:
                 }
                 QoreValue val = getIRValue(values, inst->operands.front());
                 traceIRRef(inst, "refself.input", inst->operands.front().id, val);
-                QoreValue out = val.hasNode() ? val.refSelf() : val;
+                QoreValue out = val.needsRef() ? val.refSelf() : val;
                 traceIRRef(inst, "refself.output", inst->result.id, out);
                 setOwnedValueSlot(values, cleanup, inst->result.id, out, xsink);
                 ++ip;
@@ -8034,7 +8034,7 @@ next_instruction:
                     break;
                 }
                 setValueSlot(values, inv->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(inv->result.id);
                 }
                 prev_block = block;
@@ -8292,9 +8292,9 @@ next_instruction:
                         cleanupLocalCaches();
                         return false;
                     }
-                    if (needs_deref && out.hasNode()) {
+                    if (needs_deref && out.needsRef()) {
                         result_slot_owned = true;
-                    } else if (!needs_deref && out.hasNode()) {
+                    } else if (!needs_deref && out.needsRef()) {
                         LocalVarValue* lvv = thread_try_find_lvar(local_inst->local);
                         weak_ref_load = lvv && isWeakReferenceType(lvv->val.getType());
                     }
@@ -8328,8 +8328,8 @@ next_instruction:
                                 goto load_local_done;
                             }
                             // Cache hit: one refSelf, no hash lookups, no instantiation check
-                            out = cached_val.hasNode() ? cached_val.refSelf() : cached_val;
-                            result_slot_owned = out.hasNode();
+                            out = cached_val.needsRef() ? cached_val.refSelf() : cached_val;
+                            result_slot_owned = out.needsRef();
                             goto load_local_done;
                         }
                     }
@@ -8381,8 +8381,8 @@ next_instruction:
                             // local remains the owner. Release that temporary
                             // and forward borrowed bits to the paired mutation.
                             out = val;
-                            if (needs_deref && val.hasNode()) {
-                                val.getInternalNode()->deref(xsink);
+                            if (needs_deref && val.needsRef()) {
+                                val.discard(xsink);
                             }
                             result_slot_owned = false;
                             goto load_local_done;
@@ -8395,20 +8395,20 @@ next_instruction:
                                 // access re-evaluates via TLS (weak-ref target check)
                                 locals_slot_cache[sid] = QoreValue();
                             } else {
-                                locals_slot_cache[sid] = val.hasNode() ? val.refSelf() : val;
+                                locals_slot_cache[sid] = val.needsRef() ? val.refSelf() : val;
                             }
                         }
                         if (is_weak_ref_local && val.hasNode()) {
                             out = val;
                             weak_ref_load = true;
                         } else {
-                            out = val.hasNode() ? val.refSelf() : val;
-                            result_slot_owned = out.hasNode();
+                            out = val.needsRef() ? val.refSelf() : val;
+                            result_slot_owned = out.needsRef();
                         }
                         // Release eval()'s owned ref — slot-cache and out each hold
                         // their own +1 refs via refSelf()
-                        if (needs_deref && val.hasNode()) {
-                            val.getInternalNode()->deref(xsink);
+                        if (needs_deref && val.needsRef()) {
+                            val.discard(xsink);
                         }
                     }
                 } else {
@@ -8430,9 +8430,9 @@ next_instruction:
                             cleanupLocalCaches();
                             return false;
                         }
-                        if (needs_deref && out.hasNode()) {
+                        if (needs_deref && out.needsRef()) {
                             result_slot_owned = true;
-                        } else if (!needs_deref && out.hasNode()) {
+                        } else if (!needs_deref && out.needsRef()) {
                             LocalVarValue* lvv = thread_try_find_lvar(local_inst->local);
                             weak_ref_load = lvv && isWeakReferenceType(lvv->val.getType());
                         }
@@ -8453,7 +8453,7 @@ load_local_done:
                     setValueSlotDirect(values, local_inst->result.id, out);
                     if (weak_ref_load && out.hasNode()) {
                         trackWeakLoadTemp(local_inst->result.id);
-                    } else if (out.hasNode()) {
+                    } else if (out.needsRef()) {
                         // Every non-owned node result borrows its local's reference.
                         // Clear the slot after its final consumer so scope cleanup
                         // cannot mistake the stale alias for an owned reference.
@@ -8464,14 +8464,14 @@ load_local_done:
                 if (!weak_ref_load && local_inst->result.id >= 0) {
                     local_owned_slots.insert(local_inst->result.id);
                 }
-                if (result_slot_owned && out.hasNode()) {
+                if (result_slot_owned && out.needsRef()) {
                     cleanup.push_back(local_inst->result.id);
                 }
                 // Track LoadLocal result slot for cleanup in UninstantiateLocal
                 // Only track node values that need reference cleanup; simple types
                 // (int/float/bool) don't need tracking
                 if (result_slot_owned
-                        && out.hasNode()
+                        && out.needsRef()
                         && local_inst->slot_id != UINT32_MAX
                         && local_inst->slot_id < local_load_slots.size()) {
                     uint32_t rid = local_inst->result.id;
@@ -8493,9 +8493,9 @@ load_local_done:
                 if (args && idx >= 0 && static_cast<size_t>(idx) < args->size()) {
                     val = (*args)[static_cast<size_t>(idx)];
                 }
-                QoreValue out = val.hasNode() ? val.refSelf() : val;
+                QoreValue out = val.needsRef() ? val.refSelf() : val;
                 setValueSlot(values, inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -8514,8 +8514,8 @@ load_local_done:
                         val = (*closure)[static_cast<size_t>(idx)];
                     }
                     // Closure arg: val is shared reference, needs refSelf for value slot
-                    out = val.hasNode() ? val.refSelf() : val;
-                    result_slot_owned = out.hasNode();
+                    out = val.needsRef() ? val.refSelf() : val;
+                    result_slot_owned = out.needsRef();
                 } else {
                     // the value is read from the variable every time: other threads can change it through a
                     // reference or a closure, so a value kept from an earlier read can be stale
@@ -8556,7 +8556,7 @@ load_local_done:
                                 }
                                 // cv->eval() returns a referenced value (+1), which the value slot takes
                                 out = val;
-                                result_slot_owned = out.hasNode();
+                                result_slot_owned = out.needsRef();
                             }
                         } else {
                             // Closure variable not found in closure context — fall back to
@@ -8576,10 +8576,10 @@ load_local_done:
                                 // If needs_deref is false, we need to refSelf for the value slot
                                 if (is_weak_ref_local) {
                                     // keep the borrowed weak target unowned
-                                } else if (!needs_deref && out.hasNode()) {
+                                } else if (!needs_deref && out.needsRef()) {
                                     out = out.refSelf();
                                     result_slot_owned = true;
-                                } else if (needs_deref && out.hasNode()) {
+                                } else if (needs_deref && out.needsRef()) {
                                     result_slot_owned = true;
                                 }
                             }
@@ -8599,7 +8599,7 @@ load_local_done:
                         trackWeakLoadTemp(local_inst->result.id);
                     }
                 }
-                if (result_slot_owned && out.hasNode() && local_inst->auto_ref) {
+                if (result_slot_owned && out.needsRef() && local_inst->auto_ref) {
                     cleanup.push_back(local_inst->result.id);
                 }
                 ++ip;
@@ -8698,7 +8698,7 @@ load_local_done:
                 }
                 // else: NOTHING for non-hash/non-object values
                 setValueSlot(values, hka_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(hka_inst->result.id);
                 }
                 ++ip;
@@ -9032,7 +9032,7 @@ load_local_done:
                     }
                 }
                 setValueSlot(values, inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -9265,8 +9265,8 @@ load_local_done:
                     if (fused_inst->target_slot_id < locals_slot_cache.size()) {
                         locals_slot_cache[fused_inst->target_slot_id] = QoreValue(target_val);
                     }
-                    if (nd && tv.hasNode()) {
-                        tv.getInternalNode()->deref(xsink);
+                    if (nd && tv.needsRef()) {
+                        tv.discard(xsink);
                     }
                 }
                 // Read source from slot cache (fast path) or eval (cold path)
@@ -9291,8 +9291,8 @@ load_local_done:
                     if (fused_inst->source_slot_id < locals_slot_cache.size()) {
                         locals_slot_cache[fused_inst->source_slot_id] = QoreValue(source_val);
                     }
-                    if (nd && sv.hasNode()) {
-                        sv.getInternalNode()->deref(xsink);
+                    if (nd && sv.needsRef()) {
+                        sv.discard(xsink);
                     }
                 }
                 int64 result_val = target_val + source_val;
@@ -9392,8 +9392,8 @@ load_local_done:
                     if (fused_inst->slot_id < locals_slot_cache.size()) {
                         locals_slot_cache[fused_inst->slot_id] = QoreValue(local_val);
                     }
-                    if (nd && lv.hasNode()) {
-                        lv.getInternalNode()->deref(xsink);
+                    if (nd && lv.needsRef()) {
+                        lv.discard(xsink);
                     }
                 }
                 int64 result_val = local_val + fused_inst->delta;
@@ -9455,8 +9455,8 @@ load_local_done:
                     if (fused_inst->lhs_slot_id < locals_slot_cache.size()) {
                         locals_slot_cache[fused_inst->lhs_slot_id] = QoreValue(lhs_val);
                     }
-                    if (nd && lv.hasNode()) {
-                        lv.getInternalNode()->deref(xsink);
+                    if (nd && lv.needsRef()) {
+                        lv.discard(xsink);
                     }
                 }
                 int64_t rhs_val = 0;
@@ -9480,8 +9480,8 @@ load_local_done:
                     if (fused_inst->rhs_slot_id < locals_slot_cache.size()) {
                         locals_slot_cache[fused_inst->rhs_slot_id] = QoreValue(rhs_val);
                     }
-                    if (nd && rv.hasNode()) {
-                        rv.getInternalNode()->deref(xsink);
+                    if (nd && rv.needsRef()) {
+                        rv.discard(xsink);
                     }
                 }
                 prev_block = block;
@@ -9532,7 +9532,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, mhk->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(mhk->result.id);
                 }
                 ++ip;
@@ -9568,7 +9568,7 @@ load_local_done:
                     out = result.release();
                 }
                 setValueSlot(values, mhk->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(mhk->result.id);
                 }
                 ++ip;
@@ -9601,7 +9601,7 @@ load_local_done:
                     out = result.release();
                 }
                 setValueSlot(values, mhk->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(mhk->result.id);
                 }
                 ++ip;
@@ -9626,7 +9626,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, mhk->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(mhk->result.id);
                 }
                 ++ip;
@@ -9659,7 +9659,7 @@ load_local_done:
                     out = result.release();
                 }
                 setValueSlot(values, mhk->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(mhk->result.id);
                 }
                 ++ip;
@@ -9718,7 +9718,7 @@ load_local_done:
                     out = result.release();
                 }
                 setValueSlot(values, select_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(select_inst->result.id);
                 }
                 ++ip;
@@ -9772,7 +9772,7 @@ load_local_done:
                     out = result.release();
                 }
                 setValueSlot(values, mhk->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(mhk->result.id);
                 }
                 ++ip;
@@ -9804,7 +9804,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, sm_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(sm_inst->result.id);
                     if (needs_eval) {
                         // Strong ref from evaluating a reference-type member
@@ -9833,7 +9833,7 @@ load_local_done:
                     }
                     QoreValue out = fromBits(result_bits);
                     setValueSlot(values, sv_inst->result.id, out, xsink);
-                    if (out.hasNode()) {
+                    if (out.needsRef()) {
                         cleanup.push_back(sv_inst->result.id);
                     }
                     ++ip;
@@ -9869,7 +9869,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, sv_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(sv_inst->result.id);
                     if (needs_eval) {
                         // Strong ref from evaluating a reference-type static var
@@ -9977,7 +9977,7 @@ load_local_done:
                 invalidateExternalCaches();
                 QoreValue out = fromBits(rv);
                 setValueSlot(values, no_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(no_inst->result.id);
                 }
                 ++ip;
@@ -9993,7 +9993,7 @@ load_local_done:
                 if (rcr) {
                     out = const_cast<RuntimeConstantRefNode*>(rcr)->eval(
                             needs_deref, xsink);
-                    if (!needs_deref && out.hasNode()) {
+                    if (!needs_deref && out.needsRef()) {
                         out = out.refSelf();
                     }
                     // Set exception location to the constant location if an exception occurred
@@ -10012,7 +10012,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, lc_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(lc_inst->result.id);
                 }
                 ++ip;
@@ -10038,7 +10038,7 @@ load_local_done:
                     }
                     out = const_cast<QoreClosureParseNode*>(cc_inst->closure_node)->eval(
                             needs_deref, xsink);
-                    if (!needs_deref && out.hasNode()) {
+                    if (!needs_deref && out.needsRef()) {
                         out = out.refSelf();
                     }
                 } else if (cc_inst->expr.hasNode()) {
@@ -10056,7 +10056,7 @@ load_local_done:
                         }
                     }
                     out = closure_node->eval(needs_deref, xsink);
-                    if (!needs_deref && out.hasNode()) {
+                    if (!needs_deref && out.needsRef()) {
                         out = out.refSelf();
                     }
                 } else {
@@ -10072,7 +10072,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, cc_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(cc_inst->result.id);
                 }
                 ++ip;
@@ -10091,7 +10091,7 @@ load_local_done:
                     return false;
                 }
                 QoreValue out = ref_expr.getInternalNode()->eval(needs_deref, xsink);
-                if (!needs_deref && out.hasNode()) {
+                if (!needs_deref && out.needsRef()) {
                     out = out.refSelf();
                 }
                 ref_expr.discard(xsink);
@@ -10101,7 +10101,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, cr_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(cr_inst->result.id);
                 }
                 ++ip;
@@ -10120,7 +10120,7 @@ load_local_done:
                     return false;
                 }
                 QoreValue out = ref_expr.getInternalNode()->eval(needs_deref, xsink);
-                if (!needs_deref && out.hasNode()) {
+                if (!needs_deref && out.needsRef()) {
                     out = out.refSelf();
                 }
                 ref_expr.discard(xsink);
@@ -10130,7 +10130,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, mr_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(mr_inst->result.id);
                 }
                 ++ip;
@@ -10178,7 +10178,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, pr_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(pr_inst->result.id);
                 }
                 ++ip;
@@ -10198,7 +10198,7 @@ load_local_done:
                     return false;
                 }
                 QoreValue out = const_cast<NewHashDeclNode*>(nhd)->eval(needs_deref, xsink);
-                if (!needs_deref && out.hasNode()) {
+                if (!needs_deref && out.needsRef()) {
                     out = out.refSelf();
                 }
                 if (xsink && *xsink) {
@@ -10207,7 +10207,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, nhd_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(nhd_inst->result.id);
                 }
                 ++ip;
@@ -10227,7 +10227,7 @@ load_local_done:
                     return false;
                 }
                 QoreValue out = const_cast<NewComplexHashNode*>(nch)->eval(needs_deref, xsink);
-                if (!needs_deref && out.hasNode()) {
+                if (!needs_deref && out.needsRef()) {
                     out = out.refSelf();
                 }
                 if (xsink && *xsink) {
@@ -10236,7 +10236,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, nch_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(nch_inst->result.id);
                 }
                 ++ip;
@@ -10256,7 +10256,7 @@ load_local_done:
                     return false;
                 }
                 QoreValue out = const_cast<NewComplexListNode*>(ncl)->eval(needs_deref, xsink);
-                if (!needs_deref && out.hasNode()) {
+                if (!needs_deref && out.needsRef()) {
                     out = out.refSelf();
                 }
                 if (xsink && *xsink) {
@@ -10265,7 +10265,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, ncl_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(ncl_inst->result.id);
                 }
                 ++ip;
@@ -10290,7 +10290,7 @@ load_local_done:
                 } else {
                     bool needs_deref = true;
                     out = const_cast<NewComplexBufferNode*>(ncb)->eval(needs_deref, xsink);
-                    if (!needs_deref && out.hasNode()) {
+                    if (!needs_deref && out.needsRef()) {
                         out = out.refSelf();
                     }
                 }
@@ -10300,7 +10300,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, ncb_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(ncb_inst->result.id);
                 }
                 ++ip;
@@ -10363,7 +10363,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, vrn_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(vrn_inst->result.id);
                 }
                 ++ip;
@@ -10398,7 +10398,7 @@ load_local_done:
                 }
                 QoreValue out = result ? QoreValue(result) : QoreValue();
                 setValueSlot(values, nhdfh_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(nhdfh_inst->result.id);
                 }
                 ++ip;
@@ -10412,7 +10412,7 @@ load_local_done:
                 QoreHashKeyHelper key_str(key_val, xsink);
                 if (!*xsink) {
                     QoreHashNode* hash = hash_val.get<QoreHashNode>();
-                    if (value_val.hasNode()) {
+                    if (value_val.needsRef()) {
                         value_val.refSelf();
                     }
                     hash->setKeyValue(key_str.c_str(), value_val, xsink);
@@ -10597,7 +10597,7 @@ load_local_done:
                         cleanupLocalCaches();
                         return false;
                     }
-                    QoreValue stored = val.hasNode() ? val.refSelf() : val;
+                    QoreValue stored = val.needsRef() ? val.refSelf() : val;
                     // the store's own mode, not Weak: this branch is taken for every
                     // non-Normal mode, and assigning as Weak here made '@=' on a local give up
                     // the ownership that separates it from ':=', destroying a target whose only
@@ -10622,7 +10622,7 @@ load_local_done:
                     if (local_inst->result.isValid()) {
                         QoreValue res = helper.getReferencedValue();
                         setValueSlot(values, local_inst->result.id, res, xsink);
-                        if (res.hasNode()) {
+                        if (res.needsRef()) {
                             cleanup.push_back(local_inst->result.id);
                         }
                     }
@@ -11232,9 +11232,9 @@ load_local_done:
                 // the value is only stored in the variable: other threads can change it, so the frame keeps no copy
                 assignClosureVarValue(local_inst->local, val, xsink, local_inst->initial_assignment);
                 if (local_inst->result.isValid()) {
-                    QoreValue res = val.hasNode() ? val.refSelf() : val;
+                    QoreValue res = val.needsRef() ? val.refSelf() : val;
                     setValueSlot(values, local_inst->result.id, res, xsink);
-                    if (res.hasNode()) {
+                    if (res.needsRef()) {
                         cleanup.push_back(local_inst->result.id);
                     }
                 }
@@ -11264,7 +11264,7 @@ load_local_done:
                 // the value is read from the variable every time: other threads can change it
                 QoreValue out = var_inst->var->eval();
                 setValueSlot(values, var_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(var_inst->result.id);
                 }
                 ++ip;
@@ -11298,9 +11298,9 @@ load_local_done:
                 // the value is only stored in the variable: other threads can change it, so the frame keeps no copy
                 assignGlobalVarValue(var_inst->var, val, xsink);
                 if (var_inst->result.isValid()) {
-                    QoreValue res = val.hasNode() ? val.refSelf() : val;
+                    QoreValue res = val.needsRef() ? val.refSelf() : val;
                     setValueSlot(values, var_inst->result.id, res, xsink);
-                    if (res.hasNode()) {
+                    if (res.needsRef()) {
                         cleanup.push_back(var_inst->result.id);
                     }
                 }
@@ -11330,13 +11330,13 @@ load_local_done:
                 auto it = threadlocals.find(var_inst->var);
                 if (it != threadlocals.end() && it->second.getType() != NT_REFERENCE) {
                     QoreValue val = it->second;
-                    out = val.hasNode() ? val.refSelf() : val;
+                    out = val.needsRef() ? val.refSelf() : val;
                 } else {
                     // Read from the actual thread-local variable when not in the local cache
                     out = var_inst->var->eval();
                 }
                 setValueSlot(values, var_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(var_inst->result.id);
                 }
                 ++ip;
@@ -11371,9 +11371,9 @@ load_local_done:
                 // Write-through: update the actual thread-local variable.
                 assignGlobalVarValue(var_inst->var, val, xsink);
                 if (var_inst->result.isValid()) {
-                    QoreValue res = val.hasNode() ? val.refSelf() : val;
+                    QoreValue res = val.needsRef() ? val.refSelf() : val;
                     setValueSlot(values, var_inst->result.id, res, xsink);
-                    if (res.hasNode()) {
+                    if (res.needsRef()) {
                         cleanup.push_back(var_inst->result.id);
                     }
                 }
@@ -11403,12 +11403,12 @@ load_local_done:
                 QoreValue out;
                 if (argv) {
                     out = argv->retrieveEntry(impl_arg_inst->offset);
-                    if (out.hasNode()) {
+                    if (out.needsRef()) {
                         out = out.refSelf();
                     }
                 }
                 setValueSlot(values, impl_arg_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(impl_arg_inst->result.id);
                 }
                 ++ip;
@@ -11422,7 +11422,7 @@ load_local_done:
                     out.refSelf();
                 }
                 setValueSlot(values, inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -11551,7 +11551,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, inst->result.id, result, xsink);
-                if (result.hasNode()) {
+                if (result.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -11574,7 +11574,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, inst->result.id, result, xsink);
-                if (result.hasNode()) {
+                if (result.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -11624,7 +11624,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, inst->result.id, result, xsink);
-                if (result.hasNode()) {
+                if (result.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -11649,7 +11649,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, inst->result.id, result, xsink);
-                if (result.hasNode()) {
+                if (result.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -11686,7 +11686,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -11890,7 +11890,7 @@ load_local_done:
                 }
                 QoreValue result = fromBits(entry);
                 setValueSlot(values, inst->result.id, result, xsink);
-                if (result.hasNode()) {
+                if (result.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -12096,7 +12096,7 @@ load_local_done:
                 // constructor deferred (see design/dgc.md), as LValuePathAssign's hand-over of its value avoids
                 uint32_t kept_id = inst->operands.front().id;
                 QoreValue kept = getIRValue(values, inst->operands.front());
-                if (kept.hasNode()) {
+                if (kept.needsRef()) {
                     bool move = kept_id < value_use_counts.size() && value_use_counts[kept_id] == 1
                         && !(kept_id < cross_block_slots.size() && cross_block_slots[kept_id])
                         && !(kept_id < return_protected_slots.size() && return_protected_slots[kept_id])
@@ -12322,7 +12322,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -12439,7 +12439,7 @@ load_local_done:
                     }
                 } else {
                     setValueSlot(values, inst->result.id, result, xsink);
-                    if (result.hasNode()) {
+                    if (result.needsRef()) {
                         cleanup.push_back(inst->result.id);
                     }
                 }
@@ -12608,7 +12608,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -12680,7 +12680,7 @@ load_local_done:
                 }
                 QoreValue res = fromBits(result_bits);
                 setValueSlot(values, inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -12723,7 +12723,7 @@ load_local_done:
                         return false;
                     }
                     setValueSlot(values, inst->result.id, res, xsink);
-                    if (res.hasNode()) {
+                    if (res.needsRef()) {
                         cleanup.push_back(inst->result.id);
                     }
                     ++ip;
@@ -12744,7 +12744,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -12786,7 +12786,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -12813,7 +12813,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -12847,7 +12847,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -12862,7 +12862,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, lval_inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
                 updateLocalVarFromLvalue(instantiated_locals, instantiated_locals_ordered, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated,
@@ -12963,7 +12963,7 @@ load_local_done:
                 // causes double-free when multiple stores accumulate in cleanup
                 if (lval_inst->result.isValid()) {
                     setValueSlot(values, lval_inst->result.id, res, xsink);
-                    if (res.hasNode()) {
+                    if (res.needsRef()) {
                         cleanup.push_back(lval_inst->result.id);
                     }
                 } else {
@@ -13076,7 +13076,7 @@ load_local_done:
 
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
-                    if (res.hasNode()) {
+                    if (res.needsRef()) {
                         cleanup.push_back(path_inst->result.id);
                     }
                 }
@@ -13218,7 +13218,7 @@ load_local_done:
                 }
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
-                    if (res.hasNode()) {
+                    if (res.needsRef()) {
                         cleanup.push_back(path_inst->result.id);
                     }
                 } else {
@@ -13758,7 +13758,7 @@ load_local_done:
                 cleanupLocalCaches();
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
-                    if (res.hasNode()) {
+                    if (res.needsRef()) {
                         cleanup.push_back(path_inst->result.id);
                     }
                 } else {
@@ -13913,7 +13913,7 @@ load_local_done:
                 cleanupLocalCaches();
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
-                    if (res.hasNode()) {
+                    if (res.needsRef()) {
                         cleanup.push_back(path_inst->result.id);
                     }
                 } else {
@@ -14142,7 +14142,7 @@ load_local_done:
                 cleanupLocalCaches();
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
-                    if (res.hasNode()) {
+                    if (res.needsRef()) {
                         cleanup.push_back(path_inst->result.id);
                     }
                 }
@@ -14178,7 +14178,7 @@ load_local_done:
                 }
                 markParentLValueDirty(lval_inst, inc_vrn);
                 setValueSlot(values, lval_inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
                 ++ip;
@@ -14196,7 +14196,7 @@ load_local_done:
                 // Shift returns the removed element — always invalidate (never repopulate)
                 finalizeLValueSlotCache(lval_inst, lval_vrn, res, false);
                 setValueSlot(values, lval_inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
                 ++ip;
@@ -14243,7 +14243,7 @@ load_local_done:
                 }
                 finalizeLValueSlotCache(lval_inst, lval_vrn, res, is_simple_var);
                 setValueSlot(values, lval_inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
                 ++ip;
@@ -14328,7 +14328,7 @@ load_local_done:
                 }
                 finalizeLValueSlotCache(lval_inst, lval_vrn, res, is_simple_var);
                 setValueSlot(values, lval_inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
                 ++ip;
@@ -14357,7 +14357,7 @@ load_local_done:
                 }
                 finalizeLValueSlotCache(lval_inst, lval_vrn, res, is_simple_var);
                 setValueSlot(values, lval_inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
                 ++ip;
@@ -14387,7 +14387,7 @@ load_local_done:
                 // Splice returns the mutated lvalue; always invalidate and let the slot refresh from storage.
                 finalizeLValueSlotCache(lval_inst, lval_vrn, res, false);
                 setValueSlot(values, lval_inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
                 ++ip;
@@ -14442,7 +14442,7 @@ load_local_done:
                             invalidateExternalCaches();
                         }
                         setValueSlot(values, inst->result.id, res, xsink);
-                        if (res.hasNode()) {
+                        if (res.needsRef()) {
                             cleanup.push_back(inst->result.id);
                         }
                         ++ip;
@@ -14515,7 +14515,7 @@ load_local_done:
                         invalidateExternalCaches();
                     }
                     setValueSlot(values, inst->result.id, res, xsink);
-                    if (res.hasNode()) {
+                    if (res.needsRef()) {
                         cleanup.push_back(inst->result.id);
                     }
                     ++ip;
@@ -14560,7 +14560,7 @@ load_local_done:
                             invalidateExternalCaches();
                         }
                         setValueSlot(values, inst->result.id, res, xsink);
-                        if (res.hasNode()) {
+                        if (res.needsRef()) {
                             cleanup.push_back(inst->result.id);
                         }
                         ++ip;
@@ -14606,7 +14606,7 @@ load_local_done:
                         invalidateExternalCaches();
                     }
                     setValueSlot(values, inst->result.id, res, xsink);
-                    if (res.hasNode()) {
+                    if (res.needsRef()) {
                         cleanup.push_back(inst->result.id);
                     }
                     ++ip;
@@ -14744,7 +14744,7 @@ load_local_done:
                         if (auto* call = dynamic_cast<const CallReferenceCallNode*>(
                             call_expr.getInternalNode())) {
                             QoreValue exp = call->getExp();
-                            if (exp.hasNode()) {
+                            if (exp.needsRef()) {
                                 exp = exp.refSelf();
                             }
                             // Direct evalImpl() — avoids evalExprNode() overhead
@@ -14801,7 +14801,7 @@ load_local_done:
                 // Function call runs in its own frame and cannot modify caller's locals
                 invalidateExternalCaches();
                 setValueSlot(values, inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -14844,7 +14844,7 @@ load_local_done:
                         }
                     }
                     setValueSlot(values, direct_inst->result.id, res, xsink);
-                    if (res.hasNode()) {
+                    if (res.needsRef()) {
                         cleanup.push_back(direct_inst->result.id);
                     }
                     ++ip;
@@ -14875,7 +14875,7 @@ load_local_done:
                     priv->reserve(direct_inst->operands.size());
                     for (const auto& operand : direct_inst->operands) {
                         QoreValue arg_val = getIRValue(values, operand);
-                        if (arg_val.hasNode()) {
+                        if (arg_val.needsRef()) {
                             arg_val.refSelf();
                         }
                         priv->pushIntern(arg_val);
@@ -14894,7 +14894,7 @@ load_local_done:
                     invalidateExternalCaches();
                 }
                 setValueSlot(values, direct_inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(direct_inst->result.id);
                 }
                 ++ip;
@@ -14950,7 +14950,7 @@ load_local_done:
                         break;
                     }
                     setValueSlot(values, invoke_inst->result.id, res, xsink);
-                    if (res.hasNode()) {
+                    if (res.needsRef()) {
                         cleanup.push_back(invoke_inst->result.id);
                     }
                     prev_block = block;
@@ -14983,7 +14983,7 @@ load_local_done:
                     priv->reserve(invoke_inst->operands.size());
                     for (const auto& operand : invoke_inst->operands) {
                         QoreValue arg_val = getIRValue(values, operand);
-                        if (arg_val.hasNode()) {
+                        if (arg_val.needsRef()) {
                             arg_val.refSelf();
                         }
                         priv->pushIntern(arg_val);
@@ -15013,7 +15013,7 @@ load_local_done:
                     break;
                 }
                 setValueSlot(values, invoke_inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(invoke_inst->result.id);
                 }
                 // On success, branch to normal target
@@ -15168,7 +15168,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, direct_inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(direct_inst->result.id);
                 }
                 ++ip;
@@ -15311,7 +15311,7 @@ load_local_done:
                     break;
                 }
                 setValueSlot(values, de_invoke_inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(de_invoke_inst->result.id);
                 }
                 // On success, branch to normal target
@@ -15359,7 +15359,7 @@ load_local_done:
                 return false;
             }
             setValueSlot(values, expr_inst->result.id, res, xsink);
-            if (res.hasNode()) {
+            if (res.needsRef()) {
                 cleanup.push_back(expr_inst->result.id);
             }
             ++ip;
@@ -15452,7 +15452,7 @@ load_local_done:
                 return false;
             }
             setValueSlot(values, expr_inst->result.id, res, xsink);
-            if (res.hasNode()) {
+            if (res.needsRef()) {
                 cleanup.push_back(expr_inst->result.id);
             }
             ++ip;
@@ -15491,7 +15491,7 @@ load_local_done:
                     QoreValue idx = getIRValue(values, inst->operands[1]);
                     QoreValue res = getListAssignmentValue(rhs, idx.getAsBigInt());
                     setValueSlot(values, inst->result.id, res, xsink);
-                    if (res.hasNode()) {
+                    if (res.needsRef()) {
                         cleanup.push_back(inst->result.id);
                     }
                     ++ip;
@@ -15508,7 +15508,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -15590,7 +15590,7 @@ load_local_done:
                     }
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -15645,7 +15645,7 @@ load_local_done:
                 // The closure may access closure-captured variables cached in CVV
                 invalidateExternalCaches();
                 setValueSlot(values, inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -15667,7 +15667,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -15688,7 +15688,7 @@ load_local_done:
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -15719,7 +15719,7 @@ load_local_done:
                 }
                 // Cast opcodes are now native — no cache invalidation needed
                 setValueSlot(values, inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -15758,7 +15758,7 @@ load_local_done:
                 // Method calls run in their own frame and cannot modify caller's locals
                 invalidateExternalCaches();
                 setValueSlot(values, expr_inst->result.id, res, xsink);
-                if (res.hasNode()) {
+                if (res.needsRef()) {
                     cleanup.push_back(expr_inst->result.id);
                 }
                 ++ip;
@@ -15780,7 +15780,7 @@ load_local_done:
                     if (arg.getType() == NT_LIST) {
                         xsink->raiseException(arg.get<const QoreListNode>());
                     } else {
-                        QoreValue owned_arg = arg.hasNode() ? arg.refSelf() : arg;
+                        QoreValue owned_arg = arg.needsRef() ? arg.refSelf() : arg;
                         xsink->raiseExceptionArg("IR-EXEC-THROW", owned_arg, "throw");
                     }
                 }
@@ -15888,7 +15888,7 @@ load_local_done:
                         return_value = values[ret->value.id];
                         values[ret->value.id] = QoreValue();
                         traceIRRef(inst, "return.move-owned", ret->value.id, return_value);
-                    } else if (val.hasNode()) {
+                    } else if (val.needsRef()) {
                         return_value = val.refSelf();
                         traceIRRef(inst, "return.output", ret->value.id, return_value);
                         if (ret->value.id < values.size()) {
@@ -15950,9 +15950,9 @@ load_local_done:
                 }
                 if (found) {
                     QoreValue val = getIRValue(values, incoming_value);
-                    QoreValue stored = val.hasNode() ? val.refSelf() : val;
+                    QoreValue stored = val.needsRef() ? val.refSelf() : val;
                     setValueSlot(values, phi->result.id, stored, xsink);
-                    if (stored.hasNode()) {
+                    if (stored.needsRef()) {
                         cleanup.push_back(phi->result.id);
                     }
                 }
@@ -16022,7 +16022,7 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
             // results), causing a UAF when cache/values later deref.  Binary
             // ops in evalBinary already refSelf for the same reason.
             QoreUnaryPlusOperatorNode node(nullptr,
-                value.hasNode() ? value.refSelf() : value);
+                value.needsRef() ? value.refSelf() : value);
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::UnaryMinusInt:
@@ -16032,7 +16032,7 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
         case QoreIROpcode::UnaryMinusAny: {
             // See UnaryPlusAny — refSelf balances the operator node's dtor.
             QoreUnaryMinusOperatorNode node(nullptr,
-                value.hasNode() ? value.refSelf() : value);
+                value.needsRef() ? value.refSelf() : value);
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::ExistsAny:

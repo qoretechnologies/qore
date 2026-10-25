@@ -41,12 +41,16 @@
 void EnumList::remove(hm_qen_t::iterator i) {
     QoreEnumDecl* ed = i->second;
     hm.erase(i);
-    qore_enum_decl_private::get(*ed)->deref();
+    auto* priv = qore_enum_decl_private::get(*ed);
+    priv->namespaceDeleted(priv->getNamespace());
+    priv->deref();
 }
 
 void EnumList::deleteAll() {
     for (hm_qen_t::iterator i = hm.begin(), e = hm.end(); i != e; ++i) {
-        qore_enum_decl_private::get(*i->second)->deref();
+        auto* priv = qore_enum_decl_private::get(*i->second);
+        priv->namespaceDeleted(priv->getNamespace());
+        priv->deref();
     }
     hm.clear();
 }

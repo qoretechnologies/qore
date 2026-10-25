@@ -19,6 +19,11 @@
     invalidate handles in qore_register_program_cleanup_callback() before namespace data is freed.
     Copies of declarations report the receiving %Program, including copies of builtin declarations
     (<a href="https://github.com/qoretechnologies/qore/issues/5517">issue 5517</a>).
+    Enum values also retain their declaration after its %Program is deleted, so reading, copying, formatting,
+    and converting an escaped value is safe. The declaration keeps its source location and namespace path;
+    its owning %Program and namespace pointers become null. Binary modules that create or transfer enum
+    values using earlier development headers must be rebuilt for the owned-value contract
+    (<a href="https://github.com/qoretechnologies/qore/issues/5519">issue 5519</a>).
 
     The webhook creation and deletion callbacks of
     @ref DataProvider::DataProviderWebhook "DataProviderWebhook" are no longer public members: they are set once

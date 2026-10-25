@@ -172,7 +172,7 @@ std::mutex& ConstantEntry::runtimeValueLock() const {
 }
 
 void ConstantEntry::retireValue(QoreValue& v) {
-    if (!v.hasNode()) {
+    if (!v.needsRef()) {
         v.clear();
         return;
     }
@@ -293,7 +293,7 @@ void ConstantEntry::del(QoreListNode& l) {
         rt_retired.reset();
     }
     aot_init_expr.discard(nullptr);
-    if (aot_parse_shell_value.hasNode()) {
+    if (aot_parse_shell_value.needsRef()) {
         l.push(aot_parse_shell_value, nullptr);
     } else {
         aot_parse_shell_value.clear();
@@ -304,7 +304,7 @@ void ConstantEntry::del(QoreListNode& l) {
 #endif
     if (saved_val_set) {
         val.discard(nullptr);
-        if (saved_val.hasNode()) {
+        if (saved_val.needsRef()) {
             l.push(saved_val, nullptr);
         } else {
             saved_val.clear();
@@ -314,8 +314,9 @@ void ConstantEntry::del(QoreListNode& l) {
         saved_val.clear();
 #endif
     } else {
-        if (val.hasNode()) {
-            l.push(val.takeNode(), nullptr);
+        if (val.needsRef()) {
+            l.push(val, nullptr);
+            val.clear();
         }
 #ifdef DEBUG
         val.clear();

@@ -400,7 +400,7 @@ static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
         for (uint16_t i = 0; i < num_children && !ctx.failed; ++i) {
             QoreValue v = ctx.recurse(ctx);
             if (ctx.failed) {
-                if (v.hasNode()) {
+                if (v.needsRef()) {
                     v.discard(nullptr);
                 }
                 break;

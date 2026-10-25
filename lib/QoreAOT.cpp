@@ -32088,7 +32088,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir
                 }
                 case QoreIROpcode::ConstEnum: {
                     auto* cinst = static_cast<QoreIRConstInstruction*>(inst.get());
-                    QoreValue enum_val = QoreValue::makeEnum(cinst->constant.enum_member);
+                    QoreValue enum_val = QoreValue::makeEnumBorrowed(cinst->constant.enum_member);
                     uint64_t bits;
                     memcpy(&bits, &enum_val, sizeof(bits));
                     recordExprSlot(bits, inst->opcode);
@@ -32516,7 +32516,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 }
                 case QoreIROpcode::ConstEnum: {
                     auto* cinst = static_cast<QoreIRConstInstruction*>(inst.get());
-                    QoreValue enum_val = QoreValue::makeEnum(cinst->constant.enum_member);
+                    QoreValue enum_val = QoreValue::makeEnumBorrowed(cinst->constant.enum_member);
                     uint64_t bits;
                     memcpy(&bits, &enum_val, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
@@ -33043,11 +33043,12 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 }
                 case QoreIROpcode::ConstEnum: {
                     auto* cinst = static_cast<QoreIRConstInstruction*>(inst.get());
-                    QoreValue enum_val = QoreValue::makeEnum(cinst->constant.enum_member);
+                    QoreValue enum_val = QoreValue::makeEnumBorrowed(cinst->constant.enum_member);
                     uint64_t bits;
                     memcpy(&bits, &enum_val, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
-                        // TAG_ENUM is inline (no ref-counting), no ref() needed
+                        // The context owns the enum declaration until its expression slots are released.
+                        enum_val.ref();
                         ctx->exprs[expr_idx++] = bits;
                     }
                     break;

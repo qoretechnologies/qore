@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class EnumLifetimeTest
+
+enum LifetimeCaller { One = 1 }
+
+class EnumLifetimeTest inherits QUnit::Test {
+    constructor() : QUnit::Test("enum declaration lifetime", "1.0", \ARGV) {
+        addTestCase("enum values survive their declaring Program", \survivingValues());
+        addTestCase("enum copies and variable overwrites retain and release ownership", \copiesAndOverwrites());
+        addTestCase("enum values survive nested Programs and exception cleanup", \nestedPrograms());
+        addTestCase("enum constants survive repeated calls and casts", \constantCalls());
+        set_return_value(main());
+    }
+
+    private auto echo(auto value) {
+        return value;
+    }
+
+    constantCalls() {
+        for (int i = 0; i < 100; ++i) {
+            assertEq(LifetimeCaller::One, echo(LifetimeCaller::One));
+            auto casted = cast<enum<LifetimeCaller>>(1);
+            assertEq(LifetimeCaller::One, cast<enum<LifetimeCaller>>(casted));
+        }
+    }
+
+    private list<auto> values() {
+        Program child(PO_MODERN);
+        child.parse("
+namespace Detached {
+    enum State : int { Ready = 1, Done = 2 }
+    enum Text : string { Short = 'ready', Long = 'a long enum string that has a heap allocation' }
+    enum Ratio : float { Half = 0.5 }
+    enum Decimal : number { Exact = 1.25n }
+}
+auto sub get() {
+    auto state = Detached::State::Ready;
+    return (state, Detached::Text::Short, Detached::Text::Long, Detached::Ratio::Half, Detached::Decimal::Exact);
+}
+", "detached-enums");
+        return child.callFunction("get");
+    }
+
+    survivingValues() {
+        list<auto> saved = values();
+        list<string> names = ("State", "Text", "Text", "Ratio", "Decimal");
+        list<auto> base = (1, "ready", "a long enum string that has a heap allocation", 0.5, 1.25n);
+        for (int i = 0; i < saved.size(); ++i) {
+            assertTrue(saved[i].isEnum());
+            assertEq("enum<" + names[i] + ">", saved[i].fullType());
+            assertTrue(saved[i] == base[i]);
+            assertTrue(sprintf("%y", saved[i]).size() > 0);
+        }
+        auto integer = saved[0];
+        auto text = saved[2];
+        saved = ();
+        assertTrue(integer == 1);
+        assertEq("a long enum string that has a heap allocation", string(text));
+        int plain = integer;
+        assertEq(1, plain);
+        assertFalse(plain.isEnum());
+    }
+
+    copiesAndOverwrites() {
+        list<auto> saved = values();
+        auto e = saved[0];
+        hash<auto> h = {"e": e, "text": saved[2]};
+        code<auto()> f = auto sub () { return h.e; };
+        list<auto> copy = saved;
+        copy += e;
+        saved = ();
+        e = NOTHING;
+        assertTrue(f() === copy[0]);
+        assertTrue(copy[0] === copy[5]);
+        auto removed = remove h.e;
+        assertTrue(removed === copy[0]);
+        copy = ();
+        assertTrue(removed == 1);
+        removed = 12;
+        assertEq(12, removed);
+        auto text = remove h.text;
+        text = "replacement";
+        assertEq("replacement", text);
+
+        # Exercise scalar conversions and enum overwrites repeatedly, including the compiled fast paths.
+        for (int i = 0; i < 100; ++i) {
+            auto v = values()[0];
+            v += 1;
+            assertTrue(v == 2);
+            v = values()[3];
+            v *= 2.0;
+            assertTrue(v == 1.0);
+            v = values()[4];
+            v += 1.0n;
+            assertTrue(v == 2.25n);
+            v = values()[0];
+            v = False;
+            assertEq(False, v);
+        }
+    }
+
+    nestedPrograms() {
+        auto saved;
+        {
+            Program parent(PO_MODERN);
+            parent.parse("
+public enum Shared { A = 9 }
+Program sub child() { return new Program(PO_MODERN); }
+", "enum-parent");
+            Program child = parent.callFunction("child");
+            child.parse("auto sub get() { return Shared::A; }", "enum-child");
+            saved = child.callFunction("get");
+            delete parent;
+            assertTrue(saved == 9);
+            assertEq("enum<Shared>", saved.fullType());
+        }
+        assertTrue(saved == 9);
+        try {
+            auto retained = saved;
+            saved = NOTHING;
+            throw "ENUM-TEST", "cleanup", retained;
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.arg.isEnum());
+            assertTrue(ex.arg == 9);
+        }
+    }
+}

@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 #include <qore/Qore.h>
+#include <qore/QoreReflection.h>
 
 #include <cstdio>
 #include <stdexcept>
@@ -68,6 +69,7 @@ static const char* source = R"QORE(
         public enum State : int { Ready = 1, Done = 2 }
     }
     hash<Records::Record> sub record() { return <Records::Record>{"a": 17}; }
+    auto sub state() { return Records::State::Ready; }
     hash<Records::Box<int>> sub box() {
         hash<Records::Box<int>> value({"value": 23});
         return value;
@@ -116,6 +118,8 @@ static void programOwners(qore_exec_mode_t mode) {
     CleanupRegistration registration(saved);
     ValueHolder record(&xsink);
     ValueHolder box(&xsink);
+    ValueHolder enumeration(&xsink);
+    const QoreEnumDecl* retained_enum = nullptr;
     const TypedHashDecl* retained = nullptr;
     const TypedHashDecl* concrete = nullptr;
     {
@@ -126,6 +130,11 @@ static void programOwners(qore_exec_mode_t mode) {
         saved.push_back(inspect(*pgm));
         retained = saved[0].hashdecl;
         concrete = saved[0].concrete;
+        retained_enum = saved[0].enumeration;
+        enumeration = pgm->callFunction("state", nullptr, &xsink);
+        require(!xsink && enumeration->isEnum()
+            && enumeration->getEnumMember()->getEnumDecl() == retained_enum,
+            "enum value must retain the declaration being watched");
         record = pgm->callFunction("record", nullptr, &xsink);
         require(!xsink && record->getType() == NT_HASH, "cannot retain a hash value");
         box = pgm->callFunction("box", nullptr, &xsink);
@@ -169,6 +178,18 @@ static void programOwners(qore_exec_mode_t mode) {
     // also work for concrete generic declarations, which live in the generic's cache.
     require(!retained->getProgram() && !retained->getNamespace(), "hashdecl kept a deleted namespace");
     require(!concrete->getProgram() && !concrete->getNamespace(), "generic hashdecl kept a deleted namespace");
+    require(!retained_enum->getProgram() && !retained_enum->getNamespace(), "enum kept a deleted namespace");
+    require(retained_enum->getNamespacePath() == "Records::State"
+        && retained_enum->getNamespacePath(true) == "::Records::State", "retained enum lost its namespace path");
+    require(enumeration->getAsBigInt() == 1 && enumeration->getFullTypeInfo() == retained_enum->getTypeInfo(),
+        "retained enum value changed during cleanup");
+    require(retained_enum->findMember("Done")->getValue().getAsBigInt() == 2,
+        "retained enum lost another member");
+    ReferenceHolder<QoreHashNode> enum_location(retained_enum->getSourceLocation()->getHash(), &xsink);
+    QoreStringValueHelper enum_file(enum_location->getKeyValue("file"));
+    require(!strcmp(enum_file->c_str(), "declaration-owner")
+        && enum_location->getKeyValue("line").getAsBigInt() > 0,
+        "retained enum lost its source location");
     require(record->get<const QoreHashNode>()->getKeyValue("a").getAsBigInt() == 17,
         "retained hash value changed during cleanup");
     require(box->get<const QoreHashNode>()->getKeyValue("value").getAsBigInt() == 23,

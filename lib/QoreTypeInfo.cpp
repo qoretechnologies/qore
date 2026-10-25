@@ -3510,6 +3510,7 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                 && strcmp(arg_type, "key") && strcmp(arg_type, "member")) {
                 QoreValue base_val = n.getEnumMember()->getValue();
                 base_val.ref();
+                n.discard(xsink);
                 n = base_val;
             }
             // special handling for objects; check for object validity; if it's already been deleted,

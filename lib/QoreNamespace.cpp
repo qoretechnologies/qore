@@ -3088,7 +3088,7 @@ void qore_ns_private::clearConstants(QoreListNode& l) {
     // clear properties
     AutoLocker al(kvlck);
     for (auto& i : kvmap) {
-        if (i.second.hasNode()) {
+        if (i.second.needsRef()) {
             l.push(i.second, nullptr);
         }
     }

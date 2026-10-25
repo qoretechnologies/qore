@@ -99,6 +99,13 @@ protected:
         }
     }
 
+    // Enum declarations contain only scalar member data; releasing them does not execute Qore code.
+    DLLLOCAL void discardEnum() {
+        if (assigned && type == QV_Enum && !static_assignment) {
+            v.em->deref();
+        }
+    }
+
     DLLLOCAL QoreValue getInlineValue() const {
         assert(type == QV_Value);
         QoreSimpleValue sv;
@@ -168,7 +175,7 @@ public:
             case QV_Bool: v.b = old.v.b; break;
             case QV_Int: v.i = old.v.i; break;
             case QV_Float: v.f = old.v.f; break;
-            case QV_Enum: v.em = old.v.em; break;
+            case QV_Enum: v.em = old.v.em; v.em->ref(); break;
             case QV_Value: v.qv = old.v.qv; break;
             case QV_Node:
                 v.n = old.v.n ? old.v.n->refSelf() : nullptr;
@@ -372,7 +379,8 @@ public:
             }
 
             case QV_Enum: {
-                int64 i = QoreValue::makeEnum(v.em).getAsBigInt();
+                int64 i = QoreValue::makeEnumBorrowed(v.em).getAsBigInt();
+                discardEnum();
                 v.i = i;
                 type = QV_Int;
                 return nullptr;
@@ -431,7 +439,8 @@ public:
             }
 
             case QV_Enum: {
-                double f = QoreValue::makeEnum(v.em).getAsFloat();
+                double f = QoreValue::makeEnumBorrowed(v.em).getAsFloat();
+                discardEnum();
                 v.f = f;
                 type = QV_Float;
                 return nullptr;
@@ -500,12 +509,8 @@ public:
 
             case QV_Enum: {
                 QoreValue base = v.em->getValue();
-                QoreNumberNode* n;
-                if (base.getType() == NT_FLOAT) {
-                    n = new QoreNumberNode(base.getAsFloat());
-                } else {
-                    n = new QoreNumberNode(base.getAsBigInt());
-                }
+                QoreNumberNode* n = new QoreNumberNode(base);
+                discardEnum();
                 v.n = n;
                 type = QV_Node;
                 return nullptr;
@@ -536,7 +541,7 @@ public:
             case QV_Bool: return QoreValue(v.b);
             case QV_Int: return QoreValue(v.i);
             case QV_Float: return QoreValue(v.f);
-            case QV_Enum: return QoreValue::makeEnum(v.em);
+            case QV_Enum: return QoreValue::makeEnumBorrowed(v.em);
             case QV_Value: return getInlineValue();
             case QV_Node:
                 if (tracksRealRefs())
@@ -556,7 +561,7 @@ public:
             case QV_Bool: return QoreValue(v.b);
             case QV_Int: return QoreValue(v.i);
             case QV_Float: return QoreValue(v.f);
-            case QV_Enum: return QoreValue::makeEnum(v.em);
+            case QV_Enum: return QoreValue::makeEnumBorrowed(v.em);
             case QV_Value: return getInlineValue();
             case QV_Node: return v.n;
             default: assert(false);
@@ -573,7 +578,7 @@ public:
             case QV_Bool: return QoreValue(v.b);
             case QV_Int: return QoreValue(v.i);
             case QV_Float: return QoreValue(v.f);
-            case QV_Enum: return QoreValue::makeEnum(v.em);
+            case QV_Enum: return QoreValue::makeEnumBorrowed(v.em);
             case QV_Value: return getInlineValue();
             case QV_Node: return v.n;
             default: assert(false);
@@ -655,7 +660,7 @@ public:
             }
             case QV_Enum:
                 needs_deref = false;
-                return QoreValue::makeEnum(v.em);
+                return QoreValue::makeEnumBorrowed(v.em);
             case QV_Value:
                 needs_deref = false;
                 return getInlineValue().refSelf();
@@ -733,6 +738,7 @@ public:
             }
         }
 
+        discardEnum();
         AbstractQoreNode* rv;
         if (assigned) {
             if (type == QV_Node) {
@@ -767,6 +773,7 @@ public:
             }
         }
 
+        discardEnum();
         AbstractQoreNode* rv;
         if (assigned) {
             if (type == QV_Node) {
@@ -801,6 +808,7 @@ public:
             }
         }
 
+        discardEnum();
         AbstractQoreNode* rv;
         if (assigned) {
             if (type == QV_Node) {
@@ -1018,6 +1026,7 @@ public:
             return val.takeIfNode();
         }
 
+        discardEnum();
         AbstractQoreNode* rv;
         if (assigned) {
             if (type == QV_Node) {
@@ -1036,6 +1045,7 @@ public:
         // Preserve TAG_ENUM identity for non-fixed-type variables
         if (val.isEnum()) {
             v.em = val.getEnumMember();
+            val.clear();
             if (type != QV_Enum) {
                 type = QV_Enum;
             }
@@ -1143,6 +1153,7 @@ public:
             return 0;
         }
 
+        discardEnum();
         AbstractQoreNode* rv;
         if (assigned) {
             if (type == QV_Node) {
@@ -1182,7 +1193,7 @@ public:
                 case QV_Bool: return v.b;
                 case QV_Int: return (bool)v.i;
                 case QV_Float: return (bool)v.f;
-                case QV_Enum: return QoreValue::makeEnum(v.em).getAsBool();
+                case QV_Enum: return QoreValue::makeEnumBorrowed(v.em).getAsBool();
                 case QV_Value: return getInlineValue().getAsBool();
                 case QV_Node: return v.n ? v.n->getAsBool() : false;
                 default: assert(false);
@@ -1198,7 +1209,7 @@ public:
                 case QV_Bool: return (int64)v.b;
                 case QV_Int: return v.i;
                 case QV_Float: return (int64)v.f;
-                case QV_Enum: return QoreValue::makeEnum(v.em).getAsBigInt();
+                case QV_Enum: return QoreValue::makeEnumBorrowed(v.em).getAsBigInt();
                 case QV_Value: return getInlineValue().getAsBigInt();
                 case QV_Node: return v.n ? v.n->getAsBigInt() : 0;
                 default: assert(false);
@@ -1214,7 +1225,7 @@ public:
                 case QV_Bool: return (double)v.b;
                 case QV_Int: return (double)v.i;
                 case QV_Float: return v.f;
-                case QV_Enum: return QoreValue::makeEnum(v.em).getAsFloat();
+                case QV_Enum: return QoreValue::makeEnumBorrowed(v.em).getAsFloat();
                 case QV_Value: return getInlineValue().getAsFloat();
                 case QV_Node: return v.n ? v.n->getAsFloat() : 0.0;
                 default: assert(false);
@@ -1234,7 +1245,7 @@ public:
                 case QV_Bool: return NT_BOOLEAN;
                 case QV_Int: return NT_INT;
                 case QV_Float: return NT_FLOAT;
-                case QV_Enum: return QoreValue::makeEnum(v.em).getType();
+                case QV_Enum: return QoreValue::makeEnumBorrowed(v.em).getType();
                 case QV_Value: return getInlineValue().getType();
                 case QV_Node: return v.n ? v.n->getType() : NT_NOTHING;
                 default: assert(false);
@@ -1249,7 +1260,7 @@ public:
                 case QV_Bool: return qoreBoolTypeName;
                 case QV_Int: return qoreIntTypeName;
                 case QV_Float: return qoreFloatTypeName;
-                case QV_Enum: return QoreValue::makeEnum(v.em).getTypeName();
+                case QV_Enum: return QoreValue::makeEnumBorrowed(v.em).getTypeName();
                 case QV_Value: return getInlineValue().getTypeName();
                 case QV_Node: return get_type_name(v.n);
                 default: assert(false);
@@ -1725,7 +1736,7 @@ public:
             case QV_Float:
                 return v.f;
             case QV_Enum:
-                return QoreValue::makeEnum(v.em);
+                return QoreValue::makeEnumBorrowed(v.em);
             case QV_Value:
                 return getInlineValue();
             case QV_Node:
@@ -1764,7 +1775,11 @@ public:
             case QV_Float:
                 return for_del ? QoreValue() : QoreValue(v.f);
             case QV_Enum:
-                return for_del ? QoreValue() : QoreValue::makeEnum(v.em);
+                if (for_del) {
+                    v.em->deref();
+                    return QoreValue();
+                }
+                return QoreValue::makeEnumBorrowed(v.em);
             case QV_Value:
                 return for_del ? QoreValue() : getInlineValue();
             case QV_Node:

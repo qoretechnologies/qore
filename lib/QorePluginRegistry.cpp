@@ -666,7 +666,7 @@ QoreValue makePluginArgListFromBits(const uint64_t* arg_bits, int32_t nargs, Exc
             return QoreValue();
         }
         QoreValue arg = valueFromBits(arg_bits[i]);
-        if (arg.hasNode()) {
+        if (arg.needsRef()) {
             arg.refSelf();
         }
         priv->pushIntern(arg);
