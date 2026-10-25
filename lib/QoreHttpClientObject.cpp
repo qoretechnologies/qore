@@ -5361,6 +5361,42 @@ void check_headers(const char* str, int len, bool &multipart, QoreHashNode& ans,
     }
 }
 
+//! Abandons a streaming request on its connection when it goes out of scope, unless it is disarmed
+/** A caller that stops reading the response of a streaming request before the response ends, because of an error, a
+    timeout, a cancellation or a redirect, closes the response's channel, and the connection would go on receiving the
+    rest of the response with no reader: without end for an endless stream such as a server-sent event stream, and an
+    HTTP/1 connection could serve no other request in the meantime.  The request is abandoned as
+    HttpClientConnectionManagerBase::request() abandons a request whose wait ends without a response: an exchange that
+    is still in progress is stopped, and an HTTP/1 connection, which cannot resynchronize in the middle of a response,
+    is closed and evicted from the pool.  A request whose response has ended is not affected.
+*/
+class StreamAbandonGuard {
+public:
+    DLLLOCAL StreamAbandonGuard(HttpClientConnectionManagerBase& mgr, HttpClientConnectionBase* conn,
+            int64_t stream_id) : mgr(mgr), conn(conn), stream_id(stream_id) {
+    }
+
+    DLLLOCAL ~StreamAbandonGuard() {
+        if (conn) {
+            mgr.abandonRequest(conn, stream_id);
+        }
+    }
+
+    //! The response has been received, or its reads are left to another part of the client
+    DLLLOCAL void disarm() {
+        conn = nullptr;
+    }
+
+    DLLLOCAL StreamAbandonGuard(const StreamAbandonGuard&) = delete;
+    DLLLOCAL StreamAbandonGuard& operator=(const StreamAbandonGuard&) = delete;
+
+private:
+    HttpClientConnectionManagerBase& mgr;
+    //! the connection that the request was submitted on, referenced by the caller, or nullptr when disarmed
+    HttpClientConnectionBase* conn;
+    int64_t stream_id;
+};
+
 QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink, const char* mname,
         const char* meth, const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body,
         const void* data, unsigned size, const ResolvedCallReferenceNode* send_callback, bool getbody,
@@ -6096,9 +6132,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             bool conn_reused = false;
             // true if the request is repeated on a new connection
             bool stream_retry = false;
+            HttpClientConnectionBase* stream_conn_raw = nullptr;
             int64_t stream_id = mgr.requestStreaming(meth, scheme,
                 this_connection.host.c_str(), this_connection.port,
-                msgpath, *nh, body_ptr, body_len, channel_raw, xsink, event_sink, &conn_reused);
+                msgpath, *nh, body_ptr, body_len, channel_raw, xsink, event_sink, &conn_reused, &stream_conn_raw);
+            ReferenceHolder<HttpClientConnectionBase> stream_conn(stream_conn_raw, xsink);
             // a request that could not be submitted because its reused connection was found closed has been
             // repeated on a new connection by the connection manager, which then reports no reused connection
             if (*xsink || stream_id < 0 || !channel_raw) {
@@ -6106,6 +6144,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             }
             // ReferenceHolder ensures deref on all exit paths
             ReferenceHolder<QoreChannel> channel(channel_raw, xsink);
+            // the request is abandoned if the response is not read to its end: closing the channel stops its
+            // delivery to this thread, but the connection would go on receiving the rest of the response, which
+            // has no end for a stream such as a server-sent event stream, with no reader
+            StreamAbandonGuard abandon_guard(mgr, *stream_conn, stream_id);
             bool channel_done = false;
 
             // Channel read loop: process streaming response
@@ -6420,6 +6462,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 // the terminal callback on every chunk.
                 QoreValue end_val = h->getKeyValue("end_stream");
                 if (end_val.getAsBool()) {
+                    // the response has been received; nothing is left to abandon
+                    abandon_guard.disarm();
                     // For accumulated non-chunked bodies (whether encoded or
                     // not), deliver as a single data callback at end_stream.
                     // When a content-encoding is present, decode first; when
@@ -6544,13 +6588,18 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             // sendAndStream path: submit as streaming, read only headers,
             // store the channel for later readHTTPChunk/readServerSentEvent
             QoreChannel* channel_raw = nullptr;
+            HttpClientConnectionBase* stream_conn_raw = nullptr;
             int64_t stream_id = mgr.requestStreaming(meth, scheme,
                 this_connection.host.c_str(), this_connection.port,
-                msgpath, *nh, body_ptr, body_len, channel_raw, xsink, event_sink);
+                msgpath, *nh, body_ptr, body_len, channel_raw, xsink, event_sink, nullptr, &stream_conn_raw);
+            ReferenceHolder<HttpClientConnectionBase> stream_conn(stream_conn_raw, xsink);
             if (*xsink || stream_id < 0 || !channel_raw) {
                 return nullptr;
             }
             ReferenceHolder<QoreChannel> channel(channel_raw, xsink);
+            // the request is abandoned unless its channel is kept for the reads of the body (see the recv_callback
+            // path above)
+            StreamAbandonGuard abandon_guard(mgr, *stream_conn, stream_id);
             bool channel_done = false;
 
             // Read only headers from the channel — body stays for later reads
@@ -6631,6 +6680,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         channel->close();
                         channel_done = true;
                     } else {
+                        // the body is read from the channel later
+                        abandon_guard.disarm();
                         // Store the channel for later reads via
                         // readHTTPChunk / readServerSentEvent
                         AutoLocker al(msock->m);

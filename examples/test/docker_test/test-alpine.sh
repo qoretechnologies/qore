@@ -3,6 +3,25 @@
 set -e
 set -x
 
+# This script prepares the qore-test-base image that the CI job runs in: it installs packages and replaces the image's
+# Qore installation.  It must not run anywhere else, where it would change the host or a developer's container.  The
+# image names itself in /etc/qore-test-base-build-info (written by write-build-info.sh of qore-test-base); an
+# environment variable could be set anywhere, so it is not asked.
+QORE_TEST_BASE_INFO_FILE=/etc/qore-test-base-build-info
+if [ ! -f "${QORE_TEST_BASE_INFO_FILE}" ]; then
+    echo "ERROR: $0 runs only in a qore-test-base CI image, which has ${QORE_TEST_BASE_INFO_FILE}: refusing to run" >&2
+    exit 1
+fi
+QORE_IMAGE_PREFIX=$(sed -n 's/^install_prefix=//p' "${QORE_TEST_BASE_INFO_FILE}" | head -n 1)
+case "${QORE_IMAGE_PREFIX}" in
+    /?*) ;;
+    *)
+        echo "ERROR: ${QORE_TEST_BASE_INFO_FILE} names no absolute install_prefix ('${QORE_IMAGE_PREFIX}'):" \
+            "refusing to run" >&2
+        exit 1
+        ;;
+esac
+
 # authenticate the clones CMake makes from github.com (see github-auth.sh)
 . "$(dirname "$0")/github-auth.sh"
 # no process the job starts may outlive it (see ci-job-processes.sh)
@@ -52,7 +71,14 @@ if [ -z "${REDIS_URL}" ]; then
     setup_redis_on_host
 fi
 
-find / -path "${QORE_SRC_DIR}/build" -prune -o -name "libqore.so*" -exec rm -f {} \; 2>/dev/null || true
+# The tests run with the libqore that this job installs: remove the one that the image installed in its install prefix
+# (make install of qore-test-base's prep-alpine-build.sh).  Only that library directory is touched; a search of the
+# whole file system also removed the libqore of build trees mounted into the container.
+for libqore in "${QORE_IMAGE_PREFIX:?}"/lib/libqore.so*; do
+    if [ -e "${libqore}" ] || [ -L "${libqore}" ]; then
+        rm -f "${libqore}"
+    fi
+done
 
 export MAKE_JOBS=${MAKE_JOBS:-6}
 NEED_RELEASE_BUILD=1
@@ -255,9 +281,10 @@ chown -R qore:qore ${QORE_SRC_DIR}
 # must not see AOT user modules compiled by the image's older Qore. Native
 # modules carry an API suffix; expose only those through an isolated link farm.
 SYSTEM_BINARY_MODULE_DIR=$(${QORE_SRC_DIR}/build/qore --module-dir)
-CI_NATIVE_MODULE_DIR=/tmp/qore-ci-native-modules
-mkdir -p "${CI_NATIVE_MODULE_DIR}"
-find "${CI_NATIVE_MODULE_DIR}" -mindepth 1 -maxdepth 1 -delete
+# The link farm is a directory of this run's own, so no other content has to be removed from it; the qore user that
+# runs the tests reads it
+CI_NATIVE_MODULE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/qore-ci-native-modules.XXXXXX")
+chmod 755 "${CI_NATIVE_MODULE_DIR}"
 for qmod in "${SYSTEM_BINARY_MODULE_DIR}"/*-api-*.qmod; do
     [ -e "${qmod}" ] || continue
     ln -s "${qmod}" "${CI_NATIVE_MODULE_DIR}/"

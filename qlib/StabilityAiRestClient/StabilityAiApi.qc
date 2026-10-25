@@ -152,6 +152,7 @@ public class StabilityAiApi {
         @param options generation fields; model selects ultra, core, or sd3; sd3_model selects a concrete SD3.5 model
         @return verified image bytes, MIME type, seed, and completion metadata
         @throw STABILITYAI-INPUT-ERROR incompatible or invalid generation fields
+        @throw RUNTIME-TYPE-ERROR a generation field does not fit its schema
     */
     static hash<auto> generateImage(AbstractRestClient client, hash<auto> options) {
         foreach hash<auto> field in (options.pairIterator()) {

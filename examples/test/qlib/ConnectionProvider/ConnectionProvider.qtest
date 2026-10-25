@@ -763,8 +763,9 @@ public class ConnectionProviderTest inherits QUnit::Test {
     }
 
     asyncStartPollConnectNonBlockingTest() {
-        # a plain-TCP server that accepts but never speaks TLS: the handshake can
-        # never complete, so any blocking wait runs to the connect timeout
+        # a plain-TCP server that accepts but never speaks TLS: the handshake can never complete, so a
+        # startPollConnect() that waited for the TLS/ALPN handshake would return only when the connect timeout ended
+        # it, with the operation failed
         SimpleTcpServer server();
         on_exit server.stop();
 
@@ -772,50 +773,47 @@ public class ConnectionProviderTest inherits QUnit::Test {
             "https://127.0.0.1:" + server.getPort(), {},
             {"connect_timeout": 30s});
 
-        int t0 = clock_getmicros_monotonic();
         AbstractPollOperation op = hc.startPollConnect();
-        int elapsed_us = clock_getmicros_monotonic() - t0;
         # abort tears down the never-completing handshake so the test does not
         # leave it running for the whole connect timeout
         on_exit op.abort();
 
-        assertTrue(exists op, "startPollConnect() returned a poll operation");
-        assertLt(2000000, elapsed_us,
-            sprintf("startPollConnect() took %dus; it must not wait for the TLS/ALPN "
-                "handshake (connect timeout is 30s)", elapsed_us));
+        # startPollConnect() returned while the handshake is in progress: the operation has neither reached its goal
+        # nor failed, and it waits for the socket; a failed operation raises its error from continuePoll()
+        assertEq("connecting", op.getState(), "the operation is connecting");
+        assertFalse(op.goalReached(), "the connect goal is not reached");
+        *hash<SocketPollInfo> poll_info = op.continuePoll();
+        assertTrue(exists poll_info, "the operation waits for the TLS/ALPN handshake");
     }
 
     asyncHeCancelMidRaceTest() {
         # An HTTPS URL to a plain-TCP server that accepts but never speaks TLS:
         # the H2 (TCP) candidate connects TCP then hangs in the TLS handshake,
         # and the H3 (QUIC) candidate has no UDP listener — so the async
-        # happy-eyeballs race stays genuinely in flight until the (long)
-        # connect timeout.  A working cancel must free it almost immediately.
-        SimpleTcpServer server();
+        # happy-eyeballs race stays genuinely in flight until it is
+        # cancelled or its connect timeout ends it.
+        SimpleTcpServer server(True);
         on_exit server.stop();
         string url = "https://127.0.0.1:" + server.getPort();
 
         SlowPingMonitor pcm();
         on_exit delete pcm;
-        # connect_timeout (60s) and ping_timeout (60s, set by SlowPingMonitor)
-        # are far larger than the assertion bound, so a fast stopClear() can
-        # only be the cancel path working — not a timeout masking a stuck thread.
+        # neither the connect timeout nor the ping timeout (set by SlowPingMonitor) ends the race while the test
+        # runs, so only its cancellation closes its connection
         HttpConnection hc("async-he-cancel", "test", url, {},
-            {"connect_timeout": 60s});
+            {"connect_timeout": SlowPingMonitor::Unbounded});
         pcm.add(hc);
         assertTrue(pcm.running());
 
-        # Let the ping op start and the async race reach mid-flight (H3
-        # submitted, stagger elapsed, H2 started and stuck in TLS).
-        usleep(1500ms);
+        # the ping operation has started, and the async race is mid-flight (H3 submitted, stagger elapsed, H2 started
+        # and stuck in TLS), once the H2 candidate's TCP connection has been accepted
+        server.waitForAccept();
 
-        date t0 = now_us();
         pcm.stopClear();
-        date elapsed = now_us() - t0;
+        # stopClear() cancels the race: its TCP connection is closed; a race that goes on keeps it open until the
+        # unbounded connect timeout, and this does not return
+        server.waitForClientClose();
 
-        assertTrue(elapsed < 5s,
-            sprintf("stopClear() mid async-HE-race took %y, expected << "
-                "connect/ping timeout 60s (cancel must free it)", elapsed));
         assertFalse(pcm.running(), "monitor stopped after stopClear()");
         assertFalse(pcm.getInfo().connections.val(),
             "connections cleared after stopClear()");
@@ -845,10 +843,14 @@ public class ConnectionProviderTest inherits QUnit::Test {
 }
 
 class SlowPingMonitor inherits TestPollingConnectionMonitor {
+    public {
+        #! a timeout that does not end while a test runs
+        const Unbounded = 1D;
+    }
+
     constructor(*LoggerInterface logger) : TestPollingConnectionMonitor(logger) {
-        # Long ping timeout so a fast stopClear() unambiguously proves the
-        # in-flight async connect was cancelable (not freed by a timeout).
-        ping_timeout = 60s;
+        # the ping timeout does not end an in-flight ping, so that only its cancellation does
+        ping_timeout = Unbounded;
     }
 }
 
@@ -965,9 +967,21 @@ class SimpleTcpServer {
         Mutex m();
         list<Socket> accepted;
         bool exit_flag;
+        #! one event for each connection accepted
+        Queue accept_events();
+        #! one event for each accepted connection that the client closed, if they are reported
+        Queue close_events();
+        #! if the close of each accepted connection by the client is reported
+        bool report_close;
     }
 
-    constructor() {
+    #! creates the server
+    /** @param report_close if the close of each accepted connection by the client is reported (see
+        waitForClientClose()): each connection is then read until the client closes it, so the client must close
+        each one
+    */
+    constructor(*bool report_close) {
+        self.report_close = report_close ?? False;
         exit_flag = False;
         accepted = ();
         if (sock.bind("127.0.0.1:0")) {
@@ -996,6 +1010,16 @@ class SimpleTcpServer {
         return sock.getSocketInfo().port;
     }
 
+    #! waits until the server has accepted a connection that it has not reported yet
+    waitForAccept() {
+        accept_events.get();
+    }
+
+    #! waits until the client has closed an accepted connection whose close has not been reported yet
+    waitForClientClose() {
+        close_events.get();
+    }
+
     private acceptLoop() {
         while (!shouldExit()) {
             try {
@@ -1004,11 +1028,28 @@ class SimpleTcpServer {
                     AutoLock al(m);
                     if (!exit_flag) {
                         push accepted, a;
+                        accept_events.push(True);
+                        if (report_close) {
+                            background readUntilClosed(a);
+                        }
                     }
                 }
             } catch () {
                 # ignore accept errors during shutdown
             }
+        }
+    }
+
+    #! reads what the client sends, which the server never answers, until the client closes the connection
+    private readUntilClosed(Socket a) {
+        try {
+            while (a.recvBinary(-1, -1).size()) {
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the client closed the connection, or the server is stopping
+        }
+        if (!shouldExit()) {
+            close_events.push(True);
         }
     }
 

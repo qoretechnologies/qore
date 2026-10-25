@@ -67,6 +67,7 @@
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QoreHttp1ClientConnection.h"
+#include "qore/intern/HttpClientConnectionManagerTestHooks.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/qore_socket_private.h"
@@ -631,12 +632,32 @@ static void ut_local_discard(UnitTestCounters& c) {
         VarValueBase slot("discard", type);
         slot.del(&xsink);
         UT_ASSERT(c, slot.block_cleared && !slot.val.assigned, "unassigned deletion stays empty");
+        // An assigned enum owns a non-null declaration reference; exercise it below.
+        if (type == QV_Enum) {
+            continue;
+        }
         slot.val.v.qv = 0;
         slot.val.assigned = true;
         slot.del(&xsink);
         UT_ASSERT(c, !slot.val.assigned, "deletion clears each storage representation");
         slot.del(&xsink);
         UT_ASSERT(c, !xsink, "repeated deletion is harmless");
+    }
+    {
+        ReferenceHolder<QoreStringNode> value(new QoreStringNode("owned enum member"), &xsink);
+        VarValueBase slot("owned enum");
+        {
+            QoreEnumDeclHolder decl(new QoreEnumDecl("DiscardEnum", "DiscardEnum", stringTypeInfo));
+            decl->addMember("Member", value->refSelf());
+            slot.val.assign(QoreValue::makeEnum(decl->findMember("Member")));
+            UT_ASSERT_EQ(c, QV_Enum, slot.val.type, "enum local uses enum storage");
+        }
+        UT_ASSERT_EQ(c, 2, value->reference_count(), "local retains the enum declaration and its member");
+        slot.del(&xsink);
+        UT_ASSERT(c, slot.block_cleared && !slot.val.assigned, "enum deletion clears the local");
+        UT_ASSERT_EQ(c, 1, value->reference_count(), "enum deletion releases the declaration exactly once");
+        slot.del(&xsink);
+        UT_ASSERT_EQ(c, 1, value->reference_count(), "repeated enum deletion releases no reference");
     }
     {
         VarValueBase slot("nothing");
@@ -10251,6 +10272,130 @@ static void ut_manager_streaming_does_not_repeat_unsafe_requests(UnitTestCounter
     }
 }
 
+// requestStreaming() returns the connection that a streaming request was submitted on, so that a caller that stops
+// reading the response before it ends can abandon the request: the HTTP/1 connection of a response that does not end
+// is closed and leaves the pool, and the server sees the close.  HTTPClient closed only the response's channel, and
+// the connection went on receiving the response with no reader.
+static void ut_manager_streaming_abandon_releases_connection(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    // set by the server thread when the client closed the connection: the response never ends
+    std::atomic<bool> closed_by_client{false};
+    server.serveOnce([&closed_by_client](int cfd) {
+        char buf[4096];
+        if (ut_read_request_headers(cfd, buf, sizeof(buf)) <= 0) {
+            return;
+        }
+        static const char* resp =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: application/octet-stream\r\n"
+            "Transfer-Encoding: chunked\r\n"
+            "\r\n"
+            "5\r\nhello\r\n";
+        send(cfd, resp, strlen(resp), 0);
+        // the response does not end: waits until the client closes the connection, or for 15 seconds
+        struct timeval tv = {15, 0};
+        setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        char b;
+        closed_by_client = recv(cfd, &b, 1, 0) == 0;
+    });
+
+    HttpClientConnectionManagerBase::Options opts;
+    opts.connect_timeout_ms = 5000;
+    opts.request_timeout_ms = 5000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "abandon fixture manager constructs");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+    QoreChannel* channel_raw = nullptr;
+    HttpClientConnectionBase* conn_raw = nullptr;
+    int64_t stream_id = mgr->requestStreaming("GET", "http", "127.0.0.1", server.port, "/", nullptr, nullptr, 0,
+        channel_raw, &xsink, nullptr, nullptr, &conn_raw);
+    ReferenceHolder<QoreChannel> channel(channel_raw, &xsink);
+    ReferenceHolder<HttpClientConnectionBase> conn(conn_raw, &xsink);
+    UT_ASSERT(c, !xsink && stream_id >= 0 && channel_raw, "the streaming request is submitted");
+    UT_ASSERT(c, conn_raw != nullptr, "the connection that serves the request is returned");
+    if (!channel_raw || !conn_raw) {
+        xsink.clear();
+        return;
+    }
+    UT_ASSERT_EQ(c, (int64)200, ut_read_streaming_status(channel_raw, &xsink), "the response headers arrive");
+    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(), "the connection is pooled while the response is received");
+    // the caller stops reading the response
+    channel_raw->close();
+    mgr->abandonRequest(conn_raw, stream_id);
+    UT_ASSERT(c, conn_raw->isClosed(), "the HTTP/1 connection of the abandoned response is closed");
+    UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "the connection of the abandoned response leaves the pool");
+    xsink.clear();
+    mgr->closeAll(&xsink);
+    xsink.clear();
+    // the server thread ends when the client has closed the connection
+    if (server.thr.joinable()) {
+        server.thr.join();
+    }
+    UT_ASSERT(c, closed_by_client.load(), "the server sees the client close the connection");
+}
+
+// the calls of the hook of ut_manager_new_connection_closed_before_reservation()
+static std::atomic<int> ut_new_connection_hook_calls{0};
+
+//! waits until the connect of a new connection has failed: its connection is refused
+static void ut_wait_for_connect_failure(HttpClientConnectionBase* conn) {
+    ++ut_new_connection_hook_calls;
+    ExceptionSink xs;
+    // a refused connect closes the connection; -1 = no time limit
+    conn->waitForReadyOrError(-1, &xs);
+    xs.clear();
+}
+
+// A non-blocking connect can fail before the manager adds the new connection to its pool and reserves its first stream:
+// the reservation is refused on the closed connection.  acquireConnectionAsync() reported that as
+// "HTTPCLIENT-CAPACITY-ERROR: freshly-created connection unexpectedly at capacity", which hid the error of the connect,
+// and left the closed connection in the pool.  The caller gets the error of the connection, and the pool does not
+// keep it.
+static void ut_manager_new_connection_closed_before_reservation(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    int port = ut_reserve_closed_port();
+    if (port <= 0) {
+        UT_ASSERT(c, false, "reserve a port with no listener");
+        return;
+    }
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H1;
+    opts.connect_timeout_ms = 5000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "closed-before-reservation fixture manager constructs");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+    ut_new_connection_hook_calls = 0;
+    qore_http_manager_new_connection_hook = ut_wait_for_connect_failure;
+    HttpClientConnectionBase* conn = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+    qore_http_manager_new_connection_hook = nullptr;
+    UT_ASSERT_EQ(c, 1, ut_new_connection_hook_calls.load(), "the connect failed before the reservation");
+    UT_ASSERT(c, !conn, "no connection is returned for a connection whose connect failed");
+    UT_ASSERT(c, xsink.isException(), "the failed connect raises an error");
+    if (xsink.isException()) {
+        QoreStringValueHelper err(xsink.getExceptionErr());
+        UT_ASSERT(c, strcmp(err->c_str(), "HTTPCLIENT-CAPACITY-ERROR") != 0,
+            (std::string("the error is the connect error, not a capacity error: ") + err->c_str()).c_str());
+        QoreStringValueHelper desc(xsink.getExceptionDesc());
+        UT_ASSERT(c, strstr(desc->c_str(), "refused") != nullptr,
+            (std::string("the description is that of the refused connect: ") + desc->c_str()).c_str());
+    }
+    xsink.clear();
+    UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "the closed connection is not in the pool");
+    mgr->closeAll(&xsink);
+    xsink.clear();
+}
+
 static void ut_manager_acquire_first_request(UnitTestCounters& c) {
     ExceptionSink xsink;
 
@@ -13546,6 +13691,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_request_keeps_open_connection_that_refuses(c);
     ut_manager_streaming_repeats_on_closed_reused_connection(c);
     ut_manager_streaming_does_not_repeat_unsafe_requests(c);
+    ut_manager_streaming_abandon_releases_connection(c);
+    ut_manager_new_connection_closed_before_reservation(c);
     ut_manager_abandon_h1_evicts_connection(c);
     ut_manager_abandon_multiplexed_keeps_connection(c);
     ut_manager_abandon_completed_request_is_a_no_op(c);

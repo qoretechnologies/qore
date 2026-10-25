@@ -69,7 +69,10 @@ its overlay, not by module code).
       it regenerates every root and carries each translation whose text is unchanged to the text's new id, and
       reports conflicts, missing translations and new texts; then translate the new texts and run the strict
       source-tree check below. (`--update-source-tree` regenerates the roots only and leaves the translations
-      as they are.)
+      as they are.) When a change affects only some apps, name their owner modules with `--owner` (or `-m`): only
+      their catalogs are re-keyed, exactly as the whole-tree pass re-keys them, and only those modules are loaded,
+      which takes seconds instead of the hour the whole tree takes. A selected connection catalog still loads every
+      owner, because other modules' schemes can carry its owner's option references.
       Regenerate whenever a translated text (`DataProviderPresentation::PresentationFields`: `display_name`,
       `short_desc`, `desc` or an option's or field's `validation_regex_desc`) changes; the test compares the committed
       tree against what the module currently produces. Note the check only reaches an app once its factory is
