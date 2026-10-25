@@ -1,0 +1,226 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../ExecModeHarness.qm
+
+%exec-class PrimaryThreadStackTest
+
+#! a maximum and a protected stack size set on the primary thread, and the stack size expected from them
+hashdecl StackSizeCase {
+    #! the label of the case in the assertions
+    string label;
+    #! the maximum stack size; 0 for no maximum
+    int max_size;
+    #! the protected stack size
+    int protected_size;
+}
+
+#! Tests the stack of the primary thread once a runtime that enforces its stack size, such as a JVM, has set it
+/** Once it has created the JVM, the jni module calls q_enforce_stack_size_on_primary_thread(), which derives the
+    stack limit of the primary thread from the real start and size of its stack.  On musl, pthread_getattr_np()
+    reports only the part of the initial thread's stack that is mapped so far (132 KB when %Qore starts), not the
+    size that the stack can grow to (its stack resource limit).  The stack size was taken from that report, which
+    left the primary thread a stack no larger than its stack guard, so every stack check failed: any code parsed in
+    the primary thread afterwards raised "the code is nested too deeply to be parsed within the stack of this
+    thread", and any call raised \c STACK-LIMIT-EXCEEDED.
+
+    Each scenario runs in the primary thread of a process of its own (primary-thread-stack-worker.q), as a wrong
+    stack limit leaves the primary thread unable to run any more code, and in each execution mode.  The worker calls
+    the C++ API as the jni module does, and its results are checked against the real stack size of the primary
+    thread: the stack resource limit, or 8 MB if the stack has no limit, as %Qore assumes.
+*/
+class PrimaryThreadStackTest inherits QUnit::Test {
+    public {
+        #! the stack size that %Qore assumes for the primary thread if its stack has no resource limit
+        const UnlimitedStackSize = 8 * 1024 * 1024;
+
+        #! the smallest real stack size with which the test can enforce a maximum stack size smaller than the stack
+        const MinRealSize = 4 * 1024 * 1024;
+
+        #! the stack zones that HotSpot protects at the end of each thread's stack by default: 4 zone pages of 4 KB
+        const JvmProtectedSize = 4 * 4096;
+
+        #! HotSpot limits the stack of the primary thread on Linux to its stack resource limit less two pages
+        const JvmRlimitReserve = 2 * 4096;
+
+        #! the maximum stack size, smaller than the real stack, that the test of the enforced limit sets
+        const EnforcedMaxSize = 2 * 1024 * 1024;
+
+        #! the stack that the deep recursion uses: far more than the 132 KB that musl reports for the primary
+        #! thread's stack when %Qore starts, and far less than the real stack
+        const DeepStackUse = 1024 * 1024;
+
+        #! the largest distance from the end of the stack to the stack limit, seen from where %Qore started
+        #! managing the stack: the stack guard (144 KB on x86_64 and aarch64), the stack that the thread used before
+        #! %Qore started managing it (its arguments, environment and startup frames), and a recursion step
+        const LimitTolerance = 512 * 1024;
+
+        #! the nesting of the code that is parsed and run in the primary thread: deep nesting that the parser still
+        #! accepts for each kind of code (it supports up to 1000 nested syntax elements)
+        const ParseDepth = 450;
+
+        #! the kinds of nested code that the worker parses and runs
+        const ParseKinds = ("call", "paren", "block");
+    }
+
+    private {
+        #! the soft stack resource limit of the process, which the workers inherit; -1 if the stack has no limit
+        int rlimit;
+
+        #! the real stack size of the primary thread
+        int real_size;
+
+        #! the qore executable that runs the workers
+        string qore_bin;
+
+        #! the worker script
+        string worker;
+    }
+
+    constructor() : QUnit::Test("primary thread stack", "1.0", \ARGV) {
+        rlimit = cpp_api_stack_rlimit();
+        real_size = rlimit >= 0 ? rlimit : UnlimitedStackSize;
+        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        worker = get_script_dir() + "/primary-thread-stack-worker.q";
+
+        addTestCase("the stack size is the enforced maximum less the protected stack", \sizeTest());
+        addTestCase("the stack limit lies at the end of the stack", \limitTest());
+        addTestCase("deep recursion runs in the primary thread", \recursionTest());
+        addTestCase("the enforced stack limit raises STACK-LIMIT-EXCEEDED", \enforcedLimitTest());
+        addTestCase("deeply nested code is parsed and run in the primary thread", \parseTest());
+        set_return_value(main());
+    }
+
+    setUp() {
+        if (!HAVE_MANAGE_STACK || !HAVE_GET_STACK_SIZE) {
+            testSkip("stack management is not available");
+        }
+        if (real_size < MinRealSize) {
+            testSkip(sprintf("the stack of the primary thread (%d bytes) is smaller than %d bytes", real_size,
+                MinRealSize));
+        }
+    }
+
+    #! the stack size of the primary thread is the enforced maximum stack size less the protected stack
+    /** The maximum sizes are all smaller than the real stack, so the stack size does not depend on how the platform
+        reports the real stack; with no maximum, it is the real stack size
+    */
+    sizeTest() {
+        list<hash<StackSizeCase>> cases = (
+            <StackSizeCase>{"label": "the stack resource limit less two pages, as a JVM sets it on Linux",
+                "max_size": real_size - JvmRlimitReserve, "protected_size": JvmProtectedSize},
+            <StackSizeCase>{"label": "half of the real stack", "max_size": real_size / 2,
+                "protected_size": 64 * 1024},
+            <StackSizeCase>{"label": "a maximum with no protected stack", "max_size": EnforcedMaxSize,
+                "protected_size": 0},
+            <StackSizeCase>{"label": "no maximum", "max_size": 0, "protected_size": 0},
+        );
+        list<int> args;
+        foreach hash<StackSizeCase> c in (cases) {
+            push args, c.max_size;
+            push args, c.protected_size;
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<string, string> r = runWorker(mode, "sizes", args);
+            foreach hash<StackSizeCase> c in (cases) {
+                string label = sprintf("%s (%s)", c.label, mode);
+                int size = r{"SIZE " + $#}.toInt();
+                if (c.max_size) {
+                    assertEq(c.max_size - c.protected_size, size, label);
+                } else if (rlimit >= 0) {
+                    assertEq(rlimit, size, label + ": the stack resource limit");
+                } else {
+                    # the platform can report a stack with no limit as larger than the size that Qore assumes
+                    assertGe(UnlimitedStackSize, size, label + ": a stack with no resource limit");
+                }
+            }
+        }
+    }
+
+    #! the stack limit of the primary thread lies at the end of the stack that a JVM lets it use, less the guard
+    limitTest() {
+        int size = real_size - JvmRlimitReserve - JvmProtectedSize;
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<string, string> r = runWorker(mode, "limit", getJvmArgs());
+            assertEq(size, r.SIZE.toInt(), mode + ": the stack size that a JVM lets the primary thread use");
+            int to_limit = r{"TO-LIMIT"}.toInt();
+            assertLt(size, to_limit, mode + ": the stack guard lies within the stack");
+            assertGt(size - LimitTolerance, to_limit, mode + ": the stack limit lies at the end of the stack");
+        }
+    }
+
+    #! recursion that needs far more stack than the 132 KB that musl reports for the primary thread runs in it
+    recursionTest() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<string, string> r = runWorker(mode, "recursion", getJvmArgs() + (DeepStackUse,));
+            assertGt(DeepStackUse, r.REMAINING.toInt(), mode + ": more stack remains than the recursion used");
+        }
+    }
+
+    #! recursion without bound in the primary thread raises STACK-LIMIT-EXCEEDED at the enforced limit
+    /** The enforced maximum is smaller than the real stack, so the limit is the enforced one, and the recursion
+        cannot overflow the real stack
+    */
+    enforcedLimitTest() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<string, string> r = runWorker(mode, "unbounded", EnforcedMaxSize);
+            assertEq("STACK-LIMIT-EXCEEDED", r.ERROR, mode);
+            int deepest = r.DEEPEST.toInt();
+            assertLt(EnforcedMaxSize, deepest, mode + ": the recursion stopped within the enforced stack");
+            assertGt(EnforcedMaxSize - LimitTolerance, deepest, mode + ": the recursion stopped at the end of the "
+                "stack");
+        }
+    }
+
+    #! code nested as deeply as the parser allows is parsed and run in the primary thread
+    parseTest() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<string, string> r = runWorker(mode, "parse", getJvmArgs() + (ParseDepth, mode));
+            foreach string kind in (ParseKinds) {
+                assertEq("1", r{"RESULT " + kind}, sprintf("%s (%s)", kind, mode));
+            }
+        }
+    }
+
+    #! returns the maximum and the protected stack size of the primary thread that the jni module sets on Linux
+    private list<auto> getJvmArgs() {
+        return (real_size - JvmRlimitReserve, JvmProtectedSize);
+    }
+
+    #! runs a scenario of the worker in its own process with an execution mode, and returns its results
+    /** @param mode the execution mode
+        @param scenario the scenario
+        @param args the arguments of the scenario
+
+        @return the results that the worker printed as "<name>: <value>" lines, by name; the worker must complete
+        the scenario in the primary thread and exit normally
+    */
+    private hash<string, string> runWorker(string mode, string scenario, softlist<auto> args) {
+        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s %s %s", qore_bin, mode, worker, scenario,
+            (map $1.toString(), args).join(" "));
+        hash<ModeRunResult> rv = ExecModeHarness::run_command(cmd);
+        hash<string, string> results;
+        foreach string line in (rv.stdout.split("\n")) {
+            *list<*string> m = (line =~ x/^([^:]+): (.*)$/);
+            if (m) {
+                results{m[0]} = m[1];
+            }
+        }
+        string label = sprintf("%s (%s)", scenario, mode);
+        assertEq("done", results.STATUS, sprintf("%s: the worker completed the scenario; output:\n%s", label,
+            rv.out));
+        assertEq(0, rv.rc, label + ": exit status");
+        assertEq("1", results.TID, label + ": the scenario ran in the primary thread");
+        assertEq(real_size, results.INITIAL.toInt(), label + ": the stack size before it was enforced");
+        ExecModeHarness::check_native(rv, ExecModeHarness::NativeCheck::Jit);
+        return results;
+    }
+}

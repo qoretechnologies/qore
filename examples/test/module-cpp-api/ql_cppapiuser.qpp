@@ -1205,6 +1205,56 @@ int cpp_api_thread_start_failure_race(int iterations) [dom=PROCESS,THREAD_CONTRO
     return failed;
 }
 
+//! sets the stack limit of the primary thread as a runtime that enforces the thread's stack size does
+/** Calls q_enforce_stack_size_on_primary_thread() as the jni module does once it has created the JVM: the stack size
+    of the primary thread (get_stack_size() in that thread) is then the smaller of its real stack size and
+    \a max_size, less \a protected_size
+
+    @param max_size the maximum stack size that the runtime enforces on the primary thread; 0 for no maximum
+    @param protected_size the number of bytes at the end of the primary thread's stack that the runtime protects
+
+    @throw PRIMARY-THREAD-STACK-ERROR a size is negative
+*/
+nothing cpp_api_enforce_primary_thread_stack(int max_size, int protected_size) [dom=THREAD_CONTROL] {
+    if (max_size < 0 || protected_size < 0) {
+        xsink->raiseException("PRIMARY-THREAD-STACK-ERROR", "invalid stack sizes: max_size: " QLLD
+            ", protected_size: " QLLD, max_size, protected_size);
+        return QoreValue();
+    }
+    q_enforce_stack_size_on_primary_thread(static_cast<size_t>(max_size), static_cast<size_t>(protected_size));
+    return QoreValue();
+}
+
+//! returns the soft limit of the stack size of the process's initial thread (RLIMIT_STACK)
+/** @return the soft limit in bytes; -1 means no limit
+
+    @throw STACK-RLIMIT-ERROR getrlimit() failed
+*/
+int cpp_api_stack_rlimit() [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+    struct rlimit rl;
+    if (getrlimit(RLIMIT_STACK, &rl)) {
+        xsink->raiseErrnoException("STACK-RLIMIT-ERROR", errno, "getrlimit() failed");
+        return QoreValue();
+    }
+    return rl.rlim_cur == RLIM_INFINITY ? -1 : static_cast<int64>(rl.rlim_cur);
+}
+
+//! returns the number of bytes of stack that the current thread has used since %Qore started managing it
+/** @return the value of q_thread_stack_used(): the distance from the stack position of the thread when its %Qore
+    thread data was created to the current stack position; 0 if the stack is not managed
+*/
+int cpp_api_thread_stack_used() [flags=CONSTANT;dom=THREAD_INFO] {
+    return static_cast<int64>(q_thread_stack_used());
+}
+
+//! returns the number of bytes of stack that the current thread can use before it reaches its stack limit
+/** @return the value of q_thread_stack_remaining() as a signed integer: the distance from the current stack position
+    to the thread's stack limit, negative if the position is beyond the limit; 0 if the stack is not managed
+*/
+int cpp_api_thread_stack_remaining() [flags=CONSTANT;dom=THREAD_INFO] {
+    return static_cast<int64>(q_thread_stack_remaining());
+}
+
 //! creates a child process with the C library's fork() (not Qore's fork()) that runs Qore code, and waits for it
 /** Qore's fork() stops the signal thread before fork() and starts it again after it; a fork() made by other code
     (here, this module) does not, so the child must handle a signal thread that does not exist in it
