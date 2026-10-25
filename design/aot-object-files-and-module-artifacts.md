@@ -393,6 +393,121 @@ Inputs of an aggregated `.qmod` (`qcc -m --from-objects`) are not checked
 individually: the glue object records the identity of the aggregating qcc, and
 the build-system contract below keeps the `.qo` inputs current.
 
+## Module Metadata Section
+
+qcc stores the metadata that the loader needs before it maps an AOT `.qmod` --
+the module name, the descriptor's exact ordered dependency list, and the
+`%try-module` requests that failed when the module was compiled -- in a section
+of the module's image:
+
+- Mach-O: the section `__TEXT,__qore_modinfo` holds the record. It is declared
+  `no_dead_strip`, so a link with `-dead_strip` keeps it.
+- ELF: the allocated note section `.note.qore.modinfo` holds one note with the
+  owner `Qore` and the type `0x494d4151` (the record magic), whose description
+  is the record. The linker places it in a `PT_NOTE` segment, and it is marked
+  `SHF_GNU_RETAIN`, so `--gc-sections` keeps it.
+
+The record is little-endian: magic `QAMI`, format version (1), payload size,
+then the module name, the dependency count and dependencies, and the optional
+module count and requests, each string as a 32-bit length and its bytes. Every
+string is nonempty and contains no NUL; payloads are bounded to 16 MiB and
+65,536 entries per list. `QoreAOTModuleFileInfo` in
+`include/qore/intern/QoreAOTBinary.h` documents the layout.
+
+qcc adds the section as a constant global of the LLVM module
+(`addAOTModuleInfoSection()` in `lib/QoreAOT.cpp`) to the object that is linked
+into the `.qmod`: the module object of `qcc -m`, or the glue object of
+`qcc -m --from-objects`. A `.qo` never carries one, so an aggregated module has
+exactly one record, and a cross-compiled module object (`--target`) carries its
+own, ready for a manual link. Because the metadata is part of the image:
+
+- the code signature that the linker attaches on macOS covers it, so
+  `codesign --verify --strict` accepts the module, the module can be signed
+  again in place, and it can be notarized (see "Code Signing and
+  Notarization");
+- `strip`, `objcopy --only-keep-debug`/`--add-gnu-debuglink`, `dh_strip` and
+  RPM's post-install processing keep it, since they only remove sections that
+  are not loaded;
+- a module is renamed into place complete with its metadata: no reader can see
+  a linked module whose metadata has not been written yet.
+
+Earlier qcc versions appended the same data after the end of the image as `QAOM`
+and `QAMD` EOF trailers with a 16-byte footer. The trailers lay outside of the
+code signature, so `codesign --verify --strict` refused every module ("main
+executable failed strict validation"), and every stripping step lost them unless
+packaging saved and restored them. The trailing format is no longer written or
+read: since the module code and the runtime identity change with this format
+(see "AOT Module Runtime Identity"), such a module must be rebuilt anyway. The
+loader recognizes a module that ends with such a footer and has no metadata
+section, and refuses it with an error that names the module and asks for it to be
+rebuilt, before mapping it.
+
+`qoreAOTReadModuleInfo()` reads the metadata from the file without mapping it:
+
+- Mach-O: it walks the load commands of a thin 64-bit image, or of the slice of
+  a universal file for the running architecture, for the `LC_SEGMENT_64`
+  section;
+- ELF: it walks the `PT_NOTE` program headers of a linked little-endian image
+  (notes in a segment aligned to 8 bytes are aligned to 8 bytes, as for
+  `.note.gnu.property`). A relocatable object has no program headers and no
+  metadata. Program headers rather than section headers are read because they
+  are what a loadable image cannot do without.
+
+It reports no metadata for a file that cannot be opened or is no such image, so
+`dlopen()` reports the authoritative error, and for an image without the
+section, such as a C++ binary module. It refuses, with an error that names the
+problem, an image whose headers or metadata section extend past the end of the
+file (a truncated file), a damaged record (magic, size, strings, counts), a
+record of another format version, a second record, and the EOF trailers
+described above. Notes of other owners are not validated: a note that does not
+fit in its segment ends the scan of that segment.
+
+`qcc --dump-info` prints the record with its location, for example:
+
+```
+  AOT module metadata: ELF note Qore 0x494d4151 (section .note.qore.modinfo), offset 0x270, 58 bytes
+    module: Util
+    dependencies: 3
+      yaml
+      json
+      reflection
+    unavailable optional modules: 0
+```
+
+### Code Signing and Notarization (macOS)
+
+The linker signs every `.qmod` ad hoc (`flags=0x20002(adhoc,linker-signed)`),
+which is all that loading on Apple Silicon requires. A module that is
+distributed is signed with a Developer ID certificate and notarized:
+
+```
+codesign --force --sign "Developer ID Application: Example (TEAMID)" --timestamp MyModule.qmod
+codesign --verify --strict --verbose=2 MyModule.qmod
+ditto -c -k --keepParent MyModule.qmod MyModule.zip
+xcrun notarytool submit MyModule.zip --keychain-profile <profile> --wait
+```
+
+A bare `.qmod` cannot be stapled; the notarization ticket is stapled to the
+installer package or disk image that contains it (`xcrun stapler staple`), or
+Gatekeeper fetches it online. A process with the hardened runtime and library
+validation loads only libraries signed by Apple or by its own team, so a host
+application that loads modules signed by another team needs the
+`com.apple.security.cs.disable-library-validation` entitlement. Re-signing,
+`strip` and `lipo` keep the metadata section; `strip` and `install_name_tool`
+invalidate the signature, so the module is signed after them.
+
+`QORE_VERIFY_MODULE_SIGNATURES=1` makes the loader check the signature of a
+module before mapping it (`qore_check_module_file_integrity()`), so a damaged
+module is reported instead of the process being killed by the kernel when it
+maps a page that fails validation.
+
+`examples/test/ir/AOTModuleMetadataSection.qtest` covers the section on both
+platforms, strict verification of the linker's signature and after an ad-hoc
+re-signing with another identifier, stripping, a universal module, and the
+refusal of damaged, truncated, sectionless and trailer-format modules. Ad-hoc
+signing and verification need no network access; notarization needs Apple
+credentials and is not tested.
+
 ## Load-Time Dependency Preflight
 
 A loadable `.qmod` needs its dependency providers registered before the dynamic
@@ -401,26 +516,26 @@ would normally require mapping the qmod first, which previously forced this sequ
 map with `RTLD_LAZY`, read the descriptor, load dependencies, unmap, then map again
 with `RTLD_NOW`.
 
-Current qcc output appends a small, non-executing dependency trailer to the final
-`.qmod`. The trailer is the last one in the file and contains the module name
-and the descriptor's exact ordered dependency list, followed by a fixed 16-byte footer
-with payload length, `QAMD` magic, and format version. It is appended after the final
-link, including object aggregation, because arbitrary relinking does not preserve EOF
-trailers.
+The loader reads the module metadata section instead (see "Module Metadata
+Section"):
 
-The runtime loader uses the trailer as follows:
+1. read and validate the metadata before mapping code;
+2. require its module name to be the feature being loaded;
+3. reserve the parent in the module load map and recursively load the declared providers;
+4. map the qmod once with `RTLD_NOW|RTLD_GLOBAL`;
+5. read the executable descriptor and require its AOT marker, module name, and dependency
+   list to match the metadata exactly before running module initialization.
 
-1. validate its version, lengths, entry count, and module name before mapping code;
-2. reserve the parent in the module load map and recursively load the declared providers;
-3. map the qmod once with `RTLD_NOW|RTLD_GLOBAL`;
-4. read the executable descriptor and require its AOT marker, module name, and dependency
-   list to match the preflight metadata exactly before running module initialization.
-
-Payloads are bounded to 16 MiB and 65,536 dependencies, and strings must be nonempty
-where required and contain no embedded NUL. Qmods without the trailer retain the legacy
-lazy-discovery/reopen path, so introducing the trailer does not invalidate existing AOT
-artifacts. The EOF format also keeps a qmod self-contained; there is no sidecar whose
-installation, renaming, or symlink lifetime could diverge from the executable artifact.
+A binary module without the section, such as a C++ module, is mapped with
+`RTLD_LAZY` to read its descriptor. Every AOT module that qcc links carries the
+section, so an AOT module loaded from a file without it was changed after it was
+built (for example by a tool that removed the section): it is refused after the
+runtime identity check, before its initialization, since loading it would skip
+the check of optional modules below. Statically registered AOT modules
+(`.qoa`, `qcc -o` executables) are not loaded from a file and have no section.
+The metadata keeps a qmod self-contained; there is no sidecar whose
+installation, renaming, or symlink lifetime could diverge from the executable
+artifact.
 
 Preflight registers dependency providers without importing their declarations into
 the host Program. Non-reexported `%requires` imports belong to the module's own
@@ -444,18 +559,15 @@ optional module was installed or upgraded silently keeps the reduced behavior fo
 both in a build tree and in an installation (for example, `ProviderIndex` without
 `process >= 2.1` builds indexes without worker processes).
 
-qcc therefore records every failed `%try-module` request in a `QAOM` EOF trailer: a
-count and the requests as written (a module name with an optional version
-constraint), with the same 16-byte footer shape as the other trailers. It is written
-right after the final link and before the `QAMD` trailer, so readers that predate it
-find their trailer at the end of the file as before; it is only
-written when a `%try-module` failed. The recorded requests are collected by the
-scanner in `qore_program_private::unavailable_try_modules`; requests denied by
+qcc therefore records every failed `%try-module` request in the module metadata
+section: the requests as written (a module name with an optional version
+constraint). The recorded requests are collected by the scanner in
+`qore_program_private::unavailable_try_modules`; requests denied by
 `PO_NO_MODULES` are not recorded, since they do not depend on the installation.
 
-Before mapping a qmod, the loader reads the trailer and loads each recorded module as
-the `%try-module` directive in the source module would. If one of them loads now
-(including its version constraint), the artifact is stale:
+Before mapping a qmod, the loader loads each recorded module as the `%try-module`
+directive in the source module would. If one of them loads now (including its
+version constraint), the artifact is stale:
 
 1. if the source module is available next to the qmod, the loader raises
    `AOT-MODULE-STALE`, and the existing binary-to-source fallback loads the source

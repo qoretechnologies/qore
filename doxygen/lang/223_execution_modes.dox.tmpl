@@ -509,6 +509,10 @@ qcc --dump-info --dump-symbols app
 qcc --dump-info --dump-sections build/file.qo
     @endcode
 
+    For a \c .qmod, the output ends with the module metadata that the loader reads before loading the module (its
+    name, dependencies, and the modules of failed \c %%try-module directives), and where it is stored in the image;
+    see @ref aot_module_code_signing.
+
     Inspection does not execute embedded Qore code.
 
     @section exec_mode_programmatic Programmatic Control

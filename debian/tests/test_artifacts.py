@@ -168,15 +168,38 @@ class ArtifactChecksTest(unittest.TestCase):
                 self.assertFalse(check(runpath=path))
 
     def test_aot_metadata_corruption(self):
-        payload = b"dependencies"
-        footer = struct.pack("<Q4sI", len(payload), b"QAMD", 1)
-        self.assertIn("QAMD", artifacts.trailers(b"ELF" + payload + footer))
-        for invalid in (struct.pack("<Q4sI", 999, b"QAMD", 1),
-                        struct.pack("<Q4sI", len(payload), b"QAMD", 2)):
-            with self.assertRaises(ValueError):
-                artifacts.trailers(payload + invalid)
+        if not shutil.which("cc") or not shutil.which("readelf"):
+            self.skipTest("cc and readelf are required")
+
+        def build(note):
+            source = self.root / "module.c"
+            data = ", ".join(str(value) for value in note)
+            source.write_text("int probe(void) { return 42; }\n"
+                              + ("__attribute__((used, section(\".note.qore.modinfo\"), aligned(4)))\n"
+                                 f"static const unsigned char info[] = {{ {data} }};\n" if note else ""))
+            module = self.root / "Module.qmod"
+            subprocess.run(["cc", "-shared", "-fPIC", "-o", str(module), str(source)], check=True)
+            return module.read_bytes()
+
+        def record(magic=0x494D4151, version=1, size_delta=0):
+            payload = struct.pack("<I", 6) + b"Module" + struct.pack("<II", 0, 0)
+            return struct.pack("<III", magic, version, len(payload) + size_delta) + payload
+
+        def note(**fields):
+            data = record(**fields)
+            data = struct.pack("<III", 5, len(data), 0x494D4151) + b"Qore\0\0\0\0" + data
+            return data + b"\0" * (-len(data) % 4)
+
+        data = build(note())
+        self.assertEqual(record(), artifacts.module_info(data))
+        self.assertIsNone(artifacts.module_info(build(b"")))
+        self.assertIsNone(artifacts.module_info(b"not an ELF image"))
+        for invalid in ({"magic": 0x58414D49}, {"version": 2}, {"size_delta": 1}):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    artifacts.module_info(build(note(**invalid)))
         with self.assertRaises(ValueError):
-            artifacts.trailers((payload + footer) * 2)
+            artifacts.module_info(data[:100])
 
     def test_detached_debug_symbols(self):
         if not shutil.which("objcopy") or not shutil.which("strip"):

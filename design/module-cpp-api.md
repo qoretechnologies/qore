@@ -18,15 +18,16 @@ business in the core language library.
 
 A direct reference to another module's exported symbol already *resolves* on both Linux and macOS:
 
-- Ordinary C++ modules and legacy AOT qmods are initially opened with
-  `RTLD_LAZY|RTLD_GLOBAL`, so a module's `DLLEXPORT` symbols are process-global once loaded.
-  Current AOT qmods carry preflight dependency metadata and are opened once with
-  `RTLD_NOW|RTLD_GLOBAL` after those providers are loaded.
+- Ordinary C++ modules are opened with `RTLD_LAZY|RTLD_GLOBAL`, so a module's `DLLEXPORT`
+  symbols are process-global once loaded. AOT qmods carry their dependency metadata in a
+  section of the image and are opened once with `RTLD_NOW|RTLD_GLOBAL` after those
+  providers are loaded.
 - `cmake/QoreMacros.cmake:378` already links module bundles with `-Wl,-undefined
   -Wl,dynamic_lookup` on macOS.
-- The `RTLD_NOW` path is AOT-only: current qmods use the single-map preflight path, while
-  `reopen_aot_binary_module_now()` preserves eager resolution for legacy qmods without the
-  metadata trailer. Ordinary C++ modules keep lazy binding.
+- The `RTLD_NOW` path is AOT-only: qmods use the single-map preflight path, and an AOT
+  qmod without its metadata section is refused (see
+  [`aot-object-files-and-module-artifacts.md`](aot-object-files-and-module-artifacts.md),
+  "Load-Time Dependency Preflight"). Ordinary C++ modules keep lazy binding.
 
 The problem is how it *fails*. Binding is lazy, so a header/ABI mismatch between two independently
 released repositories is a process abort at the first call rather than a load error. There is no

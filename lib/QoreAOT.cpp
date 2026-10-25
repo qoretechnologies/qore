@@ -771,7 +771,7 @@ static bool qore_aot_record_module_deps(QoreProgram* pgm,
         // The artifact is compiled without the modules of failed %try-module directives, so the build depends on
         // the files that could provide them: replacing a module that was too old, for example, must rebuild the
         // artifact.  A module that is installed later is detected when the artifact is loaded; see
-        // qoreAOTAppendOptionalModulesTrailer().
+        // QoreAOTModuleFileInfo.
         for (const std::string& spec : pp->unavailable_try_modules) {
             size_t end = spec.find_first_of(" \t<>=!");
             std::string name = spec.substr(0, end);
@@ -24831,6 +24831,60 @@ static void emitFragmentSymbols(llvm::LLVMContext& ctx, llvm::Module& module,
     builder.CreateRet(ptr);
 }
 
+//! Adds the section holding the AOT module metadata that the loader reads before it maps the module
+/** The metadata is part of the image, so the code signature that the linker or \c codesign attaches to the module
+    covers it, and stripping the module keeps it (see QoreAOTModuleFileInfo): a Mach-O section in the \c __TEXT
+    segment, or an allocated ELF note section, which the linker places in a \c PT_NOTE segment.  It is added to the
+    object that is linked into a \c .qmod (the module object, or the glue object of an aggregated module), never to a
+    \c .qo, so a module has exactly one.
+
+    @param ctx the LLVM context
+    @param module the LLVM module of the object
+    @param mod_info the module's descriptor information
+    @param unavailable_try_modules the %try-module requests that failed when the module was compiled
+    @param target_triple the target, or nullptr for the host
+    @param error receives a description of invalid metadata or of an unsupported object format
+
+    @return true on success
+*/
+static bool addAOTModuleInfoSection(llvm::LLVMContext& ctx, llvm::Module& module, const QoreAOTModuleInfo& mod_info,
+        const std::vector<std::string>& unavailable_try_modules, const char* target_triple, std::string& error) {
+    QoreAOTModuleFileInfo info;
+    info.module_name = mod_info.name;
+    info.dependencies = mod_info.dependencies;
+    info.unavailable_optional_modules = unavailable_try_modules;
+    std::vector<uint8_t> record;
+    if (!qoreAOTEncodeModuleInfo(info, record, error)) {
+        return false;
+    }
+
+    llvm::Triple triple(target_triple ? std::string(target_triple) : llvm::sys::getDefaultTargetTriple());
+    std::vector<uint8_t> contents;
+    const char* section;
+    if (triple.isOSBinFormatMachO()) {
+        contents = std::move(record);
+        // no_dead_strip keeps the section when the module is linked with -dead_strip
+        section = QORE_AOT_MODULE_INFO_MACHO_SEGMENT "," QORE_AOT_MODULE_INFO_MACHO_SECTION ",regular,no_dead_strip";
+    } else if (triple.isOSBinFormatELF()) {
+        contents = qoreAOTModuleInfoNote(record);
+        section = QORE_AOT_MODULE_INFO_ELF_SECTION;
+    } else {
+        error = "AOT modules can only be built for ELF and Mach-O targets, not for '" + triple.str() + "'";
+        return false;
+    }
+
+    llvm::Constant* data = llvm::ConstantDataArray::get(ctx, llvm::ArrayRef<uint8_t>(contents));
+    auto* gv = new llvm::GlobalVariable(module, data->getType(), true, llvm::GlobalValue::PrivateLinkage, data,
+        "qore_aot_module_info");
+    gv->setSection(section);
+    // ELF notes are 4-byte aligned; the Mach-O record is read with the same alignment
+    gv->setAlignment(llvm::Align(4));
+    // keep the otherwise unreferenced global from being removed or merged; on ELF this also marks the section
+    // SHF_GNU_RETAIN, so that --gc-sections keeps it
+    llvm::appendToUsed(module, {gv});
+    return true;
+}
+
 //! Generate LLVM IR for binary module ABI symbols
 /** Embeds serialized metadata blob and calls qore_aot_module_init_v3.
 
@@ -25637,6 +25691,10 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         // at module load time.  mod_po is only the initial seed.
         generateModuleABIV2(ctx, *module, metadata, label, qpgm->getParseOptions(),
             mod_info, compiled_funcs, compile_only);
+        if (!compile_only && !addAOTModuleInfoSection(ctx, *module, mod_info,
+                qore_program_private::get(**qpgm)->unavailable_try_modules, target_triple, error)) {
+            return false;
+        }
 
         split_codegen = !func_slots.empty();
     }
@@ -25676,19 +25734,6 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         if (!target_triple) {
             remove(obj_path.c_str());
         }
-    }
-
-    // The optional modules that were unavailable are recorded before the dependency trailer, which is read from
-    // the end of the file.
-    if (!compile_only && !target_triple
-            && !qoreAOTAppendOptionalModulesTrailer(output_path,
-                qore_program_private::get(**qpgm)->unavailable_try_modules, error)) {
-        return false;
-    }
-    if (!compile_only && !target_triple
-            && !qoreAOTAppendModuleDependenciesTrailer(
-                output_path, mod_info.name, mod_info.dependencies, error)) {
-        return false;
     }
 
     reportAOTArtifactStats("module compilation", opt_level, include_source,
@@ -26131,6 +26176,10 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             // single-file module path.
             generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(),
                 qpgm->getParseOptions(), mod_info, compiled_funcs, compile_only);
+            if (!compile_only && !addAOTModuleInfoSection(ctx, *module, mod_info,
+                    qore_program_private::get(**qpgm)->unavailable_try_modules, target_triple, error)) {
+                return false;
+            }
 
             split_codegen = !func_slots.empty();
         }
@@ -26170,19 +26219,6 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             if (!target_triple) {
                 remove(obj_path.c_str());
             }
-        }
-
-        // The optional modules that were unavailable are recorded before the dependency
-        // trailers, which are read from the end of the file.
-        if (!compile_only && !target_triple
-                && !qoreAOTAppendOptionalModulesTrailer(output_path,
-                    qore_program_private::get(**qpgm)->unavailable_try_modules, error)) {
-            return false;
-        }
-        if (!compile_only && !target_triple
-                && !qoreAOTAppendModuleDependenciesTrailer(
-                    output_path, mod_info.name, mod_info.dependencies, error)) {
-            return false;
         }
 
         reportAOTArtifactStats("split module compilation", opt_level, include_source,
@@ -30707,6 +30743,10 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(),
                 qpgm->getParseOptions(), mod_info, compiled_funcs,
                 /*compile_only=*/false);
+            if (!addAOTModuleInfoSection(ctx, *module, mod_info,
+                    qore_program_private::get(**qpgm)->unavailable_try_modules, target_triple, error)) {
+                return false;
+            }
         }
 
         di_builder.finalize();
@@ -30739,15 +30779,6 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         }
 
         if (!linkSharedLibMulti(link_inputs, output_path, error, target_triple)) {
-            remove(glue_obj.c_str());
-            return false;
-        }
-
-        if (!target_triple
-                && (!qoreAOTAppendOptionalModulesTrailer(output_path,
-                        qore_program_private::get(**qpgm)->unavailable_try_modules, error)
-                    || !qoreAOTAppendModuleDependenciesTrailer(
-                        output_path, mod_info.name, mod_info.dependencies, error))) {
             remove(glue_obj.c_str());
             return false;
         }

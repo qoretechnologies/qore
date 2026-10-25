@@ -224,8 +224,9 @@ using native builds for the target distribution. Keep modules shipped in Qore's
 modules/ and qlib/ trees in Qore's packages. Do not create duplicate JSON/YAML
 packages. Before packaging a separate module, inventory its native libraries,
 Qore dependencies, vendored sources/licenses, user modules/resources, tests,
-documentation and generated metadata. Preserve AOT trailers when stripping
-user modules, just as Qore does. Run tests against installed artifacts.
+documentation and generated metadata. Stripping keeps the AOT module metadata
+(the ELF note section .note.qore.modinfo); check that it survives packaging, as
+Qore's debian/preserve-aot-metadata.py does. Run tests against installed artifacts.
 
 The initial external-module SDK check builds UUID from a clean committed source
 archive, using only installed Qore headers/tools/libraries, and runs its tests.

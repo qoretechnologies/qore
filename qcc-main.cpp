@@ -8175,6 +8175,42 @@ static void add_existing_qo_inputs_from_args(std::vector<std::string>& inputs,
     }
 }
 
+//! Prints the AOT module metadata that qcc stores in a section of a qmod's image
+/** The loader reads the same metadata before it maps the module; see QoreAOTModuleFileInfo.
+*/
+static void print_aot_module_info(const char* path) {
+    QoreAOTModuleFileInfo info;
+    QoreAOTModuleInfoLocation location;
+    std::string error;
+    switch (qoreAOTReadModuleInfo(path, info, error, &location)) {
+        case QoreAOTModuleInfoStatus::NONE:
+            printf("  AOT module metadata: none found\n");
+            return;
+        case QoreAOTModuleInfoStatus::INVALID:
+            printf("  AOT module metadata: invalid: %s\n", error.c_str());
+            return;
+        case QoreAOTModuleInfoStatus::FOUND:
+            break;
+    }
+    printf("  AOT module metadata: %s, offset 0x%llx, %llu bytes\n", location.container.c_str(),
+        static_cast<unsigned long long>(location.offset), static_cast<unsigned long long>(location.size));
+    printf("    module: %s\n", info.module_name.c_str());
+    printf("    dependencies: %zu\n", info.dependencies.size());
+    for (size_t i = 0; i < info.dependencies.size(); ++i) {
+        if (!dump_aot_symbol_index_check_cancel(i, "AOT module metadata dump")) {
+            return;
+        }
+        printf("      %s\n", info.dependencies[i].c_str());
+    }
+    printf("    unavailable optional modules: %zu\n", info.unavailable_optional_modules.size());
+    for (size_t i = 0; i < info.unavailable_optional_modules.size(); ++i) {
+        if (!dump_aot_symbol_index_check_cancel(i, "AOT module metadata dump")) {
+            return;
+        }
+        printf("      %s\n", info.unavailable_optional_modules[i].c_str());
+    }
+}
+
 static int dump_aot_info_for_file(const char* path) {
     printf("%s:\n", path);
 
@@ -8195,6 +8231,7 @@ static int dump_aot_info_for_file(const char* path) {
             dump_aot_metadata_blob(blobs[i], i + 1);
         }
     }
+    print_aot_module_info(path);
 
     return 0;
 }

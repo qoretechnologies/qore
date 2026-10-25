@@ -183,404 +183,742 @@ uint32_t QoreAOTBinaryWriter::addSourcePath(const char* path) {
 }
 
 // ---------------------------------------------------------------------------
-// AOT module trailers (module dependencies, unavailable optional modules). See
-// QoreAOTBinary.h for the on-disk layout.
+// AOT module metadata, held in a section of the image so that the code signature covers it.  See QoreAOTBinary.h
+// for the format.
 // ---------------------------------------------------------------------------
 namespace {
-inline void trailerPut32(std::vector<uint8_t>& out, uint32_t v) {
+//! the largest payload of an AOT module metadata record
+constexpr size_t QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE = 16 * 1024 * 1024;
+//! the most dependencies, or optional modules, of an AOT module metadata record
+constexpr size_t QORE_AOT_MODULE_INFO_MAX_COUNT = 65536;
+//! the largest Mach-O load command area or ELF note segment that is read to find the metadata
+constexpr uint64_t QORE_AOT_MODULE_INFO_MAX_SCAN_SIZE = 64 * 1024 * 1024;
+
+//! the size of the footer of the trailers that earlier qcc versions appended after the image
+/** uint64 payload_len; uint32 magic; uint32 version.  Such a module is only recognized, to refuse it with an error
+    that asks for it to be rebuilt.
+*/
+constexpr size_t QORE_AOT_LEGACY_TRAILER_FOOTER_SIZE = 16;
+constexpr uint32_t QORE_AOT_LEGACY_MODULE_DEPS_MAGIC = 0x444d4151u;       // 'QAMD'
+constexpr uint32_t QORE_AOT_LEGACY_OPTIONAL_MODULES_MAGIC = 0x4d4f4151u;  // 'QAOM'
+
+// Mach-O definitions (<mach-o/loader.h>, <mach-o/fat.h>), here so that a module of either format can be inspected on
+// any host
+constexpr uint32_t QORE_MH_MAGIC_64 = 0xfeedfacfu;
+constexpr uint32_t QORE_FAT_MAGIC = 0xcafebabeu;
+constexpr uint32_t QORE_FAT_MAGIC_64 = 0xcafebabfu;
+constexpr uint32_t QORE_LC_SEGMENT_64 = 0x19u;
+constexpr size_t QORE_MACH_HEADER_64_SIZE = 32;
+constexpr size_t QORE_SEGMENT_COMMAND_64_SIZE = 72;
+constexpr size_t QORE_SECTION_64_SIZE = 80;
+constexpr uint32_t QORE_MACHO_SECTION_TYPE = 0xffu;
+constexpr uint32_t QORE_S_ZEROFILL = 0x1u;
+constexpr uint32_t QORE_S_GB_ZEROFILL = 0xcu;
+constexpr uint32_t QORE_S_THREAD_LOCAL_ZEROFILL = 0x12u;
+//! the most architectures read from a universal file
+constexpr uint32_t QORE_MAX_FAT_ARCHS = 64;
+#if defined(__aarch64__) || defined(__arm64__)
+constexpr uint32_t QORE_NATIVE_MACHO_CPU_TYPE = 0x0100000cu;  // CPU_TYPE_ARM64
+#elif defined(__x86_64__)
+constexpr uint32_t QORE_NATIVE_MACHO_CPU_TYPE = 0x01000007u;  // CPU_TYPE_X86_64
+#else
+constexpr uint32_t QORE_NATIVE_MACHO_CPU_TYPE = 0;            // no slice of a universal file is read
+#endif
+
+// ELF definitions (<elf.h>)
+constexpr uint8_t QORE_ELFCLASS32 = 1;
+constexpr uint8_t QORE_ELFCLASS64 = 2;
+constexpr uint8_t QORE_ELFDATA2LSB = 1;
+constexpr uint32_t QORE_PT_NOTE = 4;
+constexpr uint64_t QORE_PN_XNUM = 0xffff;
+constexpr size_t QORE_ELF_NOTE_HEADER_SIZE = 12;
+
+inline void moduleInfoPut32(std::vector<uint8_t>& out, uint32_t v) {
     out.push_back(static_cast<uint8_t>(v & 0xff));
     out.push_back(static_cast<uint8_t>((v >> 8) & 0xff));
     out.push_back(static_cast<uint8_t>((v >> 16) & 0xff));
     out.push_back(static_cast<uint8_t>((v >> 24) & 0xff));
 }
-inline void trailerPut64(std::vector<uint8_t>& out, uint64_t v) {
-    for (unsigned i = 0; i < 8; ++i) {
-        out.push_back(static_cast<uint8_t>((v >> (i * 8)) & 0xff));
+
+inline void moduleInfoPad4(std::vector<uint8_t>& out) {
+    while (out.size() % 4) {
+        out.push_back(0);
     }
 }
-inline bool trailerGet32(const uint8_t* data, size_t len, size_t& p, uint32_t& v) {
-    if (p + 4 > len) {
-        return false;
-    }
-    v = static_cast<uint32_t>(data[p])
-        | (static_cast<uint32_t>(data[p + 1]) << 8)
-        | (static_cast<uint32_t>(data[p + 2]) << 16)
-        | (static_cast<uint32_t>(data[p + 3]) << 24);
-    p += 4;
-    return true;
-}
-inline bool trailerGet64(const uint8_t* data, size_t len, size_t& p, uint64_t& v) {
-    if (p + 8 > len) {
-        return false;
-    }
-    v = 0;
-    for (unsigned i = 0; i < 8; ++i) {
-        v |= static_cast<uint64_t>(data[p + i]) << (i * 8);
-    }
-    p += 8;
-    return true;
+
+inline uint16_t le16(const uint8_t* p) {
+    return static_cast<uint16_t>(p[0] | (static_cast<uint16_t>(p[1]) << 8));
 }
 
-inline bool readAOTTrailerFooter(FILE* f, long end, uint64_t& payload_len,
-        uint32_t& magic, uint32_t& version) {
-    if (end < static_cast<long>(QORE_AOT_TRAILER_FOOTER_SIZE)
-            || fseek(f, end - static_cast<long>(QORE_AOT_TRAILER_FOOTER_SIZE), SEEK_SET) != 0) {
-        return false;
-    }
-    uint8_t footer[QORE_AOT_TRAILER_FOOTER_SIZE];
-    if (fread(footer, 1, sizeof(footer), f) != sizeof(footer)) {
-        return false;
-    }
-    size_t p = 0;
-    return trailerGet64(footer, sizeof(footer), p, payload_len)
-        && trailerGet32(footer, sizeof(footer), p, magic)
-        && trailerGet32(footer, sizeof(footer), p, version);
+inline uint32_t le32(const uint8_t* p) {
+    return static_cast<uint32_t>(p[0])
+        | (static_cast<uint32_t>(p[1]) << 8)
+        | (static_cast<uint32_t>(p[2]) << 16)
+        | (static_cast<uint32_t>(p[3]) << 24);
 }
 
-constexpr size_t QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE = 16 * 1024 * 1024;
-constexpr size_t QORE_AOT_MODULE_DEPS_MAX_COUNT = 65536;
-} // anonymous namespace
+inline uint64_t le64(const uint8_t* p) {
+    return static_cast<uint64_t>(le32(p)) | (static_cast<uint64_t>(le32(p + 4)) << 32);
+}
 
-bool qoreAOTAppendModuleDependenciesTrailer(const std::string& path, const std::string& module_name,
-        const std::vector<std::string>& dependencies, std::string& error) {
-    if (module_name.empty() || module_name.find('\0') != std::string::npos
-            || module_name.size() > UINT32_MAX || dependencies.size() > QORE_AOT_MODULE_DEPS_MAX_COUNT) {
-        error = "invalid AOT module dependency trailer identity or count";
-        return false;
-    }
-    if (module_name.size() > QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE - 8) {
-        error = "AOT module dependency trailer exceeds the maximum payload size";
-        return false;
+inline uint32_t be32(const uint8_t* p) {
+    return (static_cast<uint32_t>(p[0]) << 24)
+        | (static_cast<uint32_t>(p[1]) << 16)
+        | (static_cast<uint32_t>(p[2]) << 8)
+        | static_cast<uint32_t>(p[3]);
+}
+
+inline uint64_t be64(const uint8_t* p) {
+    return (static_cast<uint64_t>(be32(p)) << 32) | static_cast<uint64_t>(be32(p + 4));
+}
+
+//! Rounds an offset in a note segment up to a multiple of an alignment of 4 or 8
+/** The offsets are bounded by the segment size plus a 32-bit field, so this cannot overflow.
+*/
+inline uint64_t noteAlign(uint64_t v, uint64_t align) {
+    return (v + align - 1) & ~(align - 1);
+}
+
+std::string moduleInfoHex(uint64_t v) {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "0x%llx", static_cast<unsigned long long>(v));
+    return buf;
+}
+
+//! The description of a damaged file
+std::string moduleInfoDamaged(const std::string& what) {
+    return what + "; the file is damaged: reinstall or rebuild the module";
+}
+
+//! The description of a truncated file
+std::string moduleInfoTruncated(const std::string& what, uint64_t end, uint64_t size) {
+    return what + " extends past the end of the file (to byte " + std::to_string(end) + " of "
+        + std::to_string(size) + "); the file is truncated: reinstall or rebuild the module";
+}
+
+//! The end of a range, saturated so that a damaged offset cannot wrap in a message
+inline uint64_t moduleInfoEnd(uint64_t off, uint64_t len) {
+    return len > UINT64_MAX - off ? UINT64_MAX : off + len;
+}
+
+//! Reads a module file at absolute offsets
+class AOTModuleFileReader {
+public:
+    explicit AOTModuleFileReader(const char* path) : f(fopen(path, "rb")) {
+        if (!f) {
+            return;
+        }
+        off_t end = -1;
+        if (!fseeko(f, 0, SEEK_END)) {
+            end = ftello(f);
+        }
+        if (end < 0) {
+            fclose(f);
+            f = nullptr;
+            return;
+        }
+        fsize = static_cast<uint64_t>(end);
     }
 
-    std::vector<uint8_t> payload;
-    payload.reserve(8 + module_name.size());
-    trailerPut32(payload, static_cast<uint32_t>(module_name.size()));
-    payload.insert(payload.end(), module_name.begin(), module_name.end());
-    trailerPut32(payload, static_cast<uint32_t>(dependencies.size()));
-    for (size_t i = 0; i < dependencies.size(); ++i) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT module dependency trailer output")) {
-            error = "AOT module dependency trailer output cancelled";
+    ~AOTModuleFileReader() {
+        if (f) {
+            fclose(f);
+        }
+    }
+
+    AOTModuleFileReader(const AOTModuleFileReader&) = delete;
+    AOTModuleFileReader& operator=(const AOTModuleFileReader&) = delete;
+
+    bool isOpen() const {
+        return f != nullptr;
+    }
+
+    uint64_t size() const {
+        return fsize;
+    }
+
+    //! Returns true if [off, off + len) lies in the file
+    bool contains(uint64_t off, uint64_t len) const {
+        return off <= fsize && len <= fsize - off;
+    }
+
+    //! Reads exactly @a len bytes at @a off, which must lie in the file
+    bool read(uint64_t off, uint8_t* buf, size_t len) {
+        assert(contains(off, len));
+        if (off > static_cast<uint64_t>(std::numeric_limits<off_t>::max())) {
             return false;
         }
-        const std::string& dependency = dependencies[i];
-        if (dependency.empty() || dependency.find('\0') != std::string::npos
-                || dependency.size() > UINT32_MAX) {
-            error = "invalid AOT module dependency trailer entry";
-            return false;
-        }
-        if (payload.size() > QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE - 4
-                || dependency.size() > QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE - payload.size() - 4) {
-            error = "AOT module dependency trailer exceeds the maximum payload size";
-            return false;
-        }
-        trailerPut32(payload, static_cast<uint32_t>(dependency.size()));
-        payload.insert(payload.end(), dependency.begin(), dependency.end());
+        return !fseeko(f, static_cast<off_t>(off), SEEK_SET) && fread(buf, 1, len, f) == len;
     }
 
-    std::vector<uint8_t> footer;
-    trailerPut64(footer, payload.size());
-    trailerPut32(footer, QORE_AOT_MODULE_DEPS_MAGIC);
-    trailerPut32(footer, QORE_AOT_MODULE_DEPS_VERSION);
-    assert(footer.size() == QORE_AOT_TRAILER_FOOTER_SIZE);
+private:
+    FILE* f;
+    uint64_t fsize = 0;
+};
 
-    FILE* f = fopen(path.c_str(), "ab");
-    if (!f) {
-        error = "failed to open '" + path + "' to append AOT module dependencies: " + strerror(errno);
-        return false;
-    }
-    bool ok = fwrite(payload.data(), 1, payload.size(), f) == payload.size()
-        && fwrite(footer.data(), 1, footer.size(), f) == footer.size();
-    if (fclose(f) != 0) {
-        ok = false;
-    }
-    if (!ok) {
-        error = "failed to write AOT module dependencies to '" + path + "': " + strerror(errno);
-        return false;
-    }
-    return true;
-}
+const char* const QORE_AOT_MODULE_INFO_READ_ERROR = "cannot read the file; it may have been changed while it was "
+    "read";
 
-int qoreAOTReadModuleDependenciesTrailer(const std::string& path, std::string& module_name,
-        std::vector<std::string>& dependencies, std::string& error) {
-    module_name.clear();
-    dependencies.clear();
-    error.clear();
-
-    FILE* f = fopen(path.c_str(), "rb");
-    if (!f) {
-        // Preserve the established loader diagnostic and source-module fallback
-        // behavior for missing or unreadable binary paths: dlopen() below reports
-        // the authoritative error. Only a present dependency trailer can be invalid.
-        return 0;
-    }
-    int result = 0;
-    do {
-        if (fseek(f, 0, SEEK_END) != 0) {
-            error = "cannot seek in AOT module dependency metadata '" + path + "'";
-            result = -1;
-            break;
-        }
-        long fsize = ftell(f);
-        if (fsize < static_cast<long>(QORE_AOT_TRAILER_FOOTER_SIZE)) {
-            break;
-        }
-        uint64_t payload_len = 0;
-        uint32_t magic = 0;
-        uint32_t version = 0;
-        if (!readAOTTrailerFooter(f, fsize, payload_len, magic, version)) {
-            error = "cannot read AOT module dependency metadata footer from '" + path + "'";
-            result = -1;
-            break;
-        }
-        if (magic != QORE_AOT_MODULE_DEPS_MAGIC) {
-            break;
-        }
-        if (version != QORE_AOT_MODULE_DEPS_VERSION) {
-            error = "unsupported AOT module dependency metadata version " + std::to_string(version);
-            result = -1;
-            break;
-        }
-        if (!payload_len || payload_len > QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE
-                || payload_len > static_cast<uint64_t>(fsize) - QORE_AOT_TRAILER_FOOTER_SIZE) {
-            error = "invalid AOT module dependency metadata size";
-            result = -1;
-            break;
-        }
-        std::vector<uint8_t> payload(payload_len);
-        if (fseek(f, fsize - static_cast<long>(QORE_AOT_TRAILER_FOOTER_SIZE)
-                - static_cast<long>(payload_len), SEEK_SET) != 0
-                || fread(payload.data(), 1, payload.size(), f) != payload.size()) {
-            error = "cannot read AOT module dependency metadata payload from '" + path + "'";
-            result = -1;
-            break;
-        }
-
-        size_t p = 0;
-        uint32_t name_len = 0;
-        if (!trailerGet32(payload.data(), payload.size(), p, name_len)
-                || !name_len || name_len > payload.size() - p) {
-            error = "invalid AOT module name in dependency metadata";
-            result = -1;
-            break;
-        }
-        module_name.assign(reinterpret_cast<const char*>(payload.data() + p), name_len);
-        if (module_name.find('\0') != std::string::npos) {
-            error = "invalid AOT module name in dependency metadata";
-            result = -1;
-            break;
-        }
-        p += name_len;
-        uint32_t dependency_count = 0;
-        if (!trailerGet32(payload.data(), payload.size(), p, dependency_count)) {
-            error = "missing AOT module dependency count";
-            result = -1;
-            break;
-        }
-        // Every dependency needs at least a four-byte length and one byte of data.
-        // Bound the count before reserve() so corrupted metadata cannot request a
-        // disproportionate allocation.
-        if (dependency_count > QORE_AOT_MODULE_DEPS_MAX_COUNT
-                || dependency_count > (payload.size() - p) / 5) {
-            error = "invalid AOT module dependency count";
-            result = -1;
-            break;
-        }
-        dependencies.reserve(dependency_count);
-        bool valid = true;
-        for (uint32_t i = 0; i < dependency_count; ++i) {
-            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT module dependency trailer input")) {
-                error = "AOT module dependency trailer input cancelled";
-                valid = false;
-                break;
-            }
-            uint32_t dependency_len = 0;
-            if (!trailerGet32(payload.data(), payload.size(), p, dependency_len)
-                    || !dependency_len || dependency_len > payload.size() - p) {
-                error = "invalid AOT module dependency entry";
-                valid = false;
-                break;
-            }
-            dependencies.emplace_back(reinterpret_cast<const char*>(payload.data() + p), dependency_len);
-            if (dependencies.back().find('\0') != std::string::npos) {
-                error = "invalid AOT module dependency entry";
-                valid = false;
-                break;
-            }
-            p += dependency_len;
-        }
-        if (!valid) {
-            result = -1;
-            break;
-        }
-        if (p != payload.size()) {
-            error = "unexpected trailing data in AOT module dependency metadata";
-            result = -1;
-            break;
-        }
-        result = 1;
-    } while (false);
-    fclose(f);
-    if (result != 1) {
-        module_name.clear();
-        dependencies.clear();
-    }
-    return result;
-}
-
-bool qoreAOTAppendOptionalModulesTrailer(const std::string& path, const std::vector<std::string>& specs,
-        std::string& error) {
-    if (specs.empty()) {
+//! Returns true, setting @a error, if reading the metadata was cancelled; checked every 100 iterations
+bool moduleInfoReadCancelled(uint64_t i, std::string& error) {
+    if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT module metadata input")) {
+        error = "reading the AOT module metadata was cancelled";
         return true;
     }
-    if (specs.size() > QORE_AOT_MODULE_DEPS_MAX_COUNT) {
-        error = "too many optional modules for the AOT optional module trailer";
-        return false;
+    return false;
+}
+
+//! Returns true if a 16-byte Mach-O name field holds @a name
+bool machoNameIs(const uint8_t* field, const char* name) {
+    size_t len = strlen(name);
+    assert(len <= 16);
+    return !memcmp(field, name, len) && (len == 16 || !field[len]);
+}
+
+//! Finds the metadata section of the 64-bit Mach-O image at [base, base + len) of the file
+QoreAOTModuleInfoStatus findMachOModuleInfo(AOTModuleFileReader& f, uint64_t base, uint64_t len,
+        QoreAOTModuleInfoLocation& loc, std::string& error) {
+    uint8_t hdr[QORE_MACH_HEADER_64_SIZE];
+    if (len < sizeof(hdr)) {
+        error = moduleInfoTruncated("its Mach-O header", moduleInfoEnd(base, sizeof(hdr)), base + len);
+        return QoreAOTModuleInfoStatus::INVALID;
     }
+    if (!f.read(base, hdr, sizeof(hdr))) {
+        error = QORE_AOT_MODULE_INFO_READ_ERROR;
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    uint32_t ncmds = le32(hdr + 16);
+    uint64_t sizeofcmds = le32(hdr + 20);
+    if (sizeofcmds > len - sizeof(hdr)) {
+        error = moduleInfoTruncated("its Mach-O load command area", base + sizeof(hdr) + sizeofcmds, base + len);
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    if (sizeofcmds > QORE_AOT_MODULE_INFO_MAX_SCAN_SIZE) {
+        error = moduleInfoDamaged("its Mach-O load commands have an implausible size of "
+            + std::to_string(sizeofcmds) + " bytes");
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    std::vector<uint8_t> cmds(sizeofcmds);
+    if (!cmds.empty() && !f.read(base + sizeof(hdr), cmds.data(), cmds.size())) {
+        error = QORE_AOT_MODULE_INFO_READ_ERROR;
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+
+    bool found = false;
+    uint64_t pos = 0;
+    for (uint32_t i = 0; i < ncmds; ++i) {
+        if (moduleInfoReadCancelled(i, error)) {
+            return QoreAOTModuleInfoStatus::INVALID;
+        }
+        if (cmds.size() - pos < 8) {
+            error = moduleInfoDamaged("its Mach-O header lists " + std::to_string(ncmds) + " load commands, but "
+                "only " + std::to_string(i) + " fit in the " + std::to_string(sizeofcmds) + " bytes of load "
+                "commands");
+            return QoreAOTModuleInfoStatus::INVALID;
+        }
+        const uint8_t* cmd = cmds.data() + pos;
+        uint32_t cmd_type = le32(cmd);
+        uint64_t cmdsize = le32(cmd + 4);
+        if (cmdsize < 8 || cmdsize > cmds.size() - pos) {
+            error = moduleInfoDamaged("its Mach-O load command " + std::to_string(i) + " has an invalid size of "
+                + std::to_string(cmdsize) + " bytes");
+            return QoreAOTModuleInfoStatus::INVALID;
+        }
+        if (cmd_type == QORE_LC_SEGMENT_64) {
+            if (cmdsize < QORE_SEGMENT_COMMAND_64_SIZE) {
+                error = moduleInfoDamaged("its Mach-O segment load command " + std::to_string(i) + " is too short");
+                return QoreAOTModuleInfoStatus::INVALID;
+            }
+            uint64_t nsects = le32(cmd + 64);
+            if (nsects > (cmdsize - QORE_SEGMENT_COMMAND_64_SIZE) / QORE_SECTION_64_SIZE) {
+                error = moduleInfoDamaged("its Mach-O segment load command " + std::to_string(i) + " lists "
+                    + std::to_string(nsects) + " sections, more than fit in the command");
+                return QoreAOTModuleInfoStatus::INVALID;
+            }
+            for (uint64_t j = 0; j < nsects; ++j) {
+                if (moduleInfoReadCancelled(j, error)) {
+                    return QoreAOTModuleInfoStatus::INVALID;
+                }
+                const uint8_t* sect = cmd + QORE_SEGMENT_COMMAND_64_SIZE + j * QORE_SECTION_64_SIZE;
+                if (!machoNameIs(sect, QORE_AOT_MODULE_INFO_MACHO_SECTION)
+                        || !machoNameIs(sect + 16, QORE_AOT_MODULE_INFO_MACHO_SEGMENT)) {
+                    continue;
+                }
+                if (found) {
+                    error = moduleInfoDamaged("it has more than one Mach-O section "
+                        QORE_AOT_MODULE_INFO_MACHO_SEGMENT "," QORE_AOT_MODULE_INFO_MACHO_SECTION);
+                    return QoreAOTModuleInfoStatus::INVALID;
+                }
+                found = true;
+                uint32_t sect_type = le32(sect + 64) & QORE_MACHO_SECTION_TYPE;
+                if (sect_type == QORE_S_ZEROFILL || sect_type == QORE_S_GB_ZEROFILL
+                        || sect_type == QORE_S_THREAD_LOCAL_ZEROFILL) {
+                    error = moduleInfoDamaged("its Mach-O section " QORE_AOT_MODULE_INFO_MACHO_SEGMENT ","
+                        QORE_AOT_MODULE_INFO_MACHO_SECTION " has no contents in the file");
+                    return QoreAOTModuleInfoStatus::INVALID;
+                }
+                uint64_t size = le64(sect + 40);
+                uint64_t offset = le32(sect + 48);
+                if (offset > len || size > len - offset) {
+                    error = moduleInfoTruncated("its Mach-O section " QORE_AOT_MODULE_INFO_MACHO_SEGMENT ","
+                        QORE_AOT_MODULE_INFO_MACHO_SECTION, moduleInfoEnd(base + offset, size), base + len);
+                    return QoreAOTModuleInfoStatus::INVALID;
+                }
+                loc.container = "Mach-O section " QORE_AOT_MODULE_INFO_MACHO_SEGMENT ","
+                    QORE_AOT_MODULE_INFO_MACHO_SECTION;
+                loc.offset = base + offset;
+                loc.size = size;
+            }
+        }
+        pos += cmdsize;
+    }
+    return found ? QoreAOTModuleInfoStatus::FOUND : QoreAOTModuleInfoStatus::NONE;
+}
+
+//! Finds the metadata section of the slice of a universal Mach-O file for the running architecture
+QoreAOTModuleInfoStatus findFatMachOModuleInfo(AOTModuleFileReader& f, bool fat64, QoreAOTModuleInfoLocation& loc,
+        std::string& error) {
+    uint8_t hdr[8];
+    if (!f.contains(0, sizeof(hdr))) {
+        error = moduleInfoTruncated("its universal Mach-O header", sizeof(hdr), f.size());
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    if (!f.read(0, hdr, sizeof(hdr))) {
+        error = QORE_AOT_MODULE_INFO_READ_ERROR;
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    uint32_t nfat = be32(hdr + 4);
+    if (nfat > QORE_MAX_FAT_ARCHS) {
+        error = moduleInfoDamaged("its universal Mach-O header lists " + std::to_string(nfat) + " architectures");
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    size_t entry_size = fat64 ? 32 : 20;
+    std::vector<uint8_t> table(nfat * entry_size);
+    if (!f.contains(sizeof(hdr), table.size())) {
+        error = moduleInfoTruncated("its universal Mach-O architecture table", sizeof(hdr) + table.size(),
+            f.size());
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    if (!table.empty() && !f.read(sizeof(hdr), table.data(), table.size())) {
+        error = QORE_AOT_MODULE_INFO_READ_ERROR;
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    for (uint32_t i = 0; i < nfat; ++i) {
+        const uint8_t* arch = table.data() + i * entry_size;
+        if (!QORE_NATIVE_MACHO_CPU_TYPE || be32(arch) != QORE_NATIVE_MACHO_CPU_TYPE) {
+            continue;
+        }
+        uint64_t offset = fat64 ? be64(arch + 8) : be32(arch + 8);
+        uint64_t size = fat64 ? be64(arch + 16) : be32(arch + 12);
+        if (!f.contains(offset, size)) {
+            error = moduleInfoTruncated("its Mach-O slice for this architecture", moduleInfoEnd(offset, size),
+                f.size());
+            return QoreAOTModuleInfoStatus::INVALID;
+        }
+        uint8_t magic[4];
+        if (size < sizeof(magic)) {
+            error = moduleInfoDamaged("its Mach-O slice for this architecture is empty");
+            return QoreAOTModuleInfoStatus::INVALID;
+        }
+        if (!f.read(offset, magic, sizeof(magic))) {
+            error = QORE_AOT_MODULE_INFO_READ_ERROR;
+            return QoreAOTModuleInfoStatus::INVALID;
+        }
+        if (le32(magic) != QORE_MH_MAGIC_64) {
+            error = moduleInfoDamaged("its Mach-O slice for this architecture is not a 64-bit Mach-O image");
+            return QoreAOTModuleInfoStatus::INVALID;
+        }
+        return findMachOModuleInfo(f, offset, size, loc, error);
+    }
+    return QoreAOTModuleInfoStatus::NONE;
+}
+
+//! Finds the metadata note in the PT_NOTE segments of a linked little-endian ELF image
+QoreAOTModuleInfoStatus findElfModuleInfo(AOTModuleFileReader& f, QoreAOTModuleInfoLocation& loc,
+        std::string& error) {
+    uint8_t ident[16];
+    if (!f.contains(0, sizeof(ident))) {
+        error = moduleInfoTruncated("its ELF header", sizeof(ident), f.size());
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    if (!f.read(0, ident, sizeof(ident))) {
+        error = QORE_AOT_MODULE_INFO_READ_ERROR;
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    // qcc only produces little-endian images
+    if (ident[5] != QORE_ELFDATA2LSB || (ident[4] != QORE_ELFCLASS32 && ident[4] != QORE_ELFCLASS64)) {
+        return QoreAOTModuleInfoStatus::NONE;
+    }
+    bool elf64 = ident[4] == QORE_ELFCLASS64;
+    uint8_t ehdr[64];
+    size_t ehdr_size = elf64 ? 64 : 52;
+    if (!f.contains(0, ehdr_size)) {
+        error = moduleInfoTruncated("its ELF header", ehdr_size, f.size());
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    if (!f.read(0, ehdr, ehdr_size)) {
+        error = QORE_AOT_MODULE_INFO_READ_ERROR;
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    uint64_t phoff = elf64 ? le64(ehdr + 32) : le32(ehdr + 28);
+    uint64_t shoff = elf64 ? le64(ehdr + 40) : le32(ehdr + 32);
+    uint64_t phentsize = le16(ehdr + (elf64 ? 54 : 42));
+    uint64_t phnum = le16(ehdr + (elf64 ? 56 : 44));
+    uint64_t shentsize = le16(ehdr + (elf64 ? 58 : 46));
+    if (!phnum) {
+        // a relocatable object: the metadata is only read from linked images
+        return QoreAOTModuleInfoStatus::NONE;
+    }
+    if (phnum == QORE_PN_XNUM) {
+        // the number of program headers is the sh_info field of the first section header
+        size_t info_offset = elf64 ? 44 : 28;
+        uint8_t info[4];
+        if (shentsize < info_offset + sizeof(info)) {
+            error = moduleInfoDamaged("its ELF section headers have an invalid size of " + std::to_string(shentsize)
+                + " bytes");
+            return QoreAOTModuleInfoStatus::INVALID;
+        }
+        if (!f.contains(shoff, shentsize)) {
+            error = moduleInfoTruncated("its first ELF section header", moduleInfoEnd(shoff, shentsize), f.size());
+            return QoreAOTModuleInfoStatus::INVALID;
+        }
+        if (!f.read(shoff + info_offset, info, sizeof(info))) {
+            error = QORE_AOT_MODULE_INFO_READ_ERROR;
+            return QoreAOTModuleInfoStatus::INVALID;
+        }
+        phnum = le32(info);
+    }
+    if (phentsize < (elf64 ? 56u : 32u)) {
+        error = moduleInfoDamaged("its ELF program headers have an invalid size of " + std::to_string(phentsize)
+            + " bytes");
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    if (phnum > QORE_AOT_MODULE_INFO_MAX_SCAN_SIZE / phentsize) {
+        error = moduleInfoDamaged("it has an implausible number of ELF program headers ("
+            + std::to_string(phnum) + ")");
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    std::vector<uint8_t> phdrs(phnum * phentsize);
+    if (!f.contains(phoff, phdrs.size())) {
+        error = moduleInfoTruncated("its ELF program header table", moduleInfoEnd(phoff, phdrs.size()), f.size());
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    if (!f.read(phoff, phdrs.data(), phdrs.size())) {
+        error = QORE_AOT_MODULE_INFO_READ_ERROR;
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+
+    static constexpr char note_name[] = QORE_AOT_MODULE_INFO_NOTE_NAME;
+    bool found = false;
+    for (uint64_t i = 0; i < phnum; ++i) {
+        if (moduleInfoReadCancelled(i, error)) {
+            return QoreAOTModuleInfoStatus::INVALID;
+        }
+        const uint8_t* phdr = phdrs.data() + i * phentsize;
+        if (le32(phdr) != QORE_PT_NOTE) {
+            continue;
+        }
+        uint64_t seg_offset = elf64 ? le64(phdr + 8) : le32(phdr + 4);
+        uint64_t seg_size = elf64 ? le64(phdr + 32) : le32(phdr + 16);
+        uint64_t seg_align = elf64 ? le64(phdr + 48) : le32(phdr + 28);
+        if (!f.contains(seg_offset, seg_size)) {
+            error = moduleInfoTruncated("its ELF note segment at offset " + moduleInfoHex(seg_offset),
+                moduleInfoEnd(seg_offset, seg_size), f.size());
+            return QoreAOTModuleInfoStatus::INVALID;
+        }
+        if (seg_size > QORE_AOT_MODULE_INFO_MAX_SCAN_SIZE) {
+            error = moduleInfoDamaged("its ELF note segment at offset " + moduleInfoHex(seg_offset)
+                + " has an implausible size of " + std::to_string(seg_size) + " bytes");
+            return QoreAOTModuleInfoStatus::INVALID;
+        }
+        std::vector<uint8_t> seg(seg_size);
+        if (!seg.empty() && !f.read(seg_offset, seg.data(), seg.size())) {
+            error = QORE_AOT_MODULE_INFO_READ_ERROR;
+            return QoreAOTModuleInfoStatus::INVALID;
+        }
+        // the name and the description of a note in a segment aligned to 8 bytes start at offsets aligned to 8
+        // bytes, as for .note.gnu.property, and at offsets aligned to 4 bytes in all other segments (gABI); the
+        // segment starts at an offset with its alignment
+        uint64_t align = seg_align == 8 ? 8 : 4;
+        uint64_t pos = 0;
+        for (uint64_t n = 0; seg.size() - pos >= QORE_ELF_NOTE_HEADER_SIZE; ++n) {
+            if (moduleInfoReadCancelled(n, error)) {
+                return QoreAOTModuleInfoStatus::INVALID;
+            }
+            const uint8_t* note = seg.data() + pos;
+            uint32_t namesz = le32(note);
+            uint32_t descsz = le32(note + 4);
+            uint32_t note_type = le32(note + 8);
+            uint64_t name_offset = pos + QORE_ELF_NOTE_HEADER_SIZE;
+            uint64_t desc_offset = noteAlign(name_offset + namesz, align);
+            if (desc_offset > seg.size() || descsz > seg.size() - desc_offset) {
+                // the notes of other owners are not checked here: a note that does not fit ends the scan of its
+                // segment; damage to the module metadata note is reported for an AOT module as missing metadata
+                break;
+            }
+            if (namesz == sizeof(note_name) && note_type == QORE_AOT_MODULE_INFO_NOTE_TYPE
+                    && !memcmp(seg.data() + name_offset, note_name, sizeof(note_name))) {
+                if (found) {
+                    error = moduleInfoDamaged("it has more than one " QORE_AOT_MODULE_INFO_NOTE_NAME
+                        " module metadata ELF note");
+                    return QoreAOTModuleInfoStatus::INVALID;
+                }
+                found = true;
+                loc.offset = seg_offset + desc_offset;
+                loc.size = descsz;
+                loc.container = "ELF note " QORE_AOT_MODULE_INFO_NOTE_NAME " " + moduleInfoHex(note_type)
+                    + " (section " QORE_AOT_MODULE_INFO_ELF_SECTION ")";
+            }
+            // the padding of the last note can be missing at the end of the segment
+            pos = std::min<uint64_t>(noteAlign(desc_offset + descsz, align), seg.size());
+        }
+    }
+    return found ? QoreAOTModuleInfoStatus::FOUND : QoreAOTModuleInfoStatus::NONE;
+}
+
+//! Returns 1 if the file ends with the footer of a trailer that earlier qcc versions appended, 0 if not, -1 on error
+int hasLegacyModuleInfoTrailer(AOTModuleFileReader& f) {
+    uint8_t footer[QORE_AOT_LEGACY_TRAILER_FOOTER_SIZE];
+    if (f.size() < sizeof(footer)) {
+        return 0;
+    }
+    if (!f.read(f.size() - sizeof(footer), footer, sizeof(footer))) {
+        return -1;
+    }
+    uint64_t payload_len = le64(footer);
+    uint32_t magic = le32(footer + 8);
+    uint32_t version = le32(footer + 12);
+    return (magic == QORE_AOT_LEGACY_MODULE_DEPS_MAGIC || magic == QORE_AOT_LEGACY_OPTIONAL_MODULES_MAGIC)
+        && version == 1 && payload_len && payload_len <= f.size() - sizeof(footer) ? 1 : 0;
+}
+} // anonymous namespace
+
+bool qoreAOTEncodeModuleInfo(const QoreAOTModuleFileInfo& info, std::vector<uint8_t>& record, std::string& error) {
+    record.clear();
     std::vector<uint8_t> payload;
-    trailerPut32(payload, static_cast<uint32_t>(specs.size()));
-    for (size_t i = 0; i < specs.size(); ++i) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT optional module trailer output")) {
-            error = "AOT optional module trailer output cancelled";
+    auto put_string = [&payload, &error](const std::string& str, const char* what) -> bool {
+        if (str.empty() || str.find('\0') != std::string::npos) {
+            error = std::string("invalid ") + what + " '" + str + "' for the AOT module metadata";
             return false;
         }
-        const std::string& spec = specs[i];
-        if (spec.empty() || spec.find('\0') != std::string::npos
-                || spec.size() > QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE - payload.size() - 4) {
-            error = "invalid AOT optional module trailer entry";
+        if (payload.size() > QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE - 4
+                || str.size() > QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE - 4 - payload.size()) {
+            error = "the AOT module metadata exceeds the maximum size of "
+                + std::to_string(QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE) + " bytes";
             return false;
         }
-        trailerPut32(payload, static_cast<uint32_t>(spec.size()));
-        payload.insert(payload.end(), spec.begin(), spec.end());
-    }
-
-    std::vector<uint8_t> footer;
-    trailerPut64(footer, payload.size());
-    trailerPut32(footer, QORE_AOT_OPTIONAL_MODULES_MAGIC);
-    trailerPut32(footer, QORE_AOT_OPTIONAL_MODULES_VERSION);
-    assert(footer.size() == QORE_AOT_TRAILER_FOOTER_SIZE);
-
-    FILE* f = fopen(path.c_str(), "ab");
-    if (!f) {
-        error = "failed to open '" + path + "' to append AOT optional modules: " + strerror(errno);
+        moduleInfoPut32(payload, static_cast<uint32_t>(str.size()));
+        payload.insert(payload.end(), str.begin(), str.end());
+        return true;
+    };
+    auto put_list = [&payload, &error, &put_string](const std::vector<std::string>& list, const char* what)
+            -> bool {
+        if (list.size() > QORE_AOT_MODULE_INFO_MAX_COUNT) {
+            error = std::string("too many ") + what + "s (" + std::to_string(list.size())
+                + ") for the AOT module metadata";
+            return false;
+        }
+        if (payload.size() > QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE - 4) {
+            error = "the AOT module metadata exceeds the maximum size of "
+                + std::to_string(QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE) + " bytes";
+            return false;
+        }
+        moduleInfoPut32(payload, static_cast<uint32_t>(list.size()));
+        for (size_t i = 0; i < list.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT module metadata output")) {
+                error = "AOT module metadata output cancelled";
+                return false;
+            }
+            if (!put_string(list[i], what)) {
+                return false;
+            }
+        }
+        return true;
+    };
+    if (!put_string(info.module_name, "module name")
+            || !put_list(info.dependencies, "module dependency")
+            || !put_list(info.unavailable_optional_modules, "unavailable optional module")) {
         return false;
     }
-    bool ok = fwrite(payload.data(), 1, payload.size(), f) == payload.size()
-        && fwrite(footer.data(), 1, footer.size(), f) == footer.size();
-    if (fclose(f) != 0) {
-        ok = false;
-    }
-    if (!ok) {
-        error = "failed to write AOT optional modules to '" + path + "': " + strerror(errno);
-        return false;
-    }
+    record.reserve(QORE_AOT_MODULE_INFO_HEADER_SIZE + payload.size());
+    moduleInfoPut32(record, QORE_AOT_MODULE_INFO_MAGIC);
+    moduleInfoPut32(record, QORE_AOT_MODULE_INFO_VERSION);
+    moduleInfoPut32(record, static_cast<uint32_t>(payload.size()));
+    record.insert(record.end(), payload.begin(), payload.end());
     return true;
 }
 
-int qoreAOTReadOptionalModulesTrailer(const std::string& path, std::vector<std::string>& specs,
+std::vector<uint8_t> qoreAOTModuleInfoNote(const std::vector<uint8_t>& record) {
+    static constexpr char note_name[] = QORE_AOT_MODULE_INFO_NOTE_NAME;
+    assert(record.size() <= QORE_AOT_MODULE_INFO_HEADER_SIZE + QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE);
+    std::vector<uint8_t> note;
+    note.reserve(QORE_ELF_NOTE_HEADER_SIZE + sizeof(note_name) + 3 + record.size() + 3);
+    moduleInfoPut32(note, static_cast<uint32_t>(sizeof(note_name)));
+    moduleInfoPut32(note, static_cast<uint32_t>(record.size()));
+    moduleInfoPut32(note, QORE_AOT_MODULE_INFO_NOTE_TYPE);
+    note.insert(note.end(), note_name, note_name + sizeof(note_name));
+    moduleInfoPad4(note);
+    note.insert(note.end(), record.begin(), record.end());
+    moduleInfoPad4(note);
+    return note;
+}
+
+QoreAOTModuleInfoStatus qoreAOTDecodeModuleInfo(const uint8_t* data, size_t len, QoreAOTModuleFileInfo& info,
         std::string& error) {
-    specs.clear();
+    info = QoreAOTModuleFileInfo();
+    auto fail = [&info, &error](const std::string& msg) {
+        info = QoreAOTModuleFileInfo();
+        error = msg;
+        return QoreAOTModuleInfoStatus::INVALID;
+    };
+    if (len < QORE_AOT_MODULE_INFO_HEADER_SIZE) {
+        return fail(moduleInfoDamaged("the record has " + std::to_string(len) + " bytes, fewer than its header"));
+    }
+    if (le32(data) != QORE_AOT_MODULE_INFO_MAGIC) {
+        return fail(moduleInfoDamaged("the record has an invalid magic number " + moduleInfoHex(le32(data))));
+    }
+    uint32_t version = le32(data + 4);
+    if (version != QORE_AOT_MODULE_INFO_VERSION) {
+        return fail("the record has format version " + std::to_string(version) + ", but this Qore runtime reads "
+            "version " + std::to_string(QORE_AOT_MODULE_INFO_VERSION) + "; rebuild the module with the qcc of this "
+            "Qore installation");
+    }
+    uint64_t size = le32(data + 8);
+    if (size != len - QORE_AOT_MODULE_INFO_HEADER_SIZE) {
+        return fail(moduleInfoDamaged("the record gives a size of " + std::to_string(size) + " bytes, but holds "
+            + std::to_string(len - QORE_AOT_MODULE_INFO_HEADER_SIZE)));
+    }
+    if (size > QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE) {
+        return fail(moduleInfoDamaged("the record has an implausible size of " + std::to_string(size) + " bytes"));
+    }
+
+    const uint8_t* payload = data + QORE_AOT_MODULE_INFO_HEADER_SIZE;
+    size_t pos = 0;
+    auto get32 = [payload, size, &pos](uint32_t& v) -> bool {
+        if (size - pos < 4) {
+            return false;
+        }
+        v = le32(payload + pos);
+        pos += 4;
+        return true;
+    };
+    auto get_string = [payload, size, &pos, &get32](std::string& str) -> bool {
+        uint32_t str_len = 0;
+        if (!get32(str_len) || !str_len || str_len > size - pos) {
+            return false;
+        }
+        str.assign(reinterpret_cast<const char*>(payload + pos), str_len);
+        pos += str_len;
+        return str.find('\0') == std::string::npos;
+    };
+    std::string cancel_error;
+    auto get_list = [size, &pos, &get32, &get_string, &cancel_error](std::vector<std::string>& list) -> bool {
+        uint32_t count = 0;
+        // every entry needs at least a four-byte length and one byte of data; bound the count before reserve() so
+        // that damaged metadata cannot request a disproportionate allocation
+        if (!get32(count) || count > QORE_AOT_MODULE_INFO_MAX_COUNT || count > (size - pos) / 5) {
+            return false;
+        }
+        list.reserve(count);
+        for (uint32_t i = 0; i < count; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT module metadata input")) {
+                cancel_error = "AOT module metadata input cancelled";
+                return false;
+            }
+            std::string str;
+            if (!get_string(str)) {
+                return false;
+            }
+            list.push_back(std::move(str));
+        }
+        return true;
+    };
+    if (!get_string(info.module_name)) {
+        return fail(moduleInfoDamaged("the record has an invalid module name"));
+    }
+    if (!get_list(info.dependencies)) {
+        return fail(cancel_error.empty() ? moduleInfoDamaged("the record has an invalid dependency list")
+            : cancel_error);
+    }
+    if (!get_list(info.unavailable_optional_modules)) {
+        return fail(cancel_error.empty() ? moduleInfoDamaged("the record has an invalid optional module list")
+            : cancel_error);
+    }
+    if (pos != size) {
+        return fail(moduleInfoDamaged("the record has " + std::to_string(size - pos) + " unexpected bytes after "
+            "its last entry"));
+    }
+    return QoreAOTModuleInfoStatus::FOUND;
+}
+
+QoreAOTModuleInfoStatus qoreAOTReadModuleInfo(const std::string& path, QoreAOTModuleFileInfo& info,
+        std::string& error, QoreAOTModuleInfoLocation* location) {
+    info = QoreAOTModuleFileInfo();
     error.clear();
 
-    FILE* f = fopen(path.c_str(), "rb");
-    if (!f) {
-        return 0;
+    AOTModuleFileReader f(path.c_str());
+    if (!f.isOpen()) {
+        // Preserve the established loader diagnostic and source-module fallback behavior for missing or unreadable
+        // binary paths: dlopen() reports the authoritative error.
+        return QoreAOTModuleInfoStatus::NONE;
     }
-    int result = 0;
-    do {
-        if (fseek(f, 0, SEEK_END) != 0) {
-            break;
+
+    QoreAOTModuleInfoLocation loc;
+    QoreAOTModuleInfoStatus status = QoreAOTModuleInfoStatus::NONE;
+    uint8_t magic[4];
+    if (f.size() >= sizeof(magic)) {
+        if (!f.read(0, magic, sizeof(magic))) {
+            error = QORE_AOT_MODULE_INFO_READ_ERROR;
+            return QoreAOTModuleInfoStatus::INVALID;
         }
-        long end = ftell(f);
-        uint64_t payload_len = 0;
-        uint32_t magic = 0;
-        uint32_t version = 0;
-        // the trailer precedes the dependency trailer, which is skipped
-        bool found = false;
-        for (unsigned i = 0; i < 2; ++i) {
-            if (end < static_cast<long>(QORE_AOT_TRAILER_FOOTER_SIZE)
-                    || !readAOTTrailerFooter(f, end, payload_len, magic, version)) {
-                break;
-            }
-            if (magic == QORE_AOT_OPTIONAL_MODULES_MAGIC) {
-                found = true;
-                break;
-            }
-            if (magic != QORE_AOT_MODULE_DEPS_MAGIC
-                    || payload_len > static_cast<uint64_t>(end) - QORE_AOT_TRAILER_FOOTER_SIZE) {
-                break;
-            }
-            end -= static_cast<long>(payload_len + QORE_AOT_TRAILER_FOOTER_SIZE);
+        if (le32(magic) == QORE_MH_MAGIC_64) {
+            status = findMachOModuleInfo(f, 0, f.size(), loc, error);
+        } else if (be32(magic) == QORE_FAT_MAGIC || be32(magic) == QORE_FAT_MAGIC_64) {
+            status = findFatMachOModuleInfo(f, be32(magic) == QORE_FAT_MAGIC_64, loc, error);
+        } else if (!memcmp(magic, "\x7f" "ELF", sizeof(magic))) {
+            status = findElfModuleInfo(f, loc, error);
         }
-        if (!found) {
-            break;
-        }
-        if (version != QORE_AOT_OPTIONAL_MODULES_VERSION) {
-            error = "unsupported AOT optional module metadata version " + std::to_string(version);
-            result = -1;
-            break;
-        }
-        if (payload_len < 4 || payload_len > QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE
-                || payload_len > static_cast<uint64_t>(end) - QORE_AOT_TRAILER_FOOTER_SIZE) {
-            error = "invalid AOT optional module metadata size";
-            result = -1;
-            break;
-        }
-        std::vector<uint8_t> payload(payload_len);
-        if (fseek(f, end - static_cast<long>(QORE_AOT_TRAILER_FOOTER_SIZE) - static_cast<long>(payload_len),
-                    SEEK_SET) != 0
-                || fread(payload.data(), 1, payload.size(), f) != payload.size()) {
-            error = "cannot read AOT optional module metadata from '" + path + "'";
-            result = -1;
-            break;
-        }
-        size_t p = 0;
-        uint32_t count = 0;
-        // every entry needs at least a four-byte length and one byte of data
-        if (!trailerGet32(payload.data(), payload.size(), p, count) || count > QORE_AOT_MODULE_DEPS_MAX_COUNT
-                || count > (payload.size() - p) / 5) {
-            error = "invalid AOT optional module count";
-            result = -1;
-            break;
-        }
-        specs.reserve(count);
-        bool valid = true;
-        for (uint32_t i = 0; i < count; ++i) {
-            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT optional module trailer input")) {
-                error = "AOT optional module trailer input cancelled";
-                valid = false;
-                break;
-            }
-            uint32_t len = 0;
-            if (!trailerGet32(payload.data(), payload.size(), p, len) || !len || len > payload.size() - p) {
-                error = "invalid AOT optional module entry";
-                valid = false;
-                break;
-            }
-            specs.emplace_back(reinterpret_cast<const char*>(payload.data() + p), len);
-            p += len;
-            if (specs.back().find('\0') != std::string::npos) {
-                error = "invalid AOT optional module entry";
-                valid = false;
-                break;
-            }
-        }
-        if (!valid) {
-            result = -1;
-            break;
-        }
-        if (p != payload.size()) {
-            error = "unexpected trailing data in AOT optional module metadata";
-            result = -1;
-            break;
-        }
-        result = 1;
-    } while (false);
-    fclose(f);
-    if (result != 1) {
-        specs.clear();
     }
-    return result;
+    if (status == QoreAOTModuleInfoStatus::INVALID) {
+        return status;
+    }
+    if (status == QoreAOTModuleInfoStatus::NONE) {
+        int legacy = hasLegacyModuleInfoTrailer(f);
+        if (legacy < 0) {
+            error = QORE_AOT_MODULE_INFO_READ_ERROR;
+            return QoreAOTModuleInfoStatus::INVALID;
+        }
+        if (legacy) {
+            error = "it carries its AOT module metadata in a trailer after the end of its image, the format of an "
+                "earlier qcc, which this Qore runtime no longer reads; rebuild the module with the qcc of this Qore "
+                "installation";
+            return QoreAOTModuleInfoStatus::INVALID;
+        }
+        return status;
+    }
+
+    std::string container = loc.container + " at offset " + moduleInfoHex(loc.offset);
+    if (loc.size < QORE_AOT_MODULE_INFO_HEADER_SIZE
+            || loc.size > QORE_AOT_MODULE_INFO_HEADER_SIZE + QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE) {
+        error = moduleInfoDamaged("its AOT module metadata (" + container + ") has an invalid size of "
+            + std::to_string(loc.size) + " bytes");
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    std::vector<uint8_t> record(loc.size);
+    if (!f.read(loc.offset, record.data(), record.size())) {
+        error = QORE_AOT_MODULE_INFO_READ_ERROR;
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    std::string record_error;
+    if (qoreAOTDecodeModuleInfo(record.data(), record.size(), info, record_error)
+            != QoreAOTModuleInfoStatus::FOUND) {
+        error = "its AOT module metadata (" + container + "): " + record_error;
+        return QoreAOTModuleInfoStatus::INVALID;
+    }
+    if (location) {
+        *location = std::move(loc);
+    }
+    return QoreAOTModuleInfoStatus::FOUND;
 }
 
 static bool qorePluginQordTrace() {

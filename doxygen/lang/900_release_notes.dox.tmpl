@@ -231,6 +231,11 @@
     automatically from the library sources that define the contract, so rebuilding the library for other changes
     does not invalidate compiled modules; \c qcc <tt>--version</tt> shows it; see @ref aot_module_runtime_identity.
 
+    AOT-compiled modules can be code-signed and notarized on macOS: the metadata that the module loader reads before
+    loading a module is stored in a section of the module image, so the module's code signature covers it and modules
+    pass strict signature validation, and stripping modules for packaging keeps it; \c qcc <tt>--dump-info</tt>
+    shows it; see @ref aot_module_code_signing.
+
     Modules built with the %Qore CMake support outside of the %Qore source tree recompile their AOT modules when a
     new %Qore library is installed, also when \c qcc itself is unchanged, and compile them for the library found by
     \c find_package(Qore) even when \c LD_LIBRARY_PATH names another %Qore build tree.

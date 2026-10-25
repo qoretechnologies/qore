@@ -49,7 +49,7 @@ the native compiler, qpp and qcc. The destination matches RPM's debug-source
 directory, so paths are independent of the build root and debugedit still
 collects the corresponding sources. The RPM integration test builds in two
 different roots and verifies identical installed ELF files, retained AOT
-trailers, separate debug information and packaged source files.
+module metadata, separate debug information and packaged source files.
 
 LLVM emits synthetic ``<aot>`` compilation units for Qore modules, so RPM's
 ``debugedit`` cannot discover their Qore input files. Call
