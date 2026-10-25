@@ -92,6 +92,14 @@ public hashdecl BaseOptionInfo inherits DisplayDescInfo {
     #! Any optional example value for the option
     auto example_value;
 
+    #! The value that the remote system assumes when the option is not given, if it documents one
+    /** An annotation to show beside the option only; it is never applied, pre-filled or sent, and it is not
+        translated; see @ref dataprovider_remote_default_values
+
+        @since DataProvider 3.11
+    */
+    auto remote_default_value;
+
     #! Free-form metadata on options
     *hash<auto> metadata;
 

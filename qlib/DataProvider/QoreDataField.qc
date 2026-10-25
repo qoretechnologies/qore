@@ -80,6 +80,9 @@ public class QoreDataField inherits AbstractDataField {
         if (exists h.example_value) {
             example_value = type.acceptsValue(h.example_value);
         }
+        if (exists h.remote_default_value) {
+            setRemoteDefaultValue(h.remote_default_value);
+        }
         if (h.allowed_values_creatable) {
             allowed_values_creatable = True;
             if (allowed_values_map) {
@@ -267,6 +270,10 @@ public class QoreDataField inherits AbstractDataField {
         if (converted) {
             setAllowedValues(converted, allowed_values_creatable);
         }
+        # the documented default of a schema is converted to the final type, or dropped if the type refuses it
+        if (exists remote_default_value) {
+            setRemoteDefaultValue(remote_default_value);
+        }
         return self;
     }
 
@@ -292,6 +299,7 @@ public class QoreDataField inherits AbstractDataField {
             "desc": desc,
             "default_value": getDefaultValue(),
             "example_value": example_value,
+            "remote_default_value": remote_default_value,
             "allowed_values": allowed_values,
             "allowed_values_creatable": allowed_values_creatable ?? False,
             "element_allowed_values": element_allowed_values,

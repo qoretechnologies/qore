@@ -44,6 +44,17 @@ public hashdecl DataFieldInfo {
     #! Any example value for the field
     auto example_value;
 
+    #! The value that the remote system assumes when the field is not given, if it documents one
+    /** This value is an annotation to show beside the field, such as the \c default of a REST API schema; it is
+        never applied: it is not the field's @ref default_value, a user interface does not pre-fill it, and it is
+        never sent; it is not translated
+
+        @see @ref dataprovider_remote_default_values
+
+        @since DataProvider 3.11
+    */
+    auto remote_default_value;
+
     #! for enum fields; allowed values
     *list<hash<AllowedValueInfo>> allowed_values;
 
@@ -305,6 +316,9 @@ public class AbstractDataField inherits Qore::Serializable {
         #! the default value for the field, if any
         auto default_value;
 
+        #! the value that the remote system assumes when the field is not given, if any; never applied
+        auto remote_default_value;
+
         #! for enum fields; raw allowed values
         list<hash<AllowedValueInfo>> allowed_values;
 
@@ -492,6 +506,40 @@ public class AbstractDataField inherits Qore::Serializable {
         return self;
     }
 
+    #! Sets the value that the remote system assumes when the field is not given
+    /** The value is an annotation only (see @ref dataprovider_remote_default_values): it is never used as the
+        field's value, so it does not change what @ref getDefaultValue() or @ref acceptsValue() return
+
+        @param value the value that the remote system documents as its default; it is converted by the field's type;
+        a value that the type does not accept, and no value, clear it, since a value that the field cannot have
+        describes nothing that can be shown beside it
+
+        @return the field
+
+        @since DataProvider 3.11
+    */
+    AbstractDataField setRemoteDefaultValue(auto value) {
+        remove remote_default_value;
+        if (exists value) {
+            try {
+                remote_default_value = getType().acceptsValue(value);
+            } catch (hash<ExceptionInfo> ex) {
+                # a documented default that the field cannot have is not shown
+            }
+        }
+        return self;
+    }
+
+    #! Returns the value that the remote system assumes when the field is not given, if it documents one
+    /** @return the value that the remote system assumes when the field is not given, or @ref nothing; this value is
+        never applied (see @ref dataprovider_remote_default_values)
+
+        @since DataProvider 3.11
+    */
+    auto getRemoteDefaultValue() {
+        return remote_default_value;
+    }
+
     #! get default value, if any
     auto getDefaultValue() {
         return default_value ?? getType().getDefaultValue();
@@ -610,6 +658,7 @@ public class AbstractDataField inherits Qore::Serializable {
             "desc": getDescription(),
             "default_value": getDefaultValue(),
             "example_value": getExampleValue(),
+            "remote_default_value": remote_default_value,
             "allowed_values": allowed_values,
             "allowed_values_creatable": allowed_values_creatable ?? False,
             "element_allowed_values": element_allowed_values,

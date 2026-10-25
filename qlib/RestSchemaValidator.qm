@@ -82,6 +82,9 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - the \c default of a schema is the remote default value of its field
+      (@ref DataProvider::AbstractDataField::getRemoteDefaultValue() "AbstractDataField::getRemoteDefaultValue()"),
+      which is shown and never applied or sent (see @ref dataprovider_remote_default_values)
     - the type of an object schema is the type of a request value, which has no field for a \c readOnly property;
       added @ref RestSchemaValidator::AbstractRestSchemaValidator::getResponseDataType() "getResponseDataType()" and
       @ref RestSchemaValidator::AbstractRestSchemaValidator::getResponseFieldFromSchema() "getResponseFieldFromSchema()",
@@ -1932,6 +1935,8 @@ public namespace RestSchemaValidator {
                 "type": AutoType,
                 "allowed_values": getFieldEnumValues(),
                 "default_value": default_value,
+                # the schema's default is what the API assumes when the value is not sent; it is shown, never sent
+                "remote_default_value": defaultVal,
             } + getFieldPresenceInfo(required), getValidatedExampleCandidates(), getConstraintInfo());
             rv.updateFieldType(canonical.getType());
             setCachedField(True, ukey, rstr, rv);
@@ -2124,6 +2129,8 @@ public namespace RestSchemaValidator {
                 "type": AutoType,
                 "allowed_values": getFieldEnumValues(),
                 "default_value": default_value,
+                # the schema's default is what the API assumes when the value is not sent; it is shown, never sent
+                "remote_default_value": defaultVal,
             } + getFieldPresenceInfo(required), getValidatedExampleCandidates(), getConstraintInfo());
             setCachedField(False, name, rstr, field);
             # a required use of a nullable schema has the value type of an optional use; only the presence of the

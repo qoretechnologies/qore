@@ -1112,6 +1112,9 @@ bool known = RestSchemaTableDataProvider::hasRecordField(provider.getRecordType(
         if (exists info.example_value) {
             rv.example_value = info.example_value;
         }
+        if (exists info.remote_default_value) {
+            rv.remote_default_value = info.remote_default_value;
+        }
         if (info.allowed_values) {
             rv.allowed_values = info.allowed_values;
             rv.allowed_values_creatable = info.allowed_values_creatable ?? False;

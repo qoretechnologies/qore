@@ -1867,6 +1867,15 @@ val = "string";      # OK
     requests are no longer offered.
     @endparblock
 
+    @par Documented API Defaults Are Shown, Never Sent
+    @parblock
+    Data provider fields and options describe the value that the remote system assumes when they are not given, as
+    \c remote_default_value, apart from their own default value; REST schema data providers (OpenAPI and Swagger)
+    give the \c default of each property and parameter this way.  It is shown beside the field and is never applied:
+    it does not pre-fill a form and it is never sent, so a request without the value still lets the API decide.  See
+    @ref dataprovider_remote_default_values.
+    @endparblock
+
     @par Nullable Enumerations Offer Their Choices
     @parblock
     A REST schema property that is a nullable enumeration, which OpenAPI 3.1 writes as an \c anyOf or \c oneOf of

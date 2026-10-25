@@ -1,0 +1,114 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires OpenApi3
+%requires Swagger
+%requires SwaggerDataProvider
+%requires RestSchemaActions
+%requires json
+%exec-class OpenApi3RemoteDefaultTest
+
+#! The default of a REST schema is shown as the remote default of its field, never applied and never sent
+class OpenApi3RemoteDefaultTest inherits QUnit::Test {
+    public {
+        const Pet = {"type": "object", "properties": {
+            "name": {"type": "string"},
+            "size": {"type": "string", "enum": ("s", "m", "l"), "default": "m"},
+            "count": {"type": "integer", "default": 1},
+            "flag": {"type": "boolean", "default": False},
+            # a default that the field's constraints refuse describes no value the field can have
+            "code": {"type": "string", "maxLength": 2, "default": "toolong"},
+        }};
+
+        const Action = <RestSchemaActionInfo>{"action": "create-pet", "method": "POST", "path": "/pets",
+            "display_name": "Create Pet", "short_desc": "Creates a pet", "desc": "Creates a pet"};
+    }
+
+    constructor() : Test("REST schema remote defaults", "1.0", \ARGV) {
+        addTestCase("a property default is the remote default of its field", \openApiFieldTest());
+        addTestCase("a default that the field refuses is dropped", \refusedTest());
+        addTestCase("an action option has the remote default and sends no value for it", \openApiActionTest());
+        addTestCase("a Swagger parameter and property default are remote defaults", \swaggerTest());
+        set_return_value(main());
+    }
+
+    openApiFieldTest() {
+        OpenApi3Schema doc = openApi();
+        hash<string, AbstractDataField> fields = doc.components.schemas.Pet.getDataType().getFields();
+        assertEq("m", fields.size.getRemoteDefaultValue());
+        assertEq(1, fields.count.getRemoteDefaultValue());
+        assertEq(False, fields.flag.getRemoteDefaultValue());
+        assertNothing(fields.name.getRemoteDefaultValue());
+        foreach string name in (("size", "count", "flag")) {
+            assertNothing(fields{name}.getDefaultValue(), name);
+            assertNothing(fields{name}.getInfo().default_value, name);
+        }
+        # the record type applies none of them
+        assertEq({"name": "Rex"}, doc.components.schemas.Pet.getDataType().acceptsValue({"name": "Rex"}));
+    }
+
+    refusedTest() {
+        OpenApi3Schema doc = openApi();
+        AbstractDataField code = doc.components.schemas.Pet.getDataType().getFields().code;
+        assertNothing(code.getRemoteDefaultValue());
+    }
+
+    openApiActionTest() {
+        RestSchemaActionSet actions(openApi(), (Action,));
+        RestSchemaActionOperation op = actions.getOperationEx("create-pet");
+        hash<auto> fields = op.getRequestFields();
+        assertEq(20, fields.limit.getRemoteDefaultValue());
+        assertEq("m", fields.size.getRemoteDefaultValue());
+        assertNothing(fields.limit.getDefaultValue());
+        hash<string, hash<ActionOptionInfo>> options = DataProviderActionCatalog::getActionOptionFromFields(fields);
+        assertEq(20, options.limit.remote_default_value);
+        assertEq("m", options.size.remote_default_value);
+        assertNothing(options.limit.default_value);
+        # the request has only what is given
+        hash<auto> wire = op.unflatten({"name": "Rex"});
+        assertEq({"name": "Rex"}, wire.req.body);
+        assertNothing(wire.req.query.limit);
+    }
+
+    swaggerTest() {
+        SwaggerSchema doc = SwaggerLoader::fromString(make_json({
+            "swagger": "2.0", "info": {"title": "Remote defaults", "version": "1"},
+            "paths": {"/pets": {"get": {
+                "operationId": "listPets",
+                "parameters": ({"name": "limit", "in": "query", "type": "integer", "default": 25},),
+                "responses": {"200": {"description": "The pets", "schema": {"$ref": "#/definitions/Pet"}}},
+            }}},
+            "definitions": {"Pet": Pet},
+        }), True);
+        hash<string, AbstractDataField> fields = doc.definitions.Pet.getDataType().getFields();
+        assertEq("m", fields.size.getRemoteDefaultValue());
+        assertNothing(fields.size.getDefaultValue());
+        SwaggerDataProvider provider(doc);
+        AbstractDataProviderType request = provider.getChildProviderPath("pets/GET").getRequestType();
+        AbstractDataField limit = request.getFields().query.getType().getFields().limit;
+        assertEq(25, limit.getRemoteDefaultValue());
+        assertNothing(limit.getDefaultValue());
+        # the request type applies none of them
+        assertEq({}, request.acceptsValue({}) ?? {});
+    }
+
+    #! Returns an OpenAPI document whose pets have documented defaults
+    private static OpenApi3Schema openApi() {
+        hash<auto> pet = {"$ref": "#/components/schemas/Pet"};
+        return OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3", "info": {"title": "Remote defaults", "version": "1"},
+            "paths": {"/pets": {"post": {
+                "operationId": "createPet",
+                "parameters": ({"name": "limit", "in": "query", "schema": {"type": "integer", "default": 20}},),
+                "requestBody": {"required": True, "content": {"application/json": {"schema": pet}}},
+                "responses": {"200": {"description": "The pet", "content": {"application/json": {"schema": pet}}}},
+            }}},
+            "components": {"schemas": {"Pet": Pet}},
+        }), True);
+    }
+}

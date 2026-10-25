@@ -1110,6 +1110,7 @@ public class RestSchemaActionOperation {
             bool same_type = True;
             bool required = fields.size() == branches.size();
             bool same_default = required;
+            bool same_remote_default = True;
             bool finite = True;
             list<hash<AllowedValueInfo>> allowed = ();
             hash<string, bool> seen = {};
@@ -1117,6 +1118,8 @@ public class RestSchemaActionOperation {
                 same_type = same_type && field.getType() == first.getType();
                 required = required && fieldIsRequired(field);
                 same_default = same_default && field.getDefaultValue() == first.getDefaultValue();
+                same_remote_default = same_remote_default
+                    && field.getRemoteDefaultValue() === first.getRemoteDefaultValue();
                 finite = finite && !!field.getAllowedValues() && !field.getAllowedValuesCreatable();
                 foreach hash<AllowedValueInfo> value in (field.getAllowedValues() ?? ()) {
                     string key = make_json(value.value);
@@ -1135,6 +1138,8 @@ public class RestSchemaActionOperation {
             cfg.type = required ? field_type : field_type.getOrNothingType();
             cfg.attr.required = required;
             cfg.default_value = same_default ? first.getDefaultValue() : NOTHING;
+            # alternatives that document different defaults have no one default to show
+            cfg.remote_default_value = same_remote_default ? first.getRemoteDefaultValue() : NOTHING;
             cfg.allowed_values = finite ? allowed : NOTHING;
             cfg.allowed_values_creatable = !finite;
             # Element restrictions from just one branch must not constrain every alternative.
@@ -1927,6 +1932,9 @@ public class RestSchemaActionOperation {
         if (!type_replaced) {
             if (exists field.getDefaultValue()) {
                 h.default_value = field.getDefaultValue();
+            }
+            if (exists fi.remote_default_value) {
+                h.remote_default_value = fi.remote_default_value;
             }
             if (fi.allowed_values) {
                 h.allowed_values = fi.allowed_values;

@@ -141,6 +141,8 @@ RestHandler handler(NOTHING, swagger);
     @section swagger_relnotes Swagger Module Release Notes
 
     @subsection swagger_2_6 Swagger v2.6
+    - the \c default of a query or header parameter is the remote default value of its field, which is shown and
+      never applied or sent (see @ref dataprovider_remote_default_values)
     - the type of a schema object is the type of a request value: it has no field for a \c readOnly property, and a
       value with one is refused with \c RUNTIME-TYPE-ERROR;
       @ref Swagger::SwaggerSchema::getResponseDataType() "SwaggerSchema::getResponseDataType()" gives the type of a
@@ -1306,14 +1308,33 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     }
 
     #! Returns a field from a Swagger parameter
+    /** @param path the type path
+        @param name the field name
+        @param type the parameter type
+        @param format the parameter format, if any
+        @param arrayItems the items of an array parameter, if any
+        @param desc the parameter description, if any
+        @param required if the parameter is required
+        @param allowed_values the values that the parameter allows, if restricted
+        @param default_value the default value of the field, which is applied to it
+        @param remote_default_value the \c default that the parameter declares, which the server assumes when the
+        parameter is not sent; it is shown, never applied or sent
+        (@ref DataProvider::AbstractDataField::getRemoteDefaultValue() "AbstractDataField::getRemoteDefaultValue()")
+
+        @return the field
+
+        @since Swagger 2.6 \a remote_default_value
+    */
     AbstractDataField getFieldFromParameter(string path, string name, string type, *string format,
-            *SchemaObject arrayItems, *string desc, bool required, *list<auto> allowed_values, auto default_value) {
+            *SchemaObject arrayItems, *string desc, bool required, *list<auto> allowed_values, auto default_value,
+            auto remote_default_value) {
         return new QoreDataField({
             "name": name,
             "desc": desc.val() ? desc.getDecoded(CE_XHTML) : "",
             "type": getType(path, type, format, arrayItems, required),
             "allowed_values": allowed_values,
             "default_value": default_value,
+            "remote_default_value": remote_default_value,
         });
     }
 
@@ -1329,7 +1350,8 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
                 # body and formData parameters are handled directly under the operation
                 case "query": {
                     params{i.value.inLoc}{i.value.name} = getFieldFromParameter("!query/" + i.value.name,
-                        i.value.name, i.value.type, i.value.format, i.value.items, i.value.desc, i.value.required);
+                        i.value.name, i.value.type, i.value.format, i.value.items, i.value.desc, i.value.required,
+                        NOTHING, NOTHING, i.value.getDefaultValue());
                     # if at least one query argument is required, then we set "required" to True for the hash
                     if (i.value.required && !req_map{i.value.inLoc}) {
                         req_map{i.value.inLoc} = True;
@@ -1339,7 +1361,8 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
 
                 case "header": {
                     params{i.value.inLoc}{i.value.name} = getFieldFromParameter("!headers/" + i.value.name,
-                        i.value.name, "string", NOTHING, NOTHING, i.value.desc, i.value.required);
+                        i.value.name, "string", NOTHING, NOTHING, i.value.desc, i.value.required, NOTHING, NOTHING,
+                        i.value.getDefaultValue());
                     # if at least one query argument is required, then we set "required" to True for the hash
                     if (i.value.required) {
                         if (!req_map{i.value.inLoc}) {

@@ -1560,9 +1560,41 @@ fetch
     once processing has succeeded: every event carries the identity of its source item, and providers
     expose first-class actions that take it.
 
+    @section dataprovider_remote_default_values Remote Default Values
+
+    Many APIs document the value that they assume when a request does not give one, such as the \c default of a
+    property or parameter in an OpenAPI or Swagger schema.  That value is useful to see beside the field, since it
+    says what leaving the field empty means, but it belongs to the remote system: sending it would turn "use what
+    the API decides" into a fixed value, which stops following the API if its default changes, and pre-filling a form
+    with it makes it impossible to tell an explicit choice from no choice.
+
+    A field and an option therefore describe it apart from their own default value, as
+    @ref DataProvider::DataFieldInfo::remote_default_value "DataFieldInfo::remote_default_value" and
+    @ref DataProvider::BaseOptionInfo::remote_default_value "BaseOptionInfo::remote_default_value"
+    (see @ref DataProvider::AbstractDataField::getRemoteDefaultValue() "AbstractDataField::getRemoteDefaultValue()"
+    and @ref DataProvider::AbstractDataField::setRemoteDefaultValue() "AbstractDataField::setRemoteDefaultValue()"):
+    - it is shown, never applied: it is not the field's \c default_value, so it is never used when no value is
+      given, it does not pre-fill a form, and it is never sent
+    - it is a value of the field's type, converted as the type converts a value; a documented default that the
+      type does not accept is dropped, since it is no value that the field can have
+    - it is a value, not text, so it is not translated
+    - it is kept in every description of a field or an option: field and type descriptions
+      (@ref DataProvider::AbstractDataField::getInfo() "AbstractDataField::getInfo()"), type graphs, restored types,
+      action options and the data provider index
+
+    @par Example:
+    @code{.py}
+QoreDataField limit({"name": "limit", "type": IntOrNothingType, "remote_default_value": 20});
+# shown as "20 if not given"; the field has no value of its own
+auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
+    @endcode
+
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_11 DataProvider v3.11
+    - fields and options describe the value that the remote system assumes when they are not given, as
+      @ref DataProvider::DataFieldInfo::remote_default_value "remote_default_value", which is shown and never applied,
+      pre-filled or sent (see @ref dataprovider_remote_default_values)
     - an optional field, option or type with choices that are not creatable accepts no value and \c NULL, which are
       not choices; it refused them with a \c FIELD-VALUE-ERROR or \c TYPE-VALUE-ERROR exception
     - added @ref DataProvider::HashDataType::setFieldList() "HashDataType::setFieldList()", which sets the fields of

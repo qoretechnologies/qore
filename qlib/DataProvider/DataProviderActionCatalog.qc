@@ -3651,7 +3651,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             if (i.value instanceof AbstractDataField) {
                 hash<DataFieldInfo> info = i.value.getLocalInfo();
                 i.value = info{"display_name", "short_desc", "desc", "default_value", "example_value",
-                    "allowed_values", "allowed_values_creatable", "element_allowed_values",
+                    "remote_default_value", "allowed_values", "allowed_values_creatable", "element_allowed_values",
                     "element_allowed_values_creatable"} + {
                     "type": i.value.getType(),
                 };
@@ -3787,13 +3787,15 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 i.value.required = True;
             }
             if (i.value instanceof hash<DataProviderOptionInfo>) {
-                info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
+                info += i.value{"default_value", "required", "sensitive", "example_value", "remote_default_value",
+                    "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with",
                     "depends_on", "has_dependents", "on_change", "metadata", "messages", "icon", "image",
                     "server_expression_handling", "ui_type", "input_field_names"}
                     + additional_fields;
             } else {
-                info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
+                info += i.value{"default_value", "required", "sensitive", "example_value", "remote_default_value",
+                    "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with",
                     "validation_regex", "validation_regex_desc", "depends_on", "has_dependents", "on_change",
                     "metadata", "icon",
@@ -3895,7 +3897,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             }
             hash<auto> fh = i.value{"display_name", "short_desc", "desc", "allowed_values",
                 "allowed_values_creatable", "element_allowed_values", "element_allowed_values_creatable",
-                "default_value", "example_value"} + {
+                "default_value", "example_value", "remote_default_value"} + {
                 "name": i.key,
                 "type": i.value.required ? i.value.type.getMandatoryType() : i.value.type.getOrNothingType(),
             };
