@@ -24,6 +24,7 @@
 %requires FsUtil
 %requires Util
 %requires json
+%requires ../TestFileTime.qm
 
 %exec-class AOTSccIncrementalDriverTest
 
@@ -1253,7 +1254,7 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         # set is exactly {c} from the second pass on.
         writeCompiler(fx, NOTHING,
             "case \"$(basename \"$src\")\" in c.qc) "
-            + "touch -t 200001010000 \"$out.stamp\" ;; esac");
+            + TestFileTime::touch_command(2000-01-01T00:00:00Z) + " \"$out.stamp\" ;; esac");
         # The escalation is a real whole-group parse, so this fixture needs one
         # that works rather than the stand-in plan() installs.
         writeBatchCompiler(fx);

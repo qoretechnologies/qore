@@ -1,0 +1,108 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file TestFileTime.qm sets the times of files for the tests through touch(1) without handing it a local time
+
+/*  TestFileTime.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module TestFileTime {
+    version = "1.0";
+    desc    = "sets the times of files for the tests through touch(1) without handing it a local time";
+    author  = "David Nichols <david@qore.org>";
+    url     = "http://qore.org";
+    license = "MIT";
+}
+
+/** A test that sets the time of a file sets an instant, but the only time argument that BSD (macOS), GNU and busybox
+    (Alpine) touch(1) all accept is a wall-clock time, <tt>touch -t [[CC]YY]MMDDhhmm[.SS]</tt> (BSD touch has no
+    <tt>-d \@seconds</tt>), which touch(1) reads in its local time zone.  A local time does not name one instant: in
+    the hour that repeats when daylight saving time ends, it names two, and touch(1) picks one of them, so a file
+    given the later one is set an hour early; a local time skipped when daylight saving time starts names none.  So
+    the time is handed over as a UTC time and touch(1) reads it in UTC, which has neither.
+
+    @par Example:
+    @code{.py}
+%requires ../TestFileTime.qm
+
+TestFileTime::set_file_times(now_us() + 2s, path);
+    @endcode
+*/
+public namespace TestFileTime {
+    #! The time zone that touch(1) reads the time in: UTC as a POSIX \c TZ value, which needs no zone files
+    public const TouchZone = "UTC0";
+
+    #! Returns the time argument of <tt>touch -t</tt> that names the given instant: its UTC time, to the second
+    /** @param when the instant; a fraction of a second is dropped, not rounded
+
+        @return the time in the form <tt>CCYYMMDDhhmm.SS</tt>, in UTC
+
+        @throw TEST-FILE-TIME-ERROR \a when is a relative date, which is not an instant
+    */
+    public string sub touch_stamp(date when) {
+        if (when.relative()) {
+            throw "TEST-FILE-TIME-ERROR", sprintf("a relative date is not an instant: %y", when);
+        }
+        return format_date("YYYYMMDDHHmm.SS", gmtime(when));
+    }
+
+    #! Returns a shell command that sets the access and modification times of the files named after it to the instant
+    /** For a shell script that names its files itself, such as \c "$out"; the file names are appended to the command
+
+        @param when the instant; a fraction of a second is dropped, not rounded
+
+        @return a shell command, without the file names, that runs touch(1) in UTC with the UTC time of \a when
+
+        @throw TEST-FILE-TIME-ERROR \a when is a relative date, which is not an instant
+    */
+    public string sub touch_command(date when) {
+        return sprintf("TZ=%s touch -t %s", TouchZone, touch_stamp(when));
+    }
+
+    #! Returns the given string quoted for a POSIX shell
+    /** @param value the string, which may contain any character, quotes and newlines included
+
+        @return \a value in single quotes, with each single quote in it written as <tt>'"'"'</tt>
+    */
+    public string sub shell_quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! Sets the access and modification times of the given files to the instant
+    /** @param when the instant; a fraction of a second is dropped, not rounded
+        @param paths the files; a file that does not exist is created empty
+
+        @throw TEST-FILE-TIME-ERROR no file is given, \a when is a relative date, or touch(1) fails; the message
+        includes what touch(1) reported
+    */
+    public sub set_file_times(date when, softlist<string> paths) {
+        if (!paths) {
+            throw "TEST-FILE-TIME-ERROR", "no file is given";
+        }
+        # "--": a file name that starts with "-" is not an option
+        string cmd = touch_command(when) + " -- " + (map shell_quote($1), paths).join(" ");
+        int rc;
+        string output = backquote("{ " + cmd + "; } 2>&1", \rc);
+        if (rc) {
+            throw "TEST-FILE-TIME-ERROR", sprintf("%s: exit code %d: %s", cmd, rc, trim(output));
+        }
+    }
+}

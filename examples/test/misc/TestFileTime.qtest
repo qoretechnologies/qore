@@ -1,0 +1,267 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../TestFileTime.qm
+
+%exec-class TestFileTimeTest
+
+#! A time zone with daylight saving time and the instants at its changes in 2026
+hashdecl DstZone {
+    #! the \c TZ value under which touch(1) runs: a region name, or the zone's rules as a POSIX \c TZ string
+    string tz;
+    #! the region that gives the program's own dates the same rules
+    string region;
+    #! a local time of the zone's summer, in the form of <tt>touch -t</tt>, and the instant it names
+    string summer_local;
+    #! the instant that \a summer_local names
+    int summer_epoch;
+    #! the local time that the end of daylight saving time repeats, in the form of <tt>touch -t</tt>
+    string repeated_local;
+    #! the two instants that \a repeated_local names: with daylight saving time, then without it
+    list<int> repeated_epochs;
+    #! the last instant before the start of daylight saving time and the first one after the local times it skips
+    list<int> gap_edges;
+    #! instants whose UTC time is a local time that the zone repeats or skips
+    list<int> utc_in_changes;
+}
+
+class TestFileTimeTest inherits QUnit::Test {
+    public {
+        #! The zones that the time of a file is set in
+        /** The CI hosts run in Europe/Prague; the same rules as a POSIX \c TZ string need no zone files for the C
+            library, and Lord Howe Island moves its clocks by half an hour, in the southern hemisphere.
+        */
+        const Zones = {
+            "Europe/Prague": <DstZone>{
+                "tz": "Europe/Prague",
+                "region": "Europe/Prague",
+                # 2026-07-01 12:00 +02:00
+                "summer_local": "202607011200.00",
+                "summer_epoch": 1782900000,
+                # 2026-10-25 02:30 local: 00:30Z with daylight saving time (+02:00), 01:30Z without it (+01:00)
+                "repeated_local": "202610250230.00",
+                "repeated_epochs": (1792888200, 1792891800),
+                # 2026-03-29 01:59:59 +01:00 (00:59:59Z), then 03:00:00 +02:00 (01:00:00Z)
+                "gap_edges": (1774745999, 1774746000),
+                # 2026-10-25T02:30:00Z and 2026-03-29T02:30:00Z
+                "utc_in_changes": (1792895400, 1774751400),
+            },
+            "Central European rules": <DstZone>{
+                "tz": "CET-1CEST,M3.5.0,M10.5.0/3",
+                "region": "Europe/Prague",
+                "summer_local": "202607011200.00",
+                "summer_epoch": 1782900000,
+                "repeated_local": "202610250230.00",
+                "repeated_epochs": (1792888200, 1792891800),
+                "gap_edges": (1774745999, 1774746000),
+                "utc_in_changes": (1792895400, 1774751400),
+            },
+            "Lord Howe Island rules": <DstZone>{
+                "tz": "<+1030>-10:30<+11>-11,M10.1.0,M4.1.0",
+                "region": "Australia/Lord_Howe",
+                # 2026-01-15 12:00 +11:00
+                "summer_local": "202601151200.00",
+                "summer_epoch": 1768438800,
+                # 2026-04-05 01:45 local: 2026-04-04T14:45Z (+11:00), then 15:15Z (+10:30)
+                "repeated_local": "202604050145.00",
+                "repeated_epochs": (1775313900, 1775315700),
+                # 2026-10-04 01:59:59 +10:30 (2026-10-03T15:29:59Z), then 02:30:00 +11:00 (15:30:00Z)
+                "gap_edges": (1791041399, 1791041400),
+                # 2026-04-05T01:45:00Z and 2026-10-04T02:15:00Z
+                "utc_in_changes": (1775353500, 1791080100),
+            },
+        };
+    }
+
+    constructor() : QUnit::Test("TestFileTime", "1.0", \ARGV) {
+        foreach hash<auto> zone in (Zones.pairIterator()) {
+            addTestCase("a file is set the instant at the DST changes in " + zone.key, \testDstZone(),
+                (zone.key, zone.value));
+        }
+        addTestCase("a file is set the same instant whatever zone the date is in", \testZoneOfTheDate());
+        addTestCase("a fraction of a second is dropped", \testFraction());
+        addTestCase("touch is handed the UTC time and reads it in UTC", \testCommand());
+        addTestCase("several files and names that a shell or touch would misread", \testNames());
+        addTestCase("a failure to set the time raises an error", \testErrors());
+        set_return_value(main());
+    }
+
+    #! Sets the time of a file in a zone with daylight saving time
+    /** The zone is both the program's own zone, in which now() gives its dates, and the C library's zone, in which
+        touch(1) reads a local time: the setting in which the times of the tests were set an hour early.
+    */
+    testDstZone(string name, hash<DstZone> zone) {
+        TimeZone program_zone;
+        try {
+            program_zone = new TimeZone(zone.region);
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("the program cannot use the zone %y: %s: %s", zone.region, ex.err, ex.desc);
+        }
+
+        TmpDir tmp("qore-test-file-time-");
+        string path = tmp.path + "/file";
+        TestFileTime::set_file_times(now_us(), path);
+
+        TimeZone saved_zone = TimeZone::get();
+        on_exit TimeZone::set(saved_zone);
+        *string saved_tz = getenv("TZ");
+        on_exit {
+            if (exists saved_tz) {
+                setenv("TZ", saved_tz);
+            } else {
+                unsetenv("TZ");
+            }
+        }
+        TimeZone::set(program_zone);
+        setenv("TZ", zone.tz);
+
+        # touch(1) reads a local time by the zone's rules, or the C library has no such zone
+        assertEq(0, system(sprintf("touch -t %s %s", zone.summer_local, TestFileTime::shell_quote(path))),
+            "touch sets a local time");
+        if (hstat(path).mtime.getEpochSeconds() != zone.summer_epoch) {
+            if (zone.tz == zone.region) {
+                testSkip("the C library has no zone %y", zone.tz);
+            }
+            fail(sprintf("touch reads %s in TZ=%s as the instant %d", zone.summer_local, zone.tz,
+                zone.summer_epoch));
+        }
+
+        # the local time that the end of daylight saving time repeats names at most one of its two instants: touch
+        # picks one of them (BSD, GNU and busybox touch) or refuses the time (uutils touch)
+        int rc;
+        string output = backquote(sprintf("touch -t %s %s 2>&1", zone.repeated_local,
+            TestFileTime::shell_quote(path)), \rc);
+        int local_epoch = hstat(path).mtime.getEpochSeconds();
+        if (rc) {
+            assertEq(zone.summer_epoch, local_epoch, "a refused local time leaves the file's time: " + output);
+        } else {
+            assertTrue(inlist(local_epoch, zone.repeated_epochs),
+                sprintf("touch reads the repeated local time %s as one of %y, not %d", zone.repeated_local,
+                    zone.repeated_epochs, local_epoch));
+        }
+
+        # each instant in the repeated hour, before and after the local times that the start skips, and at a UTC time
+        # that the zone repeats or skips, is set exactly
+        foreach int epoch in (zone.repeated_epochs + zone.gap_edges + zone.utc_in_changes) {
+            date when = localtime(epoch);
+            assertEq(zone.region, when.zone().region(), "the date is in the zone");
+            TestFileTime::set_file_times(when, path);
+            assertEq(epoch * 1000000, hstat(path).mtime.getEpochMicroseconds(),
+                sprintf("%s (%d) in TZ=%s", format_date("YYYY-MM-DD HH:mm:SS Z", when), epoch, zone.tz));
+        }
+
+        # the two instants in the repeated hour are told apart
+        string other = tmp.path + "/other";
+        TestFileTime::set_file_times(localtime(zone.repeated_epochs[0]), path);
+        TestFileTime::set_file_times(localtime(zone.repeated_epochs[1]), other);
+        assertEq(zone.repeated_epochs[1] - zone.repeated_epochs[0],
+            hstat(other).mtime.getEpochSeconds() - hstat(path).mtime.getEpochSeconds(),
+            "the later instant in the repeated hour is set after the earlier one");
+    }
+
+    #! Sets the same instant from dates in different zones
+    testZoneOfTheDate() {
+        TmpDir tmp("qore-test-file-time-zones-");
+        string path = tmp.path + "/file";
+        # 2026-10-25T01:30:00Z, in the hour that Europe/Prague repeats
+        int epoch = 1792891800;
+        list<date> dates = (
+            gmtime(epoch),
+            new TimeZone(3600).date(epoch),
+            new TimeZone(-(9 * 3600 + 30 * 60)).date(epoch),
+            new TimeZone(5 * 3600 + 45 * 60).date(epoch),
+            localtime(epoch),
+            2026-10-25T02:30:00+01:00,
+        );
+        foreach date when in (dates) {
+            TestFileTime::set_file_times(when, path);
+            assertEq(epoch * 1000000, hstat(path).mtime.getEpochMicroseconds(),
+                format_date("YYYY-MM-DD HH:mm:SS Z", when));
+        }
+    }
+
+    #! touch -t has no fraction of a second: the time is the whole second, not the nearest one
+    testFraction() {
+        TmpDir tmp("qore-test-file-time-fraction-");
+        string path = tmp.path + "/file";
+        TestFileTime::set_file_times(2026-10-25T01:30:00.999999Z, path);
+        assertEq(1792891800 * 1000000, hstat(path).mtime.getEpochMicroseconds(), "the fraction is dropped");
+        assertEq("202610250130.59", TestFileTime::touch_stamp(2026-10-25T01:30:59.999999Z),
+            "the stamp is the whole second");
+    }
+
+    #! the time handed to touch(1) is the UTC time, and touch(1) runs in UTC
+    testCommand() {
+        assertEq("UTC0", TestFileTime::TouchZone);
+        assertEq("202610250030.00", TestFileTime::touch_stamp(2026-10-25T02:30:00+02:00), "with DST");
+        assertEq("202610250130.00", TestFileTime::touch_stamp(2026-10-25T02:30:00+01:00), "without DST");
+        assertEq("202603290100.00", TestFileTime::touch_stamp(2026-03-29T03:00:00+02:00), "after the gap");
+        assertEq("200001010000.00", TestFileTime::touch_stamp(1999-12-31T19:00:00-05:00), "a year earlier locally");
+        assertEq("TZ=UTC0 touch -t 202610250130.00", TestFileTime::touch_command(2026-10-25T01:30:00Z));
+
+        # a shell script that names its files itself sets the instant too
+        TmpDir tmp("qore-test-file-time-command-");
+        string path = tmp.path + "/file";
+        *string saved_tz = getenv("TZ");
+        on_exit {
+            if (exists saved_tz) {
+                setenv("TZ", saved_tz);
+            } else {
+                unsetenv("TZ");
+            }
+        }
+        setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3");
+        int rc;
+        string output = backquote(sprintf("f=%s; %s \"$f\" 2>&1", TestFileTime::shell_quote(path),
+            TestFileTime::touch_command(2026-10-25T01:30:00Z)), \rc);
+        assertEq(0, rc, output);
+        assertEq(1792891800 * 1000000, hstat(path).mtime.getEpochMicroseconds(), "the script sets the instant");
+    }
+
+    #! several files in one call, and names that need quoting or that start like an option
+    testNames() {
+        TmpDir tmp("qore-test-file-time-names-");
+        list<string> names = ("plain", "with space", "it's", "double\"quote", "$(false)`false`", "line\nbreak",
+            "-t");
+        list<string> paths = map tmp.path + "/" + $1, names;
+        foreach string path in (paths) {
+            assertFalse(is_file(path), "the file does not exist yet: " + path);
+        }
+        TestFileTime::set_file_times(2026-10-25T01:30:00Z, paths);
+        foreach string path in (paths) {
+            assertTrue(is_file(path), "the file is created: " + path);
+            assertEq(1792891800 * 1000000, hstat(path).mtime.getEpochMicroseconds(), path);
+        }
+        Dir dir();
+        dir.chdir(tmp.path);
+        assertEq(sort(names), sort(dir.list()), "no other file is created");
+
+        # a relative name that starts like an option is a file name
+        string cwd = getcwd();
+        on_exit chdir(cwd);
+        assertEq(0, chdir(tmp.path));
+        TestFileTime::set_file_times(2026-03-29T01:00:00Z, "-r");
+        assertEq(1774746000 * 1000000, hstat(tmp.path + "/-r").mtime.getEpochMicroseconds(),
+            "the relative file starting with a dash is set");
+    }
+
+    #! a time that cannot be set raises an error, with what touch(1) reported
+    testErrors() {
+        TmpDir tmp("qore-test-file-time-errors-");
+        string missing = tmp.path + "/no-such-dir/file";
+        assertThrows("TEST-FILE-TIME-ERROR", "no-such-dir/file.*: exit code [1-9][0-9]*: .",
+            \TestFileTime::set_file_times(), (2026-10-25T01:30:00Z, missing));
+        assertFalse(is_file(missing), "no file is created in a missing directory");
+        assertThrows("TEST-FILE-TIME-ERROR", "no file is given", \TestFileTime::set_file_times(),
+            (2026-10-25T01:30:00Z, ()));
+        assertThrows("TEST-FILE-TIME-ERROR", "relative date", \TestFileTime::set_file_times(), (2s, tmp.path + "/f"));
+        assertThrows("TEST-FILE-TIME-ERROR", "relative date", \TestFileTime::touch_stamp(), 2s);
+        assertFalse(is_file(tmp.path + "/f"), "no file is created for a relative date");
+    }
+}

@@ -26,9 +26,10 @@ class TimeoutDiagnosticsTest(unittest.TestCase):
             (tests / "one.qtest").touch()
             (tests / "two.qtest").touch()
             (binaries / "libqore.so").touch()
+            # touch -t reads its time in UTC (TZ=UTC0): a local time can name two instants or none
             scripts = {
                 "qore": '#!/bin/sh\ncase "$*" in *one.qtest*) '
-                        'if [ "$FRESH_CORE" = 1 ]; then touch -t 203001010000 "$TEST_CORE_TARGET"; fi; '
+                        'if [ "$FRESH_CORE" = 1 ]; then TZ=UTC0 touch -t 203001010000 "$TEST_CORE_TARGET"; fi; '
                         'exit "$TEST_EXIT";; esac\nexit 0\n',
                 "timeout": '#!/bin/sh\nif [ "$1" = --version ]; then '
                            '[ "$GNU_TIMEOUT" = 1 ] && echo GNU; exit 0; fi\n'
