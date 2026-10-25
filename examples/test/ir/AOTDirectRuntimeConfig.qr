@@ -1,0 +1,121 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+
+sub expect(auto expected, auto actual) {
+    if (type(expected) != type(actual) || (type(expected) == "float"
+            ? (expected.nanp() ? !actual.nanp() : expected != actual
+                || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual)))
+            : expected != actual)) {
+        throw "DIRECT-RUNTIME-CONFIG", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+float sub bodyStep(float input) {
+    float value = 65535.0 - input;
+    for (int j = 0; j < 2; ++j) { value += 0.25; }
+    return value;
+}
+float sub bodyResult() {
+    float value = 1.0;
+    for (int j = 0; j < 3; ++j) { value += 5.5; }
+    return value;
+}
+float sub bodyDivide(float input) {
+    float value = input;
+    for (int j = 0; j < 2; ++j) { value = 1.0 / value; }
+    return value;
+}
+float sub bodyWait(float input) {
+    float value = input;
+    for (int i = 0; i < 100000000; ++i) { value += 0.25; }
+    return value;
+}
+float sub bodyKnownUnary(float seed, int count) {
+    float value = seed;
+    float sum = 0.0;
+    for (int i = 0; i < count; ++i) { value = bodyStep(value); sum += value; }
+    return sum;
+}
+float sub bodyKnownResult(int count) {
+    float sum = 0.0;
+    for (int i = 0; i < count; ++i) { sum += bodyResult(); }
+    return sum;
+}
+float sub bodyKnownDivide(float seed) {
+    float value = seed;
+    float sum = 0.0;
+    for (int i = 0; i < 3; ++i) { value = bodyDivide(value); sum += value; }
+    return sum;
+}
+float sub bodyKnownWait() { return bodyWait(1.0); }
+# Local promotion can establish a native argument after the parser left the call's variant unresolved.
+float sub bodyOptionalLocal() { *float value = 2.0; return bodyStep(value); }
+float sub bodyAutoLocal() { auto value = 2.0; return bodyStep(value); }
+float sub bodyAssignedOptional(*float value) { value = 2.0; return bodyStep(value); }
+expect(65533.5, bodyOptionalLocal());
+expect(65533.5, bodyAutoLocal());
+expect(65533.5, bodyAssignedOptional(NOTHING));
+foreach float value in ((0.0, -0.0, 1.5, -1.5, -3.0e307, @inf@, -@inf@, @nan@, -@nan@)) {
+    foreach int count in ((0, 1, 2, 17, 257)) {
+        float current = value;
+        float sum = 0.0;
+        for (int i = 0; i < count; ++i) {
+            current = 65535.0 - current;
+            current += 0.25;
+            current += 0.25;
+            sum += current;
+        }
+        expect(sum, bodyKnownUnary(value, count));
+        expect(float(count) * 17.5, bodyKnownResult(count));
+    }
+}
+expect(6.0, bodyKnownDivide(2.0));
+bool caught = False;
+try { bodyKnownDivide(0.0); }
+catch (hash<ExceptionInfo> ex) {
+    expect("DIVISION-BY-ZERO", ex.err);
+    bool target_frame = False;
+    foreach hash<CallStackInfo> frame in (ex.callstack) {
+        if (frame.function == "bodyDivide") { target_frame = True; }
+    }
+    expect(True, target_frame);
+    caught = True;
+}
+expect(True, caught);
+# Reusing the same direct caller after an exception must remain valid.
+expect(6.0, bodyKnownDivide(2.0));
+# Observe the target's frame before interrupting, so cancellation cannot pass
+# merely by stopping the worker before the private direct entry is reached.
+for (int attempt = 0; attempt < 2; ++attempt) {
+    Counter done(1);
+    string outcome;
+    bool recovered = False;
+    int tid = background (sub () {
+        on_exit done.dec();
+        try { bodyKnownWait(); outcome = "not cancelled"; }
+        catch (hash<ExceptionInfo> ex) {
+            clear_thread_cancel();
+            outcome = ex.err;
+            recovered = bodyKnownDivide(2.0) == 6.0;
+        }
+    })();
+    bool observed = False;
+    int deadline = clock_get_monotonic_us() + 10000000;
+    while (!observed && clock_get_monotonic_us() < deadline) {
+        foreach hash<CallStackInfo> frame in (get_all_thread_call_stacks(){string(tid)} ?? ()) {
+            if (frame.function == "bodyWait") { observed = True; break; }
+        }
+        if (!observed) { usleep(1000); }
+    }
+    bool delivered = cancel_thread(tid, "native direct entry-state test");
+    if (done.waitForZero(60s)) {
+        # End the entire test process, including its worker, on a failed poll.
+        printf("direct cancellation did not complete\n");
+        exit(1);
+    }
+    expect(True, observed);
+    expect(True, delivered);
+    expect("THREAD-CANCELLED", outcome);
+    expect(True, recovered);
+}
+printf("direct-runtime-config: ok\n");

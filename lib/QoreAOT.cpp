@@ -15751,6 +15751,108 @@ static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
 using AOTCallbackSpecializationCandidates = std::vector<
     std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>;
 
+//! Declare at most one borrowed-context companion per bounded native loop target.
+static bool declareAOTNativeRuntimeEntry(llvm::Module& module, BatchCalleeInfo& info,
+        const QoreIRFunction& body) {
+    if (!info.callback_runtime_config_name.empty()) {
+        return true;
+    }
+    if (body.blocks.size() > 32) {
+        return false;
+    }
+    size_t instructions = 0;
+    bool has_loop = false;
+    for (const auto& block : body.blocks) {
+        instructions += block->instructions.size();
+        has_loop |= block->is_loop_header;
+    }
+    llvm::Function* target = module.getFunction(info.fast_name);
+    if (!has_loop || instructions > 512 || !target || target->arg_size() != info.num_params + 2) {
+        return false;
+    }
+    auto* type = target->getFunctionType();
+    std::vector<llvm::Type*> params(type->param_begin(), type->param_end());
+    params.insert(params.begin() + info.num_params, llvm::PointerType::get(module.getContext(), 0));
+    info.callback_entry_state = !q_env_is_set("QORE_DISABLE_AOT_CALLBACK_ENTRY_STATE");
+    if (info.callback_entry_state) {
+        params.insert(params.begin() + info.num_params + 1, llvm::PointerType::get(module.getContext(), 0));
+    }
+    info.callback_runtime_config_name = info.fast_name + "_runtime_config";
+    auto* companion = llvm::Function::Create(llvm::FunctionType::get(type->getReturnType(), params, false),
+        llvm::Function::InternalLinkage, info.callback_runtime_config_name, module);
+    companion->addFnAttr(llvm::Attribute::InlineHint);
+    return true;
+}
+
+//! Direct-only programs get their own bounded admission pass, independent of callback discovery.
+static bool declareAOTDirectRuntimeEntries(llvm::Module& module,
+        const AOTCallbackSpecializationCandidates& candidates,
+        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& callees) {
+    if (q_env_is_set("QORE_DISABLE_AOT_DIRECT_RUNTIME_CONFIG")) {
+        return true;
+    }
+    std::unordered_map<const AbstractQoreFunctionVariant*, const QoreIRFunction*> bodies;
+    size_t checks = 0;
+    for (const auto& [variant, ir] : candidates) {
+        if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT direct native body indexing")) {
+            return false;
+        }
+        bodies.emplace(variant, ir.get());
+    }
+    unsigned entries = 0;
+    for (const auto& [owner, ir] : candidates) {
+        if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT direct native candidate analysis")) {
+            return false;
+        }
+        const auto* owner_uvb = owner->getUserVariantBase();
+        if (!owner_uvb || !ir || ir->has_opaque_ast_local_access) {
+            continue;
+        }
+        for (const auto& block : ir->blocks) {
+            if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT direct native block analysis")) {
+                return false;
+            }
+            for (const auto& ip : block->instructions) {
+                if (++checks % 100 == 0 && qore_check_cancel(nullptr, "AOT direct native call analysis")) {
+                    return false;
+                }
+                if (ip->opcode != QoreIROpcode::CallDirect) {
+                    continue;
+                }
+                const auto* call = static_cast<const QoreIRCallDirectInstruction*>(ip.get());
+                auto target = callees.find(call->variant);
+                auto body = bodies.find(call->variant);
+                const auto* uvb = call->variant ? call->variant->getUserVariantBase() : nullptr;
+                if (!uvb || uvb->pgm != owner_uvb->pgm || target == callees.end() || body == bodies.end()) {
+                    continue;
+                }
+                auto& info = target->second;
+                if (info.direct_runtime_config_entry || !info.single_variant_function
+                        || !info.approach_b_eligible || !info.context_independent_fast_entry
+                        || info.preloaded_fast_entry || info.generic_specialized_fast_entry
+                        || dynamic_cast<const MethodVariantBase*>(call->variant)
+                        || uvb->getUserSignature()->needsTypeParameterSubstitution()
+                        || call->has_ref_args || call->explicit_type_param_inst
+                        || call->operands.size() != info.num_params || body->second->has_opaque_ast_local_access
+                        || info.return_kind != BatchCalleeReturnKind::NativeFloat || info.num_params > 1
+                        || (info.num_params && (info.param_kinds.size() != 1
+                            || info.param_kinds.front() != BatchCalleeParamKind::NativeFloat))) {
+                    continue;
+                }
+                if (declareAOTNativeRuntimeEntry(module, info, *body->second)) {
+                    info.direct_runtime_config_entry = true;
+                    // Callback admission keeps its existing budget. Direct admission adds at most 64
+                    // targets and reuses any companion already declared for a callback target.
+                    if (++entries == 64) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return true;
+}
+
 //! Declare bounded private entries without changing the ordinary callable entry or its contract.
 static bool declareAOTCallbackFastEntries(llvm::Module& module,
         const AOTCallbackSpecializationCandidates& candidates,
@@ -15938,32 +16040,9 @@ static bool declareAOTCallbackFastEntries(llvm::Module& module,
                     // receive the caller's live context through a private, non-null companion entry.
                     auto target_body = bodies.find(ref->second);
                     if (!q_env_is_set("QORE_DISABLE_AOT_CALLBACK_RUNTIME_CONFIG")
-                            && target->second.callback_runtime_config_name.empty()
-                            && target_body != bodies.end() && target_body->second->blocks.size() <= 32) {
-                        size_t target_instructions = 0;
-                        bool has_loop = false;
-                        for (const auto& tb : target_body->second->blocks) {
-                            target_instructions += tb->instructions.size();
-                            has_loop |= tb->is_loop_header;
-                        }
-                        llvm::Function* target_fn = module.getFunction(target->second.fast_name);
-                        if (has_loop && target_instructions <= 512 && target_fn
-                                && target_fn->arg_size() == target->second.num_params + 2) {
-                            auto* type = target_fn->getFunctionType();
-                            std::vector<llvm::Type*> params(type->param_begin(), type->param_end());
-                            params.insert(params.begin() + target->second.num_params,
-                                llvm::PointerType::get(module.getContext(), 0));
-                            target->second.callback_entry_state = !q_env_is_set("QORE_DISABLE_AOT_CALLBACK_ENTRY_STATE");
-                            if (target->second.callback_entry_state) {
-                                params.insert(params.begin() + target->second.num_params + 1,
-                                    llvm::PointerType::get(module.getContext(), 0));
-                            }
-                            target->second.callback_runtime_config_name = target->second.fast_name + "_runtime_config";
-                            auto* companion = llvm::Function::Create(
-                                llvm::FunctionType::get(type->getReturnType(), params, false),
-                                llvm::Function::InternalLinkage, target->second.callback_runtime_config_name, module);
-                            companion->addFnAttr(llvm::Attribute::InlineHint);
-                        }
+                            && target_body != bodies.end()) {
+                        target->second.callback_runtime_config_entry =
+                            declareAOTNativeRuntimeEntry(module, target->second, *target_body->second);
                     }
                     if (++entries == 64) {
                         return true;
@@ -24122,7 +24201,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
     std::set<std::string> declared_fast_keys;
     AOTCallbackSpecializationCandidates callback_candidates;
     auto* callback_candidates_ptr = q_env_is_set("QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION")
-        ? nullptr : &callback_candidates;
+        && q_env_is_set("QORE_DISABLE_AOT_DIRECT_RUNTIME_CONFIG") ? nullptr : &callback_candidates;
     if (!declareAOTBatchFastEntries(root_ns, pgm, ctx, *module,
             executable_batch_callees, declared_fast_keys, "", nullptr,
             local_module_names.empty() ? nullptr : &local_module_names, nullptr, nullptr, callback_candidates_ptr)) {
@@ -24154,6 +24233,10 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
     if (!declareAOTCallbackFastEntries(*module, callback_candidates, executable_batch_callees)) {
         error = "operation cancelled during executable AOT callback specialization";
+        return false;
+    }
+    if (!declareAOTDirectRuntimeEntries(*module, callback_candidates, executable_batch_callees)) {
+        error = "operation cancelled during executable AOT direct native specialization";
         return false;
     }
     callback_candidates.clear();

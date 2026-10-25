@@ -22395,3 +22395,91 @@ pure-develop comparison was run in this checkpoint.
 [all 62 audit checks](audit-aot-entry-state-rejected.md) preserve the unsuccessful
 candidates and their limits. The verified system installation remains optimized
 merge `b7e3956cf6`, including fixes #5517, #5518 and #5519.
+
+
+## Same-program direct native RuntimeConfig forwarding (2026-10-25)
+
+Retain bounded standalone AOT direct-call context forwarding. The previous optimized
+performance branch at b7e3956 (merged origin/develop f3f91cd; documentation-only HEAD
+358c913) is the baseline, not pure develop. Runtime builds use Release -O3 -DNDEBUG,
+allocation tracking OFF; executables use qcc -O3 --strip-source. Every measurement
+uses 4096 items and seed 7, randomized before/candidate/disabled process order, and
+default/reverse/shuffle-487 code layouts. Target final repeats use five forks and
+three 150 ms measured windows after one warmup. Medians of fork means and then
+layout medians are reported. All samples, including costs, are retained.
+
+The initial campaign confirmed the direct loop improvement (13.515319 to 7.098159
+ns/item). Audit then reproduced a compiler crash for late-resolved optional/auto
+locals: the original IR variant was null although lowering had resolved an AOT
+variant. The final source uses the resolved variant and adds three regression
+cases. It was rebuilt, requalified and freshly measured; initial timings are
+separately labeled and do not stand in for final-source qualification.
+
+Final independent control follow-up:
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Candidate vs before
+|original:direct_loop_float_return|13.634904|7.149034|13.662076|-47.57%
+|original:callback_loop_float_return|6.963924|7.348963|6.919104|+5.53%
+|original:typed_local_int_unary|7.582214|7.642450|7.951629|+0.79%
+
+The direct loop improves 47.57%, with >=3% gains against before and disabled in
+every layout in both final rounds. Callback loop time increases about 5.5%; LLVM
+now keeps the shared companion out of line where it previously inlined it into
+the private callback consumer. Reverse-layout integer callback time remains
+6.99% above disabled (8.18% in the preceding round), although its aggregate is
+only 0.79% above before. These costs remain part of the authorized tradeoff.
+
+All 55 broad kernels were screened. Follow-up covers all 10 flagged/aggregate-cost
+workloads plus arithmetic and the mixed callback pipeline, five forks in all
+three layouts (540 jobs). Broad indirect_affine remains 4.78% above before,
+0.75% below disabled; default/reverse before ranges are disjoint at +5.83/+6.22%.
+Most initial flags do not repeat. Callback pipeline is 1.52% below before and
+0.68% above disabled. All broad optimized function bodies match the corresponding
+controls after excluding startup metadata length; rebuilt runtime placement can
+still differ. This is no proof of zero regression or production-wide throughput.
+
+Fresh final-source Java comparison uses Temurin 25.0.2+10, JMH 1.37, verified C2/hot
+inlining and consumed checksums, three forks and three 300 ms warmup/measurement
+iterations. These are whole-kernel ns/item with different harness overhead,
+not isolated call-instruction latency.
+
+|!Workload|!Qore AOT ns/item|!Java ns/item|!Qore/Java
+|direct_local_float_return|0.816080|0.637589|1.28x
+|callback_local_float_return|0.910710|0.549153|1.66x
+|direct_local_float_result|0.760160|0.514119|1.48x
+|callback_local_float_result|0.877348|0.507455|1.73x
+|direct_loop_float_return|7.122214|0.677813|10.51x
+|callback_loop_float_return|7.272500|1.634574|4.45x
+
+Final Release validation passes 14 fixtures (13 QUnit, one standalone), 34 cases,
+1736 assertions, zero skips, 1110 IR/AOT references, and all 391 rebuilt qmods.
+Eighteen standalone mode/control executions cover AST/IR/JIT/tiered and O0/O3
+enabled, disabled, callback-disabled, descriptor-disabled, forced-null, EH and
+split compilation. Target/broad/Java preparation verifies 3510/7047/90 reference
+values in each campaign. The two campaigns retain 2988 jobs/8964 measured windows.
+The final broad follow-up parent terminal output was lost at context compaction;
+its 540 waited child receipts, complete schedule, raw outputs and summaries were
+independently replayed. No parent exit status is invented. Initial checker
+assumptions and one copied probe marker were corrected in versioned drivers;
+their failed runs remain in the evidence.
+
+The native companion shares live RuntimeConfig and six entry-state addresses,
+retaining stack checks, every cancellation poll, atomic order, frames, exceptions
+and ordinary null fallback. New admission is standalone-executable only, same
+Program, single variant, context independent, zero/unary native float, at most
+32 blocks/512 instructions and 64 direct targets; callback budget remains separate.
+No methods, generics, preloaded entries, reference arguments or opaque bodies.
+Ordinary/public native ABIs and serialized metadata remain unchanged; private
+compiler C++ layout changes. Rebuilding 391 qmods does not imply this new direct
+admission speeds qmod execution. IR/JIT regression modes pass, with no new speed
+claim for them. QORE_DISABLE_AOT_DIRECT_RUNTIME_CONFIG disables direct admission;
+existing callback descriptor and forced-null controls remain applicable.
+
+One host, external load/frequency/thermals uncontrolled; no other owned work during
+timing. Untimed profiles remove TLS setup from the hot path and still show native
+frame push/pop/destruction and explicit-context stack checks. Next recover the
+callback inlining cost, then reduce frame setup while retaining observability,
+and extend proven admission to qmods and more signatures. Java parity and a global
+performance ceiling are not established.
+
+Evidence: [results-aot-direct-runtime-config-macos-arm64.json](results-aot-direct-runtime-config-macos-arm64.json); [all 62 audit checks](audit-aot-direct-runtime-config.md).

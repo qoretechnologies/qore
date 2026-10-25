@@ -1667,6 +1667,10 @@ private:
     void ensureNativeCallFrameStorage(llvm::Module& module, llvm::Function* llvm_func);
     llvm::Value* getNativeCallEntryState(llvm::Module& module, llvm::Function* llvm_func, llvm::Value* rc);
 
+    // Call a private native companion with borrowed entry state, retaining the null-context fallback.
+    llvm::Value* emitAOTNativeRuntimeCall(const BatchCalleeInfo& info, llvm::Function* fast_fn,
+        const std::vector<llvm::Value*>& call_args, llvm::Module& module, llvm::Function* llvm_func);
+
     //! The storage of the frames of the native calls of the function being lowered, created by the first one
     /** One is enough: a native call's frame is popped before the function makes another call. */
     llvm::AllocaInst* native_call_frame_storage = nullptr;

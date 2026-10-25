@@ -11506,6 +11506,66 @@ llvm::Value* QoreIRToLLVM::getNativeCallEntryState(llvm::Module& module, llvm::F
     return native_call_entry_state;
 }
 
+llvm::Value* QoreIRToLLVM::emitAOTNativeRuntimeCall(const BatchCalleeInfo& info, llvm::Function* fast_fn,
+        const std::vector<llvm::Value*>& call_args, llvm::Module& module, llvm::Function* llvm_func) {
+    auto* runtime_entry = info.callback_runtime_config_name.empty() ? nullptr
+        : module.getFunction(info.callback_runtime_config_name);
+    if (runtime_entry) {
+        llvm::Value* rc = native_runtime_config;
+        if (!rc) {
+            if (!native_call_runtime_config) {
+                if (q_env_is_set("QORE_CONTROL_AOT_NULL_CALLBACK_RUNTIME_CONFIG")) {
+                    native_call_runtime_config = llvm::Constant::getNullValue(ptr_type);
+                } else if (loop_runtime_config) {
+                    native_call_runtime_config = loop_runtime_config;
+                } else {
+                    auto* entry = block_map.at(current_ir_func->blocks.front().get());
+                    llvm::IRBuilder<> eb(entry, entry->getFirstInsertionPt());
+                    auto acquire = module.getOrInsertFunction("qore_rt_get_loop_runtime_config",
+                        llvm::FunctionType::get(ptr_type, {}, false));
+                    native_call_runtime_config = eb.CreateCall(acquire, {},
+                        "callback_runtime_config");
+                }
+            }
+            rc = native_call_runtime_config;
+        }
+        std::vector<llvm::Value*> runtime_args(call_args);
+        runtime_args.insert(runtime_args.begin() + info.num_params, rc);
+        if (info.callback_entry_state) {
+            runtime_args.insert(runtime_args.begin() + info.num_params + 1,
+                getNativeCallEntryState(module, llvm_func, rc));
+        }
+        if (native_runtime_config) {
+            return builder->CreateCall(runtime_entry, runtime_args,
+                "known_callref_rc_result");
+        } else {
+            // Optional acquisition preserves teardown behavior. Only a non-null
+            // live view reaches helpers whose explicit-context ABI requires one.
+            auto* supplied = llvm::BasicBlock::Create(ctx, "callref_with_context", llvm_func);
+            auto* fallback = llvm::BasicBlock::Create(ctx, "callref_without_context", llvm_func);
+            auto* merge = llvm::BasicBlock::Create(ctx, "callref_context_done", llvm_func);
+            builder->CreateCondBr(builder->CreateIsNotNull(rc), supplied, fallback,
+                llvm::MDBuilder(ctx).createBranchWeights(999, 1));
+            builder->SetInsertPoint(supplied);
+            auto* supplied_result = builder->CreateCall(runtime_entry, runtime_args,
+                "known_callref_rc_result");
+            builder->CreateBr(merge);
+            builder->SetInsertPoint(fallback);
+            auto* ordinary_result = builder->CreateCall(fast_fn, call_args,
+                "known_callref_result");
+            builder->CreateBr(merge);
+            builder->SetInsertPoint(merge);
+            auto* result = builder->CreatePHI(supplied_result->getType(), 2,
+                "known_callref_context_result");
+            result->addIncoming(supplied_result, supplied);
+            result->addIncoming(ordinary_result, fallback);
+            return result;
+        }
+    } else {
+        return builder->CreateCall(fast_fn, call_args, "known_callref_result");
+    }
+}
+
 void QoreIRToLLVM::ensureNativeCallFrameStorage(llvm::Module& module, llvm::Function* llvm_func) {
     if (native_call_frame_storage) {
         return;
@@ -23405,8 +23465,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     &summary_nothrow);
                 const bool inline_body = call_result;
                 if (!call_result) {
-                    call_result = builder->CreateCall(
-                        aot_approach_b_fn, call_args);
+                    const auto* owner = current_ir_func->source_variant
+                        ? current_ir_func->source_variant->getUserVariantBase() : nullptr;
+                    const auto* target = aot_direct_variant->getUserVariantBase();
+                    // A private companion never crosses a program or an ordinary binding boundary.
+                    if (aot_approach_b_callee->direct_runtime_config_entry && owner && target
+                            && owner->pgm == target->pgm) {
+                        call_result = emitAOTNativeRuntimeCall(*aot_approach_b_callee, aot_approach_b_fn,
+                            call_args, module, llvm_func);
+                    } else {
+                        call_result = builder->CreateCall(aot_approach_b_fn, call_args);
+                    }
                 }
                 endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module);
                 call_may_throw = !(summary_nothrow && !has_arg_cleanups);
@@ -28226,62 +28295,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             fast_fn, &summary_nothrow);
                         const bool inline_body = fast_result;
                         if (!fast_result) {
-                            auto* runtime_entry = callee->second.callback_runtime_config_name.empty() ? nullptr
-                                : module.getFunction(callee->second.callback_runtime_config_name);
-                            if (runtime_entry) {
-                                llvm::Value* rc = native_runtime_config;
-                                if (!rc) {
-                                    if (!native_call_runtime_config) {
-                                        if (q_env_is_set("QORE_CONTROL_AOT_NULL_CALLBACK_RUNTIME_CONFIG")) {
-                                            native_call_runtime_config = llvm::Constant::getNullValue(ptr_type);
-                                        } else if (loop_runtime_config) {
-                                            native_call_runtime_config = loop_runtime_config;
-                                        } else {
-                                            auto* entry = block_map.at(current_ir_func->blocks.front().get());
-                                            llvm::IRBuilder<> eb(entry, entry->getFirstInsertionPt());
-                                            auto acquire = module.getOrInsertFunction("qore_rt_get_loop_runtime_config",
-                                                llvm::FunctionType::get(ptr_type, {}, false));
-                                            native_call_runtime_config = eb.CreateCall(acquire, {},
-                                                "callback_runtime_config");
-                                        }
-                                    }
-                                    rc = native_call_runtime_config;
-                                }
-                                std::vector<llvm::Value*> runtime_args(call_args);
-                                runtime_args.insert(runtime_args.begin() + callee->second.num_params, rc);
-                                if (callee->second.callback_entry_state) {
-                                    runtime_args.insert(runtime_args.begin() + callee->second.num_params + 1,
-                                        getNativeCallEntryState(module, llvm_func, rc));
-                                }
-                                if (native_runtime_config) {
-                                    fast_result = builder->CreateCall(runtime_entry, runtime_args,
-                                        "known_callref_rc_result");
-                                } else {
-                                    // Optional acquisition preserves teardown behavior. Only a non-null
-                                    // live view reaches helpers whose explicit-context ABI requires one.
-                                    auto* supplied = llvm::BasicBlock::Create(ctx, "callref_with_context", llvm_func);
-                                    auto* fallback = llvm::BasicBlock::Create(ctx, "callref_without_context", llvm_func);
-                                    auto* merge = llvm::BasicBlock::Create(ctx, "callref_context_done", llvm_func);
-                                    builder->CreateCondBr(builder->CreateIsNotNull(rc), supplied, fallback,
-                                        llvm::MDBuilder(ctx).createBranchWeights(999, 1));
-                                    builder->SetInsertPoint(supplied);
-                                    auto* supplied_result = builder->CreateCall(runtime_entry, runtime_args,
-                                        "known_callref_rc_result");
-                                    builder->CreateBr(merge);
-                                    builder->SetInsertPoint(fallback);
-                                    auto* ordinary_result = builder->CreateCall(fast_fn, call_args,
-                                        "known_callref_result");
-                                    builder->CreateBr(merge);
-                                    builder->SetInsertPoint(merge);
-                                    auto* result = builder->CreatePHI(supplied_result->getType(), 2,
-                                        "known_callref_context_result");
-                                    result->addIncoming(supplied_result, supplied);
-                                    result->addIncoming(ordinary_result, fallback);
-                                    fast_result = result;
-                                }
-                            } else {
-                                fast_result = builder->CreateCall(fast_fn, call_args, "known_callref_result");
-                            }
+                            fast_result = callee->second.callback_runtime_config_entry
+                                ? emitAOTNativeRuntimeCall(callee->second, fast_fn, call_args, module, llvm_func)
+                                : builder->CreateCall(fast_fn, call_args, "known_callref_result");
                         }
                         endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module);
                         if (has_arg_cleanups) {

@@ -4591,3 +4591,37 @@ Next investigate descriptor load redundancy and named frame setup/teardown,
 keeping asynchronous stack visibility, null fallback, exceptions and every
 cancellation checkpoint. Extend the proven private-context path to direct
 calls. No global performance ceiling is established.
+
+
+## Direct native RuntimeConfig forwarding (2026-10-25)
+
+Standalone AOT now admits same-Program direct zero/unary native float loop targets
+to the existing private context/entry-state companion. Admission is independent
+of callback discovery, bounded to 64 direct targets (callback budget unchanged),
+32 blocks/512 instructions per target, one companion per target. Only single
+variant context-independent local functions qualify; methods, generics, opaque
+bodies, reference arguments and preloaded entries remain outside this extension.
+QORE_DISABLE_AOT_DIRECT_RUNTIME_CONFIG disables it. Shared lowering retains live
+polls, stack checks, frame publication, exceptions and ordinary null fallback.
+Public/ordinary native ABIs and serialized metadata are unchanged; private
+compiler C++ layout changes. New direct admission is not yet in qmod compilation.
+
+Audit fixed a null original IR variant in late-resolved optional/auto local calls
+by using the already-resolved AOT variant. The corrected source passes Release
+qualification (14 fixtures, 1736 assertions, 1110 references, 391 qmods) and fresh
+measurements. Direct loop time falls 13.634904 to 7.149034 ns/item (-47.57%). Shared
+companion inlining changes cost the callback loop about 5.5%; reverse-layout
+integer cost repeats at 6.99% versus disabled. Broad indirect_affine is+4.78%
+before/-0.75% disabled; mixed callback pipeline -1.52%/+0.68%. Costs are retained
+under the authorized overall tradeoff, with no production-wide speedup claim.
+
+Fresh optimized Java ratios are 1.28x/1.48x for simple direct unary/result kernels,
+1.66x/1.73x for callbacks, 10.51x for direct loop bodies and 4.45x for callback loop
+bodies. These are whole-kernel ns/item on one host, not isolated call latency.
+All 2988 timing jobs/8964 windows across initial and final campaigns are retained
+and replayed; see RESULTS.md and results-aot-direct-runtime-config-macos-arm64.json.
+
+Next recover callback inlining under a bounded code-growth policy, then optimize
+native frame setup/teardown without losing asynchronous stack visibility. Extend
+proven admission to qmods and additional scalar signatures after measurement.
+No global performance ceiling has been established.
