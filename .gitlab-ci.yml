@@ -502,7 +502,8 @@ test-perf:
     expire_in: 7 days
 
 # The build-system tests (examples/test/cmake): the CMake macros and scripts, qpp, qcc and the documentation toolchain,
-# with real CMake, Doxygen and compilers, against the build job's build/
+# with real CMake, Doxygen and compilers, against the build job's build/; and the tests of the test runner
+# (examples/test/runner)
 test-cmake-ubuntu-amd64:
   stage: test
   timeout: 30 minutes

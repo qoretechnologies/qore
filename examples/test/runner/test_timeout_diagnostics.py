@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """Exercise test-runner exit classification without waiting for a real timeout.
 
+run_tests.sh runs a tree of two tests, one.qtest and two.qtest, with stand-ins for qore, timeout, gdb, cat and
+sysctl: one.qtest exits with the status under test, as a test that timed out, crashed or failed does, and two.qtest
+passes.  The runner's watchdog reads its events through the timeout stand-in, which runs the read without a limit,
+so the runner never waits for a real time limit.  run_tests.sh exits with the number of failed tests.
+
 Copyright (C) 2026 Qore Technologies, s.r.o.
 """
 
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -14,6 +20,9 @@ import unittest
 ROOT = Path(__file__).resolve().parents[3]
 
 
+# run_tests.sh reads the kernel's core pattern from /proc/sys/kernel/core_pattern, which the cat stand-in reports,
+# and looks for the processes a test left running in /proc
+@unittest.skipUnless(sys.platform.startswith("linux"), "the runner's core and process checks are Linux's")
 class TimeoutDiagnosticsTest(unittest.TestCase):
     def run_runner(self, exit_code, *, gnu=False, core_name="core.fixture",
                    kernel_pattern=None, fresh_core=True):
@@ -25,15 +34,22 @@ class TimeoutDiagnosticsTest(unittest.TestCase):
             tests.mkdir(parents=True)
             (tests / "one.qtest").touch()
             (tests / "two.qtest").touch()
+            # run_tests.sh reads its helpers from the tree it runs in
+            helpers = tests / "docker_test"
+            helpers.mkdir()
+            (helpers / "ci-job-processes.sh").symlink_to(ROOT / "examples/test/docker_test/ci-job-processes.sh")
             (binaries / "libqore.so").touch()
             # touch -t reads its time in UTC (TZ=UTC0): a local time can name two instants or none
             scripts = {
                 "qore": '#!/bin/sh\ncase "$*" in *one.qtest*) '
                         'if [ "$FRESH_CORE" = 1 ]; then TZ=UTC0 touch -t 203001010000 "$TEST_CORE_TARGET"; fi; '
                         'exit "$TEST_EXIT";; esac\nexit 0\n',
+                # GNU timeout with GNU_TIMEOUT=1, else BusyBox's: runs its command without a limit, whether the
+                # runner passes signal options ("-s ABRT -k 60 LIMIT cmd") or only a limit ("LIMIT cmd")
                 "timeout": '#!/bin/sh\nif [ "$1" = --version ]; then '
-                           '[ "$GNU_TIMEOUT" = 1 ] && echo GNU; exit 0; fi\n'
-                           'if [ "$GNU_TIMEOUT" = 1 ]; then shift 4; fi\nshift\nexec "$@"\n',
+                           '[ "$GNU_TIMEOUT" = 1 ] && echo "timeout (GNU coreutils)"; exit 0; fi\n'
+                           'while [ $# -gt 0 ]; do case "$1" in -s|-k) shift 2 ;; -*) shift ;; *) break ;; esac; '
+                           'done\nshift\nexec "$@"\n',
                 "gdb": '#!/bin/sh\necho "$*" >> "$GDB_MARKER"\necho captured-threads\n',
                 "cat": '#!/bin/sh\nif [ "$1" = /proc/sys/kernel/core_pattern ]; then '
                        'printf "%s\\n" "$TEST_KERNEL_CORE_PATTERN"; else exec /bin/cat "$@"; fi\n',
@@ -54,6 +70,8 @@ class TimeoutDiagnosticsTest(unittest.TestCase):
                        and not kernel_pattern.startswith("|") else kernel_pattern or "core")
             marker = root / "gdb-called"
             env = {
+                # CI: the runner does not set the machine's core pattern, which a root run outside CI would do
+                "CI": "1",
                 "PATH": str(binaries) + os.pathsep + os.defpath,
                 "QORE_BINARY": str(binaries / "qore"),
                 "LIBQORE_BINARY": str(binaries / "libqore.so"),
@@ -66,7 +84,7 @@ class TimeoutDiagnosticsTest(unittest.TestCase):
                 "TEST_KERNEL_CORE_PATTERN": pattern,
             }
             result = subprocess.run(["sh", str(ROOT / "run_tests.sh")], cwd=root,
-                                    env=env, capture_output=True, text=True, timeout=15)
+                                    env=env, capture_output=True, text=True, timeout=120)
             if marker.exists():
                 self.assertIn(str(target), marker.read_text())
             self.assertFalse(list(cores.glob("test-start.*")), "runner must remove its timestamp marker")

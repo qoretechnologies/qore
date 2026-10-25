@@ -2,7 +2,8 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 #
 # Runs the build-system tests in examples/test/cmake (the CMake macros and scripts, qpp, qcc and the documentation
-# toolchain, with real CMake, Doxygen and compilers) against the build of the CI build job (the build/ artifact).
+# toolchain, with real CMake, Doxygen and compilers) against the build of the CI build job (the build/ artifact), and
+# the tests of the test runner (run_tests.sh) in examples/test/runner, which use stand-ins instead of a build.
 # They run as a user without root privileges, as the other tests do: one of them checks a directory permission, which
 # root bypasses.
 
@@ -49,6 +50,7 @@ gosu qore env \
     QORE_BINARY="${BUILD_DIR}/qore" \
     QORE_TEST_BUILD_DIR="${BUILD_DIR}" \
     python3 -B -W error -m unittest discover -s examples/test/cmake -v || TEST_RC=$?
+gosu qore python3 -B -W error -m unittest discover -s examples/test/runner -p "test_*.py" -v || TEST_RC=$?
 
 # the runner ends the job only when no process the job started still holds its output
 if ! qore_ci_end_job_processes; then
