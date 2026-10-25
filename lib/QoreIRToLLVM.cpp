@@ -21204,17 +21204,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     "function metadata";
                                 return false;
                             }
-                            llvm::Value* function_name =
-                                qore_ir_create_global_string_ptr(builder,
-                                    fcr->getFunctionPath(), "function_call_ref_name");
+                            // Preserve the parsed target in the module-owned expression slot.  The
+                            // current caller's program may not contain private module functions.
+                            QoreValue expr_val = inv->expr;
+                            uint64_t expr_bits;
+                            std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                            int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                            auto expr_helper = module.getOrInsertFunction("qore_rt_get_expr_bits_aot",
+                                    llvm::FunctionType::get(i64_type, {ptr_type, i32_type}, false));
+                            llvm::Value* expr = builder->CreateCall(expr_helper, {aot_ctx_arg,
+                                    llvm::ConstantInt::get(i32_type, slot)});
                             auto cr_ft = llvm::FunctionType::get(i64_type,
-                                    {ptr_type, ptr_type}, false);
+                                    {i64_type, ptr_type}, false);
                             auto helper = module.getOrInsertFunction(
-                                    "qore_rt_create_function_call_ref_aot", cr_ft);
+                                    "qore_rt_create_call_ref", cr_ft);
                             auto helper_throwing = module.getOrInsertFunction(
-                                    "qore_rt_create_function_call_ref_aot_throwing", cr_ft);
+                                    "qore_rt_create_call_ref_throwing", cr_ft);
                             result = emitMaybeInvoke(helper, helper_throwing,
-                                    {function_name, xsink_arg}, module, llvm_func, inst);
+                                    {expr, xsink_arg}, module, llvm_func, inst);
                         } else {
                             error = "unsupported AOT call reference lowering: only resolved method, static method, "
                                 "and function call references are native";
@@ -30760,17 +30767,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 "function metadata";
                             return false;
                         }
-                        llvm::Value* function_name =
-                            qore_ir_create_global_string_ptr(builder,
-                                fcr->getFunctionPath(), "function_call_ref_name");
+                        // Preserve the parsed target in the module-owned expression slot.  The
+                        // current caller's program may not contain private module functions.
+                        QoreValue expr_val = crinst->expr;
+                        uint64_t expr_bits;
+                        std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                        auto expr_helper = module.getOrInsertFunction("qore_rt_get_expr_bits_aot",
+                                llvm::FunctionType::get(i64_type, {ptr_type, i32_type}, false));
+                        llvm::Value* expr = builder->CreateCall(expr_helper, {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, slot)});
                         auto cr_ft = llvm::FunctionType::get(i64_type,
-                                {ptr_type, ptr_type}, false);
+                                {i64_type, ptr_type}, false);
                         auto helper = module.getOrInsertFunction(
-                                "qore_rt_create_function_call_ref_aot", cr_ft);
+                                "qore_rt_create_call_ref", cr_ft);
                         auto helper_throwing = module.getOrInsertFunction(
-                                "qore_rt_create_function_call_ref_aot_throwing", cr_ft);
+                                "qore_rt_create_call_ref_throwing", cr_ft);
                         result = emitMaybeInvoke(helper, helper_throwing,
-                                {function_name, xsink_arg}, module, llvm_func, inst);
+                                {expr, xsink_arg}, module, llvm_func, inst);
                     } else {
                         error = "unsupported AOT call reference lowering: only resolved method, static method, "
                             "and function call references are native";

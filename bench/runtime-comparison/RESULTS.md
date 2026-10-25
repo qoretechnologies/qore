@@ -23129,3 +23129,11 @@ Merged the deferred-handler local-slot fix onto companion guard checkpoint 0fae3
 Optimized Release -O3 -DNDEBUG, allocation tracking off: all-target build and all 391 qmods verified. Five Release fixtures pass 12 cases/1300 assertions; four Debug fixtures pass 11 cases/378 assertions, with no skips. Handler execution covers AST, IR, JIT, tiered and source-stripped AOT modules, with related block-exit/rethrow checks and companion-call controls. All 1110 IR/AOT reference checks pass. Debug cleanup restores all 391 Release module aliases and hashes. No new timing, full-suite, module-python, module-xml or sanitizer result is claimed; preceding companion measurements remain a 0fae3afe8d source snapshot.
 
 [Audit](audit-merge-5a78.md); [evidence](results-merge-5a78.json).
+
+## Private function references in AOT modules (2026-10-25)
+
+Preparing actual qmod benchmarks after f08e094d2c exposed a private-reference construction failure: the generated helper searched the importing caller Program, where the private module target is absent. Source IR passed; the stripped module raised CALL-REFERENCE-ERROR before timing. LLDB confirmed that the caller Program differed from the AOT context owner. Resolved references now use the existing module-owned expression slot, retaining the parsed target, caller provenance and Program lifetime rules without a new runtime ABI. Deferred references retain dynamic lookup.
+
+Optimized Release all-target build and 391 qmods pass. Release 9 cases/5033 assertions; Debug 5 cases/4521 assertions; 1110 IR/AOT reference checks and 780 actual-module checks pass. Native tests reject source fallback. The first core-only validation had 18 passing assertions but was rejected because stale QUnit/FsUtil/Util qmods fell back to source; the all-target rebuild and 54-assertion expanded regression resolve that qualification gap. Debug cleanup restores 391 Release aliases and hashes. No performance delta or fresh Java/develop ratio is attributed to this correctness fix. Refreeze a working optimized qmod baseline before enabling module call specialization.
+
+[Audit](audit-private-aot-function-reference.md); [evidence](results-private-aot-function-reference.json).

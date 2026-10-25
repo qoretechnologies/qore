@@ -241,6 +241,8 @@
     Standalone AOT can also specialize bounded same-Program function calls for proven immutable floating-point
     callback arguments, retaining ordinary entries for dynamic calls. Qualified function references keep their
     namespace and alias identity in AOT executables and modules, including serialized defaults and initializers.
+    Compiled modules can also return references to their private functions when called from another Program;
+    reference construction uses the module's resolved target and retains the calling Program's lifetime rules.
     Known AOT callback summaries that are proven not to throw also avoid redundant exception checks when no
     argument cleanup, guarded fallback, boxed result or runtime-local reload is needed.
     Known same-Program float callbacks can also use native fast entries for context-independent bodies with loops,

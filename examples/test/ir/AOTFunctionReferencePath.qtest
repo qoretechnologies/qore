@@ -27,9 +27,9 @@ class FunctionReferencePathTest inherits QUnit::Test {
         on_exit file.close();
         file.write(value);
     }
-    private string run(list<string> args, string module_path) {
+    private string run(list<string> args, string module_path, string prefix = "") {
         hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(
-            "QORE_MODULE_DIR=" + quote(module_path) + " LD_LIBRARY_PATH=" + quote(libdir)
+            prefix + "QORE_MODULE_DIR=" + quote(module_path) + " LD_LIBRARY_PATH=" + quote(libdir)
             + " DYLD_LIBRARY_PATH=" + quote(libdir) + " " + (map quote($1), args).join(" "));
         # The consumer is top-level code; its module functions are already AOT compiled.
         if (result.mode) { ExecModeHarness::check_native(result, ExecModeHarness::NativeCheck::Jit); }
@@ -50,8 +50,15 @@ public namespace AOTReferencePaths {
     public int sub step(int value) { return value + 100; }
     public namespace Nested {
         public int sub step(int value) { return value + 200; }
+        int sub privateStep(int value) { return value + 300; }
     }
     public code<int(int)> sub make() { return \\Nested::step(); }
+    public code<int(int)> sub makePrivate() { return \\Nested::privateStep(); }
+    public code<int(int)> sub makePrivateCaught() {
+        try { return \\Nested::privateStep(); }
+        catch (hash<ExceptionInfo> ex) { throw ex; }
+    }
+    public int sub privateDirect(int value) { return Nested::privateStep(value); }
     public int sub defaulted(code<int(int)> fn = \\Nested::step()) { return fn(3); }
     public list<auto> sub refs() { return (\\step(), \\Nested::step()); }
     public class Holder {
@@ -67,6 +74,9 @@ public namespace AOTReferencePaths {
 %no-child-restrictions
 %requires AOTReferencePaths
 int sub step(int value) { return value + 1; }
+namespace AOTReferencePaths {
+    namespace Nested { int sub privateStep(int value) { return value + 900; } }
+}
 code<int(int)> callback = AOTReferencePaths::make();
 list<auto> refs = AOTReferencePaths::refs();
 AOTReferencePaths::Holder holder();
@@ -77,21 +87,35 @@ child.importFunction(\"AOTReferencePaths::Nested::step\", \"renamed\");
 child.parse(\"%modern\\ncode<int(int)> sub make() { return \\\\renamed(); }\", \"alias reference\");
 code<int(int)> alias = child.callFunction(\"make\");
 printf(\"%d\\n\", alias(3));
+code<int(int)> private_callback = AOTReferencePaths::makePrivate();
+code<int(int)> caught_callback = AOTReferencePaths::makePrivateCaught();
+printf(\"%d %d %d %d\\n\", private_callback(3), AOTReferencePaths::privateDirect(3),
+    caught_callback(3), AOTReferencePaths::Nested::privateStep(3));
+Program private_owner(PO_NO_CHILD_PO_RESTRICTIONS);
+private_owner.loadModule(\"AOTReferencePaths\");
+code<int(int)> retained_private = private_owner.callFunction(\"AOTReferencePaths::makePrivate\");
+printf(\"%d\\n\", retained_private(3));
+delete private_owner;
+try { retained_private(3); printf(\"deleted owner remained callable\\n\"); }
+catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }
 ");
-        string expected = "203 203 103 203 203\n203\n";
+        string expected = "203 203 103 203 203\n203\n303 303 303 903\n303\nPROGRAM-ERROR\n";
         string tail = ":" + (ENV.QORE_MODULE_DIR ?? "");
         assertEq(expected, run((qore, "--exec-mode=ast", consumer), dir.path + "/source" + tail));
         string artifact = dir.path + "/modules/AOTReferencePaths.qmod";
-        run((qore, "--compile-module", "--output", artifact, source), dir.path + "/source" + tail);
-        assertTrue(is_file(artifact));
         string modules = dir.path + "/modules" + tail;
-        foreach string mode in (("ast", "ir", "jit", "tiered")) {
-            assertEq(expected, run((qore, "--exec-mode=" + mode, consumer), modules), mode);
-        }
-        foreach string level in (("-O0", "-O3")) {
-            string executable = dir.path + "/consumer";
-            run((qcc, level, "--strip-source", "-o", executable, consumer), modules);
-            assertEq(expected, run((executable,), modules), level);
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                run((qcc, level, "--strip-source", "-m", "-o", artifact, source),
+                    dir.path + "/source" + tail, prefix);
+                assertTrue(is_file(artifact));
+                foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                    assertEq(expected, run((qore, "--exec-mode=" + mode, consumer), modules), mode);
+                }
+                string executable = dir.path + "/consumer";
+                run((qcc, level, "--strip-source", "-o", executable, consumer), modules, prefix);
+                assertEq(expected, run((executable,), modules), level);
+            }
         }
     }
 }

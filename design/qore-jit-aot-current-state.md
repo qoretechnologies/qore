@@ -4431,6 +4431,14 @@ Resolved function references retain immutable shared qualified/alias paths throu
 evaluation, native lowering and serialization, correcting the pre-existing AOT
 namespace collision exposed by this work. Internal node layout gains a shared field.
 
+Native construction of a resolved function reference uses the module-owned expression
+slot, bound once to the parsed target at load time. Looking up the qualified name in
+the executing caller's Program is insufficient: a private module function is absent
+from the importing Program. Evaluating the bound reference still captures the current
+calling Program and provenance; explicitly deleting that Program invalidates its
+returned references. Deferred, unresolved references retain their dynamic lookup.
+This reuses the existing expression serialization and runtime helper ABI.
+
 Five-fork, three-layout optimized confirmation gives unary callbacks 7.560356 to
 1.033154 ns/item (7.32x), and zero-argument callbacks 6.604806 to 1.061565 (6.22x).
 Broad 55-workload screening flags boxed-integer fallback and temporary-hash controls;
