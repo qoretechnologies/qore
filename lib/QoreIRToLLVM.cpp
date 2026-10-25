@@ -28310,7 +28310,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         if (callee->second.never_returns_nothing) {
                             known_not_nothing_values.insert(inst->result.id);
                         }
-                        emitExceptionCheck(module, llvm_func, inst);
+                        // A pure inline summary cannot set xsink. Keep the check for any fallback,
+                        // cleanup or local reload that can do more than that summary, and consume
+                        // the one-shot EH bookkeeping even when no memory check is needed.
+                        bool summary_only = inline_body && summary_nothrow && !has_arg_cleanups
+                            && !guarded_native_args
+                            && callee->second.return_kind != BatchCalleeReturnKind::Boxed
+                            && !callee->second.may_modify_runtime_locals
+                            && callee->second.modified_runtime_locals.empty();
+                        if (!summary_only || skip_next_exception_check
+                                || q_env_is_set("QORE_DISABLE_AOT_KNOWN_CALLREF_EXCEPTION_ELISION")) {
+                            emitExceptionCheck(module, llvm_func, inst);
+                        }
                         return true;
                     }
                 }

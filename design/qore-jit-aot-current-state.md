@@ -4448,3 +4448,37 @@ are independently replayed. No general Java parity or performance ceiling.
 Next test removal of the redundant exception check after an actually inlined,
 proven-nothrow known callback summary with no cleanup or guarded fallback. The
 complex loop-callback case still costs about 149 ns/item and needs separate analysis.
+
+
+## Known AOT callback summary exception checks (2026-10-25)
+
+The existing known-reference AOT path skips its post-call exception check only
+for an actually inlined, proven-nothrow summary with no argument cleanup,
+guarded fallback, boxed result or runtime-local invalidation. One-shot EH
+bookkeeping is still consumed. All existing stack and per-iteration cancellation
+checks remain. Control: QORE_DISABLE_AOT_KNOWN_CALLREF_EXCEPTION_ELISION.
+No new helper ABI or serialization schema; IR/JIT execution is unchanged.
+
+Optimized three-layout, five-fork confirmation gives unary callbacks 1.048266
+to 0.869634 ns/item (-17.04%) and zero-argument callbacks 1.030569 to 0.842893
+(-18.21%). Both gains repeat in every layout versus before and disabled.
+Under the user-authorized workload tradeoff, retain the improvement with known
+reverse-layout costs: typed float callback +5.60% / +4.85% versus before/disabled
+in the control follow-up, and direct zero-argument result +7.67% / +9.38%.
+Their across-layout aggregates are +1.81% / -0.44% and +0.86% / +0.02%.
+The three median losses in the broad 55-workload screen do not repeat.
+
+Fresh optimized Temurin 25.0.2/JMH 1.37 comparison gives direct unary/zero-argument
+float loops 1.37x/1.57x Java time and callbacks 1.78x/1.81x. Whole-kernel times,
+not isolated call latency. Before is merged performance 07786f59d8, not pure
+develop. Release passes 13 fixtures / 6451 assertions / 391 qmods, with eight
+Linux RSS skips. All 1881 timed jobs / 5643 windows are independently replayed.
+See bench/runtime-comparison/RESULTS.md and
+results-aot-callref-summary-exception-macos-arm64.json for all costs and evidence.
+
+Next test ordinary context-independent native fast-entry targets in the bounded
+callback specialization, starting with floating-point callbacks whose bodies
+contain loops and therefore have no expression summary. The complex callback
+still costs about 148 ns/item. Preserve its actual call-frame, stack, cancellation
+and exception semantics. Prior combined-poll and general proved-clear sink
+experiments were rejected; neither is revived by this change. No global ceiling.
