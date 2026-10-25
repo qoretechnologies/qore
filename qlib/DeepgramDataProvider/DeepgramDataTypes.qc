@@ -23,7 +23,7 @@
 */
 
 public namespace DeepgramDataProvider {
-#! File type for the transcribe-file \c audio input that also accepts raw audio bytes
+#! Type of the transcribe-file \c audio input: an audio file or raw audio bytes
 /** Upstream steps commonly produce raw @ref binary audio (the output of a recording or
     download step, for example); wrapping it in a @ref DataProvider::FileDataType "file"
     hash by hand would be needless friction, so a bare @ref binary value is accepted and
@@ -31,22 +31,23 @@ public namespace DeepgramDataProvider {
     @ref DeepgramAudioFileDataType::RawAudioName "RawAudioName"; as that name has no
     extension, the MIME type falls back to \c application/octet-stream
 
+    The type is the union of the \c "*file" and \c "*binary" types, so that its description says that it accepts
+    both, and a type restored from the description accepts the same values.
+
     @since DeepgramDataProvider 1.1
 */
-public class DeepgramAudioFileDataType inherits DataProvider::FileOrNothingDataType {
+public class DeepgramAudioFileDataType inherits DataProvider::QoreUnionDataType {
     public {
         #! Placeholder file name given to raw audio bytes (a file value requires a name)
         const RawAudioName = "audio";
     }
 
     #! Creates the type
-    constructor() : FileOrNothingDataType() {}
-
-    #! Returns a hash of types accepted by this type; keys are type names
-    hash<string, bool> getAcceptTypeHash(*bool simple) {
-        return FileOrNothingDataType::getAcceptTypeHash(simple) + {
-            Type::Binary: True,
-        };
+    /** @param types the alternatives, by default the \c "*file" and \c "*binary" types; given by the conversions
+        of the type, such as its soft equivalent
+    */
+    constructor(*list<AbstractDataProviderType> types)
+            : QoreUnionDataType(types ?? (NamedClassBackedTypeMap."*file", AbstractDataProviderTypeMap."*binary")) {
     }
 
     #! Returns the value if the value can be assigned to the type
@@ -55,15 +56,23 @@ public class DeepgramAudioFileDataType inherits DataProvider::FileOrNothingDataT
         @return the file hash; raw binary is wrapped as \c {"name": RawAudioName, "content": value}
         before the file validation runs (which base64-encodes the content)
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+        @throw RUNTIME-TYPE-ERROR value is neither a file value nor binary
     */
     auto acceptsValue(auto value) {
         if (value.typeCode() == NT_BINARY) {
             # the file validation replaces the content with its base64 encoding, so the wrapper must
             # be a hash<auto>, not the hash<string, binary> a bare literal would create
-            return FileOrNothingDataType::acceptsValue({} + {"name": RawAudioName, "content": value});
+            value = {} + {"name": RawAudioName, "content": value};
         }
-        return FileOrNothingDataType::acceptsValue(value);
+        # any other value is a file value, which the file type validates and reports errors for
+        return getUnionTypes()[0].acceptsValue(value);
+    }
+
+    #! Returns a union of this kind over the given alternatives, so that its conversions accept raw bytes as well
+    private QoreUnionDataType copyUnion(list<AbstractDataProviderType> types) {
+        DeepgramAudioFileDataType rv(types);
+        rv.constraints = constraints;
+        return rv;
     }
 }
 

@@ -122,6 +122,7 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
         addTestCase("synthesize-speech surfaces audio bytes + content-type",
             \synthesizeSpeechTest());
         addTestCase("app declares Speech AppGroup",       \speechAppGroupTest());
+        addTestCase("transcribe-file audio type is restored from its description", \audioTypeRestoreTest());
 
         # Live tests require a real Deepgram connection (cost: tiny — one
         # short transcription + one short TTS synthesis per run)
@@ -167,7 +168,8 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
         assertTrue(tf.options.url.preselected);
         assertEq(("audio_source",), tf.options.url.required_groups);
         assertEq(("audio",), tf.options.url.exclusive_with);
-        assertEq("*file", tf.options.audio.type.getName());
+        # a file or raw audio bytes
+        assertEq("*file|*binary", tf.options.audio.type.getName());
         assertFalse(tf.options.audio.required ?? False);
         assertTrue(tf.options.audio.preselected);
         assertEq(("audio_source",), tf.options.audio.required_groups);
@@ -273,6 +275,38 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
         assertEq("uploaded audio",
             resp.results.channels[0].alternatives[0].transcript);
         assertEq("up-1", resp.metadata.request_id);
+    }
+
+    #! The audio input's description says that it accepts a file or raw bytes, so that the type restored from it,
+    #! as index readers restore it, accepts the same values
+    private audioTypeRestoreTest() {
+        AbstractDataProviderType audio = DataProvider::DataProviderActionCatalog::getAppActionEx("Deepgram",
+            "transcribe-file").options.audio.type;
+        hash<DataTypeInfo> info = audio.getInfo();
+        assertEq("*file|*binary", (map $1.name, info.union_types).join("|"));
+        AbstractDataProviderType restored = AbstractDataProviderType::get(info);
+        hash<DataTypeInfo> restored_info = restored.getInfo();
+        foreach string key in (("name", "types_accepted", "types_returned", "mandatory")) {
+            auto value = info{key};
+            auto restored_value = restored_info{key};
+            if (value.typeCode() == NT_LIST) {
+                value = sort(value);
+                restored_value = sort(restored_value);
+            }
+            assertEq(value, restored_value, key);
+        }
+        assertEq((map $1.name, info.union_types).join("|"), (map $1.name, restored_info.union_types).join("|"));
+        assertTrue(audio.getAcceptTypeHash().binary);
+        assertTrue(restored.getAcceptTypeHash().binary);
+        # the type itself wraps raw bytes in a file value; a file value is accepted as before
+        hash<auto> file = audio.acceptsValue(AudioBytes);
+        assertEq(DeepgramDataProvider::DeepgramAudioFileDataType::RawAudioName, file.name);
+        assertEq("clip.wav", audio.acceptsValue({"name": "clip.wav", "content": AudioBytes}).name);
+        # its derived types do as well
+        foreach AbstractDataProviderType derived in ((audio.getSoftType(), audio.getOrNothingType())) {
+            assertEq(DeepgramDataProvider::DeepgramAudioFileDataType::RawAudioName,
+                derived.acceptsValue(AudioBytes).name, derived.className());
+        }
     }
 
     private transcribeFileAudioBinaryTest() {

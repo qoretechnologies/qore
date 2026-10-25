@@ -375,126 +375,6 @@
           "source": "The audio file to transcribe, uploaded as the request body; used when `url` is not given.  The file's `mime_type` (e.g. `audio/wav`, `audio/mpeg`, `audio/flac`) is sent as the request `Content-Type`; when it is `auto`, it is derived from the file `name`, falling back to `application/octet-stream`.  Upstream steps can pass either a file hash (`name`, `content`, `mime_type`) or the raw audio bytes as a `binary` value.\n\nExactly one of `url` or `audio` must be provided.",
           "message": "Le fichier audio à transcrire, téléversé comme corps de la requête ; utilisé lorsque `url` n'est pas fourni. Le `mime_type` du fichier (par ex. `audio/wav`, `audio/mpeg`, `audio/flac`) est envoyé comme `Content-Type` de la requête ; s'il vaut `auto`, il est déduit du nom de fichier `name`, avec `application/octet-stream` par défaut. Les étapes en amont peuvent transmettre soit un hachage de fichier (`name`, `content`, `mime_type`), soit les octets audio bruts sous forme de valeur `binary`.\n\nExactement l'un des paramètres `url` ou `audio` doit être fourni."
         },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.Y29udGVudA.display_name": {
-          "source": "File Data",
-          "message": "Données du fichier"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.Y29udGVudA.short_desc": {
-          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
-          "message": "Données de fichier encodées en Base64 ou données brutes à encoder en Base64"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.Y29udGVudA.desc": {
-          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
-          "message": "Données de fichier encodées en Base64 ou données brutes à encoder en Base64"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.display_name": {
-          "source": "MIME Type",
-          "message": "Type MIME"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.short_desc": {
-          "source": "The MIME type string for the file",
-          "message": "La chaîne de type MIME pour le fichier"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.desc": {
-          "source": "The MIME type string for the file",
-          "message": "La chaîne de type MIME pour le fichier"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
-          "source": "Autodetect",
-          "message": "Détection automatique"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
-          "source": "Autodetect from the file name; valid only on input",
-          "message": "Détection automatique à partir du nom de fichier ; valable uniquement en entrée"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
-          "source": "Autodetect from the file name; valid only on input",
-          "message": "Détection automatique à partir du nom de fichier ; valable uniquement en entrée"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
-          "source": "text/plain",
-          "message": "text/plain"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
-          "source": "Plain text",
-          "message": "Texte brut"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
-          "source": "Plain text",
-          "message": "Texte brut"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
-          "source": "text/html",
-          "message": "text/html"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
-          "source": "HTML text",
-          "message": "Texte HTML"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
-          "source": "HTML text",
-          "message": "Texte HTML"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
-          "source": "application/pdf",
-          "message": "application/pdf"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
-          "source": "PDF file",
-          "message": "Fichier PDF"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
-          "source": "PDF file",
-          "message": "Fichier PDF"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
-          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
-          "source": "MS Word docx document",
-          "message": "Document Word docx"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
-          "source": "MS Word `docx` document",
-          "message": "Document Word `docx`"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
-          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
-          "source": "MS PowerPoint pptx document",
-          "message": "Document PowerPoint pptx"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
-          "source": "MS PowerPoint `pptx` document",
-          "message": "Document PowerPoint `pptx`"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
-          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
-          "source": "MS Excel xlsx document",
-          "message": "Document Excel xlsx"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
-          "source": "MS Excel `xlsx` document",
-          "message": "Document Excel `xlsx`"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bmFtZQ.display_name": {
-          "source": "Filename",
-          "message": "Nom de fichier"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bmFtZQ.short_desc": {
-          "source": "The filename",
-          "message": "Le nom du fichier"
-        },
-        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.field.bmFtZQ.desc": {
-          "source": "The filename",
-          "message": "Le nom du fichier"
-        },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.display_name": {
           "source": "Model",
           "message": "Modèle"
@@ -762,6 +642,126 @@
         "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.allowed-value.c3RyaW5nOm5vbmU.display_name": {
           "source": "None (raw)",
           "message": "Aucun (brut)"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.Y29udGVudA.display_name": {
+          "source": "File Data",
+          "message": "Données du fichier"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.Y29udGVudA.short_desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Données de fichier encodées en Base64 ou données brutes à encoder en Base64"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.Y29udGVudA.desc": {
+          "source": "Base64-encoded file data or raw data to be encoded with base64 encoding",
+          "message": "Données de fichier encodées en Base64 ou données brutes à encoder en Base64"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "Type MIME"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type string for the file",
+          "message": "La chaîne de type MIME pour le fichier"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.desc": {
+          "source": "The MIME type string for the file",
+          "message": "La chaîne de type MIME pour le fichier"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Autodetect",
+          "message": "Détection automatique"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Détection automatique à partir du nom de fichier ; valable uniquement en entrée"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Autodetect from the file name; valid only on input",
+          "message": "Détection automatique à partir du nom de fichier ; valable uniquement en entrée"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "Texte brut"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "Texte brut"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "Texte HTML"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "Texte HTML"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "application/pdf",
+          "message": "application/pdf"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "PDF file",
+          "message": "Fichier PDF"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "PDF file",
+          "message": "Fichier PDF"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "message": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "MS Word docx document",
+          "message": "Document Word docx"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "MS Word `docx` document",
+          "message": "Document Word `docx`"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "message": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "MS PowerPoint pptx document",
+          "message": "Document PowerPoint pptx"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "MS PowerPoint `pptx` document",
+          "message": "Document PowerPoint `pptx`"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "message": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "MS Excel xlsx document",
+          "message": "Document Excel xlsx"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "MS Excel `xlsx` document",
+          "message": "Document Excel `xlsx`"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bmFtZQ.display_name": {
+          "source": "Filename",
+          "message": "Nom de fichier"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bmFtZQ.short_desc": {
+          "source": "The filename",
+          "message": "Le nom du fichier"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.union.RmlsZU9yTm90aGluZ0RhdGFUeXBlOipmaWxlIzIzNjViZGNiODM5OGViYTEyZmMxNTQ2YWFkNDc2YWRkNDcwYjJlNjUwOWQxNDQ0ODcyYjE2M2I4YzM4OGUwZDU.field.bmFtZQ.desc": {
+          "source": "The filename",
+          "message": "Le nom du fichier"
         }
       }
     }
