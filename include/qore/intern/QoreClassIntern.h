@@ -1308,40 +1308,14 @@ public:
         return 0;
     }
 
-    // returns 0 for OK, -1 if an exception was raised
+    //! prepares the variable's value holder for a variable declared without an initializer
+    /** The variable starts as NOTHING, as every other variable without an initializer does, whatever its type; only
+        the value holder's optimized type is set.
+
+        @return 0 for OK, -1 if an exception was raised
+    */
     DLLLOCAL int init(ExceptionSink* xsink) {
         val.set(getTypeInfo());
-        const QoreTypeInfo* ti = getTypeInfo();
-        // Initialize the actual node value for complex types that need a default container
-        // (hashes, lists, etc.) instead of leaving it as NOTHING/nullptr
-        // Only initialize to empty container for NON-nullable types
-        // Nullable types (*hash<T>, *list<T>) should default to NOTHING
-        if (QoreTypeInfo::isHashType(ti)
-                && QoreTypeInfo::parseReturns(ti, NT_NOTHING) == QTI_NOT_EQUAL) {
-            const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
-            if (hd) {
-                // a hashdecl hash gets its member defaults, as with "static hash<T> v();"
-                ReferenceHolder<QoreHashNode> h(new QoreHashNode(hd, xsink), xsink);
-                if (*xsink) {
-                    return -1;
-                }
-                val.assignInitial(h.release());
-            } else {
-                // getReturnComplexHashOrNothing() extracts element type T from hash<string,T>
-                // QoreHashNode(valueType) sets complexTypeInfo via qore_get_complex_hash_type()
-                val.assignInitial(new QoreHashNode(QoreTypeInfo::getReturnComplexHashOrNothing(ti)));
-            }
-        }
-        // Check if the typeInfo is for a list type and create empty list
-        // Only for non-nullable types
-        else if (QoreTypeInfo::isListType(ti)
-                && QoreTypeInfo::parseReturns(ti, NT_NOTHING) == QTI_NOT_EQUAL) {
-            // getReturnComplexListOrNothing() extracts element type T from list<T>
-            // QoreListNode(valueType) sets complexTypeInfo via qore_get_complex_list_type()
-            val.assignInitial(new QoreListNode(QoreTypeInfo::getReturnComplexListOrNothing(ti)));
-        }
-        // For other types (primitives, objects), the default is NOTHING
-        // which is correct for uninitialized references
         return 0;
     }
 

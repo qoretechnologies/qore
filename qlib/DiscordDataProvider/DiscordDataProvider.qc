@@ -85,7 +85,7 @@ public class DiscordDataProvider inherits DiscordDataProviderBase {
     }
 
     private {
-        static hash<string, code> dynamic_children;
+        static hash<string, code> dynamic_children = {};
 
         const ChildMap = {
             "guilds": Class::forName("DiscordDataProvider::DiscordGuildsDataProvider"),

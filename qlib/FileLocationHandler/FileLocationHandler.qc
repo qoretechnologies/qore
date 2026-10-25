@@ -676,7 +676,7 @@ public class FileLocationHandler {
         #! The location handler cache; scheme -> handler;
         /**
         */
-        static hash<string, AbstractFileLocationHandler> cache;
+        static hash<string, AbstractFileLocationHandler> cache = {};
 
         #! The location handler lock to ensure atomic operations
         static Mutex handler_lock();

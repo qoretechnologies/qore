@@ -71,7 +71,7 @@ class QdpCmd {
         static Mutex wh_lock();
 
         # Global map for webhook handlers: webhook -> handler
-        static hash<string, WebhookHandler> whm;
+        static hash<string, WebhookHandler> whm = {};
 
         # console logger
         LoggerInterface logger;
@@ -3762,7 +3762,7 @@ class WebhookHandler inherits RestHandler {
         static *string cors_allow_headers = foldl $1 + ", " + $2, DefaultCorsAllowHeaders;
         static bool cors_allow_credentials = DefaultCorsAllowCredentials;
         static bool cors_accept_all_origins = DefaultCorsAcceptAllOrigins;
-        static hash<string, bool> cors_origin_map;
+        static hash<string, bool> cors_origin_map = {};
 
         const DefaultCorsEnable = True;
         const DefaultCorsAllowMethods = ("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS");

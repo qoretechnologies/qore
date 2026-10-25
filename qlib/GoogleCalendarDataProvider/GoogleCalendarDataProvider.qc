@@ -27,7 +27,7 @@ public namespace GoogleCalendarDataProvider {
 #! The parent class for Google calendar REST APIs
 public class GoogleCalendarDataProvider inherits GoogleDataProvider::GoogleApiParentDataProvider {
     private {
-        static hash<string, Reflection::Class> childMap;
+        static hash<string, Reflection::Class> childMap = {};
     }
 
     #! Creates the object from a REST connection

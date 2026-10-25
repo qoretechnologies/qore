@@ -14030,8 +14030,8 @@ static void preInitStaticVarsInNamespace(qore_ns_private* ns, ExceptionSink* xsi
                 // effect of AOT module namespace init.
                 continue;
             }
-            // Empty-exp path inside evalInit just calls init() (set typeinfo,
-            // create empty container for non-nullable hash/list) and marks
+            // Empty-exp path inside evalInit just calls init() (sets the value
+            // holder's type; the variable stays NOTHING) and marks
             // eval_init=true. AOT-deserialized vars without init functions do
             // not carry exp; those are the only vars this pass should touch.
             vi.second->evalInit(vi.first, xsink);

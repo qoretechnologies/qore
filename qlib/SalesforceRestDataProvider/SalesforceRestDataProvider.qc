@@ -39,7 +39,7 @@ public class SalesforceRestDataProvider inherits SalesforceRestDataProviderBase 
     }
 
     private {
-        static hash<string, code> dynamic_children;
+        static hash<string, code> dynamic_children = {};
 
         const ChildMap = {
             "tables": Class::forName("SalesforceRestDataProvider::SalesforceRestTablesDataProvider"),

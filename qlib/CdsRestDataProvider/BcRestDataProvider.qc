@@ -57,7 +57,7 @@ public class BcRestDataProvider inherits CdsRestDataProviderBase {
     }
 
     private {
-        static hash<string, code> dynamic_children;
+        static hash<string, code> dynamic_children = {};
 
         const ChildMap = {
             "companies": Class::forName("CdsRestDataProvider::BcCompaniesDataProvider"),

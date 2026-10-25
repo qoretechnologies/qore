@@ -108,8 +108,8 @@ public class AzureOpenAiSchema {
     }
 
     private {
-        static list<OpenApi3::OpenApi3Schema> schemas;
-        static list<RestSchemaActions::RestSchemaActionSet> action_sets;
+        static list<OpenApi3::OpenApi3Schema> schemas = ();
+        static list<RestSchemaActions::RestSchemaActionSet> action_sets = ();
         static Mutex lck();
     }
 

@@ -39,20 +39,20 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         *RestClientIo::RestClientIo rest;
 
         #! API -> URL map
-        static hash<string, string> api_map;
+        static hash<string, string> api_map = {};
 
         #! Schema info: API -> info
-        static hash<string, hash<auto>> info_map;
+        static hash<string, hash<auto>> info_map = {};
 
         #! input schema cache; API -> schema name -> type
-        static hash<string, hash<string, AbstractDataProviderType>> input_schema_map;
+        static hash<string, hash<string, AbstractDataProviderType>> input_schema_map = {};
 
         #! output schema cache; API -> schema name -> type
-        static hash<string, hash<string, AbstractDataProviderType>> output_schema_map;
+        static hash<string, hash<string, AbstractDataProviderType>> output_schema_map = {};
 
         #! schema cache; API -> request path ->
         #   {request_type -> type, response_type -> type, http_method -> string, path -> string}
-        static hash<string, hash<auto>> request_map;
+        static hash<string, hash<auto>> request_map = {};
 
         #! schema cache lock
         static Mutex m();

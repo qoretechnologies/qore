@@ -1766,7 +1766,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         #! Extra expression implementations added at module init time (module-dependent expressions)
         /** @since DataProvider 3.3
         */
-        static hash<auto> ExtraExpressionImplementations;
+        static hash<auto> ExtraExpressionImplementations = {};
 
         #! Generic expression implementations for data providers without native search functionality
         const GenericExpressionImplementations = ExtendedExpressionImplementations + {

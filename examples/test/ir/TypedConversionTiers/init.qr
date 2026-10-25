@@ -12,7 +12,9 @@ class Statics {
         static hash<string, softstring> values = {"x": 1};
         static int computed = i_int();
         static softlist<string> computed_list = i_string();
-        static hash<InitDecl> decl;
+        static hash<InitDecl> decl();
+        # without an initializer it starts as NOTHING, as every other variable does
+        static hash<InitDecl> decl_unset;
         softlist<softlist<string>> m_nested = "a";
         softlist<softint> m_ints = "1";
         list<softstring> m_element_list = (1, 2);
@@ -30,9 +32,9 @@ string sub run() {
         Statics s();
         string bad;
         try { BadMember b(); bad = sprintf("%y", b.bad); } catch (hash<ExceptionInfo> ex) { bad = ex.err; }
-        rv = sprintf("%y %y %y %y %y %y %y %y %y|%y %y %y %y|%s", Statics::strings, Statics::ints, Statics::nested,
+        rv = sprintf("%y %y %y %y %y %y %y %y %y %y|%y %y %y %y|%s", Statics::strings, Statics::ints, Statics::nested,
             Statics::text, Statics::element_list, Statics::values, Statics::computed, Statics::computed_list,
-            Statics::decl, s.m_nested, s.m_ints, s.m_element_list, s.m_nullable, bad);
+            Statics::decl, Statics::decl_unset, s.m_nested, s.m_ints, s.m_element_list, s.m_nullable, bad);
     }
     return rv;
 }

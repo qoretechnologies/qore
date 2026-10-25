@@ -7668,7 +7668,7 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
     public class TableCache {
         private {
             #! resolved tables keyed by connection description, then by table name
-            static hash<string, hash<string, AbstractTable>> cache;
+            static hash<string, hash<string, AbstractTable>> cache = {};
 
             #! the lock protecting the cache
             static Mutex lck();
