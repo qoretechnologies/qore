@@ -21,6 +21,10 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+# each memory test case runs three times (see PipelineMemoryTest), which a loaded machine needs more than the
+# default time limit of a test for
+# test-timeout: 900
+
 %modern
 %enable-all-warnings
 
@@ -30,6 +34,8 @@
 %requires Mime
 %requires DataProvider
 %requires GeneratorDataProvider
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
 
 %try-module process
 %define NoProcess
@@ -230,9 +236,42 @@ class SlowMetricsCollector inherits DataProvider::AbstractPipelineMetricsCollect
     }
 }
 
+#! Tests that the memory of a pipeline does not grow with the records and the pipelines that it processes
+/** The test runs its memory test cases in a worker: a second run of this script in the same execution mode, in
+    which every function is compiled to its final tier at a known point.  With \c QORE_IR_THRESHOLD=1,
+    \c QORE_JIT_THRESHOLD=1 and \c QORE_JIT_SYNC_COMPILE=1, a function is compiled to native code in its first call
+    (\c --exec-mode=jit) or its second one (\c --exec-mode=tiered, and the functions of modules with either), and the
+    call waits until the compilation is done.  Each memory test case runs its code three times there and measures
+    only the third run: the first two have compiled everything that it calls, so the memory that it measures is the
+    pipeline's own and not that of the compiler.
+
+    Without the worker, when a function was compiled depended on how often it had been called and on the load of
+    the machine: functions of the imported modules are promoted when they are hot and compiled on a background
+    thread, so the compiler's memory (several MiB with LLVM) landed in a measured window often enough to fail the
+    test under load.
+
+    \c QORE_JIT_TIMING traces every compilation on the worker's stderr, together with the start and the end of each
+    measured window, so the test also checks that nothing was compiled while memory was measured.
+*/
 public class PipelineMemoryTest inherits QUnit::Test {
     public {
         const OptionColumn = 24;
+
+        #! The environment variable that makes a run of this script the worker that runs the memory test cases
+        const WorkerEnv = "QORE_PIPELINE_MEMORY_WORKER";
+
+        #! The environment of the worker: compilation in a function's first or second call, synchronous and traced
+        const WorkerEnvironment = "QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 QORE_JIT_SYNC_COMPILE=1 "
+            "QORE_JIT_TIMING=1 " + WorkerEnv + "=1";
+
+        #! The prefix of the line on the worker's stderr that starts a measured window
+        const MeasureBegin = "[PipelineMemory] measuring: ";
+
+        #! The prefix of the line on the worker's stderr that ends a measured window
+        const MeasureEnd = "[PipelineMemory] measured: ";
+
+        #! The number of runs of a memory test case that bring all of its code to its final tier before it is measured
+        const WarmRuns = 2;
 
         #! Number of records for the main pipeline test
         int record_count;
@@ -244,27 +283,36 @@ public class PipelineMemoryTest inherits QUnit::Test {
         bool verbose_memory;
     }
 
+    private {
+        #! The worker's stderr: the compilation trace and the measured windows
+        string worker_trace;
+
+        #! The worker's exit status
+        int worker_rc = -1;
+    }
+
     constructor() : Test("PipelineMemory Test", "1.0", \ARGV, Opts) {
         record_count = m_options."record-count" ?? 5000;
         max_rss_growth = m_options."max-rss-growth" ?? (5 * 1024 * 1024);
         verbose_memory = m_options."verbose-memory" ?? False;
 
 %ifndef NoProcess
-        # JIT warmup: run enough records to trigger LLVM initialization and JIT
-        # compilation of all hot code paths before any memory measurements.
-        # LLVM initialization alone uses ~17 MiB, and is a one-time cost that
-        # should not count as pipeline memory growth.
-        jitWarmup();
-
-        addTestCase("single pipeline memory stability", \singlePipelineTest());
-        addTestCase("repeated pipelines memory stability", \repeatedPipelinesTest());
-        addTestCase("multi-processor pipeline memory stability", \multiProcessorPipelineTest());
-        addTestCase("pipeline record count validation", \recordCountValidationTest());
-        addTestCase("metrics vs baseline comparison", \metricsVsBaselineTest());
-        addTestCase("high-frequency metrics collection", \metricsHighFrequencyTest());
-        addTestCase("accumulating metrics collector", \metricsAccumulatingTest());
-        addTestCase("repeated pipelines with metrics", \metricsRepeatedPipelinesTest());
-        addTestCase("slow metrics callback", \metricsSlowCallbackTest());
+        if (ENV{WorkerEnv}) {
+            addTestCase("single pipeline memory stability", sub () { runMeasured(\singlePipeline()); });
+            addTestCase("repeated pipelines memory stability", sub () { runMeasured(\repeatedPipelines()); });
+            addTestCase("multi-processor pipeline memory stability",
+                sub () { runMeasured(\multiProcessorPipeline()); });
+            addTestCase("pipeline record count validation", \recordCountValidationTest());
+            addTestCase("metrics vs baseline comparison", sub () { runMeasured(\metricsVsBaseline()); });
+            addTestCase("high-frequency metrics collection", sub () { runMeasured(\metricsHighFrequency()); });
+            addTestCase("accumulating metrics collector", sub () { runMeasured(\metricsAccumulating()); });
+            addTestCase("repeated pipelines with metrics", sub () { runMeasured(\metricsRepeatedPipelines()); });
+            addTestCase("slow metrics callback", sub () { runMeasured(\metricsSlowCallback()); });
+        } else {
+            addTestCase("pipeline memory is stable with all of its code compiled before it is measured",
+                \workerTest());
+            addTestCase("nothing is compiled while pipeline memory is measured", \measuredWindowsTest());
+        }
 %else
         addTestCase("skip - no process module", sub () { testSkip("no process module present"); });
 %endif
@@ -288,51 +336,125 @@ public class PipelineMemoryTest inherits QUnit::Test {
         printOption("-V,--verbose-memory", "verbose memory diagnostics", OptionColumn);
     }
 
-    #! JIT warmup: triggers LLVM initialization and JIT compilation of all hot code paths
-    /** In IR/tiered exec modes, LLVM initialization is deferred until the first function
-        reaches the JIT compilation threshold (default 1000 calls). This one-time cost is
-        approximately 17 MiB and must not be counted as pipeline memory growth.
+    #! Returns the given string quoted for a POSIX shell
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
 
-        This method runs enough pipeline records through each processor type used in the tests
-        to ensure all user code functions are JIT-compiled before any memory measurements begin.
+    #! Returns the execution mode given on the command line, if any
+    private static *string getExecMode() {
+        for (int i = 0; i < QORE_ARGV.size(); ++i) {
+            *string mode = (QORE_ARGV[i] =~ x/^--exec-mode=(.+)$/)[0];
+            if (mode) {
+                return mode;
+            }
+            if (QORE_ARGV[i] == "--exec-mode" && i + 1 < QORE_ARGV.size()) {
+                return QORE_ARGV[i + 1];
+            }
+        }
+    }
+
+    #! Returns the command that runs this script as the worker
+    /** The worker runs the same qore with the same options and arguments, but its compilation thresholds come from
+        WorkerEnvironment, which a threshold given on the command line would override
     */
-    private jitWarmup() {
-        # JIT threshold is 1000 calls; run 1100 records for margin
-        int jit_warmup_count = 1100;
-
-        logVerbose("JIT warmup: %d records (single processor)", jit_warmup_count);
-
-        # Single processor warmup -- triggers JIT for PassthroughProcessor::submitImpl
-        {
-            DataProviderPipeline pipe(<PipelineOptionInfo>{"name": "jit-warmup-single"});
-            pipe.append(new PassthroughProcessor());
-            pipe.submit(getGeneratorIterator(jit_warmup_count));
-            pipe.waitDone();
+    private static string getWorkerCommand() {
+        list<string> args;
+        for (int i = 0; i < QORE_ARGV.size(); ++i) {
+            string arg = QORE_ARGV[i];
+            if (arg =~ /^--jit-(ir|jit)-threshold=/) {
+                continue;
+            }
+            if (arg =~ /^--jit-(ir|jit)-threshold$/) {
+                ++i;
+                continue;
+            }
+            push args, shellQuote(arg);
         }
+        return WorkerEnvironment + " " + args.join(" ");
+    }
 
-        # Multi-processor warmup -- triggers JIT for TransformProcessor::submitImpl
-        {
-            DataProviderPipeline pipe(<PipelineOptionInfo>{"name": "jit-warmup-multi"});
-            pipe.append(new PassthroughProcessor());
-            pipe.append(new TransformProcessor());
-            pipe.append(new PassthroughProcessor());
-            pipe.submit(getGeneratorIterator(jit_warmup_count));
-            pipe.waitDone();
+    #! Runs the memory test cases in the worker
+    workerTest() {
+        TmpDir tmp("qore-pipeline-memory-");
+        string trace_path = tmp.path + "/worker.stderr";
+        string out = backquote(getWorkerCommand() + " 2>" + shellQuote(trace_path), \worker_rc);
+        worker_trace = ReadOnlyFile::readTextFile(trace_path) ?? "";
+        # the worker's report, and what it wrote to stderr besides the compilation trace and its windows
+        print(out);
+        foreach string line in (worker_trace.split("\n")) {
+            if (line && !ExecModeHarness::is_trace_line(line) && !line.equalPartial(MeasureBegin)
+                    && !line.equalPartial(MeasureEnd)) {
+                stderr.printf("%s\n", line);
+            }
         }
+        assertEq(0, worker_rc, "the memory test cases pass in the worker");
+    }
 
-        # Metrics warmup -- triggers JIT for metrics collection paths
-        {
-            LightweightMetricsCollector mc(100);
-            DataProviderPipeline pipe(<PipelineOptionInfo>{
-                "name": "jit-warmup-metrics",
-                "metrics_collector": mc,
-            });
-            pipe.append(new PassthroughProcessor());
-            pipe.submit(getGeneratorIterator(jit_warmup_count));
-            pipe.waitDone();
+    #! Checks the worker's trace: nothing is compiled while memory is measured
+    measuredWindowsTest() {
+        if (worker_rc < 0) {
+            testSkip("the worker did not run");
         }
+        *string window;
+        int windows = 0;
+        int compilations = 0;
+        list<string> compiled_in_window = ();
+        foreach string line in (worker_trace.split("\n")) {
+            if (line.equalPartial(MeasureBegin)) {
+                window = line.substr(MeasureBegin.size());
+                ++windows;
+            } else if (line.equalPartial(MeasureEnd)) {
+                window = NOTHING;
+            } else if (ExecModeHarness::is_trace_line(line)) {
+                if (ExecModeHarness::is_native_compilation(line)) {
+                    ++compilations;
+                }
+                if (window) {
+                    push compiled_in_window, window + ": " + line;
+                }
+            }
+        }
+        assertGt(0, windows, "the worker measures memory");
+        assertEq((), compiled_in_window, "nothing is compiled while memory is measured");
+        if (inlist(getExecMode(), ("jit", "tiered"))) {
+            assertGt(0, compilations, "the worker's code is compiled to native code before it is measured");
+        }
+    }
 
-        logVerbose("JIT warmup complete");
+    #! Runs a memory test case: twice to compile all of its code, then once more, measured
+    /** @param body the test case; its argument tells it whether this run is the one that is measured
+    */
+    private runMeasured(code<nothing(bool)> body) {
+        for (int i = 0; i < WarmRuns; ++i) {
+            body(False);
+        }
+        body(True);
+    }
+
+    #! Starts a window: returns the memory info that the growth is measured from
+    /** The measured window is reported on stderr, where the worker's compilation trace goes
+
+        @param name the window
+        @param measured whether this run is the one that is measured
+    */
+    private hash<auto> openWindow(string name, bool measured) {
+        if (measured) {
+            stderr.printf("%s%s\n", MeasureBegin, name);
+        }
+        return getMemInfo();
+    }
+
+    #! Ends a window: returns the memory info that the growth is measured to
+    /** @param name the window
+        @param measured whether this run is the one that is measured
+    */
+    private hash<auto> closeWindow(string name, bool measured) {
+        hash<auto> mem = getMemInfo();
+        if (measured) {
+            stderr.printf("%s%s\n", MeasureEnd, name);
+        }
+        return mem;
     }
 
     #! Returns a formatted memory size string
@@ -408,33 +530,31 @@ public class PipelineMemoryTest inherits QUnit::Test {
     }
 
     #! Asserts that pipeline memory is stable, ignoring any one-time cost paid at the start of the run
-    /** These tests exist to catch memory that grows with the record count.  Comparing the RSS before and after
-        the run also charges the pipeline for a fixed cost that the process pays only once, on the first hot
-        pipeline: notably tiered JIT promotion, which brings up LLVM and compiles the hot pipeline functions the
-        first time the promotion threshold is crossed.  That cost lands in the early snapshots and then flattens,
-        and it is not a leak, but it is large enough on its own to exhaust the growth budget.
-
-        Growth is therefore measured over the steady-state window, from the midpoint snapshot to the last one:
-        memory that grows with the record count keeps growing there, while a one-time startup cost does not.
-        The total growth is still reported, and is used for the assertion when too few snapshots were collected
-        to give a steady-state window.
+    /** These tests exist to catch memory that grows with the record count.  Growth is measured over the
+        steady-state window, from the midpoint snapshot to the last one: memory that grows with the record count
+        keeps growing there, while a one-time cost at the start of the run does not.  The total growth is still
+        reported, and is used for the assertion when too few snapshots were collected to give a steady-state
+        window.
 
         @param collector the collector holding the periodic memory snapshots
         @param mem_before memory info sampled before the pipeline ran
         @param mem_after memory info sampled after the pipeline completed
         @param desc describes the pipeline in assertion failures
+        @param measured whether this run is the one that is measured; the other runs are not asserted
     */
     private assertPipelineMemoryStable(MemorySnapshotCollector collector, hash<auto> mem_before,
-            hash<auto> mem_after, string desc) {
+            hash<auto> mem_after, string desc, bool measured) {
         int total_growth = mem_after.rss - mem_before.rss;
 
         # fewer than three snapshots leaves no steady-state window to measure
         if (collector.snapshots.size() < 3) {
             logVerbose("%s: total RSS growth: %s (limit: %s; too few snapshots for a steady-state window)",
                 desc, fmtMem(total_growth), fmtMem(max_rss_growth));
-            assertTrue(total_growth < max_rss_growth,
-                sprintf("%s: RSS growth %s should be less than %s", desc, fmtMem(total_growth),
-                    fmtMem(max_rss_growth)));
+            if (measured) {
+                assertTrue(total_growth < max_rss_growth,
+                    sprintf("%s: RSS growth %s should be less than %s", desc, fmtMem(total_growth),
+                        fmtMem(max_rss_growth)));
+            }
             return;
         }
 
@@ -444,24 +564,18 @@ public class PipelineMemoryTest inherits QUnit::Test {
         logVerbose("%s: steady-state RSS growth over the last %d of %d snapshots: %s (limit: %s; "
             "total growth including one-time costs: %s)", desc, collector.snapshots.size() - mid_idx,
             collector.snapshots.size(), fmtMem(steady_growth), fmtMem(max_rss_growth), fmtMem(total_growth));
-        assertTrue(steady_growth < max_rss_growth,
-            sprintf("%s: steady-state RSS growth %s should be less than %s (total growth: %s)", desc,
-                fmtMem(steady_growth), fmtMem(max_rss_growth), fmtMem(total_growth)));
+        if (measured) {
+            assertTrue(steady_growth < max_rss_growth,
+                sprintf("%s: steady-state RSS growth %s should be less than %s (total growth: %s)", desc,
+                    fmtMem(steady_growth), fmtMem(max_rss_growth), fmtMem(total_growth)));
+        }
     }
 
     #! Test: single pipeline with large record count should have stable memory
-    singlePipelineTest() {
+    private singlePipeline(bool measured) {
         logVerbose("single pipeline test: %d records", record_count);
 
-        # warm up: run a small pipeline first to initialize internal structures
-        {
-            DataProviderPipeline warmup_pipe(<PipelineOptionInfo>{"name": "warmup"});
-            warmup_pipe.append(new PassthroughProcessor());
-            warmup_pipe.submit(getGeneratorIterator(100));
-            warmup_pipe.waitDone();
-        }
-
-        hash<auto> mem_before = getMemInfo();
+        hash<auto> mem_before = openWindow("single pipeline", measured);
         logMem("before", mem_before);
 
         MemorySnapshotCollector collector(record_count > 10000 ? (record_count / 10) : 1000);
@@ -481,29 +595,21 @@ public class PipelineMemoryTest inherits QUnit::Test {
         assertEq(record_count, info.record_count);
         assertTrue(collector.shutdown_called, "metrics collector shutdown should be called");
 
-        hash<auto> mem_after = getMemInfo();
+        hash<auto> mem_after = closeWindow("single pipeline", measured);
         logMem("after", mem_after);
 
         logVerbose("throughput: %.1f records/sec", info.recs_per_sec);
         logSnapshots(collector, mem_before, "memory snapshots during pipeline execution");
-        assertPipelineMemoryStable(collector, mem_before, mem_after, "single pipeline");
+        assertPipelineMemoryStable(collector, mem_before, mem_after, "single pipeline", measured);
     }
 
     #! Test: repeated pipeline creation/destruction should not leak memory
-    repeatedPipelinesTest() {
+    private repeatedPipelines(bool measured) {
         int iterations = m_options.iterations > 0 ? m_options.iterations : 10;
         int records_per_pipeline = record_count > 50000 ? 2000 : (record_count / 25 > 0 ? record_count / 25 : 100);
         logVerbose("repeated pipelines test: %d iterations x %d records", iterations, records_per_pipeline);
 
-        # warm up
-        {
-            DataProviderPipeline warmup_pipe(<PipelineOptionInfo>{"name": "warmup"});
-            warmup_pipe.append(new PassthroughProcessor());
-            warmup_pipe.submit(getGeneratorIterator(100));
-            warmup_pipe.waitDone();
-        }
-
-        hash<auto> mem_before = getMemInfo();
+        hash<auto> mem_before = openWindow("repeated pipelines", measured);
         logMem("before", mem_before);
 
         list<int> rss_samples();
@@ -527,7 +633,7 @@ public class PipelineMemoryTest inherits QUnit::Test {
             }
         }
 
-        hash<auto> mem_after = getMemInfo();
+        hash<auto> mem_after = closeWindow("repeated pipelines", measured);
         logMem("after", mem_after);
 
         int rss_growth = mem_after.rss - mem_before.rss;
@@ -535,9 +641,11 @@ public class PipelineMemoryTest inherits QUnit::Test {
             iterations, fmtMem(rss_growth), fmtMem(max_rss_growth));
 
         # assert bounded memory growth across all iterations
-        assertTrue(rss_growth < max_rss_growth,
-            sprintf("RSS growth %s across %d pipeline iterations should be less than %s",
-                fmtMem(rss_growth), iterations, fmtMem(max_rss_growth)));
+        if (measured) {
+            assertTrue(rss_growth < max_rss_growth,
+                sprintf("RSS growth %s across %d pipeline iterations should be less than %s",
+                    fmtMem(rss_growth), iterations, fmtMem(max_rss_growth)));
+        }
 
         # check that late samples are not significantly larger than early samples
         if (rss_samples.size() >= 4) {
@@ -550,18 +658,10 @@ public class PipelineMemoryTest inherits QUnit::Test {
     }
 
     #! Test: multi-processor pipeline should have stable memory with chained processors
-    multiProcessorPipelineTest() {
+    private multiProcessorPipeline(bool measured) {
         logVerbose("multi-processor pipeline test: %d records, 3 processors", record_count);
 
-        # warm up
-        {
-            DataProviderPipeline warmup_pipe(<PipelineOptionInfo>{"name": "warmup"});
-            warmup_pipe.append(new PassthroughProcessor());
-            warmup_pipe.submit(getGeneratorIterator(100));
-            warmup_pipe.waitDone();
-        }
-
-        hash<auto> mem_before = getMemInfo();
+        hash<auto> mem_before = openWindow("multi-processor pipeline", measured);
         logMem("before", mem_before);
 
         MemorySnapshotCollector collector(record_count > 10000 ? (record_count / 10) : 1000);
@@ -583,12 +683,12 @@ public class PipelineMemoryTest inherits QUnit::Test {
         assertEq(record_count, info.record_count);
         assertTrue(collector.shutdown_called, "metrics collector shutdown should be called");
 
-        hash<auto> mem_after = getMemInfo();
+        hash<auto> mem_after = closeWindow("multi-processor pipeline", measured);
         logMem("after", mem_after);
 
         logVerbose("throughput: %.1f records/sec", info.recs_per_sec);
         logSnapshots(collector, mem_before, "memory snapshots");
-        assertPipelineMemoryStable(collector, mem_before, mem_after, "multi-processor pipeline");
+        assertPipelineMemoryStable(collector, mem_before, mem_after, "multi-processor pipeline", measured);
     }
 
     #! Test: validate that pipeline actually processes the correct number of records from the generator
@@ -625,8 +725,9 @@ public class PipelineMemoryTest inherits QUnit::Test {
     # =====================================================================
 
     #! Runs a pipeline with a passthrough processor and optional metrics collector, returns RSS delta
-    private hash<auto> runPipelineAndMeasure(string name, int count, *AbstractPipelineMetricsCollector collector) {
-        hash<auto> mem_before = getMemInfo();
+    private hash<auto> runPipelineAndMeasure(string name, int count, *AbstractPipelineMetricsCollector collector,
+            bool measured) {
+        hash<auto> mem_before = openWindow(name, measured);
 
         hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
             "name": name,
@@ -641,7 +742,7 @@ public class PipelineMemoryTest inherits QUnit::Test {
         pipe.waitDone();
 
         hash<PipelineInfo> info = pipe.getInfo();
-        hash<auto> mem_after = getMemInfo();
+        hash<auto> mem_after = closeWindow(name, measured);
 
         return {
             "rss_before": mem_before.rss,
@@ -653,23 +754,8 @@ public class PipelineMemoryTest inherits QUnit::Test {
     }
 
     #! Test: compare same workload with and without metrics to isolate collection overhead
-    metricsVsBaselineTest() {
+    private metricsVsBaseline(bool measured) {
         logVerbose("metrics vs baseline: %d records", record_count);
-
-        # warm up both paths
-        {
-            DataProviderPipeline warmup(<PipelineOptionInfo>{"name": "warmup"});
-            warmup.append(new PassthroughProcessor());
-            warmup.submit(getGeneratorIterator(1000));
-            warmup.waitDone();
-        }
-        {
-            LightweightMetricsCollector wc(500);
-            DataProviderPipeline warmup(<PipelineOptionInfo>{"name": "warmup-metrics", "metrics_collector": wc});
-            warmup.append(new PassthroughProcessor());
-            warmup.submit(getGeneratorIterator(1000));
-            warmup.waitDone();
-        }
 
         # Short pipeline benchmarks are sensitive to scheduler noise on shared runners. Measure five paired
         # samples, alternate their execution order, and compare the median rather than allowing transient
@@ -680,13 +766,15 @@ public class PipelineMemoryTest inherits QUnit::Test {
             hash<auto> baseline;
             hash<auto> with_metrics;
             if (sample % 2) {
-                baseline = runPipelineAndMeasure(sprintf("baseline-no-metrics-%d", sample), record_count);
+                baseline = runPipelineAndMeasure(sprintf("baseline-no-metrics-%d", sample), record_count, NOTHING,
+                    measured);
                 with_metrics = runPipelineAndMeasure(
-                    sprintf("with-lightweight-metrics-%d", sample), record_count, lw_collector);
+                    sprintf("with-lightweight-metrics-%d", sample), record_count, lw_collector, measured);
             } else {
                 with_metrics = runPipelineAndMeasure(
-                    sprintf("with-lightweight-metrics-%d", sample), record_count, lw_collector);
-                baseline = runPipelineAndMeasure(sprintf("baseline-no-metrics-%d", sample), record_count);
+                    sprintf("with-lightweight-metrics-%d", sample), record_count, lw_collector, measured);
+                baseline = runPipelineAndMeasure(sprintf("baseline-no-metrics-%d", sample), record_count, NOTHING,
+                    measured);
             }
 
             logVerbose("sample %d baseline (no metrics): RSS growth %s, %.1f rec/s", sample,
@@ -700,9 +788,11 @@ public class PipelineMemoryTest inherits QUnit::Test {
             assertTrue(lw_collector.callback_count > 0, "should have received metrics callbacks");
 
             # the metrics overhead should not exceed the memory threshold in any sample
-            assertTrue(with_metrics.rss_growth < max_rss_growth,
-                sprintf("metrics-enabled RSS growth %s should be less than %s",
-                    fmtMem(with_metrics.rss_growth), fmtMem(max_rss_growth)));
+            if (measured) {
+                assertTrue(with_metrics.rss_growth < max_rss_growth,
+                    sprintf("metrics-enabled RSS growth %s should be less than %s",
+                        fmtMem(with_metrics.rss_growth), fmtMem(max_rss_growth)));
+            }
 
             int rss_overhead = with_metrics.rss_growth - baseline.rss_growth;
             logVerbose("sample %d metrics overhead (RSS delta): %s", sample, fmtMem(rss_overhead));
@@ -721,7 +811,7 @@ public class PipelineMemoryTest inherits QUnit::Test {
         # For real-world pipelines with processors doing meaningful work (>100μs each),
         # the metrics overhead is <5%.  CI variability can add ~10-15% noise on shared
         # runners, so the threshold includes margin for that.
-        if (throughput_overheads) {
+        if (measured && throughput_overheads) {
             list<float> sorted_overheads = sort(throughput_overheads);
             float median_overhead_pct = sorted_overheads[sorted_overheads.size() / 2];
             logVerbose("median throughput overhead: %.1f%% from samples %y (target: < 70%%)",
@@ -733,21 +823,12 @@ public class PipelineMemoryTest inherits QUnit::Test {
     }
 
     #! Test: high-frequency metrics reporting to stress snapshot creation and GC
-    metricsHighFrequencyTest() {
+    private metricsHighFrequency(bool measured) {
         # report every 100 records -- creates many snapshots
         int interval = 100;
         logVerbose("high-frequency metrics: %d records, interval=%d", record_count, interval);
 
-        # warm up
-        {
-            LightweightMetricsCollector wc(interval);
-            DataProviderPipeline warmup(<PipelineOptionInfo>{"name": "warmup-hf", "metrics_collector": wc});
-            warmup.append(new PassthroughProcessor());
-            warmup.submit(getGeneratorIterator(1000));
-            warmup.waitDone();
-        }
-
-        hash<auto> mem_before = getMemInfo();
+        hash<auto> mem_before = openWindow("high-frequency metrics", measured);
         logMem("before", mem_before);
 
         LightweightMetricsCollector collector(interval);
@@ -760,7 +841,7 @@ public class PipelineMemoryTest inherits QUnit::Test {
         pipe.submit(getGeneratorIterator(record_count));
         pipe.waitDone();
 
-        hash<auto> mem_after = getMemInfo();
+        hash<auto> mem_after = closeWindow("high-frequency metrics", measured);
         logMem("after", mem_after);
 
         int rss_growth = mem_after.rss - mem_before.rss;
@@ -775,27 +856,20 @@ public class PipelineMemoryTest inherits QUnit::Test {
             sprintf("expected at least %d callbacks, got %d", record_count / interval / 2,
                 collector.callback_count));
 
-        assertTrue(rss_growth < max_rss_growth,
-            sprintf("high-frequency metrics RSS growth %s should be less than %s",
-                fmtMem(rss_growth), fmtMem(max_rss_growth)));
+        if (measured) {
+            assertTrue(rss_growth < max_rss_growth,
+                sprintf("high-frequency metrics RSS growth %s should be less than %s",
+                    fmtMem(rss_growth), fmtMem(max_rss_growth)));
+        }
     }
 
     #! Test: accumulating metrics collector that retains all snapshots
-    metricsAccumulatingTest() {
+    private metricsAccumulating(bool measured) {
         # report every 500 records; all snapshots are retained in memory
         int interval = 500;
         logVerbose("accumulating metrics: %d records, interval=%d", record_count, interval);
 
-        # warm up
-        {
-            AccumulatingMetricsCollector wc(interval);
-            DataProviderPipeline warmup(<PipelineOptionInfo>{"name": "warmup-accum", "metrics_collector": wc});
-            warmup.append(new PassthroughProcessor());
-            warmup.submit(getGeneratorIterator(1000));
-            warmup.waitDone();
-        }
-
-        hash<auto> mem_before = getMemInfo();
+        hash<auto> mem_before = openWindow("accumulating metrics", measured);
         logMem("before", mem_before);
 
         AccumulatingMetricsCollector collector(interval);
@@ -808,7 +882,7 @@ public class PipelineMemoryTest inherits QUnit::Test {
         pipe.submit(getGeneratorIterator(record_count));
         pipe.waitDone();
 
-        hash<auto> mem_after = getMemInfo();
+        hash<auto> mem_after = closeWindow("accumulating metrics", measured);
         logMem("after", mem_after);
 
         int rss_growth = mem_after.rss - mem_before.rss;
@@ -824,9 +898,11 @@ public class PipelineMemoryTest inherits QUnit::Test {
         assertTrue(last.total_records_submitted > 0);
         assertEq("accumulating-metrics", last.pipeline_name);
 
-        assertTrue(rss_growth < max_rss_growth,
-            sprintf("accumulating metrics RSS growth %s should be less than %s",
-                fmtMem(rss_growth), fmtMem(max_rss_growth)));
+        if (measured) {
+            assertTrue(rss_growth < max_rss_growth,
+                sprintf("accumulating metrics RSS growth %s should be less than %s",
+                    fmtMem(rss_growth), fmtMem(max_rss_growth)));
+        }
 
         # now release the snapshots and measure RSS to see if memory is recovered
         int snapshot_count = collector.snapshots.size();
@@ -838,23 +914,14 @@ public class PipelineMemoryTest inherits QUnit::Test {
     }
 
     #! Test: repeated pipeline creation/destruction with metrics collector on each
-    metricsRepeatedPipelinesTest() {
+    private metricsRepeatedPipelines(bool measured) {
         int iterations = m_options.iterations > 0 ? m_options.iterations : 10;
         int records_per_pipeline = record_count > 50000 ? 2000 : (record_count / 25 > 0 ? record_count / 25 : 100);
         int interval = records_per_pipeline > 200 ? (records_per_pipeline / 5) : 50;
         logVerbose("repeated pipelines with metrics: %d iterations x %d records, interval=%d",
             iterations, records_per_pipeline, interval);
 
-        # warm up
-        {
-            LightweightMetricsCollector wc(interval);
-            DataProviderPipeline warmup(<PipelineOptionInfo>{"name": "warmup-rep", "metrics_collector": wc});
-            warmup.append(new PassthroughProcessor());
-            warmup.submit(getGeneratorIterator(100));
-            warmup.waitDone();
-        }
-
-        hash<auto> mem_before = getMemInfo();
+        hash<auto> mem_before = openWindow("repeated pipelines with metrics", measured);
         logMem("before", mem_before);
 
         list<int> rss_samples();
@@ -883,7 +950,7 @@ public class PipelineMemoryTest inherits QUnit::Test {
             }
         }
 
-        hash<auto> mem_after = getMemInfo();
+        hash<auto> mem_after = closeWindow("repeated pipelines with metrics", measured);
         logMem("after", mem_after);
 
         int rss_growth = mem_after.rss - mem_before.rss;
@@ -891,9 +958,11 @@ public class PipelineMemoryTest inherits QUnit::Test {
             iterations, fmtMem(rss_growth), fmtMem(max_rss_growth));
         logVerbose("total callbacks across all pipelines: %d", total_callbacks);
 
-        assertTrue(rss_growth < max_rss_growth,
-            sprintf("repeated pipelines with metrics RSS growth %s should be less than %s",
-                fmtMem(rss_growth), fmtMem(max_rss_growth)));
+        if (measured) {
+            assertTrue(rss_growth < max_rss_growth,
+                sprintf("repeated pipelines with metrics RSS growth %s should be less than %s",
+                    fmtMem(rss_growth), fmtMem(max_rss_growth)));
+        }
 
         # check for upward trend in RSS samples
         if (rss_samples.size() >= 4) {
@@ -906,7 +975,7 @@ public class PipelineMemoryTest inherits QUnit::Test {
     }
 
     #! Test: slow metrics callback simulating real-world event posting latency
-    metricsSlowCallbackTest() {
+    private metricsSlowCallback(bool measured) {
         # use a smaller record count for the slow callback test to keep runtime reasonable
         int slow_count = record_count;
         int interval = 1000;
@@ -914,16 +983,7 @@ public class PipelineMemoryTest inherits QUnit::Test {
         logVerbose("slow metrics callback: %d records, interval=%d, delay=%dms",
             slow_count, interval, delay_ms);
 
-        # warm up
-        {
-            SlowMetricsCollector wc(interval, delay_ms);
-            DataProviderPipeline warmup(<PipelineOptionInfo>{"name": "warmup-slow", "metrics_collector": wc});
-            warmup.append(new PassthroughProcessor());
-            warmup.submit(getGeneratorIterator(1000));
-            warmup.waitDone();
-        }
-
-        hash<auto> mem_before = getMemInfo();
+        hash<auto> mem_before = openWindow("slow metrics callback", measured);
         logMem("before", mem_before);
 
         SlowMetricsCollector collector(interval, delay_ms);
@@ -936,7 +996,7 @@ public class PipelineMemoryTest inherits QUnit::Test {
         pipe.submit(getGeneratorIterator(slow_count));
         pipe.waitDone();
 
-        hash<auto> mem_after = getMemInfo();
+        hash<auto> mem_after = closeWindow("slow metrics callback", measured);
         logMem("after", mem_after);
 
         int rss_growth = mem_after.rss - mem_before.rss;
@@ -948,9 +1008,11 @@ public class PipelineMemoryTest inherits QUnit::Test {
         assertTrue(collector.shutdown_called);
         assertTrue(collector.callback_count > 0, "should have received callbacks");
 
-        assertTrue(rss_growth < max_rss_growth,
-            sprintf("slow callback metrics RSS growth %s should be less than %s",
-                fmtMem(rss_growth), fmtMem(max_rss_growth)));
+        if (measured) {
+            assertTrue(rss_growth < max_rss_growth,
+                sprintf("slow callback metrics RSS growth %s should be less than %s",
+                    fmtMem(rss_growth), fmtMem(max_rss_growth)));
+        }
     }
 }
 
