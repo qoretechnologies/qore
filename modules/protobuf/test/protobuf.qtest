@@ -417,9 +417,9 @@ class ProtobufTest inherits QUnit::Test {
         assertThrows("PROTOBUF-FIELD-ERROR", \schema.encode(),
             ("ErrorMsg", {"unknown_field": "value"}));
 
-        # Invalid proto string
+        # Invalid proto string; it names its syntax, or libprotobuf logs a warning to the console besides the error
         assertThrows("PROTOBUF-SCHEMA-ERROR", sub() {
-            new Protobuf::ProtobufSchema("this is not valid proto");
+            new Protobuf::ProtobufSchema("syntax = \"proto3\";\nthis is not valid proto");
         });
 
         # Empty descriptor list
